@@ -18,6 +18,9 @@ define('QP_PLUGIN_FILE', __FILE__);
 define('QP_PLUGIN_DIR', plugin_dir_path(QP_PLUGIN_FILE));
 define('QP_PLUGIN_URL', plugin_dir_url(QP_PLUGIN_FILE));
 
+// Include the class file for the subjects page
+require_once QP_PLUGIN_DIR . 'admin/class-qp-subjects-page.php';
+
 /**
  * The main function to run when the plugin is activated.
  */
@@ -212,32 +215,41 @@ register_uninstall_hook(QP_PLUGIN_FILE, 'qp_uninstall_plugin');
 // ------------------------------------------------------------------
 
 /**
- * Adds the main admin menu for Question Press.
+ * Adds the main admin menu and submenus for Question Press.
  */
 function qp_admin_menu() {
+    // Add top-level menu page
     add_menu_page(
         'Question Press',           // Page Title
         'Question Press',           // Menu Title
-        'manage_options',           // Capability required to see this menu
-        'question-press',           // Menu Slug (URL)
-        'qp_main_admin_page_cb',    // Callback function to display the page content
+        'manage_options',           // Capability
+        'question-press',           // Menu Slug
+        'qp_main_admin_page_cb',    // Callback function
         'dashicons-forms',          // Icon
-        25                          // Position in the menu order
+        25                          // Position
+    );
+
+    // Add "Subjects" submenu page
+    add_submenu_page(
+        'question-press',           // Parent Slug
+        'Subjects',                 // Page Title
+        'Subjects',                 // Menu Title
+        'manage_options',           // Capability
+        'qp-subjects',              // Menu Slug
+        ['QP_Subjects_Page', 'render'] // Callback to the render method in our class
     );
 }
 add_action('admin_menu', 'qp_admin_menu');
 
 /**
  * Callback function for the main admin page.
- * For now, it will just be a placeholder.
+ * We will rename this to "Dashboard" in a later step.
  */
 function qp_main_admin_page_cb() {
     ?>
     <div class="wrap">
-        <h1>Welcome to Question Press</h1>
+        <h1>Welcome to Question Press Dashboard</h1>
         <p>The main dashboard page will be built here.</p>
     </div>
     <?php
 }
-
-// We will add all other plugin functions and includes below this line in future steps.
