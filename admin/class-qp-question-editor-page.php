@@ -9,6 +9,7 @@ class QP_Question_Editor_Page {
         $is_editing = $group_id > 0;
         
         $direction_text = '';
+        $direction_image_id = 0;
         $current_subject_id = 0;
         $questions_in_group = [];
         $is_pyq_group = false;
@@ -23,11 +24,11 @@ class QP_Question_Editor_Page {
             $group_data = $wpdb->get_row($wpdb->prepare("SELECT * FROM $g_table WHERE group_id = %d", $group_id));
             if ($group_data) {
                 $direction_text = $group_data->direction_text;
+                $direction_image_id = $group_data->direction_image_id;
                 $current_subject_id = $group_data->subject_id;
                 $questions_in_group = $wpdb->get_results($wpdb->prepare("SELECT * FROM $q_table WHERE group_id = %d ORDER BY question_id ASC", $group_id));
                 
                 if (!empty($questions_in_group)) {
-                    // Base PYQ & Labels status on the first question in the group
                     $first_question_id = $questions_in_group[0]->question_id;
                     $is_pyq_group = (bool)$questions_in_group[0]->is_pyq;
                     $current_label_ids = $wpdb->get_col($wpdb->prepare("SELECT label_id FROM $ql_table WHERE question_id = %d", $first_question_id));
@@ -68,98 +69,50 @@ class QP_Question_Editor_Page {
                                 <h2 class="hndle"><span>Direction (Optional Passage)</span></h2>
                                 <div class="inside">
                                     <textarea name="direction_text" style="width: 100%; height: 100px;"><?php echo esc_textarea($direction_text); ?></textarea>
-                                    <p class="description">This text will appear above all questions in this group. You can use LaTeX for math by enclosing it in dollar signs, e.g., <code>$E=mc^2$</code>.</p>
+                                    <p class="description">You can use LaTeX for math by enclosing it in dollar signs, e.g., <code>$E=mc^2$</code>.</p>
+                                    <hr>
+                                    <div>
+                                        <input type="hidden" name="direction_image_id" id="direction-image-id" value="<?php echo esc_attr($direction_image_id); ?>">
+                                        <div id="qp-direction-image-preview" style="margin-top: 10px; margin-bottom: 10px;">
+                                            <?php if ($direction_image_id) : ?>
+                                                <img src="<?php echo esc_url(wp_get_attachment_url($direction_image_id)); ?>" style="max-width:100%; height:auto;">
+                                            <?php endif; ?>
+                                        </div>
+                                        <button type="button" class="button" id="qp-upload-image-button">Upload/Select Image</button>
+                                        <button type="button" class="button" id="qp-remove-image-button" style="<?php echo $direction_image_id ? '' : 'display:none;'; ?>">Remove Image</button>
+                                    </div>
                                 </div>
                             </div>
                             
                             <div id="qp-question-blocks-container">
                                 <?php foreach ($questions_in_group as $q_index => $question) : ?>
-                                <div class="postbox qp-question-block">
-                                    <div class="postbox-header">
-                                        <h2 class="hndle"><span>Question</span></h2>
-                                        <div class="handle-actions">
-                                            <button type="button" class="button-link remove-question-block">Remove</button>
+                                    <div class="postbox qp-question-block">
+                                        <div class="postbox-header"><h2 class="hndle"><span>Question</span></h2><div class="handle-actions"><button type="button" class="button-link remove-question-block">Remove</button></div></div>
+                                        <div class="inside">
+                                            <textarea name="questions[<?php echo $q_index; ?>][question_text]" class="question-text-area" style="width: 100%; height: 100px;" placeholder="Enter question text here..." required><?php echo esc_textarea($question->question_text); ?></textarea>
+                                            <p class="description">You can use LaTeX for math, e.g., <code>$x^2$</code>.</p><hr>
+                                            <p><strong>Options (Select the radio button for the correct answer)</strong></p>
+                                            <?php
+                                            $option_count = max(5, count($question->options));
+                                            for ($i = 0; $i < $option_count; $i++) : 
+                                                $option = isset($question->options[$i]) ? $question->options[$i] : null;
+                                                $is_correct = $option ? $option->is_correct : ($i == 0);
+                                            ?>
+                                            <div class="qp-option-row" style="display: flex; align-items: center; margin-bottom: 5px;"><input type="radio" name="questions[<?php echo $q_index; ?>][is_correct_option]" value="<?php echo $i; ?>" <?php checked($is_correct); ?>><input type="text" name="questions[<?php echo $q_index; ?>][options][]" value="<?php echo $option ? esc_attr($option->option_text) : ''; ?>" style="flex-grow: 1; margin: 0 5px;"></div>
+                                            <?php endfor; ?>
+                                            <p class="description">At least 4 options are recommended. You can use LaTeX here too.</p>
                                         </div>
                                     </div>
-                                    <div class="inside">
-                                        <textarea name="questions[<?php echo $q_index; ?>][question_text]" class="question-text-area" style="width: 100%; height: 100px;" placeholder="Enter question text here..." required><?php echo esc_textarea($question->question_text); ?></textarea>
-                                        <p class="description">You can use LaTeX for math, e.g., <code>$x^2$</code>.</p>
-                                        <hr>
-                                        <p><strong>Options (Select the radio button for the correct answer)</strong></p>
-                                        <?php
-                                        $option_count = max(5, count($question->options));
-                                        for ($i = 0; $i < $option_count; $i++) : 
-                                            $option = isset($question->options[$i]) ? $question->options[$i] : null;
-                                            $is_correct = $option ? $option->is_correct : ($i == 0);
-                                        ?>
-                                        <div class="qp-option-row" style="display: flex; align-items: center; margin-bottom: 5px;">
-                                            <input type="radio" name="questions[<?php echo $q_index; ?>][is_correct_option]" value="<?php echo $i; ?>" <?php checked($is_correct); ?>>
-                                            <input type="text" name="questions[<?php echo $q_index; ?>][options][]" value="<?php echo $option ? esc_attr($option->option_text) : ''; ?>" style="flex-grow: 1; margin: 0 5px;">
-                                        </div>
-                                        <?php endfor; ?>
-                                        <p class="description">At least 4 options are recommended. You can use LaTeX here too.</p>
-                                    </div>
-                                </div>
                                 <?php endforeach; ?>
                             </div>
                             <button type="button" id="add-new-question-block" class="button button-secondary">+ Add Another Question</button>
                         </div>
 
                         <div id="postbox-container-1" class="postbox-container">
-                            <div class="postbox">
-                                <h2 class="hndle"><span>Publish</span></h2>
-                                <div class="inside">
-                                    <div class="submitbox" id="submitpost">
-                                        <div id="major-publishing-actions">
-                                            <div id="publishing-action">
-                                                <input name="save_group" type="submit" class="button button-primary button-large" value="<?php echo $is_editing ? 'Update Question(s)' : 'Save Question(s)'; ?>">
-                                            </div>
-                                            <div class="clear"></div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="postbox">
-                                <h2 class="hndle"><span>Subject</span></h2>
-                                <div class="inside">
-                                    <select name="subject_id" style="width: 100%;">
-                                        <?php foreach($all_subjects as $subject) : ?>
-                                            <option value="<?php echo esc_attr($subject->subject_id); ?>" <?php selected($current_subject_id, $subject->subject_id); ?>>
-                                                <?php echo esc_html($subject->subject_name); ?>
-                                            </option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                </div>
-                            </div>
-                            
-                            <div class="postbox">
-                                <h2 class="hndle"><span>Labels</span></h2>
-                                <div class="inside">
-                                    <div style="max-height: 200px; overflow-y: auto;">
-                                        <ul style="list-style: none; margin: 0; padding: 0;">
-                                        <?php foreach ($all_labels as $label) : ?>
-                                            <li>
-                                                <label>
-                                                    <input value="<?php echo esc_attr($label->label_id); ?>" type="checkbox" name="labels[]" <?php checked(in_array($label->label_id, $current_label_ids)); ?>>
-                                                    <?php echo esc_html($label->label_name); ?>
-                                                </label>
-                                            </li>
-                                        <?php endforeach; ?>
-                                        </ul>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="postbox">
-                                <h2 class="hndle"><span>Settings</span></h2>
-                                <div class="inside">
-                                    <label>
-                                        <input type="checkbox" name="is_pyq" value="1" <?php checked($is_pyq_group, 1); ?>>
-                                        PYQ (Applies to all questions in this group)
-                                    </label>
-                                </div>
-                            </div>
+                            <div class="postbox"><h2 class="hndle"><span>Publish</span></h2><div class="inside"><div class="submitbox" id="submitpost"><div id="major-publishing-actions"><div id="publishing-action"><input name="save_group" type="submit" class="button button-primary button-large" value="<?php echo $is_editing ? 'Update Question(s)' : 'Save Question(s)'; ?>"></div><div class="clear"></div></div></div></div></div>
+                            <div class="postbox"><h2 class="hndle"><span>Subject</span></h2><div class="inside"><select name="subject_id" style="width: 100%;"><?php foreach($all_subjects as $subject) : ?><option value="<?php echo esc_attr($subject->subject_id); ?>" <?php selected($current_subject_id, $subject->subject_id); ?>><?php echo esc_html($subject->subject_name); ?></option><?php endforeach; ?></select></div></div>
+                            <div class="postbox"><h2 class="hndle"><span>Labels</span></h2><div class="inside"><div style="max-height: 200px; overflow-y: auto;"><ul style="list-style: none; margin: 0; padding: 0;"><?php foreach ($all_labels as $label) : ?><li><label><input value="<?php echo esc_attr($label->label_id); ?>" type="checkbox" name="labels[]" <?php checked(in_array($label->label_id, $current_label_ids)); ?>> <?php echo esc_html($label->label_name); ?></label></li><?php endforeach; ?></ul></div></div></div>
+                            <div class="postbox"><h2 class="hndle"><span>Settings</span></h2><div class="inside"><label><input type="checkbox" name="is_pyq" value="1" <?php checked($is_pyq_group, 1); ?>> PYQ (Applies to all questions in this group)</label></div></div>
                         </div>
                     </div>
                     <br class="clear">
