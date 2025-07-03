@@ -26,7 +26,7 @@ require_once QP_PLUGIN_DIR . 'admin/class-qp-questions-list-table.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-question-editor-page.php';
 
 
-// All activation, deactivation, and uninstall hooks are unchanged...
+// Activation/Deactivation/Uninstall Hooks
 function qp_activate_plugin() {
     global $wpdb;
     $charset_collate = $wpdb->get_charset_collate();
@@ -156,9 +156,8 @@ register_uninstall_hook(QP_PLUGIN_FILE, 'qp_uninstall_plugin');
 function qp_admin_menu() {
     add_menu_page('All Questions', 'Question Press', 'manage_options', 'question-press', 'qp_all_questions_page_cb', 'dashicons-forms', 25);
     add_submenu_page('question-press', 'All Questions', 'All Questions', 'manage_options', 'question-press', 'qp_all_questions_page_cb');
-    add_submenu_page('question-press', 'Add New Group', 'Add New Group', 'manage_options', 'qp-question-editor', ['QP_Question_Editor_Page', 'render']);
-    // Hidden page for editing
-    add_submenu_page(null, 'Edit Question Group', 'Edit Question Group', 'manage_options', 'qp-edit-group', ['QP_Question_Editor_Page', 'render']);
+    add_submenu_page('question-press', 'Add New', 'Add New', 'manage_options', 'qp-question-editor', ['QP_Question_Editor_Page', 'render']);
+    add_submenu_page(null, 'Edit Question', 'Edit Question', 'manage_options', 'qp-edit-group', ['QP_Question_Editor_Page', 'render']);
     add_submenu_page('question-press', 'Import', 'Import', 'manage_options', 'qp-import', ['QP_Import_Page', 'render']);
     add_submenu_page('question-press', 'Export', 'Export', 'manage_options', 'qp-export', ['QP_Export_Page', 'render']);
     add_submenu_page('question-press', 'Subjects', 'Subjects', 'manage_options', 'qp-subjects', ['QP_Subjects_Page', 'render']);
@@ -167,13 +166,12 @@ function qp_admin_menu() {
 add_action('admin_menu', 'qp_admin_menu');
 
 function qp_admin_enqueue_scripts($hook_suffix) {
-    if (strpos($hook_suffix, 'qp-') !== false || $hook_suffix === 'toplevel_page_question-press') {
+    if (strpos($hook_suffix, 'qp-') !== false || $hook_suffix === 'toplevel_page_question-press' || $hook_suffix === 'admin_page_qp-edit-group') {
         wp_enqueue_style('wp-color-picker');
         wp_enqueue_script('wp-color-picker');
     }
-    // Enqueue our new editor script only on the editor page
     if ($hook_suffix === 'question-press_page_qp-question-editor' || $hook_suffix === 'admin_page_qp-edit-group') {
-        wp_enqueue_script('qp-editor-script', QP_PLUGIN_URL . 'admin/assets/js/question-editor.js', ['jquery'], '1.0.0', true);
+        wp_enqueue_script('qp-editor-script', QP_PLUGIN_URL . 'admin/assets/js/question-editor.js', ['jquery'], '1.0.1', true);
     }
 }
 add_action('admin_enqueue_scripts', 'qp_admin_enqueue_scripts');
@@ -185,21 +183,21 @@ function qp_handle_form_submissions() {
 }
 add_action('admin_init', 'qp_handle_form_submissions');
 
-
-/**
- * Callback function for the "All Questions" page.
- * Instantiates and displays our custom list table.
- */
 function qp_all_questions_page_cb() {
     $list_table = new QP_Questions_List_Table();
     $list_table->prepare_items();
+    global $wpdb;
+    foreach ($list_table->items as &$item) {
+        $item['group_id'] = $wpdb->get_var($wpdb->prepare("SELECT group_id FROM {$wpdb->prefix}qp_questions WHERE question_id = %d", $item['question_id']));
+    }
+    
     ?>
     <div class="wrap">
         <h1 class="wp-heading-inline">All Questions</h1>
         <a href="<?php echo admin_url('admin.php?page=qp-question-editor'); ?>" class="page-title-action">Add New</a>
 
         <?php if (isset($_GET['message']) && $_GET['message'] === '1') : ?>
-            <div id="message" class="notice notice-success is-dismissible"><p>Question updated successfully.</p></div>
+            <div id="message" class="notice notice-success is-dismissible"><p>Question(s) updated successfully.</p></div>
         <?php endif; ?>
 
         <hr class="wp-header-end">
@@ -210,7 +208,6 @@ function qp_all_questions_page_cb() {
     <?php
 }
 
-// REWRITTEN: Function to handle saving/updating a question group
 function qp_handle_save_question_group() {
     if (!isset($_POST['save_group']) || !isset($_POST['_wpnonce']) || !wp_verify_nonce($_POST['_wpnonce'], 'qp_save_question_group_nonce')) {
         return;
@@ -222,11 +219,12 @@ function qp_handle_save_question_group() {
 
     $direction_text = sanitize_textarea_field($_POST['direction_text']);
     $subject_id = absint($_POST['subject_id']);
+    $is_pyq = isset($_POST['is_pyq']) ? 1 : 0;
+    $labels = isset($_POST['labels']) ? array_map('absint', $_POST['labels']) : [];
     $questions = isset($_POST['questions']) ? (array) $_POST['questions'] : [];
 
     if (empty($subject_id) || empty($questions)) { return; }
 
-    // Group Handling
     $group_data = ['direction_text' => $direction_text, 'subject_id' => $subject_id];
     if ($is_editing) {
         $wpdb->update("{$wpdb->prefix}qp_question_groups", $group_data, ['group_id' => $group_id]);
@@ -237,15 +235,17 @@ function qp_handle_save_question_group() {
 
     $q_table = "{$wpdb->prefix}qp_questions";
     $o_table = "{$wpdb->prefix}qp_options";
+    $ql_table = "{$wpdb->prefix}qp_question_labels";
     
-    // First, delete all existing questions and options for this group to handle removals
-    $existing_q_ids = $wpdb->get_col($wpdb->prepare("SELECT question_id FROM $q_table WHERE group_id = %d", $group_id));
-    if (!empty($existing_q_ids)) {
-        $wpdb->query("DELETE FROM $o_table WHERE question_id IN (" . implode(',', $existing_q_ids) . ")");
-        $wpdb->query("DELETE FROM $q_table WHERE question_id IN (" . implode(',', $existing_q_ids) . ")");
+    if ($is_editing) {
+        $existing_q_ids = $wpdb->get_col($wpdb->prepare("SELECT question_id FROM $q_table WHERE group_id = %d", $group_id));
+        if (!empty($existing_q_ids)) {
+            $wpdb->query("DELETE FROM $o_table WHERE question_id IN (" . implode(',', $existing_q_ids) . ")");
+            $wpdb->query("DELETE FROM $ql_table WHERE question_id IN (" . implode(',', $existing_q_ids) . ")");
+            $wpdb->query("DELETE FROM $q_table WHERE question_id IN (" . implode(',', $existing_q_ids) . ")");
+        }
     }
 
-    // Now, loop through and insert all submitted questions
     foreach ($questions as $q_data) {
         $question_text = sanitize_textarea_field($q_data['question_text']);
         if (empty($question_text)) continue;
@@ -254,25 +254,23 @@ function qp_handle_save_question_group() {
             'group_id' => $group_id,
             'question_text' => $question_text,
             'question_text_hash' => md5(strtolower(trim(preg_replace('/\s+/', '', $question_text)))),
-            'is_pyq' => isset($q_data['is_pyq']) ? 1 : 0
+            'is_pyq' => $is_pyq
         ]);
         $question_id = $wpdb->insert_id;
 
         $options = isset($q_data['options']) ? (array) $q_data['options'] : [];
         $correct_option_index = isset($q_data['is_correct_option']) ? absint($q_data['is_correct_option']) : -1;
-
         foreach ($options as $index => $option_text) {
             if (!empty(trim($option_text))) {
-                $wpdb->insert($o_table, [
-                    'question_id' => $question_id,
-                    'option_text' => sanitize_text_field($option_text),
-                    'is_correct' => ($index === $correct_option_index) ? 1 : 0
-                ]);
+                $wpdb->insert($o_table, ['question_id' => $question_id, 'option_text' => sanitize_text_field($option_text), 'is_correct' => ($index === $correct_option_index) ? 1 : 0 ]);
             }
+        }
+
+        foreach ($labels as $label_id) {
+            $wpdb->insert($ql_table, ['question_id' => $question_id, 'label_id' => $label_id]);
         }
     }
     
-    // Redirect Logic
     if ($is_editing) {
         wp_safe_redirect(admin_url('admin.php?page=question-press&message=1'));
     } else {

@@ -173,16 +173,20 @@ class QP_Questions_List_Table extends WP_List_Table {
     // In admin/class-qp-questions-list-table.php
 
     public function column_question_text($item) {
-        $edit_nonce = wp_create_nonce('qp_edit_question_' . $item['question_id']);
-        $trash_nonce = wp_create_nonce('qp_trash_question_' . $item['question_id']);
-        $page = esc_attr($_REQUEST['page']);
-
-        $actions = [
-            'edit'   => sprintf('<a href="?page=qp-question-editor&action=edit&question_id=%s&_wpnonce=%s">Edit</a>', $item['question_id'], $edit_nonce),
-            'trash'  => sprintf('<a href="?page=%s&action=trash&question_id=%s&_wpnonce=%s" style="color:#a00;">Trash</a>', $page, $item['question_id'], $trash_nonce),
-        ];
-        return sprintf('<strong>%s</strong>%s', wp_trim_words(esc_html($item['question_text']), 20, '...'), $this->row_actions($actions));
-    }
+    // The group_id is now passed into the item array from the callback function
+    $group_id = isset($item['group_id']) ? $item['group_id'] : 0;
+    
+    $edit_nonce = wp_create_nonce('qp_edit_question_group_' . $group_id);
+    $trash_nonce = wp_create_nonce('qp_trash_question_' . $item['question_id']);
+    $page = esc_attr($_REQUEST['page']);
+    
+    $actions = [
+        // This link now points to our hidden edit page with the group_id
+        'edit'   => sprintf('<a href="admin.php?page=qp-edit-group&action=edit&group_id=%s&_wpnonce=%s">Edit</a>', $group_id, $edit_nonce),
+        'trash'  => sprintf('<a href="?page=%s&action=trash&question_id=%s&_wpnonce=%s" style="color:#a00;">Trash</a>', $page, $item['question_id'], $trash_nonce),
+    ];
+    return sprintf('<strong>%s</strong>%s', wp_trim_words(esc_html($item['question_text']), 20, '...'), $this->row_actions($actions));
+}
 
     /**
      * Render the PYQ column
