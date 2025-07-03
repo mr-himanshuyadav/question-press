@@ -16,7 +16,6 @@ class QP_Questions_List_Table extends WP_List_Table {
 
     /**
      * Define the columns that are going to be used in the table
-     * @return array
      */
     public function get_columns() {
         return [
@@ -30,7 +29,6 @@ class QP_Questions_List_Table extends WP_List_Table {
 
     /**
      * Decide which columns to activate the sorting functionality on
-     * @return array
      */
     public function get_sortable_columns() {
         return [
@@ -39,12 +37,48 @@ class QP_Questions_List_Table extends WP_List_Table {
             'import_date'   => ['import_date', true]
         ];
     }
+    
+    /**
+     * Define the bulk actions
+     */
+    protected function get_bulk_actions() {
+        return ['trash' => 'Move to Trash'];
+    }
+
+    /**
+     * Add filter controls to the table nav
+     */
+    protected function extra_tablenav($which) {
+        if ($which == "top") {
+            global $wpdb;
+            $subjects_table = $wpdb->prefix . 'qp_subjects';
+            $subjects = $wpdb->get_results("SELECT * FROM $subjects_table ORDER BY subject_name ASC");
+            
+            $current_subject = isset($_GET['filter_by_subject']) ? absint($_GET['filter_by_subject']) : '';
+            ?>
+            <div class="alignleft actions">
+                <select name="filter_by_subject" id="filter_by_subject">
+                    <option value="">All Subjects</option>
+                    <?php foreach ($subjects as $subject) : ?>
+                        <option value="<?php echo esc_attr($subject->subject_id); ?>" <?php selected($current_subject, $subject->subject_id); ?>>
+                            <?php echo esc_html($subject->subject_name); ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+                <?php submit_button('Filter', 'button', 'filter_action', false); ?>
+            </div>
+            <?php
+        }
+    }
 
     /**
      * Prepare the items for the table to process
      */
     public function prepare_items() {
         global $wpdb;
+
+        // Process bulk actions first
+        $this->process_bulk_action();
 
         $columns = $this->get_columns();
         $hidden = [];
@@ -55,31 +89,65 @@ class QP_Questions_List_Table extends WP_List_Table {
         $current_page = $this->get_pagenum();
         $offset = ($current_page - 1) * $per_page;
 
-        // Ordering logic
         $orderby = isset($_GET['orderby']) && in_array($_GET['orderby'], array_keys($this->get_sortable_columns())) ? sanitize_key($_GET['orderby']) : 'import_date';
         $order = isset($_GET['order']) && in_array(strtoupper($_GET['order']), ['ASC', 'DESC']) ? sanitize_key($_GET['order']) : 'desc';
 
         $q_table = $wpdb->prefix . 'qp_questions';
         $g_table = $wpdb->prefix . 'qp_question_groups';
         $s_table = $wpdb->prefix . 'qp_subjects';
-
-        $sql_query = "SELECT q.question_id, q.question_text, q.is_pyq, q.import_date, s.subject_name
-                      FROM {$q_table} q
-                      LEFT JOIN {$g_table} g ON q.group_id = g.group_id
-                      LEFT JOIN {$s_table} s ON g.subject_id = s.subject_id";
         
-        // Count total items
-        $total_items = $wpdb->get_var(str_replace("SELECT q.question_id, q.question_text, q.is_pyq, q.import_date, s.subject_name", "SELECT COUNT(q.question_id)", $sql_query));
+        // Base query
+        $sql_query = " FROM {$q_table} q
+                       LEFT JOIN {$g_table} g ON q.group_id = g.group_id
+                       LEFT JOIN {$s_table} s ON g.subject_id = s.subject_id";
+        
+        // Where conditions
+        $where = ["q.status = 'publish'"];
+        if (!empty($_GET['filter_by_subject'])) {
+            $where[] = $wpdb->prepare("g.subject_id = %d", absint($_GET['filter_by_subject']));
+        }
+        $sql_query .= " WHERE " . implode(' AND ', $where);
+
+        // Count total items after filtering
+        $total_items = $wpdb->get_var("SELECT COUNT(q.question_id)" . $sql_query);
 
         // Add ordering and pagination to the query
-        $sql_query .= $wpdb->prepare(" ORDER BY %s %s LIMIT %d OFFSET %d", $orderby, $order, $per_page, $offset);
+        $data_query = "SELECT q.question_id, q.question_text, q.is_pyq, q.import_date, s.subject_name" . $sql_query;
+        $data_query .= $wpdb->prepare(" ORDER BY %s %s LIMIT %d OFFSET %d", $orderby, $order, $per_page, $offset);
         
-        $this->items = $wpdb->get_results($sql_query, ARRAY_A);
+        $this->items = $wpdb->get_results($data_query, ARRAY_A);
 
         $this->set_pagination_args([
             'total_items' => $total_items,
             'per_page'    => $per_page
         ]);
+    }
+
+    /**
+     * Process bulk actions
+     */
+    public function process_bulk_action() {
+        if ('trash' === $this->current_action()) {
+            // Security check
+            if (!isset($_POST['_wpnonce']) || !wp_verify_nonce($_POST['_wpnonce'], 'qp_bulk_action_nonce')) {
+                if (!isset($_GET['_wpnonce']) || !wp_verify_nonce($_GET['_wpnonce'], 'qp_trash_question_' . absint($_GET['question_id']))) {
+                    wp_die('Security check failed.');
+                }
+            }
+
+            $question_ids = isset($_POST['question_ids']) ? array_map('absint', $_POST['question_ids']) : [absint($_GET['question_id'])];
+            
+            if (empty($question_ids)) return;
+
+            global $wpdb;
+            $questions_table = $wpdb->prefix . 'qp_questions';
+            $ids_placeholder = implode(',', array_fill(0, count($question_ids), '%d'));
+
+            $wpdb->query($wpdb->prepare(
+                "UPDATE {$questions_table} SET status = 'trash' WHERE question_id IN ($ids_placeholder)",
+                $question_ids
+            ));
+        }
     }
 
     /**
@@ -93,9 +161,10 @@ class QP_Questions_List_Table extends WP_List_Table {
      * Render the Question column with actions
      */
     public function column_question_text($item) {
+        $trash_nonce = wp_create_nonce('qp_trash_question_' . $item['question_id']);
         $actions = [
             'edit'   => sprintf('<a href="#">Edit</a>'),
-            'trash'  => sprintf('<a href="#" style="color:#a00;">Trash</a>'),
+            'trash'  => sprintf('<a href="?page=%s&action=trash&question_id=%s&_wpnonce=%s" style="color:#a00;">Trash</a>', esc_attr($_REQUEST['page']), $item['question_id'], $trash_nonce),
         ];
         return sprintf('<strong>%s</strong>%s', wp_trim_words(esc_html($item['question_text']), 20, '...'), $this->row_actions($actions));
     }
