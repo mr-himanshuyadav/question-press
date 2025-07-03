@@ -22,6 +22,7 @@ define('QP_PLUGIN_URL', plugin_dir_url(QP_PLUGIN_FILE));
 require_once QP_PLUGIN_DIR . 'admin/class-qp-subjects-page.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-labels-page.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-import-page.php';
+require_once QP_PLUGIN_DIR . 'admin/class-qp-importer.php';
 
 
 // All activation, deactivation, and uninstall hooks are unchanged...
@@ -30,18 +31,19 @@ function qp_activate_plugin() {
     $charset_collate = $wpdb->get_charset_collate();
     require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
 
-    // Table for Subjects
+    // Table for Subjects - CORRECTED SCHEMA
     $table_subjects = $wpdb->prefix . 'qp_subjects';
     $sql_subjects = "CREATE TABLE $table_subjects (
         subject_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
         subject_name VARCHAR(255) NOT NULL,
+        description TEXT,
         PRIMARY KEY (subject_id)
     ) $charset_collate;";
     dbDelta($sql_subjects);
     
     $subject_exists = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $table_subjects WHERE subject_name = %s", 'Uncategorized'));
     if ($subject_exists == 0) {
-        $wpdb->insert($table_subjects, ['subject_name' => 'Uncategorized'], ['%s']);
+        $wpdb->insert($table_subjects, ['subject_name' => 'Uncategorized', 'description' => 'Default subject for questions without an assigned one.']);
     }
 
     // Table for Labels
@@ -191,13 +193,8 @@ register_uninstall_hook(QP_PLUGIN_FILE, 'qp_uninstall_plugin');
 function qp_admin_menu() {
     add_menu_page('Question Press', 'Question Press', 'manage_options', 'question-press', 'qp_main_admin_page_cb', 'dashicons-forms', 25);
     
-    // Add "Import" submenu page - Placed high for importance
     add_submenu_page('question-press', 'Import', 'Import', 'manage_options', 'qp-import', ['QP_Import_Page', 'render']);
-
-    // Add "Subjects" submenu page
     add_submenu_page('question-press', 'Subjects', 'Subjects', 'manage_options', 'qp-subjects', ['QP_Subjects_Page', 'render']);
-
-    // Add "Labels" submenu page
     add_submenu_page('question-press', 'Labels', 'Labels', 'manage_options', 'qp-labels', ['QP_Labels_Page', 'render']);
 }
 add_action('admin_menu', 'qp_admin_menu');

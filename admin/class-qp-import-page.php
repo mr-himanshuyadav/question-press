@@ -7,9 +7,24 @@ if (!defined('ABSPATH')) {
 class QP_Import_Page {
 
     /**
-     * Renders the Import admin page.
+     * Renders the Import admin page or handles the import process.
      */
     public static function render() {
+        // Check if the form has been submitted
+        if (isset($_POST['submit']) && isset($_FILES['question_zip_file'])) {
+            // Instantiate the importer and handle the file
+            $importer = new QP_Importer();
+            $importer->handle_import();
+        } else {
+            // If not submitted, show the upload form
+            self::render_upload_form();
+        }
+    }
+
+    /**
+     * Renders the initial upload form.
+     */
+    private static function render_upload_form() {
         ?>
         <div class="wrap">
             <h1 class="wp-heading-inline">Import Questions</h1>
@@ -17,7 +32,7 @@ class QP_Import_Page {
 
             <p>Upload a <code>.zip</code> file created by the "Question Press Kit" tool to import questions into the database.</p>
 
-            <form method="post" action="" enctype="multipart/form-data">
+            <form method="post" action="admin.php?page=qp-import" enctype="multipart/form-data">
                 
                 <?php wp_nonce_field('qp_import_nonce_action', 'qp_import_nonce_field'); ?>
 
@@ -33,7 +48,6 @@ class QP_Import_Page {
                 <?php submit_button('Upload and Import'); ?>
 
             </form>
-
         </div>
         <?php
     }
