@@ -54,7 +54,8 @@ class QP_Questions_List_Table extends WP_List_Table {
             $subjects_table = $wpdb->prefix . 'qp_subjects';
             $subjects = $wpdb->get_results("SELECT * FROM $subjects_table ORDER BY subject_name ASC");
             
-            $current_subject = isset($_GET['filter_by_subject']) ? absint($_GET['filter_by_subject']) : '';
+            // CORRECTED: Use $_REQUEST to get the current filter value
+            $current_subject = isset($_REQUEST['filter_by_subject']) ? absint($_REQUEST['filter_by_subject']) : '';
             ?>
             <div class="alignleft actions">
                 <select name="filter_by_subject" id="filter_by_subject">
@@ -96,23 +97,22 @@ class QP_Questions_List_Table extends WP_List_Table {
         $g_table = $wpdb->prefix . 'qp_question_groups';
         $s_table = $wpdb->prefix . 'qp_subjects';
         
-        // Base query
-        $sql_query = " FROM {$q_table} q
-                       LEFT JOIN {$g_table} g ON q.group_id = g.group_id
-                       LEFT JOIN {$s_table} s ON g.subject_id = s.subject_id";
+        $sql_query_from = " FROM {$q_table} q
+                            LEFT JOIN {$g_table} g ON q.group_id = g.group_id
+                            LEFT JOIN {$s_table} s ON g.subject_id = s.subject_id";
         
-        // Where conditions
         $where = ["q.status = 'publish'"];
-        if (!empty($_GET['filter_by_subject'])) {
-            $where[] = $wpdb->prepare("g.subject_id = %d", absint($_GET['filter_by_subject']));
+        
+        // CORRECTED: Use $_REQUEST to get the filter value
+        if (!empty($_REQUEST['filter_by_subject'])) {
+            $where[] = $wpdb->prepare("g.subject_id = %d", absint($_REQUEST['filter_by_subject']));
         }
-        $sql_query .= " WHERE " . implode(' AND ', $where);
+        
+        $sql_query_where = " WHERE " . implode(' AND ', $where);
 
-        // Count total items after filtering
-        $total_items = $wpdb->get_var("SELECT COUNT(q.question_id)" . $sql_query);
+        $total_items = $wpdb->get_var("SELECT COUNT(q.question_id)" . $sql_query_from . $sql_query_where);
 
-        // Add ordering and pagination to the query
-        $data_query = "SELECT q.question_id, q.question_text, q.is_pyq, q.import_date, s.subject_name" . $sql_query;
+        $data_query = "SELECT q.question_id, q.question_text, q.is_pyq, q.import_date, s.subject_name" . $sql_query_from . $sql_query_where;
         $data_query .= $wpdb->prepare(" ORDER BY %s %s LIMIT %d OFFSET %d", $orderby, $order, $per_page, $offset);
         
         $this->items = $wpdb->get_results($data_query, ARRAY_A);
@@ -127,16 +127,26 @@ class QP_Questions_List_Table extends WP_List_Table {
      * Process bulk actions
      */
     public function process_bulk_action() {
-        if ('trash' === $this->current_action()) {
-            // Security check
-            if (!isset($_POST['_wpnonce']) || !wp_verify_nonce($_POST['_wpnonce'], 'qp_bulk_action_nonce')) {
-                if (!isset($_GET['_wpnonce']) || !wp_verify_nonce($_GET['_wpnonce'], 'qp_trash_question_' . absint($_GET['question_id']))) {
-                    wp_die('Security check failed.');
-                }
+        $action = $this->current_action();
+
+        if ('trash' === $action) {
+            $nonce = isset($_REQUEST['_wpnonce']) ? sanitize_key($_REQUEST['_wpnonce']) : '';
+            $is_bulk = isset($_POST['question_ids']);
+            $is_single = isset($_GET['question_id']);
+
+            $verified = false;
+            if ($is_bulk && wp_verify_nonce($nonce, 'bulk-' . $this->_args['plural'])) {
+                $verified = true;
+            } elseif ($is_single && wp_verify_nonce($nonce, 'qp_trash_question_' . absint($_GET['question_id']))) {
+                $verified = true;
             }
 
-            $question_ids = isset($_POST['question_ids']) ? array_map('absint', $_POST['question_ids']) : [absint($_GET['question_id'])];
+            if (!$verified) {
+                wp_die('Security check failed.');
+            }
             
+            $question_ids = $is_bulk ? array_map('absint', $_POST['question_ids']) : [absint($_GET['question_id'])];
+
             if (empty($question_ids)) return;
 
             global $wpdb;
@@ -162,9 +172,11 @@ class QP_Questions_List_Table extends WP_List_Table {
      */
     public function column_question_text($item) {
         $trash_nonce = wp_create_nonce('qp_trash_question_' . $item['question_id']);
+        $page = esc_attr($_REQUEST['page']);
+        
         $actions = [
             'edit'   => sprintf('<a href="#">Edit</a>'),
-            'trash'  => sprintf('<a href="?page=%s&action=trash&question_id=%s&_wpnonce=%s" style="color:#a00;">Trash</a>', esc_attr($_REQUEST['page']), $item['question_id'], $trash_nonce),
+            'trash'  => sprintf('<a href="?page=%s&action=trash&question_id=%s&_wpnonce=%s" style="color:#a00;">Trash</a>', $page, $item['question_id'], $trash_nonce),
         ];
         return sprintf('<strong>%s</strong>%s', wp_trim_words(esc_html($item['question_text']), 20, '...'), $this->row_actions($actions));
     }
