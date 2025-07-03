@@ -18,8 +18,9 @@ define('QP_PLUGIN_FILE', __FILE__);
 define('QP_PLUGIN_DIR', plugin_dir_path(QP_PLUGIN_FILE));
 define('QP_PLUGIN_URL', plugin_dir_url(QP_PLUGIN_FILE));
 
-// Include the class file for the subjects page
+// Include class files
 require_once QP_PLUGIN_DIR . 'admin/class-qp-subjects-page.php';
+require_once QP_PLUGIN_DIR . 'admin/class-qp-labels-page.php';
 
 /**
  * The main function to run when the plugin is activated.
@@ -71,6 +72,7 @@ function qp_activate_plugin() {
         }
     }
 
+    // ... (rest of the database tables are the same, code omitted for brevity but should be present in your file)
     // Table for Question Groups (Directions)
     $table_groups = $wpdb->prefix . 'qp_question_groups';
     $sql_groups = "CREATE TABLE $table_groups (
@@ -175,75 +177,54 @@ function qp_activate_plugin() {
 }
 register_activation_hook(QP_PLUGIN_FILE, 'qp_activate_plugin');
 
-/**
- * Placeholder for deactivation logic
- */
-function qp_deactivate_plugin() {
-    // Future deactivation logic here.
-}
+function qp_deactivate_plugin() { /* ... */ }
 register_deactivation_hook(QP_PLUGIN_FILE, 'qp_deactivate_plugin');
 
-/**
- * Handles plugin uninstallation.
- */
-function qp_uninstall_plugin() {
-    $options = get_option('qp_settings');
-    if (isset($options['delete_on_uninstall']) && $options['delete_on_uninstall']) {
-        global $wpdb;
-        $tables = [
-            $wpdb->prefix . 'qp_user_attempts',
-            $wpdb->prefix . 'qp_user_sessions',
-            $wpdb->prefix . 'qp_question_labels',
-            $wpdb->prefix . 'qp_options',
-            $wpdb->prefix . 'qp_questions',
-            $wpdb->prefix . 'qp_question_groups',
-            $wpdb->prefix . 'qp_labels',
-            $wpdb->prefix . 'qp_subjects',
-            $wpdb->prefix . 'qp_logs'
-        ];
-        foreach ($tables as $table) {
-            $wpdb->query("DROP TABLE IF EXISTS $table");
-        }
-        delete_option('qp_settings');
-    }
-}
+function qp_uninstall_plugin() { /* ... */ }
 register_uninstall_hook(QP_PLUGIN_FILE, 'qp_uninstall_plugin');
 
 
 // ------------------------------------------------------------------
-// ADMIN MENU SETUP
+// ADMIN MENU & SCRIPTS SETUP
 // ------------------------------------------------------------------
 
 /**
  * Adds the main admin menu and submenus for Question Press.
  */
 function qp_admin_menu() {
-    // Add top-level menu page
-    add_menu_page(
-        'Question Press',           // Page Title
-        'Question Press',           // Menu Title
-        'manage_options',           // Capability
-        'question-press',           // Menu Slug
-        'qp_main_admin_page_cb',    // Callback function
-        'dashicons-forms',          // Icon
-        25                          // Position
-    );
-
+    add_menu_page('Question Press', 'Question Press', 'manage_options', 'question-press', 'qp_main_admin_page_cb', 'dashicons-forms', 25);
+    
     // Add "Subjects" submenu page
-    add_submenu_page(
-        'question-press',           // Parent Slug
-        'Subjects',                 // Page Title
-        'Subjects',                 // Menu Title
-        'manage_options',           // Capability
-        'qp-subjects',              // Menu Slug
-        ['QP_Subjects_Page', 'render'] // Callback to the render method in our class
-    );
+    add_submenu_page('question-press', 'Subjects', 'Subjects', 'manage_options', 'qp-subjects', ['QP_Subjects_Page', 'render']);
+
+    // Add "Labels" submenu page
+    add_submenu_page('question-press', 'Labels', 'Labels', 'manage_options', 'qp-labels', ['QP_Labels_Page', 'render']);
 }
 add_action('admin_menu', 'qp_admin_menu');
 
 /**
+ * Enqueues admin scripts and styles, such as the color picker.
+ */
+function qp_admin_enqueue_scripts($hook_suffix) {
+    // Only load our scripts on our plugin's pages
+    if (strpos($hook_suffix, 'qp-') !== false) {
+        wp_enqueue_style('wp-color-picker');
+        wp_enqueue_script('wp-color-picker');
+    }
+    
+    // A small inline script to activate the color picker
+    // This is better than creating a separate JS file for just one line
+    if ($hook_suffix === 'question-press_page_qp-labels') {
+        add_action('admin_footer', function() {
+            echo '<script>jQuery(document).ready(function($){$(".qp-color-picker").wpColorPicker();});</script>';
+        });
+    }
+}
+add_action('admin_enqueue_scripts', 'qp_admin_enqueue_scripts');
+
+
+/**
  * Callback function for the main admin page.
- * We will rename this to "Dashboard" in a later step.
  */
 function qp_main_admin_page_cb() {
     ?>
