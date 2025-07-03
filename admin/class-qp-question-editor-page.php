@@ -8,15 +8,18 @@ class QP_Question_Editor_Page {
         $question_id = isset($_GET['question_id']) ? absint($_GET['question_id']) : 0;
         $is_editing = $question_id > 0;
         
+        // Data holders
         $question_data = null;
         $direction_text = '';
         $options_data = [];
         $current_subject_id = 0;
+        $current_label_ids = [];
 
         if ($is_editing) {
             $q_table = $wpdb->prefix . 'qp_questions';
             $g_table = $wpdb->prefix . 'qp_question_groups';
             $o_table = $wpdb->prefix . 'qp_options';
+            $ql_table = $wpdb->prefix . 'qp_question_labels';
 
             $question_data = $wpdb->get_row($wpdb->prepare("SELECT * FROM $q_table WHERE question_id = %d", $question_id));
             if ($question_data) {
@@ -26,16 +29,23 @@ class QP_Question_Editor_Page {
                     $current_subject_id = $group_data->subject_id;
                 }
                 $options_data = $wpdb->get_results($wpdb->prepare("SELECT * FROM $o_table WHERE question_id = %d ORDER BY option_id ASC", $question_id));
+                $current_label_ids = $wpdb->get_col($wpdb->prepare("SELECT label_id FROM $ql_table WHERE question_id = %d", $question_id));
             }
         }
 
+        // Fetch all available subjects and labels for the form
         $all_subjects = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}qp_subjects ORDER BY subject_name ASC");
+        $all_labels = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}qp_labels ORDER BY label_name ASC");
+        
+        // Check for success messages in URL
+        if (isset($_GET['message'])) {
+            $message = $_GET['message'] === '1' ? 'Question updated successfully.' : 'Question saved successfully.';
+            echo '<div id="message" class="notice notice-success is-dismissible"><p>' . esc_html($message) . '</p></div>';
+        }
         ?>
         <div class="wrap">
             <h1 class="wp-heading-inline"><?php echo $is_editing ? 'Edit Question' : 'Add New Question'; ?></h1>
-            <?php if (!$is_editing) : ?>
-                <a href="<?php echo admin_url('admin.php?page=question-press'); ?>" class="page-title-action">Back to All Questions</a>
-            <?php endif; ?>
+            <a href="<?php echo admin_url('admin.php?page=question-press'); ?>" class="page-title-action">Back to All Questions</a>
             <hr class="wp-header-end">
 
             <form method="post" action="">
@@ -45,22 +55,24 @@ class QP_Question_Editor_Page {
                 <div id="poststuff">
                     <div id="post-body" class="metabox-holder columns-2">
                         <div id="post-body-content">
-                            <div id="titlediv">
-                                <div id="titlewrap">
-                                    <label class="screen-reader-text" id="title-prompt-text" for="title">Enter question text here</label>
-                                    <textarea name="question_text" id="title" spellcheck="true" autocomplete="off" style="width: 100%; height: 150px;" placeholder="Enter question text here"><?php echo $is_editing ? esc_textarea($question_data->question_text) : ''; ?></textarea>
+                            
+                            <div class="postbox">
+                                <h2 class="hndle"><span>Direction (Optional Passage)</span></h2>
+                                <div class="inside">
+                                    <textarea name="direction_text" style="width: 100%; height: 100px;"><?php echo esc_textarea($direction_text); ?></textarea>
+                                    <p>This text will appear above the question. The same direction can be used for multiple questions.</p>
                                 </div>
                             </div>
 
-                            <div class="postbox">
-                                <h2 class="hndle"><span>Direction (Optional)</span></h2>
-                                <div class="inside">
-                                    <textarea name="direction_text" style="width: 100%; height: 100px;"><?php echo esc_textarea($direction_text); ?></textarea>
+                            <div id="titlediv">
+                                <div id="titlewrap">
+                                    <label class="screen-reader-text" id="title-prompt-text" for="title">Enter question text here</label>
+                                    <textarea name="question_text" id="title" spellcheck="true" autocomplete="off" style="width: 100%; height: 150px;" placeholder="Enter question text here" required><?php echo $is_editing ? esc_textarea($question_data->question_text) : ''; ?></textarea>
                                 </div>
                             </div>
                             
                             <div class="postbox">
-                                <h2 class="hndle"><span>Options</span></h2>
+                                <h2 class="hndle"><span>Options (Select the radio button for the correct answer)</span></h2>
                                 <div class="inside" id="qp-options-wrapper">
                                     <?php 
                                     $option_count = max(5, count($options_data));
@@ -103,6 +115,26 @@ class QP_Question_Editor_Page {
                                 </div>
                             </div>
                             
+                            <div class="postbox">
+                                <h2 class="hndle"><span>Labels</span></h2>
+                                <div class="inside">
+                                    <div id="taxonomy-labels" class="categorydiv">
+                                        <div id="labels-all" class="tabs-panel">
+                                            <ul id="labelschecklist" class="categorychecklist form-no-clear">
+                                            <?php foreach ($all_labels as $label) : ?>
+                                                <li id="label-<?php echo esc_attr($label->label_id); ?>">
+                                                    <label class="selectit">
+                                                        <input value="<?php echo esc_attr($label->label_id); ?>" type="checkbox" name="labels[]" id="in-label-<?php echo esc_attr($label->label_id); ?>" <?php checked(in_array($label->label_id, $current_label_ids)); ?>>
+                                                        <?php echo esc_html($label->label_name); ?>
+                                                    </label>
+                                                </li>
+                                            <?php endforeach; ?>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
                             <div class="postbox">
                                 <h2 class="hndle"><span>Settings</span></h2>
                                 <div class="inside">
