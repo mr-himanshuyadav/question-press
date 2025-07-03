@@ -56,69 +56,82 @@ class QP_Importer {
         $this->display_results($result);
     }
 
-    private function process_data($data) {
-        global $wpdb;
-        $subjects_table = $wpdb->prefix . 'qp_subjects';
-        $groups_table = $wpdb->prefix . 'qp_question_groups';
-        $questions_table = $wpdb->prefix . 'qp_questions';
-        $options_table = $wpdb->prefix . 'qp_options';
-        $labels_table = $wpdb->prefix . 'qp_labels';
-        $question_labels_table = $wpdb->prefix . 'qp_question_labels';
+    // In admin/class-qp-importer.php
 
-        $imported_count = 0;
-        $skipped_count = 0;
-        $duplicate_label_id = $wpdb->get_var($wpdb->prepare("SELECT label_id FROM $labels_table WHERE label_name = %s", 'Duplicate'));
+private function process_data($data) {
+    global $wpdb;
+    $subjects_table = $wpdb->prefix . 'qp_subjects';
+    $groups_table = $wpdb->prefix . 'qp_question_groups';
+    $questions_table = $wpdb->prefix . 'qp_questions';
+    $options_table = $wpdb->prefix . 'qp_options';
+    $labels_table = $wpdb->prefix . 'qp_labels';
+    $question_labels_table = $wpdb->prefix . 'qp_question_labels';
 
-        if (!isset($data['questionGroups']) || !is_array($data['questionGroups'])) {
-            return ['imported' => 0, 'skipped' => 0];
-        }
+    $imported_count = 0;
+    $skipped_count = 0;
 
-        foreach ($data['questionGroups'] as $group) {
-            $subject_name = !empty($group['subject']) ? sanitize_text_field($group['subject']) : 'Uncategorized';
-            $subject_id = $wpdb->get_var($wpdb->prepare("SELECT subject_id FROM $subjects_table WHERE subject_name = %s", $subject_name));
-            if (!$subject_id) {
-                $wpdb->insert($subjects_table, ['subject_name' => $subject_name, 'description' => '']);
-                $subject_id = $wpdb->insert_id;
-            }
-
-            $direction_text = isset($group['Direction']['text']) ? $group['Direction']['text'] : null;
-            $wpdb->insert($groups_table, ['direction_text' => $direction_text, 'subject_id' => $subject_id]);
-            $group_id = $wpdb->insert_id;
-
-            foreach ($group['questions'] as $question) {
-                $question_text = $question['questionText'];
-                $hash = md5(strtolower(trim(preg_replace('/\s+/', '', $question_text))));
-                $existing_question_id = $wpdb->get_var($wpdb->prepare("SELECT question_id FROM $questions_table WHERE question_text_hash = %s", $hash));
-
-                if ($existing_question_id) {
-                    $skipped_count++;
-                    continue;
-                }
-
-                $wpdb->insert($questions_table, [
-                    'group_id' => $group_id,
-                    'question_text' => $question_text,
-                    'question_text_hash' => $hash,
-                    'is_pyq' => isset($question['isPYQ']) ? (int)$question['isPYQ'] : 0,
-                    'source_file' => isset($data['sourceFile']) ? sanitize_text_field($data['sourceFile']) : null,
-                ]);
-                $question_id = $wpdb->insert_id;
-
-                if (isset($question['options']) && is_array($question['options'])) {
-                    foreach ($question['options'] as $option) {
-                        $wpdb->insert($options_table, [
-                            'question_id' => $question_id,
-                            'option_text' => $option['optionText'],
-                            'is_correct' => (int)$option['isCorrect']
-                        ]);
-                    }
-                }
-                $imported_count++;
-            }
-        }
-
-        return ['imported' => $imported_count, 'skipped' => $skipped_count];
+    if (!isset($data['questionGroups']) || !is_array($data['questionGroups'])) {
+        return ['imported' => 0, 'skipped' => 0];
     }
+
+    foreach ($data['questionGroups'] as $group) {
+        // Get or create the subject ID
+        $subject_name = !empty($group['subject']) ? sanitize_text_field($group['subject']) : 'Uncategorized';
+        $subject_id = $wpdb->get_var($wpdb->prepare("SELECT subject_id FROM $subjects_table WHERE subject_name = %s", $subject_name));
+        if (!$subject_id) {
+            $wpdb->insert($subjects_table, ['subject_name' => $subject_name, 'description' => '']);
+            $subject_id = $wpdb->insert_id;
+        }
+
+        // Insert the question group
+        $direction_text = isset($group['Direction']['text']) ? $group['Direction']['text'] : null;
+        $wpdb->insert($groups_table, ['direction_text' => $direction_text, 'subject_id' => $subject_id]);
+        $group_id = $wpdb->insert_id;
+
+        // Loop through and insert questions
+        foreach ($group['questions'] as $question) {
+            $question_text = $question['questionText'];
+            
+            // Check for duplicates
+            $hash = md5(strtolower(trim(preg_replace('/\s+/', '', $question_text))));
+            $existing_question_id = $wpdb->get_var($wpdb->prepare("SELECT question_id FROM $questions_table WHERE question_text_hash = %s", $hash));
+
+            if ($existing_question_id) {
+                $skipped_count++;
+                continue;
+            }
+
+            // --- NEW: Get and increment the custom question ID ---
+            $next_custom_id = get_option('qp_next_custom_question_id', 1000);
+            
+            $wpdb->insert($questions_table, [
+                'custom_question_id' => $next_custom_id, // Add the new ID
+                'group_id' => $group_id,
+                'question_text' => $question_text,
+                'question_text_hash' => $hash,
+                'is_pyq' => isset($question['isPYQ']) ? (int)$question['isPYQ'] : 0,
+                'source_file' => isset($data['sourceFile']) ? sanitize_text_field($data['sourceFile']) : null,
+            ]);
+            $question_id = $wpdb->insert_id;
+
+            update_option('qp_next_custom_question_id', $next_custom_id + 1); // Increment for the next question
+
+            // Insert options for the question
+            if (isset($question['options']) && is_array($question['options'])) {
+                foreach ($question['options'] as $option) {
+                    $wpdb->insert($options_table, [
+                        'question_id' => $question_id,
+                        'option_text' => $option['optionText'],
+                        'is_correct' => (int)$option['isCorrect']
+                    ]);
+                }
+            }
+            $imported_count++;
+        }
+    }
+
+    return ['imported' => $imported_count, 'skipped' => $skipped_count];
+}
 
     private function cleanup($dir) {
         if (!is_dir($dir)) return;
