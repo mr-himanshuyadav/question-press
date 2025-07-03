@@ -21,12 +21,10 @@ class QP_Importer {
         $file = $_FILES['question_zip_file'];
         $file_path = $file['tmp_name'];
 
-        // Check if it's a zip file
-        if ($file['type'] !== 'application/zip') {
+        if ($file['type'] !== 'application/zip' && $file['type'] !== 'application/x-zip-compressed') {
             wp_die('Invalid file type. Please upload a .zip file.');
         }
 
-        // Unzip the file to a temporary directory
         $upload_dir = wp_upload_dir();
         $temp_dir = trailingslashit($upload_dir['basedir']) . 'qp_temp_import';
         wp_mkdir_p($temp_dir);
@@ -39,7 +37,6 @@ class QP_Importer {
             wp_die('Failed to unzip the file.');
         }
 
-        // Find the questions.json file
         $json_file = trailingslashit($temp_dir) . 'questions.json';
         if (!file_exists($json_file)) {
             $this->cleanup($temp_dir);
@@ -54,59 +51,46 @@ class QP_Importer {
             wp_die('Invalid JSON format in questions.json file.');
         }
 
-        // Process the data
         $result = $this->process_data($data);
-
-        // Clean up the temporary directory
         $this->cleanup($temp_dir);
-
-        // Display results
         $this->display_results($result);
     }
 
-    /**
-     * Processes the parsed JSON data and inserts it into the database.
-     */
     private function process_data($data) {
         global $wpdb;
         $subjects_table = $wpdb->prefix . 'qp_subjects';
         $groups_table = $wpdb->prefix . 'qp_question_groups';
         $questions_table = $wpdb->prefix . 'qp_questions';
         $options_table = $wpdb->prefix . 'qp_options';
+        $labels_table = $wpdb->prefix . 'qp_labels';
+        $question_labels_table = $wpdb->prefix . 'qp_question_labels';
 
         $imported_count = 0;
         $skipped_count = 0;
+        $duplicate_label_id = $wpdb->get_var($wpdb->prepare("SELECT label_id FROM $labels_table WHERE label_name = %s", 'Duplicate'));
 
         if (!isset($data['questionGroups']) || !is_array($data['questionGroups'])) {
             return ['imported' => 0, 'skipped' => 0];
         }
 
         foreach ($data['questionGroups'] as $group) {
-            // 1. Get or create the subject ID
             $subject_name = !empty($group['subject']) ? sanitize_text_field($group['subject']) : 'Uncategorized';
             $subject_id = $wpdb->get_var($wpdb->prepare("SELECT subject_id FROM $subjects_table WHERE subject_name = %s", $subject_name));
             if (!$subject_id) {
-                $wpdb->insert($subjects_table, ['subject_name' => $subject_name]);
+                $wpdb->insert($subjects_table, ['subject_name' => $subject_name, 'description' => '']);
                 $subject_id = $wpdb->insert_id;
             }
 
-            // 2. Insert the question group (direction)
             $direction_text = isset($group['Direction']['text']) ? $group['Direction']['text'] : null;
-            $wpdb->insert($groups_table, [
-                'direction_text' => $direction_text,
-                'subject_id' => $subject_id
-            ]);
+            $wpdb->insert($groups_table, ['direction_text' => $direction_text, 'subject_id' => $subject_id]);
             $group_id = $wpdb->insert_id;
 
-            // 3. Loop through and insert questions
             foreach ($group['questions'] as $question) {
                 $question_text = $question['questionText'];
-                
-                // Check for duplicates
                 $hash = md5(strtolower(trim(preg_replace('/\s+/', '', $question_text))));
-                $existing_question = $wpdb->get_var($wpdb->prepare("SELECT question_id FROM $questions_table WHERE question_text_hash = %s", $hash));
+                $existing_question_id = $wpdb->get_var($wpdb->prepare("SELECT question_id FROM $questions_table WHERE question_text_hash = %s", $hash));
 
-                if ($existing_question) {
+                if ($existing_question_id) {
                     $skipped_count++;
                     continue;
                 }
@@ -120,7 +104,6 @@ class QP_Importer {
                 ]);
                 $question_id = $wpdb->insert_id;
 
-                // 4. Insert options for the question
                 if (isset($question['options']) && is_array($question['options'])) {
                     foreach ($question['options'] as $option) {
                         $wpdb->insert($options_table, [
@@ -137,14 +120,8 @@ class QP_Importer {
         return ['imported' => $imported_count, 'skipped' => $skipped_count];
     }
 
-    /**
-     * Deletes the temporary import directory.
-     */
     private function cleanup($dir) {
-        // A basic recursive directory removal
-        if (!is_dir($dir)) {
-            return;
-        }
+        if (!is_dir($dir)) return;
         $files = array_diff(scandir($dir), ['.', '..']);
         foreach ($files as $file) {
             (is_dir("$dir/$file")) ? $this->cleanup("$dir/$file") : unlink("$dir/$file");
@@ -152,9 +129,6 @@ class QP_Importer {
         return rmdir($dir);
     }
 
-    /**
-     * Displays the results of the import process.
-     */
     private function display_results($result) {
         ?>
         <div class="wrap">
@@ -167,7 +141,6 @@ class QP_Importer {
                 </p>
             </div>
             <p><a href="<?php echo esc_url(admin_url('admin.php?page=qp-import')); ?>" class="button button-primary">Import Another File</a></p>
-            <p><a href="<?php echo esc_url(admin_url('admin.php?page=question-press')); ?>" class="button button-secondary">Go to All Questions</a></p>
         </div>
         <?php
     }

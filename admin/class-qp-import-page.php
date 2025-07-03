@@ -10,9 +10,8 @@ class QP_Import_Page {
      * Renders the Import admin page or handles the import process.
      */
     public static function render() {
-        // Check if the form has been submitted
+        // Check if the form has been submitted via the submit button and a file is present
         if (isset($_POST['submit']) && isset($_FILES['question_zip_file'])) {
-            // Instantiate the importer and handle the file
             $importer = new QP_Importer();
             $importer->handle_import();
         } else {
@@ -40,7 +39,7 @@ class QP_Import_Page {
                     <tbody>
                         <tr class="user-user-login-wrap">
                             <th><label for="question_zip_file">Question Package (.zip)</label></th>
-                            <td><input type="file" name="question_zip_file" id="question_zip_file" accept=".zip" required></td>
+                            <td><input type="file" name="question_zip_file" id="question_zip_file" accept=".zip,application/zip,application/x-zip,application/x-zip-compressed" required></td>
                         </tr>
                     </tbody>
                 </table>

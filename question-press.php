@@ -24,14 +24,13 @@ require_once QP_PLUGIN_DIR . 'admin/class-qp-labels-page.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-import-page.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-importer.php';
 
-
-// All activation, deactivation, and uninstall hooks are unchanged...
+// All activation, deactivation, and uninstall hooks
 function qp_activate_plugin() {
     global $wpdb;
     $charset_collate = $wpdb->get_charset_collate();
     require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
 
-    // Table for Subjects - CORRECTED SCHEMA
+    // Table for Subjects
     $table_subjects = $wpdb->prefix . 'qp_subjects';
     $sql_subjects = "CREATE TABLE $table_subjects (
         subject_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -117,7 +116,7 @@ function qp_activate_plugin() {
     ) $charset_collate;";
     dbDelta($sql_options);
     
-    // Table for Question Labels (Many-to-Many Relationship)
+    // Table for Question Labels
     $table_question_labels = $wpdb->prefix . 'qp_question_labels';
     $sql_question_labels = "CREATE TABLE $table_question_labels (
         question_id BIGINT(20) UNSIGNED NOT NULL,
@@ -129,79 +128,37 @@ function qp_activate_plugin() {
     
     // Table for User Practice Sessions
     $table_sessions = $wpdb->prefix . 'qp_user_sessions';
-    $sql_sessions = "CREATE TABLE $table_sessions (
-        session_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
-        user_id BIGINT(20) UNSIGNED NOT NULL,
-        start_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        end_time DATETIME,
-        total_attempted INT,
-        correct_count INT,
-        incorrect_count INT,
-        skipped_count INT,
-        marks_obtained DECIMAL(10, 2),
-        settings_snapshot TEXT,
-        PRIMARY KEY (session_id),
-        KEY user_id (user_id)
-    ) $charset_collate;";
+    $sql_sessions = "CREATE TABLE $table_sessions ( session_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT, user_id BIGINT(20) UNSIGNED NOT NULL, start_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, end_time DATETIME, total_attempted INT, correct_count INT, incorrect_count INT, skipped_count INT, marks_obtained DECIMAL(10, 2), settings_snapshot TEXT, PRIMARY KEY (session_id), KEY user_id (user_id) ) $charset_collate;";
     dbDelta($sql_sessions);
     
-    // Table for User Question Attempts in a Session
+    // Table for User Question Attempts
     $table_attempts = $wpdb->prefix . 'qp_user_attempts';
-    $sql_attempts = "CREATE TABLE $table_attempts (
-        attempt_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
-        session_id BIGINT(20) UNSIGNED NOT NULL,
-        user_id BIGINT(20) UNSIGNED NOT NULL,
-        question_id BIGINT(20) UNSIGNED NOT NULL,
-        is_correct BOOLEAN,
-        attempt_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        PRIMARY KEY (attempt_id),
-        KEY session_id (session_id),
-        KEY user_id (user_id),
-        KEY question_id (question_id)
-    ) $charset_collate;";
+    $sql_attempts = "CREATE TABLE $table_attempts ( attempt_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT, session_id BIGINT(20) UNSIGNED NOT NULL, user_id BIGINT(20) UNSIGNED NOT NULL, question_id BIGINT(20) UNSIGNED NOT NULL, is_correct BOOLEAN, attempt_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (attempt_id), KEY session_id (session_id), KEY user_id (user_id), KEY question_id (question_id) ) $charset_collate;";
     dbDelta($sql_attempts);
 
     // Table for Logs
     $table_logs = $wpdb->prefix . 'qp_logs';
-    $sql_logs = "CREATE TABLE $table_logs (
-        log_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
-        log_type VARCHAR(50) NOT NULL,
-        log_message TEXT NOT NULL,
-        log_data LONGTEXT,
-        log_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        PRIMARY KEY (log_id),
-        KEY log_type (log_type)
-    ) $charset_collate;";
+    $sql_logs = "CREATE TABLE $table_logs ( log_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT, log_type VARCHAR(50) NOT NULL, log_message TEXT NOT NULL, log_data LONGTEXT, log_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (log_id), KEY log_type (log_type) ) $charset_collate;";
     dbDelta($sql_logs);
 }
 register_activation_hook(QP_PLUGIN_FILE, 'qp_activate_plugin');
 
-function qp_deactivate_plugin() { /* ... */ }
+function qp_deactivate_plugin() {}
 register_deactivation_hook(QP_PLUGIN_FILE, 'qp_deactivate_plugin');
 
-function qp_uninstall_plugin() { /* ... */ }
+function qp_uninstall_plugin() {}
 register_uninstall_hook(QP_PLUGIN_FILE, 'qp_uninstall_plugin');
 
 
-// ------------------------------------------------------------------
 // ADMIN MENU & SCRIPTS SETUP
-// ------------------------------------------------------------------
-
-/**
- * Adds the main admin menu and submenus for Question Press.
- */
 function qp_admin_menu() {
     add_menu_page('Question Press', 'Question Press', 'manage_options', 'question-press', 'qp_main_admin_page_cb', 'dashicons-forms', 25);
-    
     add_submenu_page('question-press', 'Import', 'Import', 'manage_options', 'qp-import', ['QP_Import_Page', 'render']);
     add_submenu_page('question-press', 'Subjects', 'Subjects', 'manage_options', 'qp-subjects', ['QP_Subjects_Page', 'render']);
     add_submenu_page('question-press', 'Labels', 'Labels', 'manage_options', 'qp-labels', ['QP_Labels_Page', 'render']);
 }
 add_action('admin_menu', 'qp_admin_menu');
 
-/**
- * Enqueues admin scripts and styles.
- */
 function qp_admin_enqueue_scripts($hook_suffix) {
     if (strpos($hook_suffix, 'qp-') !== false) {
         wp_enqueue_style('wp-color-picker');
@@ -215,15 +172,8 @@ function qp_admin_enqueue_scripts($hook_suffix) {
 }
 add_action('admin_enqueue_scripts', 'qp_admin_enqueue_scripts');
 
-
-/**
- * Callback function for the main admin page (Dashboard).
- */
 function qp_main_admin_page_cb() {
     ?>
-    <div class="wrap">
-        <h1>Welcome to Question Press Dashboard</h1>
-        <p>The main dashboard page will be built here.</p>
-    </div>
+    <div class="wrap"><h1>Welcome to Question Press Dashboard</h1><p>The main dashboard page will be built here.</p></div>
     <?php
 }
