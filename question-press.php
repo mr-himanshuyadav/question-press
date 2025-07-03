@@ -23,7 +23,7 @@ require_once QP_PLUGIN_DIR . 'admin/class-qp-subjects-page.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-labels-page.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-import-page.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-importer.php';
-require_once QP_PLUGIN_DIR . 'admin/class-qp-export-page.php'; // New line
+require_once QP_PLUGIN_DIR . 'admin/class-qp-export-page.php';
 
 
 // All activation, deactivation, and uninstall hooks are unchanged...
@@ -160,7 +160,7 @@ function qp_admin_menu() {
     add_menu_page('Question Press', 'Question Press', 'manage_options', 'question-press', 'qp_main_admin_page_cb', 'dashicons-forms', 25);
     
     add_submenu_page('question-press', 'Import', 'Import', 'manage_options', 'qp-import', ['QP_Import_Page', 'render']);
-    add_submenu_page('question-press', 'Export', 'Export', 'manage_options', 'qp-export', ['QP_Export_Page', 'render']); // New line
+    add_submenu_page('question-press', 'Export', 'Export', 'manage_options', 'qp-export', ['QP_Export_Page', 'render']);
     add_submenu_page('question-press', 'Subjects', 'Subjects', 'manage_options', 'qp-subjects', ['QP_Subjects_Page', 'render']);
     add_submenu_page('question-press', 'Labels', 'Labels', 'manage_options', 'qp-labels', ['QP_Labels_Page', 'render']);
 }
@@ -178,6 +178,14 @@ function qp_admin_enqueue_scripts($hook_suffix) {
     }
 }
 add_action('admin_enqueue_scripts', 'qp_admin_enqueue_scripts');
+
+/**
+ * NEW: Hook into admin_init to handle form submissions before headers are sent.
+ */
+function qp_handle_form_submissions() {
+    QP_Export_Page::handle_export_submission();
+}
+add_action('admin_init', 'qp_handle_form_submissions');
 
 
 function qp_main_admin_page_cb() {

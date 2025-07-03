@@ -7,23 +7,23 @@ if (!defined('ABSPATH')) {
 class QP_Export_Page {
 
     /**
-     * Renders the Export admin page.
+     * This method is hooked into 'admin_init' to catch the form submission
+     * before any HTML is rendered.
      */
-    public static function render() {
-        // Handle the form submission if the export button was clicked
-        if (isset($_POST['export_questions']) && check_admin_referer('qp_export_nonce_action', 'qp_export_nonce_field')) {
-            self::handle_export();
-            return; // Stop rendering the rest of the page
+    public static function handle_export_submission() {
+        // Check if we are on the export page and the form was submitted
+        if (isset($_GET['page']) && $_GET['page'] === 'qp-export' && isset($_POST['export_questions'])) {
+            // Verify nonce for security
+            if (check_admin_referer('qp_export_nonce_action', 'qp_export_nonce_field')) {
+                self::generate_zip();
+            }
         }
-        
-        // Display the form
-        self::render_export_form();
     }
 
     /**
-     * Displays the export options form.
+     * Renders the Export admin page form.
      */
-    private static function render_export_form() {
+    public static function render() {
         global $wpdb;
         $subjects_table = $wpdb->prefix . 'qp_subjects';
         $subjects = $wpdb->get_results("SELECT * FROM $subjects_table ORDER BY subject_name ASC");
@@ -34,7 +34,7 @@ class QP_Export_Page {
 
             <p>Select the subjects you wish to export. All questions within the selected subjects will be exported into a single <code>.zip</code> file.</p>
 
-            <form method="post" action="">
+            <form method="post" action="admin.php?page=qp-export">
                 <?php wp_nonce_field('qp_export_nonce_action', 'qp_export_nonce_field'); ?>
                 
                 <h2>Select Subjects</h2>
@@ -60,9 +60,9 @@ class QP_Export_Page {
     }
 
     /**
-     * Handles the data fetching and ZIP file generation.
+     * Handles the data fetching and ZIP file generation. This is now a private method.
      */
-    private static function handle_export() {
+    private static function generate_zip() {
         if (empty($_POST['subject_ids'])) {
             wp_die('Please select at least one subject to export.');
         }
@@ -102,7 +102,6 @@ class QP_Export_Page {
                 ];
             }
 
-            // Fetch options for this question
             $options = $wpdb->get_results($wpdb->prepare("SELECT option_text, is_correct FROM {$o_table} WHERE question_id = %d", $q->question_id));
             $options_array = [];
             foreach ($options as $opt) {
@@ -130,10 +129,11 @@ class QP_Export_Page {
         
         $json_data = json_encode($final_json, JSON_PRETTY_PRINT);
         
+        // Use a temporary file for the zip archive
+        $zip_path = tempnam(sys_get_temp_dir(), 'qp_export');
         $zip = new ZipArchive();
-        $zip_path = wp_upload_dir()['basedir'] . '/' . $filename;
 
-        if ($zip->open($zip_path, ZipArchive::CREATE) !== TRUE) {
+        if ($zip->open($zip_path, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== TRUE) {
             wp_die("Cannot create ZIP archive.");
         }
 
@@ -143,8 +143,9 @@ class QP_Export_Page {
         header('Content-Type: application/zip');
         header('Content-Disposition: attachment; filename="' . $filename . '"');
         header('Content-Length: ' . filesize($zip_path));
+        header('Connection: close');
         readfile($zip_path);
-        unlink($zip_path); // Delete the temp file
+        unlink($zip_path); // Delete the temp file from the server
         exit;
     }
 }
