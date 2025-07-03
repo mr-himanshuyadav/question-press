@@ -140,6 +140,8 @@ function qp_all_questions_page_cb() {
 }
 
 // REWRITTEN & ROBUST SAVE LOGIC
+// In question-press.php
+
 function qp_handle_save_question_group() {
     if (!isset($_POST['save_group']) || !isset($_POST['_wpnonce']) || !wp_verify_nonce($_POST['_wpnonce'], 'qp_save_question_group_nonce')) {
         return;
@@ -149,6 +151,7 @@ function qp_handle_save_question_group() {
     $group_id = isset($_POST['group_id']) ? absint($_POST['group_id']) : 0;
     $is_editing = $group_id > 0;
 
+    // Sanitize all data
     $direction_text = sanitize_textarea_field($_POST['direction_text']);
     $direction_image_id = absint($_POST['direction_image_id']);
     $subject_id = absint($_POST['subject_id']);
@@ -167,16 +170,19 @@ function qp_handle_save_question_group() {
         $group_id = $wpdb->insert_id;
     }
 
-    // This is the key: get all question IDs currently in this group
     $q_table = "{$wpdb->prefix}qp_questions";
-    $existing_q_ids = $is_editing ? $wpdb->get_col($wpdb->prepare("SELECT question_id FROM $q_table WHERE group_id = %d", $group_id)) : [];
-
-    // Delete existing questions, options, and label associations for this group.
-    if (!empty($existing_q_ids)) {
-        $ids_placeholder = implode(',', array_map('absint', $existing_q_ids));
-        $wpdb->query("DELETE FROM {$wpdb->prefix}qp_options WHERE question_id IN ($ids_placeholder)");
-        $wpdb->query("DELETE FROM {$wpdb->prefix}qp_question_labels WHERE question_id IN ($ids_placeholder)");
-        $wpdb->query("DELETE FROM $q_table WHERE question_id IN ($ids_placeholder)");
+    $o_table = "{$wpdb->prefix}qp_options";
+    $ql_table = "{$wpdb->prefix}qp_question_labels";
+    
+    // For editing, we clear out the old questions in the group before re-inserting
+    if ($is_editing) {
+        $existing_q_ids = $wpdb->get_col($wpdb->prepare("SELECT question_id FROM $q_table WHERE group_id = %d", $group_id));
+        if (!empty($existing_q_ids)) {
+            $ids_placeholder = implode(',', array_map('absint', $existing_q_ids));
+            $wpdb->query("DELETE FROM $o_table WHERE question_id IN ($ids_placeholder)");
+            $wpdb->query("DELETE FROM $ql_table WHERE question_id IN ($ids_placeholder)");
+            $wpdb->query("DELETE FROM $q_table WHERE question_id IN ($ids_placeholder)");
+        }
     }
 
     // Now, loop through the submitted questions and insert them as fresh entries
@@ -196,17 +202,22 @@ function qp_handle_save_question_group() {
         $correct_option_index = isset($q_data['is_correct_option']) ? absint($q_data['is_correct_option']) : -1;
         foreach ($options as $index => $option_text) {
             if (!empty(trim($option_text))) {
-                $wpdb->insert("{$wpdb->prefix}qp_options", ['question_id' => $question_id, 'option_text' => sanitize_text_field($option_text), 'is_correct' => ($index === $correct_option_index) ? 1 : 0 ]);
+                $wpdb->insert($o_table, ['question_id' => $question_id, 'option_text' => sanitize_text_field($option_text), 'is_correct' => ($index === $correct_option_index) ? 1 : 0 ]);
             }
         }
 
         foreach ($labels as $label_id) {
-            $wpdb->insert("{$wpdb->prefix}qp_question_labels", ['question_id' => $question_id, 'label_id' => $label_id]);
+            $wpdb->insert($ql_table, ['question_id' => $question_id, 'label_id' => $label_id]);
         }
     }
     
-    // Consistent Redirection: Always go back to the main list.
-    $message_id = $is_editing ? 1 : 2; // 1 for updated, 2 for saved
-    wp_safe_redirect(admin_url('admin.php?page=question-press&message=' . $message_id));
+    // CORRECTED Redirection Logic
+    if ($is_editing) {
+        // When editing, go back to the list with an "updated" message
+        wp_safe_redirect(admin_url('admin.php?page=question-press&message=1'));
+    } else {
+        // When adding new, go back to a fresh editor page with a "saved" message
+        wp_safe_redirect(admin_url('admin.php?page=qp-question-editor&message=2'));
+    }
     exit;
 }
