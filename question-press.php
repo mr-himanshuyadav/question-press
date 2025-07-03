@@ -156,7 +156,9 @@ register_uninstall_hook(QP_PLUGIN_FILE, 'qp_uninstall_plugin');
 function qp_admin_menu() {
     add_menu_page('All Questions', 'Question Press', 'manage_options', 'question-press', 'qp_all_questions_page_cb', 'dashicons-forms', 25);
     add_submenu_page('question-press', 'All Questions', 'All Questions', 'manage_options', 'question-press', 'qp_all_questions_page_cb');
-    add_submenu_page('question-press', 'Add New', 'Add New', 'manage_options', 'qp-question-editor', ['QP_Question_Editor_Page', 'render']);
+    add_submenu_page('question-press', 'Add New Group', 'Add New Group', 'manage_options', 'qp-question-editor', ['QP_Question_Editor_Page', 'render']);
+    // Hidden page for editing
+    add_submenu_page(null, 'Edit Question Group', 'Edit Question Group', 'manage_options', 'qp-edit-group', ['QP_Question_Editor_Page', 'render']);
     add_submenu_page('question-press', 'Import', 'Import', 'manage_options', 'qp-import', ['QP_Import_Page', 'render']);
     add_submenu_page('question-press', 'Export', 'Export', 'manage_options', 'qp-export', ['QP_Export_Page', 'render']);
     add_submenu_page('question-press', 'Subjects', 'Subjects', 'manage_options', 'qp-subjects', ['QP_Subjects_Page', 'render']);
@@ -169,10 +171,9 @@ function qp_admin_enqueue_scripts($hook_suffix) {
         wp_enqueue_style('wp-color-picker');
         wp_enqueue_script('wp-color-picker');
     }
-    if ($hook_suffix === 'question-press_page_qp-labels') {
-        add_action('admin_footer', function() {
-            echo '<script>jQuery(document).ready(function($){$(".qp-color-picker").wpColorPicker();});</script>';
-        });
+    // Enqueue our new editor script only on the editor page
+    if ($hook_suffix === 'question-press_page_qp-question-editor' || $hook_suffix === 'admin_page_qp-edit-group') {
+        wp_enqueue_script('qp-editor-script', QP_PLUGIN_URL . 'admin/assets/js/question-editor.js', ['jquery'], '1.0.0', true);
     }
 }
 add_action('admin_enqueue_scripts', 'qp_admin_enqueue_scripts');
@@ -180,7 +181,7 @@ add_action('admin_enqueue_scripts', 'qp_admin_enqueue_scripts');
 // FORM & ACTION HANDLERS
 function qp_handle_form_submissions() {
     QP_Export_Page::handle_export_submission();
-    qp_handle_save_question();
+    qp_handle_save_question_group();
 }
 add_action('admin_init', 'qp_handle_form_submissions');
 
@@ -209,77 +210,73 @@ function qp_all_questions_page_cb() {
     <?php
 }
 
-// UPDATED: Save question logic with new features
-function qp_handle_save_question() {
-    if (!isset($_POST['save']) || !isset($_POST['_wpnonce']) || !wp_verify_nonce($_POST['_wpnonce'], 'qp_save_question_nonce')) {
+// REWRITTEN: Function to handle saving/updating a question group
+function qp_handle_save_question_group() {
+    if (!isset($_POST['save_group']) || !isset($_POST['_wpnonce']) || !wp_verify_nonce($_POST['_wpnonce'], 'qp_save_question_group_nonce')) {
         return;
     }
 
     global $wpdb;
-    $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
-    $is_editing = $question_id > 0;
+    $group_id = isset($_POST['group_id']) ? absint($_POST['group_id']) : 0;
+    $is_editing = $group_id > 0;
 
-    // Sanitize all data
-    $question_text = sanitize_textarea_field($_POST['question_text']);
     $direction_text = sanitize_textarea_field($_POST['direction_text']);
     $subject_id = absint($_POST['subject_id']);
-    $is_pyq = isset($_POST['is_pyq']) ? 1 : 0;
-    $options = isset($_POST['options']) ? (array) $_POST['options'] : [];
-    $correct_option_index = isset($_POST['is_correct_option']) ? absint($_POST['is_correct_option']) : -1;
-    $labels = isset($_POST['labels']) ? array_map('absint', $_POST['labels']) : [];
+    $questions = isset($_POST['questions']) ? (array) $_POST['questions'] : [];
 
-    if (empty($question_text) || empty($subject_id)) { return; }
+    if (empty($subject_id) || empty($questions)) { return; }
 
     // Group Handling
-    $group_id = 0;
+    $group_data = ['direction_text' => $direction_text, 'subject_id' => $subject_id];
     if ($is_editing) {
-        $group_id = $wpdb->get_var($wpdb->prepare("SELECT group_id FROM {$wpdb->prefix}qp_questions WHERE question_id = %d", $question_id));
-        if ($group_id) {
-            $wpdb->update("{$wpdb->prefix}qp_question_groups", ['direction_text' => $direction_text, 'subject_id' => $subject_id], ['group_id' => $group_id]);
-        }
-    }
-    if (!$group_id) {
-        $wpdb->insert("{$wpdb->prefix}qp_question_groups", ['direction_text' => $direction_text, 'subject_id' => $subject_id]);
+        $wpdb->update("{$wpdb->prefix}qp_question_groups", $group_data, ['group_id' => $group_id]);
+    } else {
+        $wpdb->insert("{$wpdb->prefix}qp_question_groups", $group_data);
         $group_id = $wpdb->insert_id;
     }
+
+    $q_table = "{$wpdb->prefix}qp_questions";
+    $o_table = "{$wpdb->prefix}qp_options";
     
-    // Question Handling
-    $question_data = [
-        'group_id' => $group_id,
-        'question_text' => $question_text,
-        'question_text_hash' => md5(strtolower(trim(preg_replace('/\s+/', '', $question_text)))),
-        'is_pyq' => $is_pyq
-    ];
-    if ($is_editing) {
-        $wpdb->update("{$wpdb->prefix}qp_questions", $question_data, ['question_id' => $question_id]);
-    } else {
-        $wpdb->insert("{$wpdb->prefix}qp_questions", $question_data);
-        $question_id = $wpdb->insert_id;
+    // First, delete all existing questions and options for this group to handle removals
+    $existing_q_ids = $wpdb->get_col($wpdb->prepare("SELECT question_id FROM $q_table WHERE group_id = %d", $group_id));
+    if (!empty($existing_q_ids)) {
+        $wpdb->query("DELETE FROM $o_table WHERE question_id IN (" . implode(',', $existing_q_ids) . ")");
+        $wpdb->query("DELETE FROM $q_table WHERE question_id IN (" . implode(',', $existing_q_ids) . ")");
     }
 
-    // Options Handling
-    $wpdb->delete("{$wpdb->prefix}qp_options", ['question_id' => $question_id]);
-    foreach ($options as $index => $option_text) {
-        if (!empty(trim($option_text))) {
-            $wpdb->insert("{$wpdb->prefix}qp_options", [
-                'question_id' => $question_id,
-                'option_text' => sanitize_text_field($option_text),
-                'is_correct' => ($index === $correct_option_index) ? 1 : 0
-            ]);
+    // Now, loop through and insert all submitted questions
+    foreach ($questions as $q_data) {
+        $question_text = sanitize_textarea_field($q_data['question_text']);
+        if (empty($question_text)) continue;
+
+        $wpdb->insert($q_table, [
+            'group_id' => $group_id,
+            'question_text' => $question_text,
+            'question_text_hash' => md5(strtolower(trim(preg_replace('/\s+/', '', $question_text)))),
+            'is_pyq' => isset($q_data['is_pyq']) ? 1 : 0
+        ]);
+        $question_id = $wpdb->insert_id;
+
+        $options = isset($q_data['options']) ? (array) $q_data['options'] : [];
+        $correct_option_index = isset($q_data['is_correct_option']) ? absint($q_data['is_correct_option']) : -1;
+
+        foreach ($options as $index => $option_text) {
+            if (!empty(trim($option_text))) {
+                $wpdb->insert($o_table, [
+                    'question_id' => $question_id,
+                    'option_text' => sanitize_text_field($option_text),
+                    'is_correct' => ($index === $correct_option_index) ? 1 : 0
+                ]);
+            }
         }
     }
     
-    // NEW: Labels Handling
-    $wpdb->delete("{$wpdb->prefix}qp_question_labels", ['question_id' => $question_id]);
-    foreach ($labels as $label_id) {
-        $wpdb->insert("{$wpdb->prefix}qp_question_labels", ['question_id' => $question_id, 'label_id' => $label_id]);
-    }
-    
-    // NEW: Redirection Logic
+    // Redirect Logic
     if ($is_editing) {
-        wp_safe_redirect(admin_url('admin.php?page=question-press&message=1')); // Redirect to list with "updated" message
+        wp_safe_redirect(admin_url('admin.php?page=question-press&message=1'));
     } else {
-        wp_safe_redirect(admin_url('admin.php?page=qp-question-editor&message=2')); // Redirect to a fresh "add new" page with "saved" message
+        wp_safe_redirect(admin_url('admin.php?page=qp-question-editor&message=2'));
     }
     exit;
 }
