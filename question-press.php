@@ -165,19 +165,19 @@ function qp_admin_menu() {
 }
 add_action('admin_menu', 'qp_admin_menu');
 
-// UPDATED: Script enqueueing function
+// CORRECTED SCRIPT ENQUEUEING
 function qp_admin_enqueue_scripts($hook_suffix) {
-    if (strpos($hook_suffix, 'qp-') !== false || $hook_suffix === 'toplevel_page_question-press') {
+    if (strpos($hook_suffix, 'qp-') !== false || $hook_suffix === 'toplevel_page_question-press' || $hook_suffix === 'admin_page_qp-edit-group') {
         wp_enqueue_style('wp-color-picker');
         wp_enqueue_script('wp-color-picker');
     }
     
     // Check if we are on our editor page
     if ($hook_suffix === 'question-press_page_qp-question-editor' || $hook_suffix === 'admin_page_qp-edit-group') {
-        // Enqueue the WordPress media scripts
+        // This is the required function to enable the media uploader
         wp_enqueue_media();
         // Enqueue our custom scripts
-        wp_enqueue_script('qp-media-uploader-script', QP_PLUGIN_URL . 'admin/assets/js/media-uploader.js', ['jquery', 'wp-media-editor'], '1.0.0', true);
+        wp_enqueue_script('qp-media-uploader-script', QP_PLUGIN_URL . 'admin/assets/js/media-uploader.js', ['jquery'], '1.0.0', true);
         wp_enqueue_script('qp-editor-script', QP_PLUGIN_URL . 'admin/assets/js/question-editor.js', ['jquery'], '1.0.1', true);
     }
 }
