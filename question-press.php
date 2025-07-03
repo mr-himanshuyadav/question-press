@@ -9,11 +9,9 @@
  * Text Domain:       question-press
  */
 
-if (!defined('ABSPATH')) {
-    exit; // Exit if accessed directly.
-}
+if (!defined('ABSPATH')) exit;
 
-// Define plugin constants
+// Define constants
 define('QP_PLUGIN_FILE', __FILE__);
 define('QP_PLUGIN_DIR', plugin_dir_path(QP_PLUGIN_FILE));
 define('QP_PLUGIN_URL', plugin_dir_url(QP_PLUGIN_FILE));
@@ -25,6 +23,7 @@ require_once QP_PLUGIN_DIR . 'admin/class-qp-import-page.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-importer.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-export-page.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-questions-list-table.php';
+require_once QP_PLUGIN_DIR . 'admin/class-qp-question-editor-page.php';
 
 
 // All activation, deactivation, and uninstall hooks are unchanged...
@@ -153,16 +152,12 @@ function qp_uninstall_plugin() {}
 register_uninstall_hook(QP_PLUGIN_FILE, 'qp_uninstall_plugin');
 
 
-// ------------------------------------------------------------------
 // ADMIN MENU & SCRIPTS SETUP
-// ------------------------------------------------------------------
-
 function qp_admin_menu() {
-    // The main menu item now points to the "All Questions" page
     add_menu_page('All Questions', 'Question Press', 'manage_options', 'question-press', 'qp_all_questions_page_cb', 'dashicons-forms', 25);
-    
-    // We add "All Questions" again as a submenu so it's clear
     add_submenu_page('question-press', 'All Questions', 'All Questions', 'manage_options', 'question-press', 'qp_all_questions_page_cb');
+    // Add a hidden page for the editor
+    add_submenu_page(null, 'Question Editor', 'Question Editor', 'manage_options', 'qp-question-editor', ['QP_Question_Editor_Page', 'render']);
     add_submenu_page('question-press', 'Import', 'Import', 'manage_options', 'qp-import', ['QP_Import_Page', 'render']);
     add_submenu_page('question-press', 'Export', 'Export', 'manage_options', 'qp-export', ['QP_Export_Page', 'render']);
     add_submenu_page('question-press', 'Subjects', 'Subjects', 'manage_options', 'qp-subjects', ['QP_Subjects_Page', 'render']);
@@ -185,6 +180,7 @@ add_action('admin_enqueue_scripts', 'qp_admin_enqueue_scripts');
 
 function qp_handle_form_submissions() {
     QP_Export_Page::handle_export_submission();
+    qp_handle_save_question(); // New handler for our editor
 }
 add_action('admin_init', 'qp_handle_form_submissions');
 
@@ -199,16 +195,79 @@ function qp_all_questions_page_cb() {
     ?>
     <div class="wrap">
         <h1 class="wp-heading-inline">All Questions</h1>
-        <a href="#" class="page-title-action">Add New</a>
+        <a href="<?php echo admin_url('admin.php?page=qp-question-editor'); ?>" class="page-title-action">Add New</a>
         <hr class="wp-header-end">
-        
         <form method="post">
-            <?php
-            // Security nonce for bulk actions
-            wp_nonce_field('qp_bulk_action_nonce');
-            $list_table->display();
-            ?>
+            <?php wp_nonce_field('qp_bulk_action_nonce'); $list_table->display(); ?>
         </form>
     </div>
     <?php
+}
+
+// NEW: Function to handle saving/updating a question
+function qp_handle_save_question() {
+    if (!isset($_POST['save']) || !check_admin_referer('qp_save_question_nonce')) {
+        return;
+    }
+
+    global $wpdb;
+    $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
+    $is_editing = $question_id > 0;
+
+    // Sanitize data
+    $question_text = sanitize_textarea_field($_POST['question_text']);
+    $direction_text = sanitize_textarea_field($_POST['direction_text']);
+    $subject_id = absint($_POST['subject_id']);
+    $is_pyq = isset($_POST['is_pyq']) ? 1 : 0;
+    $options = isset($_POST['options']) ? (array) $_POST['options'] : [];
+    $correct_option_index = isset($_POST['is_correct_option']) ? absint($_POST['is_correct_option']) : -1;
+
+    if (empty($question_text) || empty($subject_id) || empty($options)) {
+        // In a real plugin, we'd add an admin notice here for the error
+        return;
+    }
+
+    // --- Group Handling (Update or Insert) ---
+    $group_id = 0;
+    if ($is_editing) {
+        $group_id = $wpdb->get_var($wpdb->prepare("SELECT group_id FROM {$wpdb->prefix}qp_questions WHERE question_id = %d", $question_id));
+        if ($group_id) {
+            $wpdb->update("{$wpdb->prefix}qp_question_groups", ['direction_text' => $direction_text, 'subject_id' => $subject_id], ['group_id' => $group_id]);
+        }
+    }
+    if (!$group_id) {
+        $wpdb->insert("{$wpdb->prefix}qp_question_groups", ['direction_text' => $direction_text, 'subject_id' => $subject_id]);
+        $group_id = $wpdb->insert_id;
+    }
+
+    // --- Question Handling (Update or Insert) ---
+    $question_data = [
+        'group_id' => $group_id,
+        'question_text' => $question_text,
+        'question_text_hash' => md5(strtolower(trim(preg_replace('/\s+/', '', $question_text)))),
+        'is_pyq' => $is_pyq
+    ];
+
+    if ($is_editing) {
+        $wpdb->update("{$wpdb->prefix}qp_questions", $question_data, ['question_id' => $question_id]);
+    } else {
+        $wpdb->insert("{$wpdb->prefix}qp_questions", $question_data);
+        $question_id = $wpdb->insert_id;
+    }
+
+    // --- Options Handling (Delete all old, insert all new) ---
+    $wpdb->delete("{$wpdb->prefix}qp_options", ['question_id' => $question_id]);
+    foreach ($options as $index => $option_text) {
+        if (!empty(trim($option_text))) {
+            $wpdb->insert("{$wpdb->prefix}qp_options", [
+                'question_id' => $question_id,
+                'option_text' => sanitize_text_field($option_text),
+                'is_correct' => ($index === $correct_option_index) ? 1 : 0
+            ]);
+        }
+    }
+
+    // Redirect back to the main list table
+    wp_safe_redirect(admin_url('admin.php?page=question-press'));
+    exit;
 }
