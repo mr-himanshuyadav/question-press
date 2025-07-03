@@ -23,8 +23,10 @@ require_once QP_PLUGIN_DIR . 'admin/class-qp-subjects-page.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-labels-page.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-import-page.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-importer.php';
+require_once QP_PLUGIN_DIR . 'admin/class-qp-export-page.php'; // New line
 
-// All activation, deactivation, and uninstall hooks
+
+// All activation, deactivation, and uninstall hooks are unchanged...
 function qp_activate_plugin() {
     global $wpdb;
     $charset_collate = $wpdb->get_charset_collate();
@@ -150,10 +152,15 @@ function qp_uninstall_plugin() {}
 register_uninstall_hook(QP_PLUGIN_FILE, 'qp_uninstall_plugin');
 
 
+// ------------------------------------------------------------------
 // ADMIN MENU & SCRIPTS SETUP
+// ------------------------------------------------------------------
+
 function qp_admin_menu() {
     add_menu_page('Question Press', 'Question Press', 'manage_options', 'question-press', 'qp_main_admin_page_cb', 'dashicons-forms', 25);
+    
     add_submenu_page('question-press', 'Import', 'Import', 'manage_options', 'qp-import', ['QP_Import_Page', 'render']);
+    add_submenu_page('question-press', 'Export', 'Export', 'manage_options', 'qp-export', ['QP_Export_Page', 'render']); // New line
     add_submenu_page('question-press', 'Subjects', 'Subjects', 'manage_options', 'qp-subjects', ['QP_Subjects_Page', 'render']);
     add_submenu_page('question-press', 'Labels', 'Labels', 'manage_options', 'qp-labels', ['QP_Labels_Page', 'render']);
 }
@@ -172,7 +179,9 @@ function qp_admin_enqueue_scripts($hook_suffix) {
 }
 add_action('admin_enqueue_scripts', 'qp_admin_enqueue_scripts');
 
+
 function qp_main_admin_page_cb() {
+    // This will be the "All Questions" page later
     ?>
     <div class="wrap"><h1>Welcome to Question Press Dashboard</h1><p>The main dashboard page will be built here.</p></div>
     <?php
