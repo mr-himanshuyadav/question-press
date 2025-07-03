@@ -21,10 +21,10 @@ define('QP_PLUGIN_URL', plugin_dir_url(QP_PLUGIN_FILE));
 // Include class files
 require_once QP_PLUGIN_DIR . 'admin/class-qp-subjects-page.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-labels-page.php';
+require_once QP_PLUGIN_DIR . 'admin/class-qp-import-page.php';
 
-/**
- * The main function to run when the plugin is activated.
- */
+
+// All activation, deactivation, and uninstall hooks are unchanged...
 function qp_activate_plugin() {
     global $wpdb;
     $charset_collate = $wpdb->get_charset_collate();
@@ -39,7 +39,6 @@ function qp_activate_plugin() {
     ) $charset_collate;";
     dbDelta($sql_subjects);
     
-    // Insert default "Uncategorized" subject if it doesn't exist
     $subject_exists = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $table_subjects WHERE subject_name = %s", 'Uncategorized'));
     if ($subject_exists == 0) {
         $wpdb->insert($table_subjects, ['subject_name' => 'Uncategorized'], ['%s']);
@@ -57,7 +56,6 @@ function qp_activate_plugin() {
     ) $charset_collate;";
     dbDelta($sql_labels);
 
-    // Insert default labels
     $default_labels = [
         ['label_name' => 'Wrong Answer', 'label_color' => '#ff5733', 'is_default' => 1, 'description' => 'Reported by users for having an incorrect answer key.'],
         ['label_name' => 'No Answer', 'label_color' => '#ffc300', 'is_default' => 1, 'description' => 'Reported by users because the question has no correct option provided.'],
@@ -72,7 +70,6 @@ function qp_activate_plugin() {
         }
     }
 
-    // ... (rest of the database tables are the same, code omitted for brevity but should be present in your file)
     // Table for Question Groups (Directions)
     $table_groups = $wpdb->prefix . 'qp_question_groups';
     $sql_groups = "CREATE TABLE $table_groups (
@@ -194,6 +191,9 @@ register_uninstall_hook(QP_PLUGIN_FILE, 'qp_uninstall_plugin');
 function qp_admin_menu() {
     add_menu_page('Question Press', 'Question Press', 'manage_options', 'question-press', 'qp_main_admin_page_cb', 'dashicons-forms', 25);
     
+    // Add "Import" submenu page - Placed high for importance
+    add_submenu_page('question-press', 'Import', 'Import', 'manage_options', 'qp-import', ['QP_Import_Page', 'render']);
+
     // Add "Subjects" submenu page
     add_submenu_page('question-press', 'Subjects', 'Subjects', 'manage_options', 'qp-subjects', ['QP_Subjects_Page', 'render']);
 
@@ -203,17 +203,13 @@ function qp_admin_menu() {
 add_action('admin_menu', 'qp_admin_menu');
 
 /**
- * Enqueues admin scripts and styles, such as the color picker.
+ * Enqueues admin scripts and styles.
  */
 function qp_admin_enqueue_scripts($hook_suffix) {
-    // Only load our scripts on our plugin's pages
     if (strpos($hook_suffix, 'qp-') !== false) {
         wp_enqueue_style('wp-color-picker');
         wp_enqueue_script('wp-color-picker');
     }
-    
-    // A small inline script to activate the color picker
-    // This is better than creating a separate JS file for just one line
     if ($hook_suffix === 'question-press_page_qp-labels') {
         add_action('admin_footer', function() {
             echo '<script>jQuery(document).ready(function($){$(".qp-color-picker").wpColorPicker();});</script>';
@@ -224,7 +220,7 @@ add_action('admin_enqueue_scripts', 'qp_admin_enqueue_scripts');
 
 
 /**
- * Callback function for the main admin page.
+ * Callback function for the main admin page (Dashboard).
  */
 function qp_main_admin_page_cb() {
     ?>
