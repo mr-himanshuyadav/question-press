@@ -1,0 +1,13 @@
+# WordPress
+/wp-admin/
+/wp-includes/
+wp-config.php
+.htaccess
+
+# Dependencies
+node_modules/
+vendor/
+
+# OS generated files
+.DS_Store
+Thumbs.db
