@@ -56,82 +56,87 @@ class QP_Importer {
         $this->display_results($result);
     }
 
-    // In admin/class-qp-importer.php
+    /**
+     * Processes the parsed JSON data and inserts it into the database.
+     */
+    private function process_data($data) {
+        global $wpdb;
+        $subjects_table = $wpdb->prefix . 'qp_subjects';
+        $groups_table = $wpdb->prefix . 'qp_question_groups';
+        $questions_table = $wpdb->prefix . 'qp_questions';
+        $options_table = $wpdb->prefix . 'qp_options';
+        $labels_table = $wpdb->prefix . 'qp_labels';
+        $question_labels_table = $wpdb->prefix . 'qp_question_labels';
 
-private function process_data($data) {
-    global $wpdb;
-    $subjects_table = $wpdb->prefix . 'qp_subjects';
-    $groups_table = $wpdb->prefix . 'qp_question_groups';
-    $questions_table = $wpdb->prefix . 'qp_questions';
-    $options_table = $wpdb->prefix . 'qp_options';
-    $labels_table = $wpdb->prefix . 'qp_labels';
-    $question_labels_table = $wpdb->prefix . 'qp_question_labels';
+        $imported_count = 0;
+        $duplicate_count = 0; // Changed from skipped_count
 
-    $imported_count = 0;
-    $skipped_count = 0;
+        // Get the ID for our "Duplicate" label to use later
+        $duplicate_label_id = $wpdb->get_var($wpdb->prepare("SELECT label_id FROM $labels_table WHERE label_name = %s", 'Duplicate'));
 
-    if (!isset($data['questionGroups']) || !is_array($data['questionGroups'])) {
-        return ['imported' => 0, 'skipped' => 0];
-    }
-
-    foreach ($data['questionGroups'] as $group) {
-        // Get or create the subject ID
-        $subject_name = !empty($group['subject']) ? sanitize_text_field($group['subject']) : 'Uncategorized';
-        $subject_id = $wpdb->get_var($wpdb->prepare("SELECT subject_id FROM $subjects_table WHERE subject_name = %s", $subject_name));
-        if (!$subject_id) {
-            $wpdb->insert($subjects_table, ['subject_name' => $subject_name, 'description' => '']);
-            $subject_id = $wpdb->insert_id;
+        if (!isset($data['questionGroups']) || !is_array($data['questionGroups'])) {
+            return ['imported' => 0, 'duplicates' => 0];
         }
 
-        // Insert the question group
-        $direction_text = isset($group['Direction']['text']) ? $group['Direction']['text'] : null;
-        $wpdb->insert($groups_table, ['direction_text' => $direction_text, 'subject_id' => $subject_id]);
-        $group_id = $wpdb->insert_id;
-
-        // Loop through and insert questions
-        foreach ($group['questions'] as $question) {
-            $question_text = $question['questionText'];
-            
-            // Check for duplicates
-            $hash = md5(strtolower(trim(preg_replace('/\s+/', '', $question_text))));
-            $existing_question_id = $wpdb->get_var($wpdb->prepare("SELECT question_id FROM $questions_table WHERE question_text_hash = %s", $hash));
-
-            if ($existing_question_id) {
-                $skipped_count++;
-                continue;
+        foreach ($data['questionGroups'] as $group) {
+            $subject_name = !empty($group['subject']) ? sanitize_text_field($group['subject']) : 'Uncategorized';
+            $subject_id = $wpdb->get_var($wpdb->prepare("SELECT subject_id FROM $subjects_table WHERE subject_name = %s", $subject_name));
+            if (!$subject_id) {
+                $wpdb->insert($subjects_table, ['subject_name' => $subject_name, 'description' => '']);
+                $subject_id = $wpdb->insert_id;
             }
 
-            // --- NEW: Get and increment the custom question ID ---
-            $next_custom_id = get_option('qp_next_custom_question_id', 1000);
-            
-            $wpdb->insert($questions_table, [
-                'custom_question_id' => $next_custom_id, // Add the new ID
-                'group_id' => $group_id,
-                'question_text' => $question_text,
-                'question_text_hash' => $hash,
-                'is_pyq' => isset($question['isPYQ']) ? (int)$question['isPYQ'] : 0,
-                'source_file' => isset($data['sourceFile']) ? sanitize_text_field($data['sourceFile']) : null,
-            ]);
-            $question_id = $wpdb->insert_id;
+            $direction_text = isset($group['Direction']['text']) ? $group['Direction']['text'] : null;
+            $wpdb->insert($groups_table, ['direction_text' => $direction_text, 'subject_id' => $subject_id]);
+            $group_id = $wpdb->insert_id;
 
-            update_option('qp_next_custom_question_id', $next_custom_id + 1); // Increment for the next question
+            foreach ($group['questions'] as $question) {
+                $question_text = $question['questionText'];
+                $hash = md5(strtolower(trim(preg_replace('/\s+/', '', $question_text))));
+                
+                // Check for a duplicate, but don't skip. Just store the result.
+                $is_duplicate = $wpdb->get_var($wpdb->prepare("SELECT question_id FROM $questions_table WHERE question_text_hash = %s", $hash)) ? true : false;
+                
+                $next_custom_id = get_option('qp_next_custom_question_id', 1000);
+                
+                $wpdb->insert($questions_table, [
+                    'custom_question_id' => $next_custom_id,
+                    'group_id' => $group_id,
+                    'question_text' => $question_text,
+                    'question_text_hash' => $hash,
+                    'is_pyq' => isset($question['isPYQ']) ? (int)$question['isPYQ'] : 0,
+                    'source_file' => isset($data['sourceFile']) ? sanitize_text_field($data['sourceFile']) : null,
+                ]);
+                $question_id = $wpdb->insert_id;
+                update_option('qp_next_custom_question_id', $next_custom_id + 1);
 
-            // Insert options for the question
-            if (isset($question['options']) && is_array($question['options'])) {
-                foreach ($question['options'] as $option) {
-                    $wpdb->insert($options_table, [
-                        'question_id' => $question_id,
-                        'option_text' => $option['optionText'],
-                        'is_correct' => (int)$option['isCorrect']
-                    ]);
+                if (isset($question['options']) && is_array($question['options'])) {
+                    foreach ($question['options'] as $option) {
+                        $wpdb->insert($options_table, [
+                            'question_id' => $question_id,
+                            'option_text' => $option['optionText'],
+                            'is_correct' => (int)$option['isCorrect']
+                        ]);
+                    }
                 }
-            }
-            $imported_count++;
-        }
-    }
 
-    return ['imported' => $imported_count, 'skipped' => $skipped_count];
-}
+                // If it was a duplicate, assign the "Duplicate" label
+                if ($is_duplicate) {
+                    if ($duplicate_label_id) {
+                        $wpdb->insert($question_labels_table, [
+                            'question_id' => $question_id,
+                            'label_id'    => $duplicate_label_id
+                        ]);
+                    }
+                    $duplicate_count++;
+                }
+
+                $imported_count++;
+            }
+        }
+
+        return ['imported' => $imported_count, 'duplicates' => $duplicate_count];
+    }
 
     private function cleanup($dir) {
         if (!is_dir($dir)) return;
@@ -142,6 +147,9 @@ private function process_data($data) {
         return rmdir($dir);
     }
 
+    /**
+     * Displays the results of the import process.
+     */
     private function display_results($result) {
         ?>
         <div class="wrap">
@@ -150,10 +158,11 @@ private function process_data($data) {
                 <p>
                     <strong>Import Complete!</strong><br>
                     Successfully imported: <?php echo esc_html($result['imported']); ?> questions.<br>
-                    Skipped (duplicates): <?php echo esc_html($result['skipped']); ?> questions.
+                    Marked as duplicate: <?php echo esc_html($result['duplicates']); ?> questions.
                 </p>
             </div>
             <p><a href="<?php echo esc_url(admin_url('admin.php?page=qp-import')); ?>" class="button button-primary">Import Another File</a></p>
+            <p><a href="<?php echo esc_url(admin_url('admin.php?page=question-press')); ?>" class="button button-secondary">Go to All Questions</a></p>
         </div>
         <?php
     }
