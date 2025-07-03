@@ -20,7 +20,6 @@ define('QP_PLUGIN_URL', plugin_dir_url(QP_PLUGIN_FILE));
 
 /**
  * The main function to run when the plugin is activated.
- * This function creates the necessary database tables.
  */
 function qp_activate_plugin() {
     global $wpdb;
@@ -35,7 +34,7 @@ function qp_activate_plugin() {
         PRIMARY KEY (subject_id)
     ) $charset_collate;";
     dbDelta($sql_subjects);
-
+    
     // Insert default "Uncategorized" subject if it doesn't exist
     $subject_exists = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $table_subjects WHERE subject_name = %s", 'Uncategorized'));
     if ($subject_exists == 0) {
@@ -113,7 +112,7 @@ function qp_activate_plugin() {
         KEY question_id (question_id)
     ) $charset_collate;";
     dbDelta($sql_options);
-
+    
     // Table for Question Labels (Many-to-Many Relationship)
     $table_question_labels = $wpdb->prefix . 'qp_question_labels';
     $sql_question_labels = "CREATE TABLE $table_question_labels (
@@ -123,7 +122,7 @@ function qp_activate_plugin() {
         KEY label_id (label_id)
     ) $charset_collate;";
     dbDelta($sql_question_labels);
-
+    
     // Table for User Practice Sessions
     $table_sessions = $wpdb->prefix . 'qp_user_sessions';
     $sql_sessions = "CREATE TABLE $table_sessions (
@@ -141,7 +140,7 @@ function qp_activate_plugin() {
         KEY user_id (user_id)
     ) $charset_collate;";
     dbDelta($sql_sessions);
-
+    
     // Table for User Question Attempts in a Session
     $table_attempts = $wpdb->prefix . 'qp_user_attempts';
     $sql_attempts = "CREATE TABLE $table_attempts (
@@ -183,7 +182,6 @@ register_deactivation_hook(QP_PLUGIN_FILE, 'qp_deactivate_plugin');
 
 /**
  * Handles plugin uninstallation.
- * Deletes all plugin data if the setting is checked.
  */
 function qp_uninstall_plugin() {
     $options = get_option('qp_settings');
@@ -207,5 +205,39 @@ function qp_uninstall_plugin() {
     }
 }
 register_uninstall_hook(QP_PLUGIN_FILE, 'qp_uninstall_plugin');
+
+
+// ------------------------------------------------------------------
+// ADMIN MENU SETUP
+// ------------------------------------------------------------------
+
+/**
+ * Adds the main admin menu for Question Press.
+ */
+function qp_admin_menu() {
+    add_menu_page(
+        'Question Press',           // Page Title
+        'Question Press',           // Menu Title
+        'manage_options',           // Capability required to see this menu
+        'question-press',           // Menu Slug (URL)
+        'qp_main_admin_page_cb',    // Callback function to display the page content
+        'dashicons-forms',          // Icon
+        25                          // Position in the menu order
+    );
+}
+add_action('admin_menu', 'qp_admin_menu');
+
+/**
+ * Callback function for the main admin page.
+ * For now, it will just be a placeholder.
+ */
+function qp_main_admin_page_cb() {
+    ?>
+    <div class="wrap">
+        <h1>Welcome to Question Press</h1>
+        <p>The main dashboard page will be built here.</p>
+    </div>
+    <?php
+}
 
 // We will add all other plugin functions and includes below this line in future steps.
