@@ -24,6 +24,7 @@ require_once QP_PLUGIN_DIR . 'admin/class-qp-labels-page.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-import-page.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-importer.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-export-page.php';
+require_once QP_PLUGIN_DIR . 'admin/class-qp-questions-list-table.php';
 
 
 // All activation, deactivation, and uninstall hooks are unchanged...
@@ -157,8 +158,11 @@ register_uninstall_hook(QP_PLUGIN_FILE, 'qp_uninstall_plugin');
 // ------------------------------------------------------------------
 
 function qp_admin_menu() {
-    add_menu_page('Question Press', 'Question Press', 'manage_options', 'question-press', 'qp_main_admin_page_cb', 'dashicons-forms', 25);
+    // The main menu item now points to the "All Questions" page
+    add_menu_page('All Questions', 'Question Press', 'manage_options', 'question-press', 'qp_all_questions_page_cb', 'dashicons-forms', 25);
     
+    // We add "All Questions" again as a submenu so it's clear
+    add_submenu_page('question-press', 'All Questions', 'All Questions', 'manage_options', 'question-press', 'qp_all_questions_page_cb');
     add_submenu_page('question-press', 'Import', 'Import', 'manage_options', 'qp-import', ['QP_Import_Page', 'render']);
     add_submenu_page('question-press', 'Export', 'Export', 'manage_options', 'qp-export', ['QP_Export_Page', 'render']);
     add_submenu_page('question-press', 'Subjects', 'Subjects', 'manage_options', 'qp-subjects', ['QP_Subjects_Page', 'render']);
@@ -167,7 +171,7 @@ function qp_admin_menu() {
 add_action('admin_menu', 'qp_admin_menu');
 
 function qp_admin_enqueue_scripts($hook_suffix) {
-    if (strpos($hook_suffix, 'qp-') !== false) {
+    if (strpos($hook_suffix, 'qp-') !== false || $hook_suffix === 'toplevel_page_question-press') {
         wp_enqueue_style('wp-color-picker');
         wp_enqueue_script('wp-color-picker');
     }
@@ -179,18 +183,32 @@ function qp_admin_enqueue_scripts($hook_suffix) {
 }
 add_action('admin_enqueue_scripts', 'qp_admin_enqueue_scripts');
 
-/**
- * NEW: Hook into admin_init to handle form submissions before headers are sent.
- */
 function qp_handle_form_submissions() {
     QP_Export_Page::handle_export_submission();
 }
 add_action('admin_init', 'qp_handle_form_submissions');
 
 
-function qp_main_admin_page_cb() {
-    // This will be the "All Questions" page later
+/**
+ * Callback function for the "All Questions" page.
+ * Instantiates and displays our custom list table.
+ */
+function qp_all_questions_page_cb() {
+    $list_table = new QP_Questions_List_Table();
+    $list_table->prepare_items();
     ?>
-    <div class="wrap"><h1>Welcome to Question Press Dashboard</h1><p>The main dashboard page will be built here.</p></div>
+    <div class="wrap">
+        <h1 class="wp-heading-inline">All Questions</h1>
+        <a href="#" class="page-title-action">Add New</a>
+        <hr class="wp-header-end">
+        
+        <form method="post">
+            <?php
+            // Security nonce for bulk actions
+            wp_nonce_field('qp_bulk_action_nonce');
+            $list_table->display();
+            ?>
+        </form>
+    </div>
     <?php
 }
