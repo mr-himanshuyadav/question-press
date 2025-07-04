@@ -474,58 +474,70 @@ add_action('wp_ajax_delete_user_session', 'qp_delete_user_session_ajax');
 /**
  * AJAX handler for reporting an issue with a question.
  */
+// UPDATED: Report issue function
 function qp_report_question_issue_ajax() {
     check_ajax_referer('qp_practice_nonce', 'nonce');
     $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
     $report_label_name = isset($_POST['label_name']) ? sanitize_text_field($_POST['label_name']) : 'Incorrect Formatting';
-
-    if (!$question_id) {
-        wp_send_json_error(['message' => 'Invalid Question ID.']);
-    }
+    if (!$question_id) { wp_send_json_error(['message' => 'Invalid Question ID.']); }
 
     global $wpdb;
     $labels_table = $wpdb->prefix . 'qp_labels';
     $question_labels_table = $wpdb->prefix . 'qp_question_labels';
+    $logs_table = $wpdb->prefix . 'qp_logs';
     
     $label_id = $wpdb->get_var($wpdb->prepare("SELECT label_id FROM $labels_table WHERE label_name = %s", $report_label_name));
-
-    if (!$label_id) {
-        wp_send_json_error(['message' => 'Reporting system is not configured correctly. The "' . esc_html($report_label_name) . '" label does not exist.']);
-    }
+    if (!$label_id) { wp_send_json_error(['message' => 'Reporting system is not configured correctly.']); }
 
     $already_assigned = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $question_labels_table WHERE question_id = %d AND label_id = %d", $question_id, $label_id));
     if ($already_assigned == 0) {
-        $wpdb->insert($question_labels_table, ['question_id' => $question_id, 'label_id'    => $label_id]);
+        $wpdb->insert($question_labels_table, ['question_id' => $question_id, 'label_id' => $label_id]);
+        
+        // NEW: Create the log entry
+        $wpdb->insert($logs_table, [
+            'log_type' => 'Report',
+            'log_message' => sprintf('User reported question #%d with label: %s', $question_id, $report_label_name),
+            'log_data' => wp_json_encode(['user_id' => get_current_user_id()])
+        ]);
     }
 
     wp_send_json_success(['message' => 'Issue reported.']);
-    wp_die(); // IMPORTANT: Terminate the script
+    wp_die();
 }
 add_action('wp_ajax_report_question_issue', 'qp_report_question_issue_ajax');
 
 
 // In question-press.php, ADD this new function
 
+// UPDATED: Report and Skip function
 function qp_report_and_skip_question_ajax() {
     check_ajax_referer('qp_practice_nonce', 'nonce');
     $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
     $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
     $label_name = isset($_POST['label_name']) ? sanitize_text_field($_POST['label_name']) : '';
-
-    if (!$session_id || !$question_id || !$label_name) {
-        wp_send_json_error(['message' => 'Invalid data.']);
-    }
+    if (!$session_id || !$question_id || !$label_name) { wp_send_json_error(['message' => 'Invalid data.']); }
 
     global $wpdb;
-    $label_id = $wpdb->get_var($wpdb->prepare("SELECT label_id FROM {$wpdb->prefix}qp_labels WHERE label_name = %s", $label_name));
+    $labels_table = $wpdb->prefix . 'qp_labels';
+    $question_labels_table = $wpdb->prefix . 'qp_question_labels';
+    $logs_table = $wpdb->prefix . 'qp_logs';
+
+    $label_id = $wpdb->get_var($wpdb->prepare("SELECT label_id FROM $labels_table WHERE label_name = %s", $label_name));
     if ($label_id) {
-        $wpdb->insert("{$wpdb->prefix}qp_question_labels", ['question_id' => $question_id, 'label_id' => $label_id]);
+        $wpdb->insert($question_labels_table, ['question_id' => $question_id, 'label_id' => $label_id]);
+        
+        // NEW: Create the log entry
+        $wpdb->insert($logs_table, [
+            'log_type' => 'Report',
+            'log_message' => sprintf('User reported question #%d with label: %s', $question_id, $label_name),
+            'log_data' => wp_json_encode(['user_id' => get_current_user_id(), 'session_id' => $session_id])
+        ]);
     }
     
     $wpdb->insert("{$wpdb->prefix}qp_user_attempts", ['session_id' => $session_id, 'user_id' => get_current_user_id(), 'question_id' => $question_id, 'is_correct' => null]);
 
     wp_send_json_success(['message' => 'Question reported and skipped.']);
-    wp_die(); // IMPORTANT: Terminate the script
+    wp_die();
 }
 add_action('wp_ajax_report_and_skip_question', 'qp_report_and_skip_question_ajax');
 
