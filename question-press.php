@@ -588,6 +588,8 @@ function qp_handle_clear_logs() {
 
 
 // NEW: AJAX handler to fetch the Quick Edit form HTML
+// In question-press.php
+
 function qp_get_quick_edit_form_ajax() {
     check_ajax_referer('qp_quick_edit_nonce', 'nonce');
     $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
@@ -607,10 +609,8 @@ function qp_get_quick_edit_form_ajax() {
 
     ob_start();
     ?>
-    <form class="quick-edit-form">
+    <div class="quick-edit-form-wrapper">
         <h4>Quick Edit <span class="title"><?php echo esc_html(wp_trim_words($question->question_text, 5, '...')); ?></span></h4>
-        <input type="hidden" name="question_id" value="<?php echo esc_attr($question_id); ?>">
-        <?php wp_nonce_field('qp_quick_edit_save_nonce'); ?>
         <div class="form-row">
             <label class="form-label"><strong>Question Text</strong></label>
             <textarea name="question_text" rows="4"><?php echo esc_textarea($question->question_text); ?></textarea>
@@ -649,23 +649,24 @@ function qp_get_quick_edit_form_ajax() {
         </div>
         <p class="submit inline-edit-save">
             <button type="button" class="button cancel">Cancel</button>
-            <button type="button" class="button button-primary save">Update</button>
+            <button type="button" class="button button-primary">Update</button>
         </p>
-    </form>
+    </div>
     <style>
         .quick-edit-form-wrapper { padding: 1rem; }
         .quick-edit-form-wrapper .form-row { margin-bottom: 1rem; }
         .quick-edit-form-wrapper .form-row-flex { display: flex; gap: 1rem; align-items: flex-end; }
         .quick-edit-form-wrapper .form-group-half { flex: 1; }
         .quick-edit-form-wrapper .form-group-center-align { padding-bottom: 5px; }
-        .quick-edit-form-wrapper .form-label, .quick-edit-form-wrapper .title, .quick-edit-form-wrapper strong { font-weight: 600; display: block; margin-bottom: .5rem;}
+        .quick_edit_form-wrapper .form-label, .quick-edit-form-wrapper .title, .quick-edit-form-wrapper strong { font-weight: 600; display: block; margin-bottom: .5rem;}
         .quick-edit-form-wrapper textarea, .quick-edit-form-wrapper select, .quick-edit-form-wrapper .options-group input[type="text"] { width: 100%; }
         .quick-edit-form-wrapper .options-group .option-label { display: flex; align-items: center; gap: .5rem; margin-bottom: .5rem; }
         .quick-edit-form-wrapper .labels-group { display: flex; flex-wrap: wrap; gap: .5rem 1rem; padding: .5rem; border: 1px solid #ddd; background: #fff; }
         .quick-edit-form-wrapper .inline-checkbox { white-space: nowrap; }
     </style>
     <?php
-    wp_send_json_success(['form' => ob_get_clean()]);
+    $form_html = ob_get_clean();
+    wp_send_json_success(['form' => $form_html]);
 }
 add_action('wp_ajax_get_quick_edit_form', 'qp_get_quick_edit_form_ajax');
 

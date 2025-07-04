@@ -283,51 +283,49 @@ class QP_Questions_List_Table extends WP_List_Table
         return sprintf('<input type="checkbox" name="question_ids[]" value="%s" />', $item['question_id']);
     }
 
-    // In admin/class-qp-questions-list-table.php
+    public function column_question_text($item) {
+        $group_id = isset($item['group_id']) ? $item['group_id'] : 0;
+        $page = esc_attr($_REQUEST['page']);
+        $status = isset($_REQUEST['status']) ? sanitize_key($_REQUEST['status']) : 'all';
+        $actions = [];
 
-public function column_question_text($item) {
-    $group_id = isset($item['group_id']) ? $item['group_id'] : 0;
-    $page = esc_attr($_REQUEST['page']);
-    $status = isset($_REQUEST['status']) ? sanitize_key($_REQUEST['status']) : 'all';
-    $actions = [];
-
-    if ($status === 'trash') {
-        $untrash_nonce = wp_create_nonce('qp_untrash_question_' . $item['question_id']);
-        $delete_nonce = wp_create_nonce('qp_delete_question_' . $item['question_id']);
-        $actions = [
-            'untrash' => sprintf('<a href="?page=%s&action=untrash&question_id=%s&_wpnonce=%s">Restore</a>', $page, $item['question_id'], $untrash_nonce),
-            'delete'  => sprintf('<a href="?page=%s&action=delete&question_id=%s&_wpnonce=%s" style="color:#a00;" onclick="return confirm(\'You are about to permanently delete this item. This action cannot be undone. Are you sure?\');">Delete Permanently</a>', $page, $item['question_id'], $delete_nonce),
-        ];
-    } else {
-        $trash_nonce = wp_create_nonce('qp_trash_question_' . $item['question_id']);
-        $actions = [
-            'edit' => sprintf('<a href="admin.php?page=qp-question-editor&action=edit&group_id=%s">Edit</a>', $group_id),
-            'inline hide-if-no-js' => sprintf(
-                '<a href="#" class="editinline" data-question-id="%d">Quick Edit</a>',
-                $item['question_id']
-            ),
-            'trash' => sprintf('<a href="?page=%s&action=trash&question_id=%s&_wpnonce=%s" style="color:#a00;">Trash</a>', $page, $item['question_id'], $trash_nonce),
-        ];
-    }
-    
-    $row_text = sprintf('<strong>%s</strong>', wp_trim_words(esc_html($item['question_text']), 20, '...'));
-
-    // THIS IS THE RESTORED LOGIC FOR DISPLAYING LABELS
-    if (!empty($item['labels'])) {
-        $labels_html = '<div style="margin-top: 5px; display: flex; flex-wrap: wrap; gap: 5px;">';
-        foreach ($item['labels'] as $label) {
-            $labels_html .= sprintf(
-                '<span style="padding: 2px 8px; font-size: 11px; border-radius: 3px; color: #fff; background-color: %s;">%s</span>',
-                esc_attr($label->label_color),
-                esc_html($label->label_name)
-            );
+        if ($status === 'trash') {
+            $untrash_nonce = wp_create_nonce('qp_untrash_question_' . $item['question_id']);
+            $delete_nonce = wp_create_nonce('qp_delete_question_' . $item['question_id']);
+            $actions = [
+                'untrash' => sprintf('<a href="?page=%s&action=untrash&question_id=%s&_wpnonce=%s">Restore</a>', $page, $item['question_id'], $untrash_nonce),
+                'delete'  => sprintf('<a href="?page=%s&action=delete&question_id=%s&_wpnonce=%s" style="color:#a00;" onclick="return confirm(\'You are about to permanently delete this item. This action cannot be undone. Are you sure?\');">Delete Permanently</a>', $page, $item['question_id'], $delete_nonce),
+            ];
+        } else {
+            $trash_nonce = wp_create_nonce('qp_trash_question_' . $item['question_id']);
+            $actions = [
+                'edit' => sprintf('<a href="admin.php?page=qp-question-editor&action=edit&group_id=%s">Edit</a>', $group_id),
+                'inline hide-if-no-js' => sprintf(
+                    '<a href="#" class="editinline" data-question-id="%d">Quick Edit</a>',
+                    $item['question_id']
+                ),
+                'trash' => sprintf('<a href="?page=%s&action=trash&question_id=%s&_wpnonce=%s" style="color:#a00;">Trash</a>', $page, $item['question_id'], $trash_nonce),
+            ];
         }
-        $labels_html .= '</div>';
-        $row_text .= $labels_html;
-    }
+        
+        $row_text = sprintf('<strong>%s</strong>', wp_trim_words(esc_html($item['question_text']), 20, '...'));
 
-    return $row_text . $this->row_actions($actions);
-}
+        // THIS IS THE RESTORED LOGIC FOR DISPLAYING LABELS
+        if (!empty($item['labels'])) {
+            $labels_html = '<div style="margin-top: 5px; display: flex; flex-wrap: wrap; gap: 5px;">';
+            foreach ($item['labels'] as $label) {
+                $labels_html .= sprintf(
+                    '<span style="padding: 2px 8px; font-size: 11px; border-radius: 3px; color: #fff; background-color: %s;">%s</span>',
+                    esc_attr($label->label_color),
+                    esc_html($label->label_name)
+                );
+            }
+            $labels_html .= '</div>';
+            $row_text .= $labels_html;
+        }
+
+        return $row_text . $this->row_actions($actions);
+    }
 
     public function column_is_pyq($item)
     {
