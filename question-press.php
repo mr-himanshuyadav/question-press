@@ -135,9 +135,12 @@ function qp_all_questions_page_cb() {
     $list_table = new QP_Questions_List_Table();
     $list_table->prepare_items();
     global $wpdb;
-    foreach ($list_table->items as &$item) {
-        $item['group_id'] = $wpdb->get_var($wpdb->prepare("SELECT group_id FROM {$wpdb->prefix}qp_questions WHERE question_id = %d", $item['question_id']));
+    if (!empty($list_table->items)) {
+        foreach ($list_table->items as &$item) {
+            $item['group_id'] = $wpdb->get_var($wpdb->prepare("SELECT group_id FROM {$wpdb->prefix}qp_questions WHERE question_id = %d", $item['question_id']));
+        }
     }
+    
     ?>
     <div class="wrap">
         <h1 class="wp-heading-inline">All Questions</h1>
@@ -150,8 +153,14 @@ function qp_all_questions_page_cb() {
             }
         } ?>
         <hr class="wp-header-end">
+        
         <form method="post">
-            <?php wp_nonce_field('bulk-questions'); $list_table->display(); ?>
+            <?php
+            // The search box is now called before the table
+            $list_table->search_box('Search Questions', 'question');
+            wp_nonce_field('bulk-questions'); 
+            $list_table->display();
+            ?>
         </form>
     </div>
     <?php
