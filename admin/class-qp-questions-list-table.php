@@ -33,14 +33,11 @@ class QP_Questions_List_Table extends WP_List_Table {
             'import_date'        => ['import_date', true]
         ];
     }
-
+    
     protected function get_bulk_actions() {
         $status = isset($_REQUEST['status']) && $_REQUEST['status'] === 'trash' ? 'trash' : 'publish';
         if ($status === 'trash') {
-            return [
-                'untrash' => 'Restore',
-                'delete'  => 'Delete Permanently',
-            ];
+            return ['untrash' => 'Restore', 'delete'  => 'Delete Permanently'];
         }
         return ['trash' => 'Move to Trash'];
     }
@@ -54,19 +51,11 @@ class QP_Questions_List_Table extends WP_List_Table {
 
         $publish_count = $wpdb->get_var("SELECT COUNT(*) FROM $q_table WHERE status = 'publish'");
         $trash_count = $wpdb->get_var("SELECT COUNT(*) FROM $q_table WHERE status = 'trash'");
-        $all_count = $publish_count; // "All" should show only non-trashed items
+        $all_count = $publish_count;
 
         $views = [
-            'all' => sprintf('<a href="%s" class="%s">All <span class="count">(%d)</span></a>',
-                esc_url($base_url),
-                $current_status === 'all' || $current_status === 'publish' ? 'current' : '',
-                $all_count
-            ),
-            'trash' => sprintf('<a href="%s" class="%s">Trash <span class="count">(%d)</span></a>',
-                esc_url(add_query_arg('status', 'trash', $base_url)),
-                $current_status === 'trash' ? 'current' : '',
-                $trash_count
-            )
+            'all' => sprintf('<a href="%s" class="%s">All <span class="count">(%d)</span></a>', esc_url($base_url), $current_status === 'all' || $current_status === 'publish' ? 'current' : '', $all_count),
+            'trash' => sprintf('<a href="%s" class="%s">Trash <span class="count">(%d)</span></a>', esc_url(add_query_arg('status', 'trash', $base_url)), $current_status === 'trash' ? 'current' : '', $trash_count)
         ];
 
         return $views;
@@ -75,12 +64,8 @@ class QP_Questions_List_Table extends WP_List_Table {
     protected function extra_tablenav($which) {
         if ($which == "top") {
             global $wpdb;
-            $subjects_table = $wpdb->prefix . 'qp_subjects';
-            $labels_table = $wpdb->prefix . 'qp_labels';
-
-            $subjects = $wpdb->get_results("SELECT * FROM $subjects_table ORDER BY subject_name ASC");
-            $labels = $wpdb->get_results("SELECT * FROM $labels_table ORDER BY label_name ASC");
-            
+            $subjects = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}qp_subjects ORDER BY subject_name ASC");
+            $labels = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}qp_labels ORDER BY label_name ASC");
             $current_subject = isset($_REQUEST['filter_by_subject']) ? absint($_REQUEST['filter_by_subject']) : '';
             $current_label = isset($_REQUEST['filter_by_label']) ? absint($_REQUEST['filter_by_label']) : '';
             ?>
@@ -89,12 +74,10 @@ class QP_Questions_List_Table extends WP_List_Table {
                     <option value="">All Subjects</option>
                     <?php foreach ($subjects as $subject) { echo sprintf('<option value="%s" %s>%s</option>', esc_attr($subject->subject_id), selected($current_subject, $subject->subject_id, false), esc_html($subject->subject_name)); } ?>
                 </select>
-                
                 <select name="filter_by_label">
                     <option value="">All Labels</option>
                     <?php foreach ($labels as $label) { echo sprintf('<option value="%s" %s>%s</option>', esc_attr($label->label_id), selected($current_label, $label->label_id, false), esc_html($label->label_name)); } ?>
                 </select>
-
                 <?php submit_button('Filter', 'button', 'filter_action', false, ['id' => 'post-query-submit']); ?>
             </div>
             <?php
@@ -117,13 +100,10 @@ class QP_Questions_List_Table extends WP_List_Table {
     public function prepare_items() {
         global $wpdb;
         $this->process_bulk_action();
-
         $this->_column_headers = [$this->get_columns(), [], $this->get_sortable_columns(), 'custom_question_id'];
-
         $per_page = 20;
         $current_page = $this->get_pagenum();
         $offset = ($current_page - 1) * $per_page;
-
         $orderby = isset($_GET['orderby']) ? sanitize_key($_GET['orderby']) : 'import_date';
         $order = isset($_GET['order']) ? sanitize_key($_GET['order']) : 'desc';
 
@@ -136,11 +116,7 @@ class QP_Questions_List_Table extends WP_List_Table {
         
         $where = [];
         $current_status = isset($_REQUEST['status']) ? sanitize_key($_REQUEST['status']) : 'all';
-        if ($current_status === 'trash') {
-            $where[] = "q.status = 'trash'";
-        } else {
-            $where[] = "q.status = 'publish'";
-        }
+        $where[] = ($current_status === 'trash') ? "q.status = 'trash'" : "q.status = 'publish'";
         
         if (!empty($_REQUEST['filter_by_subject'])) { $where[] = $wpdb->prepare("g.subject_id = %d", absint($_REQUEST['filter_by_subject'])); }
         if (!empty($_REQUEST['filter_by_label'])) { $where[] = $wpdb->prepare("q.question_id IN (SELECT question_id FROM {$ql_table} WHERE label_id = %d)", absint($_REQUEST['filter_by_label'])); }
@@ -149,7 +125,6 @@ class QP_Questions_List_Table extends WP_List_Table {
         $sql_query_where = " WHERE " . implode(' AND ', $where);
 
         $total_items = $wpdb->get_var("SELECT COUNT(q.question_id)" . $sql_query_from . $sql_query_where);
-
         $data_query = "SELECT q.question_id, q.custom_question_id, q.question_text, q.is_pyq, q.import_date, s.subject_name" . $sql_query_from . $sql_query_where;
         $data_query .= $wpdb->prepare(" ORDER BY %s %s LIMIT %d OFFSET %d", $orderby, $order, $per_page, $offset);
         
@@ -172,83 +147,41 @@ class QP_Questions_List_Table extends WP_List_Table {
         $this->set_pagination_args(['total_items' => $total_items, 'per_page' => $per_page]);
     }
 
-
-    /**
-     * Process all bulk actions (trash, untrash, delete)
-     */
     public function process_bulk_action() {
-        $action = $this->current_action();
-        if (!$action) return;
-
+        $action = $this->current_action(); if (!$action) return;
         $nonce = isset($_REQUEST['_wpnonce']) ? sanitize_key($_REQUEST['_wpnonce']) : '';
         $question_ids = isset($_REQUEST['question_ids']) ? array_map('absint', $_REQUEST['question_ids']) : (isset($_REQUEST['question_id']) ? [absint($_REQUEST['question_id'])] : []);
-        
         if (empty($question_ids)) return;
-
-        global $wpdb;
-        $q_table = $wpdb->prefix . 'qp_questions';
-        $ids_placeholder = implode(',', array_fill(0, count($question_ids), '%d'));
-
-        // Handle Trash action
-        if ('trash' === $action) {
-            if (!wp_verify_nonce($nonce, 'bulk-questions') && !wp_verify_nonce($nonce, 'qp_trash_question_' . $question_ids[0])) wp_die('Security check failed.');
-            $wpdb->query($wpdb->prepare("UPDATE {$q_table} SET status = 'trash' WHERE question_id IN ($ids_placeholder)", $question_ids));
-        }
-        
-        // Handle Restore action
-        if ('untrash' === $action) {
-            if (!wp_verify_nonce($nonce, 'bulk-questions') && !wp_verify_nonce($nonce, 'qp_untrash_question_' . $question_ids[0])) wp_die('Security check failed.');
-            $wpdb->query($wpdb->prepare("UPDATE {$q_table} SET status = 'publish' WHERE question_id IN ($ids_placeholder)", $question_ids));
-        }
-
-        // Handle Delete Permanently action
-        if ('delete' === $action) {
-            if (!wp_verify_nonce($nonce, 'bulk-questions') && !wp_verify_nonce($nonce, 'qp_delete_question_' . $question_ids[0])) wp_die('Security check failed.');
-            // This is a destructive action, so we delete from all related tables
-            $wpdb->query($wpdb->prepare("DELETE FROM {$wpdb->prefix}qp_options WHERE question_id IN ($ids_placeholder)", $question_ids));
-            $wpdb->query($wpdb->prepare("DELETE FROM {$wpdb->prefix}qp_question_labels WHERE question_id IN ($ids_placeholder)", $question_ids));
-            $wpdb->query($wpdb->prepare("DELETE FROM {$q_table} WHERE question_id IN ($ids_placeholder)", $question_ids));
-        }
+        global $wpdb; $q_table = $wpdb->prefix . 'qp_questions'; $ids_placeholder = implode(',', array_fill(0, count($question_ids), '%d'));
+        if ('trash' === $action) { if (!wp_verify_nonce($nonce, 'bulk-questions') && !wp_verify_nonce($nonce, 'qp_trash_question_' . $question_ids[0])) wp_die('Security check failed.'); $wpdb->query($wpdb->prepare("UPDATE {$q_table} SET status = 'trash' WHERE question_id IN ($ids_placeholder)", $question_ids)); }
+        if ('untrash' === $action) { if (!wp_verify_nonce($nonce, 'bulk-questions') && !wp_verify_nonce($nonce, 'qp_untrash_question_' . $question_ids[0])) wp_die('Security check failed.'); $wpdb->query($wpdb->prepare("UPDATE {$q_table} SET status = 'publish' WHERE question_id IN ($ids_placeholder)", $question_ids)); }
+        if ('delete' === $action) { if (!wp_verify_nonce($nonce, 'bulk-questions') && !wp_verify_nonce($nonce, 'qp_delete_question_' . $question_ids[0])) wp_die('Security check failed.'); $wpdb->query($wpdb->prepare("DELETE FROM {$wpdb->prefix}qp_options WHERE question_id IN ($ids_placeholder)", $question_ids)); $wpdb->query($wpdb->prepare("DELETE FROM {$wpdb->prefix}qp_question_labels WHERE question_id IN ($ids_placeholder)", $question_ids)); $wpdb->query($wpdb->prepare("DELETE FROM {$q_table} WHERE question_id IN ($ids_placeholder)", $question_ids)); }
     }
 
-    public function column_cb($item) {
-        return sprintf('<input type="checkbox" name="question_ids[]" value="%s" />', $item['question_id']);
-    }
+    public function column_cb($item) { return sprintf('<input type="checkbox" name="question_ids[]" value="%s" />', $item['question_id']); }
 
-    
-    /**
-     * Render the Question column with dynamic actions based on view
-     */
     public function column_question_text($item) {
         $group_id = isset($item['group_id']) ? $item['group_id'] : 0;
         $page = esc_attr($_REQUEST['page']);
         $status = isset($_REQUEST['status']) ? sanitize_key($_REQUEST['status']) : 'all';
-
+        $actions = [];
         if ($status === 'trash') {
-            $untrash_nonce = wp_create_nonce('qp_untrash_question_' . $item['question_id']);
-            $delete_nonce = wp_create_nonce('qp_delete_question_' . $item['question_id']);
-            $actions = [
-                'untrash' => sprintf('<a href="?page=%s&action=untrash&question_id=%s&_wpnonce=%s">Restore</a>', $page, $item['question_id'], $untrash_nonce),
-                'delete'  => sprintf('<a href="?page=%s&action=delete&question_id=%s&_wpnonce=%s" style="color:#a00;" onclick="return confirm(\'You are about to permanently delete this item. This action cannot be undone. Are you sure?\');">Delete Permanently</a>', $page, $item['question_id'], $delete_nonce),
-            ];
+            $untrash_nonce = wp_create_nonce('qp_untrash_question_' . $item['question_id']); $delete_nonce = wp_create_nonce('qp_delete_question_' . $item['question_id']);
+            $actions = ['untrash' => sprintf('<a href="?page=%s&action=untrash&question_id=%s&_wpnonce=%s">Restore</a>', $page, $item['question_id'], $untrash_nonce), 'delete' => sprintf('<a href="?page=%s&action=delete&question_id=%s&_wpnonce=%s" style="color:#a00;" onclick="return confirm(\'You are about to permanently delete this item. This action cannot be undone. Are you sure?\');">Delete Permanently</a>', $page, $item['question_id'], $delete_nonce)];
         } else {
             $trash_nonce = wp_create_nonce('qp_trash_question_' . $item['question_id']);
-            $actions = [
-                'edit'  => sprintf('<a href="admin.php?page=qp-question-editor&action=edit&group_id=%s">Edit</a>', $group_id),
-                'trash' => sprintf('<a href="?page=%s&action=trash&question_id=%s&_wpnonce=%s" style="color:#a00;">Trash</a>', $page, $item['question_id'], $trash_nonce),
-            ];
+            $actions = ['edit' => sprintf('<a href="admin.php?page=qp-question-editor&action=edit&group_id=%s">Edit</a>', $group_id), 'trash' => sprintf('<a href="?page=%s&action=trash&question_id=%s&_wpnonce=%s" style="color:#a00;">Trash</a>', $page, $item['question_id'], $trash_nonce)];
         }
-        
         $row_text = sprintf('<strong>%s</strong>', wp_trim_words(esc_html($item['question_text']), 20, '...'));
-
-        if (!empty($item['labels'])) { /* ... label display logic is unchanged ... */ }
-
+        if (!empty($item['labels'])) {
+            $labels_html = '<div style="margin-top: 5px;">';
+            foreach ($item['labels'] as $label) { $labels_html .= sprintf('<span style="display: inline-block; margin-right: 5px; padding: 2px 6px; font-size: 11px; border-radius: 3px; color: #fff; background-color: %s;">%s</span>', esc_attr($label->label_color), esc_html($label->label_name)); }
+            $labels_html .= '</div>';
+            $row_text .= $labels_html;
+        }
         return $row_text . $this->row_actions($actions);
     }
 
     public function column_is_pyq($item) { return $item['is_pyq'] ? 'Yes' : 'No'; }
-    
-    public function column_default($item, $column_name) {
-        return isset($item[$column_name]) ? esc_html($item[$column_name]) : 'N/A';
-    }
+    public function column_default($item, $column_name) { return isset($item[$column_name]) ? esc_html($item[$column_name]) : 'N/A'; }
 }
