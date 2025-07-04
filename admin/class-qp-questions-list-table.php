@@ -92,19 +92,28 @@ class QP_Questions_List_Table extends WP_List_Table {
     /**
      * Display the search box
      */
-    public function search_box($text, $input_id) {
-        $input_id = $input_id . '-search-input';
-        if (!empty($_REQUEST['s'])) {
-            $text = esc_attr($_REQUEST['s']);
-        }
-        ?>
-        <p class="search-box">
-            <label class="screen-reader-text" for="<?php echo $input_id ?>"><?php echo $text; ?>:</label>
-            <input type="search" id="<?php echo $input_id ?>" name="s" value="<?php echo _admin_search_query(); ?>" />
-            <?php submit_button($text, 'button', 'search_submit', false, array('id' => 'search-submit')); ?>
-        </p>
-        <?php
+    // In admin/class-qp-questions-list-table.php
+
+public function search_box($text, $input_id) {
+    // The main $text parameter is 'Search Questions'
+    // We will use it for the button and ignore the query for the button text
+    $search_button_text = $text;
+    
+    $input_id = $input_id . '-search-input';
+    
+    if (!empty($_REQUEST['s'])) {
+        $text = esc_attr($_REQUEST['s']);
+    } else {
+        $text = ''; // Clear text if no search
     }
+    ?>
+    <p class="search-box">
+        <label class="screen-reader-text" for="<?php echo $input_id ?>"><?php echo $search_button_text; ?>:</label>
+        <input type="search" id="<?php echo $input_id ?>" name="s" value="<?php echo $text; ?>" placeholder="By ID or text" />
+        <?php submit_button($search_button_text, 'button', 'search_submit', false, array('id' => 'search-submit')); ?>
+    </p>
+    <?php
+}
 
     /**
      * Prepare the items for the table to process
