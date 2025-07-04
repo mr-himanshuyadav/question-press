@@ -108,8 +108,8 @@ jQuery(document).ready(function($) {
             }
         });
     });
-
-    // NEW: Handle End Practice button click
+    
+    // Handle End Practice button click
     wrapper.on('click', '#qp-end-practice-btn', function() {
         clearInterval(questionTimer);
         if (confirm('Are you sure you want to end this practice session?')) {
@@ -131,12 +131,13 @@ jQuery(document).ready(function($) {
     });
 
     // Handle clicking an admin report button
-wrapper.on('click', '.qp-button-admin-report', function() {
+wrapper.on('click', '.qp-admin-report-btn', function() {
     var button = $(this);
     var labelNameToAdd = button.data('label');
     var questionID = sessionQuestionIDs[currentQuestionIndex];
-
-    button.prop('disabled', true).css('opacity', 0.5);
+    
+    // Disable all admin buttons for this question to prevent multiple clicks
+    $('.qp-admin-report-btn').prop('disabled', true).css('opacity', 0.5);
 
     $.ajax({
         url: qp_ajax_object.ajax_url, type: 'POST',
@@ -144,63 +145,52 @@ wrapper.on('click', '.qp-button-admin-report', function() {
             action: 'report_question_issue', 
             nonce: qp_ajax_object.nonce, 
             question_id: questionID,
-            label_name: labelNameToAdd // Send the specific label name
+            label_name: labelNameToAdd
         },
         success: function(response) {
             if (response.success) {
-                // Give visual feedback without an alert for admins
-                button.text('Labelled!');
+                // It was successfully labelled, now move to the next question
+                loadNextQuestion();
             } else {
-                alert('Error: ' + response.data.message);
-                button.prop('disabled', false).css('opacity', 1);
+                alert('Error: ' + (response.data.message || 'Could not add label.'));
+                // Re-enable on failure
+                $('.qp-admin-report-btn').prop('disabled', false).css('opacity', 1);
             }
         },
         error: function() {
             alert('An error occurred.');
-            button.prop('disabled', false).css('opacity', 1);
+            $('.qp-admin-report-btn').prop('disabled', false).css('opacity', 1);
         }
     });
 });
 
-
-    // NEW: Handle clicks on the user-facing report buttons
+    // Handle clicks on the user-facing report buttons
     wrapper.on('click', '.qp-user-report-btn', function() {
         clearInterval(questionTimer);
-        
         var button = $(this);
         var labelNameToAdd = button.data('label');
         var questionID = sessionQuestionIDs[currentQuestionIndex];
-
-        // Deselect any chosen radio button
         $('input[name="qp_option"]:checked').prop('checked', false);
-        $('.qp-options-area .option').removeClass('correct incorrect');
-        $('.qp-options-area .option').addClass('disabled');
-        
+        $('.qp-options-area .option').removeClass('correct incorrect').addClass('disabled');
         button.text('Reporting...');
         $('.qp-user-report-btn').prop('disabled', true);
-
-        // This AJAX call will report AND skip the question
         $.ajax({
             url: qp_ajax_object.ajax_url, type: 'POST',
-            data: { 
-                action: 'report_and_skip_question', 
-                nonce: qp_ajax_object.nonce, 
-                session_id: sessionID,
-                question_id: questionID,
-                label_name: labelNameToAdd
-            },
+            data: { action: 'report_and_skip_question', nonce: qp_ajax_object.nonce, session_id: sessionID, question_id: questionID, label_name: labelNameToAdd },
             success: function(response) {
                 if(response.success) {
-                    // It was reported successfully, now treat it as a skip
                     skippedCount++;
                     updateHeaderStats();
                     loadNextQuestion();
                 } else {
-                    alert('Error: ' + response.data.message);
+                    alert('Error: ' + (response.data.message || 'Could not report issue.'));
+                    button.text(labelNameToAdd);
+                    $('.qp-user-report-btn').prop('disabled', false);
                 }
             }
         });
     });
+
 
     // --- Helper Functions ---
     function loadQuestion(questionID) {
@@ -208,6 +198,7 @@ wrapper.on('click', '.qp-button-admin-report', function() {
         $('#qp-question-text-area').html('Loading...');
         $('.qp-options-area').empty();
         $('#qp-skip-btn').prop('disabled', false);
+        $('.qp-user-report-btn').prop('disabled', false).text(function() { return $(this).data('label'); });
 
         $.ajax({
             url: qp_ajax_object.ajax_url, type: 'POST',
@@ -239,17 +230,15 @@ wrapper.on('click', '.qp-button-admin-report', function() {
     }
     
     function loadNextQuestion() {
-    currentQuestionIndex++;
-    if (currentQuestionIndex >= sessionQuestionIDs.length) {
-        // Use a more user-friendly confirmation dialog
-        if (confirm("Congratulations, you've completed all available questions! Click OK to end this session and see your summary.")) {
-            // If user clicks OK, trigger the existing end practice logic
-            $('#qp-end-practice-btn').click();
+        currentQuestionIndex++;
+        if (currentQuestionIndex >= sessionQuestionIDs.length) {
+            if (confirm("Congratulations, you've completed all available questions! Click OK to end this session and see your summary.")) {
+                $('#qp-end-practice-btn').click();
+            }
+            return; 
         }
-        return; 
+        loadQuestion(sessionQuestionIDs[currentQuestionIndex]);
     }
-    loadQuestion(sessionQuestionIDs[currentQuestionIndex]);
-}
     
     function updateHeaderStats() {
         $('#qp-score').text(score.toFixed(2));
@@ -272,35 +261,33 @@ wrapper.on('click', '.qp-button-admin-report', function() {
             updateDisplay();
             if (remainingTime <= 0) {
                 clearInterval(questionTimer);
-                $('#qp-skip-btn').click();
+                if (confirm("Time's up for this question! Click OK to move to the next question.")) {
+                    $('#qp-skip-btn').click();
+                }
             }
         }, 1000);
     }
 
-    // NEW: Function to display the summary screen
-    // In public/assets/js/practice.js
-
-function displaySummary(summaryData) {
-    // Note the added 'qp-button' class to both links
-    var summaryHtml = `
-        <div class="qp-summary-wrapper">
-            <h2>Session Summary</h2>
-            <div class="qp-summary-score">
-                <div class="label">Final Score</div>
-                ${parseFloat(summaryData.final_score).toFixed(2)}
+    function displaySummary(summaryData) {
+        var summaryHtml = `
+            <div class="qp-summary-wrapper">
+                <h2>Session Summary</h2>
+                <div class="qp-summary-score">
+                    <div class="label">Final Score</div>
+                    ${parseFloat(summaryData.final_score).toFixed(2)}
+                </div>
+                <div class="qp-summary-stats">
+                    <div class="stat"><div class="value">${summaryData.total_attempted}</div><div class="label">Attempted</div></div>
+                    <div class="stat"><div class="value">${summaryData.correct_count}</div><div class="label">Correct</div></div>
+                    <div class="stat"><div class="value">${summaryData.incorrect_count}</div><div class="label">Incorrect</div></div>
+                    <div class="stat"><div class="value">${summaryData.skipped_count}</div><div class="label">Skipped</div></div>
+                </div>
+                <div class="qp-summary-actions">
+                    <a href="/dashboard/" class="qp-button qp-button-secondary">View Dashboard</a>
+                    <a href="" class="qp-button qp-button-primary">Start Another Practice</a>
+                </div>
             </div>
-            <div class="qp-summary-stats">
-                <div class="stat"><div class="value">${summaryData.total_attempted}</div><div class="label">Attempted</div></div>
-                <div class="stat"><div class="value">${summaryData.correct_count}</div><div class="label">Correct</div></div>
-                <div class="stat"><div class="value">${summaryData.incorrect_count}</div><div class="label">Incorrect</div></div>
-                <div class="stat"><div class="value">${summaryData.skipped_count}</div><div class="label">Skipped</div></div>
-            </div>
-            <div class="qp-summary-actions">
-                <a href="/dashboard/" class="qp-button qp-button-secondary">View Dashboard</a>
-                <a href="" class="qp-button qp-button-primary">Start Another Practice</a>
-            </div>
-        </div>
-    `;
-    wrapper.html(summaryHtml);
-}
+        `;
+        wrapper.html(summaryHtml);
+    }
 });

@@ -139,3 +139,29 @@
     padding: 5px 10px;
     font-size: 13px;
 }
+
+/* ADD THIS TO THE END of practice.css */
+.qp-user-report-area {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid var(--qp-border-color);
+    text-align: center;
+}
+.qp-user-report-area h4 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    color: var(--qp-light-text);
+    font-size: 16px;
+}
+.qp-user-report-area .button-group {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+}
+.qp-user-report-area .qp-user-report-btn {
+    background: none;
+    border: none;
+    color: var(--qp-primary-color);
+    text-decoration: underline;
+    cursor: pointer;
+}

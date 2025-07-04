@@ -493,8 +493,6 @@ add_action('wp_ajax_delete_user_session', 'qp_delete_user_session_ajax');
 function qp_report_question_issue_ajax() {
     check_ajax_referer('qp_practice_nonce', 'nonce');
     $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
-
-    // Get the specific label name from the AJAX call, default to a generic one if not provided
     $report_label_name = isset($_POST['label_name']) ? sanitize_text_field($_POST['label_name']) : 'Incorrect Formatting';
 
     if (!$question_id) {
@@ -504,27 +502,20 @@ function qp_report_question_issue_ajax() {
     global $wpdb;
     $labels_table = $wpdb->prefix . 'qp_labels';
     $question_labels_table = $wpdb->prefix . 'qp_question_labels';
-
+    
     $label_id = $wpdb->get_var($wpdb->prepare("SELECT label_id FROM $labels_table WHERE label_name = %s", $report_label_name));
 
     if (!$label_id) {
         wp_send_json_error(['message' => 'Reporting system is not configured correctly. The "' . esc_html($report_label_name) . '" label does not exist.']);
     }
 
-    // Check if this label is already assigned to prevent duplicates
-    $already_assigned = $wpdb->get_var($wpdb->prepare(
-        "SELECT COUNT(*) FROM $question_labels_table WHERE question_id = %d AND label_id = %d",
-        $question_id, $label_id
-    ));
-
+    $already_assigned = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $question_labels_table WHERE question_id = %d AND label_id = %d", $question_id, $label_id));
     if ($already_assigned == 0) {
-        $wpdb->insert($question_labels_table, [
-            'question_id' => $question_id,
-            'label_id'    => $label_id
-        ]);
+        $wpdb->insert($question_labels_table, ['question_id' => $question_id, 'label_id'    => $label_id]);
     }
 
     wp_send_json_success(['message' => 'Issue reported.']);
+    wp_die(); // IMPORTANT: Terminate the script
 }
 add_action('wp_ajax_report_question_issue', 'qp_report_question_issue_ajax');
 
@@ -542,15 +533,14 @@ function qp_report_and_skip_question_ajax() {
     }
 
     global $wpdb;
-    // First, add the label to the question
     $label_id = $wpdb->get_var($wpdb->prepare("SELECT label_id FROM {$wpdb->prefix}qp_labels WHERE label_name = %s", $label_name));
     if ($label_id) {
-        $wpdb->insert("{$wpdb->prefix}qp_question_labels", ['question_id' => $question_id, 'label_id' => $label_id], ['%d', '%d']);
+        $wpdb->insert("{$wpdb->prefix}qp_question_labels", ['question_id' => $question_id, 'label_id' => $label_id]);
     }
-
-    // Next, record the attempt as a skip (is_correct = NULL)
+    
     $wpdb->insert("{$wpdb->prefix}qp_user_attempts", ['session_id' => $session_id, 'user_id' => get_current_user_id(), 'question_id' => $question_id, 'is_correct' => null]);
 
     wp_send_json_success(['message' => 'Question reported and skipped.']);
+    wp_die(); // IMPORTANT: Terminate the script
 }
 add_action('wp_ajax_report_and_skip_question', 'qp_report_and_skip_question_ajax');

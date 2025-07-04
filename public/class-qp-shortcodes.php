@@ -1,29 +1,32 @@
 <?php
 if (!defined('ABSPATH')) exit;
 
-class QP_Shortcodes {
+class QP_Shortcodes
+{
 
-    public static function render_practice_form() {
+    public static function render_practice_form()
+    {
         if (!is_user_logged_in()) {
             return '<p>You must be logged in to start a practice session. <a href="' . wp_login_url(get_permalink()) . '">Click here to log in.</a></p>';
         }
         $output = '<div id="qp-practice-app-wrapper">';
         $output .= self::render_settings_form();
-        $output .= '</div>'; 
+        $output .= '</div>';
         return $output;
     }
 
     // In public/class-qp-shortcodes.php
 
-    private static function render_settings_form() {
+    private static function render_settings_form()
+    {
         global $wpdb;
         $subjects = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}qp_subjects ORDER BY subject_name ASC");
         ob_start();
-        ?>
+?>
         <div class="qp-practice-form-wrapper">
             <h2>Start a New Practice Session</h2>
             <form id="qp-start-practice-form" method="post" action="">
-                
+
                 <div class="qp-form-group">
                     <label for="qp_subject">Select Subject:</label>
                     <select name="qp_subject" id="qp_subject" required>
@@ -51,7 +54,7 @@ class QP_Shortcodes {
                     <p><strong>PYQ Only:</strong> Only include questions that are marked as a "Previous Year Question".</p>
                     <p><strong>Revision Mode:</strong> Previously answered questions will reappear in your session to help you revise.</p>
                 </div>
-                
+
                 <div class="qp-form-group qp-marks-group">
                     <div>
                         <label for="qp_marks_correct">Marks for Correct Answer:</label>
@@ -80,7 +83,7 @@ class QP_Shortcodes {
                 </div>
             </form>
         </div>
-        <?php
+    <?php
         return ob_get_clean();
     }
 
@@ -92,16 +95,32 @@ class QP_Shortcodes {
 
     // In public/class-qp-shortcodes.php
 
-    public static function render_practice_ui() {
+    public static function render_practice_ui()
+    {
         ob_start();
-        ?>
+    ?>
         <div class="qp-practice-wrapper">
             <div class="qp-header">
-                <div class="qp-header-stat timer-stat"><div class="label">Timer</div><div class="value" id="qp-timer">--:--</div></div>
-                <div class="qp-header-stat"><div class="label">Score</div><div class="value" id="qp-score">0</div></div>
-                <div class="qp-header-stat"><div class="label">Correct</div><div class="value" id="qp-correct-count">0</div></div>
-                <div class="qp-header-stat"><div class="label">Incorrect</div><div class="value" id="qp-incorrect-count">0</div></div>
-                <div class="qp-header-stat"><div class="label">Skipped</div><div class="value" id="qp-skipped-count">0</div></div>
+                <div class="qp-header-stat timer-stat">
+                    <div class="label">Timer</div>
+                    <div class="value" id="qp-timer">--:--</div>
+                </div>
+                <div class="qp-header-stat">
+                    <div class="label">Score</div>
+                    <div class="value" id="qp-score">0</div>
+                </div>
+                <div class="qp-header-stat">
+                    <div class="label">Correct</div>
+                    <div class="value" id="qp-correct-count">0</div>
+                </div>
+                <div class="qp-header-stat">
+                    <div class="label">Incorrect</div>
+                    <div class="value" id="qp-incorrect-count">0</div>
+                </div>
+                <div class="qp-header-stat">
+                    <div class="label">Skipped</div>
+                    <div class="value" id="qp-skipped-count">0</div>
+                </div>
             </div>
 
             <div class="qp-direction" style="display: none;"></div>
@@ -124,26 +143,29 @@ class QP_Shortcodes {
             </div>
 
             <div class="qp-footer-controls" style="margin-top: 20px; text-align: center;">
-            <button id="qp-end-practice-btn" class="qp-button">End Practice</button>
-        </div>
-
-        <div class="qp-user-report-area" style="margin-top: 15px; text-align: center; font-size: 13px;">
-            Problem with this question? 
-            <button class="qp-user-report-btn" data-label="Wrong Answer">Report Wrong Answer</button> | 
-            <button class="qp-user-report-btn" data-label="No Answer">Report No Answer</button>
-        </div>
-
-        <?php if (current_user_can('manage_options')) : // Admin-only tools ?>
-        <div class="qp-admin-report-area">
-            <h4>Admin Actions: Label As...</h4>
-            <div class="button-group">
-                <button class="qp-admin-report-btn" data-label="Incorrect Formatting">Incorrect Formatting</button>
-                <button class="qp-admin-report-btn" data-label="Wrong Subject">Wrong Subject</button>
+                <button id="qp-end-practice-btn" class="qp-button">End Practice</button>
             </div>
+
+            <div class="qp-user-report-area">
+                <h4>Report & Skip</h4>
+                <div class="button-group">
+                    <button class="qp-user-report-btn" data-label="Wrong Answer">Report Incorrect Answer</button>
+                    <button class="qp-user-report-btn" data-label="No Answer">Report No Answer</button>
+                </div>
+            </div>
+
+            <?php if (current_user_can('manage_options')) : // Admin-only tools 
+            ?>
+                <div class="qp-admin-report-area">
+                    <h4>For Admins Only (Label As)</h4>
+                    <div class="button-group">
+                        <button class="qp-admin-report-btn" data-label="Incorrect Formatting">Incorrect Formatting</button>
+                        <button class="qp-admin-report-btn" data-label="Wrong Subject">Wrong Subject</button>
+                    </div>
+                </div>
+            <?php endif; ?>
         </div>
-        <?php endif; ?>
-        </div>
-        <?php
+<?php
         return ob_get_clean();
     }
 }

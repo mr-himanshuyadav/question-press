@@ -34,13 +34,20 @@ class QP_Questions_List_Table extends WP_List_Table {
         ];
     }
     
-    protected function get_bulk_actions() {
-        $status = isset($_REQUEST['status']) && $_REQUEST['status'] === 'trash' ? 'trash' : 'publish';
-        if ($status === 'trash') {
-            return ['untrash' => 'Restore', 'delete'  => 'Delete Permanently'];
-        }
-        return ['trash' => 'Move to Trash'];
+    // REPLACE this method
+protected function get_bulk_actions() {
+    $status = isset($_REQUEST['status']) && in_array($_REQUEST['status'], ['trash', 'needs_review']) ? $_REQUEST['status'] : 'publish';
+    
+    if ($status === 'trash') {
+        return ['untrash' => 'Restore', 'delete'  => 'Delete Permanently'];
     }
+    
+    if ($status === 'needs_review') {
+        return ['remove_review_labels' => 'Remove Review Labels'];
+    }
+
+    return ['trash' => 'Move to Trash'];
+}
 
     // REPLACE this method
 protected function get_views() {
@@ -171,16 +178,42 @@ public function prepare_items() {
         $this->set_pagination_args(['total_items' => $total_items, 'per_page' => $per_page]);
     }
 
-    public function process_bulk_action() {
-        $action = $this->current_action(); if (!$action) return;
-        $nonce = isset($_REQUEST['_wpnonce']) ? sanitize_key($_REQUEST['_wpnonce']) : '';
-        $question_ids = isset($_REQUEST['question_ids']) ? array_map('absint', $_REQUEST['question_ids']) : (isset($_REQUEST['question_id']) ? [absint($_REQUEST['question_id'])] : []);
-        if (empty($question_ids)) return;
-        global $wpdb; $q_table = $wpdb->prefix . 'qp_questions'; $ids_placeholder = implode(',', array_fill(0, count($question_ids), '%d'));
+// REPLACE this method
+public function process_bulk_action() {
+    $action = $this->current_action();
+    if (!$action) return;
+
+    $nonce = isset($_REQUEST['_wpnonce']) ? sanitize_key($_REQUEST['_wpnonce']) : '';
+    $question_ids = isset($_REQUEST['question_ids']) ? array_map('absint', $_REQUEST['question_ids']) : (isset($_REQUEST['question_id']) ? [absint($_REQUEST['question_id'])] : []);
+    
+    if (empty($question_ids)) return;
+
+    global $wpdb;
+    $q_table = $wpdb->prefix . 'qp_questions';
+    $ql_table = $wpdb->prefix . 'qp_question_labels';
+    $ids_placeholder = implode(',', array_fill(0, count($question_ids), '%d'));
         if ('trash' === $action) { if (!wp_verify_nonce($nonce, 'bulk-questions') && !wp_verify_nonce($nonce, 'qp_trash_question_' . $question_ids[0])) wp_die('Security check failed.'); $wpdb->query($wpdb->prepare("UPDATE {$q_table} SET status = 'trash' WHERE question_id IN ($ids_placeholder)", $question_ids)); }
         if ('untrash' === $action) { if (!wp_verify_nonce($nonce, 'bulk-questions') && !wp_verify_nonce($nonce, 'qp_untrash_question_' . $question_ids[0])) wp_die('Security check failed.'); $wpdb->query($wpdb->prepare("UPDATE {$q_table} SET status = 'publish' WHERE question_id IN ($ids_placeholder)", $question_ids)); }
         if ('delete' === $action) { if (!wp_verify_nonce($nonce, 'bulk-questions') && !wp_verify_nonce($nonce, 'qp_delete_question_' . $question_ids[0])) wp_die('Security check failed.'); $wpdb->query($wpdb->prepare("DELETE FROM {$wpdb->prefix}qp_options WHERE question_id IN ($ids_placeholder)", $question_ids)); $wpdb->query($wpdb->prepare("DELETE FROM {$wpdb->prefix}qp_question_labels WHERE question_id IN ($ids_placeholder)", $question_ids)); $wpdb->query($wpdb->prepare("DELETE FROM {$q_table} WHERE question_id IN ($ids_placeholder)", $question_ids)); }
+// NEW: Handle the new bulk action
+    if ('remove_review_labels' === $action) {
+        if (!wp_verify_nonce($nonce, 'bulk-questions')) wp_die('Security check failed.');
+        
+        $labels_table = $wpdb->prefix . 'qp_labels';
+        $review_label_ids = $wpdb->get_col("SELECT label_id FROM $labels_table WHERE label_name IN ('Wrong Answer', 'No Answer')");
+
+        if (!empty($review_label_ids)) {
+            $label_ids_placeholder = implode(',', array_fill(0, count($review_label_ids), '%d'));
+            
+            $args = array_merge($question_ids, $review_label_ids);
+            
+            $wpdb->query($wpdb->prepare(
+                "DELETE FROM {$ql_table} WHERE question_id IN ($ids_placeholder) AND label_id IN ($label_ids_placeholder)",
+                $args
+            ));
+        }
     }
+}
 
     public function column_cb($item) { return sprintf('<input type="checkbox" name="question_ids[]" value="%s" />', $item['question_id']); }
 
