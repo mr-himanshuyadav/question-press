@@ -278,21 +278,39 @@ function qp_handle_save_question_group() {
 // PUBLIC FACING HOOKS & AJAX
 // ------------------------------------------------------------------
 
-// REPLACE the existing qp_public_init function with this one
+// REPLACE this function
 function qp_public_init() {
     add_shortcode('question_press_practice', ['QP_Shortcodes', 'render_practice_form']);
-    add_shortcode('question_press_dashboard', ['QP_Dashboard', 'render']); // New line
+    add_shortcode('question_press_dashboard', ['QP_Dashboard', 'render']);
 }
 add_action('init', 'qp_public_init');
 
+// REPLACE this function
 function qp_public_enqueue_scripts() {
-    if (is_singular() && has_shortcode(get_post()->post_content, 'question_press_practice')) {
-        wp_enqueue_style('qp-practice-styles', QP_PLUGIN_URL . 'public/assets/css/practice.css', [], '1.0.1');
-        wp_enqueue_script('qp-practice-script', QP_PLUGIN_URL . 'public/assets/js/practice.js', ['jquery'], '1.0.1', true);
-        wp_localize_script('qp-practice-script', 'qp_ajax_object', [
+    global $post;
+    // Check if the post content has either of our shortcodes
+    if (is_a($post, 'WP_Post') && (has_shortcode($post->post_content, 'question_press_practice') || has_shortcode($post->post_content, 'question_press_dashboard'))) {
+        
+        // Always enqueue styles if a shortcode is present
+        wp_enqueue_style('qp-practice-styles', QP_PLUGIN_URL . 'public/assets/css/practice.css', [], '1.0.2');
+        
+        // Localize data for both scripts
+        $ajax_data = [
             'ajax_url' => admin_url('admin-ajax.php'),
-            'nonce'    => wp_create_nonce('qp_practice_nonce')
-        ]);
+            'nonce'    => wp_create_nonce('qp_practice_nonce') // A general nonce for frontend actions
+        ];
+
+        // Conditionally load the correct JS file
+        if (has_shortcode($post->post_content, 'question_press_practice')) {
+            wp_enqueue_script('qp-practice-script', QP_PLUGIN_URL . 'public/assets/js/practice.js', ['jquery'], '1.0.2', true);
+            wp_localize_script('qp-practice-script', 'qp_ajax_object', $ajax_data);
+        }
+
+        if (has_shortcode($post->post_content, 'question_press_dashboard')) {
+            wp_enqueue_script('qp-dashboard-script', QP_PLUGIN_URL . 'public/assets/js/dashboard.js', ['jquery'], '1.0.0', true);
+            // Re-use the same nonce and ajax_url object
+            wp_localize_script('qp-dashboard-script', 'qp_ajax_object', $ajax_data);
+        }
     }
 }
 add_action('wp_enqueue_scripts', 'qp_public_enqueue_scripts');
@@ -424,3 +442,33 @@ function qp_end_practice_session_ajax() {
     ]);
 }
 add_action('wp_ajax_end_practice_session', 'qp_end_practice_session_ajax');
+
+
+// ADD THIS NEW FUNCTION to the end of the file
+function qp_delete_user_session_ajax() {
+    check_ajax_referer('qp_practice_nonce', 'nonce');
+    $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
+
+    if (!$session_id) {
+        wp_send_json_error(['message' => 'Invalid session ID.']);
+    }
+
+    global $wpdb;
+    $user_id = get_current_user_id();
+    $sessions_table = $wpdb->prefix . 'qp_user_sessions';
+    $attempts_table = $wpdb->prefix . 'qp_user_attempts';
+
+    // Security check: ensure the session belongs to the current user
+    $session_owner = $wpdb->get_var($wpdb->prepare("SELECT user_id FROM $sessions_table WHERE session_id = %d", $session_id));
+
+    if ((int)$session_owner !== $user_id) {
+        wp_send_json_error(['message' => 'You do not have permission to delete this session.']);
+    }
+
+    // Delete the session and its related attempts
+    $wpdb->delete($attempts_table, ['session_id' => $session_id], ['%d']);
+    $wpdb->delete($sessions_table, ['session_id' => $session_id], ['%d']);
+
+    wp_send_json_success(['message' => 'Session deleted.']);
+}
+add_action('wp_ajax_delete_user_session', 'qp_delete_user_session_ajax');
