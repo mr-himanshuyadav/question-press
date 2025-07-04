@@ -131,6 +131,8 @@ function qp_handle_form_submissions() {
 }
 add_action('admin_init', 'qp_handle_form_submissions');
 
+// In question-press.php
+
 function qp_all_questions_page_cb() {
     $list_table = new QP_Questions_List_Table();
     $list_table->prepare_items();
@@ -145,6 +147,7 @@ function qp_all_questions_page_cb() {
     <div class="wrap">
         <h1 class="wp-heading-inline">All Questions</h1>
         <a href="<?php echo admin_url('admin.php?page=qp-question-editor'); ?>" class="page-title-action">Add New</a>
+
         <?php if (isset($_GET['message'])) {
             $messages = ['1' => 'Question(s) updated successfully.', '2' => 'Question(s) saved successfully.'];
             $message_id = absint($_GET['message']);
@@ -152,13 +155,16 @@ function qp_all_questions_page_cb() {
                 echo '<div id="message" class="notice notice-success is-dismissible"><p>' . esc_html($messages[$message_id]) . '</p></div>';
             }
         } ?>
+
         <hr class="wp-header-end">
+
+        <?php $list_table->views(); ?>
         
         <form method="post">
+            <?php wp_nonce_field('bulk-questions'); ?>
             <?php
             // The search box is now called before the table
             $list_table->search_box('Search Questions', 'question');
-            wp_nonce_field('bulk-questions'); 
             $list_table->display();
             ?>
         </form>
