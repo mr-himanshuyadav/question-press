@@ -302,14 +302,74 @@ add_action('wp_enqueue_scripts', 'qp_public_enqueue_scripts');
 /**
  * NEW: The AJAX handler for starting a practice session.
  */
+// In question-press.php
+
 function qp_start_practice_session_ajax() {
     check_ajax_referer('qp_practice_nonce', 'nonce');
 
-    // Here we will eventually get questions from the DB based on settings.
-    // For now, we just return the static HTML of the practice UI.
-    
-    $practice_ui_html = QP_Shortcodes::render_practice_ui();
+    // Parse the form settings
+    $settings = [];
+    parse_str($_POST['settings'], $settings);
 
-    wp_send_json_success(['html' => $practice_ui_html]);
+    $subject_id = isset($settings['qp_subject']) ? $settings['qp_subject'] : '';
+    $pyq_only = isset($settings['qp_pyq_only']) ? true : false;
+
+    if (empty($subject_id)) {
+        wp_send_json_error(['message' => 'Please select a subject.']);
+    }
+
+    // Build the database query
+    global $wpdb;
+    $q_table = $wpdb->prefix . 'qp_questions';
+    $g_table = $wpdb->prefix . 'qp_question_groups';
+    $s_table = $wpdb->prefix . 'qp_subjects';
+    $o_table = $wpdb->prefix . 'qp_options';
+
+    $where_clauses = ["q.status = 'publish'"];
+    $query_args = [];
+
+    if ($subject_id !== 'all') {
+        $where_clauses[] = "g.subject_id = %d";
+        $query_args[] = absint($subject_id);
+    }
+
+    if ($pyq_only) {
+        $where_clauses[] = "q.is_pyq = 1";
+    }
+
+    $where_sql = implode(' AND ', $where_clauses);
+
+    $query = "SELECT q.question_id FROM {$q_table} q LEFT JOIN {$g_table} g ON q.group_id = g.group_id WHERE {$where_sql} ORDER BY RAND()";
+    $prepared_query = $wpdb->prepare($query, $query_args);
+    $question_ids = $wpdb->get_col($prepared_query);
+
+    if (empty($question_ids)) {
+        wp_send_json_error(['message' => 'No questions found matching your criteria.']);
+    }
+
+    // For now, let's just get the full data for the first question
+    $first_question_id = $question_ids[0];
+    
+    $question_query = $wpdb->prepare(
+        "SELECT q.question_id, q.custom_question_id, q.question_text, g.direction_text, s.subject_name 
+         FROM {$q_table} q 
+         LEFT JOIN {$g_table} g ON q.group_id = g.group_id
+         LEFT JOIN {$s_table} s ON g.subject_id = s.subject_id
+         WHERE q.question_id = %d",
+        $first_question_id
+    );
+    $first_question_data = $wpdb->get_row($question_query, ARRAY_A);
+
+    // Get options for the first question
+    $options_query = $wpdb->prepare("SELECT option_id, option_text FROM {$o_table} WHERE question_id = %d", $first_question_id);
+    $first_question_data['options'] = $wpdb->get_results($options_query, ARRAY_A);
+    
+    // Prepare the data to send back
+    $response_data = [
+        'ui_html'   => QP_Shortcodes::render_practice_ui(), // The static UI shell
+        'questions' => [$first_question_data] // An array with our first question's data
+    ];
+    
+    wp_send_json_success($response_data);
 }
 add_action('wp_ajax_start_practice_session', 'qp_start_practice_session_ajax');

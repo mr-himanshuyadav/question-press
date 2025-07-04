@@ -36,16 +36,43 @@ class QP_Shortcodes {
      * Renders the static HTML layout for the main practice screen.
      * Changed to public so our AJAX handler can access it.
      */
+    // In public/class-qp-shortcodes.php
+
     public static function render_practice_ui() {
         ob_start();
         ?>
         <div class="qp-practice-wrapper">
-            <div class="qp-header"><div class="qp-header-stat"><div class="label">Timer</div><div class="value" id="qp-timer">01:00</div></div><div class="qp-header-stat"><div class="label">Score</div><div class="value" id="qp-score">0</div></div><div class="qp-header-stat"><div class="label">Correct</div><div class="value" id="qp-correct-count">0</div></div><div class="qp-header-stat"><div class="label">Incorrect</div><div class="value" id="qp-incorrect-count">0</div></div><div class="qp-header-stat"><div class="label">Skipped</div><div class="value" id="qp-skipped-count">0</div></div></div>
-            <div class="qp-direction"><p>This is the direction or passage area...</p></div>
-            <div class="qp-question-area"><div class="question-meta" style="font-size: 12px; color: #777; margin-bottom: 10px;"><span id="qp-question-subject">Subject: Physics</span> | <span id="qp-question-id">Question ID: 1001</span></div><div class="question-text">This is where the main text of the question will be displayed.</div></div>
-            <div class="qp-options-area"><label class="option"><input type="radio" name="qp_option"> Option A</label><label class="option"><input type="radio" name="qp_option"> Option B</label><label class="option"><input type="radio" name="qp_option"> Option C</label><label class="option"><input type="radio" name="qp_option"> Option D</label></div>
-            <div class="qp-footer-nav"><button id="qp-prev-btn" disabled>&laquo; Previous</button><button id="qp-skip-btn">Skip</button><button id="qp-next-btn">Next &raquo;</button></div>
-            <div class="qp-footer-controls" style="margin-top: 20px; text-align: center;"><button id="qp-end-practice-btn" style="background-color: #d9534f; color: white;">End Practice</button><button id="qp-report-btn" style="background: none; border: none; color: #0073aa; cursor: pointer; text-decoration: underline; margin-left: 15px;">Report Issue</button></div>
+            <div class="qp-header">
+                <div class="qp-header-stat"><div class="label">Timer</div><div class="value" id="qp-timer">--:--</div></div>
+                <div class="qp-header-stat"><div class="label">Score</div><div class="value" id="qp-score">0</div></div>
+                <div class="qp-header-stat"><div class="label">Correct</div><div class="value" id="qp-correct-count">0</div></div>
+                <div class="qp-header-stat"><div class="label">Incorrect</div><div class="value" id="qp-incorrect-count">0</div></div>
+                <div class="qp-header-stat"><div class="label">Skipped</div><div class="value" id="qp-skipped-count">0</div></div>
+            </div>
+
+            <div class="qp-direction" style="display: none;"></div>
+
+            <div class="qp-question-area">
+                <div class="question-meta" style="font-size: 12px; color: #777; margin-bottom: 10px;">
+                    <span id="qp-question-subject"></span> | <span id="qp-question-id"></span>
+                </div>
+                <div class="question-text" id="qp-question-text-area">
+                    <p>Loading question...</p>
+                </div>
+            </div>
+
+            <div class="qp-options-area"></div>
+
+            <div class="qp-footer-nav">
+                <button id="qp-prev-btn" disabled>&laquo; Previous</button>
+                <button id="qp-skip-btn">Skip</button>
+                <button id="qp-next-btn">Next &raquo;</button>
+            </div>
+
+            <div class="qp-footer-controls" style="margin-top: 20px; text-align: center;">
+                <button id="qp-end-practice-btn" style="background-color: #d9534f; color: white;">End Practice</button>
+                <button id="qp-report-btn" style="background: none; border: none; color: #0073aa; cursor: pointer; text-decoration: underline; margin-left: 15px;">Report Issue</button>
+            </div>
         </div>
         <?php
         return ob_get_clean();
