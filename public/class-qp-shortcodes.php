@@ -124,9 +124,24 @@ class QP_Shortcodes {
             </div>
 
             <div class="qp-footer-controls" style="margin-top: 20px; text-align: center;">
-                <button id="qp-end-practice-btn" style="background-color: #d9534f; color: white;">End Practice</button>
-                <button id="qp-report-btn" style="background: none; border: none; color: #0073aa; cursor: pointer; text-decoration: underline; margin-left: 15px;">Report Issue</button>
+            <button id="qp-end-practice-btn" class="qp-button">End Practice</button>
+            
+            <?php if (!current_user_can('manage_options')) : // Show for regular users ?>
+                <button id="qp-report-btn" class="qp-button-link">Report Issue</button>
+            <?php endif; ?>
+        </div>
+
+        <?php if (current_user_can('manage_options')) : // Show for Admins only ?>
+        <div class="qp-admin-report-area">
+            <h4>Admin Actions: Report Issue As...</h4>
+            <div class="button-group">
+                <button class="qp-button-admin-report" data-label="Wrong Answer">Wrong Answer</button>
+                <button class="qp-button-admin-report" data-label="No Answer">No Answer</button>
+                <button class="qp-button-admin-report" data-label="Incorrect Formatting">Incorrect Formatting</button>
+                <button class="qp-button-admin-report" data-label="Wrong Subject">Wrong Subject</button>
             </div>
+        </div>
+        <?php endif; ?>
         </div>
         <?php
         return ob_get_clean();

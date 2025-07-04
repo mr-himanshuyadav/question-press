@@ -130,6 +130,38 @@ jQuery(document).ready(function($) {
         }
     });
 
+    // Handle clicking an admin report button
+wrapper.on('click', '.qp-button-admin-report', function() {
+    var button = $(this);
+    var labelNameToAdd = button.data('label');
+    var questionID = sessionQuestionIDs[currentQuestionIndex];
+
+    button.prop('disabled', true).css('opacity', 0.5);
+
+    $.ajax({
+        url: qp_ajax_object.ajax_url, type: 'POST',
+        data: { 
+            action: 'report_question_issue', 
+            nonce: qp_ajax_object.nonce, 
+            question_id: questionID,
+            label_name: labelNameToAdd // Send the specific label name
+        },
+        success: function(response) {
+            if (response.success) {
+                // Give visual feedback without an alert for admins
+                button.text('Labelled!');
+            } else {
+                alert('Error: ' + response.data.message);
+                button.prop('disabled', false).css('opacity', 1);
+            }
+        },
+        error: function() {
+            alert('An error occurred.');
+            button.prop('disabled', false).css('opacity', 1);
+        }
+    });
+});
+
     // --- Helper Functions ---
     function loadQuestion(questionID) {
         if (!questionID) return;

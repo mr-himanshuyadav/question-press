@@ -472,3 +472,45 @@ function qp_delete_user_session_ajax() {
     wp_send_json_success(['message' => 'Session deleted.']);
 }
 add_action('wp_ajax_delete_user_session', 'qp_delete_user_session_ajax');
+
+/**
+ * AJAX handler for reporting an issue with a question.
+ */
+function qp_report_question_issue_ajax() {
+    check_ajax_referer('qp_practice_nonce', 'nonce');
+    $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
+
+    // Get the specific label name from the AJAX call, default to a generic one if not provided
+    $report_label_name = isset($_POST['label_name']) ? sanitize_text_field($_POST['label_name']) : 'Incorrect Formatting';
+
+    if (!$question_id) {
+        wp_send_json_error(['message' => 'Invalid Question ID.']);
+    }
+
+    global $wpdb;
+    $labels_table = $wpdb->prefix . 'qp_labels';
+    $question_labels_table = $wpdb->prefix . 'qp_question_labels';
+
+    $label_id = $wpdb->get_var($wpdb->prepare("SELECT label_id FROM $labels_table WHERE label_name = %s", $report_label_name));
+
+    if (!$label_id) {
+        wp_send_json_error(['message' => 'Reporting system is not configured correctly. The "' . esc_html($report_label_name) . '" label does not exist.']);
+    }
+
+    // Check if this label is already assigned to prevent duplicates
+    $already_assigned = $wpdb->get_var($wpdb->prepare(
+        "SELECT COUNT(*) FROM $question_labels_table WHERE question_id = %d AND label_id = %d",
+        $question_id, $label_id
+    ));
+
+    if ($already_assigned == 0) {
+        $wpdb->insert($question_labels_table, [
+            'question_id' => $question_id,
+            'label_id'    => $label_id
+        ]);
+    }
+
+    wp_send_json_success(['message' => 'Issue reported.']);
+}
+add_action('wp_ajax_report_question_issue', 'qp_report_question_issue_ajax');
+
