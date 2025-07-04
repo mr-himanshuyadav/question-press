@@ -11,15 +11,56 @@ jQuery(document).ready(function($) {
     var correctCount = 0;
     var incorrectCount = 0;
     var skippedCount = 0;
-    var questionTimer; // For the setInterval
+    var questionTimer;
 
     // --- Event Handlers ---
 
-    wrapper.on('submit', '#qp-start-practice-form', function(e) { /* This function is unchanged */ });
+    // Logic for the timer checkbox on the settings form
+    wrapper.on('change', '#qp_timer_enabled_cb', function() {
+        if ($(this).is(':checked')) {
+            $('#qp-timer-input-wrapper').slideDown();
+        } else {
+            $('#qp-timer-input-wrapper').slideUp();
+        }
+    });
+
+    // Logic for submitting the settings form to start the practice
+    wrapper.on('submit', '#qp-start-practice-form', function(e) {
+        e.preventDefault();
+        var formData = $(this).serialize();
+        
+        $.ajax({
+            url: qp_ajax_object.ajax_url,
+            type: 'POST',
+            data: {
+                action: 'start_practice_session',
+                nonce: qp_ajax_object.nonce,
+                settings: formData
+            },
+            beforeSend: function() {
+                wrapper.html('<p style="text-align:center; padding: 50px;">Setting up your session...</p>');
+            },
+            success: function(response) {
+                if (response.success) {
+                    wrapper.html(response.data.ui_html);
+                    sessionID = response.data.session_id;
+                    sessionQuestionIDs = response.data.question_ids;
+                    sessionSettings = response.data.settings;
+                    currentQuestionIndex = 0;
+                    loadQuestion(sessionQuestionIDs[currentQuestionIndex]);
+                } else {
+                    wrapper.html('<p style="text-align:center; color: red;">Error: ' + response.data.message + '</p>');
+                }
+            },
+            error: function() {
+                wrapper.html('<p style="text-align:center; color: red;">An unknown error occurred. Please try again.</p>');
+            }
+        });
+    });
 
     // Handle clicking an option
     wrapper.on('click', '.qp-options-area .option:not(.disabled)', function() {
-        clearInterval(questionTimer); // Stop the timer
+        clearInterval(questionTimer);
         var selectedOption = $(this);
         var selectedOptionID = selectedOption.find('input[type="radio"]').val();
         var questionID = sessionQuestionIDs[currentQuestionIndex];
@@ -46,36 +87,34 @@ jQuery(document).ready(function($) {
         });
     });
 
-    wrapper.on('click', '#qp-next-btn', function() { /* This function is unchanged */ });
+    // Handle Next button click
+    wrapper.on('click', '#qp-next-btn', function() {
+        loadNextQuestion();
+    });
 
     // Handle Skip button click
     wrapper.on('click', '#qp-skip-btn', function() {
-        clearInterval(questionTimer); // Stop the timer
+        clearInterval(questionTimer);
         var questionID = sessionQuestionIDs[currentQuestionIndex];
-        
-        // Disable button to prevent multiple clicks
         $(this).prop('disabled', true);
 
-        // Save skip to the database
         $.ajax({
             url: qp_ajax_object.ajax_url, type: 'POST',
             data: { action: 'skip_question', nonce: qp_ajax_object.nonce, session_id: sessionID, question_id: questionID },
             success: function() {
                 skippedCount++;
                 updateHeaderStats();
-                loadNextQuestion(); // Load the next question
+                loadNextQuestion();
             }
         });
     });
 
-
     // --- Helper Functions ---
-
     function loadQuestion(questionID) {
         if (!questionID) return;
         $('#qp-question-text-area').html('Loading...');
         $('.qp-options-area').empty();
-        $('#qp-skip-btn').prop('disabled', false); // Re-enable skip button
+        $('#qp-skip-btn').prop('disabled', false);
 
         $.ajax({
             url: qp_ajax_object.ajax_url, type: 'POST',
@@ -83,8 +122,21 @@ jQuery(document).ready(function($) {
             success: function(response) {
                 if(response.success) {
                     var questionData = response.data.question;
-                    // ... (rest of the UI population logic is the same)
-                    // NEW: Start the timer if enabled for the session
+                    var directionBox = $('.qp-direction');
+                    if (questionData.direction_text) {
+                        directionBox.html($('<p>').text(questionData.direction_text)).show();
+                    } else {
+                        directionBox.hide();
+                    }
+                    $('#qp-question-subject').text('Subject: ' + questionData.subject_name);
+                    $('#qp-question-id').text('Question ID: ' + questionData.custom_question_id);
+                    $('#qp-question-text-area').html(questionData.question_text);
+                    var optionsArea = $('.qp-options-area');
+                    optionsArea.empty();
+                    $.each(questionData.options, function(index, option) {
+                        var optionHtml = $('<label class="option"></label>').append($('<input type="radio" name="qp_option">').val(option.option_id), ' ' + option.option_text);
+                        optionsArea.append(optionHtml);
+                    });
                     if (sessionSettings.timer_enabled) {
                         startTimer(sessionSettings.timer_seconds);
                     }
@@ -102,30 +154,29 @@ jQuery(document).ready(function($) {
         loadQuestion(sessionQuestionIDs[currentQuestionIndex]);
     }
     
-    function updateHeaderStats() { /* This function is unchanged */ }
+    function updateHeaderStats() {
+        $('#qp-score').text(score.toFixed(2));
+        $('#qp-correct-count').text(correctCount);
+        $('#qp-incorrect-count').text(incorrectCount);
+        $('#qp-skipped-count').text(skippedCount);
+    }
     
-    // NEW: Timer functionality
     function startTimer(seconds) {
-        if (sessionSettings.timer_enabled) {
-            $('.timer-stat').show();
-            var remainingTime = seconds;
-            
-            function updateDisplay() {
-                var minutes = Math.floor(remainingTime / 60);
-                var secs = remainingTime % 60;
-                $('#qp-timer').text(String(minutes).padStart(2, '0') + ':' + String(secs).padStart(2, '0'));
-            }
-
-            updateDisplay(); // Initial display
-
-            questionTimer = setInterval(function() {
-                remainingTime--;
-                updateDisplay();
-                if (remainingTime <= 0) {
-                    clearInterval(questionTimer);
-                    $('#qp-skip-btn').click(); // Auto-skip when time runs out
-                }
-            }, 1000);
+        $('.timer-stat').show();
+        var remainingTime = seconds;
+        function updateDisplay() {
+            var minutes = Math.floor(remainingTime / 60);
+            var secs = remainingTime % 60;
+            $('#qp-timer').text(String(minutes).padStart(2, '0') + ':' + String(secs).padStart(2, '0'));
         }
+        updateDisplay();
+        questionTimer = setInterval(function() {
+            remainingTime--;
+            updateDisplay();
+            if (remainingTime <= 0) {
+                clearInterval(questionTimer);
+                $('#qp-skip-btn').click();
+            }
+        }, 1000);
     }
 });
