@@ -167,13 +167,17 @@ jQuery(document).ready(function($) {
     }
     
     function loadNextQuestion() {
-        currentQuestionIndex++;
-        if (currentQuestionIndex >= sessionQuestionIDs.length) {
-            alert("Congratulations, you've completed all questions!");
-            return;
+    currentQuestionIndex++;
+    if (currentQuestionIndex >= sessionQuestionIDs.length) {
+        // Use a more user-friendly confirmation dialog
+        if (confirm("Congratulations, you've completed all available questions! Click OK to end this session and see your summary.")) {
+            // If user clicks OK, trigger the existing end practice logic
+            $('#qp-end-practice-btn').click();
         }
-        loadQuestion(sessionQuestionIDs[currentQuestionIndex]);
+        return; 
     }
+    loadQuestion(sessionQuestionIDs[currentQuestionIndex]);
+}
     
     function updateHeaderStats() {
         $('#qp-score').text(score.toFixed(2));

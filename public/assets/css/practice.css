@@ -1,5 +1,5 @@
 /* =================================================================
-   Question Press Frontend Styles - v3.0 Final Polish
+   Question Press Frontend Styles - v4.0 Final Design
    ================================================================= */
 
 :root {
@@ -7,14 +7,16 @@
     --qp-primary-hover: #1d5f96;
     --qp-correct-bg: #f6fff5;
     --qp-correct-border: #8ce19b;
+    --qp-correct-text: #2d6a36;
     --qp-incorrect-bg: #fff5f5;
     --qp-incorrect-border: #e96a6a;
+    --qp-incorrect-text: #a94442;
     --qp-dark-text: #1d2327;
     --qp-light-text: #50575e;
     --qp-border-color: #dcdcde;
     --qp-bg-light: #f6f7f7;
     --qp-bg-white: #ffffff;
-    --qp-shadow: 0 5px 20px rgba(0,0,0,0.05);
+    --qp-shadow: 0 4px 15px rgba(0,0,0,0.06);
     --qp-radius: 8px;
 }
 
@@ -25,54 +27,70 @@
     box-sizing: border-box;
 }
 
-/* --- Base Button Styles --- */
+/* --- Base Component & Button Styles --- */
+.qp-practice-form-wrapper,
+.qp-practice-wrapper,
+.qp-summary-wrapper,
+.qp-dashboard-wrapper {
+    max-width: 800px;
+    margin: 2rem auto;
+    background-color: var(--qp-bg-white);
+    padding: 2rem 2.5rem;
+    border-radius: var(--qp-radius);
+    box-shadow: var(--qp-shadow);
+}
+
 .qp-button {
     text-decoration: none;
     font-weight: 600;
-    padding: 12px 24px;
+    padding: 10px 22px;
     border-radius: 4px;
     transition: all 0.2s;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
     border: 1px solid transparent;
     cursor: pointer;
     font-size: 14px;
 }
-.qp-button-primary { background-color: var(--qp-primary-color); color: var(--qp-bg-white); }
+.qp-button-primary { background-color: var(--qp-primary-color); color: var(--qp-bg-white); border-color: var(--qp-primary-color); }
 .qp-button-secondary { background-color: var(--qp-bg-white); color: var(--qp-dark-text); border-color: var(--qp-border-color); }
-.qp-button:hover { box-shadow: 0 3px 6px rgba(0,0,0,0.1); transform: translateY(-1px); }
+.qp-button:hover { transform: translateY(-1px); box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+
 
 /* --- 1. Settings Form --- */
-.qp-practice-form-wrapper { max-width: 550px; margin: 2rem auto; background-color: var(--qp-bg-white); padding: 2rem 2.5rem; border-radius: var(--qp-radius); box-shadow: var(--qp-shadow); }
-.qp-practice-form-wrapper h2 { text-align: center; margin-top: 0; margin-bottom: 2rem; font-size: 24px; color: var(--qp-dark-text); }
+.qp-practice-form-wrapper { max-width: 550px; }
+.qp-practice-form-wrapper h2 { text-align: center; margin-top: 0; margin-bottom: 2rem; font-size: 24px; }
 .qp-form-group { margin-bottom: 1.5rem; }
-.qp-form-group label { font-weight: 600; font-size: 14px; color: var(--qp-light-text); display: block; margin-bottom: 8px; }
+.qp-form-group > label { font-weight: 600; font-size: 14px; color: var(--qp-light-text); display: block; margin-bottom: 8px; }
 .qp-form-group select, .qp-form-group input[type="number"] { width: 100%; padding: 12px; border: 1px solid var(--qp-border-color); border-radius: 4px; font-size: 16px; box-sizing: border-box; transition: border-color 0.2s, box-shadow 0.2s; }
 .qp-form-group select:focus, .qp-form-group input[type="number"]:focus { outline: none; border-color: var(--qp-primary-color); box-shadow: 0 0 0 1px var(--qp-primary-color); }
 .qp-checkbox-group { display: flex; gap: 2rem; align-items: center; }
-.qp-custom-checkbox { padding-left: 30px; position: relative; cursor: pointer; user-select: none; font-weight: normal !important; display: flex; align-items: center; }
+.qp-custom-checkbox { display: inline-flex; align-items: center; padding-left: 30px; position: relative; cursor: pointer; user-select: none; }
 .qp-custom-checkbox input { position: absolute; opacity: 0; height: 0; width: 0; }
 .qp-custom-checkbox span { content: ''; position: absolute; left: 0; top: 50%; transform: translateY(-50%); height: 18px; width: 18px; background: #fff; border: 1px solid var(--qp-border-color); border-radius: 4px; transition: all 0.2s ease; }
 .qp-custom-checkbox input:checked ~ span { background-color: var(--qp-primary-color); border-color: var(--qp-primary-color); }
 .qp-custom-checkbox span::after { content: ""; position: absolute; display: none; left: 6px; top: 3px; width: 4px; height: 8px; border: solid white; border-width: 0 2px 2px 0; transform: rotate(45deg); }
 .qp-custom-checkbox input:checked ~ span::after { display: block; }
-.qp-form-group-description { background: var(--qp-bg-light); border: 1px solid #e0e6eb; padding: 1rem; margin-top: -1rem; margin-bottom: 1.5rem; border-radius: 4px; }
+.qp-form-group-description { background: var(--qp-bg-light); border: 1px solid #e0e6eb; padding: 1rem; margin-top: 1rem; margin-bottom: 1.5rem; border-radius: 4px; }
+.qp-form-group-description p { margin: 0.5rem 0; font-size: 13px; color: var(--qp-light-text); }
+.qp-form-group-description p strong { color: var(--qp-dark-text); }
 .qp-marks-group { display: flex; gap: 1.5rem; } .qp-marks-group > div { flex: 1; }
-.qp-form-group input[type="submit"] { width: 100%; padding: 14px; font-size: 16px; font-weight: 600; text-transform: uppercase; background-color: var(--qp-primary-color); color: white; border: none; border-radius: 4px; cursor: pointer; }
+.qp-form-group input[type="submit"] { width: 100%; padding: 14px; font-size: 16px; font-weight: 600; text-transform: uppercase; }
 
 /* --- 2. Practice Screen --- */
-.qp-practice-wrapper { max-width: 800px; margin: 2rem auto; background-color: var(--qp-bg-white); padding: 2rem 2.5rem; border-radius: var(--qp-radius); box-shadow: var(--qp-shadow); }
-.qp-header { display: flex; justify-content: space-around; align-items: stretch; margin-bottom: 1.5rem; padding-bottom: 1.5rem; border-bottom: 1px solid var(--qp-border-color); }
-.qp-header-stat { text-align: center; } .qp-header-stat .value { font-size: 26px; font-weight: 600; } .qp-header-stat .label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--qp-light-text); }
+.qp-header { display: flex; justify-content: space-around; text-align: center; margin-bottom: 1.5rem; padding-bottom: 1.5rem; border-bottom: 1px solid var(--qp-border-color); }
+.qp-header-stat .value { font-size: 26px; font-weight: 600; } .qp-header-stat .label { font-size: 12px; text-transform: uppercase; color: var(--qp-light-text); }
+.qp-header .timer-stat { display: none; } /* Hide timer by default */
 .qp-question-area .question-text { font-size: 22px; font-weight: 500; line-height: 1.5; color: var(--qp-dark-text); margin-bottom: 2rem; }
-.qp-options-area .option { display: block; padding: 1rem; margin-bottom: 0.75rem; border: 2px solid var(--qp-border-color); border-radius: var(--qp-radius); font-size: 16px; cursor: pointer; transition: all 0.15s ease-in-out; position: relative; }
+.qp-options-area .option { display: block; padding: 1rem; margin-bottom: 0.75rem; border: 2px solid var(--qp-border-color); border-radius: var(--qp-radius); font-size: 16px; cursor: pointer; transition: border-color 0.15s ease-in-out; position: relative; }
 .qp-options-area .option input { display: none; } /* Completely hide radio button */
 .qp-options-area .option:hover { border-color: var(--qp-primary-hover); }
 .qp-options-area .option.correct { border-color: var(--qp-correct-border) !important; background: var(--qp-correct-bg); color: var(--qp-correct-text); font-weight: 600; }
 .qp-options-area .option.incorrect { border-color: var(--qp-incorrect-border) !important; background: var(--qp-incorrect-bg); color: var(--qp-incorrect-text); }
 .qp-options-area .option.disabled { cursor: not-allowed; opacity: 0.9; } .qp-options-area .option.disabled:not(.correct):not(.incorrect) { background: var(--qp-bg-light); }
 .qp-footer-nav, .qp-footer-controls { margin-top: 2rem; display: flex; align-items: center; justify-content: space-between; }
-.qp-footer-nav button { font-weight: 600; }
-#qp-report-btn { background: none!important; border: none!important; color: var(--qp-light-text)!important; text-decoration: underline; font-weight: normal; }
+.qp-footer-nav button { padding: 10px 20px; font-weight: 600; }
+#qp-skip-btn { border-color: var(--qp-border-color); }
+#qp-report-btn { background: none!important; border: none!important; color: var(--qp-light-text)!important; text-decoration: underline; font-weight: normal; box-shadow: none; }
+#qp-end-practice-btn { background-color: #d63638; color: #fff; border-color: #d63638; }
 
 /* --- 3. Summary Screen --- */
 .qp-summary-wrapper { text-align: center; }
@@ -80,13 +98,17 @@
 .qp-summary-score { font-size: 56px; font-weight: 700; margin: 1.5rem 0; color: var(--qp-primary-color); }
 .qp-summary-score .label { display: block; font-size: 16px; font-weight: 400; color: var(--qp-light-text); margin-bottom: 0.5rem; }
 .qp-summary-stats { display: flex; justify-content: space-around; margin: 2.5rem 0; }
+.qp-summary-stats .stat .value { font-size: 28px; font-weight: 600; }
+.qp-summary-stats .stat .label { font-size: 13px; text-transform: uppercase; color: var(--qp-light-text); }
 .qp-summary-actions { margin-top: 2rem; display: flex; justify-content: center; gap: 1rem; }
 
 /* --- 4. Dashboard Screen --- */
+.qp-dashboard-wrapper { max-width: 900px; }
 .qp-dashboard-wrapper h2 { text-align: center; font-size: 24px; }
 .qp-dashboard-table { width: 100%; border-collapse: collapse; margin-top: 2rem; font-size: 14px; }
 .qp-dashboard-table th, .qp-dashboard-table td { padding: 15px; border-bottom: 1px solid var(--qp-border-color); text-align: left; }
 .qp-dashboard-table th { background-color: var(--qp-bg-light); font-size: 12px; text-transform: uppercase; }
-.qp-dashboard-table td { color: var(--qp-light-text); } .qp-dashboard-table td strong { color: var(--qp-dark-text); font-size: 16px; }
+.qp-dashboard-table td { color: var(--qp-light-text); vertical-align: middle; } .qp-dashboard-table td strong { color: var(--qp-dark-text); font-size: 16px; }
 .qp-dashboard-actions { margin-top: 2rem; text-align: right; }
-.qp-delete-session-btn { background: none; border: 1px solid #e14d43; color: #d63638; cursor: pointer; border-radius: 4px; padding: 4px 8px; font-size: 12px; }
+.qp-delete-session-btn { background: none; border: 1px solid #d63638; color: #d63638; cursor: pointer; border-radius: 4px; padding: 4px 8px; font-size: 12px; transition: all 0.2s; }
+.qp-delete-session-btn:hover { background: #d63638; color: #fff; }
