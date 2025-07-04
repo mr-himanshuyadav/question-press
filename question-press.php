@@ -65,7 +65,17 @@ function qp_admin_menu() {
 }
 add_action('admin_menu', 'qp_admin_menu');
 
+// UPDATED: Enqueue our new Quick Edit script
 function qp_admin_enqueue_scripts($hook_suffix) {
+    // Only load on our plugin's main page
+    if ($hook_suffix === 'toplevel_page_question-press') {
+        wp_enqueue_script('qp-quick-edit-script', QP_PLUGIN_URL . 'admin/assets/js/quick-edit.js', ['jquery'], '1.0.0', true);
+        // Pass data to our script
+        wp_localize_script('qp-quick-edit-script', 'qp_quick_edit_object', [
+            'nonce' => wp_create_nonce('qp_quick_edit_nonce')
+        ]);
+    }
+
     if (strpos($hook_suffix, 'qp-') !== false || strpos($hook_suffix, 'question-press') !== false) {
         wp_enqueue_style('wp-color-picker');
         wp_enqueue_script('wp-color-picker');
@@ -76,7 +86,6 @@ function qp_admin_enqueue_scripts($hook_suffix) {
         wp_enqueue_script('qp-media-uploader-script', QP_PLUGIN_URL . 'admin/assets/js/media-uploader.js', ['jquery'], '1.0.0', true);
         wp_enqueue_script('qp-editor-script', QP_PLUGIN_URL . 'admin/assets/js/question-editor.js', ['jquery'], '1.0.1', true);
     }
-    
 }
 add_action('admin_enqueue_scripts', 'qp_admin_enqueue_scripts');
 
@@ -576,3 +585,60 @@ function qp_handle_clear_logs() {
         exit;
     }
 }
+
+
+// NEW: AJAX handler to fetch the Quick Edit form HTML
+function qp_get_quick_edit_form_ajax() {
+    check_ajax_referer('qp_quick_edit_nonce', 'nonce');
+    $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
+    if (!$question_id) { wp_send_json_error(); }
+
+    global $wpdb;
+    $q_table = $wpdb->prefix . 'qp_questions';
+    $g_table = $wpdb->prefix . 'qp_question_groups';
+    
+    $question = $wpdb->get_row($wpdb->prepare("SELECT q.question_text, q.is_pyq, g.subject_id FROM {$q_table} q LEFT JOIN {$g_table} g ON q.group_id = g.group_id WHERE q.question_id = %d", $question_id));
+    
+    $all_subjects = $wpdb->get_results("SELECT subject_id, subject_name FROM {$wpdb->prefix}qp_subjects ORDER BY subject_name ASC");
+    $all_labels = $wpdb->get_results("SELECT label_id, label_name FROM {$wpdb->prefix}qp_labels ORDER BY label_name ASC");
+    $current_labels = $wpdb->get_col($wpdb->prepare("SELECT label_id FROM {$wpdb->prefix}qp_question_labels WHERE question_id = %d", $question_id));
+
+    ob_start();
+    ?>
+    <h4>Quick Edit</h4>
+    <fieldset class="inline-edit-col-left">
+        <label>
+            <span class="title">Question Text</span>
+            <span class="input-text-wrap"><textarea name="question_text" rows="4" style="width: 100%;"><?php echo esc_textarea($question->question_text); ?></textarea></span>
+        </label>
+    </fieldset>
+    <fieldset class="inline-edit-col-right">
+        <label>
+            <span class="title">Subject</span>
+            <select name="subject_id">
+                <?php foreach ($all_subjects as $subject) : ?>
+                    <option value="<?php echo esc_attr($subject->subject_id); ?>" <?php selected($subject->subject_id, $question->subject_id); ?>><?php echo esc_html($subject->subject_name); ?></option>
+                <?php endforeach; ?>
+            </select>
+        </label>
+        <div style="margin-top: 10px;">
+            <p style="margin: 0 0 5px 0;"><strong>Labels</strong></p>
+            <div style="max-height: 100px; overflow-y: auto; border: 1px solid #ddd; padding: 5px; background: #fff;">
+                <?php foreach ($all_labels as $label) : ?>
+                    <label style="display: block;"><input type="checkbox" name="labels[]" value="<?php echo esc_attr($label->label_id); ?>" <?php checked(in_array($label->label_id, $current_labels)); ?>> <?php echo esc_html($label->label_name); ?></label>
+                <?php endforeach; ?>
+            </div>
+        </div>
+        <div style="margin-top: 10px;">
+            <label><input type="checkbox" name="is_pyq" value="1" <?php checked($question->is_pyq, 1); ?>> Is PYQ?</label>
+        </div>
+    </fieldset>
+    <p class="submit inline-edit-save">
+        <button type="button" class="button cancel">Cancel</button>
+        <button type="button" class="button button-primary">Update</button>
+    </p>
+    <?php
+    $form_html = ob_get_clean();
+    wp_send_json_success(['form' => $form_html]);
+}
+add_action('wp_ajax_get_quick_edit_form', 'qp_get_quick_edit_form_ajax');
