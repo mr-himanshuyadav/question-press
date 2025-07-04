@@ -273,24 +273,19 @@ function qp_handle_save_question_group() {
     exit;
 }
 
-/**
- * Initializes the plugin's public-facing features like shortcodes.
- */
-// PUBLIC FACING HOOKS
+// ------------------------------------------------------------------
+// PUBLIC FACING HOOKS & AJAX
+// ------------------------------------------------------------------
+
 function qp_public_init() {
     add_shortcode('question_press_practice', ['QP_Shortcodes', 'render_practice_form']);
 }
 add_action('init', 'qp_public_init');
 
-// UPDATED: Enqueue public scripts and styles
 function qp_public_enqueue_scripts() {
     if (is_singular() && has_shortcode(get_post()->post_content, 'question_press_practice')) {
         wp_enqueue_style('qp-practice-styles', QP_PLUGIN_URL . 'public/assets/css/practice.css', [], '1.0.1');
-        
-        // Enqueue our new practice.js script
-        wp_enqueue_script('qp-practice-script', QP_PLUGIN_URL . 'public/assets/js/practice.js', ['jquery'], '1.0.0', true);
-        
-        // Pass data to our script, like the AJAX URL and a security nonce
+        wp_enqueue_script('qp-practice-script', QP_PLUGIN_URL . 'public/assets/js/practice.js', ['jquery'], '1.0.1', true);
         wp_localize_script('qp-practice-script', 'qp_ajax_object', [
             'ajax_url' => admin_url('admin-ajax.php'),
             'nonce'    => wp_create_nonce('qp_practice_nonce')
@@ -299,79 +294,75 @@ function qp_public_enqueue_scripts() {
 }
 add_action('wp_enqueue_scripts', 'qp_public_enqueue_scripts');
 
-/**
- * NEW: The AJAX handler for starting a practice session.
- */
-// In question-press.php
-
-// In question-press.php
-
 function qp_start_practice_session_ajax() {
     check_ajax_referer('qp_practice_nonce', 'nonce');
-
-    // Parse the form settings
+    $settings_str = isset($_POST['settings']) ? $_POST['settings'] : '';
     $settings = [];
-    parse_str($_POST['settings'], $settings);
-
+    parse_str($settings_str, $settings);
     $subject_id = isset($settings['qp_subject']) ? $settings['qp_subject'] : '';
     $pyq_only = isset($settings['qp_pyq_only']) ? true : false;
+    $settings['marks_correct'] = isset($settings['qp_marks_correct']) ? floatval($settings['qp_marks_correct']) : 4.0;
+    $settings['marks_incorrect'] = isset($settings['qp_marks_incorrect']) ? -abs(floatval($settings['qp_marks_incorrect'])) : -1.0;
+    $settings['timer_enabled'] = isset($settings['qp_timer_enabled']);
+    $settings['timer_seconds'] = isset($settings['qp_timer_seconds']) ? absint($settings['qp_timer_seconds']) : 60;
+    if (empty($subject_id)) { wp_send_json_error(['message' => 'Please select a subject.']); }
 
-    if (empty($subject_id)) {
-        wp_send_json_error(['message' => 'Please select a subject.']);
-    }
-
-    // Build the database query
     global $wpdb;
     $q_table = $wpdb->prefix . 'qp_questions';
     $g_table = $wpdb->prefix . 'qp_question_groups';
-    $s_table = $wpdb->prefix . 'qp_subjects';
-    $o_table = $wpdb->prefix . 'qp_options';
-
     $where_clauses = ["q.status = 'publish'"];
     $query_args = [];
-
-    if ($subject_id !== 'all') {
-        $where_clauses[] = "g.subject_id = %d";
-        $query_args[] = absint($subject_id);
-    }
-
-    if ($pyq_only) {
-        $where_clauses[] = "q.is_pyq = 1";
-    }
-
+    if ($subject_id !== 'all') { $where_clauses[] = "g.subject_id = %d"; $query_args[] = absint($subject_id); }
+    if ($pyq_only) { $where_clauses[] = "q.is_pyq = 1"; }
     $where_sql = implode(' AND ', $where_clauses);
-
     $query = "SELECT q.question_id FROM {$q_table} q LEFT JOIN {$g_table} g ON q.group_id = g.group_id WHERE {$where_sql} ORDER BY RAND()";
-    $prepared_query = $wpdb->prepare($query, $query_args);
-    $question_ids = $wpdb->get_col($prepared_query);
-
-    if (empty($question_ids)) {
-        wp_send_json_error(['message' => 'No questions found matching your criteria.']);
-    }
-
-    // For now, let's just get the full data for the first question
-    $first_question_id = $question_ids[0];
+    $question_ids = $wpdb->get_col($wpdb->prepare($query, $query_args));
+    if (empty($question_ids)) { wp_send_json_error(['message' => 'No questions found matching your criteria.']); }
     
-    $question_query = $wpdb->prepare(
-        "SELECT q.question_id, q.custom_question_id, q.question_text, g.direction_text, s.subject_name 
-         FROM {$q_table} q 
-         LEFT JOIN {$g_table} g ON q.group_id = g.group_id
-         LEFT JOIN {$s_table} s ON g.subject_id = s.subject_id
-         WHERE q.question_id = %d",
-        $first_question_id
-    );
-    $first_question_data = $wpdb->get_row($question_query, ARRAY_A);
+    $sessions_table = $wpdb->prefix . 'qp_user_sessions';
+    $wpdb->insert($sessions_table, ['user_id' => get_current_user_id(), 'settings_snapshot' => wp_json_encode($settings)]);
+    $session_id = $wpdb->insert_id;
 
-    // Get options for the first question
-    $options_query = $wpdb->prepare("SELECT option_id, option_text FROM {$o_table} WHERE question_id = %d", $first_question_id);
-    $first_question_data['options'] = $wpdb->get_results($options_query, ARRAY_A);
-    
-    // Prepare the data to send back
-    $response_data = [
-        'ui_html'   => QP_Shortcodes::render_practice_ui(), // The static UI shell
-        'questions' => [$first_question_data] // An array with our first question's data
-    ];
-    
-    wp_send_json_success($response_data);
+    wp_send_json_success(['ui_html' => QP_Shortcodes::render_practice_ui(), 'question_ids' => $question_ids, 'session_id' => $session_id, 'settings' => $settings]);
 }
 add_action('wp_ajax_start_practice_session', 'qp_start_practice_session_ajax');
+
+function qp_get_question_data_ajax() {
+    check_ajax_referer('qp_practice_nonce', 'nonce');
+    $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
+    if (!$question_id) { wp_send_json_error(['message' => 'Invalid Question ID.']); }
+    global $wpdb;
+    $q_table = $wpdb->prefix . 'qp_questions'; $g_table = $wpdb->prefix . 'qp_question_groups'; $s_table = $wpdb->prefix . 'qp_subjects'; $o_table = $wpdb->prefix . 'qp_options';
+    $question_data = $wpdb->get_row($wpdb->prepare("SELECT q.custom_question_id, q.question_text, g.direction_text, s.subject_name FROM {$q_table} q LEFT JOIN {$g_table} g ON q.group_id = g.group_id LEFT JOIN {$s_table} s ON g.subject_id = s.subject_id WHERE q.question_id = %d", $question_id), ARRAY_A);
+    if (!$question_data) { wp_send_json_error(['message' => 'Question not found.']); }
+    $question_data['options'] = $wpdb->get_results($wpdb->prepare("SELECT option_id, option_text FROM {$o_table} WHERE question_id = %d ORDER BY RAND()", $question_id), ARRAY_A);
+    wp_send_json_success(['question' => $question_data]);
+}
+add_action('wp_ajax_get_question_data', 'qp_get_question_data_ajax');
+
+function qp_check_answer_ajax() {
+    check_ajax_referer('qp_practice_nonce', 'nonce');
+    $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
+    $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
+    $option_id = isset($_POST['option_id']) ? absint($_POST['option_id']) : 0;
+    if (!$session_id || !$question_id || !$option_id) { wp_send_json_error(['message' => 'Invalid data submitted.']); }
+    global $wpdb;
+    $o_table = $wpdb->prefix . 'qp_options'; $attempts_table = $wpdb->prefix . 'qp_user_attempts';
+    $is_correct = (bool) $wpdb->get_var($wpdb->prepare("SELECT is_correct FROM $o_table WHERE question_id = %d AND option_id = %d", $question_id, $option_id));
+    $correct_option_id = $wpdb->get_var($wpdb->prepare("SELECT option_id FROM $o_table WHERE question_id = %d AND is_correct = 1", $question_id));
+    $wpdb->insert($attempts_table, ['session_id' => $session_id, 'user_id' => get_current_user_id(), 'question_id' => $question_id, 'is_correct' => $is_correct ? 1 : 0]);
+    wp_send_json_success(['is_correct' => $is_correct, 'correct_option_id' => $correct_option_id]);
+}
+add_action('wp_ajax_check_answer', 'qp_check_answer_ajax');
+
+function qp_skip_question_ajax() {
+    check_ajax_referer('qp_practice_nonce', 'nonce');
+    $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
+    $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
+    if (!$session_id || !$question_id) { wp_send_json_error(['message' => 'Invalid data submitted.']); }
+    global $wpdb;
+    $attempts_table = $wpdb->prefix . 'qp_user_attempts';
+    $wpdb->insert($attempts_table, ['session_id' => $session_id, 'user_id' => get_current_user_id(), 'question_id' => $question_id, 'is_correct' => null]);
+    wp_send_json_success();
+}
+add_action('wp_ajax_skip_question', 'qp_skip_question_ajax');

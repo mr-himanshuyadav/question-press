@@ -117,3 +117,7 @@
     padding-top: 15px;
     border-top: 1px solid #eee;
 }
+
+.qp-header .timer-stat {
+    display: none; /* Hide timer by default */
+}
