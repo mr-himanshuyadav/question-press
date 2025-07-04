@@ -26,6 +26,7 @@ require_once QP_PLUGIN_DIR . 'admin/class-qp-questions-list-table.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-question-editor-page.php';
 // Include Public class files
 require_once QP_PLUGIN_DIR . 'public/class-qp-shortcodes.php';
+require_once QP_PLUGIN_DIR . 'public/class-qp-dashboard.php';
 
 
 // Activation/Deactivation/Uninstall Hooks
@@ -277,8 +278,10 @@ function qp_handle_save_question_group() {
 // PUBLIC FACING HOOKS & AJAX
 // ------------------------------------------------------------------
 
+// REPLACE the existing qp_public_init function with this one
 function qp_public_init() {
     add_shortcode('question_press_practice', ['QP_Shortcodes', 'render_practice_form']);
+    add_shortcode('question_press_dashboard', ['QP_Dashboard', 'render']); // New line
 }
 add_action('init', 'qp_public_init');
 
