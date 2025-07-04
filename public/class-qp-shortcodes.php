@@ -38,6 +38,8 @@ class QP_Shortcodes {
      */
     // In public/class-qp-shortcodes.php
 
+    // In public/class-qp-shortcodes.php
+
     public static function render_practice_ui() {
         ob_start();
         ?>

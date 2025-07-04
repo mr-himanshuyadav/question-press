@@ -304,6 +304,8 @@ add_action('wp_enqueue_scripts', 'qp_public_enqueue_scripts');
  */
 // In question-press.php
 
+// In question-press.php
+
 function qp_start_practice_session_ajax() {
     check_ajax_referer('qp_practice_nonce', 'nonce');
 
