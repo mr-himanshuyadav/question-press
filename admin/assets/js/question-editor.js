@@ -3,20 +3,22 @@ jQuery(document).ready(function($) {
     $('#add-new-question-block').on('click', function(e) {
         e.preventDefault();
 
-        // Clone the last question block
-        var newBlock = $('.qp-question-block:last').clone();
+        // Clone the first question block as a template
+        var newBlock = $('.qp-question-block:first').clone();
 
-        // Clear the input values in the new block
+        // Clear all input values in the new block
         newBlock.find('textarea, input[type="text"]').val('');
         newBlock.find('input[type="checkbox"]').prop('checked', false);
         
+        // Remove the hidden question_id so it's treated as a new question
+        newBlock.find('.question-id-input').val('0');
+
         // Set the first radio button as checked by default
         newBlock.find('input[type="radio"]').first().prop('checked', true);
 
         // Append the new block to the container
         $('#qp-question-blocks-container').append(newBlock);
 
-        // Re-index all question blocks to ensure form names are correct
         reindexQuestionBlocks();
     });
 
@@ -24,7 +26,6 @@ jQuery(document).ready(function($) {
     $('#qp-question-blocks-container').on('click', '.remove-question-block', function(e) {
         e.preventDefault();
 
-        // Don't allow removing the very last block
         if ($('.qp-question-block').length > 1) {
             $(this).closest('.qp-question-block').remove();
             reindexQuestionBlocks();
@@ -33,26 +34,23 @@ jQuery(document).ready(function($) {
         }
     });
 
-    // Function to re-index names and IDs of the form elements
     function reindexQuestionBlocks() {
         $('.qp-question-block').each(function(questionIndex, questionElement) {
             var $questionBlock = $(questionElement);
             
-            // Update question text textarea name
-            $questionBlock.find('.question-text-area').attr('name', 'questions[' + questionIndex + '][question_text]');
+            // Update base name attribute for all fields in this block
+            var baseName = 'questions[' + questionIndex + ']';
 
-            // Update PYQ checkbox name
-            $questionBlock.find('.is-pyq-checkbox').attr('name', 'questions[' + questionIndex + '][is_pyq]');
+            $questionBlock.find('.question-id-input').attr('name', baseName + '[question_id]');
+            $questionBlock.find('.question-text-area').attr('name', baseName + '[question_text]');
+            $questionBlock.find('input[type="radio"]').attr('name', baseName + '[is_correct_option]');
             
-            // Update option inputs
-            $questionBlock.find('.qp-option-row').each(function(optionIndex, optionElement) {
-                var $optionRow = $(optionElement);
-                
-                // Update radio button name
-                $optionRow.find('input[type="radio"]').attr('name', 'questions[' + questionIndex + '][is_correct_option]');
-                
-                // Update option text input name
-                $optionRow.find('input[type="text"]').attr('name', 'questions[' + questionIndex + '][options][]');
+            $questionBlock.find('.option-text-input').each(function(optionIndex, optionElement) {
+                $(optionElement).attr('name', baseName + '[options][]');
+            });
+
+            $questionBlock.find('.label-checkbox').each(function(labelIndex, labelElement) {
+                $(labelElement).attr('name', baseName + '[labels][]');
             });
         });
     }

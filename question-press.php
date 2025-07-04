@@ -160,7 +160,8 @@ function qp_all_questions_page_cb() {
 // REWRITTEN & ROBUST SAVE LOGIC
 // In question-press.php
 
-// UPDATED SAVE LOGIC
+// In question-press.php
+
 function qp_handle_save_question_group() {
     if (!isset($_POST['save_group']) || !isset($_POST['_wpnonce']) || !wp_verify_nonce($_POST['_wpnonce'], 'qp_save_question_group_nonce')) {
         return;
@@ -174,12 +175,11 @@ function qp_handle_save_question_group() {
     $direction_image_id = absint($_POST['direction_image_id']);
     $subject_id = absint($_POST['subject_id']);
     $is_pyq = isset($_POST['is_pyq']) ? 1 : 0;
-    $labels = isset($_POST['labels']) ? array_map('absint', $_POST['labels']) : [];
     $questions_from_form = isset($_POST['questions']) ? (array) $_POST['questions'] : [];
 
     if (empty($subject_id) || empty($questions_from_form)) { return; }
 
-    // Group Handling
+    // 1. UPDATE OR INSERT THE GROUP
     $group_data = ['direction_text' => $direction_text, 'direction_image_id' => $direction_image_id, 'subject_id' => $subject_id];
     if ($is_editing) {
         $wpdb->update("{$wpdb->prefix}qp_question_groups", $group_data, ['group_id' => $group_id]);
@@ -188,38 +188,43 @@ function qp_handle_save_question_group() {
         $group_id = $wpdb->insert_id;
     }
 
+    // 2. INTELLIGENTLY UPDATE, INSERT, AND DELETE QUESTIONS
     $q_table = "{$wpdb->prefix}qp_questions";
     $o_table = "{$wpdb->prefix}qp_options";
     $ql_table = "{$wpdb->prefix}qp_question_labels";
-    
-    if ($is_editing) {
-        $existing_q_ids = $wpdb->get_col($wpdb->prepare("SELECT question_id FROM $q_table WHERE group_id = %d", $group_id));
-        if (!empty($existing_q_ids)) {
-            $ids_placeholder = implode(',', array_map('absint', $existing_q_ids));
-            $wpdb->query("DELETE FROM $o_table WHERE question_id IN ($ids_placeholder)");
-            $wpdb->query("DELETE FROM $ql_table WHERE question_id IN ($ids_placeholder)");
-            $wpdb->query("DELETE FROM $q_table WHERE question_id IN ($ids_placeholder)");
-        }
-    }
+
+    $existing_q_ids = $is_editing ? $wpdb->get_col($wpdb->prepare("SELECT question_id FROM $q_table WHERE group_id = %d", $group_id)) : [];
+    $submitted_q_ids = [];
 
     foreach ($questions_from_form as $q_data) {
+        $question_id = isset($q_data['question_id']) ? absint($q_data['question_id']) : 0;
         $question_text = sanitize_textarea_field($q_data['question_text']);
         if (empty($question_text)) continue;
-        
-        // --- NEW: Get and increment the custom question ID ---
-        $next_custom_id = get_option('qp_next_custom_question_id', 1000);
 
-        $wpdb->insert($q_table, [
-            'custom_question_id' => $next_custom_id, // Add the new ID
+        $question_db_data = [
             'group_id' => $group_id,
             'question_text' => $question_text,
-            'question_text_hash' => md5(strtolower(trim(preg_replace('/\s+/', '', $question_text)))),
-            'is_pyq' => $is_pyq
-        ]);
-        $question_id = $wpdb->insert_id;
-        
-        update_option('qp_next_custom_question_id', $next_custom_id + 1);
+            'is_pyq' => $is_pyq,
+            'question_text_hash' => md5(strtolower(trim(preg_replace('/\s+/', '', $question_text))))
+        ];
 
+        if ($question_id && in_array($question_id, $existing_q_ids)) {
+            // This is an existing question, UPDATE it.
+            $wpdb->update($q_table, $question_db_data, ['question_id' => $question_id]);
+            $submitted_q_ids[] = $question_id;
+        } else {
+            // This is a new question, INSERT it.
+            $next_custom_id = get_option('qp_next_custom_question_id', 1000);
+            $question_db_data['custom_question_id'] = $next_custom_id;
+            
+            $wpdb->insert($q_table, $question_db_data);
+            $question_id = $wpdb->insert_id;
+            update_option('qp_next_custom_question_id', $next_custom_id + 1);
+            $submitted_q_ids[] = $question_id;
+        }
+
+        // Handle Options (delete old, insert new for this specific question)
+        $wpdb->delete($o_table, ['question_id' => $question_id]);
         $options = isset($q_data['options']) ? (array) $q_data['options'] : [];
         $correct_option_index = isset($q_data['is_correct_option']) ? absint($q_data['is_correct_option']) : -1;
         foreach ($options as $index => $option_text) {
@@ -227,17 +232,25 @@ function qp_handle_save_question_group() {
                 $wpdb->insert($o_table, ['question_id' => $question_id, 'option_text' => sanitize_text_field($option_text), 'is_correct' => ($index === $correct_option_index) ? 1 : 0 ]);
             }
         }
-
+        
+        // Handle Labels (delete old, insert new for this specific question)
+        $wpdb->delete($ql_table, ['question_id' => $question_id]);
+        $labels = isset($q_data['labels']) ? array_map('absint', $q_data['labels']) : [];
         foreach ($labels as $label_id) {
             $wpdb->insert($ql_table, ['question_id' => $question_id, 'label_id' => $label_id]);
         }
     }
-    
-    // Redirection Logic
-    if ($is_editing) {
-        wp_safe_redirect(admin_url('admin.php?page=question-press&message=1'));
-    } else {
-        wp_safe_redirect(admin_url('admin.php?page=qp-question-editor&message=2'));
+
+    // 3. DELETE any questions that were removed from the form
+    $questions_to_delete = array_diff($existing_q_ids, $submitted_q_ids);
+    if (!empty($questions_to_delete)) {
+        $ids_placeholder = implode(',', array_map('absint', $questions_to_delete));
+        $wpdb->query("DELETE FROM $o_table WHERE question_id IN ($ids_placeholder)");
+        $wpdb->query("DELETE FROM $ql_table WHERE question_id IN ($ids_placeholder)");
+        $wpdb->query("DELETE FROM $q_table WHERE question_id IN ($ids_placeholder)");
     }
+    
+    // Redirect Logic
+    wp_safe_redirect(admin_url('admin.php?page=question-press&message=1'));
     exit;
 }
