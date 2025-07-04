@@ -13,6 +13,8 @@ class QP_Shortcodes {
         return $output;
     }
 
+    // In public/class-qp-shortcodes.php
+
     private static function render_settings_form() {
         global $wpdb;
         $subjects = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}qp_subjects ORDER BY subject_name ASC");
@@ -21,11 +23,61 @@ class QP_Shortcodes {
         <div class="qp-practice-form-wrapper">
             <h2>Start a New Practice Session</h2>
             <form id="qp-start-practice-form" method="post" action="">
-                <div class="qp-form-group"><label for="qp_subject">Select Subject:</label><select name="qp_subject" id="qp_subject" required><option value="" disabled selected>-- Please select a subject --</option><option value="all">All Subjects</option><?php foreach ($subjects as $subject) : ?><option value="<?php echo esc_attr($subject->subject_id); ?>"><?php echo esc_html($subject->subject_name); ?></option><?php endforeach; ?></select></div>
-                <div class="qp-form-group"><label><input type="checkbox" name="qp_pyq_only" value="1"> PYQ Only</label><label style="margin-left: 20px;"><input type="checkbox" name="qp_revise_mode" value="1"> Revision Mode</label></div>
-                <div class="qp-form-group qp-marks-group"><div><label for="qp_marks_correct">Marks for Correct Answer:</label><input type="number" name="qp_marks_correct" id="qp_marks_correct" value="4" step="0.1" required></div><div><label for="qp_marks_incorrect">Penalty for Incorrect Answer:</label><input type="number" name="qp_marks_incorrect" id="qp_marks_incorrect" value="1" step="0.1" min="0" required></div></div>
-                <div class="qp-form-group"><label><input type="checkbox" name="qp_timer_enabled" id="qp_timer_enabled_cb"> Enable Timer per Question</label><div id="qp-timer-input-wrapper" style="display: none; margin-top: 10px;"><label for="qp_timer_seconds">Time in Seconds:</label><input type="number" name="qp_timer_seconds" id="qp_timer_seconds" value="60" min="10"></div></div>
-                <div class="qp-form-group"><input type="submit" name="qp_start_practice" value="Start Practice"></div>
+                
+                <div class="qp-form-group">
+                    <label for="qp_subject">Select Subject:</label>
+                    <select name="qp_subject" id="qp_subject" required>
+                        <option value="" disabled selected>-- Please select a subject --</option>
+                        <option value="all">All Subjects</option>
+                        <?php foreach ($subjects as $subject) : ?>
+                            <option value="<?php echo esc_attr($subject->subject_id); ?>"><?php echo esc_html($subject->subject_name); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+
+                <div class="qp-form-group qp-checkbox-group">
+                    <label class="qp-custom-checkbox">
+                        <input type="checkbox" name="qp_pyq_only" value="1">
+                        <span></span>
+                        PYQ Only
+                    </label>
+                    <label class="qp-custom-checkbox">
+                        <input type="checkbox" name="qp_revise_mode" value="1">
+                        <span></span>
+                        Revision Mode
+                    </label>
+                </div>
+                <div class="qp-form-group-description">
+                    <p><strong>PYQ Only:</strong> Only include questions that are marked as a "Previous Year Question".</p>
+                    <p><strong>Revision Mode:</strong> Previously answered questions will reappear in your session to help you revise.</p>
+                </div>
+                
+                <div class="qp-form-group qp-marks-group">
+                    <div>
+                        <label for="qp_marks_correct">Marks for Correct Answer:</label>
+                        <input type="number" name="qp_marks_correct" id="qp_marks_correct" value="4" step="0.1" required>
+                    </div>
+                    <div>
+                        <label for="qp_marks_incorrect">Penalty for Incorrect Answer:</label>
+                        <input type="number" name="qp_marks_incorrect" id="qp_marks_incorrect" value="1" step="0.1" min="0" required>
+                    </div>
+                </div>
+
+                <div class="qp-form-group">
+                    <label class="qp-custom-checkbox">
+                        <input type="checkbox" name="qp_timer_enabled" id="qp_timer_enabled_cb">
+                        <span></span>
+                        Enable Timer per Question
+                    </label>
+                    <div id="qp-timer-input-wrapper" style="display: none; margin-top: 15px;">
+                        <label for="qp_timer_seconds">Time in Seconds:</label>
+                        <input type="number" name="qp_timer_seconds" id="qp_timer_seconds" value="60" min="10">
+                    </div>
+                </div>
+
+                <div class="qp-form-group">
+                    <input type="submit" name="qp_start_practice" value="Start Practice">
+                </div>
             </form>
         </div>
         <?php
