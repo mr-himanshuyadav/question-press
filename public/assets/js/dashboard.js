@@ -2,18 +2,20 @@
 jQuery(document).ready(function($) {
     $('.qp-dashboard-wrapper').on('click', '.qp-delete-session-btn', function(e) {
         e.preventDefault();
-
+        
         var button = $(this);
         var sessionID = button.data('session-id');
-        var nonce = button.data('nonce');
-
+        
+        // UPDATED: Use the global nonce provided by wp_localize_script
+        var nonce = qp_ajax_object.nonce; 
+        
         if (confirm('Are you sure you want to permanently delete this session history? This cannot be undone.')) {
             $.ajax({
                 url: qp_ajax_object.ajax_url,
                 type: 'POST',
                 data: {
                     action: 'delete_user_session',
-                    nonce: nonce,
+                    nonce: nonce, // Send the correct nonce
                     session_id: sessionID
                 },
                 beforeSend: function() {
@@ -22,7 +24,6 @@ jQuery(document).ready(function($) {
                 },
                 success: function(response) {
                     if (response.success) {
-                        // Fade out and remove the table row for instant feedback
                         button.closest('tr').fadeOut(500, function() {
                             $(this).remove();
                         });

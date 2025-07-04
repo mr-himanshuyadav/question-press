@@ -12,7 +12,6 @@ class QP_Dashboard {
         $user_id = get_current_user_id();
         $sessions_table = $wpdb->prefix . 'qp_user_sessions';
 
-        // Fetch all subjects once to avoid querying in a loop
         $subjects_raw = $wpdb->get_results("SELECT subject_id, subject_name FROM {$wpdb->prefix}qp_subjects");
         $subjects_map = [];
         foreach ($subjects_raw as $subject) {
@@ -61,7 +60,7 @@ class QP_Dashboard {
                                 <td><?php echo esc_html($session->incorrect_count); ?></td>
                                 <td><?php echo esc_html($session->skipped_count); ?></td>
                                 <td>
-                                    <button class="qp-delete-session-btn" data-session-id="<?php echo esc_attr($session->session_id); ?>" data-nonce="<?php echo wp_create_nonce('qp_delete_session_nonce'); ?>">
+                                    <button class="qp-delete-session-btn" data-session-id="<?php echo esc_attr($session->session_id); ?>">
                                         Delete
                                     </button>
                                 </td>
