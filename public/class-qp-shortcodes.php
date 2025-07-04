@@ -5,79 +5,109 @@ class QP_Shortcodes {
 
     /**
      * Renders the [question_press_practice] shortcode.
+     * Decides whether to show the form or the practice interface.
      */
     public static function render_practice_form() {
-        // This shortcode is only for logged-in users.
         if (!is_user_logged_in()) {
             return '<p>You must be logged in to start a practice session. <a href="' . wp_login_url(get_permalink()) . '">Click here to log in.</a></p>';
         }
 
+        // If the form was submitted, show the practice UI.
+        if (isset($_POST['qp_start_practice'])) {
+            // In future steps, we'll process the POST data here.
+            // For now, we just show the static HTML layout.
+            return self::render_practice_ui();
+        }
+
+        // If not submitted, show the settings form.
+        return self::render_settings_form();
+    }
+
+    /**
+     * Renders the initial settings form.
+     */
+    private static function render_settings_form() {
         global $wpdb;
         $subjects = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}qp_subjects ORDER BY subject_name ASC");
-
-        // Start output buffering to capture the HTML
         ob_start();
         ?>
         <div class="qp-practice-form-wrapper">
             <h2>Start a New Practice Session</h2>
             <form id="qp-start-practice-form" method="post" action="">
-                
-                <div class="qp-form-group">
-                    <label for="qp_subject">Select Subject:</label>
-                    <select name="qp_subject" id="qp_subject" required>
-                        <option value="" disabled selected>-- Please select a subject --</option>
-                        <option value="all">All Subjects</option>
-                        <?php foreach ($subjects as $subject) : ?>
-                            <option value="<?php echo esc_attr($subject->subject_id); ?>"><?php echo esc_html($subject->subject_name); ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-
-                <div class="qp-form-group">
-                    <label><input type="checkbox" name="qp_pyq_only" value="1"> PYQ Only</label>
-                    <label style="margin-left: 20px;"><input type="checkbox" name="qp_revise_mode" value="1"> Revision Mode</label>
-                </div>
-                
-                <div class="qp-form-group qp-marks-group">
-                    <div>
-                        <label for="qp_marks_correct">Marks for Correct Answer:</label>
-                        <input type="number" name="qp_marks_correct" id="qp_marks_correct" value="4" step="0.1" required>
-                    </div>
-                    <div>
-                        <label for="qp_marks_incorrect">Penalty for Incorrect Answer:</label>
-                        <input type="number" name="qp_marks_incorrect" id="qp_marks_incorrect" value="1" step="0.1" min="0" required>
-                    </div>
-                </div>
-
-                <div class="qp-form-group">
-                    <label>
-                        <input type="checkbox" name="qp_timer_enabled" id="qp_timer_enabled_cb"> Enable Timer per Question
-                    </label>
-                    <div id="qp-timer-input-wrapper" style="display: none; margin-top: 10px;">
-                        <label for="qp_timer_seconds">Time in Seconds:</label>
-                        <input type="number" name="qp_timer_seconds" id="qp_timer_seconds" value="60" min="10">
-                    </div>
-                </div>
-
-                <div class="qp-form-group">
-                    <input type="submit" name="qp_start_practice" value="Start Practice">
-                </div>
+                <div class="qp-form-group"><label for="qp_subject">Select Subject:</label><select name="qp_subject" id="qp_subject" required><option value="" disabled selected>-- Please select a subject --</option><option value="all">All Subjects</option><?php foreach ($subjects as $subject) : ?><option value="<?php echo esc_attr($subject->subject_id); ?>"><?php echo esc_html($subject->subject_name); ?></option><?php endforeach; ?></select></div>
+                <div class="qp-form-group"><label><input type="checkbox" name="qp_pyq_only" value="1"> PYQ Only</label><label style="margin-left: 20px;"><input type="checkbox" name="qp_revise_mode" value="1"> Revision Mode</label></div>
+                <div class="qp-form-group qp-marks-group"><div><label for="qp_marks_correct">Marks for Correct Answer:</label><input type="number" name="qp_marks_correct" id="qp_marks_correct" value="4" step="0.1" required></div><div><label for="qp_marks_incorrect">Penalty for Incorrect Answer:</label><input type="number" name="qp_marks_incorrect" id="qp_marks_incorrect" value="1" step="0.1" min="0" required></div></div>
+                <div class="qp-form-group"><label><input type="checkbox" name="qp_timer_enabled" id="qp_timer_enabled_cb"> Enable Timer per Question</label><div id="qp-timer-input-wrapper" style="display: none; margin-top: 10px;"><label for="qp_timer_seconds">Time in Seconds:</label><input type="number" name="qp_timer_seconds" id="qp_timer_seconds" value="60" min="10"></div></div>
+                <div class="qp-form-group"><input type="submit" name="qp_start_practice" value="Start Practice"></div>
             </form>
         </div>
-        
-        <script>
-            jQuery(document).ready(function($) {
-                $('#qp_timer_enabled_cb').on('change', function() {
-                    if ($(this).is(':checked')) {
-                        $('#qp-timer-input-wrapper').show();
-                    } else {
-                        $('#qp-timer-input-wrapper').hide();
-                    }
-                });
-            });
-        </script>
+        <script>jQuery(document).ready(function($){$('#qp_timer_enabled_cb').on('change',function(){if($(this).is(':checked')){$('#qp-timer-input-wrapper').show();}else{$('#qp-timer-input-wrapper').hide();}});});</script>
         <?php
-        // Return the captured HTML
+        return ob_get_clean();
+    }
+
+    /**
+     * Renders the static HTML layout for the main practice screen.
+     */
+    private static function render_practice_ui() {
+        ob_start();
+        ?>
+        <div class="qp-practice-wrapper">
+            <div class="qp-header">
+                <div class="qp-header-stat">
+                    <div class="label">Timer</div>
+                    <div class="value" id="qp-timer">01:00</div>
+                </div>
+                <div class="qp-header-stat">
+                    <div class="label">Score</div>
+                    <div class="value" id="qp-score">0</div>
+                </div>
+                <div class="qp-header-stat">
+                    <div class="label">Correct</div>
+                    <div class="value" id="qp-correct-count">0</div>
+                </div>
+                <div class="qp-header-stat">
+                    <div class="label">Incorrect</div>
+                    <div class="value" id="qp-incorrect-count">0</div>
+                </div>
+                <div class="qp-header-stat">
+                    <div class="label">Skipped</div>
+                    <div class="value" id="qp-skipped-count">0</div>
+                </div>
+            </div>
+
+            <div class="qp-direction">
+                <p>This is the direction or passage area. It will be hidden if there is no direction for the current question. The text might be long and could contain images.</p>
+            </div>
+
+            <div class="qp-question-area">
+                <div class="question-meta" style="font-size: 12px; color: #777; margin-bottom: 10px;">
+                    <span id="qp-question-subject">Subject: Physics</span> | <span id="qp-question-id">Question ID: 1001</span>
+                </div>
+                <div class="question-text">
+                    This is where the main text of the question will be displayed.
+                </div>
+            </div>
+
+            <div class="qp-options-area">
+                <label class="option"><input type="radio" name="qp_option"> Option A</label>
+                <label class="option"><input type="radio" name="qp_option"> Option B</label>
+                <label class="option"><input type="radio" name="qp_option"> Option C</label>
+                <label class="option"><input type="radio" name="qp_option"> Option D</label>
+            </div>
+
+            <div class="qp-footer-nav">
+                <button id="qp-prev-btn" disabled>&laquo; Previous</button>
+                <button id="qp-skip-btn">Skip</button>
+                <button id="qp-next-btn">Next &raquo;</button>
+            </div>
+
+            <div class="qp-footer-controls" style="margin-top: 20px; text-align: center;">
+                <button id="qp-end-practice-btn" style="background-color: #d9534f; color: white;">End Practice</button>
+                <button id="qp-report-btn" style="background: none; border: none; color: #0073aa; cursor: pointer; text-decoration: underline; margin-left: 15px;">Report Issue</button>
+            </div>
+        </div>
+        <?php
         return ob_get_clean();
     }
 }

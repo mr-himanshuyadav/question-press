@@ -1,0 +1,59 @@
+/* practice.css */
+.qp-practice-wrapper {
+    border: 1px solid #ddd;
+    padding: 20px;
+    background-color: #f9f9f9;
+    border-radius: 5px;
+}
+.qp-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #eee;
+}
+.qp-header-stat {
+    text-align: center;
+}
+.qp-header-stat .label {
+    font-size: 12px;
+    color: #666;
+}
+.qp-header-stat .value {
+    font-size: 24px;
+    font-weight: bold;
+    color: #333;
+}
+.qp-direction {
+    background-color: #fff;
+    border: 1px solid #eee;
+    padding: 15px;
+    margin-bottom: 20px;
+}
+.qp-question-area .question-text {
+    font-size: 1.4em;
+    font-weight: bold;
+    margin-bottom: 20px;
+}
+.qp-options-area .option {
+    display: block;
+    background-color: #fff;
+    border: 1px solid #ddd;
+    padding: 15px;
+    margin-bottom: 10px;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.2s ease-in-out;
+}
+.qp-options-area .option:hover {
+    background-color: #f0f8ff;
+    border-color: #99caff;
+}
+.qp-footer-nav {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 20px;
+    padding-top: 15px;
+    border-top: 1px solid #eee;
+}

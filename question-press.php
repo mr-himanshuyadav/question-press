@@ -123,6 +123,7 @@ function qp_admin_enqueue_scripts($hook_suffix) {
         wp_enqueue_script('qp-media-uploader-script', QP_PLUGIN_URL . 'admin/assets/js/media-uploader.js', ['jquery'], '1.0.0', true);
         wp_enqueue_script('qp-editor-script', QP_PLUGIN_URL . 'admin/assets/js/question-editor.js', ['jquery'], '1.0.1', true);
     }
+    
 }
 add_action('admin_enqueue_scripts', 'qp_admin_enqueue_scripts');
 
@@ -279,3 +280,20 @@ function qp_public_init() {
     add_shortcode('question_press_practice', ['QP_Shortcodes', 'render_practice_form']);
 }
 add_action('init', 'qp_public_init');
+
+/**
+ * Enqueues scripts and styles for the public-facing pages.
+ */
+function qp_public_enqueue_scripts() {
+    // We only want to load our styles on pages that have our shortcode
+    if (is_singular() && has_shortcode(get_post()->post_content, 'question_press_practice')) {
+        wp_enqueue_style(
+            'qp-practice-styles',
+            QP_PLUGIN_URL . 'public/assets/css/practice.css',
+            [],
+            '1.0.0'
+        );
+        // We will enqueue our JS file here in a later step
+    }
+}
+add_action('wp_enqueue_scripts', 'qp_public_enqueue_scripts');
