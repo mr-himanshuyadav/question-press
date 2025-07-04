@@ -587,7 +587,8 @@ function qp_handle_clear_logs() {
 }
 
 
-// NEW: AJAX handler to fetch the Quick Edit form HTML
+// In question-press.php
+
 function qp_get_quick_edit_form_ajax() {
     check_ajax_referer('qp_quick_edit_nonce', 'nonce');
     $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
@@ -596,47 +597,72 @@ function qp_get_quick_edit_form_ajax() {
     global $wpdb;
     $q_table = $wpdb->prefix . 'qp_questions';
     $g_table = $wpdb->prefix . 'qp_question_groups';
+    $o_table = $wpdb->prefix . 'qp_options';
     
     $question = $wpdb->get_row($wpdb->prepare("SELECT q.question_text, q.is_pyq, g.subject_id FROM {$q_table} q LEFT JOIN {$g_table} g ON q.group_id = g.group_id WHERE q.question_id = %d", $question_id));
     
     $all_subjects = $wpdb->get_results("SELECT subject_id, subject_name FROM {$wpdb->prefix}qp_subjects ORDER BY subject_name ASC");
     $all_labels = $wpdb->get_results("SELECT label_id, label_name FROM {$wpdb->prefix}qp_labels ORDER BY label_name ASC");
     $current_labels = $wpdb->get_col($wpdb->prepare("SELECT label_id FROM {$wpdb->prefix}qp_question_labels WHERE question_id = %d", $question_id));
+    $options = $wpdb->get_results($wpdb->prepare("SELECT option_id, option_text, is_correct FROM $o_table WHERE question_id = %d", $question_id));
 
     ob_start();
     ?>
-    <h4>Quick Edit</h4>
-    <fieldset class="inline-edit-col-left">
-        <label>
-            <span class="title">Question Text</span>
-            <span class="input-text-wrap"><textarea name="question_text" rows="4" style="width: 100%;"><?php echo esc_textarea($question->question_text); ?></textarea></span>
-        </label>
-    </fieldset>
-    <fieldset class="inline-edit-col-right">
-        <label>
-            <span class="title">Subject</span>
-            <select name="subject_id">
-                <?php foreach ($all_subjects as $subject) : ?>
-                    <option value="<?php echo esc_attr($subject->subject_id); ?>" <?php selected($subject->subject_id, $question->subject_id); ?>><?php echo esc_html($subject->subject_name); ?></option>
-                <?php endforeach; ?>
-            </select>
-        </label>
-        <div style="margin-top: 10px;">
-            <p style="margin: 0 0 5px 0;"><strong>Labels</strong></p>
-            <div style="max-height: 100px; overflow-y: auto; border: 1px solid #ddd; padding: 5px; background: #fff;">
-                <?php foreach ($all_labels as $label) : ?>
-                    <label style="display: block;"><input type="checkbox" name="labels[]" value="<?php echo esc_attr($label->label_id); ?>" <?php checked(in_array($label->label_id, $current_labels)); ?>> <?php echo esc_html($label->label_name); ?></label>
+    <div class="quick-edit-form-wrapper">
+        <h4>Quick Edit <span class="title"><?php echo esc_html(wp_trim_words($question->question_text, 5, '...')); ?></span></h4>
+        <div class="form-row">
+            <label class="form-label">Question Text</label>
+            <textarea name="question_text" rows="4"><?php echo esc_textarea($question->question_text); ?></textarea>
+        </div>
+        <div class="form-row">
+            <label class="form-label">Options (select correct answer)</label>
+            <div class="options-group">
+                <?php foreach ($options as $index => $option): ?>
+                <label class="option-label">
+                    <input type="radio" name="is_correct_option" value="<?php echo esc_attr($option->option_id); ?>" <?php checked($option->is_correct, 1); ?>>
+                    <input type="text" name="options[<?php echo esc_attr($option->option_id); ?>]" value="<?php echo esc_attr($option->option_text); ?>">
+                </label>
                 <?php endforeach; ?>
             </div>
         </div>
-        <div style="margin-top: 10px;">
-            <label><input type="checkbox" name="is_pyq" value="1" <?php checked($question->is_pyq, 1); ?>> Is PYQ?</label>
+        <div class="form-row form-row-flex">
+            <div class="form-group-half">
+                <label for="qe-subject">Subject</label>
+                <select name="subject_id" id="qe-subject">
+                    <?php foreach ($all_subjects as $subject) : ?>
+                        <option value="<?php echo esc_attr($subject->subject_id); ?>" <?php selected($subject->subject_id, $question->subject_id); ?>><?php echo esc_html($subject->subject_name); ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="form-group-half form-group-center-align">
+                <label class="inline-checkbox"><input type="checkbox" name="is_pyq" value="1" <?php checked($question->is_pyq, 1); ?>> Is PYQ?</label>
+            </div>
         </div>
-    </fieldset>
-    <p class="submit inline-edit-save">
-        <button type="button" class="button cancel">Cancel</button>
-        <button type="button" class="button button-primary">Update</button>
-    </p>
+        <div class="form-row">
+            <label class="form-label">Labels</label>
+            <div class="labels-group">
+                <?php foreach ($all_labels as $label) : ?>
+                    <label class="inline-checkbox"><input type="checkbox" name="labels[]" value="<?php echo esc_attr($label->label_id); ?>" <?php checked(in_array($label->label_id, $current_labels)); ?>> <?php echo esc_html($label->label_name); ?></label>
+                <?php endforeach; ?>
+            </div>
+        </div>
+        <p class="submit inline-edit-save">
+            <button type="button" class="button cancel">Cancel</button>
+            <button type="button" class="button button-primary">Update</button>
+        </p>
+    </div>
+    <style>
+        .quick-edit-form-wrapper { padding: 1rem; }
+        .quick-edit-form-wrapper .form-row { margin-bottom: 1rem; }
+        .quick-edit-form-wrapper .form-row-flex { display: flex; gap: 1rem; align-items: flex-end; }
+        .quick-edit-form-wrapper .form-group-half { flex: 1; }
+        .quick-edit-form-wrapper .form-group-center-align { padding-bottom: 5px; }
+        .quick_edit_form-wrapper .form-label, .quick-edit-form-wrapper .title, .quick-edit-form-wrapper strong { font-weight: 600; display: block; margin-bottom: .5rem;}
+        .quick-edit-form-wrapper textarea, .quick-edit-form-wrapper select, .quick-edit-form-wrapper .options-group input[type="text"] { width: 100%; }
+        .quick-edit-form-wrapper .options-group .option-label { display: flex; align-items: center; gap: .5rem; margin-bottom: .5rem; }
+        .quick-edit-form-wrapper .labels-group { display: flex; flex-wrap: wrap; gap: .5rem 1rem; padding: .5rem; border: 1px solid #ddd; background: #fff; }
+        .quick-edit-form-wrapper .inline-checkbox { white-space: nowrap; }
+    </style>
     <?php
     $form_html = ob_get_clean();
     wp_send_json_success(['form' => $form_html]);
