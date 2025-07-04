@@ -25,7 +25,7 @@ class QP_Shortcodes {
                 <div class="qp-form-group">
                     <label for="qp_subject">Select Subject:</label>
                     <select name="qp_subject" id="qp_subject" required>
-                        <option value="">-- Please select a subject --</option>
+                        <option value="" disabled selected>-- Please select a subject --</option>
                         <option value="all">All Subjects</option>
                         <?php foreach ($subjects as $subject) : ?>
                             <option value="<?php echo esc_attr($subject->subject_id); ?>"><?php echo esc_html($subject->subject_name); ?></option>
@@ -44,8 +44,8 @@ class QP_Shortcodes {
                         <input type="number" name="qp_marks_correct" id="qp_marks_correct" value="4" step="0.1" required>
                     </div>
                     <div>
-                        <label for="qp_marks_incorrect">Marks for Incorrect Answer (Negative):</label>
-                        <input type="number" name="qp_marks_incorrect" id="qp_marks_incorrect" value="-1" step="0.1" required>
+                        <label for="qp_marks_incorrect">Penalty for Incorrect Answer:</label>
+                        <input type="number" name="qp_marks_incorrect" id="qp_marks_incorrect" value="1" step="0.1" min="0" required>
                     </div>
                 </div>
 
@@ -66,7 +66,6 @@ class QP_Shortcodes {
         </div>
         
         <script>
-            // Simple script to show/hide the timer input
             jQuery(document).ready(function($) {
                 $('#qp_timer_enabled_cb').on('change', function() {
                     if ($(this).is(':checked')) {
