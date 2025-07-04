@@ -587,8 +587,7 @@ function qp_handle_clear_logs() {
 }
 
 
-// In question-press.php
-
+// NEW: AJAX handler to fetch the Quick Edit form HTML
 function qp_get_quick_edit_form_ajax() {
     check_ajax_referer('qp_quick_edit_nonce', 'nonce');
     $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
@@ -604,18 +603,20 @@ function qp_get_quick_edit_form_ajax() {
     $all_subjects = $wpdb->get_results("SELECT subject_id, subject_name FROM {$wpdb->prefix}qp_subjects ORDER BY subject_name ASC");
     $all_labels = $wpdb->get_results("SELECT label_id, label_name FROM {$wpdb->prefix}qp_labels ORDER BY label_name ASC");
     $current_labels = $wpdb->get_col($wpdb->prepare("SELECT label_id FROM {$wpdb->prefix}qp_question_labels WHERE question_id = %d", $question_id));
-    $options = $wpdb->get_results($wpdb->prepare("SELECT option_id, option_text, is_correct FROM $o_table WHERE question_id = %d", $question_id));
+    $options = $wpdb->get_results($wpdb->prepare("SELECT option_id, option_text, is_correct FROM $o_table WHERE question_id = %d ORDER BY option_id ASC", $question_id));
 
     ob_start();
     ?>
-    <div class="quick-edit-form-wrapper">
+    <form class="quick-edit-form">
         <h4>Quick Edit <span class="title"><?php echo esc_html(wp_trim_words($question->question_text, 5, '...')); ?></span></h4>
+        <input type="hidden" name="question_id" value="<?php echo esc_attr($question_id); ?>">
+        <?php wp_nonce_field('qp_quick_edit_save_nonce'); ?>
         <div class="form-row">
-            <label class="form-label">Question Text</label>
+            <label class="form-label"><strong>Question Text</strong></label>
             <textarea name="question_text" rows="4"><?php echo esc_textarea($question->question_text); ?></textarea>
         </div>
         <div class="form-row">
-            <label class="form-label">Options (select correct answer)</label>
+            <label class="form-label"><strong>Options (select correct answer)</strong></label>
             <div class="options-group">
                 <?php foreach ($options as $index => $option): ?>
                 <label class="option-label">
@@ -627,7 +628,7 @@ function qp_get_quick_edit_form_ajax() {
         </div>
         <div class="form-row form-row-flex">
             <div class="form-group-half">
-                <label for="qe-subject">Subject</label>
+                <label for="qe-subject"><strong>Subject</strong></label>
                 <select name="subject_id" id="qe-subject">
                     <?php foreach ($all_subjects as $subject) : ?>
                         <option value="<?php echo esc_attr($subject->subject_id); ?>" <?php selected($subject->subject_id, $question->subject_id); ?>><?php echo esc_html($subject->subject_name); ?></option>
@@ -639,7 +640,7 @@ function qp_get_quick_edit_form_ajax() {
             </div>
         </div>
         <div class="form-row">
-            <label class="form-label">Labels</label>
+            <label class="form-label"><strong>Labels</strong></label>
             <div class="labels-group">
                 <?php foreach ($all_labels as $label) : ?>
                     <label class="inline-checkbox"><input type="checkbox" name="labels[]" value="<?php echo esc_attr($label->label_id); ?>" <?php checked(in_array($label->label_id, $current_labels)); ?>> <?php echo esc_html($label->label_name); ?></label>
@@ -648,23 +649,91 @@ function qp_get_quick_edit_form_ajax() {
         </div>
         <p class="submit inline-edit-save">
             <button type="button" class="button cancel">Cancel</button>
-            <button type="button" class="button button-primary">Update</button>
+            <button type="button" class="button button-primary save">Update</button>
         </p>
-    </div>
+    </form>
     <style>
         .quick-edit-form-wrapper { padding: 1rem; }
         .quick-edit-form-wrapper .form-row { margin-bottom: 1rem; }
         .quick-edit-form-wrapper .form-row-flex { display: flex; gap: 1rem; align-items: flex-end; }
         .quick-edit-form-wrapper .form-group-half { flex: 1; }
         .quick-edit-form-wrapper .form-group-center-align { padding-bottom: 5px; }
-        .quick_edit_form-wrapper .form-label, .quick-edit-form-wrapper .title, .quick-edit-form-wrapper strong { font-weight: 600; display: block; margin-bottom: .5rem;}
+        .quick-edit-form-wrapper .form-label, .quick-edit-form-wrapper .title, .quick-edit-form-wrapper strong { font-weight: 600; display: block; margin-bottom: .5rem;}
         .quick-edit-form-wrapper textarea, .quick-edit-form-wrapper select, .quick-edit-form-wrapper .options-group input[type="text"] { width: 100%; }
         .quick-edit-form-wrapper .options-group .option-label { display: flex; align-items: center; gap: .5rem; margin-bottom: .5rem; }
         .quick-edit-form-wrapper .labels-group { display: flex; flex-wrap: wrap; gap: .5rem 1rem; padding: .5rem; border: 1px solid #ddd; background: #fff; }
         .quick-edit-form-wrapper .inline-checkbox { white-space: nowrap; }
     </style>
     <?php
-    $form_html = ob_get_clean();
-    wp_send_json_success(['form' => $form_html]);
+    wp_send_json_success(['form' => ob_get_clean()]);
 }
 add_action('wp_ajax_get_quick_edit_form', 'qp_get_quick_edit_form_ajax');
+
+// NEW: AJAX handler to save the Quick Edit data
+function qp_save_quick_edit_data_ajax() {
+    check_ajax_referer('qp_quick_edit_nonce', 'nonce');
+    parse_str($_POST['form_data'], $data);
+    if (!isset($data['_wpnonce']) || !wp_verify_nonce($data['_wpnonce'], 'qp_quick_edit_save_nonce')) {
+        wp_send_json_error(['message' => 'Security check failed.']);
+    }
+
+    global $wpdb;
+    $question_id = absint($data['question_id']);
+    
+    // Update Question Text and PYQ status
+    $wpdb->update("{$wpdb->prefix}qp_questions", [
+        'question_text' => sanitize_textarea_field($data['question_text']),
+        'is_pyq' => isset($data['is_pyq']) ? 1 : 0
+    ], ['question_id' => $question_id]);
+
+    // Update Subject
+    $group_id = $wpdb->get_var($wpdb->prepare("SELECT group_id FROM {$wpdb->prefix}qp_questions WHERE question_id = %d", $question_id));
+    if ($group_id) {
+        $wpdb->update("{$wpdb->prefix}qp_question_groups", ['subject_id' => absint($data['subject_id'])], ['group_id' => $group_id]);
+    }
+    
+    // Update Options
+    $correct_option_id = absint($data['is_correct_option']);
+    foreach ($data['options'] as $option_id => $option_text) {
+        $wpdb->update("{$wpdb->prefix}qp_options", [
+            'option_text' => sanitize_text_field($option_text),
+            'is_correct' => (absint($option_id) === $correct_option_id) ? 1 : 0
+        ], ['option_id' => absint($option_id)]);
+    }
+
+    // Update Labels
+    $wpdb->delete("{$wpdb->prefix}qp_question_labels", ['question_id' => $question_id]);
+    if (!empty($data['labels'])) {
+        foreach ($data['labels'] as $label_id) {
+            $wpdb->insert("{$wpdb->prefix}qp_question_labels", ['question_id' => $question_id, 'label_id' => absint($label_id)]);
+        }
+    }
+
+    // Fetch the updated row HTML to send back
+    $list_table = new QP_Questions_List_Table();
+    $list_table->prepare_items(); // Re-fetch all items to find our updated one
+    $updated_row_html = '';
+
+    // Find our specific item from the newly prepared list
+    $found_item = null;
+    foreach ($list_table->items as $item) {
+        if ($item['question_id'] == $question_id) {
+            $found_item = $item;
+            break;
+        }
+    }
+    
+    // Manually fetch group_id for the found item if it doesn't exist (it should)
+    if ($found_item && !isset($found_item['group_id'])) {
+        $found_item['group_id'] = $group_id;
+    }
+    
+    if ($found_item) {
+        ob_start();
+        $list_table->single_row($found_item);
+        $updated_row_html = ob_get_clean();
+    }
+
+    wp_send_json_success(['row_html' => $updated_row_html]);
+}
+add_action('wp_ajax_save_quick_edit_data', 'qp_save_quick_edit_data_ajax');
