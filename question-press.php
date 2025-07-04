@@ -22,6 +22,7 @@ require_once QP_PLUGIN_DIR . 'admin/class-qp-importer.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-export-page.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-questions-list-table.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-question-editor-page.php';
+require_once QP_PLUGIN_DIR . 'admin/class-qp-settings-page.php';
 require_once QP_PLUGIN_DIR . 'public/class-qp-shortcodes.php';
 require_once QP_PLUGIN_DIR . 'public/class-qp-dashboard.php';
 
@@ -50,13 +51,14 @@ register_uninstall_hook(QP_PLUGIN_FILE, 'qp_uninstall_plugin');
 function qp_admin_menu() {
     add_menu_page('All Questions', 'Question Press', 'manage_options', 'question-press', 'qp_all_questions_page_cb', 'dashicons-forms', 25);
     add_submenu_page('question-press', 'All Questions', 'All Questions', 'manage_options', 'question-press', 'qp_all_questions_page_cb');
-    // Unified editor page for both Add New and Edit
     add_submenu_page('question-press', 'Add New', 'Add New', 'manage_options', 'qp-question-editor', ['QP_Question_Editor_Page', 'render']);
-    add_submenu_page(null, 'Edit Question', 'Edit Question', 'manage_options', 'qp-question-editor', ['QP_Question_Editor_Page', 'render']);
+    add_submenu_page(null, 'Edit Question', 'Edit Question', 'manage_options', 'qp-edit-group', ['QP_Question_Editor_Page', 'render']);
     add_submenu_page('question-press', 'Import', 'Import', 'manage_options', 'qp-import', ['QP_Import_Page', 'render']);
     add_submenu_page('question-press', 'Export', 'Export', 'manage_options', 'qp-export', ['QP_Export_Page', 'render']);
     add_submenu_page('question-press', 'Subjects', 'Subjects', 'manage_options', 'qp-subjects', ['QP_Subjects_Page', 'render']);
     add_submenu_page('question-press', 'Labels', 'Labels', 'manage_options', 'qp-labels', ['QP_Labels_Page', 'render']);
+    // Add the new settings page, usually at the end
+    add_submenu_page('question-press', 'Settings', 'Settings', 'manage_options', 'qp-settings', ['QP_Settings_Page', 'render']);
 }
 add_action('admin_menu', 'qp_admin_menu');
 
@@ -79,6 +81,8 @@ add_action('admin_enqueue_scripts', 'qp_admin_enqueue_scripts');
 function qp_handle_form_submissions() {
     QP_Export_Page::handle_export_submission();
     qp_handle_save_question_group();
+    // NEW: Register our settings
+    QP_Settings_Page::register_settings();
 }
 add_action('admin_init', 'qp_handle_form_submissions');
 
