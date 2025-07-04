@@ -23,6 +23,9 @@ require_once QP_PLUGIN_DIR . 'admin/class-qp-export-page.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-questions-list-table.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-question-editor-page.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-settings-page.php';
+
+require_once QP_PLUGIN_DIR . 'admin/class-qp-logs-page.php'; // New
+require_once QP_PLUGIN_DIR . 'admin/class-qp-logs-list-table.php'; // New
 require_once QP_PLUGIN_DIR . 'public/class-qp-shortcodes.php';
 require_once QP_PLUGIN_DIR . 'public/class-qp-dashboard.php';
 
@@ -57,7 +60,7 @@ function qp_admin_menu() {
     add_submenu_page('question-press', 'Export', 'Export', 'manage_options', 'qp-export', ['QP_Export_Page', 'render']);
     add_submenu_page('question-press', 'Subjects', 'Subjects', 'manage_options', 'qp-subjects', ['QP_Subjects_Page', 'render']);
     add_submenu_page('question-press', 'Labels', 'Labels', 'manage_options', 'qp-labels', ['QP_Labels_Page', 'render']);
-    // Add the new settings page, usually at the end
+    add_submenu_page('question-press', 'Logs', 'Logs', 'manage_options', 'qp-logs', ['QP_Logs_Page', 'render']); // New
     add_submenu_page('question-press', 'Settings', 'Settings', 'manage_options', 'qp-settings', ['QP_Settings_Page', 'render']);
 }
 add_action('admin_menu', 'qp_admin_menu');
@@ -83,6 +86,7 @@ function qp_handle_form_submissions() {
     qp_handle_save_question_group();
     // NEW: Register our settings
     QP_Settings_Page::register_settings();
+    qp_handle_clear_logs(); // New handler
 }
 add_action('admin_init', 'qp_handle_form_submissions');
 
@@ -546,3 +550,17 @@ function qp_delete_revision_history_ajax() {
     wp_send_json_success(['message' => 'Revision history deleted.']);
 }
 add_action('wp_ajax_delete_revision_history', 'qp_delete_revision_history_ajax');
+
+// NEW: Function to handle clearing the logs
+function qp_handle_clear_logs() {
+    if (isset($_POST['action']) && $_POST['action'] === 'clear_logs') {
+        if (!isset($_POST['_wpnonce']) || !wp_verify_nonce($_POST['_wpnonce'], 'qp_clear_logs_nonce')) {
+            wp_die('Security check failed.');
+        }
+        global $wpdb;
+        $table_name = $wpdb->prefix . 'qp_logs';
+        $wpdb->query("TRUNCATE TABLE $table_name");
+        wp_safe_redirect(admin_url('admin.php?page=qp-logs&message=1'));
+        exit;
+    }
+}
