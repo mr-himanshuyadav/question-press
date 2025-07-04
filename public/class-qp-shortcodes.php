@@ -45,7 +45,6 @@ class QP_Shortcodes {
         ?>
         <div class="qp-practice-wrapper">
             <div class="qp-header">
-                <div class="qp-header-stat"><div class="label">Timer</div><div class="value" id="qp-timer">--:--</div></div>
                 <div class="qp-header-stat timer-stat"><div class="label">Timer</div><div class="value" id="qp-timer">--:--</div></div>
                 <div class="qp-header-stat"><div class="label">Score</div><div class="value" id="qp-score">0</div></div>
                 <div class="qp-header-stat"><div class="label">Correct</div><div class="value" id="qp-correct-count">0</div></div>

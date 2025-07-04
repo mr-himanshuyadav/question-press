@@ -366,3 +366,58 @@ function qp_skip_question_ajax() {
     wp_send_json_success();
 }
 add_action('wp_ajax_skip_question', 'qp_skip_question_ajax');
+
+
+/**
+ * AJAX handler for ending a practice session.
+ */
+function qp_end_practice_session_ajax() {
+    check_ajax_referer('qp_practice_nonce', 'nonce');
+    $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
+
+    if (!$session_id) {
+        wp_send_json_error(['message' => 'Invalid session.']);
+    }
+
+    global $wpdb;
+    $sessions_table = $wpdb->prefix . 'qp_user_sessions';
+    $attempts_table = $wpdb->prefix . 'qp_user_attempts';
+
+    // Get session settings to calculate score
+    $session = $wpdb->get_row($wpdb->prepare("SELECT * FROM $sessions_table WHERE session_id = %d", $session_id));
+    $settings = json_decode($session->settings_snapshot, true);
+    $marks_correct = isset($settings['marks_correct']) ? floatval($settings['marks_correct']) : 0;
+    $marks_incorrect = isset($settings['marks_incorrect']) ? floatval($settings['marks_incorrect']) : 0;
+
+    // Calculate stats from attempts
+    $correct_count = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $attempts_table WHERE session_id = %d AND is_correct = 1", $session_id));
+    $incorrect_count = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $attempts_table WHERE session_id = %d AND is_correct = 0", $session_id));
+    $skipped_count = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $attempts_table WHERE session_id = %d AND is_correct IS NULL", $session_id));
+    $total_attempted = $correct_count + $incorrect_count;
+
+    // Calculate final score
+    $final_score = ($correct_count * $marks_correct) + ($incorrect_count * $marks_incorrect);
+
+    // Update the session in the database with the final stats
+    $wpdb->update($sessions_table, 
+        [
+            'end_time' => current_time('mysql', 1),
+            'total_attempted' => $total_attempted,
+            'correct_count' => $correct_count,
+            'incorrect_count' => $incorrect_count,
+            'skipped_count' => $skipped_count,
+            'marks_obtained' => $final_score
+        ],
+        ['session_id' => $session_id]
+    );
+
+    // Send the final stats back to the frontend
+    wp_send_json_success([
+        'final_score' => $final_score,
+        'total_attempted' => $total_attempted,
+        'correct_count' => $correct_count,
+        'incorrect_count' => $incorrect_count,
+        'skipped_count' => $skipped_count,
+    ]);
+}
+add_action('wp_ajax_end_practice_session', 'qp_end_practice_session_ajax');

@@ -121,3 +121,60 @@
 .qp-header .timer-stat {
     display: none; /* Hide timer by default */
 }
+
+/* ADD THIS TO THE END of practice.css */
+
+.qp-summary-wrapper {
+    border: 1px solid #ddd;
+    padding: 30px;
+    background-color: #fff;
+    border-radius: 5px;
+    text-align: center;
+    max-width: 500px;
+    margin: 20px auto;
+}
+
+.qp-summary-wrapper h2 {
+    margin-top: 0;
+}
+
+.qp-summary-score {
+    font-size: 48px;
+    font-weight: bold;
+    margin: 20px 0;
+    color: #2271b1;
+}
+
+.qp-summary-score .label {
+    display: block;
+    font-size: 16px;
+    font-weight: normal;
+    color: #444;
+}
+
+.qp-summary-stats {
+    display: flex;
+    justify-content: space-around;
+    margin: 30px 0;
+    text-align: center;
+}
+
+.qp-summary-stats .stat .value {
+    font-size: 24px;
+    font-weight: bold;
+}
+
+.qp-summary-stats .stat .label {
+    font-size: 12px;
+    color: #666;
+}
+
+.qp-summary-actions .button-primary {
+    display: inline-block;
+    background: #2271b1;
+    color: #fff;
+    padding: 10px 20px;
+    text-decoration: none;
+    border-radius: 4px;
+    margin-top: 20px;
+}

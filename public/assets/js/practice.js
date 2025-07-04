@@ -109,6 +109,27 @@ jQuery(document).ready(function($) {
         });
     });
 
+    // NEW: Handle End Practice button click
+    wrapper.on('click', '#qp-end-practice-btn', function() {
+        clearInterval(questionTimer);
+        if (confirm('Are you sure you want to end this practice session?')) {
+            $.ajax({
+                url: qp_ajax_object.ajax_url, type: 'POST',
+                data: { action: 'end_practice_session', nonce: qp_ajax_object.nonce, session_id: sessionID },
+                beforeSend: function() {
+                    wrapper.html('<p style="text-align:center; padding: 50px;">Generating your results...</p>');
+                },
+                success: function(response) {
+                    if (response.success) {
+                        displaySummary(response.data);
+                    } else {
+                        alert('Could not end session. Please try again.');
+                    }
+                }
+            });
+        }
+    });
+
     // --- Helper Functions ---
     function loadQuestion(questionID) {
         if (!questionID) return;
@@ -178,5 +199,40 @@ jQuery(document).ready(function($) {
                 $('#qp-skip-btn').click();
             }
         }, 1000);
+    }
+
+    // NEW: Function to display the summary screen
+    function displaySummary(summaryData) {
+        var summaryHtml = `
+            <div class="qp-summary-wrapper">
+                <h2>Session Summary</h2>
+                <div class="qp-summary-score">
+                    <div class="label">Final Score</div>
+                    ${parseFloat(summaryData.final_score).toFixed(2)}
+                </div>
+                <div class="qp-summary-stats">
+                    <div class="stat">
+                        <div class="value">${summaryData.total_attempted}</div>
+                        <div class="label">Attempted</div>
+                    </div>
+                    <div class="stat">
+                        <div class="value">${summaryData.correct_count}</div>
+                        <div class="label">Correct</div>
+                    </div>
+                    <div class="stat">
+                        <div class="value">${summaryData.incorrect_count}</div>
+                        <div class="label">Incorrect</div>
+                    </div>
+                    <div class="stat">
+                        <div class="value">${summaryData.skipped_count}</div>
+                        <div class="label">Skipped</div>
+                    </div>
+                </div>
+                <div class="qp-summary-actions">
+                    <a href="" class="button-primary">Start Another Practice</a>
+                </div>
+            </div>
+        `;
+        wrapper.html(summaryHtml);
     }
 });
