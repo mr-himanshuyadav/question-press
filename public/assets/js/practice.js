@@ -202,7 +202,10 @@ jQuery(document).ready(function($) {
     }
 
     // NEW: Function to display the summary screen
-    function displaySummary(summaryData) {
+    // In public/assets/js/practice.js
+
+function displaySummary(summaryData) {
+    // Note the added 'qp-button' class to both links
     var summaryHtml = `
         <div class="qp-summary-wrapper">
             <h2>Session Summary</h2>
@@ -211,26 +214,14 @@ jQuery(document).ready(function($) {
                 ${parseFloat(summaryData.final_score).toFixed(2)}
             </div>
             <div class="qp-summary-stats">
-                <div class="stat">
-                    <div class="value">${summaryData.total_attempted}</div>
-                    <div class="label">Attempted</div>
-                </div>
-                <div class="stat">
-                    <div class="value">${summaryData.correct_count}</div>
-                    <div class="label">Correct</div>
-                </div>
-                <div class="stat">
-                    <div class="value">${summaryData.incorrect_count}</div>
-                    <div class="label">Incorrect</div>
-                </div>
-                <div class="stat">
-                    <div class="value">${summaryData.skipped_count}</div>
-                    <div class="label">Skipped</div>
-                </div>
+                <div class="stat"><div class="value">${summaryData.total_attempted}</div><div class="label">Attempted</div></div>
+                <div class="stat"><div class="value">${summaryData.correct_count}</div><div class="label">Correct</div></div>
+                <div class="stat"><div class="value">${summaryData.incorrect_count}</div><div class="label">Incorrect</div></div>
+                <div class="stat"><div class="value">${summaryData.skipped_count}</div><div class="label">Skipped</div></div>
             </div>
             <div class="qp-summary-actions">
-                <a href="/dashboard/" class="button-secondary">View Dashboard</a>
-                <a href="" class="button-primary">Start Another Practice</a>
+                <a href="/dashboard/" class="qp-button qp-button-secondary">View Dashboard</a>
+                <a href="" class="qp-button qp-button-primary">Start Another Practice</a>
             </div>
         </div>
     `;
