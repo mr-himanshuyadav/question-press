@@ -1,3 +1,63 @@
+/* ADD THIS TO THE TOP of practice.css */
+
+.qp-practice-form-wrapper {
+    border: 1px solid #ddd;
+    padding: 20px 30px;
+    background-color: #fff;
+    border-radius: 5px;
+    max-width: 600px;
+    margin: 20px auto;
+}
+
+.qp-practice-form-wrapper h2 {
+    text-align: center;
+    margin-top: 0;
+    margin-bottom: 25px;
+}
+
+.qp-form-group {
+    margin-bottom: 20px;
+}
+
+.qp-form-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: bold;
+    color: #444;
+}
+
+.qp-form-group select,
+.qp-form-group input[type="number"] {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+.qp-marks-group {
+    display: flex;
+    justify-content: space-between;
+}
+
+.qp-marks-group > div {
+    width: 48%;
+}
+
+.qp-form-group input[type="submit"] {
+    width: 100%;
+    padding: 12px;
+    font-size: 16px;
+    font-weight: bold;
+    background-color: #2271b1;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.qp-form-group input[type="submit"]:hover {
+    background-color: #1e639a;
+}
 /* practice.css */
 .qp-practice-wrapper {
     border: 1px solid #ddd;

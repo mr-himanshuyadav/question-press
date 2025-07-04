@@ -276,42 +276,40 @@ function qp_handle_save_question_group() {
 /**
  * Initializes the plugin's public-facing features like shortcodes.
  */
+// PUBLIC FACING HOOKS
 function qp_public_init() {
     add_shortcode('question_press_practice', ['QP_Shortcodes', 'render_practice_form']);
 }
 add_action('init', 'qp_public_init');
 
-// In question-press.php
-
+// UPDATED: Enqueue public scripts and styles
 function qp_public_enqueue_scripts() {
-    // We only want to load our styles on pages that have our shortcode
     if (is_singular() && has_shortcode(get_post()->post_content, 'question_press_practice')) {
-        // Enqueue jQuery, as our inline script depends on it
-        wp_enqueue_script('jquery');
-
-        wp_enqueue_style(
-            'qp-practice-styles',
-            QP_PLUGIN_URL . 'public/assets/css/practice.css',
-            [],
-            '1.0.0'
-        );
+        wp_enqueue_style('qp-practice-styles', QP_PLUGIN_URL . 'public/assets/css/practice.css', [], '1.0.1');
         
-        // Add our small inline script to the footer to handle the checkbox toggle
-        add_action('wp_footer', function() {
-            ?>
-            <script>
-                jQuery(document).ready(function($) {
-                    $('#qp_timer_enabled_cb').on('change', function() {
-                        if ($(this).is(':checked')) {
-                            $('#qp-timer-input-wrapper').show();
-                        } else {
-                            $('#qp-timer-input-wrapper').hide();
-                        }
-                    });
-                });
-            </script>
-            <?php
-        });
+        // Enqueue our new practice.js script
+        wp_enqueue_script('qp-practice-script', QP_PLUGIN_URL . 'public/assets/js/practice.js', ['jquery'], '1.0.0', true);
+        
+        // Pass data to our script, like the AJAX URL and a security nonce
+        wp_localize_script('qp-practice-script', 'qp_ajax_object', [
+            'ajax_url' => admin_url('admin-ajax.php'),
+            'nonce'    => wp_create_nonce('qp_practice_nonce')
+        ]);
     }
 }
 add_action('wp_enqueue_scripts', 'qp_public_enqueue_scripts');
+
+/**
+ * NEW: The AJAX handler for starting a practice session.
+ */
+function qp_start_practice_session_ajax() {
+    check_ajax_referer('qp_practice_nonce', 'nonce');
+
+    // Here we will eventually get questions from the DB based on settings.
+    // For now, we just return the static HTML of the practice UI.
+    
+    $practice_ui_html = QP_Shortcodes::render_practice_ui();
+
+    wp_send_json_success(['html' => $practice_ui_html]);
+}
+add_action('wp_ajax_start_practice_session', 'qp_start_practice_session_ajax');
