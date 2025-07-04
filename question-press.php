@@ -520,3 +520,25 @@ function qp_report_and_skip_question_ajax() {
     wp_die(); // IMPORTANT: Terminate the script
 }
 add_action('wp_ajax_report_and_skip_question', 'qp_report_and_skip_question_ajax');
+
+
+/**
+ * AJAX handler for deleting a user's entire revision history.
+ */
+function qp_delete_revision_history_ajax() {
+    check_ajax_referer('qp_practice_nonce', 'nonce');
+
+    $user_id = get_current_user_id();
+    if (!$user_id) {
+        wp_send_json_error(['message' => 'You must be logged in to do this.']);
+    }
+
+    global $wpdb;
+    $attempts_table = $wpdb->prefix . 'qp_user_attempts';
+
+    // Delete all rows from the attempts table for the current user.
+    $wpdb->delete($attempts_table, ['user_id' => $user_id], ['%d']);
+
+    wp_send_json_success(['message' => 'Revision history deleted.']);
+}
+add_action('wp_ajax_delete_revision_history', 'qp_delete_revision_history_ajax');
