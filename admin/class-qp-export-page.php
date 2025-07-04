@@ -11,9 +11,7 @@ class QP_Export_Page {
      * before any HTML is rendered.
      */
     public static function handle_export_submission() {
-        // Check if we are on the export page and the form was submitted
         if (isset($_GET['page']) && $_GET['page'] === 'qp-export' && isset($_POST['export_questions'])) {
-            // Verify nonce for security
             if (check_admin_referer('qp_export_nonce_action', 'qp_export_nonce_field')) {
                 self::generate_zip();
             }
@@ -60,7 +58,7 @@ class QP_Export_Page {
     }
 
     /**
-     * Handles the data fetching and ZIP file generation. This is now a private method.
+     * Handles the data fetching and ZIP file generation.
      */
     private static function generate_zip() {
         if (empty($_POST['subject_ids'])) {
@@ -76,12 +74,12 @@ class QP_Export_Page {
         $o_table = $wpdb->prefix . 'qp_options';
         $s_table = $wpdb->prefix . 'qp_subjects';
 
-        // Fetch all questions for the selected subjects
+        // CORRECTED: Using LEFT JOIN for more robust fetching
         $questions_data = $wpdb->get_results($wpdb->prepare(
-            "SELECT q.question_id, q.question_text, q.is_pyq, g.group_id, g.direction_text, s.subject_name
+            "SELECT q.question_id, q.custom_question_id, q.question_text, q.is_pyq, g.group_id, g.direction_text, s.subject_name
              FROM {$q_table} q
-             JOIN {$g_table} g ON q.group_id = g.group_id
-             JOIN {$s_table} s ON g.subject_id = s.subject_id
+             LEFT JOIN {$g_table} g ON q.group_id = g.group_id
+             LEFT JOIN {$s_table} s ON g.subject_id = s.subject_id
              WHERE g.subject_id IN ($subject_ids_placeholder)",
             $subject_ids
         ));
@@ -90,7 +88,6 @@ class QP_Export_Page {
             wp_die('No questions found for the selected subjects.');
         }
 
-        // Process data into the correct JSON structure
         $grouped_by_group = [];
         foreach ($questions_data as $q) {
             if (!isset($grouped_by_group[$q->group_id])) {
@@ -109,7 +106,7 @@ class QP_Export_Page {
             }
 
             $grouped_by_group[$q->group_id]['questions'][] = [
-                'questionId' => 'db_question_' . $q->question_id,
+                'questionId' => $q->custom_question_id ? 'custom_' . $q->custom_question_id : 'db_' . $q->question_id,
                 'questionText' => $q->question_text,
                 'isPYQ' => (bool)$q->is_pyq,
                 'options' => $options_array,
@@ -129,7 +126,6 @@ class QP_Export_Page {
         
         $json_data = json_encode($final_json, JSON_PRETTY_PRINT);
         
-        // Use a temporary file for the zip archive
         $zip_path = tempnam(sys_get_temp_dir(), 'qp_export');
         $zip = new ZipArchive();
 
@@ -145,7 +141,7 @@ class QP_Export_Page {
         header('Content-Length: ' . filesize($zip_path));
         header('Connection: close');
         readfile($zip_path);
-        unlink($zip_path); // Delete the temp file from the server
+        unlink($zip_path);
         exit;
     }
 }
