@@ -24,6 +24,8 @@ require_once QP_PLUGIN_DIR . 'admin/class-qp-importer.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-export-page.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-questions-list-table.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-question-editor-page.php';
+// Include Public class files
+require_once QP_PLUGIN_DIR . 'public/class-qp-shortcodes.php';
 
 
 // Activation/Deactivation/Uninstall Hooks
@@ -269,3 +271,11 @@ function qp_handle_save_question_group() {
     wp_safe_redirect(admin_url('admin.php?page=question-press&message=1'));
     exit;
 }
+
+/**
+ * Initializes the plugin's public-facing features like shortcodes.
+ */
+function qp_public_init() {
+    add_shortcode('question_press_practice', ['QP_Shortcodes', 'render_practice_form']);
+}
+add_action('init', 'qp_public_init');
