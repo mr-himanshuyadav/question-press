@@ -125,20 +125,20 @@ class QP_Shortcodes {
 
             <div class="qp-footer-controls" style="margin-top: 20px; text-align: center;">
             <button id="qp-end-practice-btn" class="qp-button">End Practice</button>
-            
-            <?php if (!current_user_can('manage_options')) : // Show for regular users ?>
-                <button id="qp-report-btn" class="qp-button-link">Report Issue</button>
-            <?php endif; ?>
         </div>
 
-        <?php if (current_user_can('manage_options')) : // Show for Admins only ?>
+        <div class="qp-user-report-area" style="margin-top: 15px; text-align: center; font-size: 13px;">
+            Problem with this question? 
+            <button class="qp-user-report-btn" data-label="Wrong Answer">Report Wrong Answer</button> | 
+            <button class="qp-user-report-btn" data-label="No Answer">Report No Answer</button>
+        </div>
+
+        <?php if (current_user_can('manage_options')) : // Admin-only tools ?>
         <div class="qp-admin-report-area">
-            <h4>Admin Actions: Report Issue As...</h4>
+            <h4>Admin Actions: Label As...</h4>
             <div class="button-group">
-                <button class="qp-button-admin-report" data-label="Wrong Answer">Wrong Answer</button>
-                <button class="qp-button-admin-report" data-label="No Answer">No Answer</button>
-                <button class="qp-button-admin-report" data-label="Incorrect Formatting">Incorrect Formatting</button>
-                <button class="qp-button-admin-report" data-label="Wrong Subject">Wrong Subject</button>
+                <button class="qp-admin-report-btn" data-label="Incorrect Formatting">Incorrect Formatting</button>
+                <button class="qp-admin-report-btn" data-label="Wrong Subject">Wrong Subject</button>
             </div>
         </div>
         <?php endif; ?>

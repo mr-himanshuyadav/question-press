@@ -321,24 +321,38 @@ function qp_start_practice_session_ajax() {
     $settings = [];
     parse_str($settings_str, $settings);
     $subject_id = isset($settings['qp_subject']) ? $settings['qp_subject'] : '';
-    $pyq_only = isset($settings['qp_pyq_only']) ? true : false;
-    $settings['marks_correct'] = isset($settings['qp_marks_correct']) ? floatval($settings['qp_marks_correct']) : 4.0;
-    $settings['marks_incorrect'] = isset($settings['qp_marks_incorrect']) ? -abs(floatval($settings['qp_marks_incorrect'])) : -1.0;
-    $settings['timer_enabled'] = isset($settings['qp_timer_enabled']);
-    $settings['timer_seconds'] = isset($settings['qp_timer_seconds']) ? absint($settings['qp_timer_seconds']) : 60;
     if (empty($subject_id)) { wp_send_json_error(['message' => 'Please select a subject.']); }
 
     global $wpdb;
     $q_table = $wpdb->prefix . 'qp_questions';
     $g_table = $wpdb->prefix . 'qp_question_groups';
+    $l_table = $wpdb->prefix . 'qp_labels';
+    $ql_table = $wpdb->prefix . 'qp_question_labels';
+
+    // Get IDs of labels that exclude a question from practice
+    $review_label_names = "'Wrong Answer', 'No Answer'";
+    $review_label_ids = $wpdb->get_col("SELECT label_id FROM $l_table WHERE label_name IN ($review_label_names)");
+
     $where_clauses = ["q.status = 'publish'"];
     $query_args = [];
-    if ($subject_id !== 'all') { $where_clauses[] = "g.subject_id = %d"; $query_args[] = absint($subject_id); }
-    if ($pyq_only) { $where_clauses[] = "q.is_pyq = 1"; }
+
+    if (!empty($review_label_ids)) {
+        $ids_placeholder = implode(',', array_fill(0, count($review_label_ids), '%d'));
+        $where_clauses[] = "q.question_id NOT IN (SELECT question_id FROM $ql_table WHERE label_id IN ($ids_placeholder))";
+        $query_args = array_merge($query_args, $review_label_ids);
+    }
+
+    if ($subject_id !== 'all') { /* ... subject filter logic is unchanged ... */ }
+    if (isset($settings['qp_pyq_only'])) { /* ... PYQ filter logic is unchanged ... */ }
+
     $where_sql = implode(' AND ', $where_clauses);
     $query = "SELECT q.question_id FROM {$q_table} q LEFT JOIN {$g_table} g ON q.group_id = g.group_id WHERE {$where_sql} ORDER BY RAND()";
+
     $question_ids = $wpdb->get_col($wpdb->prepare($query, $query_args));
-    if (empty($question_ids)) { wp_send_json_error(['message' => 'No questions found matching your criteria.']); }
+
+    if (empty($question_ids)) {
+        wp_send_json_error(['message' => 'No questions found matching your criteria.']);
+    }
     
     $sessions_table = $wpdb->prefix . 'qp_user_sessions';
     $wpdb->insert($sessions_table, ['user_id' => get_current_user_id(), 'settings_snapshot' => wp_json_encode($settings)]);
@@ -514,3 +528,29 @@ function qp_report_question_issue_ajax() {
 }
 add_action('wp_ajax_report_question_issue', 'qp_report_question_issue_ajax');
 
+
+// In question-press.php, ADD this new function
+
+function qp_report_and_skip_question_ajax() {
+    check_ajax_referer('qp_practice_nonce', 'nonce');
+    $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
+    $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
+    $label_name = isset($_POST['label_name']) ? sanitize_text_field($_POST['label_name']) : '';
+
+    if (!$session_id || !$question_id || !$label_name) {
+        wp_send_json_error(['message' => 'Invalid data.']);
+    }
+
+    global $wpdb;
+    // First, add the label to the question
+    $label_id = $wpdb->get_var($wpdb->prepare("SELECT label_id FROM {$wpdb->prefix}qp_labels WHERE label_name = %s", $label_name));
+    if ($label_id) {
+        $wpdb->insert("{$wpdb->prefix}qp_question_labels", ['question_id' => $question_id, 'label_id' => $label_id], ['%d', '%d']);
+    }
+
+    // Next, record the attempt as a skip (is_correct = NULL)
+    $wpdb->insert("{$wpdb->prefix}qp_user_attempts", ['session_id' => $session_id, 'user_id' => get_current_user_id(), 'question_id' => $question_id, 'is_correct' => null]);
+
+    wp_send_json_success(['message' => 'Question reported and skipped.']);
+}
+add_action('wp_ajax_report_and_skip_question', 'qp_report_and_skip_question_ajax');

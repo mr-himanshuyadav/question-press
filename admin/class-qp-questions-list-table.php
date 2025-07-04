@@ -42,24 +42,35 @@ class QP_Questions_List_Table extends WP_List_Table {
         return ['trash' => 'Move to Trash'];
     }
 
-    protected function get_views() {
-        global $wpdb;
-        $q_table = $wpdb->prefix . 'qp_questions';
-        
-        $current_status = isset($_REQUEST['status']) ? sanitize_key($_REQUEST['status']) : 'all';
-        $base_url = admin_url('admin.php?page=question-press');
+    // REPLACE this method
+protected function get_views() {
+    global $wpdb;
+    $q_table = $wpdb->prefix . 'qp_questions';
+    $l_table = $wpdb->prefix . 'qp_labels';
+    $ql_table = $wpdb->prefix . 'qp_question_labels';
+    
+    $current_status = isset($_REQUEST['status']) ? sanitize_key($_REQUEST['status']) : 'all';
+    $base_url = admin_url('admin.php?page=question-press');
 
-        $publish_count = $wpdb->get_var("SELECT COUNT(*) FROM $q_table WHERE status = 'publish'");
-        $trash_count = $wpdb->get_var("SELECT COUNT(*) FROM $q_table WHERE status = 'trash'");
-        $all_count = $publish_count;
-
-        $views = [
-            'all' => sprintf('<a href="%s" class="%s">All <span class="count">(%d)</span></a>', esc_url($base_url), $current_status === 'all' || $current_status === 'publish' ? 'current' : '', $all_count),
-            'trash' => sprintf('<a href="%s" class="%s">Trash <span class="count">(%d)</span></a>', esc_url(add_query_arg('status', 'trash', $base_url)), $current_status === 'trash' ? 'current' : '', $trash_count)
-        ];
-
-        return $views;
+    $publish_count = $wpdb->get_var("SELECT COUNT(*) FROM $q_table WHERE status = 'publish'");
+    $trash_count = $wpdb->get_var("SELECT COUNT(*) FROM $q_table WHERE status = 'trash'");
+    
+    // NEW: Count for questions needing review
+    $review_label_ids = $wpdb->get_col("SELECT label_id FROM $l_table WHERE label_name IN ('Wrong Answer', 'No Answer')");
+    $review_count = 0;
+    if (!empty($review_label_ids)) {
+        $ids_placeholder = implode(',', array_fill(0, count($review_label_ids), '%d'));
+        $review_count = $wpdb->get_var($wpdb->prepare("SELECT COUNT(DISTINCT question_id) FROM $ql_table WHERE label_id IN ($ids_placeholder)", $review_label_ids));
     }
+
+    $views = [
+        'all' => sprintf('<a href="%s" class="%s">Published <span class="count">(%d)</span></a>', esc_url($base_url), $current_status === 'all' || $current_status === 'publish' ? 'current' : '', $publish_count),
+        'needs_review' => sprintf('<a href="%s" class="%s">Needs Review <span class="count">(%d)</span></a>', esc_url(add_query_arg('status', 'needs_review', $base_url)), $current_status === 'needs_review' ? 'current' : '', $review_count),
+        'trash' => sprintf('<a href="%s" class="%s">Trash <span class="count">(%d)</span></a>', esc_url(add_query_arg('status', 'trash', $base_url)), $current_status === 'trash' ? 'current' : '', $trash_count)
+    ];
+
+    return $views;
+}
 
     protected function extra_tablenav($which) {
         if ($which == "top") {
@@ -97,26 +108,39 @@ class QP_Questions_List_Table extends WP_List_Table {
         <?php
     }
 
-    public function prepare_items() {
-        global $wpdb;
-        $this->process_bulk_action();
-        $this->_column_headers = [$this->get_columns(), [], $this->get_sortable_columns(), 'custom_question_id'];
-        $per_page = 20;
-        $current_page = $this->get_pagenum();
-        $offset = ($current_page - 1) * $per_page;
-        $orderby = isset($_GET['orderby']) ? sanitize_key($_GET['orderby']) : 'import_date';
-        $order = isset($_GET['order']) ? sanitize_key($_GET['order']) : 'desc';
+// REPLACE this method
+public function prepare_items() {
+    global $wpdb;
+    $this->process_bulk_action();
+    $this->_column_headers = [$this->get_columns(), [], $this->get_sortable_columns(), 'custom_question_id'];
+    $per_page = 20;
+    $current_page = $this->get_pagenum();
+    $offset = ($current_page - 1) * $per_page;
+    $orderby = isset($_GET['orderby']) ? sanitize_key($_GET['orderby']) : 'import_date';
+    $order = isset($_GET['order']) ? sanitize_key($_GET['order']) : 'desc';
 
-        $q_table = $wpdb->prefix . 'qp_questions';
-        $g_table = $wpdb->prefix . 'qp_question_groups';
-        $s_table = $wpdb->prefix . 'qp_subjects';
-        $ql_table = $wpdb->prefix . 'qp_question_labels';
+    $q_table = $wpdb->prefix . 'qp_questions';
+    $g_table = $wpdb->prefix . 'qp_question_groups';
+    $s_table = $wpdb->prefix . 'qp_subjects';
+    $ql_table = $wpdb->prefix . 'qp_question_labels';
 
-        $sql_query_from = " FROM {$q_table} q LEFT JOIN {$g_table} g ON q.group_id = g.group_id LEFT JOIN {$s_table} s ON g.subject_id = s.subject_id";
-        
-        $where = [];
-        $current_status = isset($_REQUEST['status']) ? sanitize_key($_REQUEST['status']) : 'all';
-        $where[] = ($current_status === 'trash') ? "q.status = 'trash'" : "q.status = 'publish'";
+    $sql_query_from = " FROM {$q_table} q LEFT JOIN {$g_table} g ON q.group_id = g.group_id LEFT JOIN {$s_table} s ON g.subject_id = s.subject_id";
+    $where = [];
+    $current_status = isset($_REQUEST['status']) ? sanitize_key($_REQUEST['status']) : 'all';
+
+    if ($current_status === 'trash') {
+        $where[] = "q.status = 'trash'";
+    } else if ($current_status === 'needs_review') {
+        $review_label_ids = $wpdb->get_col("SELECT label_id FROM {$wpdb->prefix}qp_labels WHERE label_name IN ('Wrong Answer', 'No Answer')");
+        if (!empty($review_label_ids)) {
+            $ids_placeholder = implode(',', array_fill(0, count($review_label_ids), '%d'));
+            $where[] = $wpdb->prepare("q.question_id IN (SELECT question_id FROM {$ql_table} WHERE label_id IN ($ids_placeholder))", $review_label_ids);
+        } else {
+            $where[] = "1=0"; // No review labels found, so show no results
+        }
+    } else {
+        $where[] = "q.status = 'publish'";
+    }
         
         if (!empty($_REQUEST['filter_by_subject'])) { $where[] = $wpdb->prepare("g.subject_id = %d", absint($_REQUEST['filter_by_subject'])); }
         if (!empty($_REQUEST['filter_by_label'])) { $where[] = $wpdb->prepare("q.question_id IN (SELECT question_id FROM {$ql_table} WHERE label_id = %d)", absint($_REQUEST['filter_by_label'])); }
