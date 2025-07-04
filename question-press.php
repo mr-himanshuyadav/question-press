@@ -245,15 +245,16 @@ function qp_public_enqueue_scripts() {
 }
 add_action('wp_enqueue_scripts', 'qp_public_enqueue_scripts');
 
+// In question-press.php
+
 function qp_start_practice_session_ajax() {
     check_ajax_referer('qp_practice_nonce', 'nonce');
     $settings_str = isset($_POST['settings']) ? $_POST['settings'] : '';
     $form_settings = [];
     parse_str($settings_str, $form_settings);
-    $subject_id = isset($form_settings['qp_subject']) ? $form_settings['qp_subject'] : '';
-    if (empty($subject_id)) { wp_send_json_error(['message' => 'Please select a subject.']); }
+
     $session_settings = [
-        'subject_id'      => $subject_id,
+        'subject_id'      => isset($form_settings['qp_subject']) ? $form_settings['qp_subject'] : '',
         'pyq_only'        => isset($form_settings['qp_pyq_only']),
         'revise_mode'     => isset($form_settings['qp_revise_mode']),
         'marks_correct'   => isset($form_settings['qp_marks_correct']) ? floatval($form_settings['qp_marks_correct']) : 4.0,
@@ -261,36 +262,92 @@ function qp_start_practice_session_ajax() {
         'timer_enabled'   => isset($form_settings['qp_timer_enabled']),
         'timer_seconds'   => isset($form_settings['qp_timer_seconds']) ? absint($form_settings['qp_timer_seconds']) : 60
     ];
+
+    if (empty($session_settings['subject_id'])) { wp_send_json_error(['message' => 'Please select a subject.']); }
+
     global $wpdb;
-    $q_table = $wpdb->prefix . 'qp_questions'; $g_table = $wpdb->prefix . 'qp_question_groups'; $l_table = $wpdb->prefix . 'qp_labels'; $ql_table = $wpdb->prefix . 'qp_question_labels';
-    $review_label_names = "'Wrong Answer', 'No Answer'";
-    $review_label_ids = $wpdb->get_col("SELECT label_id FROM $l_table WHERE label_name IN ($review_label_names)");
+    $user_id = get_current_user_id();
+    $q_table = $wpdb->prefix . 'qp_questions';
+    $g_table = $wpdb->prefix . 'qp_question_groups';
+    $a_table = $wpdb->prefix . 'qp_user_attempts';
+    $l_table = $wpdb->prefix . 'qp_labels';
+    $ql_table = $wpdb->prefix . 'qp_question_labels';
+
     $where_clauses = ["q.status = 'publish'"];
     $query_args = [];
-    if (!empty($review_label_ids)) { $ids_placeholder = implode(',', array_fill(0, count($review_label_ids), '%d')); $where_clauses[] = "q.question_id NOT IN (SELECT question_id FROM $ql_table WHERE label_id IN ($ids_placeholder))"; $query_args = array_merge($query_args, $review_label_ids); }
-    if ($session_settings['subject_id'] !== 'all') { $where_clauses[] = "g.subject_id = %d"; $query_args[] = absint($session_settings['subject_id']); }
-    if ($session_settings['pyq_only']) { $where_clauses[] = "q.is_pyq = 1"; }
+
+    // Exclude questions needing review
+    $review_label_ids = $wpdb->get_col("SELECT label_id FROM $l_table WHERE label_name IN ('Wrong Answer', 'No Answer')");
+    if (!empty($review_label_ids)) {
+        $ids_placeholder = implode(',', array_fill(0, count($review_label_ids), '%d'));
+        $where_clauses[] = "q.question_id NOT IN (SELECT question_id FROM $ql_table WHERE label_id IN ($ids_placeholder))";
+        $query_args = array_merge($query_args, $review_label_ids);
+    }
+    
+    // --- NEW: Revision Mode Logic ---
+    if ($session_settings['revise_mode']) {
+        // If revision mode is on, select from questions the user has previously attempted.
+        $where_clauses[] = $wpdb->prepare("q.question_id IN (SELECT DISTINCT question_id FROM $a_table WHERE user_id = %d)", $user_id);
+    }
+
+    if ($session_settings['subject_id'] !== 'all') {
+        $where_clauses[] = "g.subject_id = %d";
+        $query_args[] = absint($session_settings['subject_id']);
+    }
+    if ($session_settings['pyq_only']) {
+        $where_clauses[] = "q.is_pyq = 1";
+    }
+
     $where_sql = implode(' AND ', $where_clauses);
     $query = "SELECT q.question_id FROM {$q_table} q LEFT JOIN {$g_table} g ON q.group_id = g.group_id WHERE {$where_sql} ORDER BY RAND()";
+    
     $question_ids = $wpdb->get_col($wpdb->prepare($query, $query_args));
-    if (empty($question_ids)) { wp_send_json_error(['message' => 'No questions found matching your criteria.']); }
+
+    if (empty($question_ids)) {
+        $message = $session_settings['revise_mode'] ? 'No previously attempted questions found for this criteria.' : 'No questions found matching your criteria.';
+        wp_send_json_error(['message' => $message]);
+    }
+    
+    // Create the session and send the response (this part is unchanged)
     $sessions_table = $wpdb->prefix . 'qp_user_sessions';
-    $wpdb->insert($sessions_table, ['user_id' => get_current_user_id(), 'settings_snapshot' => wp_json_encode($session_settings)]);
+    $wpdb->insert($sessions_table, ['user_id' => $user_id, 'settings_snapshot' => wp_json_encode($session_settings)]);
     $session_id = $wpdb->insert_id;
-    wp_send_json_success(['ui_html' => QP_Shortcodes::render_practice_ui(), 'question_ids' => $question_ids, 'session_id' => $session_id, 'settings' => $session_settings]);
+    $response_data = ['ui_html' => QP_Shortcodes::render_practice_ui(), 'question_ids' => $question_ids, 'session_id' => $session_id, 'settings' => $session_settings];
+    wp_send_json_success($response_data);
 }
 add_action('wp_ajax_start_practice_session', 'qp_start_practice_session_ajax');
+
+// In question-press.php, REPLACE this function
 
 function qp_get_question_data_ajax() {
     check_ajax_referer('qp_practice_nonce', 'nonce');
     $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
     if (!$question_id) { wp_send_json_error(['message' => 'Invalid Question ID.']); }
+
     global $wpdb;
-    $q_table = $wpdb->prefix . 'qp_questions'; $g_table = $wpdb->prefix . 'qp_question_groups'; $s_table = $wpdb->prefix . 'qp_subjects'; $o_table = $wpdb->prefix . 'qp_options';
+    $q_table = $wpdb->prefix . 'qp_questions'; 
+    $g_table = $wpdb->prefix . 'qp_question_groups'; 
+    $s_table = $wpdb->prefix . 'qp_subjects'; 
+    $o_table = $wpdb->prefix . 'qp_options';
+    $a_table = $wpdb->prefix . 'qp_user_attempts';
+
     $question_data = $wpdb->get_row($wpdb->prepare("SELECT q.custom_question_id, q.question_text, g.direction_text, s.subject_name FROM {$q_table} q LEFT JOIN {$g_table} g ON q.group_id = g.group_id LEFT JOIN {$s_table} s ON g.subject_id = s.subject_id WHERE q.question_id = %d", $question_id), ARRAY_A);
-    if (!$question_data) { wp_send_json_error(['message' => 'Question not found.']); }
+    
+    if (!$question_data) {
+        wp_send_json_error(['message' => 'Question not found.']);
+    }
+
     $question_data['options'] = $wpdb->get_results($wpdb->prepare("SELECT option_id, option_text FROM {$o_table} WHERE question_id = %d ORDER BY RAND()", $question_id), ARRAY_A);
-    wp_send_json_success(['question' => $question_data]);
+    
+    // NEW: Check if this user has attempted this question before
+    $user_id = get_current_user_id();
+    $attempt_count = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $a_table WHERE user_id = %d AND question_id = %d", $user_id, $question_id));
+    $is_revision = $attempt_count > 0;
+
+    wp_send_json_success([
+        'question' => $question_data,
+        'is_revision' => $is_revision // Send this new flag to the frontend
+    ]);
 }
 add_action('wp_ajax_get_question_data', 'qp_get_question_data_ajax');
 

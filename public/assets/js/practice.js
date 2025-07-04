@@ -188,42 +188,54 @@ jQuery(document).ready(function($) {
     });
 
     // --- Helper Functions ---
-    function loadQuestion(questionID) {
-        if (!questionID) return;
-        $('#qp-question-text-area').html('Loading...');
-        $('.qp-options-area').empty();
-        $('#qp-skip-btn').prop('disabled', false);
-        $('.qp-user-report-btn').prop('disabled', false).text(function() { return $(this).data('label'); });
-        $('.qp-admin-report-btn').prop('disabled', false).css('opacity', 1);
+    // In public/assets/js/practice.js, REPLACE this function
 
-        $.ajax({
-            url: qp_ajax_object.ajax_url, type: 'POST',
-            data: { action: 'get_question_data', nonce: qp_ajax_object.nonce, question_id: questionID },
-            success: function(response) {
-                if(response.success) {
-                    var questionData = response.data.question;
-                    var directionBox = $('.qp-direction');
-                    if (questionData.direction_text) {
-                        directionBox.html($('<p>').text(questionData.direction_text)).show();
-                    } else {
-                        directionBox.hide();
-                    }
-                    $('#qp-question-subject').text('Subject: ' + questionData.subject_name);
-                    $('#qp-question-id').text('Question ID: ' + questionData.custom_question_id);
-                    $('#qp-question-text-area').html(questionData.question_text);
-                    var optionsArea = $('.qp-options-area');
-                    optionsArea.empty();
-                    $.each(questionData.options, function(index, option) {
-                        var optionHtml = $('<label class="option"></label>').append($('<input type="radio" name="qp_option">').val(option.option_id), ' ' + option.option_text);
-                        optionsArea.append(optionHtml);
-                    });
-                    if (sessionSettings.timer_enabled) {
-                        startTimer(sessionSettings.timer_seconds);
-                    }
+function loadQuestion(questionID) {
+    if (!questionID) return;
+    
+    // Reset UI for the new question
+    $('#qp-question-text-area').html('Loading...');
+    $('.qp-options-area').empty();
+    $('#qp-revision-indicator').hide(); // Hide indicator by default
+    $('#qp-skip-btn').prop('disabled', false);
+    $('.qp-user-report-btn').prop('disabled', false).text(function() { return $(this).data('label'); });
+    $('.qp-admin-report-btn').prop('disabled', false).css('opacity', 1);
+
+    $.ajax({
+        url: qp_ajax_object.ajax_url, type: 'POST',
+        data: { action: 'get_question_data', nonce: qp_ajax_object.nonce, question_id: questionID },
+        success: function(response) {
+            if(response.success) {
+                var questionData = response.data.question;
+                
+                // CORRECTED LOGIC: Show indicator only if session is in revise_mode AND this specific question is a revision question.
+                if (sessionSettings.revise_mode && response.data.is_revision) {
+                    $('#qp-revision-indicator').show();
+                }
+
+                // Populate the rest of the question data...
+                var directionBox = $('.qp-direction');
+                if (questionData.direction_text) {
+                    directionBox.html($('<p>').text(questionData.direction_text)).show();
+                } else {
+                    directionBox.hide();
+                }
+                $('#qp-question-subject').text('Subject: ' + questionData.subject_name);
+                $('#qp-question-id').text('Question ID: ' + questionData.custom_question_id);
+                $('#qp-question-text-area').html(questionData.question_text);
+                var optionsArea = $('.qp-options-area');
+                optionsArea.empty();
+                $.each(questionData.options, function(index, option) {
+                    var optionHtml = $('<label class="option"></label>').append($('<input type="radio" name="qp_option">').val(option.option_id), ' ' + option.option_text);
+                    optionsArea.append(optionHtml);
+});
+                if (sessionSettings.timer_enabled) {
+                    startTimer(sessionSettings.timer_seconds);
                 }
             }
-        });
-    }
+        }
+    });
+}
     
     function loadNextQuestion() {
         currentQuestionIndex++;
