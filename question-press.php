@@ -281,19 +281,37 @@ function qp_public_init() {
 }
 add_action('init', 'qp_public_init');
 
-/**
- * Enqueues scripts and styles for the public-facing pages.
- */
+// In question-press.php
+
 function qp_public_enqueue_scripts() {
     // We only want to load our styles on pages that have our shortcode
     if (is_singular() && has_shortcode(get_post()->post_content, 'question_press_practice')) {
+        // Enqueue jQuery, as our inline script depends on it
+        wp_enqueue_script('jquery');
+
         wp_enqueue_style(
             'qp-practice-styles',
             QP_PLUGIN_URL . 'public/assets/css/practice.css',
             [],
             '1.0.0'
         );
-        // We will enqueue our JS file here in a later step
+        
+        // Add our small inline script to the footer to handle the checkbox toggle
+        add_action('wp_footer', function() {
+            ?>
+            <script>
+                jQuery(document).ready(function($) {
+                    $('#qp_timer_enabled_cb').on('change', function() {
+                        if ($(this).is(':checked')) {
+                            $('#qp-timer-input-wrapper').show();
+                        } else {
+                            $('#qp-timer-input-wrapper').hide();
+                        }
+                    });
+                });
+            </script>
+            <?php
+        });
     }
 }
 add_action('wp_enqueue_scripts', 'qp_public_enqueue_scripts');
