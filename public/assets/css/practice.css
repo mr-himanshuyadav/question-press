@@ -1,48 +1,58 @@
-/* ADD THIS TO THE TOP of practice.css */
+/* =================================================================
+   Question Press Frontend Styles - Redesign v1.0
+   ================================================================= */
 
-.qp-practice-form-wrapper {
-    border: 1px solid #ddd;
-    padding: 20px 30px;
-    background-color: #fff;
-    border-radius: 5px;
-    max-width: 600px;
-    margin: 20px auto;
+/* --- Global Wrapper & Base --- */
+#qp-practice-app-wrapper {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+    background-color: #f0f2f5; /* Light grey background for the page */
+    padding: 20px 0;
 }
 
+/* --- Form Styles --- */
+.qp-practice-form-wrapper {
+    max-width: 600px;
+    margin: 20px auto;
+    background-color: #ffffff;
+    padding: 25px 40px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
 .qp-practice-form-wrapper h2 {
     text-align: center;
     margin-top: 0;
+    margin-bottom: 30px;
+    font-size: 24px;
+    color: #1d2327;
+}
+.qp-form-group {
     margin-bottom: 25px;
 }
-
-.qp-form-group {
-    margin-bottom: 20px;
-}
-
 .qp-form-group label {
     display: block;
     margin-bottom: 8px;
-    font-weight: bold;
-    color: #444;
+    font-weight: 600;
+    font-size: 14px;
+    color: #444c54;
 }
-
 .qp-form-group select,
 .qp-form-group input[type="number"] {
     width: 100%;
-    padding: 8px;
-    border: 1px solid #ccc;
+    padding: 10px;
+    border: 1px solid #8c8f94;
     border-radius: 4px;
+    font-size: 16px;
+    box-sizing: border-box;
 }
-
+.qp-form-group input[type="checkbox"] {
+    margin-right: 8px;
+}
 .qp-marks-group {
     display: flex;
     justify-content: space-between;
+    gap: 20px;
 }
-
-.qp-marks-group > div {
-    width: 48%;
-}
-
+.qp-marks-group > div { width: 48%; }
 .qp-form-group input[type="submit"] {
     width: 100%;
     padding: 12px;
@@ -53,168 +63,96 @@
     border: none;
     border-radius: 4px;
     cursor: pointer;
+    transition: background-color 0.2s;
 }
-
 .qp-form-group input[type="submit"]:hover {
     background-color: #1e639a;
 }
-/* practice.css */
+
+/* --- Main Practice Screen Styles --- */
 .qp-practice-wrapper {
-    border: 1px solid #ddd;
-    padding: 20px;
-    background-color: #f9f9f9;
-    border-radius: 5px;
+    max-width: 800px;
+    margin: 20px auto;
+    background-color: #ffffff;
+    padding: 20px 30px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
 }
 .qp-header {
     display: flex;
-    justify-content: space-between;
+    justify-content: space-around;
     align-items: center;
     margin-bottom: 20px;
     padding-bottom: 15px;
-    border-bottom: 1px solid #eee;
+    border-bottom: 1px solid #e0e0e0;
 }
-.qp-header-stat {
-    text-align: center;
-}
-.qp-header-stat .label {
-    font-size: 12px;
-    color: #666;
-}
-.qp-header-stat .value {
-    font-size: 24px;
-    font-weight: bold;
-    color: #333;
-}
+.qp-header-stat .label { color: #50575e; }
+.qp-header-stat .value { font-size: 28px; font-weight: 600; color: #1d2327; }
 .qp-direction {
-    background-color: #fff;
-    border: 1px solid #eee;
+    background-color: #f6f7f7;
+    border: 1px solid #e0e0e0;
     padding: 15px;
-    margin-bottom: 20px;
+    margin-bottom: 25px;
+    border-radius: 4px;
+    line-height: 1.6;
 }
-.qp-question-area .question-text {
-    font-size: 1.4em;
-    font-weight: bold;
-    margin-bottom: 20px;
-}
+.qp-question-area .question-text { font-size: 22px; font-weight: 600; margin-bottom: 25px; line-height: 1.5; }
 .qp-options-area .option {
-    display: block;
+    display: flex;
+    align-items: center;
     background-color: #fff;
-    border: 1px solid #ddd;
+    border: 1px solid #ccd0d4;
     padding: 15px;
     margin-bottom: 10px;
     cursor: pointer;
     border-radius: 4px;
     transition: all 0.2s ease-in-out;
 }
-.qp-options-area .option:hover {
-    background-color: #f0f8ff;
-    border-color: #99caff;
-}
+.qp-options-area .option:hover { background-color: #f0f6fc; }
+.qp-options-area .option input[type="radio"] { margin-right: 15px; }
+.qp-options-area .option.correct { background-color: #e7f7e9; border-color: #5cb85c; color: #3c763d; font-weight: 600; }
+.qp-options-area .option.incorrect { background-color: #f9e4e4; border-color: #d9534f; color: #a94442; font-weight: 600; }
+.qp-options-area .option.disabled { cursor: not-allowed; opacity: 0.8; }
 .qp-footer-nav {
     display: flex;
     justify-content: space-between;
-    margin-top: 20px;
+    margin-top: 25px;
     padding-top: 15px;
-    border-top: 1px solid #eee;
+    border-top: 1px solid #e0e0e0;
 }
-
-.qp-header .timer-stat {
-    display: none; /* Hide timer by default */
+.qp-footer-nav button, .qp-footer-controls button {
+    padding: 8px 16px;
+    border-radius: 4px;
+    border: 1px solid #8c8f94;
+    background-color: #f6f7f7;
+    cursor: pointer;
+    font-weight: 600;
 }
+.qp-footer-nav button:disabled { opacity: 0.5; cursor: not-allowed; }
+#qp-next-btn { background-color: #2271b1; color: #fff; border-color: #2271b1; }
+#qp-end-practice-btn { background-color: #d63638; color: #fff; border-color: #d63638; }
 
-/* ADD THIS TO THE END of practice.css */
-
-.qp-summary-wrapper {
-    border: 1px solid #ddd;
-    padding: 30px;
-    background-color: #fff;
-    border-radius: 5px;
-    text-align: center;
-    max-width: 500px;
+/* --- Summary & Dashboard Styles --- */
+.qp-summary-wrapper, .qp-dashboard-wrapper {
+    max-width: 700px;
     margin: 20px auto;
+    background-color: #ffffff;
+    padding: 25px 40px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
 }
-
-.qp-summary-wrapper h2 {
-    margin-top: 0;
-}
-
-.qp-summary-score {
-    font-size: 48px;
-    font-weight: bold;
-    margin: 20px 0;
-    color: #2271b1;
-}
-
-.qp-summary-score .label {
-    display: block;
-    font-size: 16px;
-    font-weight: normal;
-    color: #444;
-}
-
-.qp-summary-stats {
-    display: flex;
-    justify-content: space-around;
-    margin: 30px 0;
-    text-align: center;
-}
-
-.qp-summary-stats .stat .value {
-    font-size: 24px;
-    font-weight: bold;
-}
-
-.qp-summary-stats .stat .label {
-    font-size: 12px;
-    color: #666;
-}
-
-.qp-summary-actions .button-primary {
-    display: inline-block;
-    background: #2271b1;
-    color: #fff;
-    padding: 10px 20px;
-    text-decoration: none;
-    border-radius: 4px;
-    margin-top: 20px;
-}
-
-.qp-dashboard-wrapper {
-    border: 1px solid #ddd;
-    padding: 20px 30px;
-    background-color: #fff;
-    border-radius: 5px;
-    margin: 20px 0;
-}
-.qp-dashboard-wrapper h2 {
-    margin-top: 0;
-}
-.qp-dashboard-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 20px;
-}
-.qp-dashboard-table th, 
-.qp-dashboard-table td {
-    padding: 12px;
-    border: 1px solid #eee;
-    text-align: left;
-}
-.qp-dashboard-table th {
-    background-color: #f9f9f9;
-}
-.qp-dashboard-table tbody tr:nth-child(even) {
-    background-color: #f9f9f9;
-}
-.qp-dashboard-actions {
-    margin-top: 20px;
-    text-align: right;
-}
-.qp-dashboard-actions .button-primary {
-    display: inline-block;
-    background: #2271b1;
-    color: #fff;
-    padding: 10px 20px;
-    text-decoration: none;
-    border-radius: 4px;
-}
+.qp-summary-wrapper h2, .qp-dashboard-wrapper h2 { text-align: center; margin-top: 0; font-size: 24px; color: #1d2327; }
+.qp-summary-score { font-size: 52px; font-weight: 700; margin: 20px 0; color: #2271b1; }
+.qp-summary-score .label { display: block; font-size: 18px; font-weight: 400; color: #444c54; }
+.qp-summary-stats, .qp-dashboard-table { width: 100%; text-align: center; }
+.qp-summary-stats { display: flex; justify-content: space-around; margin: 30px 0; }
+.qp-summary-stats .stat .value, .qp-dashboard-table td strong { font-size: 28px; font-weight: 600; }
+.qp-summary-stats .stat .label, .qp-dashboard-table th { font-size: 13px; color: #50575e; text-transform: uppercase; }
+.qp-dashboard-table { border-collapse: collapse; margin-top: 25px; }
+.qp-dashboard-table th, .qp-dashboard-table td { padding: 15px; border-bottom: 1px solid #e0e0e0; }
+.qp-dashboard-table tbody tr:last-child td { border-bottom: none; }
+.qp-summary-actions, .qp-dashboard-actions { margin-top: 30px; text-align: center; display: flex; justify-content: center; gap: 15px; }
+.qp-summary-actions a, .qp-dashboard-actions a { text-decoration: none; font-weight: 600; }
+a.button-primary { background-color: #2271b1; color: #fff; padding: 10px 20px; border-radius: 4px; }
+a.button-secondary { background-color: #f6f7f7; color: #1d2327; border: 1px solid #8c8f94; padding: 10px 20px; border-radius: 4px; }
+.qp-delete-session-btn { background: none; border: 1px solid #d63638; color: #d63638; cursor: pointer; border-radius: 4px; padding: 4px 8px; font-size: 12px; }
