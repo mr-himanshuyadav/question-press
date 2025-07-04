@@ -47,6 +47,11 @@ jQuery(document).ready(function($) {
                     sessionQuestionIDs = response.data.question_ids;
                     sessionSettings = response.data.settings;
                     currentQuestionIndex = 0;
+                    score = 0; // Reset score for new session
+                    correctCount = 0;
+                    incorrectCount = 0;
+                    skippedCount = 0;
+                    updateHeaderStats();
                     loadQuestion(sessionQuestionIDs[currentQuestionIndex]);
                 } else {
                     wrapper.html('<p style="text-align:center; color: red;">Error: ' + response.data.message + '</p>');
@@ -131,38 +136,29 @@ jQuery(document).ready(function($) {
     });
 
     // Handle clicking an admin report button
-wrapper.on('click', '.qp-admin-report-btn', function() {
-    var button = $(this);
-    var labelNameToAdd = button.data('label');
-    var questionID = sessionQuestionIDs[currentQuestionIndex];
-    
-    // Disable all admin buttons for this question to prevent multiple clicks
-    $('.qp-admin-report-btn').prop('disabled', true).css('opacity', 0.5);
+    wrapper.on('click', '.qp-admin-report-btn', function() {
+        var button = $(this);
+        var labelNameToAdd = button.data('label');
+        var questionID = sessionQuestionIDs[currentQuestionIndex];
+        $('.qp-admin-report-btn').prop('disabled', true).css('opacity', 0.5);
 
-    $.ajax({
-        url: qp_ajax_object.ajax_url, type: 'POST',
-        data: { 
-            action: 'report_question_issue', 
-            nonce: qp_ajax_object.nonce, 
-            question_id: questionID,
-            label_name: labelNameToAdd
-        },
-        success: function(response) {
-            if (response.success) {
-                // It was successfully labelled, now move to the next question
-                loadNextQuestion();
-            } else {
-                alert('Error: ' + (response.data.message || 'Could not add label.'));
-                // Re-enable on failure
+        $.ajax({
+            url: qp_ajax_object.ajax_url, type: 'POST',
+            data: { action: 'report_question_issue', nonce: qp_ajax_object.nonce, question_id: questionID, label_name: labelNameToAdd },
+            success: function(response) {
+                if (response.success) {
+                    loadNextQuestion();
+                } else {
+                    alert('Error: ' + (response.data.message || 'Could not add label.'));
+                    $('.qp-admin-report-btn').prop('disabled', false).css('opacity', 1);
+                }
+            },
+            error: function() {
+                alert('An error occurred.');
                 $('.qp-admin-report-btn').prop('disabled', false).css('opacity', 1);
             }
-        },
-        error: function() {
-            alert('An error occurred.');
-            $('.qp-admin-report-btn').prop('disabled', false).css('opacity', 1);
-        }
+        });
     });
-});
 
     // Handle clicks on the user-facing report buttons
     wrapper.on('click', '.qp-user-report-btn', function() {
@@ -191,7 +187,6 @@ wrapper.on('click', '.qp-admin-report-btn', function() {
         });
     });
 
-
     // --- Helper Functions ---
     function loadQuestion(questionID) {
         if (!questionID) return;
@@ -199,6 +194,7 @@ wrapper.on('click', '.qp-admin-report-btn', function() {
         $('.qp-options-area').empty();
         $('#qp-skip-btn').prop('disabled', false);
         $('.qp-user-report-btn').prop('disabled', false).text(function() { return $(this).data('label'); });
+        $('.qp-admin-report-btn').prop('disabled', false).css('opacity', 1);
 
         $.ajax({
             url: qp_ajax_object.ajax_url, type: 'POST',
