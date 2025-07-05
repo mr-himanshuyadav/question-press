@@ -144,7 +144,9 @@ class QP_Questions_List_Table extends WP_List_Table
         global $wpdb;
         $this->process_bulk_action();
         $this->_column_headers = [$this->get_columns(), [], $this->get_sortable_columns(), 'custom_question_id'];
-        $per_page = 500;
+        // UPDATED: Use the saved setting for per_page value
+        $options = get_option('qp_settings');
+        $per_page = isset($options['questions_per_page']) ? absint($options['questions_per_page']) : 20;
         $current_page = $this->get_pagenum();
         $offset = ($current_page - 1) * $per_page;
         $orderby = isset($_GET['orderby']) ? sanitize_key($_GET['orderby']) : 'import_date';
@@ -345,18 +347,19 @@ class QP_Questions_List_Table extends WP_List_Table
         if (!empty($item['labels'])) {
             $labels_html = '<div style="margin-top: 5px; display: flex; flex-wrap: wrap; gap: 5px;">';
             foreach ($item['labels'] as $label) {
-                $labels_html .= sprintf(
-                    '<span style="padding: 2px 8px; font-size: 11px; border-radius: 3px; color: #fff; background-color: %s;">%s</span>',
-                    esc_attr($label->label_color),
-                    esc_html($label->label_name)
-                );
+                $label_span = sprintf('<span style="...background-color: %s;">%s</span>', esc_attr($label->label_color), esc_html($label->label_name));
+            // NEW: If the label is "Duplicate", add the reference link
+            if ($label->label_name === 'Duplicate' && !empty($item['duplicate_of'])) {
+                $original_custom_id = get_question_custom_id($item['duplicate_of']); // We will create this helper function
+                $label_span .= sprintf(' (of #%s)', $original_custom_id);
             }
-            $labels_html .= '</div>';
-            $row_text .= $labels_html;
+            $labels_html .= $label_span;
         }
-
-        return $row_text . $this->row_actions($actions);
+        $labels_html .= '</div>';
+        $row_text .= $labels_html;
     }
+    return $row_text . $this->row_actions($actions);
+}
 
     public function column_is_pyq($item)
     {

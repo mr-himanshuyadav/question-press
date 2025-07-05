@@ -27,7 +27,10 @@ class QP_Settings_Page {
     public static function register_settings() {
         register_setting('qp_settings_group', 'qp_settings', ['sanitize_callback' => [self::class, 'sanitize_settings']]);
         add_settings_section('qp_data_settings_section', 'Data Management', [self::class, 'render_data_section_text'], 'qp-settings-page');
+        // NEW: Add the pagination setting field
+        add_settings_field('qp_questions_per_page', 'Questions Per Page', [self::class, 'render_per_page_input'], 'qp-settings-page', 'qp_data_settings_section');
         add_settings_field('qp_delete_on_uninstall', 'Delete Data on Uninstall', [self::class, 'render_delete_data_checkbox'], 'qp-settings-page', 'qp_data_settings_section');
+        
         add_settings_section('qp_api_settings_section', 'REST API Documentation', [self::class, 'render_api_section_text'], 'qp-settings-page');
         add_settings_field('qp_api_secret_key', 'JWT Secret Key', [self::class, 'render_api_key_field'], 'qp-settings-page', 'qp_api_settings_section');
     }
@@ -38,7 +41,7 @@ class QP_Settings_Page {
      * Callback to render the description for the data section.
      */
     public static function render_data_section_text() {
-        echo '<p>Control how the plugin handles its data upon deletion.</p>';
+        echo '<p>General plugin and data management settings.</p>';
     }
     
     /**
@@ -46,6 +49,14 @@ class QP_Settings_Page {
      */
     public static function render_api_section_text() {
         echo '<p>Use these endpoints and the secret key to connect your mobile application to this website.</p>';
+    }
+
+
+    // NEW: Renders the input for questions per page
+    public static function render_per_page_input() {
+        $options = get_option('qp_settings');
+        $value = isset($options['questions_per_page']) ? $options['questions_per_page'] : 20;
+        echo '<input type="number" name="qp_settings[questions_per_page]" value="' . esc_attr($value) . '" min="1" max="100" /> <p class="description">Number of questions to show per page in the "All Questions" list.</p>';
     }
     /**
      * Callback to render our checkbox setting.
@@ -116,14 +127,11 @@ class QP_Settings_Page {
         <?php
     }
 
-    /**
-     * Sanitizes the settings array before saving.
-     */
+    // UPDATED: Sanitize the new setting
     public static function sanitize_settings($input) {
         $new_input = [];
-        if (isset($input['delete_on_uninstall'])) {
-            $new_input['delete_on_uninstall'] = absint($input['delete_on_uninstall']);
-        }
+        if (isset($input['delete_on_uninstall'])) { $new_input['delete_on_uninstall'] = absint($input['delete_on_uninstall']); }
+        if (isset($input['questions_per_page'])) { $new_input['questions_per_page'] = absint($input['questions_per_page']); }
         return $new_input;
     }
 }

@@ -94,18 +94,21 @@ private function process_data($data) {
             $question_text = $question['questionText'];
             $hash = md5(strtolower(trim(preg_replace('/\s+/', '', $question_text))));
             $is_duplicate = $wpdb->get_var($wpdb->prepare("SELECT question_id FROM $questions_table WHERE question_text_hash = %s", $hash)) ? true : false;
+            // UPDATED: Get the ID of the existing question, not just true/false
+            $existing_question_id = $wpdb->get_var($wpdb->prepare("SELECT question_id FROM $questions_table WHERE question_text_hash = %s", $hash));
             $next_custom_id = get_option('qp_next_custom_question_id', 1000);
             
             // CORRECTED: Added source_page and source_number to the insert data
             $wpdb->insert($questions_table, [
                 'custom_question_id' => $next_custom_id,
                 'group_id' => $group_id,
-                'question_text' => $question_text,
+                'question_text' => $question['questionText'],
                 'question_text_hash' => $hash,
                 'is_pyq' => isset($question['isPYQ']) ? (int)$question['isPYQ'] : 0,
                 'source_file' => isset($data['sourceFile']) ? sanitize_text_field($data['sourceFile']) : null,
                 'source_page' => isset($question['source']['page']) ? absint($question['source']['page']) : null,
                 'source_number' => isset($question['source']['number']) ? absint($question['source']['number']) : null,
+                'duplicate_of' => $existing_question_id ? $existing_question_id : null // NEW: Save the original ID
             ]);
             $question_id = $wpdb->insert_id;
             update_option('qp_next_custom_question_id', $next_custom_id + 1);
@@ -116,7 +119,7 @@ private function process_data($data) {
                 }
             }
 
-            if ($is_duplicate) {
+            if ($existing_question_id) {
                 if ($duplicate_label_id) {
                     $wpdb->insert($question_labels_table, ['question_id' => $question_id, 'label_id' => $duplicate_label_id]);
                 }

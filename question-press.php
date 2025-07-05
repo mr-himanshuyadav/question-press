@@ -49,8 +49,26 @@ function qp_activate_plugin() {
     $sql_groups = "CREATE TABLE $table_groups ( group_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT, direction_text LONGTEXT, direction_image_id BIGINT(20) UNSIGNED, subject_id BIGINT(20) UNSIGNED NOT NULL, PRIMARY KEY (group_id), KEY subject_id (subject_id) ) $charset_collate;";
     dbDelta($sql_groups);
 
+    // UPDATED: Table for Questions
     $table_questions = $wpdb->prefix . 'qp_questions';
-    $sql_questions = "CREATE TABLE $table_questions ( question_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT, custom_question_id BIGINT(20) UNSIGNED, group_id BIGINT(20) UNSIGNED, question_text LONGTEXT NOT NULL, question_text_hash VARCHAR(32) NOT NULL, is_pyq BOOLEAN NOT NULL DEFAULT 0, source_file VARCHAR(255), source_page INT, source_number INT, import_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, status VARCHAR(20) NOT NULL DEFAULT 'publish', PRIMARY KEY (question_id), UNIQUE KEY custom_question_id (custom_question_id), KEY group_id (group_id), KEY status (status), KEY is_pyq (is_pyq), KEY question_text_hash (question_text_hash) ) $charset_collate;";
+    $sql_questions = "CREATE TABLE $table_questions (
+        question_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+        custom_question_id BIGINT(20) UNSIGNED,
+        group_id BIGINT(20) UNSIGNED,
+        question_text LONGTEXT NOT NULL,
+        question_text_hash VARCHAR(32) NOT NULL,
+        is_pyq BOOLEAN NOT NULL DEFAULT 0,
+        source_file VARCHAR(255),
+        source_page INT,
+        source_number INT,
+        duplicate_of BIGINT(20) UNSIGNED DEFAULT NULL,
+        import_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        status VARCHAR(20) NOT NULL DEFAULT 'publish',
+        PRIMARY KEY (question_id),
+        UNIQUE KEY custom_question_id (custom_question_id),
+        KEY group_id (group_id),
+        KEY status (status)
+    ) $charset_collate;";
     dbDelta($sql_questions);
 
     $table_options = $wpdb->prefix . 'qp_options';
@@ -105,6 +123,9 @@ function qp_admin_menu() {
     add_submenu_page('question-press', 'Settings', 'Settings', 'manage_options', 'qp-settings', ['QP_Settings_Page', 'render']);
 }
 add_action('admin_menu', 'qp_admin_menu');
+
+
+
 
 function qp_admin_enqueue_scripts($hook_suffix) {
     if (strpos($hook_suffix, 'qp-') !== false || strpos($hook_suffix, 'question-press') !== false) {
@@ -171,6 +192,12 @@ function qp_all_questions_page_cb() {
         </form>
     </div>
     <?php
+}
+
+// ADD THIS NEW HELPER FUNCTION anywhere in question-press.php
+function get_question_custom_id($question_id) {
+    global $wpdb;
+    return $wpdb->get_var($wpdb->prepare("SELECT custom_question_id FROM {$wpdb->prefix}qp_questions WHERE question_id = %d", $question_id));
 }
 
 function qp_handle_save_question_group() {
