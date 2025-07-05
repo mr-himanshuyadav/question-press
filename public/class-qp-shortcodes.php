@@ -129,6 +129,9 @@ class QP_Shortcodes
                 <div id="qp-revision-indicator" style="display: none; margin-bottom: 15px; background-color: #fffbe6; border: 1px solid #ffc107; padding: 10px; border-radius: 4px; font-weight: bold; color: #856404;">
                 &#9851; This is a Revision Question
             </div>
+            <div id="qp-reported-indicator" style="display: none; margin-bottom: 15px; background-color: #fff3cd; border: 1px solid #ffeeba; padding: 10px; border-radius: 4px; font-weight: bold; color: #856404;">
+                &#9888; You have reported an issue with this question.
+            </div>
                 <div class="question-meta" style="font-size: 12px; color: #777; margin-bottom: 10px;">
                     <span id="qp-question-subject"></span> | <span id="qp-question-id"></span>
                 </div>
