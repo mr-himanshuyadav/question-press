@@ -57,7 +57,7 @@ All administrative features can be found under the **"Question Press"** menu ite
 
 ## The "Question Press Kit" Tool
 
-To create questions for import, use the `Question Press Kit.exe` tool. It has two modes:
+To create questions for import, use the `Question Press Kit.py` tool. It has two modes:
 
 1.  **Manual Entry:** Fill out the forms to add questions one by one to a queue, then generate the final `.zip` file.
 2.  **Import from DOCX:** Create a `.docx` file using the specific format below, and the tool will parse it automatically.
