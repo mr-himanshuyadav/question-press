@@ -298,11 +298,14 @@ class QP_Questions_List_Table extends WP_List_Table
             ];
         } else {
             $trash_nonce = wp_create_nonce('qp_trash_question_' . $item['question_id']);
+            $quick_edit_nonce = wp_create_nonce('qp_get_quick_edit_form_nonce'); // Nonce for fetching the form
+
             $actions = [
                 'edit' => sprintf('<a href="admin.php?page=qp-question-editor&action=edit&group_id=%s">Edit</a>', $group_id),
                 'inline hide-if-no-js' => sprintf(
-                    '<a href="#" class="editinline" data-question-id="%d">Quick Edit</a>',
-                    $item['question_id']
+                    '<a href="#" class="editinline" data-question-id="%d" data-nonce="%s">Quick Edit</a>',
+                    $item['question_id'],
+                    $quick_edit_nonce
                 ),
                 'trash' => sprintf('<a href="?page=%s&action=trash&question_id=%s&_wpnonce=%s" style="color:#a00;">Trash</a>', $page, $item['question_id'], $trash_nonce),
             ];
