@@ -336,35 +336,26 @@ add_action('wp_ajax_start_practice_session', 'qp_start_practice_session_ajax');
 
 // In question-press.php, REPLACE this function
 
+// In question-press.php
 function qp_get_question_data_ajax() {
     check_ajax_referer('qp_practice_nonce', 'nonce');
     $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
     if (!$question_id) { wp_send_json_error(['message' => 'Invalid Question ID.']); }
 
     global $wpdb;
-    $q_table = $wpdb->prefix . 'qp_questions'; 
-    $g_table = $wpdb->prefix . 'qp_question_groups'; 
-    $s_table = $wpdb->prefix . 'qp_subjects'; 
-    $o_table = $wpdb->prefix . 'qp_options';
-    $a_table = $wpdb->prefix . 'qp_user_attempts';
+    $q_table = $wpdb->prefix . 'qp_questions'; $g_table = $wpdb->prefix . 'qp_question_groups'; $s_table = $wpdb->prefix . 'qp_subjects'; $o_table = $wpdb->prefix . 'qp_options'; $a_table = $wpdb->prefix . 'qp_user_attempts';
 
-    $question_data = $wpdb->get_row($wpdb->prepare("SELECT q.custom_question_id, q.question_text, g.direction_text, s.subject_name FROM {$q_table} q LEFT JOIN {$g_table} g ON q.group_id = g.group_id LEFT JOIN {$s_table} s ON g.subject_id = s.subject_id WHERE q.question_id = %d", $question_id), ARRAY_A);
+    $question_data = $wpdb->get_row($wpdb->prepare("SELECT q.custom_question_id, q.question_text, g.direction_text, g.direction_image_id, s.subject_name FROM {$q_table} q LEFT JOIN {$g_table} g ON q.group_id = g.group_id LEFT JOIN {$s_table} s ON g.subject_id = s.subject_id WHERE q.question_id = %d", $question_id), ARRAY_A);
+    if (!$question_data) { wp_send_json_error(['message' => 'Question not found.']); }
     
-    if (!$question_data) {
-        wp_send_json_error(['message' => 'Question not found.']);
-    }
+    // NEW: Get image URL if an ID exists
+    $question_data['direction_image_url'] = $question_data['direction_image_id'] ? wp_get_attachment_url($question_data['direction_image_id']) : null;
 
     $question_data['options'] = $wpdb->get_results($wpdb->prepare("SELECT option_id, option_text FROM {$o_table} WHERE question_id = %d ORDER BY RAND()", $question_id), ARRAY_A);
-    
-    // NEW: Check if this user has attempted this question before
     $user_id = get_current_user_id();
     $attempt_count = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $a_table WHERE user_id = %d AND question_id = %d", $user_id, $question_id));
-    $is_revision = $attempt_count > 0;
-
-    wp_send_json_success([
-        'question' => $question_data,
-        'is_revision' => $is_revision // Send this new flag to the frontend
-    ]);
+    
+    wp_send_json_success(['question' => $question_data, 'is_revision' => ($attempt_count > 0)]);
 }
 add_action('wp_ajax_get_question_data', 'qp_get_question_data_ajax');
 

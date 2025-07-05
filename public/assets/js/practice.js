@@ -1,3 +1,5 @@
+
+
 jQuery(document).ready(function($) {
 
     var wrapper = $('#qp-practice-app-wrapper');
@@ -12,6 +14,7 @@ jQuery(document).ready(function($) {
     var incorrectCount = 0;
     var skippedCount = 0;
     var questionTimer;
+    var answeredStates = {}; // To store the state of each question (answered, skipped, etc.)
 
     // --- Event Handlers ---
 
@@ -30,16 +33,9 @@ jQuery(document).ready(function($) {
         var formData = $(this).serialize();
         
         $.ajax({
-            url: qp_ajax_object.ajax_url,
-            type: 'POST',
-            data: {
-                action: 'start_practice_session',
-                nonce: qp_ajax_object.nonce,
-                settings: formData
-            },
-            beforeSend: function() {
-                wrapper.html('<p style="text-align:center; padding: 50px;">Setting up your session...</p>');
-            },
+            url: qp_ajax_object.ajax_url, type: 'POST',
+            data: { action: 'start_practice_session', nonce: qp_ajax_object.nonce, settings: formData },
+            beforeSend: function() { wrapper.html('<p style="text-align:center; padding: 50px;">Setting up your session...</p>'); },
             success: function(response) {
                 if (response.success) {
                     wrapper.html(response.data.ui_html);
@@ -47,18 +43,12 @@ jQuery(document).ready(function($) {
                     sessionQuestionIDs = response.data.question_ids;
                     sessionSettings = response.data.settings;
                     currentQuestionIndex = 0;
-                    score = 0; // Reset score for new session
-                    correctCount = 0;
-                    incorrectCount = 0;
-                    skippedCount = 0;
+                    score = 0; correctCount = 0; incorrectCount = 0; skippedCount = 0; answeredStates = {};
                     updateHeaderStats();
                     loadQuestion(sessionQuestionIDs[currentQuestionIndex]);
                 } else {
                     wrapper.html('<p style="text-align:center; color: red;">Error: ' + response.data.message + '</p>');
                 }
-            },
-            error: function() {
-                wrapper.html('<p style="text-align:center; color: red;">An unknown error occurred. Please try again.</p>');
             }
         });
     });
@@ -69,13 +59,18 @@ jQuery(document).ready(function($) {
         var selectedOption = $(this);
         var selectedOptionID = selectedOption.find('input[type="radio"]').val();
         var questionID = sessionQuestionIDs[currentQuestionIndex];
+        
+        // Lock the UI for this question
         $('.qp-options-area .option').addClass('disabled');
+        $('#qp-skip-btn').prop('disabled', true);
+        $('#qp-next-btn').prop('disabled', false); // Enable Next button
 
         $.ajax({
             url: qp_ajax_object.ajax_url, type: 'POST',
             data: { action: 'check_answer', nonce: qp_ajax_object.nonce, session_id: sessionID, question_id: questionID, option_id: selectedOptionID },
             success: function(response) {
                 if (response.success) {
+                    answeredStates[questionID] = { is_correct: response.data.is_correct, correct_option_id: response.data.correct_option_id, selected_option_id: selectedOptionID };
                     if (response.data.is_correct) {
                         selectedOption.addClass('correct');
                         score += parseFloat(sessionSettings.marks_correct);
@@ -92,9 +87,22 @@ jQuery(document).ready(function($) {
         });
     });
 
-    // Handle Next button click
-    wrapper.on('click', '#qp-next-btn', function() {
-        loadNextQuestion();
+    // Handle Next & Previous button clicks
+    wrapper.on('click', '#qp-next-btn, #qp-prev-btn', function() {
+        var isNext = $(this).attr('id') === 'qp-next-btn';
+        if (isNext) {
+            currentQuestionIndex++;
+        } else {
+            if(currentQuestionIndex > 0) currentQuestionIndex--;
+        }
+        
+        if (currentQuestionIndex >= sessionQuestionIDs.length) {
+            if (confirm("Congratulations, you've completed all available questions! Click OK to end this session and see your summary.")) {
+                $('#qp-end-practice-btn').click();
+            }
+            return; 
+        }
+        loadQuestion(sessionQuestionIDs[currentQuestionIndex]);
     });
 
     // Handle Skip button click
@@ -102,14 +110,43 @@ jQuery(document).ready(function($) {
         clearInterval(questionTimer);
         var questionID = sessionQuestionIDs[currentQuestionIndex];
         $(this).prop('disabled', true);
+        $('#qp-next-btn').prop('disabled', false); // Enable next after skipping
 
         $.ajax({
             url: qp_ajax_object.ajax_url, type: 'POST',
             data: { action: 'skip_question', nonce: qp_ajax_object.nonce, session_id: sessionID, question_id: questionID },
             success: function() {
+                answeredStates[questionID] = { is_skipped: true };
                 skippedCount++;
                 updateHeaderStats();
-                loadNextQuestion();
+                loadNextQuestion(); // This just increments index and calls loadQuestion
+            }
+        });
+    });
+    
+    // Handle all Report button clicks
+    wrapper.on('click', '.qp-user-report-btn, .qp-admin-report-btn', function() {
+        clearInterval(questionTimer);
+        var button = $(this);
+        var labelNameToAdd = button.data('label');
+        var questionID = sessionQuestionIDs[currentQuestionIndex];
+        
+        $('.qp-options-area .option').addClass('disabled');
+        $('.qp-user-report-btn, .qp-admin-report-btn').prop('disabled', true);
+        
+        $.ajax({
+            url: qp_ajax_object.ajax_url, type: 'POST',
+            data: { action: 'report_and_skip_question', nonce: qp_ajax_object.nonce, session_id: sessionID, question_id: questionID, label_name: labelNameToAdd },
+            success: function(response) {
+                if(response.success) {
+                    answeredStates[questionID] = { is_reported: true };
+                    skippedCount++;
+                    updateHeaderStats();
+                    loadNextQuestion();
+                } else {
+                    alert('Error: ' + (response.data.message || 'Could not report issue.'));
+                    $('.qp-user-report-btn, .qp-admin-report-btn').prop('disabled', false);
+                }
             }
         });
     });
@@ -190,52 +227,56 @@ jQuery(document).ready(function($) {
     // --- Helper Functions ---
     // In public/assets/js/practice.js, REPLACE this function
 
-function loadQuestion(questionID) {
-    if (!questionID) return;
-    
-    // Reset UI for the new question
-    $('#qp-question-text-area').html('Loading...');
-    $('.qp-options-area').empty();
-    $('#qp-revision-indicator').hide(); // Hide indicator by default
-    $('#qp-skip-btn').prop('disabled', false);
-    $('.qp-user-report-btn').prop('disabled', false).text(function() { return $(this).data('label'); });
-    $('.qp-admin-report-btn').prop('disabled', false).css('opacity', 1);
 
-    $.ajax({
-        url: qp_ajax_object.ajax_url, type: 'POST',
-        data: { action: 'get_question_data', nonce: qp_ajax_object.nonce, question_id: questionID },
-        success: function(response) {
-            if(response.success) {
-                var questionData = response.data.question;
-                
-                // CORRECTED LOGIC: Show indicator only if session is in revise_mode AND this specific question is a revision question.
-                if (sessionSettings.revise_mode && response.data.is_revision) {
-                    $('#qp-revision-indicator').show();
-                }
+    function loadQuestion(questionID) {
+        if (!questionID) return;
+        $('#qp-question-text-area').html('Loading...');
+        $('.qp-options-area').empty();
+        $('#qp-revision-indicator, .qp-direction').hide();
+        $('.qp-user-report-btn, .qp-admin-report-btn').prop('disabled', false);
 
-                // Populate the rest of the question data...
-                var directionBox = $('.qp-direction');
-                if (questionData.direction_text) {
-                    directionBox.html($('<p>').text(questionData.direction_text)).show();
-                } else {
-                    directionBox.hide();
-                }
-                $('#qp-question-subject').text('Subject: ' + questionData.subject_name);
-                $('#qp-question-id').text('Question ID: ' + questionData.custom_question_id);
-                $('#qp-question-text-area').html(questionData.question_text);
-                var optionsArea = $('.qp-options-area');
-                optionsArea.empty();
-                $.each(questionData.options, function(index, option) {
-                    var optionHtml = $('<label class="option"></label>').append($('<input type="radio" name="qp_option">').val(option.option_id), ' ' + option.option_text);
-                    optionsArea.append(optionHtml);
-});
-                if (sessionSettings.timer_enabled) {
-                    startTimer(sessionSettings.timer_seconds);
+        $.ajax({
+            url: qp_ajax_object.ajax_url, type: 'POST',
+            data: { action: 'get_question_data', nonce: qp_ajax_object.nonce, question_id: questionID },
+            success: function(response) {
+                if(response.success) {
+                    var questionData = response.data.question;
+                    if (sessionSettings.revise_mode && response.data.is_revision) { $('#qp-revision-indicator').show(); }
+                    if (questionData.direction_text) { $('.qp-direction').html($('<p>').text(questionData.direction_text)).show(); }
+                    if (questionData.direction_image_url) { $('.qp-direction').append($('<img>').attr('src', questionData.direction_image_url).css('max-width', '100%')); }
+                    $('#qp-question-subject').text('Subject: ' + questionData.subject_name);
+                    $('#qp-question-id').text('Question ID: ' + questionData.custom_question_id);
+                    $('#qp-question-text-area').html(questionData.question_text);
+                    
+                    var optionsArea = $('.qp-options-area');
+                    optionsArea.empty();
+                    $.each(questionData.options, function(index, option) {
+                        var optionHtml = $('<label class="option"></label>').append($('<input type="radio" name="qp_option">').val(option.option_id), ' ' + option.option_text);
+                        optionsArea.append(optionHtml);
+                    });
+
+                    // Manage button states based on history
+                    var previousState = answeredStates[questionID];
+                    if (previousState) {
+                        $('.qp-options-area .option').addClass('disabled');
+                        $('#qp-skip-btn').prop('disabled', true);
+                        if (previousState.is_correct) {
+                            $('input[value="' + previousState.selected_option_id + '"]').closest('.option').addClass('correct');
+                        } else if(previousState.is_correct === false) {
+                            $('input[value="' + previousState.selected_option_id + '"]').closest('.option').addClass('incorrect');
+                            $('input[value="' + previousState.correct_option_id + '"]').closest('.option').addClass('correct');
+                        }
+                    } else {
+                        $('#qp-skip-btn').prop('disabled', false);
+                        if (sessionSettings.timer_enabled) { startTimer(sessionSettings.timer_seconds); }
+                    }
+                    
+                    $('#qp-prev-btn').prop('disabled', currentQuestionIndex === 0);
+                    $('#qp-next-btn').prop('disabled', !previousState); // Next is enabled only if question has a state (answered, skipped, etc.)
                 }
             }
-        }
-    });
-}
+        });
+    }
     
     function loadNextQuestion() {
         currentQuestionIndex++;
