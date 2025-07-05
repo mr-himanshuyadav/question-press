@@ -189,7 +189,13 @@ jQuery(document).ready(function($) {
                     var questionData = response.data.question;
                                         if (sessionSettings.revise_mode && response.data.is_revision) { $('#qp-revision-indicator').show(); }
                     if (questionData.direction_text) { $('.qp-direction').html($('<p>').text(questionData.direction_text)).show(); }
-                    if (window.MathJax) { window.MathJax.typeset(); }
+                    // Check if MathJax is loaded and ready before trying to render equations.
+                    if (typeof MathJax !== 'undefined' && MathJax.typeset) {
+                        // Use a brief timeout to allow the DOM to update before typesetting.
+                        setTimeout(function() {
+                            MathJax.typeset();
+                        }, 100);
+                    }
                     if (questionData.direction_image_url) { $('.qp-direction').append($('<img>').attr('src', questionData.direction_image_url).css('max-width', '100%')); }
                     $('#qp-question-subject').text('Subject: ' + questionData.subject_name);
                     $('#qp-question-id').text('Question ID: ' + questionData.custom_question_id);
