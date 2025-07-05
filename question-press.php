@@ -210,6 +210,13 @@ function qp_all_questions_page_cb() {
             <?php wp_nonce_field('bulk-questions'); ?>
             <?php $list_table->search_box('Search Questions', 'question'); $list_table->display(); ?>
         </form>
+    <style type="text/css">
+        .wp-list-table .column-custom_question_id { width: 10%; }
+        .wp-list-table .column-question_text { width: 50%; }
+        .wp-list-table .column-subject_name { width: 15%; }
+        .wp-list-table .column-source { width: 15%; }
+        .wp-list-table .column-import_date { width: 10%; }
+    </style>
     </div>
     <?php
 }

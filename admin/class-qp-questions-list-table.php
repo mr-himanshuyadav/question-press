@@ -205,7 +205,7 @@ class QP_Questions_List_Table extends WP_List_Table
         $total_items = $wpdb->get_var("SELECT COUNT(q.question_id)" . $sql_query_from . $sql_query_where);
 
         // UPDATED: Select the source columns
-        $data_query = "SELECT q.question_id, q.custom_question_id, q.question_text, q.is_pyq, q.import_date, q.source_file, q.source_page, q.source_number, q.duplicate_of, s.subject_name" . $sql_query_from . $sql_query_where;
+        $data_query = "SELECT q.question_id, q.custom_question_id, q.question_text, q.is_pyq, q.import_date, q.source_file, q.source_page, q.source_number, q.duplicate_of, s.subject_name, g.direction_text, g.direction_image_id" . $sql_query_from . $sql_query_where;
         $data_query .= $wpdb->prepare(" ORDER BY %s %s LIMIT %d OFFSET %d", $orderby, $order, $per_page, $offset);
     
         $this->items = $wpdb->get_results($data_query, ARRAY_A);
@@ -356,28 +356,72 @@ class QP_Questions_List_Table extends WP_List_Table
         return sprintf('<input type="checkbox" name="question_ids[]" value="%s" />', $item['question_id']);
     }
 
-    public function column_question_text($item) {
-        $group_id = isset($item['group_id']) ? $item['group_id'] : 0;
-        $page = esc_attr($_REQUEST['page']);
-        $status = isset($_REQUEST['status']) ? sanitize_key($_REQUEST['status']) : 'all';
-        $actions = [];
+public function column_question_text($item) {
+    $page = esc_attr($_REQUEST['page']);
+    $status = isset($_REQUEST['status']) ? sanitize_key($_REQUEST['status']) : 'all';
+    $group_id = isset($item['group_id']) ? $item['group_id'] : 0; // Ensure group_id is available
 
-        if ($status === 'trash') {
-            $untrash_nonce = wp_create_nonce('qp_untrash_question_' . $item['question_id']);
-            $delete_nonce = wp_create_nonce('qp_delete_question_' . $item['question_id']);
-            $actions = [
-                'untrash' => sprintf('<a href="?page=%s&action=untrash&question_id=%s&_wpnonce=%s">Restore</a>', $page, $item['question_id'], $untrash_nonce),
-                'delete'  => sprintf('<a href="?page=%s&action=delete&question_id=%s&_wpnonce=%s" style="color:#a00;" onclick="return confirm(\'You are about to permanently delete this item. This action cannot be undone. Are you sure?\');">Delete Permanently</a>', $page, $item['question_id'], $delete_nonce),
-            ];
-        } else {
-            $trash_nonce = wp_create_nonce('qp_trash_question_' . $item['question_id']);
-            $quick_edit_nonce = wp_create_nonce('qp_get_quick_edit_form_nonce');
-            $actions = [
-                'edit' => sprintf('<a href="admin.php?page=qp-edit-group&action=edit&group_id=%s">Edit</a>', $group_id),
-                'inline hide-if-no-js' => sprintf('<a href="#" class="editinline" data-question-id="%d" data-nonce="%s">Quick Edit</a>', $item['question_id'], $quick_edit_nonce),
-                'trash' => sprintf('<a href="?page=%s&action=trash&question_id=%s&_wpnonce=%s" style="color:#a00;">Trash</a>', $page, $item['question_id'], $trash_nonce),
-            ];
+    $output = '';
+
+    // Display Direction if it exists
+    if (!empty($item['direction_text'])) {
+        $direction_display = '<strong>Direction:</strong> ' . wp_trim_words(esc_html($item['direction_text']), 40, '...');
+
+        // Add an image indicator
+        if (!empty($item['direction_image_id'])) {
+            $direction_display .= ' <span style="background-color: #f0f0f1; color: #50575e; padding: 1px 5px; font-size: 10px; border-radius: 3px; font-weight: 600;">IMAGE</span>';
         }
+        $output .= '<div style="padding-bottom: 8px;">' . $direction_display . '</div>';
+    }
+
+    // Display the main question text
+    $output .= sprintf('<strong>%s</strong>', wp_trim_words(esc_html($item['question_text']), 50, '...'));
+
+    // Display labels and the duplicate cross-reference
+    if (!empty($item['labels'])) {
+        $labels_html = '<div class="qp-labels-container" style="margin-top: 5px; display: flex; flex-wrap: wrap; gap: 5px;">';
+        foreach ($item['labels'] as $label) {
+            $label_text = esc_html($label->label_name);
+
+            if ($label->label_name === 'Duplicate' && !empty($item['duplicate_of'])) {
+                $original_custom_id = get_question_custom_id($item['duplicate_of']);
+                if ($original_custom_id) {
+                    $label_text .= sprintf(' (of #%s)', esc_html($original_custom_id));
+                }
+            }
+
+            $labels_html .= sprintf(
+                '<span class="qp-label" style="background-color: %s; color: #fff; padding: 2px 6px; font-size: 11px; border-radius: 3px;">%s</span>',
+                esc_attr($label->label_color),
+                $label_text
+            );
+        }
+        $labels_html .= '</div>';
+        $output .= $labels_html;
+    }
+
+    // Row Actions
+    $actions = [];
+    if ($status === 'trash') {
+        $untrash_nonce = wp_create_nonce('qp_untrash_question_' . $item['question_id']);
+        $delete_nonce = wp_create_nonce('qp_delete_question_' . $item['question_id']);
+        $actions = [
+            'untrash' => sprintf('<a href="?page=%s&action=untrash&question_id=%s&_wpnonce=%s">Restore</a>', $page, $item['question_id'], $untrash_nonce),
+            'delete'  => sprintf('<a href="?page=%s&action=delete&question_id=%s&_wpnonce=%s" style="color:#a00;" onclick="return confirm(\'You are about to permanently delete this item. This action cannot be undone. Are you sure?\');">Delete Permanently</a>', $page, $item['question_id'], $delete_nonce),
+        ];
+    } else {
+        $trash_nonce = wp_create_nonce('qp_trash_question_' . $item['question_id']);
+        $quick_edit_nonce = wp_create_nonce('qp_get_quick_edit_form_nonce');
+        $actions = [
+            'edit' => sprintf('<a href="admin.php?page=qp-edit-group&action=edit&group_id=%s">Edit</a>', $group_id),
+            'inline hide-if-no-js' => sprintf(
+                '<a href="#" class="editinline" data-question-id="%d" data-nonce="%s">Quick Edit</a>',
+                $item['question_id'],
+                $quick_edit_nonce
+            ),
+            'trash' => sprintf('<a href="?page=%s&action=trash&question_id=%s&_wpnonce=%s" style="color:#a00;">Trash</a>', $page, $item['question_id'], $trash_nonce),
+        ];
+    }
         
         $row_text = '';
 
