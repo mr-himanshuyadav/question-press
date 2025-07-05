@@ -216,6 +216,9 @@ function qp_all_questions_page_cb() {
         .wp-list-table .column-subject_name { width: 15%; }
         .wp-list-table .column-source { width: 15%; }
         .wp-list-table .column-import_date { width: 10%; }
+        .wp-list-table.questions #the-list tr td {
+        border-bottom: 1px solid rgb(174, 174, 174);
+    }
     </style>
     </div>
     <?php
