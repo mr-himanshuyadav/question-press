@@ -119,13 +119,11 @@ class App(tk.Tk):
         self.title("Question Press Kit")
         self.geometry("900x800")
         
-        # --- Data Stores ---
         self.question_groups = []
         self.current_group_questions = []
         self.current_group_image_path = None
         self.image_preview_cache = {}
 
-        # --- Main UI Setup ---
         notebook = ttk.Notebook(self)
         notebook.pack(pady=10, padx=10, expand=True, fill="both")
         manual_entry_frame = ttk.Frame(notebook)
@@ -138,7 +136,6 @@ class App(tk.Tk):
         self.create_docx_import_widgets(docx_import_frame)
 
     def create_manual_entry_widgets(self, parent_frame):
-        # --- Group Details Frame ---
         group_frame = ttk.LabelFrame(parent_frame, text="Step 1: Define a Question Group", padding=(10, 5))
         group_frame.pack(padx=10, pady=10, fill="x")
         ttk.Label(group_frame, text="Subject:").grid(row=0, column=0, sticky="w", padx=5, pady=5)
@@ -153,7 +150,6 @@ class App(tk.Tk):
         self.image_preview_label.grid(row=2, column=2, padx=5, pady=5, sticky="w")
         group_frame.columnconfigure(1, weight=1)
 
-        # --- Question Details Frame ---
         question_frame = ttk.LabelFrame(parent_frame, text="Step 2: Add Questions to this Group", padding=(10, 5))
         question_frame.pack(padx=10, pady=5, fill="both", expand=True)
         ttk.Label(question_frame, text="Question Text:").grid(row=0, column=0, sticky="nw", padx=5, pady=5)
@@ -172,11 +168,12 @@ class App(tk.Tk):
             ttk.Entry(options_frame, textvariable=option_var, width=80).grid(row=i, column=1, sticky="ew", padx=5, pady=2)
             self.option_vars.append(option_var)
         options_frame.columnconfigure(1, weight=1)
-        ttk.Button(question_frame, text="Add Question to Group", command=self.add_question_to_group).pack(pady=10)
+        
+        # CORRECTED: Changed .pack() to .grid()
+        ttk.Button(question_frame, text="Add Question to Group", command=self.add_question_to_group).grid(row=3, column=1, pady=10, sticky="w")
 
-        # --- Group Management Frame ---
         group_manage_frame = ttk.LabelFrame(parent_frame, text="Step 3: Finalize", padding=(10, 5))
-        group_manage_frame.pack(padx=10, pady=10, fill="x")
+        group_manage_frame.pack(padx=10, pady=10, fill="x", side="bottom")
         ttk.Button(group_manage_frame, text="Finish Current Group & Start New One", command=self.finish_group).pack(side="left", padx=5)
         self.group_status_var = tk.StringVar(value="0 question groups finalized.")
         ttk.Label(group_manage_frame, textvariable=self.group_status_var, foreground="blue").pack(side="left", padx=20)
@@ -193,7 +190,6 @@ class App(tk.Tk):
             self.image_preview_label.config(image=self.image_preview_cache['current'], text="")
         except Exception as e:
             self.image_preview_label.config(image='', text="Preview failed.")
-            print(f"Image preview error: {e}")
 
     def add_question_to_group(self):
         question = self.question_text.get("1.0", "end-1c").strip()
@@ -203,11 +199,14 @@ class App(tk.Tk):
             return
             
         question_data = {
-            "questionText": question, "isPYQ": self.is_pyq_var.get(),
-            "options": [{"optionText": text, "isCorrect": i == (self.correct_option_var.get() - 1)} for i, text in enumerate(options)]
+            "questionId": str(uuid.uuid4()),
+            "questionText": question, 
+            "isPYQ": self.is_pyq_var.get(),
+            "options": [{"optionText": text, "isCorrect": i == (self.correct_option_var.get() - 1)} for i, text in enumerate(options)],
+            "source": {"page": None, "number": None}
         }
         self.current_group_questions.append(question_data)
-        messagebox.showinfo("Success", f"Question added to the current group.\nGroup now has {len(self.current_group_questions)} question(s).")
+        messagebox.showinfo("Success", f"Question added to group.\nGroup now has {len(self.current_group_questions)} question(s).")
         self.question_text.delete("1.0", "end")
         for var in self.option_vars: var.set("")
         self.is_pyq_var.set(False)
@@ -231,7 +230,18 @@ class App(tk.Tk):
         messagebox.showinfo("Success", "Group finalized. You can now start a new group or generate the file.")
 
     def generate_zip(self):
-        if not self.question_groups: messagebox.showwarning("Warning", "No groups created."); return
+        if not self.question_groups and not self.current_group_questions: 
+            messagebox.showwarning("Warning", "No groups created."); return
+        
+        # If there's an unfinished group, ask user if they want to add it
+        if self.current_group_questions:
+            if messagebox.askyesno("Unfinished Group", "You have an unfinished group. Do you want to add it before generating the file?"):
+                self.finish_group()
+            else:
+                return # User cancelled
+
+        if not self.question_groups: messagebox.showwarning("Warning", "No groups to generate."); return
+
         filepath = filedialog.asksaveasfilename(defaultextension=".zip", filetypes=[("ZIP Archives", "*.zip")])
         if not filepath: return
 
@@ -253,7 +263,7 @@ class App(tk.Tk):
             final_group = {
                 "groupId": str(uuid.uuid4()), "subject": group["subject"],
                 "Direction": {"text": group["direction_text"], "image": image_filename} if group["direction_text"] or image_filename else None,
-                "questions": [{"questionId": str(uuid.uuid4()), "source": {"page": None, "number": None}, **q} for q in group["questions"]]
+                "questions": group["questions"]
             }
             final_question_groups.append(final_group)
         
@@ -267,8 +277,7 @@ class App(tk.Tk):
         with zipfile.ZipFile(filepath, 'w', zipfile.ZIP_DEFLATED) as zipf:
             zipf.write(json_path, 'questions.json')
             if os.path.exists(images_dir) and os.listdir(images_dir):
-                for fn in os.listdir(images_dir):
-                    zipf.write(os.path.join(images_dir, fn), os.path.join('images', fn))
+                for fn in os.listdir(images_dir): zipf.write(os.path.join(images_dir, fn), os.path.join('images', fn))
         
         shutil.rmtree(temp_dir)
         messagebox.showinfo("Success", "ZIP file generated successfully!")
@@ -276,6 +285,7 @@ class App(tk.Tk):
         self.group_status_var.set("0 question groups finalized.")
 
     def create_docx_import_widgets(self, parent_frame):
+        # This function's content is correct and unchanged
         file_frame = ttk.LabelFrame(parent_frame, text="1. Select File", padding=(10, 5))
         file_frame.pack(padx=10, pady=10, fill="x")
         self.docx_path_var = tk.StringVar()
@@ -310,7 +320,6 @@ class App(tk.Tk):
             imported_groups = []
             for block_text in blocks_raw:
                 block_clean = block_text.split('[end]')[0].strip()
-                lines = [line.strip() for line in block_clean.split('\n') if line.strip()]
                 direction = ""
                 dir_match = re.search(r'Direction:(.*?)(?=Q\d+:|$)', block_clean, re.IGNORECASE | re.DOTALL)
                 if dir_match: direction = dir_match.group(1).strip()
