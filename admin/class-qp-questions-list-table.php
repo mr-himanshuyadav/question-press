@@ -185,10 +185,11 @@ class QP_Questions_List_Table extends WP_List_Table
         $sql_query_where = " WHERE " . implode(' AND ', $where);
 
         $total_items = $wpdb->get_var("SELECT COUNT(q.question_id)" . $sql_query_from . $sql_query_where);
-        $data_query = "SELECT q.question_id, q.custom_question_id, q.question_text, q.is_pyq, q.import_date, s.subject_name" . $sql_query_from . $sql_query_where;
-        $data_query .= $wpdb->prepare(" ORDER BY %s %s LIMIT %d OFFSET %d", $orderby, $order, $per_page, $offset);
-
-        $this->items = $wpdb->get_results($data_query, ARRAY_A);
+        // UPDATED: Select the new source columns
+    $data_query = "SELECT q.question_id, q.custom_question_id, q.question_text, q.is_pyq, q.import_date, q.source_file, q.source_page, q.source_number, s.subject_name" . $sql_query_from . $sql_query_where;
+    $data_query .= $wpdb->prepare(" ORDER BY %s %s LIMIT %d OFFSET %d", $orderby, $order, $per_page, $offset);
+    
+    $this->items = $wpdb->get_results($data_query, ARRAY_A);
 
         $question_ids = wp_list_pluck($this->items, 'question_id');
         if (!empty($question_ids)) {
@@ -335,7 +336,7 @@ class QP_Questions_List_Table extends WP_List_Table
             ];
         }
         
-        $row_text = sprintf('<strong>%s</strong>', wp_trim_words(esc_html($item['question_text']), 20, '...'));
+        $row_text = sprintf('<strong>%s</strong>', wp_trim_words(esc_html($item['question_text']), 50, '...'));
 
         // THIS IS THE RESTORED LOGIC FOR DISPLAYING LABELS
         if (!empty($item['labels'])) {
@@ -350,6 +351,21 @@ class QP_Questions_List_Table extends WP_List_Table
             $labels_html .= '</div>';
             $row_text .= $labels_html;
         }
+
+        // NEW: Display source information if it exists
+    $source_info = [];
+    if (!empty($item['source_file'])) {
+        $source_info[] = 'File: ' . esc_html($item['source_file']);
+    }
+    if (!empty($item['source_page'])) {
+        $source_info[] = 'Page: ' . esc_html($item['source_page']);
+    }
+    if (!empty($item['source_number'])) {
+        $source_info[] = 'No: ' . esc_html($item['source_number']);
+    }
+    if (!empty($source_info)) {
+        $row_text .= '<div style="font-size: 11px; color: #777;">Source: ' . implode(', ', $source_info) . '</div>';
+    }
 
         return $row_text . $this->row_actions($actions);
     }

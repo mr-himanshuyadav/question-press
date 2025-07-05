@@ -27,7 +27,8 @@ class QP_Question_Editor_Page {
                 $direction_text = $group_data->direction_text;
                 $direction_image_id = $group_data->direction_image_id;
                 $current_subject_id = $group_data->subject_id;
-                $questions_in_group = $wpdb->get_results($wpdb->prepare("SELECT * FROM $q_table WHERE group_id = %d ORDER BY question_id ASC", $group_id));
+                // UPDATED: The query to fetch questions now includes the source fields
+                $questions_in_group = $wpdb->get_results($wpdb->prepare("SELECT question_id, custom_question_id, question_text, is_pyq, source_file, source_page, source_number FROM {$wpdb->prefix}qp_questions WHERE group_id = %d ORDER BY question_id ASC", $group_id));
                 
                 if (!empty($questions_in_group)) {
                     $is_pyq_group = (bool)$questions_in_group[0]->is_pyq; 
@@ -113,10 +114,22 @@ class QP_Question_Editor_Page {
                             <div id="qp-question-blocks-container">
                                 <?php foreach ($questions_in_group as $q_index => $question) : 
                                     $current_label_ids = wp_list_pluck($question->labels, 'label_id');
+                                    // NEW: Prepare source text for display
+                    $source_text = '';
+                    if (!empty($question->source_file)) {
+                        $source_text = esc_html($question->source_file);
+                        if (!empty($question->source_page)) {
+                            $source_text .= ' (p. ' . esc_html($question->source_page) . ')';
+                        }
+                    }
                                 ?>
                                 <div class="postbox qp-question-block">
                                     <div class="postbox-header">
                                         <h2 class="hndle"><span>Question (ID: <?php echo esc_html($question->custom_question_id); ?>)</span></h2>
+                                        <?php if ($source_text) : ?>
+                                <small style="font-weight: normal; margin-left: 10px;">Source: <?php echo $source_text; ?></small>
+                            <?php endif; ?>
+
                                         <div class="handle-actions">
                                             <button type="button" class="button-link remove-question-block">Remove</button>
                                         </div>

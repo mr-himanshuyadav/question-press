@@ -88,6 +88,7 @@ class QP_Export_Page {
             wp_die('No questions found for the selected subjects.');
         }
 
+        // Process data into the correct JSON structure
         $grouped_by_group = [];
         foreach ($questions_data as $q) {
             if (!isset($grouped_by_group[$q->group_id])) {
@@ -99,6 +100,7 @@ class QP_Export_Page {
                 ];
             }
 
+            // Fetch options for this question
             $options = $wpdb->get_results($wpdb->prepare("SELECT option_text, is_correct FROM {$o_table} WHERE question_id = %d", $q->question_id));
             $options_array = [];
             foreach ($options as $opt) {
