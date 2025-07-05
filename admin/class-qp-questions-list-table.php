@@ -28,7 +28,7 @@ class QP_Questions_List_Table extends WP_List_Table
     public function get_sortable_columns()
     {
         return [
-            'custom_question_id' => ['custom_question_id', false],
+            'custom_question_id' => ['custom_question_id', true],
             'question_text'      => ['question_text', false],
             'subject_name'       => ['subject_name', false],
             'import_date'        => ['import_date', true]
@@ -144,7 +144,7 @@ class QP_Questions_List_Table extends WP_List_Table
         global $wpdb;
         $this->process_bulk_action();
         $this->_column_headers = [$this->get_columns(), [], $this->get_sortable_columns(), 'custom_question_id'];
-        $per_page = 20;
+        $per_page = 500;
         $current_page = $this->get_pagenum();
         $offset = ($current_page - 1) * $per_page;
         $orderby = isset($_GET['orderby']) ? sanitize_key($_GET['orderby']) : 'import_date';
@@ -377,11 +377,10 @@ class QP_Questions_List_Table extends WP_List_Table
         if (!empty($item['source_number'])) {
             $source_info[] = '<strong>No:</strong> ' . esc_html($item['source_number']);
         }
-        // Display vertically
         return implode('<br>', $source_info);
     }
-    public function column_default($item, $column_name)
-    {
+
+    public function column_default($item, $column_name) {
         return isset($item[$column_name]) ? esc_html($item[$column_name]) : 'N/A';
     }
 }
