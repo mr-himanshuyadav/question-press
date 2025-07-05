@@ -194,12 +194,22 @@ class QP_Questions_List_Table extends WP_List_Table
         $data_query = "SELECT q.question_id, q.custom_question_id, q.question_text, q.is_pyq, q.import_date, q.source_file, q.source_page, q.source_number, s.subject_name" . $sql_query_from . $sql_query_where;
         $data_query .= $wpdb->prepare(" ORDER BY %s %s LIMIT %d OFFSET %d", $orderby, $order, $per_page, $offset);
     
-    $this->items = $wpdb->get_results($data_query, ARRAY_A);
+        $this->items = $wpdb->get_results($data_query, ARRAY_A);
 
+        // CORRECTED: Logic to fetch full label data including color
         $question_ids = wp_list_pluck($this->items, 'question_id');
         if (!empty($question_ids)) {
+            $ql_table = $wpdb->prefix . 'qp_question_labels';
+            $l_table = $wpdb->prefix . 'qp_labels';
             $ids_placeholder = implode(',', array_map('absint', $question_ids));
-            $labels_results = $wpdb->get_results("SELECT ql.question_id, l.label_name, l.label_color FROM {$ql_table} ql JOIN {$wpdb->prefix}qp_labels l ON ql.label_id = l.label_id WHERE ql.question_id IN ($ids_placeholder)");
+
+            $labels_results = $wpdb->get_results(
+                "SELECT ql.question_id, l.label_name, l.label_color
+                 FROM {$ql_table} ql
+                 JOIN {$l_table} l ON ql.label_id = l.label_id
+                 WHERE ql.question_id IN ($ids_placeholder)"
+            );
+            
             $labels_by_question_id = [];
             foreach ($labels_results as $label) {
                 if (!isset($labels_by_question_id[$label->question_id])) {
@@ -207,6 +217,7 @@ class QP_Questions_List_Table extends WP_List_Table
                 }
                 $labels_by_question_id[$label->question_id][] = $label;
             }
+
             foreach ($this->items as &$item) {
                 if (isset($labels_by_question_id[$item['question_id']])) {
                     $item['labels'] = $labels_by_question_id[$item['question_id']];
