@@ -10,10 +10,11 @@ class QP_Logs_List_Table extends WP_List_Table {
     }
 
     public function get_columns() {
-        // REMOVED: Status column
+        // RESTORED: "Status" column is back
         return [
             'log_type'    => 'Log Type',
-            'log_message' => 'Message / Action',
+            'log_message' => 'Message',
+            'status'      => 'Status',
             'log_date'    => 'Date'
         ];
     }
@@ -37,25 +38,31 @@ class QP_Logs_List_Table extends WP_List_Table {
             "SELECT * FROM $table_name ORDER BY %s %s LIMIT %d OFFSET %d",
             $orderby, $order, $per_page, $offset
         ), ARRAY_A);
+
         $this->set_pagination_args(['total_items' => $total_items, 'per_page' => $per_page]);
     }
 
-    // UPDATED: Custom renderer for the message column
+    // UPDATED: This column now only displays the message.
     public function column_log_message($item) {
-        $message = esc_html($item['log_message']);
-        $log_data = json_decode($item['log_data'], true);
-
-        // If the log is unresolved and has a question ID, show a "Review" button
-        if ($item['resolved'] == 0 && isset($log_data['question_id'])) {
-            global $wpdb;
-            $group_id = $wpdb->get_var($wpdb->prepare("SELECT group_id FROM {$wpdb->prefix}qp_questions WHERE question_id = %d", $log_data['question_id']));
-            if ($group_id) {
-                $review_link = admin_url('admin.php?page=qp-edit-group&group_id=' . $group_id);
-                // Styled like a button for emphasis
-                $message .= sprintf(' <a href="%s" class="button button-secondary button-small">Review</a>', esc_url($review_link));
+        return esc_html($item['log_message']);
+    }
+    
+    // NEW: Custom renderer for our new Status column
+    public function column_status($item) {
+        if ($item['resolved']) {
+            return '<span style="color: #00a32a;">Resolved</span>';
+        } else {
+            $log_data = json_decode($item['log_data'], true);
+            if (isset($log_data['question_id'])) {
+                global $wpdb;
+                $group_id = $wpdb->get_var($wpdb->prepare("SELECT group_id FROM {$wpdb->prefix}qp_questions WHERE question_id = %d", $log_data['question_id']));
+                if ($group_id) {
+                    $review_link = admin_url('admin.php?page=qp-edit-group&group_id=' . $group_id);
+                    return sprintf('<a href="%s" class="button button-secondary button-small">Review</a>', esc_url($review_link));
+                }
             }
         }
-        return $message;
+        return 'N/A'; // Fallback if no question is associated
     }
 
     public function column_default($item, $column_name) {
