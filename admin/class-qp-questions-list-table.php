@@ -7,13 +7,8 @@ if (!class_exists('WP_List_Table')) {
 class QP_Questions_List_Table extends WP_List_Table
 {
 
-    public function __construct()
-    {
-        parent::__construct([
-            'singular' => 'Question',
-            'plural'   => 'Questions',
-            'ajax'     => false
-        ]);
+    public function __construct() {
+        parent::__construct(['singular' => 'Question', 'plural' => 'Questions', 'ajax' => false]);
     }
 
     public function get_columns()
@@ -38,20 +33,34 @@ class QP_Questions_List_Table extends WP_List_Table
         ];
     }
 
-    // REPLACE this method
-    protected function get_bulk_actions()
-    {
-        $status = isset($_REQUEST['status']) && in_array($_REQUEST['status'], ['trash', 'needs_review']) ? $_REQUEST['status'] : 'publish';
-
+    
+    /**
+     * UPDATED: Define the bulk actions based on the current view
+     */
+    protected function get_bulk_actions() {
+        $actions = [];
+        $status = isset($_REQUEST['status']) ? sanitize_key($_REQUEST['status']) : 'publish';
+        
+        // Actions for the Trash view
         if ($status === 'trash') {
             return ['untrash' => 'Restore', 'delete'  => 'Delete Permanently'];
         }
+        
+        // Default action for published views
+        $actions['trash'] = 'Move to Trash';
 
-        if ($status === 'needs_review') {
-            return ['remove_review_labels' => 'Remove Review Labels'];
+        // NEW: Add contextual action if a label is being filtered
+        if (!empty($_REQUEST['filter_by_label'])) {
+            global $wpdb;
+            $label_id = absint($_REQUEST['filter_by_label']);
+            $label_name = $wpdb->get_var($wpdb->prepare("SELECT label_name FROM {$wpdb->prefix}qp_labels WHERE label_id = %d", $label_id));
+            if ($label_name) {
+                // The key must be unique, so we add the label ID
+                $actions['remove_label_' . $label_id] = 'Remove "' . esc_html($label_name) . '" label';
+            }
         }
-
-        return ['trash' => 'Move to Trash'];
+        
+        return $actions;
     }
 
     // REPLACE this method
@@ -202,15 +211,16 @@ class QP_Questions_List_Table extends WP_List_Table
         $this->set_pagination_args(['total_items' => $total_items, 'per_page' => $per_page]);
     }
 
-    // REPLACE this method
-    public function process_bulk_action()
-    {
+/**
+     * UPDATED: Process all bulk actions, including the new contextual one
+     */
+    public function process_bulk_action() {
         $action = $this->current_action();
-        if (!$action) return;
+        if (!$action || $action === -1) return;
 
         $nonce = isset($_REQUEST['_wpnonce']) ? sanitize_key($_REQUEST['_wpnonce']) : '';
         $question_ids = isset($_REQUEST['question_ids']) ? array_map('absint', $_REQUEST['question_ids']) : (isset($_REQUEST['question_id']) ? [absint($_REQUEST['question_id'])] : []);
-
+        
         if (empty($question_ids)) return;
 
         global $wpdb;
@@ -230,6 +240,20 @@ class QP_Questions_List_Table extends WP_List_Table
             $wpdb->query($wpdb->prepare("DELETE FROM {$wpdb->prefix}qp_options WHERE question_id IN ($ids_placeholder)", $question_ids));
             $wpdb->query($wpdb->prepare("DELETE FROM {$wpdb->prefix}qp_question_labels WHERE question_id IN ($ids_placeholder)", $question_ids));
             $wpdb->query($wpdb->prepare("DELETE FROM {$q_table} WHERE question_id IN ($ids_placeholder)", $question_ids));
+        }
+
+        // NEW: Handle the dynamic remove label action
+        if (strpos($action, 'remove_label_') === 0) {
+            if (!wp_verify_nonce($nonce, 'bulk-questions')) wp_die('Security check failed.');
+            
+            $label_id_to_remove = absint(str_replace('remove_label_', '', $action));
+            
+            if ($label_id_to_remove > 0) {
+                $wpdb->query($wpdb->prepare(
+                    "DELETE FROM {$ql_table} WHERE label_id = %d AND question_id IN ($ids_placeholder)",
+                    $label_id_to_remove, ...$question_ids
+                ));
+            }
         }
         // NEW: Handle the new bulk action
         if ('remove_review_labels' === $action) {
