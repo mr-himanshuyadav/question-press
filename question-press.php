@@ -241,38 +241,61 @@ function qp_handle_save_question_group() {
     }
     $q_table = "{$wpdb->prefix}qp_questions"; $o_table = "{$wpdb->prefix}qp_options"; $ql_table = "{$wpdb->prefix}qp_question_labels";
     $existing_q_ids = $is_editing ? $wpdb->get_col($wpdb->prepare("SELECT question_id FROM $q_table WHERE group_id = %d", $group_id)) : [];
-    $submitted_q_ids = [];
-    foreach ($questions_from_form as $q_data) {
-        $question_db_data = [
-            'group_id' => $group_id,
-            'question_text' => $question_text,
-            'is_pyq' => $is_pyq,
-            'question_text_hash' => md5(strtolower(trim(preg_replace('/\s+/', '', $question_text)))),
-            'last_modified' => current_time('mysql') // NEW: Update the modified time
-        ];
-        $question_id = isset($q_data['question_id']) ? absint($q_data['question_id']) : 0;
-        $question_text = sanitize_textarea_field($q_data['question_text']);
-        if (empty($question_text)) continue;
-        $question_db_data = ['group_id' => $group_id, 'question_text' => $question_text, 'is_pyq' => $is_pyq, 'question_text_hash' => md5(strtolower(trim(preg_replace('/\s+/', '', $question_text)))), 'last_modified' => current_time('mysql')];
-        if ($question_id && in_array($question_id, $existing_q_ids)) {
-            $wpdb->update($q_table, $question_db_data, ['question_id' => $question_id]);
-            $submitted_q_ids[] = $question_id;
-        } else {
-            $next_custom_id = get_option('qp_next_custom_question_id', 1000);
-            $question_db_data['custom_question_id'] = $next_custom_id;
-            $wpdb->insert($q_table, $question_db_data);
-            $question_id = $wpdb->insert_id;
-            update_option('qp_next_custom_question_id', $next_custom_id + 1);
-            $submitted_q_ids[] = $question_id;
+$submitted_q_ids = [];
+    if (!empty($questions_from_form)) {
+        foreach ($questions_from_form as $q_index => $q_data) {
+            $question_id = isset($q_data['question_id']) ? absint($q_data['question_id']) : 0;
+            $question_text = isset($q_data['question_text']) ? sanitize_textarea_field($q_data['question_text']) : '';
+
+            if (empty($question_text)) {
+                continue; // Skip empty questions
+            }
+
+            $question_db_data = [
+                'group_id' => $group_id,
+                'question_text' => $question_text,
+                'is_pyq' => $is_pyq,
+                'question_text_hash' => md5(strtolower(trim(preg_replace('/\s+/', '', $question_text))))
+            ];
+
+            if ($question_id > 0 && in_array($question_id, $existing_q_ids)) {
+                // This is an existing question, so we UPDATE it.
+                $wpdb->update($q_table, $question_db_data, ['question_id' => $question_id]);
+                $submitted_q_ids[] = $question_id;
+            } else {
+                // This is a new question, so we INSERT it.
+                $next_custom_id = get_option('qp_next_custom_question_id', 1000);
+                $question_db_data['custom_question_id'] = $next_custom_id;
+                $wpdb->insert($q_table, $question_db_data);
+                $question_id = $wpdb->insert_id;
+                update_option('qp_next_custom_question_id', $next_custom_id + 1);
+                $submitted_q_ids[] = $question_id;
+            }
+
+            // --- Handle Options ---
+            $wpdb->delete($o_table, ['question_id' => $question_id]);
+            $options = isset($q_data['options']) ? (array) $q_data['options'] : [];
+            $correct_option_index = isset($q_data['is_correct_option']) ? absint($q_data['is_correct_option']) : -1;
+            foreach ($options as $index => $option_text) {
+                if (!empty(trim($option_text))) {
+                    $wpdb->insert($o_table, [
+                        'question_id' => $question_id,
+                        'option_text' => sanitize_text_field($option_text),
+                        'is_correct' => ($index === $correct_option_index) ? 1 : 0
+                    ]);
+                }
+            }
+
+            // --- Handle Labels ---
+            $wpdb->delete($ql_table, ['question_id' => $question_id]);
+            $labels = isset($q_data['labels']) ? array_map('absint', $q_data['labels']) : [];
+            foreach ($labels as $label_id) {
+                $wpdb->insert($ql_table, ['question_id' => $question_id, 'label_id' => $label_id]);
+            }
         }
-        $wpdb->delete($o_table, ['question_id' => $question_id]);
-        $options = isset($q_data['options']) ? (array) $q_data['options'] : [];
-        $correct_option_index = isset($q_data['is_correct_option']) ? absint($q_data['is_correct_option']) : -1;
-        foreach ($options as $index => $option_text) { if (!empty(trim($option_text))) { $wpdb->insert($o_table, ['question_id' => $question_id, 'option_text' => sanitize_text_field($option_text), 'is_correct' => ($index === $correct_option_index) ? 1 : 0 ]); } }
-        $wpdb->delete($ql_table, ['question_id' => $question_id]);
-        $labels = isset($q_data['labels']) ? array_map('absint', $q_data['labels']) : [];
-        foreach ($labels as $label_id) { $wpdb->insert($ql_table, ['question_id' => $question_id, 'label_id' => $label_id]); }
     }
+
+
     $questions_to_delete = array_diff($existing_q_ids, $submitted_q_ids);
     if (!empty($questions_to_delete)) { $ids_placeholder = implode(',', array_map('absint', $questions_to_delete)); $wpdb->query("DELETE FROM $o_table WHERE question_id IN ($ids_placeholder)"); $wpdb->query("DELETE FROM $ql_table WHERE question_id IN ($ids_placeholder)"); $wpdb->query("DELETE FROM $q_table WHERE question_id IN ($ids_placeholder)"); }
     // Determine the correct redirect URL and message
@@ -714,13 +737,14 @@ add_action('wp_ajax_get_quick_edit_form', 'qp_get_quick_edit_form_ajax');
 function qp_save_quick_edit_data_ajax() {
     check_ajax_referer('qp_save_quick_edit_nonce', 'nonce');
     
-    // CORRECTED: Get question_id from the main POST data, not the serialized form
-    $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
-    if (!$question_id) {
-        wp_send_json_error(['message' => 'Invalid Question ID.']);
-    }
-
+    // The form data is sent as a serialized string, so we need to parse it first.
     parse_str($_POST['form_data'], $data);
+
+    // Now, get the question_id from the parsed data.
+    $question_id = isset($data['question_id']) ? absint($data['question_id']) : 0;
+    if (!$question_id) {
+        wp_send_json_error(['message' => 'Invalid Question ID in form data.']);
+    }
     
     global $wpdb;
     
