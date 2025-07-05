@@ -45,29 +45,6 @@ function qp_activate_plugin() {
     $default_labels = [['label_name' => 'Wrong Answer', 'label_color' => '#ff5733', 'is_default' => 1, 'description' => 'Reported by users for having an incorrect answer key.'], ['label_name' => 'No Answer', 'label_color' => '#ffc300', 'is_default' => 1, 'description' => 'Reported by users because the question has no correct option provided.'], ['label_name' => 'Incorrect Formatting', 'label_color' => '#900c3f', 'is_default' => 1, 'description' => 'Reported by users for formatting or display issues.'], ['label_name' => 'Wrong Subject', 'label_color' => '#581845', 'is_default' => 1, 'description' => 'Reported by users for being in the wrong subject category.'], ['label_name' => 'Duplicate', 'label_color' => '#c70039', 'is_default' => 1, 'description' => 'Automatically marked as a duplicate of another question during import.']];
     foreach ($default_labels as $label) { if ($wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $table_labels WHERE label_name = %s", $label['label_name'])) == 0) { $wpdb->insert($table_labels, $label); } }
 
-    // UPDATED: Table for Questions with last_modified column
-    $table_questions = $wpdb->prefix . 'qp_questions';
-    $sql_questions = "CREATE TABLE $table_questions (
-        question_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
-        custom_question_id BIGINT(20) UNSIGNED,
-        group_id BIGINT(20) UNSIGNED,
-        question_text LONGTEXT NOT NULL,
-        question_text_hash VARCHAR(32) NOT NULL,
-        is_pyq BOOLEAN NOT NULL DEFAULT 0,
-        source_file VARCHAR(255),
-        source_page INT,
-        source_number INT,
-        duplicate_of BIGINT(20) UNSIGNED DEFAULT NULL,
-        import_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        last_modified DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        status VARCHAR(20) NOT NULL DEFAULT 'publish',
-        PRIMARY KEY (question_id),
-        UNIQUE KEY custom_question_id (custom_question_id),
-        KEY group_id (group_id),
-        KEY status (status)
-    ) $charset_collate;";
-    dbDelta($sql_questions);
-
     // UPDATED: Table for Questions
     $table_questions = $wpdb->prefix . 'qp_questions';
     $sql_questions = "CREATE TABLE $table_questions (
@@ -90,6 +67,12 @@ function qp_activate_plugin() {
     ) $charset_collate;";
     dbDelta($sql_questions);
 
+    add_option('qp_next_custom_question_id', 1000, '', 'no');
+    if (!get_option('qp_jwt_secret_key')) {
+        add_option('qp_jwt_secret_key', wp_generate_password(64, true, true), '', 'no');
+    }
+
+
     $table_options = $wpdb->prefix . 'qp_options';
     $sql_options = "CREATE TABLE $table_options ( option_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT, question_id BIGINT(20) UNSIGNED NOT NULL, option_text TEXT NOT NULL, is_correct BOOLEAN NOT NULL DEFAULT 0, PRIMARY KEY (option_id), KEY question_id (question_id) ) $charset_collate;";
     dbDelta($sql_options);
@@ -110,14 +93,7 @@ function qp_activate_plugin() {
     $sql_logs = "CREATE TABLE $table_logs ( log_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT, log_type VARCHAR(50) NOT NULL, log_message TEXT NOT NULL, log_data LONGTEXT, log_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, resolved TINYINT(1) NOT NULL DEFAULT 0, PRIMARY KEY (log_id), KEY log_type (log_type), KEY resolved (resolved) ) $charset_collate;";
     dbDelta($sql_logs);
 
-    add_option('qp_next_custom_question_id', 1000, '', 'no');
-
-    // NEW: Initialize our JWT secret key on first activation
-    if (!get_option('qp_jwt_secret_key')) {
-        // Generate a long, random, secure key
-        $secret_key = wp_generate_password(64, true, true);
-        add_option('qp_jwt_secret_key', $secret_key, '', 'no');
-    }
+    
     
 }
 register_activation_hook(QP_PLUGIN_FILE, 'qp_activate_plugin');
@@ -147,7 +123,7 @@ function qp_admin_menu() {
 }
 add_action('admin_menu', 'qp_admin_menu');
 
-// NEW: Function to add screen options to our page
+// CORRECTED: Function to add screen options
 function qp_add_screen_options() {
     $option = 'per_page';
     $args = [
@@ -156,12 +132,10 @@ function qp_add_screen_options() {
         'option'  => 'qp_questions_per_page'
     ];
     add_screen_option($option, $args);
-
-    // We also need to instantiate our table here so WordPress knows about its columns
-    new QP_Questions_List_Table();
+    new QP_Questions_List_Table(); // Instantiate table to register columns
 }
 
-// NEW: Function to save the screen options
+// CORRECTED: Function to save the screen options
 function qp_save_screen_options($status, $option, $value) {
     if ('qp_questions_per_page' === $option) {
         return $value;
@@ -269,6 +243,13 @@ function qp_handle_save_question_group() {
     $existing_q_ids = $is_editing ? $wpdb->get_col($wpdb->prepare("SELECT question_id FROM $q_table WHERE group_id = %d", $group_id)) : [];
     $submitted_q_ids = [];
     foreach ($questions_from_form as $q_data) {
+        $question_db_data = [
+            'group_id' => $group_id,
+            'question_text' => $question_text,
+            'is_pyq' => $is_pyq,
+            'question_text_hash' => md5(strtolower(trim(preg_replace('/\s+/', '', $question_text)))),
+            'last_modified' => current_time('mysql') // NEW: Update the modified time
+        ];
         $question_id = isset($q_data['question_id']) ? absint($q_data['question_id']) : 0;
         $question_text = sanitize_textarea_field($q_data['question_text']);
         if (empty($question_text)) continue;
@@ -294,7 +275,17 @@ function qp_handle_save_question_group() {
     }
     $questions_to_delete = array_diff($existing_q_ids, $submitted_q_ids);
     if (!empty($questions_to_delete)) { $ids_placeholder = implode(',', array_map('absint', $questions_to_delete)); $wpdb->query("DELETE FROM $o_table WHERE question_id IN ($ids_placeholder)"); $wpdb->query("DELETE FROM $ql_table WHERE question_id IN ($ids_placeholder)"); $wpdb->query("DELETE FROM $q_table WHERE question_id IN ($ids_placeholder)"); }
-    wp_safe_redirect(admin_url('admin.php?page=question-press&message=1'));
+    // Determine the correct redirect URL and message
+    if ($is_editing) {
+        // Redirect to the "All Questions" list with an "updated" message
+        $redirect_url = admin_url('admin.php?page=question-press&message=1');
+    } else {
+        // After creating a new group, redirect to the new group's editor page
+        // with a "saved" message.
+        $redirect_url = admin_url('admin.php?page=qp-edit-group&group_id=' . $group_id . '&message=2');
+    }
+
+    wp_safe_redirect($redirect_url);
     exit;
 }
 

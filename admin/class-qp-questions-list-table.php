@@ -37,6 +37,9 @@ class QP_Questions_List_Table extends WP_List_Table
         ];
     }
 
+
+    
+
     protected function get_hidden_columns() {
         // Hide some columns by default
         return ['source', 'is_pyq'];
@@ -151,14 +154,13 @@ class QP_Questions_List_Table extends WP_List_Table
         global $wpdb;
         $this->process_bulk_action();
         // UPDATED: Now respects screen options
-        $columns = $this->get_columns();
-        
-        $hidden = $this->get_hidden_columns();
+        $columns = $this->get_columns();        
+        $hidden = get_hidden_columns($this->screen);
         $sortable = $this->get_sortable_columns();
         $this->_column_headers = [$columns, $hidden, $sortable, 'custom_question_id'];
         // UPDATED: Use the saved setting for per_page value
         $options = get_option('qp_settings');
-        $per_page = isset($options['questions_per_page']) ? absint($options['questions_per_page']) : 20;
+         $per_page = $this->get_items_per_page('qp_questions_per_page', 20);
         $current_page = $this->get_pagenum();
         $offset = ($current_page - 1) * $per_page;
         $orderby = isset($_GET['orderby']) ? sanitize_key($_GET['orderby']) : 'import_date';
@@ -365,12 +367,12 @@ class QP_Questions_List_Table extends WP_List_Table
         if (!empty($item['direction_text'])) {
             $direction_display = '<strong>Direction:</strong> ' . wp_trim_words(esc_html($item['direction_text']), 25, '...');
             if (!empty($item['direction_image_id'])) {
-                $direction_display .= ' <span class="dashicons dashicons-format-image" title="Includes Image"></span>';
+                $direction_display .= ' <span class="dashicons dashicons-format-image" title="Includes Image" style="color:#888; font-size: 16px; vertical-align: middle;"></span>';
             }
-            $row_text .= '<div style="padding: 5px; background-color: #f6f7f7; margin-bottom: 5px;">' . $direction_display . '</div>';
+            $row_text .= '<div style="padding: 5px; background-color: #f6f7f7; margin-bottom: 8px; border-radius: 3px;">' . $direction_display . '</div>';
         }
         
-        $row_text .= sprintf('<strong>%s</strong>', esc_html($item['question_text']));
+        $row_text .= sprintf('<strong>(ID: %d) %s</strong>', esc_html($item['custom_question_id']), esc_html($item['question_text']));
 
         if (!empty($item['labels'])) {
             $labels_html = '<div style="margin-top: 5px; display: flex; flex-wrap: wrap; gap: 5px;">';
