@@ -268,9 +268,27 @@ class QP_Questions_List_Table extends WP_List_Table
         }
         if ('delete' === $action) {
             if (!wp_verify_nonce($nonce, 'bulk-questions') && !wp_verify_nonce($nonce, 'qp_delete_question_' . $question_ids[0])) wp_die('Security check failed.');
+
+            $g_table = $wpdb->prefix . 'qp_question_groups';
+
+            // First, get the group IDs for the questions about to be deleted.
+            $group_ids = $wpdb->get_col($wpdb->prepare("SELECT DISTINCT group_id FROM {$q_table} WHERE question_id IN ($ids_placeholder)", $question_ids));
+            $group_ids = array_filter($group_ids); // Remove any null/empty group IDs
+
+            // Now, delete the questions and their related data.
             $wpdb->query($wpdb->prepare("DELETE FROM {$wpdb->prefix}qp_options WHERE question_id IN ($ids_placeholder)", $question_ids));
             $wpdb->query($wpdb->prepare("DELETE FROM {$wpdb->prefix}qp_question_labels WHERE question_id IN ($ids_placeholder)", $question_ids));
             $wpdb->query($wpdb->prepare("DELETE FROM {$q_table} WHERE question_id IN ($ids_placeholder)", $question_ids));
+
+            // Finally, check if the parent groups are now empty.
+            if (!empty($group_ids)) {
+                foreach ($group_ids as $group_id) {
+                    $remaining_questions = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$q_table} WHERE group_id = %d", $group_id));
+                    if ($remaining_questions == 0) {
+                        $wpdb->delete($g_table, ['group_id' => $group_id]);
+                    }
+                }
+            }
         }
 
         // NEW: Handle the dynamic remove label action

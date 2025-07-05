@@ -298,7 +298,21 @@ $submitted_q_ids = [];
 
 
     $questions_to_delete = array_diff($existing_q_ids, $submitted_q_ids);
-    if (!empty($questions_to_delete)) { $ids_placeholder = implode(',', array_map('absint', $questions_to_delete)); $wpdb->query("DELETE FROM $o_table WHERE question_id IN ($ids_placeholder)"); $wpdb->query("DELETE FROM $ql_table WHERE question_id IN ($ids_placeholder)"); $wpdb->query("DELETE FROM $q_table WHERE question_id IN ($ids_placeholder)"); }
+    if (!empty($questions_to_delete)) {
+        $ids_placeholder = implode(',', array_map('absint', $questions_to_delete));
+        $wpdb->query("DELETE FROM $o_table WHERE question_id IN ($ids_placeholder)");
+        $wpdb->query("DELETE FROM $ql_table WHERE question_id IN ($ids_placeholder)");
+        $wpdb->query("DELETE FROM $q_table WHERE question_id IN ($ids_placeholder)");
+    }
+
+    // After all updates, check if the group is now empty and should be deleted.
+    $remaining_questions_in_group = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $q_table WHERE group_id = %d", $group_id));
+    if ($is_editing && $remaining_questions_in_group == 0) {
+        $wpdb->delete("{$wpdb->prefix}qp_question_groups", ['group_id' => $group_id]);
+        // Redirect to the main page since this group no longer exists.
+        wp_safe_redirect(admin_url('admin.php?page=question-press&message=1'));
+        exit;
+    }
     // Determine the correct redirect URL and message
     if ($is_editing) {
         // Redirect to the "All Questions" list with an "updated" message
@@ -608,7 +622,7 @@ add_action('wp_ajax_report_and_skip_question', 'qp_report_and_skip_question_ajax
 
 
 /**
- * AJAX handler for deleting a user's entire revision history.
+ * AJAX handler for deleting a user's entire revision and session history.
  */
 function qp_delete_revision_history_ajax() {
     check_ajax_referer('qp_practice_nonce', 'nonce');
@@ -620,11 +634,15 @@ function qp_delete_revision_history_ajax() {
 
     global $wpdb;
     $attempts_table = $wpdb->prefix . 'qp_user_attempts';
+    $sessions_table = $wpdb->prefix . 'qp_user_sessions';
 
     // Delete all rows from the attempts table for the current user.
     $wpdb->delete($attempts_table, ['user_id' => $user_id], ['%d']);
 
-    wp_send_json_success(['message' => 'Revision history deleted.']);
+    // ALSO, delete all rows from the sessions table for the current user.
+    $wpdb->delete($sessions_table, ['user_id' => $user_id], ['%d']);
+
+    wp_send_json_success(['message' => 'Your practice and revision history has been successfully deleted.']);
 }
 add_action('wp_ajax_delete_revision_history', 'qp_delete_revision_history_ajax');
 

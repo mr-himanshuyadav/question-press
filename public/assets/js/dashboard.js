@@ -28,7 +28,7 @@ jQuery(document).ready(function($) {
     wrapper.on('click', '#qp-delete-history-btn', function(e) {
         e.preventDefault();
         var button = $(this);
-        if (confirm('Are you sure you want to delete ALL of your question attempt history? This will reset your revision mode pool.')) {
+        if (confirm('Are you sure you want to delete ALL of your practice session and revision history? This action cannot be undone.')) {
             $.ajax({
                 url: qp_ajax_object.ajax_url, type: 'POST',
                 data: { action: 'delete_revision_history', nonce: qp_ajax_object.nonce },
