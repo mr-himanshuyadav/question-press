@@ -339,37 +339,31 @@ class QP_Questions_List_Table extends WP_List_Table
             ];
         } else {
             $trash_nonce = wp_create_nonce('qp_trash_question_' . $item['question_id']);
-            $quick_edit_nonce = wp_create_nonce('qp_get_quick_edit_form_nonce'); // Nonce for fetching the form
-
+            $quick_edit_nonce = wp_create_nonce('qp_get_quick_edit_form_nonce');
             $actions = [
-                'edit' => sprintf('<a href="admin.php?page=qp-question-editor&action=edit&group_id=%s">Edit</a>', $group_id),
-                'inline hide-if-no-js' => sprintf(
-                    '<a href="#" class="editinline" data-question-id="%d" data-nonce="%s">Quick Edit</a>',
-                    $item['question_id'],
-                    $quick_edit_nonce
-                ),
+                'edit' => sprintf('<a href="admin.php?page=qp-edit-group&action=edit&group_id=%s">Edit</a>', $group_id),
+                'inline hide-if-no-js' => sprintf('<a href="#" class="editinline" data-question-id="%d" data-nonce="%s">Quick Edit</a>', $item['question_id'], $quick_edit_nonce),
                 'trash' => sprintf('<a href="?page=%s&action=trash&question_id=%s&_wpnonce=%s" style="color:#a00;">Trash</a>', $page, $item['question_id'], $trash_nonce),
             ];
         }
         
         $row_text = sprintf('<strong>%s</strong>', wp_trim_words(esc_html($item['question_text']), 50, '...'));
 
-        // THIS IS THE RESTORED LOGIC FOR DISPLAYING LABELS
         if (!empty($item['labels'])) {
             $labels_html = '<div style="margin-top: 5px; display: flex; flex-wrap: wrap; gap: 5px;">';
             foreach ($item['labels'] as $label) {
-                $label_span = sprintf('<span style="...background-color: %s;">%s</span>', esc_attr($label->label_color), esc_html($label->label_name));
-            // NEW: If the label is "Duplicate", add the reference link
-            if ($label->label_name === 'Duplicate' && !empty($item['duplicate_of'])) {
-                $original_custom_id = get_question_custom_id($item['duplicate_of']); // We will create this helper function
-                $label_span .= sprintf(' (of #%s)', $original_custom_id);
+                // CORRECTED: The full style attribute is now present
+                $label_span = sprintf('<span style="padding: 2px 8px; font-size: 11px; border-radius: 3px; color: #fff; background-color: %s;">%s</span>', esc_attr($label->label_color), esc_html($label->label_name));
+                if ($label->label_name === 'Duplicate' && !empty($item['duplicate_of'])) {
+                    $original_custom_id = get_question_custom_id($item['duplicate_of']);
+                    $label_span .= sprintf(' (of #%s)', $original_custom_id);
+                }
+                $labels_html .= $label_span;
             }
-            $labels_html .= $label_span;
+            $labels_html .= '</div>';
+            $row_text .= $labels_html;
         }
-        $labels_html .= '</div>';
-        $row_text .= $labels_html;
-    }
-    return $row_text . $this->row_actions($actions);
+        return $row_text . $this->row_actions($actions);
 }
 
     public function column_is_pyq($item)
