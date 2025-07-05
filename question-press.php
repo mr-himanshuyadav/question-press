@@ -350,15 +350,18 @@ function qp_public_enqueue_scripts() {
         wp_enqueue_style('qp-practice-styles', QP_PLUGIN_URL . 'public/assets/css/practice.css', [], '1.0.3');
         $ajax_data = ['ajax_url' => admin_url('admin-ajax.php'), 'nonce' => wp_create_nonce('qp_practice_nonce')];
         if (has_shortcode($post->post_content, 'question_press_practice')) {
-            // --- LATEX SUPPORT ---
-            // 1. Load the main MathJax library from the CDN.
-            wp_enqueue_script('qp-mathjax', 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js', [], '3.2.2', true);
+            // --- NEW KaTeX IMPLEMENTATION ---
+            // 1. Load KaTeX CSS
+            wp_enqueue_style('katex-css', 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css');
 
-            // 2. Load our local config file, making sure it loads AFTER the main library.
-            wp_enqueue_script('qp-mathjax-config', QP_PLUGIN_URL . 'public/assets/js/mathjax-config.js', ['qp-mathjax'], '1.0.0', true);
+            // 2. Load KaTeX JavaScript Library
+            wp_enqueue_script('katex-js', 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js', [], '0.16.9', true);
 
-            // 3. Load our practice script, ensuring it depends on our config file being ready.
-            wp_enqueue_script('qp-practice-script', QP_PLUGIN_URL . 'public/assets/js/practice.js', ['jquery', 'qp-mathjax-config'], '1.0.5', true);
+            // 3. Load the KaTeX Auto-Render Extension
+            wp_enqueue_script('katex-auto-render', 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js', ['katex-js'], '0.16.9', true);
+
+            // 4. Load your practice script, making sure it loads after everything else
+            wp_enqueue_script('qp-practice-script', QP_PLUGIN_URL . 'public/assets/js/practice.js', ['jquery', 'katex-auto-render'], '1.0.6', true);
             wp_localize_script('qp-practice-script', 'qp_ajax_object', $ajax_data);
         }
         if (has_shortcode($post->post_content, 'question_press_dashboard')) {
