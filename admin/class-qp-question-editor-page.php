@@ -5,7 +5,6 @@ class QP_Question_Editor_Page {
 
     public static function render() {
         global $wpdb;
-        // Use the unified slug for editing
         $group_id = isset($_GET['group_id']) ? absint($_GET['group_id']) : 0;
         $is_editing = $group_id > 0;
         
@@ -21,6 +20,7 @@ class QP_Question_Editor_Page {
             $q_table = $wpdb->prefix . 'qp_questions';
             $o_table = $wpdb->prefix . 'qp_options';
             $ql_table = $wpdb->prefix . 'qp_question_labels';
+            $l_table = $wpdb->prefix . 'qp_labels';
             
             $group_data = $wpdb->get_row($wpdb->prepare("SELECT * FROM $g_table WHERE group_id = %d", $group_id));
             if ($group_data) {
@@ -33,22 +33,20 @@ class QP_Question_Editor_Page {
                     $is_pyq_group = (bool)$questions_in_group[0]->is_pyq; 
                     foreach ($questions_in_group as $q) {
                         $q->options = $wpdb->get_results($wpdb->prepare("SELECT * FROM $o_table WHERE question_id = %d ORDER BY option_id ASC", $q->question_id));
-                        $q->labels = $wpdb->get_col($wpdb->prepare("SELECT label_id FROM $ql_table WHERE question_id = %d", $q->question_id));
+                        // Fetch the full label object now, not just the ID
+                        $q->labels = $wpdb->get_results($wpdb->prepare("SELECT l.label_id, l.label_name, l.label_color FROM {$ql_table} ql JOIN {$l_table} l ON ql.label_id = l.label_id WHERE ql.question_id = %d", $q->question_id));
                     }
                 }
             }
         }
 
-        // If we are adding a new question, create one empty shell to start with
         if (empty($questions_in_group)) {
-            $questions_in_group[] = (object)['question_id' => 0, 'question_text' => '', 'is_pyq' => 0, 'options' => [], 'labels' => []];
+            $questions_in_group[] = (object)['question_id' => 0, 'custom_question_id' => 'New', 'question_text' => '', 'is_pyq' => 0, 'options' => [], 'labels' => []];
         }
 
-        // Fetch all available subjects and labels for the form's dropdowns/checklists
         $all_subjects = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}qp_subjects ORDER BY subject_name ASC");
         $all_labels = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}qp_labels ORDER BY label_name ASC");
         
-        // Display success/update messages if present in the URL
         if (isset($_GET['message'])) {
             $message = $_GET['message'] === '1' ? 'Question(s) updated successfully.' : 'Question(s) saved successfully.';
             echo '<div id="message" class="notice notice-success is-dismissible"><p>' . esc_html($message) . '</p></div>';
@@ -87,25 +85,35 @@ class QP_Question_Editor_Page {
                             </div>
                             
                             <div id="qp-question-blocks-container">
-                                <?php foreach ($questions_in_group as $q_index => $question) : ?>
+                                <?php foreach ($questions_in_group as $q_index => $question) : 
+                                    $current_label_ids = wp_list_pluck($question->labels, 'label_id');
+                                ?>
                                 <div class="postbox qp-question-block">
                                     <div class="postbox-header">
-                                        <h2 class="hndle"><span>Question</span></h2>
+                                        <h2 class="hndle"><span>Question (ID: <?php echo esc_html($question->custom_question_id); ?>)</span></h2>
                                         <div class="handle-actions">
                                             <button type="button" class="button-link remove-question-block">Remove</button>
                                         </div>
                                     </div>
                                     <div class="inside">
+                                        <?php if(!empty($question->labels)) : ?>
+                                            <div class="current-labels-display">
+                                                <?php foreach($question->labels as $label): ?>
+                                                    <span style="background-color: <?php echo esc_attr($label->label_color); ?>; color: #fff; padding: 2px 6px; font-size: 11px; border-radius: 3px;"><?php echo esc_html($label->label_name); ?></span>
+                                                <?php endforeach; ?>
+                                            </div>
+                                        <?php endif; ?>
+
                                         <input type="hidden" name="questions[<?php echo $q_index; ?>][question_id]" class="question-id-input" value="<?php echo esc_attr($question->question_id); ?>">
                                         <textarea name="questions[<?php echo $q_index; ?>][question_text]" class="question-text-area" style="width: 100%; height: 100px;" placeholder="Enter question text here..." required><?php echo esc_textarea($question->question_text); ?></textarea>
                                         <p class="description">You can use LaTeX for math, e.g., <code>$x^2$</code>.</p>
                                         <hr>
                                         <p><strong>Options (Select the radio button for the correct answer)</strong></p>
                                         <?php
-                                        $option_count = 5; // Always show 5 options
+                                        $option_count = 5;
                                         for ($i = 0; $i < $option_count; $i++) : 
                                             $option = isset($question->options[$i]) ? $question->options[$i] : null;
-                                            $is_correct = $option ? $option->is_correct : ($i == 0 && !$is_editing); // Default to first option only for new questions
+                                            $is_correct = $option ? $option->is_correct : ($i == 0 && !$is_editing);
                                         ?>
                                         <div class="qp-option-row" style="display: flex; align-items: center; margin-bottom: 5px;">
                                             <input type="radio" name="questions[<?php echo $q_index; ?>][is_correct_option]" value="<?php echo $i; ?>" <?php checked($is_correct); ?>>
@@ -115,9 +123,9 @@ class QP_Question_Editor_Page {
                                         <p class="description">At least 4 options are recommended. You can use LaTeX here too.</p>
                                         <hr>
                                         <p><strong>Labels for this Question:</strong></p>
-                                        <div style="max-height: 100px; overflow-y: auto; border: 1px solid #ddd; padding: 5px; background: #fff;">
+                                        <div class="labels-group">
                                             <?php foreach ($all_labels as $label) : ?>
-                                                <label style="display: block;"><input value="<?php echo esc_attr($label->label_id); ?>" type="checkbox" name="questions[<?php echo $q_index; ?>][labels][]" class="label-checkbox" <?php checked(in_array($label->label_id, $question->labels)); ?>> <?php echo esc_html($label->label_name); ?></label>
+                                                <label class="inline-checkbox"><input value="<?php echo esc_attr($label->label_id); ?>" type="checkbox" name="questions[<?php echo $q_index; ?>][labels][]" class="label-checkbox" <?php checked(in_array($label->label_id, $current_label_ids)); ?>> <?php echo esc_html($label->label_name); ?></label>
                                             <?php endforeach; ?>
                                         </div>
                                     </div>
@@ -130,39 +138,25 @@ class QP_Question_Editor_Page {
                         <div id="postbox-container-1" class="postbox-container">
                             <div class="postbox">
                                 <h2 class="hndle"><span>Publish</span></h2>
-                                <div class="inside">
-                                    <div class="submitbox" id="submitpost">
-                                        <div id="major-publishing-actions">
-                                            <div id="publishing-action">
-                                                <input name="save_group" type="submit" class="button button-primary button-large" id="publish" value="<?php echo $is_editing ? 'Update Question(s)' : 'Save Question(s)'; ?>">
-                                            </div>
-                                            <div class="clear"></div>
-                                        </div>
-                                    </div>
-                                </div>
+                                <div class="inside"> ... </div>
                             </div>
                              <div class="postbox">
                                 <h2 class="hndle"><span>Subject</span></h2>
-                                <div class="inside">
-                                    <select name="subject_id" style="width: 100%;">
-                                        <?php foreach($all_subjects as $subject) : ?>
-                                            <option value="<?php echo esc_attr($subject->subject_id); ?>" <?php selected($current_subject_id, $subject->subject_id); ?>>
-                                                <?php echo esc_html($subject->subject_name); ?>
-                                            </option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                </div>
+                                <div class="inside"> ... </div>
                             </div>
                             <div class="postbox">
                                 <h2 class="hndle"><span>Settings</span></h2>
-                                <div class="inside">
-                                    <label><input type="checkbox" name="is_pyq" value="1" <?php checked($is_pyq_group, 1); ?>> PYQ (Applies to all questions in this group)</label>
-                                </div>
+                                <div class="inside"> ... </div>
                             </div>
                         </div>
                     </div><br class="clear">
                 </div></form>
         </div>
+        <style>
+            .current-labels-display { margin-bottom: 10px; display: flex; flex-wrap: wrap; gap: 5px; }
+            .labels-group { display: flex; flex-wrap: wrap; gap: 5px 15px; padding: 5px; border: 1px solid #ddd; background: #fff; max-height: 100px; overflow-y: auto; }
+            .inline-checkbox { white-space: nowrap; }
+        </style>
         <?php
     }
 }
