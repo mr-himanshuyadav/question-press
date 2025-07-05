@@ -44,7 +44,8 @@ class QP_Question_Editor_Page {
             if (!empty($question_ids_in_group)) {
                 $ids_placeholder = implode(',', array_map('absint', $question_ids_in_group));
                 $logs_table = $wpdb->prefix . 'qp_logs';
-                $question_logs = $wpdb->get_results("SELECT * FROM $logs_table WHERE log_data LIKE '%\"question_id\"%' AND JSON_EXTRACT(log_data, '$.question_id') IN ($ids_placeholder) ORDER BY log_date DESC");
+                // Only fetch UNRESOLVED logs
+                $question_logs = $wpdb->get_results("SELECT * FROM $logs_table WHERE resolved = 0 AND log_data LIKE '%\"question_id\"%' AND JSON_EXTRACT(log_data, '$.question_id') IN ($ids_placeholder) ORDER BY log_date DESC");
             }
         }
 
@@ -68,9 +69,15 @@ class QP_Question_Editor_Page {
             <?php if (!empty($question_logs)) : ?>
             <div id="qp-question-logs" class="notice notice-warning">
                 <h4><span class="dashicons dashicons-flag"></span> This Question Group has open reports:</h4>
-                <ul>
-                    <?php foreach ($question_logs as $log) : ?>
-                        <li><strong><?php echo esc_html($log->log_date); ?>:</strong> <?php echo esc_html($log->log_message); ?></li>
+                <ul style="margin-left: 20px; list-style: disc;">
+                    <?php foreach ($question_logs as $log) : 
+                        $resolve_nonce = wp_create_nonce('qp_resolve_log_' . $log->log_id);
+                        $resolve_link = admin_url('admin.php?page=qp-edit-group&group_id=' . $group_id . '&action=resolve_log&log_id=' . $log->log_id . '&_wpnonce=' . $resolve_nonce);
+                    ?>
+                        <li style="display:flex; justify-content:space-between; align-items:center;">
+                            <span><strong><?php echo esc_html($log->log_date); ?>:</strong> <?php echo esc_html($log->log_message); ?></span>
+                            <a href="<?php echo esc_url($resolve_link); ?>" class="button button-small">Mark as Resolved</a>
+                        </li>
                     <?php endforeach; ?>
                 </ul>
             </div>

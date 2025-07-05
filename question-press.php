@@ -1,5 +1,3 @@
-
-
 <?php
 /**
  * Plugin Name:       Question Press
@@ -23,30 +21,64 @@ require_once QP_PLUGIN_DIR . 'admin/class-qp-export-page.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-questions-list-table.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-question-editor-page.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-settings-page.php';
-
-require_once QP_PLUGIN_DIR . 'admin/class-qp-logs-page.php'; // New
-require_once QP_PLUGIN_DIR . 'admin/class-qp-logs-list-table.php'; // New
+require_once QP_PLUGIN_DIR . 'admin/class-qp-logs-page.php';
+require_once QP_PLUGIN_DIR . 'admin/class-qp-logs-list-table.php';
 require_once QP_PLUGIN_DIR . 'public/class-qp-shortcodes.php';
 require_once QP_PLUGIN_DIR . 'public/class-qp-dashboard.php';
 
 
 // Activation, Deactivation, Uninstall Hooks
-function qp_activate_plugin() { 
-    global $wpdb; $charset_collate = $wpdb->get_charset_collate(); require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
-    $table_subjects = $wpdb->prefix . 'qp_subjects'; $sql_subjects = "CREATE TABLE $table_subjects ( subject_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT, subject_name VARCHAR(255) NOT NULL, description TEXT, PRIMARY KEY (subject_id) ) $charset_collate;"; dbDelta($sql_subjects); if ($wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $table_subjects WHERE subject_name = %s", 'Uncategorized')) == 0) { $wpdb->insert($table_subjects, ['subject_name' => 'Uncategorized', 'description' => 'Default subject for questions without an assigned one.']); }
-    $table_labels = $wpdb->prefix . 'qp_labels'; $sql_labels = "CREATE TABLE $table_labels ( label_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT, label_name VARCHAR(255) NOT NULL, label_color VARCHAR(7) NOT NULL DEFAULT '#cccccc', is_default BOOLEAN NOT NULL DEFAULT 0, description TEXT, PRIMARY KEY (label_id) ) $charset_collate;"; dbDelta($sql_labels); $default_labels = [['label_name' => 'Wrong Answer', 'label_color' => '#ff5733', 'is_default' => 1, 'description' => 'Reported by users for having an incorrect answer key.'], ['label_name' => 'No Answer', 'label_color' => '#ffc300', 'is_default' => 1, 'description' => 'Reported by users because the question has no correct option provided.'], ['label_name' => 'Incorrect Formatting', 'label_color' => '#900c3f', 'is_default' => 1, 'description' => 'Reported by users for formatting or display issues.'], ['label_name' => 'Wrong Subject', 'label_color' => '#581845', 'is_default' => 1, 'description' => 'Reported by users for being in the wrong subject category.'], ['label_name' => 'Duplicate', 'label_color' => '#c70039', 'is_default' => 1, 'description' => 'Automatically marked as a duplicate of another question during import.']]; foreach ($default_labels as $label) { if ($wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $table_labels WHERE label_name = %s", $label['label_name'])) == 0) { $wpdb->insert($table_labels, $label); } }
-    $table_groups = $wpdb->prefix . 'qp_question_groups'; $sql_groups = "CREATE TABLE $table_groups ( group_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT, direction_text LONGTEXT, direction_image_id BIGINT(20) UNSIGNED, subject_id BIGINT(20) UNSIGNED NOT NULL, PRIMARY KEY (group_id), KEY subject_id (subject_id) ) $charset_collate;"; dbDelta($sql_groups);
-    $table_questions = $wpdb->prefix . 'qp_questions'; $sql_questions = "CREATE TABLE $table_questions ( question_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT, custom_question_id BIGINT(20) UNSIGNED, group_id BIGINT(20) UNSIGNED, question_text LONGTEXT NOT NULL, question_text_hash VARCHAR(32) NOT NULL, is_pyq BOOLEAN NOT NULL DEFAULT 0, source_file VARCHAR(255), source_page INT, source_number INT, import_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, status VARCHAR(20) NOT NULL DEFAULT 'publish', PRIMARY KEY (question_id), UNIQUE KEY custom_question_id (custom_question_id), KEY group_id (group_id), KEY status (status), KEY is_pyq (is_pyq), KEY question_text_hash (question_text_hash) ) $charset_collate;"; dbDelta($sql_questions);
-    $table_options = $wpdb->prefix . 'qp_options'; $sql_options = "CREATE TABLE $table_options ( option_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT, question_id BIGINT(20) UNSIGNED NOT NULL, option_text TEXT NOT NULL, is_correct BOOLEAN NOT NULL DEFAULT 0, PRIMARY KEY (option_id), KEY question_id (question_id) ) $charset_collate;"; dbDelta($sql_options);
-    $table_question_labels = $wpdb->prefix . 'qp_question_labels'; $sql_question_labels = "CREATE TABLE $table_question_labels ( question_id BIGINT(20) UNSIGNED NOT NULL, label_id BIGINT(20) UNSIGNED NOT NULL, PRIMARY KEY (question_id, label_id), KEY label_id (label_id) ) $charset_collate;"; dbDelta($sql_question_labels);
-    $table_sessions = $wpdb->prefix . 'qp_user_sessions'; $sql_sessions = "CREATE TABLE $table_sessions ( session_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT, user_id BIGINT(20) UNSIGNED NOT NULL, start_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, end_time DATETIME, total_attempted INT, correct_count INT, incorrect_count INT, skipped_count INT, marks_obtained DECIMAL(10, 2), settings_snapshot TEXT, PRIMARY KEY (session_id), KEY user_id (user_id) ) $charset_collate;"; dbDelta($sql_sessions);
-    $table_attempts = $wpdb->prefix . 'qp_user_attempts'; $sql_attempts = "CREATE TABLE $table_attempts ( attempt_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT, session_id BIGINT(20) UNSIGNED NOT NULL, user_id BIGINT(20) UNSIGNED NOT NULL, question_id BIGINT(20) UNSIGNED NOT NULL, is_correct BOOLEAN, attempt_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (attempt_id), KEY session_id (session_id), KEY user_id (user_id), KEY question_id (question_id) ) $charset_collate;"; dbDelta($sql_attempts);
-    $table_logs = $wpdb->prefix . 'qp_logs'; $sql_logs = "CREATE TABLE $table_logs ( log_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT, log_type VARCHAR(50) NOT NULL, log_message TEXT NOT NULL, log_data LONGTEXT, log_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (log_id), KEY log_type (log_type) ) $charset_collate;"; dbDelta($sql_logs);
+function qp_activate_plugin() {
+    global $wpdb;
+    $charset_collate = $wpdb->get_charset_collate();
+    require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+
+    $table_subjects = $wpdb->prefix . 'qp_subjects';
+    $sql_subjects = "CREATE TABLE $table_subjects ( subject_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT, subject_name VARCHAR(255) NOT NULL, description TEXT, PRIMARY KEY (subject_id) ) $charset_collate;";
+    dbDelta($sql_subjects);
+    if ($wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $table_subjects WHERE subject_name = %s", 'Uncategorized')) == 0) { $wpdb->insert($table_subjects, ['subject_name' => 'Uncategorized', 'description' => 'Default subject for questions without an assigned one.']); }
+
+    $table_labels = $wpdb->prefix . 'qp_labels';
+    $sql_labels = "CREATE TABLE $table_labels ( label_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT, label_name VARCHAR(255) NOT NULL, label_color VARCHAR(7) NOT NULL DEFAULT '#cccccc', is_default BOOLEAN NOT NULL DEFAULT 0, description TEXT, PRIMARY KEY (label_id) ) $charset_collate;";
+    dbDelta($sql_labels);
+    $default_labels = [['label_name' => 'Wrong Answer', 'label_color' => '#ff5733', 'is_default' => 1, 'description' => 'Reported by users for having an incorrect answer key.'], ['label_name' => 'No Answer', 'label_color' => '#ffc300', 'is_default' => 1, 'description' => 'Reported by users because the question has no correct option provided.'], ['label_name' => 'Incorrect Formatting', 'label_color' => '#900c3f', 'is_default' => 1, 'description' => 'Reported by users for formatting or display issues.'], ['label_name' => 'Wrong Subject', 'label_color' => '#581845', 'is_default' => 1, 'description' => 'Reported by users for being in the wrong subject category.'], ['label_name' => 'Duplicate', 'label_color' => '#c70039', 'is_default' => 1, 'description' => 'Automatically marked as a duplicate of another question during import.']];
+    foreach ($default_labels as $label) { if ($wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $table_labels WHERE label_name = %s", $label['label_name'])) == 0) { $wpdb->insert($table_labels, $label); } }
+
+    $table_groups = $wpdb->prefix . 'qp_question_groups';
+    $sql_groups = "CREATE TABLE $table_groups ( group_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT, direction_text LONGTEXT, direction_image_id BIGINT(20) UNSIGNED, subject_id BIGINT(20) UNSIGNED NOT NULL, PRIMARY KEY (group_id), KEY subject_id (subject_id) ) $charset_collate;";
+    dbDelta($sql_groups);
+
+    $table_questions = $wpdb->prefix . 'qp_questions';
+    $sql_questions = "CREATE TABLE $table_questions ( question_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT, custom_question_id BIGINT(20) UNSIGNED, group_id BIGINT(20) UNSIGNED, question_text LONGTEXT NOT NULL, question_text_hash VARCHAR(32) NOT NULL, is_pyq BOOLEAN NOT NULL DEFAULT 0, source_file VARCHAR(255), source_page INT, source_number INT, import_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, status VARCHAR(20) NOT NULL DEFAULT 'publish', PRIMARY KEY (question_id), UNIQUE KEY custom_question_id (custom_question_id), KEY group_id (group_id), KEY status (status), KEY is_pyq (is_pyq), KEY question_text_hash (question_text_hash) ) $charset_collate;";
+    dbDelta($sql_questions);
+
+    $table_options = $wpdb->prefix . 'qp_options';
+    $sql_options = "CREATE TABLE $table_options ( option_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT, question_id BIGINT(20) UNSIGNED NOT NULL, option_text TEXT NOT NULL, is_correct BOOLEAN NOT NULL DEFAULT 0, PRIMARY KEY (option_id), KEY question_id (question_id) ) $charset_collate;";
+    dbDelta($sql_options);
+
+    $table_question_labels = $wpdb->prefix . 'qp_question_labels';
+    $sql_question_labels = "CREATE TABLE $table_question_labels ( question_id BIGINT(20) UNSIGNED NOT NULL, label_id BIGINT(20) UNSIGNED NOT NULL, PRIMARY KEY (question_id, label_id), KEY label_id (label_id) ) $charset_collate;";
+    dbDelta($sql_question_labels);
+
+    $table_sessions = $wpdb->prefix . 'qp_user_sessions';
+    $sql_sessions = "CREATE TABLE $table_sessions ( session_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT, user_id BIGINT(20) UNSIGNED NOT NULL, start_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, end_time DATETIME, total_attempted INT, correct_count INT, incorrect_count INT, skipped_count INT, marks_obtained DECIMAL(10, 2), settings_snapshot TEXT, PRIMARY KEY (session_id), KEY user_id (user_id) ) $charset_collate;";
+    dbDelta($sql_sessions);
+
+    $table_attempts = $wpdb->prefix . 'qp_user_attempts';
+    $sql_attempts = "CREATE TABLE $table_attempts ( attempt_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT, session_id BIGINT(20) UNSIGNED NOT NULL, user_id BIGINT(20) UNSIGNED NOT NULL, question_id BIGINT(20) UNSIGNED NOT NULL, is_correct BOOLEAN, attempt_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (attempt_id), KEY session_id (session_id), KEY user_id (user_id), KEY question_id (question_id) ) $charset_collate;";
+    dbDelta($sql_attempts);
+
+    $table_logs = $wpdb->prefix . 'qp_logs';
+    $sql_logs = "CREATE TABLE $table_logs ( log_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT, log_type VARCHAR(50) NOT NULL, log_message TEXT NOT NULL, log_data LONGTEXT, log_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, resolved TINYINT(1) NOT NULL DEFAULT 0, PRIMARY KEY (log_id), KEY log_type (log_type), KEY resolved (resolved) ) $charset_collate;";
+    dbDelta($sql_logs);
+
     add_option('qp_next_custom_question_id', 1000, '', 'no');
 }
 register_activation_hook(QP_PLUGIN_FILE, 'qp_activate_plugin');
+
 function qp_deactivate_plugin() {}
 register_deactivation_hook(QP_PLUGIN_FILE, 'qp_deactivate_plugin');
+
 function qp_uninstall_plugin() {}
 register_uninstall_hook(QP_PLUGIN_FILE, 'qp_uninstall_plugin');
 
@@ -60,35 +92,27 @@ function qp_admin_menu() {
     add_submenu_page('question-press', 'Export', 'Export', 'manage_options', 'qp-export', ['QP_Export_Page', 'render']);
     add_submenu_page('question-press', 'Subjects', 'Subjects', 'manage_options', 'qp-subjects', ['QP_Subjects_Page', 'render']);
     add_submenu_page('question-press', 'Labels', 'Labels', 'manage_options', 'qp-labels', ['QP_Labels_Page', 'render']);
-    add_submenu_page('question-press', 'Logs', 'Logs', 'manage_options', 'qp-logs', ['QP_Logs_Page', 'render']); // New
+    add_submenu_page('question-press', 'Logs', 'Logs', 'manage_options', 'qp-logs', ['QP_Logs_Page', 'render']);
     add_submenu_page('question-press', 'Settings', 'Settings', 'manage_options', 'qp-settings', ['QP_Settings_Page', 'render']);
 }
 add_action('admin_menu', 'qp_admin_menu');
 
-// CORRECTED SCRIPT ENQUEUEING LOGIC
 function qp_admin_enqueue_scripts($hook_suffix) {
-    // Load general styles (like color picker) on all our pages
     if (strpos($hook_suffix, 'qp-') !== false || strpos($hook_suffix, 'question-press') !== false) {
         wp_enqueue_style('wp-color-picker');
         wp_enqueue_script('wp-color-picker');
     }
-
-    // Load scripts for the main question editor page
     if ($hook_suffix === 'question-press_page_qp-question-editor' || $hook_suffix === 'admin_page_qp-edit-group') {
         wp_enqueue_media();
         wp_enqueue_script('qp-media-uploader-script', QP_PLUGIN_URL . 'admin/assets/js/media-uploader.js', ['jquery'], '1.0.0', true);
         wp_enqueue_script('qp-editor-script', QP_PLUGIN_URL . 'admin/assets/js/question-editor.js', ['jquery'], '1.0.1', true);
     }
-    
-    // Load scripts for the main "All Questions" list table page
     if ($hook_suffix === 'toplevel_page_question-press') {
         wp_enqueue_script('qp-quick-edit-script', QP_PLUGIN_URL . 'admin/assets/js/quick-edit.js', ['jquery'], '1.0.1', true);
         wp_localize_script('qp-quick-edit-script', 'qp_quick_edit_object', [
             'save_nonce' => wp_create_nonce('qp_save_quick_edit_nonce')
         ]);
     }
-
-    // Activate color picker only on the labels page
     if ($hook_suffix === 'question-press_page_qp-labels') {
         add_action('admin_footer', function() {
             echo '<script>jQuery(document).ready(function($){$(".qp-color-picker").wpColorPicker();});</script>';
@@ -101,13 +125,11 @@ add_action('admin_enqueue_scripts', 'qp_admin_enqueue_scripts');
 function qp_handle_form_submissions() {
     QP_Export_Page::handle_export_submission();
     qp_handle_save_question_group();
-    // NEW: Register our settings
     QP_Settings_Page::register_settings();
-    qp_handle_clear_logs(); // New handler
+    qp_handle_clear_logs();
+    qp_handle_resolve_log();
 }
 add_action('admin_init', 'qp_handle_form_submissions');
-
-// In question-press.php
 
 function qp_all_questions_page_cb() {
     $list_table = new QP_Questions_List_Table();
@@ -118,59 +140,37 @@ function qp_all_questions_page_cb() {
             $item['group_id'] = $wpdb->get_var($wpdb->prepare("SELECT group_id FROM {$wpdb->prefix}qp_questions WHERE question_id = %d", $item['question_id']));
         }
     }
-    
     ?>
     <div class="wrap">
         <h1 class="wp-heading-inline">All Questions</h1>
         <a href="<?php echo admin_url('admin.php?page=qp-question-editor'); ?>" class="page-title-action">Add New</a>
-
         <?php if (isset($_GET['message'])) {
             $messages = ['1' => 'Question(s) updated successfully.', '2' => 'Question(s) saved successfully.'];
             $message_id = absint($_GET['message']);
-            if (isset($messages[$message_id])) {
-                echo '<div id="message" class="notice notice-success is-dismissible"><p>' . esc_html($messages[$message_id]) . '</p></div>';
-            }
+            if (isset($messages[$message_id])) { echo '<div id="message" class="notice notice-success is-dismissible"><p>' . esc_html($messages[$message_id]) . '</p></div>'; }
         } ?>
-
         <hr class="wp-header-end">
-
         <?php $list_table->views(); ?>
-        
         <form method="post">
             <?php wp_nonce_field('bulk-questions'); ?>
-            <?php
-            // The search box is now called before the table
-            $list_table->search_box('Search Questions', 'question');
-            $list_table->display();
-            ?>
+            <?php $list_table->search_box('Search Questions', 'question'); $list_table->display(); ?>
         </form>
     </div>
     <?php
 }
 
-// REWRITTEN & ROBUST SAVE LOGIC
-// In question-press.php
-
-// In question-press.php
-
 function qp_handle_save_question_group() {
-    if (!isset($_POST['save_group']) || !isset($_POST['_wpnonce']) || !wp_verify_nonce($_POST['_wpnonce'], 'qp_save_question_group_nonce')) {
-        return;
-    }
-
+    if (!isset($_POST['save_group']) || !isset($_POST['_wpnonce']) || !wp_verify_nonce($_POST['_wpnonce'], 'qp_save_question_group_nonce')) { return; }
     global $wpdb;
     $group_id = isset($_POST['group_id']) ? absint($_POST['group_id']) : 0;
     $is_editing = $group_id > 0;
-
     $direction_text = sanitize_textarea_field($_POST['direction_text']);
     $direction_image_id = absint($_POST['direction_image_id']);
     $subject_id = absint($_POST['subject_id']);
     $is_pyq = isset($_POST['is_pyq']) ? 1 : 0;
     $questions_from_form = isset($_POST['questions']) ? (array) $_POST['questions'] : [];
-
     if (empty($subject_id) || empty($questions_from_form)) { return; }
 
-    // 1. UPDATE OR INSERT THE GROUP
     $group_data = ['direction_text' => $direction_text, 'direction_image_id' => $direction_image_id, 'subject_id' => $subject_id];
     if ($is_editing) {
         $wpdb->update("{$wpdb->prefix}qp_question_groups", $group_data, ['group_id' => $group_id]);
@@ -178,70 +178,35 @@ function qp_handle_save_question_group() {
         $wpdb->insert("{$wpdb->prefix}qp_question_groups", $group_data);
         $group_id = $wpdb->insert_id;
     }
-
-    // 2. INTELLIGENTLY UPDATE, INSERT, AND DELETE QUESTIONS
-    $q_table = "{$wpdb->prefix}qp_questions";
-    $o_table = "{$wpdb->prefix}qp_options";
-    $ql_table = "{$wpdb->prefix}qp_question_labels";
-
+    $q_table = "{$wpdb->prefix}qp_questions"; $o_table = "{$wpdb->prefix}qp_options"; $ql_table = "{$wpdb->prefix}qp_question_labels";
     $existing_q_ids = $is_editing ? $wpdb->get_col($wpdb->prepare("SELECT question_id FROM $q_table WHERE group_id = %d", $group_id)) : [];
     $submitted_q_ids = [];
-
     foreach ($questions_from_form as $q_data) {
         $question_id = isset($q_data['question_id']) ? absint($q_data['question_id']) : 0;
         $question_text = sanitize_textarea_field($q_data['question_text']);
         if (empty($question_text)) continue;
-
-        $question_db_data = [
-            'group_id' => $group_id,
-            'question_text' => $question_text,
-            'is_pyq' => $is_pyq,
-            'question_text_hash' => md5(strtolower(trim(preg_replace('/\s+/', '', $question_text))))
-        ];
-
+        $question_db_data = ['group_id' => $group_id, 'question_text' => $question_text, 'is_pyq' => $is_pyq, 'question_text_hash' => md5(strtolower(trim(preg_replace('/\s+/', '', $question_text))))];
         if ($question_id && in_array($question_id, $existing_q_ids)) {
-            // This is an existing question, UPDATE it.
             $wpdb->update($q_table, $question_db_data, ['question_id' => $question_id]);
             $submitted_q_ids[] = $question_id;
         } else {
-            // This is a new question, INSERT it.
             $next_custom_id = get_option('qp_next_custom_question_id', 1000);
             $question_db_data['custom_question_id'] = $next_custom_id;
-            
             $wpdb->insert($q_table, $question_db_data);
             $question_id = $wpdb->insert_id;
             update_option('qp_next_custom_question_id', $next_custom_id + 1);
             $submitted_q_ids[] = $question_id;
         }
-
-        // Handle Options (delete old, insert new for this specific question)
         $wpdb->delete($o_table, ['question_id' => $question_id]);
         $options = isset($q_data['options']) ? (array) $q_data['options'] : [];
         $correct_option_index = isset($q_data['is_correct_option']) ? absint($q_data['is_correct_option']) : -1;
-        foreach ($options as $index => $option_text) {
-            if (!empty(trim($option_text))) {
-                $wpdb->insert($o_table, ['question_id' => $question_id, 'option_text' => sanitize_text_field($option_text), 'is_correct' => ($index === $correct_option_index) ? 1 : 0 ]);
-            }
-        }
-        
-        // Handle Labels (delete old, insert new for this specific question)
+        foreach ($options as $index => $option_text) { if (!empty(trim($option_text))) { $wpdb->insert($o_table, ['question_id' => $question_id, 'option_text' => sanitize_text_field($option_text), 'is_correct' => ($index === $correct_option_index) ? 1 : 0 ]); } }
         $wpdb->delete($ql_table, ['question_id' => $question_id]);
         $labels = isset($q_data['labels']) ? array_map('absint', $q_data['labels']) : [];
-        foreach ($labels as $label_id) {
-            $wpdb->insert($ql_table, ['question_id' => $question_id, 'label_id' => $label_id]);
-        }
+        foreach ($labels as $label_id) { $wpdb->insert($ql_table, ['question_id' => $question_id, 'label_id' => $label_id]); }
     }
-
-    // 3. DELETE any questions that were removed from the form
     $questions_to_delete = array_diff($existing_q_ids, $submitted_q_ids);
-    if (!empty($questions_to_delete)) {
-        $ids_placeholder = implode(',', array_map('absint', $questions_to_delete));
-        $wpdb->query("DELETE FROM $o_table WHERE question_id IN ($ids_placeholder)");
-        $wpdb->query("DELETE FROM $ql_table WHERE question_id IN ($ids_placeholder)");
-        $wpdb->query("DELETE FROM $q_table WHERE question_id IN ($ids_placeholder)");
-    }
-    
-    // Redirect Logic
+    if (!empty($questions_to_delete)) { $ids_placeholder = implode(',', array_map('absint', $questions_to_delete)); $wpdb->query("DELETE FROM $o_table WHERE question_id IN ($ids_placeholder)"); $wpdb->query("DELETE FROM $ql_table WHERE question_id IN ($ids_placeholder)"); $wpdb->query("DELETE FROM $q_table WHERE question_id IN ($ids_placeholder)"); }
     wp_safe_redirect(admin_url('admin.php?page=question-press&message=1'));
     exit;
 }
@@ -571,6 +536,22 @@ function qp_handle_clear_logs() {
         $table_name = $wpdb->prefix . 'qp_logs';
         $wpdb->query("TRUNCATE TABLE $table_name");
         wp_safe_redirect(admin_url('admin.php?page=qp-logs&message=1'));
+        exit;
+    }
+}
+
+// ADD this new function to the file
+function qp_handle_resolve_log() {
+    if (isset($_GET['action']) && $_GET['action'] === 'resolve_log' && isset($_GET['log_id'])) {
+        $log_id = absint($_GET['log_id']);
+        if (!isset($_GET['_wpnonce']) || !wp_verify_nonce($_GET['_wpnonce'], 'qp_resolve_log_' . $log_id)) {
+            wp_die('Security check failed.');
+        }
+        global $wpdb;
+        $wpdb->update("{$wpdb->prefix}qp_logs", ['resolved' => 1], ['log_id' => $log_id]);
+        
+        // Redirect back to the page the user was on
+        wp_safe_redirect(remove_query_arg(['action', 'log_id', '_wpnonce']));
         exit;
     }
 }
