@@ -11,14 +11,16 @@ class QP_Questions_List_Table extends WP_List_Table
         parent::__construct(['singular' => 'Question', 'plural' => 'Questions', 'ajax' => false]);
     }
 
-    public function get_columns()
-    {
+    /**
+     * UPDATED: Define the columns for the table
+     */
+    public function get_columns() {
         return [
             'cb'                 => '<input type="checkbox" />',
             'custom_question_id' => 'Question ID',
             'question_text'      => 'Question',
             'subject_name'       => 'Subject',
-            'is_pyq'             => 'PYQ',
+            'source'             => 'Source', // NEW COLUMN
             'import_date'        => 'Date'
         ];
     }
@@ -185,9 +187,10 @@ class QP_Questions_List_Table extends WP_List_Table
         $sql_query_where = " WHERE " . implode(' AND ', $where);
 
         $total_items = $wpdb->get_var("SELECT COUNT(q.question_id)" . $sql_query_from . $sql_query_where);
-        // UPDATED: Select the new source columns
-    $data_query = "SELECT q.question_id, q.custom_question_id, q.question_text, q.is_pyq, q.import_date, q.source_file, q.source_page, q.source_number, s.subject_name" . $sql_query_from . $sql_query_where;
-    $data_query .= $wpdb->prepare(" ORDER BY %s %s LIMIT %d OFFSET %d", $orderby, $order, $per_page, $offset);
+
+        // UPDATED: Select the source columns
+        $data_query = "SELECT q.question_id, q.custom_question_id, q.question_text, q.is_pyq, q.import_date, q.source_file, q.source_page, q.source_number, s.subject_name" . $sql_query_from . $sql_query_where;
+        $data_query .= $wpdb->prepare(" ORDER BY %s %s LIMIT %d OFFSET %d", $orderby, $order, $per_page, $offset);
     
     $this->items = $wpdb->get_results($data_query, ARRAY_A);
 
@@ -352,27 +355,30 @@ class QP_Questions_List_Table extends WP_List_Table
             $row_text .= $labels_html;
         }
 
-        // NEW: Display source information if it exists
-    $source_info = [];
-    if (!empty($item['source_file'])) {
-        $source_info[] = 'File: ' . esc_html($item['source_file']);
-    }
-    if (!empty($item['source_page'])) {
-        $source_info[] = 'Page: ' . esc_html($item['source_page']);
-    }
-    if (!empty($item['source_number'])) {
-        $source_info[] = 'No: ' . esc_html($item['source_number']);
-    }
-    if (!empty($source_info)) {
-        $row_text .= '<div style="font-size: 11px; color: #777;">Source: ' . implode(', ', $source_info) . '</div>';
-    }
-
         return $row_text . $this->row_actions($actions);
     }
 
     public function column_is_pyq($item)
     {
         return $item['is_pyq'] ? 'Yes' : 'No';
+    }
+
+    /**
+     * NEW: Custom renderer for our new Source column
+     */
+    public function column_source($item) {
+        $source_info = [];
+        if (!empty($item['source_file'])) {
+            $source_info[] = '<strong>File:</strong> ' . esc_html($item['source_file']);
+        }
+        if (!empty($item['source_page'])) {
+            $source_info[] = '<strong>Page:</strong> ' . esc_html($item['source_page']);
+        }
+        if (!empty($item['source_number'])) {
+            $source_info[] = '<strong>No:</strong> ' . esc_html($item['source_number']);
+        }
+        // Display vertically
+        return implode('<br>', $source_info);
     }
     public function column_default($item, $column_name)
     {
