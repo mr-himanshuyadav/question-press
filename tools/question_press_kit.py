@@ -10,6 +10,109 @@ import shutil
 from datetime import datetime
 from PIL import Image, ImageTk
 
+
+
+class ReviewWindow(tk.Toplevel):
+    def __init__(self, parent, question_queue):
+        super().__init__(parent)
+        self.parent = parent
+        self.question_queue = question_queue
+
+        self.title("Review and Export Questions")
+        self.geometry("700x500")
+        
+        # --- Treeview to display questions ---
+        columns = ('subject', 'direction', 'question')
+        self.tree = ttk.Treeview(self, columns=columns, show='headings')
+        
+        self.tree.heading('subject', text='Subject')
+        self.tree.heading('direction', text='Direction')
+        self.tree.heading('question', text='Question')
+        
+        self.tree.column('subject', width=150)
+        self.tree.column('direction', width=200)
+        self.tree.column('question', width=350)
+        
+        for q in self.question_queue:
+            dir_text = q['direction'][:50] + '...' if q['direction'] else 'N/A'
+            self.tree.insert('', 'end', values=(q['subject'], dir_text, q['questionText']))
+            
+        self.tree.pack(padx=10, pady=10, expand=True, fill='both')
+
+        # --- Action Buttons ---
+        button_frame = ttk.Frame(self)
+        button_frame.pack(padx=10, pady=10, fill='x')
+        
+        ttk.Button(button_frame, text="Generate ZIP File...", command=self.generate_zip).pack(side='right')
+        ttk.Button(button_frame, text="Cancel", command=self.destroy).pack(side='right', padx=10)
+
+    def generate_zip(self):
+        if not self.question_queue:
+            messagebox.showwarning("Warning", "The queue is empty. Nothing to generate.")
+            return
+
+        filepath = filedialog.asksaveasfilename(
+            title="Save Question Package",
+            defaultextension=".zip",
+            filetypes=(("ZIP Archive", "*.zip"), ("All files", "*.*"))
+        )
+        if not filepath:
+            return # User cancelled
+
+        # --- Group questions by subject and direction ---
+        grouped_data = {}
+        for q in self.question_queue:
+            group_key = (q['subject'], q['direction'])
+            if group_key not in grouped_data:
+                grouped_data[group_key] = []
+            grouped_data[group_key].append(q)
+
+        # --- Build the final JSON structure ---
+        question_groups = []
+        for (subject, direction_text), questions in grouped_data.items():
+            group = {
+                "groupId": str(uuid.uuid4()),
+                "subject": subject,
+                "Direction": {"text": direction_text, "image": None} if direction_text else None,
+                "questions": []
+            }
+            for q in questions:
+                question_entry = {
+                    "questionId": str(uuid.uuid4()),
+                    "questionText": q['questionText'],
+                    "isPYQ": q['isPYQ'],
+                    "options": q['options'],
+                    "source": {"page": None, "number": None} # Not captured by tool
+                }
+                group["questions"].append(question_entry)
+            question_groups.append(group)
+
+        final_json = {
+            "schemaVersion": "1.2",
+            "exportTimestamp": datetime.utcnow().isoformat() + "Z",
+            "sourceFile": os.path.basename(filepath).replace('.zip', ''),
+            "questionGroups": question_groups
+        }
+
+        # --- Create ZIP file ---
+        temp_dir = "temp_export"
+        os.makedirs(temp_dir, exist_ok=True)
+        
+        json_path = os.path.join(temp_dir, "questions.json")
+        with open(json_path, 'w', encoding='utf-8') as f:
+            json.dump(final_json, f, indent=2)
+            
+        # Create the zip file
+        with zipfile.ZipFile(filepath, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            zipf.write(json_path, os.path.basename(json_path))
+        
+        # Cleanup
+        shutil.rmtree(temp_dir)
+        
+        messagebox.showinfo("Success", f"Successfully generated ZIP file at:\n{filepath}")
+        self.parent.clear_queue()
+        self.destroy()
+
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
