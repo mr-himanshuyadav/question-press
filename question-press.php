@@ -25,6 +25,7 @@ require_once QP_PLUGIN_DIR . 'admin/class-qp-logs-page.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-logs-list-table.php';
 require_once QP_PLUGIN_DIR . 'public/class-qp-shortcodes.php';
 require_once QP_PLUGIN_DIR . 'public/class-qp-dashboard.php';
+require_once QP_PLUGIN_DIR . 'api/class-qp-rest-api.php';
 
 
 // Activation, Deactivation, Uninstall Hooks
@@ -73,6 +74,14 @@ function qp_activate_plugin() {
     dbDelta($sql_logs);
 
     add_option('qp_next_custom_question_id', 1000, '', 'no');
+
+    // NEW: Initialize our JWT secret key on first activation
+    if (!get_option('qp_jwt_secret_key')) {
+        // Generate a long, random, secure key
+        $secret_key = wp_generate_password(64, true, true);
+        add_option('qp_jwt_secret_key', $secret_key, '', 'no');
+    }
+    
 }
 register_activation_hook(QP_PLUGIN_FILE, 'qp_activate_plugin');
 
@@ -117,6 +126,11 @@ function qp_admin_enqueue_scripts($hook_suffix) {
         add_action('admin_footer', function() {
             echo '<script>jQuery(document).ready(function($){$(".qp-color-picker").wpColorPicker();});</script>';
         });
+    }
+
+    // Load script for the Settings page
+    if ($hook_suffix === 'question-press_page_qp-settings') {
+        wp_enqueue_script('qp-settings-script', QP_PLUGIN_URL . 'admin/assets/js/settings-page.js', ['jquery'], '1.0.0', true);
     }
 }
 add_action('admin_enqueue_scripts', 'qp_admin_enqueue_scripts');
@@ -692,3 +706,26 @@ function qp_save_quick_edit_data_ajax() {
     wp_send_json_error(['message' => 'Could not retrieve updated row.']);
 }
 add_action('wp_ajax_save_quick_edit_data', 'qp_save_quick_edit_data_ajax');
+
+
+/**
+ * Initialize all plugin features that hook into WordPress.
+ */
+function qp_init_plugin() {
+    QP_Rest_Api::init();
+}
+add_action('init', 'qp_init_plugin');
+
+// NEW: Add this function to the end of the file
+function qp_regenerate_api_key_ajax() {
+    check_ajax_referer('qp_regenerate_api_key_nonce', 'nonce');
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error(['message' => 'Permission denied.']);
+    }
+
+    $new_key = wp_generate_password(64, true, true);
+    update_option('qp_jwt_secret_key', $new_key);
+
+    wp_send_json_success(['new_key' => $new_key]);
+}
+add_action('wp_ajax_regenerate_api_key', 'qp_regenerate_api_key_ajax');
