@@ -38,6 +38,14 @@ class QP_Question_Editor_Page {
                     }
                 }
             }
+
+            // NEW: Fetch logs associated with any question in this group
+            $question_ids_in_group = wp_list_pluck($questions_in_group, 'question_id');
+            if (!empty($question_ids_in_group)) {
+                $ids_placeholder = implode(',', array_map('absint', $question_ids_in_group));
+                $logs_table = $wpdb->prefix . 'qp_logs';
+                $question_logs = $wpdb->get_results("SELECT * FROM $logs_table WHERE log_data LIKE '%\"question_id\"%' AND JSON_EXTRACT(log_data, '$.question_id') IN ($ids_placeholder) ORDER BY log_date DESC");
+            }
         }
 
         if (empty($questions_in_group)) {
@@ -56,6 +64,17 @@ class QP_Question_Editor_Page {
             <h1 class="wp-heading-inline"><?php echo $is_editing ? 'Edit Question' : 'Add New Question'; ?></h1>
             <a href="<?php echo admin_url('admin.php?page=question-press'); ?>" class="page-title-action">Back to All Questions</a>
             <hr class="wp-header-end">
+
+            <?php if (!empty($question_logs)) : ?>
+            <div id="qp-question-logs" class="notice notice-warning">
+                <h4><span class="dashicons dashicons-flag"></span> This Question Group has open reports:</h4>
+                <ul>
+                    <?php foreach ($question_logs as $log) : ?>
+                        <li><strong><?php echo esc_html($log->log_date); ?>:</strong> <?php echo esc_html($log->log_message); ?></li>
+                    <?php endforeach; ?>
+                </ul>
+            </div>
+            <?php endif; ?>
 
             <form method="post" action="">
                 <?php wp_nonce_field('qp_save_question_group_nonce'); ?>
