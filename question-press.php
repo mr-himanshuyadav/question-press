@@ -729,3 +729,6 @@ function qp_save_quick_edit_data_ajax() {
     wp_send_json_success(['row_html' => $updated_row_html]);
 }
 add_action('wp_ajax_save_quick_edit_data', 'qp_save_quick_edit_data_ajax');
+
+
+// ADD THIS NEW FUNCTION to the end of question-press.php
