@@ -205,7 +205,7 @@ class QP_Questions_List_Table extends WP_List_Table
         $total_items = $wpdb->get_var("SELECT COUNT(q.question_id)" . $sql_query_from . $sql_query_where);
 
         // UPDATED: Select the source columns
-        $data_query = "SELECT q.question_id, q.custom_question_id, q.question_text, q.is_pyq, q.import_date, q.source_file, q.source_page, q.source_number, s.subject_name" . $sql_query_from . $sql_query_where;
+        $data_query = "SELECT q.question_id, q.custom_question_id, q.question_text, q.is_pyq, q.import_date, q.source_file, q.source_page, q.source_number, q.duplicate_of, s.subject_name" . $sql_query_from . $sql_query_where;
         $data_query .= $wpdb->prepare(" ORDER BY %s %s LIMIT %d OFFSET %d", $orderby, $order, $per_page, $offset);
     
         $this->items = $wpdb->get_results($data_query, ARRAY_A);
@@ -376,22 +376,23 @@ class QP_Questions_List_Table extends WP_List_Table
 
         // Display labels and the duplicate cross-reference
         if (!empty($item['labels'])) {
-            $labels_html = '<div style="margin-top: 5px; display: flex; flex-wrap: wrap; gap: 5px;">';
+            $labels_html = '<div class="qp-labels-container" style="margin-top: 5px; display: flex; flex-wrap: wrap; gap: 5px;">';
             foreach ($item['labels'] as $label) {
-                $label_span = sprintf(
-                    '<span style="background-color: %s; color: #fff; padding: 2px 6px; font-size: 11px; border-radius: 3px;">%s</span>',
-                    esc_attr($label->label_color),
-                    esc_html($label->label_name)
-                );
-                
-                // If this is the "Duplicate" label, add the cross-reference link
+                $label_text = esc_html($label->label_name);
+
+                // If this is the "Duplicate" label and the data exists, create the link.
                 if ($label->label_name === 'Duplicate' && !empty($item['duplicate_of'])) {
                     $original_custom_id = get_question_custom_id($item['duplicate_of']);
                     if ($original_custom_id) {
-                        $label_span .= sprintf(' <span style="font-size: 11px;">(of #%s)</span>', $original_custom_id);
+                        $label_text .= sprintf(' (of #%s)', esc_html($original_custom_id));
                     }
                 }
-                $labels_html .= $label_span;
+
+                $labels_html .= sprintf(
+                    '<span class="qp-label" style="background-color: %s; color: #fff; padding: 2px 6px; font-size: 11px; border-radius: 3px;">%s</span>',
+                    esc_attr($label->label_color),
+                    $label_text
+                );
             }
             $labels_html .= '</div>';
             $row_text .= $labels_html;
