@@ -54,6 +54,25 @@ class QP_Rest_Api {
                 ],
             ],
         ]);
+
+        // --- NEW: Session Management Endpoints (Protected) ---
+        register_rest_route('questionpress/v1', '/session/create', [
+            'methods' => WP_REST_Server::CREATABLE, // POST
+            'callback' => [self::class, 'create_session'],
+            'permission_callback' => [self::class, 'check_auth_token']
+        ]);
+
+        register_rest_route('questionpress/v1', '/session/attempt', [
+            'methods' => WP_REST_Server::CREATABLE, // POST
+            'callback' => [self::class, 'record_attempt'],
+            'permission_callback' => [self::class, 'check_auth_token']
+        ]);
+
+        register_rest_route('questionpress/v1', '/session/end', [
+            'methods' => WP_REST_Server::CREATABLE, // POST
+            'callback' => [self::class, 'end_session'],
+            'permission_callback' => [self::class, 'check_auth_token']
+        ]);
     }
 
     /**
@@ -190,6 +209,88 @@ class QP_Rest_Api {
         $question_data['options'] = $options;
 
         return new WP_REST_Response($question_data, 200);
+    }
+
+
+    /**
+     * NEW: Creates a new practice session record.
+     */
+    public static function create_session(WP_REST_Request $request) {
+        $settings = $request->get_param('settings'); // App sends a JSON object of settings
+        
+        global $wpdb;
+        $wpdb->insert("{$wpdb->prefix}qp_user_sessions", [
+            'user_id' => get_current_user_id(),
+            'settings_snapshot' => wp_json_encode($settings)
+        ]);
+        $session_id = $wpdb->insert_id;
+
+        return new WP_REST_Response(['session_id' => $session_id], 200);
+    }
+
+    /**
+     * NEW: Records a user's attempt for a single question.
+     */
+    public static function record_attempt(WP_REST_Request $request) {
+        $session_id = $request->get_param('session_id');
+        $question_id = $request->get_param('question_id'); // This is the internal DB ID
+        $option_id = $request->get_param('option_id'); // Can be null if skipped
+
+        if (!$session_id || !$question_id) {
+            return new WP_Error('rest_invalid_request', 'Session ID and Question ID are required.', ['status' => 400]);
+        }
+        
+        global $wpdb;
+        $is_correct = null;
+        $correct_option_id = null;
+
+        if ($option_id) { // If an answer was submitted
+            $is_correct = (bool) $wpdb->get_var($wpdb->prepare("SELECT is_correct FROM {$wpdb->prefix}qp_options WHERE option_id = %d", $option_id));
+            $correct_option_id = $wpdb->get_var($wpdb->prepare("SELECT option_id FROM {$wpdb->prefix}qp_options WHERE question_id = %d AND is_correct = 1", $question_id));
+        }
+
+        $wpdb->insert("{$wpdb->prefix}qp_user_attempts", [
+            'session_id' => $session_id,
+            'user_id' => get_current_user_id(),
+            'question_id' => $question_id,
+            'is_correct' => $is_correct
+        ]);
+
+        return new WP_REST_Response([
+            'success' => true,
+            'is_correct' => $is_correct,
+            'correct_option_id' => (int)$correct_option_id
+        ], 200);
+    }
+    
+    /**
+     * NEW: Ends a session and calculates the final results.
+     */
+    public static function end_session(WP_REST_Request $request) {
+        $session_id = $request->get_param('session_id');
+        if (!$session_id) {
+            return new WP_Error('rest_invalid_request', 'Session ID is required.', ['status' => 400]);
+        }
+        
+        // This logic is identical to our AJAX handler
+        global $wpdb;
+        $sessions_table = $wpdb->prefix . 'qp_user_sessions';
+        $attempts_table = $wpdb->prefix . 'qp_user_attempts';
+        $session = $wpdb->get_row($wpdb->prepare("SELECT * FROM $sessions_table WHERE session_id = %d", $session_id));
+        $settings = json_decode($session->settings_snapshot, true);
+        $marks_correct = $settings['marks_correct'] ?? 0;
+        $marks_incorrect = $settings['marks_incorrect'] ?? 0;
+
+        $correct_count = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $attempts_table WHERE session_id = %d AND is_correct = 1", $session_id));
+        $incorrect_count = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $attempts_table WHERE session_id = %d AND is_correct = 0", $session_id));
+        $skipped_count = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $attempts_table WHERE session_id = %d AND is_correct IS NULL", $session_id));
+        
+        $final_score = ($correct_count * $marks_correct) + ($incorrect_count * $marks_incorrect);
+        $total_attempted = $correct_count + $incorrect_count;
+
+        $wpdb->update($sessions_table, ['end_time' => current_time('mysql', 1), 'total_attempted' => $total_attempted, 'correct_count' => $correct_count, 'incorrect_count' => $incorrect_count, 'skipped_count' => $skipped_count, 'marks_obtained' => $final_score], ['session_id' => $session_id]);
+
+        return new WP_REST_Response(['message' => 'Session ended successfully.', 'final_score' => $final_score], 200);
     }
 
 }
