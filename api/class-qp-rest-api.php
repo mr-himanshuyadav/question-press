@@ -22,23 +22,37 @@ class QP_Rest_Api {
     public static function register_routes() {
         // --- Authentication Endpoint (Public) ---
         register_rest_route('questionpress/v1', '/token', [
-            'methods' => 'POST',
+            'methods' => WP_REST_Server::CREATABLE, // This is equivalent to POST
             'callback' => [self::class, 'get_auth_token'],
             'permission_callback' => '__return_true'
         ]);
 
         // --- Subjects Endpoint (Protected) ---
         register_rest_route('questionpress/v1', '/subjects', [
-            'methods' => 'GET',
+            'methods' => WP_REST_Server::READABLE, // This is equivalent to GET
             'callback' => [self::class, 'get_subjects'],
             'permission_callback' => [self::class, 'check_auth_token']
         ]);
         
         // --- Start Session / Get Questions Endpoint (Protected) ---
         register_rest_route('questionpress/v1', '/start-session', [
-            'methods' => 'POST',
+            'methods' => WP_REST_Server::CREATABLE, // POST
             'callback' => [self::class, 'start_session_and_get_questions'],
             'permission_callback' => [self::class, 'check_auth_token']
+        ]);
+        
+        // UPDATED: Route now uses the custom ID
+        register_rest_route('questionpress/v1', '/question/id/(?P<custom_id>\d+)', [
+            'methods' => WP_REST_Server::READABLE, // GET
+            'callback' => [self::class, 'get_single_question_by_custom_id'],
+            'permission_callback' => [self::class, 'check_auth_token'],
+            'args' => [
+                'custom_id' => [
+                    'validate_callback' => function($param, $request, $key) {
+                        return is_numeric($param);
+                    }
+                ],
+            ],
         ]);
     }
 
@@ -139,4 +153,43 @@ class QP_Rest_Api {
         
         return new WP_REST_Response(['question_ids' => $question_ids], 200);
     }
+
+    
+    /**
+     * UPDATED: Callback now fetches question by its custom ID.
+     */
+    public static function get_single_question_by_custom_id(WP_REST_Request $request) {
+        $custom_question_id = (int) $request['custom_id'];
+
+        global $wpdb;
+        $q_table = $wpdb->prefix . 'qp_questions';
+        $g_table = $wpdb->prefix . 'qp_question_groups';
+        $s_table = $wpdb->prefix . 'qp_subjects';
+        $o_table = $wpdb->prefix . 'qp_options';
+
+        // Query by the custom_question_id column
+        $question_data = $wpdb->get_row($wpdb->prepare(
+            "SELECT q.question_id, q.custom_question_id, q.question_text, g.direction_text, g.direction_image_id, s.subject_name 
+             FROM {$q_table} q 
+             LEFT JOIN {$g_table} g ON q.group_id = g.group_id
+             LEFT JOIN {$s_table} s ON g.subject_id = s.subject_id
+             WHERE q.custom_question_id = %d AND q.status = 'publish'",
+            $custom_question_id
+        ), ARRAY_A);
+
+        if (!$question_data) {
+            return new WP_Error('rest_question_not_found', 'Question not found.', ['status' => 404]);
+        }
+
+        $question_id = $question_data['question_id']; // Get the internal ID for fetching options
+
+        $question_data['direction_image_url'] = $question_data['direction_image_id'] ? wp_get_attachment_url($question_data['direction_image_id']) : null;
+        unset($question_data['direction_image_id']);
+
+        $options = $wpdb->get_results($wpdb->prepare("SELECT option_id, option_text FROM {$o_table} WHERE question_id = %d ORDER BY RAND()", $question_id), ARRAY_A);
+        $question_data['options'] = $options;
+
+        return new WP_REST_Response($question_data, 200);
+    }
+
 }
