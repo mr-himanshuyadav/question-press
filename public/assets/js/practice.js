@@ -12,11 +12,10 @@ jQuery(document).ready(function($) {
     var incorrectCount = 0;
     var skippedCount = 0;
     var questionTimer;
-    var answeredStates = {}; // Stores the state for each question ID
+    var answeredStates = {};
 
     // --- Event Handlers ---
 
-    // Handles form submission to start a session
     wrapper.on('submit', '#qp-start-practice-form', function(e) {
         e.preventDefault();
         var formData = $(this).serialize();
@@ -29,13 +28,13 @@ jQuery(document).ready(function($) {
                     wrapper.html(response.data.ui_html);
                     sessionID = response.data.session_id; sessionQuestionIDs = response.data.question_ids; sessionSettings = response.data.settings;
                     currentQuestionIndex = 0; score = 0; correctCount = 0; incorrectCount = 0; skippedCount = 0; answeredStates = {};
-                    updateHeaderStats(); loadQuestion(sessionQuestionIDs[currentQuestionIndex]);
+                    updateHeaderStats();
+                    loadQuestion(sessionQuestionIDs[currentQuestionIndex]);
                 } else { wrapper.html('<p style="text-align:center; color: red;">Error: ' + response.data.message + '</p>'); }
             }
         });
     });
 
-    // Handles clicking an answer option
     wrapper.on('click', '.qp-options-area .option:not(.disabled)', function() {
         clearInterval(questionTimer);
         var selectedOption = $(this);
@@ -43,7 +42,7 @@ jQuery(document).ready(function($) {
         var questionID = sessionQuestionIDs[currentQuestionIndex];
         
         $('.qp-options-area .option').addClass('disabled');
-        $('#qp-skip-btn').prop('disabled', true);
+        $('#qp-skip-btn, .qp-user-report-btn, .qp-admin-report-btn').prop('disabled', true);
         $('#qp-next-btn').prop('disabled', false);
 
         $.ajax({
@@ -63,7 +62,6 @@ jQuery(document).ready(function($) {
         });
     });
 
-    // Handles navigation clicks
     wrapper.on('click', '#qp-next-btn, #qp-prev-btn', function() {
         clearInterval(questionTimer);
         if ($(this).attr('id') === 'qp-next-btn') {
@@ -73,30 +71,33 @@ jQuery(document).ready(function($) {
         }
     });
 
-    // UNIFIED HANDLER for Skip and all Report buttons
     wrapper.on('click', '#qp-skip-btn, .qp-user-report-btn, .qp-admin-report-btn', function() {
         clearInterval(questionTimer);
         var $button = $(this);
         var questionID = sessionQuestionIDs[currentQuestionIndex];
         var isAdminAction = $button.hasClass('qp-admin-report-btn');
-        var ajaxAction = isAdminAction ? 'report_question_issue' : ($button.attr('id') === 'qp-skip-btn' ? 'skip_question' : 'report_and_skip_question');
+        var ajaxAction;
 
-        // Lock all action buttons
+        if (isAdminAction) {
+            ajaxAction = 'report_question_issue';
+        } else if ($button.hasClass('qp-user-report-btn')) {
+            ajaxAction = 'report_and_skip_question';
+        } else {
+            ajaxAction = 'skip_question';
+        }
+        
         $('.qp-footer-nav button, .qp-user-report-btn, .qp-admin-report-btn').prop('disabled', true);
         if ($button.data('label')) $button.text('Processing...');
 
-        // If the question was already answered, reverse the score before reporting/skipping
-        if (answeredStates[questionID] && answeredStates[questionID].type === 'answered') {
+        // CORRECTED: Only reverse score for USER actions (report or skip)
+        if (!isAdminAction && answeredStates[questionID] && answeredStates[questionID].type === 'answered') {
             if (answeredStates[questionID].is_correct) { score -= parseFloat(sessionSettings.marks_correct); correctCount--; }
             else { score -= parseFloat(sessionSettings.marks_incorrect); incorrectCount--; }
         }
 
         var ajaxData = {
-            action: ajaxAction,
-            nonce: qp_ajax_object.nonce,
-            session_id: sessionID,
-            question_id: questionID,
-            label_name: $button.data('label') || ''
+            action: ajaxAction, nonce: qp_ajax_object.nonce, session_id: sessionID,
+            question_id: questionID, label_name: $button.data('label') || ''
         };
 
         $.ajax({
@@ -104,16 +105,15 @@ jQuery(document).ready(function($) {
             data: ajaxData,
             success: function(response) {
                 if(response.success) {
-                    // Only increment skip count for user actions, not silent admin reports
-                    if (!isAdminAction) {
-                        // Mark as skipped so it isn't double-counted
+                    if (isAdminAction) {
+                        // For admin, just mark that it was labelled and move on. Don't affect skip count.
+                        answeredStates[questionID] = { type: 'admin_labelled' };
+                    } else {
+                        // For user skip/report, it always becomes a "skipped" question.
                         if (!answeredStates[questionID] || answeredStates[questionID].type !== 'skipped') {
                             answeredStates[questionID] = { type: 'skipped' };
                             skippedCount++;
                         }
-                    } else {
-                        // For admin, just mark it as having an action taken
-                        answeredStates[questionID] = { type: 'admin_labelled' };
                     }
                     updateHeaderStats();
                     loadNextQuestion();
@@ -137,11 +137,11 @@ jQuery(document).ready(function($) {
         }
     });
 
+    
     // --- Helper Functions ---
     function loadQuestion(questionID) {
         if (!questionID) return;
         
-        // Reset UI elements
         $('#qp-question-text-area').html('Loading...');
         $('.qp-options-area').empty();
         $('#qp-revision-indicator, .qp-direction, #qp-reported-indicator').hide();
@@ -178,13 +178,11 @@ jQuery(document).ready(function($) {
                     if (previousState) {
                         $('.qp-options-area .option').addClass('disabled');
                         $('#qp-skip-btn').prop('disabled', true);
+                        $('.qp-user-report-btn, .qp-admin-report-btn').prop('disabled', true);
+
                         if (previousState.type === 'answered') {
-                            if (previousState.is_correct) {
-                                $('input[value="' + previousState.selected_option_id + '"]').closest('.option').addClass('correct');
-                            } else {
-                                $('input[value="' + previousState.selected_option_id + '"]').closest('.option').addClass('incorrect');
-                                $('input[value="' + previousState.correct_option_id + '"]').closest('.option').addClass('correct');
-                            }
+                            if (previousState.is_correct) { $('input[value="' + previousState.selected_option_id + '"]').closest('.option').addClass('correct'); }
+                            else { $('input[value="' + previousState.selected_option_id + '"]').closest('.option').addClass('incorrect'); $('input[value="' + previousState.correct_option_id + '"]').closest('.option').addClass('correct'); }
                         } else if (previousState.type === 'skipped' || previousState.type === 'reported') {
                             $('#qp-reported-indicator').show();
                         }
