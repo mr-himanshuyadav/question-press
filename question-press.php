@@ -220,6 +220,7 @@ function get_question_custom_id($question_id) {
     return $wpdb->get_var($wpdb->prepare("SELECT custom_question_id FROM {$wpdb->prefix}qp_questions WHERE question_id = %d", $question_id));
 }
 
+
 function qp_handle_save_question_group() {
     if (!isset($_POST['save_group']) || !isset($_POST['_wpnonce']) || !wp_verify_nonce($_POST['_wpnonce'], 'qp_save_question_group_nonce')) { return; }
     global $wpdb;

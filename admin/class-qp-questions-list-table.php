@@ -374,14 +374,22 @@ class QP_Questions_List_Table extends WP_List_Table
         
         $row_text .= sprintf('<strong>(ID: %d) %s</strong>', esc_html($item['custom_question_id']), esc_html($item['question_text']));
 
+        // Display labels and the duplicate cross-reference
         if (!empty($item['labels'])) {
             $labels_html = '<div style="margin-top: 5px; display: flex; flex-wrap: wrap; gap: 5px;">';
             foreach ($item['labels'] as $label) {
-                // CORRECTED: The full style attribute is now present
-                $label_span = sprintf('<span style="padding: 2px 8px; font-size: 11px; border-radius: 3px; color: #fff; background-color: %s;">%s</span>', esc_attr($label->label_color), esc_html($label->label_name));
+                $label_span = sprintf(
+                    '<span style="background-color: %s; color: #fff; padding: 2px 6px; font-size: 11px; border-radius: 3px;">%s</span>',
+                    esc_attr($label->label_color),
+                    esc_html($label->label_name)
+                );
+                
+                // If this is the "Duplicate" label, add the cross-reference link
                 if ($label->label_name === 'Duplicate' && !empty($item['duplicate_of'])) {
                     $original_custom_id = get_question_custom_id($item['duplicate_of']);
-                    $label_span .= sprintf(' (of #%s)', $original_custom_id);
+                    if ($original_custom_id) {
+                        $label_span .= sprintf(' <span style="font-size: 11px;">(of #%s)</span>', $original_custom_id);
+                    }
                 }
                 $labels_html .= $label_span;
             }
