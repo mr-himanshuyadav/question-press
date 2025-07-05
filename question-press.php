@@ -45,9 +45,28 @@ function qp_activate_plugin() {
     $default_labels = [['label_name' => 'Wrong Answer', 'label_color' => '#ff5733', 'is_default' => 1, 'description' => 'Reported by users for having an incorrect answer key.'], ['label_name' => 'No Answer', 'label_color' => '#ffc300', 'is_default' => 1, 'description' => 'Reported by users because the question has no correct option provided.'], ['label_name' => 'Incorrect Formatting', 'label_color' => '#900c3f', 'is_default' => 1, 'description' => 'Reported by users for formatting or display issues.'], ['label_name' => 'Wrong Subject', 'label_color' => '#581845', 'is_default' => 1, 'description' => 'Reported by users for being in the wrong subject category.'], ['label_name' => 'Duplicate', 'label_color' => '#c70039', 'is_default' => 1, 'description' => 'Automatically marked as a duplicate of another question during import.']];
     foreach ($default_labels as $label) { if ($wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $table_labels WHERE label_name = %s", $label['label_name'])) == 0) { $wpdb->insert($table_labels, $label); } }
 
-    $table_groups = $wpdb->prefix . 'qp_question_groups';
-    $sql_groups = "CREATE TABLE $table_groups ( group_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT, direction_text LONGTEXT, direction_image_id BIGINT(20) UNSIGNED, subject_id BIGINT(20) UNSIGNED NOT NULL, PRIMARY KEY (group_id), KEY subject_id (subject_id) ) $charset_collate;";
-    dbDelta($sql_groups);
+    // UPDATED: Table for Questions with last_modified column
+    $table_questions = $wpdb->prefix . 'qp_questions';
+    $sql_questions = "CREATE TABLE $table_questions (
+        question_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+        custom_question_id BIGINT(20) UNSIGNED,
+        group_id BIGINT(20) UNSIGNED,
+        question_text LONGTEXT NOT NULL,
+        question_text_hash VARCHAR(32) NOT NULL,
+        is_pyq BOOLEAN NOT NULL DEFAULT 0,
+        source_file VARCHAR(255),
+        source_page INT,
+        source_number INT,
+        duplicate_of BIGINT(20) UNSIGNED DEFAULT NULL,
+        import_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        last_modified DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        status VARCHAR(20) NOT NULL DEFAULT 'publish',
+        PRIMARY KEY (question_id),
+        UNIQUE KEY custom_question_id (custom_question_id),
+        KEY group_id (group_id),
+        KEY status (status)
+    ) $charset_collate;";
+    dbDelta($sql_questions);
 
     // UPDATED: Table for Questions
     $table_questions = $wpdb->prefix . 'qp_questions';
@@ -111,7 +130,11 @@ register_uninstall_hook(QP_PLUGIN_FILE, 'qp_uninstall_plugin');
 
 // ADMIN MENU & SCRIPTS SETUP
 function qp_admin_menu() {
-    add_menu_page('All Questions', 'Question Press', 'manage_options', 'question-press', 'qp_all_questions_page_cb', 'dashicons-forms', 25);
+    // Add top-level menu page and store the returned hook suffix
+    $hook = add_menu_page('All Questions', 'Question Press', 'manage_options', 'question-press', 'qp_all_questions_page_cb', 'dashicons-forms', 25);
+    
+    // Use this hook to add screen options
+    add_action("load-{$hook}", 'qp_add_screen_options');
     add_submenu_page('question-press', 'All Questions', 'All Questions', 'manage_options', 'question-press', 'qp_all_questions_page_cb');
     add_submenu_page('question-press', 'Add New', 'Add New', 'manage_options', 'qp-question-editor', ['QP_Question_Editor_Page', 'render']);
     add_submenu_page(null, 'Edit Question', 'Edit Question', 'manage_options', 'qp-edit-group', ['QP_Question_Editor_Page', 'render']);
@@ -123,6 +146,29 @@ function qp_admin_menu() {
     add_submenu_page('question-press', 'Settings', 'Settings', 'manage_options', 'qp-settings', ['QP_Settings_Page', 'render']);
 }
 add_action('admin_menu', 'qp_admin_menu');
+
+// NEW: Function to add screen options to our page
+function qp_add_screen_options() {
+    $option = 'per_page';
+    $args = [
+        'label'   => 'Questions per page',
+        'default' => 20,
+        'option'  => 'qp_questions_per_page'
+    ];
+    add_screen_option($option, $args);
+
+    // We also need to instantiate our table here so WordPress knows about its columns
+    new QP_Questions_List_Table();
+}
+
+// NEW: Function to save the screen options
+function qp_save_screen_options($status, $option, $value) {
+    if ('qp_questions_per_page' === $option) {
+        return $value;
+    }
+    return $status;
+}
+add_filter('set-screen-option', 'qp_save_screen_options', 10, 3);
 
 
 
@@ -226,7 +272,7 @@ function qp_handle_save_question_group() {
         $question_id = isset($q_data['question_id']) ? absint($q_data['question_id']) : 0;
         $question_text = sanitize_textarea_field($q_data['question_text']);
         if (empty($question_text)) continue;
-        $question_db_data = ['group_id' => $group_id, 'question_text' => $question_text, 'is_pyq' => $is_pyq, 'question_text_hash' => md5(strtolower(trim(preg_replace('/\s+/', '', $question_text))))];
+        $question_db_data = ['group_id' => $group_id, 'question_text' => $question_text, 'is_pyq' => $is_pyq, 'question_text_hash' => md5(strtolower(trim(preg_replace('/\s+/', '', $question_text)))), 'last_modified' => current_time('mysql')];
         if ($question_id && in_array($question_id, $existing_q_ids)) {
             $wpdb->update($q_table, $question_db_data, ['question_id' => $question_id]);
             $submitted_q_ids[] = $question_id;
@@ -687,8 +733,11 @@ function qp_save_quick_edit_data_ajax() {
     
     global $wpdb;
     
-    // Update PYQ status
-    $wpdb->update("{$wpdb->prefix}qp_questions", ['is_pyq' => isset($data['is_pyq']) ? 1 : 0], ['question_id' => $question_id]);
+// Update Question PYQ status and last modified date
+    $wpdb->update("{$wpdb->prefix}qp_questions", [
+        'is_pyq' => isset($data['is_pyq']) ? 1 : 0,
+        'last_modified' => current_time('mysql') // NEW: Update the modified time
+    ], ['question_id' => $question_id]);
 
     // Update Subject
     $group_id = $wpdb->get_var($wpdb->prepare("SELECT group_id FROM {$wpdb->prefix}qp_questions WHERE question_id = %d", $question_id));
@@ -756,3 +805,5 @@ function qp_regenerate_api_key_ajax() {
     wp_send_json_success(['new_key' => $new_key]);
 }
 add_action('wp_ajax_regenerate_api_key', 'qp_regenerate_api_key_ajax');
+
+

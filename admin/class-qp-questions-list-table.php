@@ -8,7 +8,10 @@ class QP_Questions_List_Table extends WP_List_Table
 {
 
     public function __construct() {
-        parent::__construct(['singular' => 'Question', 'plural' => 'Questions', 'ajax' => false]);
+        parent::__construct([
+            'singular' => 'Question', 'plural' => 'Questions', 'ajax' => false,
+            'screen' => get_current_screen() // Important for screen options to work
+        ]);
     }
 
     /**
@@ -17,22 +20,26 @@ class QP_Questions_List_Table extends WP_List_Table
     public function get_columns() {
         return [
             'cb'                 => '<input type="checkbox" />',
-            'custom_question_id' => 'Question ID',
+            'custom_question_id' => 'ID',
             'question_text'      => 'Question',
             'subject_name'       => 'Subject',
-            'source'             => 'Source', // NEW COLUMN
-            'import_date'        => 'Date'
+            'source'             => 'Source',
+            'is_pyq'             => 'PYQ',
+            'last_modified'      => 'Last Modified'
         ];
     }
 
-    public function get_sortable_columns()
-    {
+    public function get_sortable_columns() {
         return [
             'custom_question_id' => ['custom_question_id', true],
-            'question_text'      => ['question_text', false],
             'subject_name'       => ['subject_name', false],
-            'import_date'        => ['import_date', true]
+            'last_modified'      => ['last_modified', true]
         ];
+    }
+
+    protected function get_hidden_columns() {
+        // Hide some columns by default
+        return ['source', 'is_pyq'];
     }
 
     
@@ -143,7 +150,12 @@ class QP_Questions_List_Table extends WP_List_Table
     {
         global $wpdb;
         $this->process_bulk_action();
-        $this->_column_headers = [$this->get_columns(), [], $this->get_sortable_columns(), 'custom_question_id'];
+        // UPDATED: Now respects screen options
+        $columns = $this->get_columns();
+        
+        $hidden = $this->get_hidden_columns();
+        $sortable = $this->get_sortable_columns();
+        $this->_column_headers = [$columns, $hidden, $sortable, 'custom_question_id'];
         // UPDATED: Use the saved setting for per_page value
         $options = get_option('qp_settings');
         $per_page = isset($options['questions_per_page']) ? absint($options['questions_per_page']) : 20;
@@ -347,7 +359,18 @@ class QP_Questions_List_Table extends WP_List_Table
             ];
         }
         
-        $row_text = sprintf('<strong>%s</strong>', wp_trim_words(esc_html($item['question_text']), 50, '...'));
+        $row_text = '';
+
+        // NEW: Display Direction and Image Indicator
+        if (!empty($item['direction_text'])) {
+            $direction_display = '<strong>Direction:</strong> ' . wp_trim_words(esc_html($item['direction_text']), 25, '...');
+            if (!empty($item['direction_image_id'])) {
+                $direction_display .= ' <span class="dashicons dashicons-format-image" title="Includes Image"></span>';
+            }
+            $row_text .= '<div style="padding: 5px; background-color: #f6f7f7; margin-bottom: 5px;">' . $direction_display . '</div>';
+        }
+        
+        $row_text .= sprintf('<strong>%s</strong>', esc_html($item['question_text']));
 
         if (!empty($item['labels'])) {
             $labels_html = '<div style="margin-top: 5px; display: flex; flex-wrap: wrap; gap: 5px;">';
