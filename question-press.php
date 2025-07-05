@@ -233,48 +233,55 @@ function get_question_custom_id($question_id) {
 
 function qp_handle_save_question_group() {
     if (!isset($_POST['save_group']) || !isset($_POST['_wpnonce']) || !wp_verify_nonce($_POST['_wpnonce'], 'qp_save_question_group_nonce')) { return; }
+
     global $wpdb;
     $group_id = isset($_POST['group_id']) ? absint($_POST['group_id']) : 0;
     $is_editing = $group_id > 0;
-    $direction_text = sanitize_textarea_field($_POST['direction_text']);
+
+    // --- FIX: Apply stripslashes to all incoming text data ---
+    $direction_text = isset($_POST['direction_text']) ? stripslashes($_POST['direction_text']) : '';
     $direction_image_id = absint($_POST['direction_image_id']);
     $subject_id = absint($_POST['subject_id']);
     $is_pyq = isset($_POST['is_pyq']) ? 1 : 0;
     $questions_from_form = isset($_POST['questions']) ? (array) $_POST['questions'] : [];
+
     if (empty($subject_id) || empty($questions_from_form)) { return; }
 
-    $group_data = ['direction_text' => $direction_text, 'direction_image_id' => $direction_image_id, 'subject_id' => $subject_id];
+    $group_data = [
+        'direction_text' => sanitize_textarea_field($direction_text), // Sanitize AFTER stripping slashes
+        'direction_image_id' => $direction_image_id,
+        'subject_id' => $subject_id
+    ];
+
     if ($is_editing) {
         $wpdb->update("{$wpdb->prefix}qp_question_groups", $group_data, ['group_id' => $group_id]);
     } else {
         $wpdb->insert("{$wpdb->prefix}qp_question_groups", $group_data);
         $group_id = $wpdb->insert_id;
     }
+
     $q_table = "{$wpdb->prefix}qp_questions"; $o_table = "{$wpdb->prefix}qp_options"; $ql_table = "{$wpdb->prefix}qp_question_labels";
     $existing_q_ids = $is_editing ? $wpdb->get_col($wpdb->prepare("SELECT question_id FROM $q_table WHERE group_id = %d", $group_id)) : [];
-$submitted_q_ids = [];
+
+    $submitted_q_ids = [];
     if (!empty($questions_from_form)) {
         foreach ($questions_from_form as $q_index => $q_data) {
+            // --- FIX: Apply stripslashes here ---
+            $question_text = isset($q_data['question_text']) ? stripslashes($q_data['question_text']) : '';
+            if (empty(trim($question_text))) { continue; }
+
             $question_id = isset($q_data['question_id']) ? absint($q_data['question_id']) : 0;
-            $question_text = isset($q_data['question_text']) ? sanitize_textarea_field($q_data['question_text']) : '';
-
-            if (empty($question_text)) {
-                continue; // Skip empty questions
-            }
-
             $question_db_data = [
                 'group_id' => $group_id,
-                'question_text' => $question_text,
+                'question_text' => sanitize_textarea_field($question_text),
                 'is_pyq' => $is_pyq,
                 'question_text_hash' => md5(strtolower(trim(preg_replace('/\s+/', '', $question_text))))
             ];
 
             if ($question_id > 0 && in_array($question_id, $existing_q_ids)) {
-                // This is an existing question, so we UPDATE it.
                 $wpdb->update($q_table, $question_db_data, ['question_id' => $question_id]);
                 $submitted_q_ids[] = $question_id;
             } else {
-                // This is a new question, so we INSERT it.
                 $next_custom_id = get_option('qp_next_custom_question_id', 1000);
                 $question_db_data['custom_question_id'] = $next_custom_id;
                 $wpdb->insert($q_table, $question_db_data);
@@ -283,29 +290,27 @@ $submitted_q_ids = [];
                 $submitted_q_ids[] = $question_id;
             }
 
-            // --- Handle Options ---
             $wpdb->delete($o_table, ['question_id' => $question_id]);
             $options = isset($q_data['options']) ? (array) $q_data['options'] : [];
             $correct_option_index = isset($q_data['is_correct_option']) ? absint($q_data['is_correct_option']) : -1;
+
             foreach ($options as $index => $option_text) {
                 if (!empty(trim($option_text))) {
+                    // --- FIX: Apply stripslashes here ---
+                    $clean_option_text = stripslashes($option_text);
                     $wpdb->insert($o_table, [
                         'question_id' => $question_id,
-                        'option_text' => sanitize_text_field($option_text),
+                        'option_text' => sanitize_text_field($clean_option_text),
                         'is_correct' => ($index === $correct_option_index) ? 1 : 0
                     ]);
                 }
             }
 
-            // --- Handle Labels ---
             $wpdb->delete($ql_table, ['question_id' => $question_id]);
             $labels = isset($q_data['labels']) ? array_map('absint', $q_data['labels']) : [];
-            foreach ($labels as $label_id) {
-                $wpdb->insert($ql_table, ['question_id' => $question_id, 'label_id' => $label_id]);
-            }
+            foreach ($labels as $label_id) { $wpdb->insert($ql_table, ['question_id' => $question_id, 'label_id' => $label_id]); }
         }
     }
-
 
     $questions_to_delete = array_diff($existing_q_ids, $submitted_q_ids);
     if (!empty($questions_to_delete)) {
@@ -315,24 +320,13 @@ $submitted_q_ids = [];
         $wpdb->query("DELETE FROM $q_table WHERE question_id IN ($ids_placeholder)");
     }
 
-    // After all updates, check if the group is now empty and should be deleted.
-    $remaining_questions_in_group = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $q_table WHERE group_id = %d", $group_id));
-    if ($is_editing && $remaining_questions_in_group == 0) {
+    if ($is_editing && count($submitted_q_ids) === 0) {
         $wpdb->delete("{$wpdb->prefix}qp_question_groups", ['group_id' => $group_id]);
-        // Redirect to the main page since this group no longer exists.
         wp_safe_redirect(admin_url('admin.php?page=question-press&message=1'));
         exit;
     }
-    // Determine the correct redirect URL and message
-    if ($is_editing) {
-        // Redirect to the "All Questions" list with an "updated" message
-        $redirect_url = admin_url('admin.php?page=question-press&message=1');
-    } else {
-        // After creating a new group, redirect to the new group's editor page
-        // with a "saved" message.
-        $redirect_url = admin_url('admin.php?page=qp-edit-group&group_id=' . $group_id . '&message=2');
-    }
 
+    $redirect_url = $is_editing ? admin_url('admin.php?page=question-press&message=1') : admin_url('admin.php?page=qp-edit-group&group_id=' . $group_id . '&message=2');
     wp_safe_redirect($redirect_url);
     exit;
 }
@@ -350,18 +344,21 @@ function qp_public_enqueue_scripts() {
         wp_enqueue_style('qp-practice-styles', QP_PLUGIN_URL . 'public/assets/css/practice.css', [], '1.0.3');
         $ajax_data = ['ajax_url' => admin_url('admin-ajax.php'), 'nonce' => wp_create_nonce('qp_practice_nonce')];
         if (has_shortcode($post->post_content, 'question_press_practice')) {
-            // --- NEW KaTeX IMPLEMENTATION ---
+            // --- FINAL KaTeX IMPLEMENTATION ---
             // 1. Load KaTeX CSS
-            wp_enqueue_style('katex-css', 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css');
+            wp_enqueue_style('katex-css', 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css', [], '0.16.9');
 
             // 2. Load KaTeX JavaScript Library
             wp_enqueue_script('katex-js', 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js', [], '0.16.9', true);
 
-            // 3. Load the KaTeX Auto-Render Extension
-            wp_enqueue_script('katex-auto-render', 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js', ['katex-js'], '0.16.9', true);
+            // 3. NEW: Load the Chemistry (mhchem) Extension
+            wp_enqueue_script('katex-mhchem', 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/mhchem.min.js', ['katex-js'], '0.16.9', true);
 
-            // 4. Load your practice script, making sure it loads after everything else
-            wp_enqueue_script('qp-practice-script', QP_PLUGIN_URL . 'public/assets/js/practice.js', ['jquery', 'katex-auto-render'], '1.0.6', true);
+            // 4. Load the Auto-Render Extension, making sure it depends on the chemistry extension
+            wp_enqueue_script('katex-auto-render', 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js', ['katex-mhchem'], '0.16.9', true);
+
+            // 5. Load your practice script, making it dependent on the auto-renderer
+            wp_enqueue_script('qp-practice-script', QP_PLUGIN_URL . 'public/assets/js/practice.js', ['jquery', 'katex-auto-render'], '1.0.7', true);
             wp_localize_script('qp-practice-script', 'qp_ajax_object', $ajax_data);
         }
         if (has_shortcode($post->post_content, 'question_press_dashboard')) {
