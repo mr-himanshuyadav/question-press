@@ -205,27 +205,31 @@ jQuery(document).ready(function($) {
                     });
 
                     // Manage button states and display previous results
-                    if (previousState) {
-                        $('#qp-next-btn').prop('disabled', false);
-                        $('.qp-options-area .option').addClass('disabled');
-                        
-                        if (previousState.type === 'answered') {
-                            $('#qp-skip-btn').prop('disabled', true);
-                            if (previousState.is_correct) { $('input[value="' + previousState.selected_option_id + '"]').closest('.option').addClass('correct'); }
-                            else { $('input[value="' + previousState.selected_option_id + '"]').closest('.option').addClass('incorrect'); $('input[value="' + previousState.correct_option_id + '"]').closest('.option').addClass('correct'); }
-                        } else if (previousState.type === 'skipped') {
-                             $('#qp-skip-btn, .qp-user-report-btn').prop('disabled', true);
-                            $('#qp-reported-indicator').show();
-                        }
-                        
-                        // Always check for and disable any specific report buttons that have been used
-                        if (previousState.reported_as && previousState.reported_as.length > 0) {
-                            previousState.reported_as.forEach(function(labelName) {
-                                $('.qp-report-button[data-label="' + labelName + '"]').prop('disabled', true).text('Reported');
-                            });
-                        }
+                if (previousState) {
+                    $('#qp-next-btn').prop('disabled', false);
+                    $('.qp-options-area .option').addClass('disabled');
 
-                    } else {
+                    if (previousState.type === 'answered') {
+                        $('#qp-skip-btn').prop('disabled', true); // Can't skip after answering
+                        if (previousState.is_correct) {
+                            $('input[value="' + previousState.selected_option_id + '"]').closest('.option').addClass('correct');
+                        } else {
+                            $('input[value="' + previousState.selected_option_id + '"]').closest('.option').addClass('incorrect');
+                            $('input[value="' + previousState.correct_option_id + '"]').closest('.option').addClass('correct');
+                        }
+                    } else if (previousState.type === 'skipped') {
+                        $('#qp-skip-btn, .qp-user-report-btn, .qp-admin-report-btn').prop('disabled', true); // Disable all actions if skipped
+                    }
+
+                    // ONLY show the reported indicator if a report was actually filed
+                    if (previousState.reported_as && previousState.reported_as.length > 0) {
+                         $('#qp-reported-indicator').show();
+                        previousState.reported_as.forEach(function(labelName) {
+                            $('.qp-report-button[data-label="' + labelName + '"]').prop('disabled', true).text('Reported');
+                        });
+                    }
+
+                } else {
                         $('#qp-next-btn').prop('disabled', true); // Next is disabled for new questions
                         if (sessionSettings.timer_enabled) { startTimer(sessionSettings.timer_seconds); }
                     }
