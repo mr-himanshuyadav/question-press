@@ -350,6 +350,10 @@ function qp_public_enqueue_scripts() {
         wp_enqueue_style('qp-practice-styles', QP_PLUGIN_URL . 'public/assets/css/practice.css', [], '1.0.3');
         $ajax_data = ['ajax_url' => admin_url('admin-ajax.php'), 'nonce' => wp_create_nonce('qp_practice_nonce')];
         if (has_shortcode($post->post_content, 'question_press_practice')) {
+            // --- ADD THESE TWO LINES FOR LATEX SUPPORT ---
+            wp_enqueue_script('qp-mathjax', 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js', [], null, true);
+            wp_enqueue_script('qp-mathjax-config', QP_PLUGIN_URL . 'public/assets/js/mathjax-config.js', [], null, true);
+            // --- END OF NEW LINES ---
             wp_enqueue_script('qp-practice-script', QP_PLUGIN_URL . 'public/assets/js/practice.js', ['jquery'], '1.0.3', true);
             wp_localize_script('qp-practice-script', 'qp_ajax_object', $ajax_data);
         }

@@ -189,6 +189,7 @@ jQuery(document).ready(function($) {
                     var questionData = response.data.question;
                                         if (sessionSettings.revise_mode && response.data.is_revision) { $('#qp-revision-indicator').show(); }
                     if (questionData.direction_text) { $('.qp-direction').html($('<p>').text(questionData.direction_text)).show(); }
+                    if (window.MathJax) { window.MathJax.typeset(); }
                     if (questionData.direction_image_url) { $('.qp-direction').append($('<img>').attr('src', questionData.direction_image_url).css('max-width', '100%')); }
                     $('#qp-question-subject').text('Subject: ' + questionData.subject_name);
                     $('#qp-question-id').text('Question ID: ' + questionData.custom_question_id);
@@ -251,6 +252,8 @@ jQuery(document).ready(function($) {
         }
         loadQuestion(sessionQuestionIDs[currentQuestionIndex]);
     } 
+
+
     function updateHeaderStats() {
         $('#qp-score').text(score.toFixed(2));
         $('#qp-correct-count').text(correctCount);
