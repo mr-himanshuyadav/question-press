@@ -177,3 +177,24 @@
     background-color: #b02a2a;
     border-color: #b02a2a;
 }
+
+/* ADD THIS to practice.css */
+
+.qp-report-button {
+    background: none;
+    border: 1px solid var(--qp-border-color);
+    color: var(--qp-light-text);
+    cursor: pointer;
+    border-radius: 4px;
+    padding: 5px 10px;
+    font-size: 12px;
+    transition: all 0.2s;
+}
+.qp-report-button:hover:not(:disabled) {
+    background-color: var(--qp-bg-light);
+    border-color: var(--qp-light-text);
+}
+.qp-report-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}

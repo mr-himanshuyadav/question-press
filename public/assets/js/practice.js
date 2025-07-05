@@ -20,7 +20,7 @@ jQuery(document).ready(function($) {
     // Handles form submission to start a session
     wrapper.on('submit', '#qp-start-practice-form', function(e) {
         e.preventDefault();
-        practiceInProgress = true; // Set the flag
+        practiceInProgress = true; // Set the flag to prevent accidental page refresh
         var formData = $(this).serialize();
         $.ajax({
             url: qp_ajax_object.ajax_url, type: 'POST',
@@ -29,10 +29,20 @@ jQuery(document).ready(function($) {
             success: function(response) {
                 if (response.success) {
                     wrapper.html(response.data.ui_html);
-                    sessionID = response.data.session_id; sessionQuestionIDs = response.data.question_ids; sessionSettings = response.data.settings;
-                    currentQuestionIndex = 0; score = 0; correctCount = 0; incorrectCount = 0; skippedCount = 0; answeredStates = {};
-                    updateHeaderStats(); loadQuestion(sessionQuestionIDs[currentQuestionIndex]);
-                } else { wrapper.html('<p style="text-align:center; color: red;">Error: ' + response.data.message + '</p>'); }
+                    sessionID = response.data.session_id; 
+                    sessionQuestionIDs = response.data.question_ids; 
+                    sessionSettings = response.data.settings;
+                    currentQuestionIndex = 0; 
+                    score = 0; 
+                    correctCount = 0; 
+                    incorrectCount = 0; 
+                    skippedCount = 0; 
+                    answeredStates = {};
+                    updateHeaderStats(); 
+                    loadQuestion(sessionQuestionIDs[currentQuestionIndex]);
+                } else { 
+                    wrapper.html('<p style="text-align:center; color: red;">Error: ' + response.data.message + '</p>'); 
+                }
             }
         });
     });
@@ -44,7 +54,7 @@ jQuery(document).ready(function($) {
         var selectedOptionID = selectedOption.find('input[type="radio"]').val();
         var questionID = sessionQuestionIDs[currentQuestionIndex];
         
-        $('.qp-options-area .option, #qp-skip-btn, .qp-user-report-btn, .qp-admin-report-btn').prop('disabled', true);
+        $('.qp-options-area .option, #qp-skip-btn').prop('disabled', true);
         $('#qp-next-btn').prop('disabled', false);
 
         $.ajax({
@@ -54,9 +64,14 @@ jQuery(document).ready(function($) {
                 if (response.success) {
                     answeredStates[questionID] = { type: 'answered', is_correct: response.data.is_correct, correct_option_id: response.data.correct_option_id, selected_option_id: selectedOptionID };
                     if (response.data.is_correct) {
-                        selectedOption.addClass('correct'); score += parseFloat(sessionSettings.marks_correct); correctCount++;
+                        selectedOption.addClass('correct'); 
+                        score += parseFloat(sessionSettings.marks_correct); 
+                        correctCount++;
                     } else {
-                        selectedOption.addClass('incorrect'); $('input[value="' + response.data.correct_option_id + '"]').closest('.option').addClass('correct'); score += parseFloat(sessionSettings.marks_incorrect); incorrectCount++;
+                        selectedOption.addClass('incorrect'); 
+                        $('input[value="' + response.data.correct_option_id + '"]').closest('.option').addClass('correct'); 
+                        score += parseFloat(sessionSettings.marks_incorrect); 
+                        incorrectCount++;
                     }
                     updateHeaderStats();
                 }
@@ -70,7 +85,10 @@ jQuery(document).ready(function($) {
         if ($(this).attr('id') === 'qp-next-btn') {
             loadNextQuestion();
         } else {
-            if(currentQuestionIndex > 0) { currentQuestionIndex--; loadQuestion(sessionQuestionIDs[currentQuestionIndex]); }
+            if(currentQuestionIndex > 0) { 
+                currentQuestionIndex--; 
+                loadQuestion(sessionQuestionIDs[currentQuestionIndex]); 
+            }
         }
     });
 
@@ -91,7 +109,6 @@ jQuery(document).ready(function($) {
         $('.qp-footer-nav button, .qp-user-report-btn, .qp-admin-report-btn').prop('disabled', true);
         if ($button.data('label')) $button.text('Processing...');
 
-        // If the question was already answered, reverse the score before user reports/skips it
         if (!isAdminAction && answeredStates[questionID] && answeredStates[questionID].type === 'answered') {
             if (answeredStates[questionID].is_correct) { score -= parseFloat(sessionSettings.marks_correct); correctCount--; }
             else { score -= parseFloat(sessionSettings.marks_incorrect); incorrectCount--; }
@@ -107,12 +124,15 @@ jQuery(document).ready(function($) {
             data: ajaxData,
             success: function(response) {
                 if(response.success) {
-                    // Only increment skip count for user actions if it hasn't been skipped/reported before
-                    if (!isAdminAction && (!answeredStates[questionID] || answeredStates[questionID].type === 'answered')) {
-                        skippedCount++;
+                    if (!isAdminAction) {
+                        if (!answeredStates[questionID] || answeredStates[questionID].type === 'answered') {
+                            skippedCount++;
+                        }
+                        answeredStates[questionID] = { type: 'skipped' };
+                    } else {
+                        answeredStates[questionID] = answeredStates[questionID] || {};
+                        answeredStates[questionID].admin_labelled = true;
                     }
-                    
-                    answeredStates[questionID] = { type: (isAdminAction ? 'admin_labelled' : 'reported') };
                     updateHeaderStats();
                     loadNextQuestion();
                 } else {
@@ -124,7 +144,7 @@ jQuery(document).ready(function($) {
     });
     
     wrapper.on('click', '#qp-end-practice-btn', function() {
-        practiceInProgress = false; // Session is ending
+        practiceInProgress = false;
         clearInterval(questionTimer);
         if (confirm('Are you sure you want to end this practice session?')) {
             $.ajax({
@@ -134,11 +154,10 @@ jQuery(document).ready(function($) {
                 success: function(response) { if (response.success) { displaySummary(response.data); } }
             });
         } else {
-            practiceInProgress = true; // User cancelled, so session continues
+            practiceInProgress = true;
         }
     });
 
-    // NEW: Handle page refresh/close attempts
     $(window).on('beforeunload', function() {
         if (practiceInProgress) {
             return "Are you sure you want to leave? Your practice session is in progress and will be lost.";
@@ -148,6 +167,7 @@ jQuery(document).ready(function($) {
     // --- Helper Functions ---
     function loadQuestion(questionID) {
         if (!questionID) return;
+        
         $('#qp-question-text-area').html('Loading...');
         $('.qp-options-area').empty();
         $('#qp-revision-indicator, .qp-direction, #qp-reported-indicator').hide();
@@ -179,7 +199,7 @@ jQuery(document).ready(function($) {
                         optionsArea.append(optionHtml);
                     });
 
-                    // Manage button states and display previous results
+                    // Manage button states based on history
                     if (previousState) {
                         $('.qp-options-area .option, #qp-skip-btn, .qp-user-report-btn, .qp-admin-report-btn').prop('disabled', true);
                         if (previousState.type === 'answered') {
@@ -199,7 +219,6 @@ jQuery(document).ready(function($) {
             }
         });
     }
-    
     
     function loadNextQuestion() {
         currentQuestionIndex++;
@@ -234,20 +253,18 @@ jQuery(document).ready(function($) {
             if (remainingTime <= 0) {
                 clearInterval(questionTimer);
                 if (confirm("Time's up for this question! Click OK to move to the next question.")) {
-                    handleSkipOrReport('skip_question', null); // Use unified handler
+                    handleSkipOrReport('skip_question', $('#qp-skip-btn'));
                 }
             }
         }, 1000);
     }
 
     function displaySummary(summaryData) {
+        practiceInProgress = false;
         var summaryHtml = `
             <div class="qp-summary-wrapper">
                 <h2>Session Summary</h2>
-                <div class="qp-summary-score">
-                    <div class="label">Final Score</div>
-                    ${parseFloat(summaryData.final_score).toFixed(2)}
-                </div>
+                <div class="qp-summary-score"><div class="label">Final Score</div>${parseFloat(summaryData.final_score).toFixed(2)}</div>
                 <div class="qp-summary-stats">
                     <div class="stat"><div class="value">${summaryData.total_attempted}</div><div class="label">Attempted</div></div>
                     <div class="stat"><div class="value">${summaryData.correct_count}</div><div class="label">Correct</div></div>
@@ -258,8 +275,7 @@ jQuery(document).ready(function($) {
                     <a href="/dashboard/" class="qp-button qp-button-secondary">View Dashboard</a>
                     <a href="" class="qp-button qp-button-primary">Start Another Practice</a>
                 </div>
-            </div>
-        `;
+            </div>`;
         wrapper.html(summaryHtml);
     }
 });
