@@ -157,15 +157,34 @@ class QP_Question_Editor_Page {
                         <div id="postbox-container-1" class="postbox-container">
                             <div class="postbox">
                                 <h2 class="hndle"><span>Publish</span></h2>
-                                <div class="inside"> ... </div>
+                                <div class="inside">
+                                    <div class="submitbox" id="submitpost">
+                                        <div id="major-publishing-actions">
+                                            <div id="publishing-action">
+                                                <input name="save_group" type="submit" class="button button-primary button-large" id="publish" value="<?php echo $is_editing ? 'Update Question(s)' : 'Save Question(s)'; ?>">
+                                            </div>
+                                            <div class="clear"></div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                              <div class="postbox">
                                 <h2 class="hndle"><span>Subject</span></h2>
-                                <div class="inside"> ... </div>
+                                <div class="inside">
+                                    <select name="subject_id" style="width: 100%;">
+                                        <?php foreach($all_subjects as $subject) : ?>
+                                            <option value="<?php echo esc_attr($subject->subject_id); ?>" <?php selected($current_subject_id, $subject->subject_id); ?>>
+                                                <?php echo esc_html($subject->subject_name); ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
                             </div>
                             <div class="postbox">
                                 <h2 class="hndle"><span>Settings</span></h2>
-                                <div class="inside"> ... </div>
+                                <div class="inside">
+                                    <label><input type="checkbox" name="is_pyq" value="1" <?php checked($is_pyq_group, 1); ?>> PYQ (Applies to all questions in this group)</label>
+                                </div>
                             </div>
                         </div>
                     </div><br class="clear">
