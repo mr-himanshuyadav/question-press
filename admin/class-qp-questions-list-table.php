@@ -374,8 +374,9 @@ public function column_question_text($item) {
         $output .= '<div style="padding-bottom: 8px;">' . $direction_display . '</div>';
     }
 
-    // Display the main question text
-    $output .= sprintf('<strong>%s</strong>', wp_trim_words(esc_html($item['question_text']), 50, '...'));
+    // Remove any "Q#:" prefix before displaying the text
+        $clean_question_text = preg_replace('/^q\d+:\s*/i', '', $item['question_text']);
+        $output .= sprintf('<strong>%s</strong>', wp_trim_words(esc_html($clean_question_text), 50, '...'));
 
     // Display labels and the duplicate cross-reference
     if (!empty($item['labels'])) {
@@ -431,10 +432,10 @@ public function column_question_text($item) {
             if (!empty($item['direction_image_id'])) {
                 $direction_display .= ' <span class="dashicons dashicons-format-image" title="Includes Image" style="color:#888; font-size: 16px; vertical-align: middle;"></span>';
             }
-            $row_text .= '<div style="padding: 5px; background-color: #f6f7f7; margin-bottom: 8px; border-radius: 3px;">' . $direction_display . '</div>';
+            $row_text .= '<div style="padding: 0px; background-color: #f6f7f7; margin-bottom: 8px; border-radius: 3px;">' . $direction_display . '</div>';
         }
         
-        $row_text .= sprintf('<strong>(ID: %d) %s</strong>', esc_html($item['custom_question_id']), esc_html($item['question_text']));
+        $row_text .= sprintf('<strong>%s</strong>', esc_html($item['question_text']));
 
         // Display labels and the duplicate cross-reference
         if (!empty($item['labels'])) {
