@@ -153,21 +153,22 @@ class QP_Shortcodes
             </div>
 
             <div class="qp-user-report-area">
-            <h4>Report</h4> <div class="button-group">
-                 <button class="qp-report-button qp-user-report-btn" data-label="Wrong Answer">Report Incorrect Answer</button>
-                 <button class="qp-report-button qp-user-report-btn" data-label="No Answer">Report No Answer</button>
+                <h4>Report an Issue</h4> 
+                <div class="button-group">
+                     <button class="qp-report-button qp-report-color-error" data-label="Wrong Answer">Wrong Answer</button>
+                     <button class="qp-report-button qp-report-color-warning" data-label="No Answer">No Answer</button>
+                </div>
             </div>
-        </div>
 
-        <?php if (current_user_can('manage_options')) : // Admin-only tools ?>
-        <div class="qp-admin-report-area">
-            <h4>For Admins Only (Label As)</h4>
-            <div class="button-group">
-                <button class="qp-report-button qp-admin-report-btn" data-label="Incorrect Formatting">Incorrect Formatting</button>
-                <button class="qp-report-button qp-admin-report-btn" data-label="Wrong Subject">Wrong Subject</button>
+            <?php if (current_user_can('manage_options')) : // Admin-only tools ?>
+            <div class="qp-admin-report-area">
+                <h4>For Admins Only (Label As)</h4>
+                <div class="button-group">
+                    <button class="qp-report-button qp-report-color-info" data-label="Incorrect Formatting">Incorrect Formatting</button>
+                    <button class="qp-report-button qp-report-color-neutral" data-label="Wrong Subject">Wrong Subject</button>
+                </div>
             </div>
-        </div>
-        <?php endif; ?>
+            <?php endif; ?>
         </div>
 <?php
         return ob_get_clean();

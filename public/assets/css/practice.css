@@ -113,60 +113,26 @@
 .qp-delete-session-btn { background: none; border: 1px solid #d63638; color: #d63638; cursor: pointer; border-radius: 4px; padding: 4px 8px; font-size: 12px; transition: all 0.2s; }
 .qp-delete-session-btn:hover { background: #d63638; color: #fff; }
 
-/* ADD THIS TO THE END of practice.css */
-
-.qp-admin-report-area {
+.qp-admin-report-area,
+.qp-user-report-area {
     margin-top: 30px;
     padding-top: 20px;
     border-top: 1px dashed var(--qp-border-color);
-}
-.qp-admin-report-area h4 {
-    margin-top: 0;
-    margin-bottom: 10px;
-    text-align: center;
-    color: var(--qp-light-text);
-}
-.qp-admin-report-area .button-group {
-    display: flex;
-    justify-content: center;
-    gap: 10px;
-}
-.qp-admin-report-area .button-group .qp-button-admin-report {
-    background: #f0f0f1;
-    border-color: #dcdcde;
-    color: #50575e;
-    font-weight: normal;
-    padding: 5px 10px;
-    font-size: 13px;
-}
-
-/* ADD THIS TO THE END of practice.css */
-.qp-user-report-area {
-    margin-top: 20px;
-    padding-top: 20px;
-    border-top: 1px solid var(--qp-border-color);
     text-align: center;
 }
+.qp-admin-report-area h4,
 .qp-user-report-area h4 {
     margin-top: 0;
-    margin-bottom: 10px;
+    margin-bottom: 15px;
     color: var(--qp-light-text);
     font-size: 16px;
 }
+.qp-admin-report-area .button-group,
 .qp-user-report-area .button-group {
     display: flex;
     justify-content: center;
     gap: 10px;
 }
-.qp-user-report-area .qp-user-report-btn {
-    background: none;
-    border: none;
-    color: var(--qp-primary-color);
-    text-decoration: underline;
-    cursor: pointer;
-}
-
-/* ADD THIS to practice.css */
 
 .qp-button-danger {
     background-color: #d63638;
@@ -178,23 +144,40 @@
     border-color: #b02a2a;
 }
 
-/* ADD THIS to practice.css */
-
+/* --- NEW UNIFIED REPORT BUTTON STYLES --- */
 .qp-report-button {
-    background: none;
-    border: 1px solid var(--qp-border-color);
-    color: var(--qp-light-text);
+    border: none;
+    color: #fff;
     cursor: pointer;
     border-radius: 4px;
-    padding: 5px 10px;
-    font-size: 12px;
-    transition: all 0.2s;
+    padding: 8px 14px;
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 0.2s ease;
 }
+
 .qp-report-button:hover:not(:disabled) {
-    background-color: var(--qp-bg-light);
-    border-color: var(--qp-light-text);
+    opacity: 0.85;
+    transform: translateY(-1px);
 }
+
 .qp-report-button:disabled {
-    opacity: 0.6;
+    opacity: 0.5;
     cursor: not-allowed;
+}
+
+.qp-report-color-error {
+    background-color: #e57373; /* Light Red */
+}
+
+.qp-report-color-warning {
+    background-color: #ffb74d; /* Light Orange */
+}
+
+.qp-report-color-info {
+    background-color: #64b5f6; /* Light Blue */
+}
+
+.qp-report-color-neutral {
+    background-color: #90a4ae; /* Blue Grey */
 }
