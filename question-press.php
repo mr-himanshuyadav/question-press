@@ -542,7 +542,7 @@ function qp_get_question_data_ajax() {
     global $wpdb;
     $q_table = $wpdb->prefix . 'qp_questions'; $g_table = $wpdb->prefix . 'qp_question_groups'; $s_table = $wpdb->prefix . 'qp_subjects'; $o_table = $wpdb->prefix . 'qp_options'; $a_table = $wpdb->prefix . 'qp_user_attempts';
 
-    $question_data = $wpdb->get_row($wpdb->prepare("SELECT q.custom_question_id, q.question_text, g.direction_text, g.direction_image_id, s.subject_name FROM {$q_table} q LEFT JOIN {$g_table} g ON q.group_id = g.group_id LEFT JOIN {$s_table} s ON g.subject_id = s.subject_id WHERE q.question_id = %d", $question_id), ARRAY_A);
+    $question_data = $wpdb->get_row($wpdb->prepare("SELECT q.custom_question_id, q.question_text, q.source_file, q.source_page, q.source_number, g.direction_text, g.direction_image_id, s.subject_name FROM {$q_table} q LEFT JOIN {$g_table} g ON q.group_id = g.group_id LEFT JOIN {$s_table} s ON g.subject_id = s.subject_id WHERE q.question_id = %d", $question_id), ARRAY_A);
     if (!$question_data) { wp_send_json_error(['message' => 'Question not found.']); }
     
     // NEW: Get image URL if an ID exists
@@ -552,7 +552,7 @@ function qp_get_question_data_ajax() {
     $user_id = get_current_user_id();
     $attempt_count = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $a_table WHERE user_id = %d AND question_id = %d", $user_id, $question_id));
     
-    wp_send_json_success(['question' => $question_data, 'is_revision' => ($attempt_count > 0)]);
+    wp_send_json_success(['question' => $question_data, 'is_revision' => ($attempt_count > 0), 'is_admin' => current_user_can('manage_options')]);
 }
 add_action('wp_ajax_get_question_data', 'qp_get_question_data_ajax');
 

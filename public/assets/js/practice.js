@@ -298,6 +298,23 @@ jQuery(document).ready(function ($) {
 
             $('#qp-question-subject').text('Subject: ' + questionData.subject_name);
             $('#qp-question-id').text('Question ID: ' + questionData.custom_question_id);
+            
+            // Handle source display for admins
+            if(response.data.is_admin) {
+                var sourceInfo = [];
+                if (questionData.source_file) sourceInfo.push('File: ' + questionData.source_file);
+                if (questionData.source_page) sourceInfo.push('Page: ' + questionData.source_page);
+                if (questionData.source_number) sourceInfo.push('No: ' + questionData.source_number);
+
+                if (sourceInfo.length > 0) {
+                    $('#qp-question-source').html(sourceInfo.join(' | ')).show();
+                } else {
+                    $('#qp-question-source').hide();
+                }
+            } else {
+                $('#qp-question-source').hide();
+            }
+
             $('#qp-question-text-area').html(questionData.question_text);
 
             var optionsArea = $('.qp-options-area');
@@ -322,6 +339,7 @@ jQuery(document).ready(function ($) {
                 var elementsToRender = [
                     directionEl.get(0),
                     document.getElementById('qp-question-text-area'),
+                    document.getElementById('qp-question-source'),
                     ...optionsArea.find('.option').toArray()
                 ];
 
@@ -387,7 +405,7 @@ jQuery(document).ready(function ($) {
         }
       },
     });
-  }
+}
 
   function loadNextQuestion() {
     currentQuestionIndex++;
