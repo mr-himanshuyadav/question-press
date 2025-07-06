@@ -15,9 +15,7 @@ class QP_Shortcodes
         return $output;
     }
 
-    // In public/class-qp-shortcodes.php
-
-    private static function render_settings_form()
+    public static function render_settings_form()
     {
         global $wpdb;
         $subjects = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}qp_subjects ORDER BY subject_name ASC");
@@ -79,13 +77,14 @@ class QP_Shortcodes
                 </div>
 
                 <div class="qp-form-group">
-                    <input type="submit" name="qp_start_practice" value="Start Practice">
+                    <input type="submit" name="qp_start_practice" value="Start Practice" class="qp-button qp-button-primary">
                 </div>
             </form>
         </div>
     <?php
         return ob_get_clean();
     }
+
 
     /**
      * Renders the static HTML layout for the main practice screen.
@@ -127,10 +126,10 @@ class QP_Shortcodes
 
             <div class="qp-question-area">
                 <div id="qp-revision-indicator" style="display: none; margin-bottom: 15px; background-color: #fffbe6; border: 1px solid #ffc107; padding: 10px; border-radius: 4px; font-weight: bold; color: #856404;">
-                &#9851; Revision Question
+                &#9851; This is a Revision Question
             </div>
             <div id="qp-reported-indicator" style="display: none; margin-bottom: 15px; background-color: #fff3cd; border: 1px solid #ffeeba; padding: 10px; border-radius: 4px; font-weight: bold; color: #856404;">
-                &#9888; Reported Question
+                &#9888; You have reported an issue with this question.
             </div>
                 <div class="question-meta" style="font-size: 12px; color: #777; margin-bottom: 10px;">
                     <span id="qp-question-subject"></span> | <span id="qp-question-id"></span>
@@ -144,13 +143,13 @@ class QP_Shortcodes
             <div class="qp-options-area"></div>
 
             <div class="qp-footer-nav">
-                <button id="qp-prev-btn" disabled>&laquo; Previous</button>
-                <button id="qp-skip-btn">Skip</button>
-                <button id="qp-next-btn">Next &raquo;</button>
+                <button id="qp-prev-btn" class="qp-button qp-button-secondary" disabled>&laquo; Previous</button>
+                <button id="qp-skip-btn" class="qp-button qp-button-secondary">Skip</button>
+                <button id="qp-next-btn" class="qp-button qp-button-primary">Next &raquo;</button>
             </div>
 
             <div class="qp-footer-controls" style="margin-top: 20px; text-align: center;">
-                <button id="qp-end-practice-btn" class="qp-button">End Practice</button>
+                <button id="qp-end-practice-btn" class="qp-button qp-button-danger">End Practice</button>
             </div>
 
             <div class="qp-user-report-area">

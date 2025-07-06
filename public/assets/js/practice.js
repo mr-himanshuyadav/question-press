@@ -44,7 +44,9 @@ jQuery(document).ready(function ($) {
         );
       },
       success: function (response) {
+        practiceInProgress = false; // Reset flag on response
         if (response.success) {
+          practiceInProgress = true; // Set flag only on successful session start
           wrapper.html(response.data.ui_html);
           sessionID = response.data.session_id;
           sessionQuestionIDs = response.data.question_ids;
@@ -58,16 +60,57 @@ jQuery(document).ready(function ($) {
           updateHeaderStats();
           loadQuestion(sessionQuestionIDs[currentQuestionIndex]);
         } else {
-          practiceInProgress = false;
-          wrapper.html(
-            '<p style="text-align:center; color: red;">Error: ' +
-              response.data.message +
-              "</p>"
-          );
+          var errorCode = response.data.error_code;
+          var errorMessage = '';
+
+          if (errorCode === 'ALL_ATTEMPTED') {
+            errorMessage = `
+              <div class="qp-practice-form-wrapper" style="text-align: center;">
+                <h2>You've Mastered It!</h2>
+                <p style="margin: 20px 0;">You have attempted all of the available questions for this criteria. Try Revision Mode to practice them again.</p>
+                <button id="qp-try-revision-btn" class="qp-button qp-button-primary">Try Revision Mode</button>
+              </div>`;
+          } else if (errorCode === 'NO_QUESTIONS_EXIST') {
+            errorMessage = `
+              <div class="qp-practice-form-wrapper" style="text-align: center;">
+                <h2>Fresh Questions Coming Soon!</h2>
+                <p style="margin: 20px 0;">We are adding more questions to your selected practice area soon. Try different options and subjects.</p>
+                <button id="qp-go-back-btn" class="qp-button qp-button-secondary">Back to Practice Form</button>
+              </div>`;
+          } else {
+            errorMessage = '<p style="text-align:center; color: red;">Error: ' + (response.data.message || 'An unknown error occurred.') + "</p>";
+          }
+          wrapper.html(errorMessage);
         }
       },
+      error: function() {
+        practiceInProgress = false;
+        wrapper.html('<p style="text-align:center; color: red;">A server error occurred. Please try again later.</p>');
+      }
     });
   });
+  
+  // Handlers for the new error screen buttons
+  wrapper.on('click', '#qp-try-revision-btn, #qp-go-back-btn', function() {
+    var isRevision = $(this).attr('id') === 'qp-try-revision-btn';
+    $.ajax({
+        url: qp_ajax_object.ajax_url,
+        type: 'POST',
+        data: { action: 'get_practice_form_html', nonce: qp_ajax_object.nonce }, // You will need to create this new AJAX action
+        beforeSend: function() {
+            wrapper.html('<p style="text-align:center; padding: 50px;">Loading form...</p>');
+        },
+        success: function(response) {
+            if (response.success) {
+                wrapper.html(response.data.form_html);
+                if (isRevision) {
+                    wrapper.find('input[name="qp_revise_mode"]').prop('checked', true);
+                }
+            }
+        }
+    });
+  });
+
 
   // Handles clicking an answer option
   wrapper.on("click", ".qp-options-area .option:not(.disabled)", function () {
@@ -258,7 +301,7 @@ jQuery(document).ready(function ($) {
     // Reset UI elements for the new question
     $("#qp-question-text-area").html("Loading...");
     $(".qp-options-area").empty();
-    $("#qp-revision-indicator, .qp-direction, #qp-reported-indicator").hide();
+    $("#qp-revision-indicator, .qp-direction, #qp-reported-indicator, #qp-question-source").hide();
     $(".qp-user-report-btn, .qp-admin-report-btn").text(function () {
       return $(this).data("label");
     });
@@ -300,7 +343,7 @@ jQuery(document).ready(function ($) {
             $('#qp-question-id').text('Question ID: ' + questionData.custom_question_id);
             
             // Handle source display for admins
-            if(response.data.is_admin) {
+            if(response.data.is_admin && (questionData.source_file || questionData.source_page || questionData.source_number)) {
                 var sourceInfo = [];
                 if (questionData.source_file) sourceInfo.push('File: ' + questionData.source_file);
                 if (questionData.source_page) sourceInfo.push('Page: ' + questionData.source_page);
@@ -308,11 +351,7 @@ jQuery(document).ready(function ($) {
 
                 if (sourceInfo.length > 0) {
                     $('#qp-question-source').html(sourceInfo.join(' | ')).show();
-                } else {
-                    $('#qp-question-source').hide();
                 }
-            } else {
-                $('#qp-question-source').hide();
             }
 
             $('#qp-question-text-area').html(questionData.question_text);

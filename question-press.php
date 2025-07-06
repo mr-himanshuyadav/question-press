@@ -525,12 +525,20 @@ function qp_start_practice_session_ajax() {
     $question_ids = $wpdb->get_col($wpdb->prepare($query, $query_args));
 
     if (empty($question_ids)) {
+        // Check if there are any questions matching the criteria *before* excluding attempted questions
+        $all_questions_query = $wpdb->prepare(
+            "SELECT COUNT(q.question_id) FROM {$q_table} q LEFT JOIN {$g_table} g ON q.group_id = g.group_id WHERE " . $where_sql,
+            $query_args
+        );
+        $total_questions_matching_criteria = $wpdb->get_var($all_questions_query);
+
+        $error_code = ($total_questions_matching_criteria > 0) ? 'ALL_ATTEMPTED' : 'NO_QUESTIONS_EXIST';
+        
         if ($session_settings['revise_mode']) {
-            $message = 'No previously attempted questions found for this criteria.';
+             wp_send_json_error(['message' => 'No previously attempted questions found for this criteria.']);
         } else {
-            $message = 'No new questions found matching your criteria. You may have attempted all of them. Try Revision Mode to practice them again.';
+             wp_send_json_error(['error_code' => $error_code]);
         }
-        wp_send_json_error(['message' => $message]);
     }
     
     $sessions_table = $wpdb->prefix . 'qp_user_sessions';
@@ -540,6 +548,13 @@ function qp_start_practice_session_ajax() {
     wp_send_json_success($response_data);
 }
 add_action('wp_ajax_start_practice_session', 'qp_start_practice_session_ajax');
+
+function qp_get_practice_form_html_ajax() {
+    check_ajax_referer('qp_practice_nonce', 'nonce');
+    // We can re-use the function from our shortcode class to get the form HTML
+    wp_send_json_success(['form_html' => QP_Shortcodes::render_practice_form()]);
+}
+add_action('wp_ajax_get_practice_form_html', 'qp_get_practice_form_html_ajax');
 
 // In question-press.php, REPLACE this function
 
