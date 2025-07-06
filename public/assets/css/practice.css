@@ -49,6 +49,7 @@
     border: 1px solid transparent;
     cursor: pointer;
     font-size: 14px;
+    text-align: center; /* Ensure text is centered inside the button */
 }
 .qp-button-primary { background-color: var(--qp-primary-color); color: var(--qp-bg-white); border-color: var(--qp-primary-color); }
 .qp-button-secondary { background-color: var(--qp-bg-white); color: var(--qp-dark-text); border-color: var(--qp-border-color); }
@@ -88,8 +89,25 @@
 .qp-options-area .option.correct { border-color: var(--qp-correct-border) !important; background: var(--qp-correct-bg); color: var(--qp-correct-text); font-weight: 600; }
 .qp-options-area .option.incorrect { border-color: var(--qp-incorrect-border) !important; background: var(--qp-incorrect-bg); color: var(--qp-incorrect-text); }
 .qp-options-area .option.disabled { cursor: not-allowed; opacity: 0.9; } .qp-options-area .option.disabled:not(.correct):not(.incorrect) { background: var(--qp-bg-light); }
-.qp-footer-nav, .qp-footer-controls { margin-top: 2rem; display: flex; align-items: center; justify-content: space-between; }
-.qp-footer-nav button { padding: 10px 20px; font-weight: 600; }
+
+.qp-footer-nav { 
+    margin-top: 2rem; 
+    display: flex; 
+    align-items: center; 
+    justify-content: space-between;
+    gap: 15px; /* Add a gap between buttons */
+}
+.qp-footer-nav button { 
+    padding: 10px 20px; 
+    font-weight: 600; 
+    flex: 1; /* Make all buttons take up equal space */
+}
+
+.qp-footer-controls {
+    margin-top: 20px;
+    display: flex;
+    justify-content: center;
+}
 
 .qp-footer-nav button:disabled {
     background-color: #f0f0f1;
