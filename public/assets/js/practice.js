@@ -153,10 +153,12 @@ jQuery(document).ready(function ($) {
   wrapper.on("click", ".qp-options-area .option:not(.disabled)", function () {
     clearInterval(questionTimer);
     var selectedOption = $(this);
-    var selectedOptionID = selectedOption.find('input[type="radio"]').val();
     var questionID = sessionQuestionIDs[currentQuestionIndex];
-
-    $(".qp-options-area .option, #qp-skip-btn").prop("disabled", true);
+    
+    // Disable all options immediately
+    $('.qp-options-area .option').addClass('disabled');
+    $('.qp-options-area .option input[type="radio"]').prop('disabled', true);
+    $("#qp-skip-btn").prop("disabled", true);
     $("#qp-next-btn").prop("disabled", false);
 
     $.ajax({
@@ -167,16 +169,15 @@ jQuery(document).ready(function ($) {
         nonce: qp_ajax_object.nonce,
         session_id: sessionID,
         question_id: questionID,
-        option_id: selectedOptionID,
+        option_id: selectedOption.find('input[type="radio"]').val()
       },
       success: function (response) {
         if (response.success) {
-          $('.qp-options-area .option input[type="radio"]').prop('disabled', true);
           answeredStates[questionID] = {
             type: "answered",
             is_correct: response.data.is_correct,
             correct_option_id: response.data.correct_option_id,
-            selected_option_id: selectedOptionID,
+            selected_option_id: selectedOption.find('input[type="radio"]').val(),
             reported_as: answeredStates[questionID]?.reported_as || [],
           };
           if (response.data.is_correct) {
