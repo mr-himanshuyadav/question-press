@@ -16,7 +16,7 @@ jQuery(document).ready(function ($) {
 
   // --- Event Handlers ---
 
-  // NEWLY RESTORED: Logic for the timer checkbox on the settings form
+  // Logic for the timer checkbox on the settings form
   wrapper.on("change", "#qp_timer_enabled_cb", function () {
     if ($(this).is(":checked")) {
       $("#qp-timer-input-wrapper").slideDown();
@@ -265,7 +265,7 @@ jQuery(document).ready(function ($) {
     $(".qp-footer-nav button, .qp-user-report-btn, .qp-admin-report-btn").prop(
       "disabled",
       false
-    ); // Enable all buttons by default
+    ); 
 
     var previousState = answeredStates[questionID];
 
@@ -279,129 +279,111 @@ jQuery(document).ready(function ($) {
       },
       success: function (response) {
         if(response.success) {
-        var questionData = response.data.question;
+            var questionData = response.data.question;
 
-        // --- Step 1: Insert the new, clean content into the page ---
-        if (sessionSettings.revise_mode && response.data.is_revision) { $('#qp-revision-indicator').show(); }
+            if (sessionSettings.revise_mode && response.data.is_revision) { $('#qp-revision-indicator').show(); }
 
-        // Use .html() to ensure raw LaTeX is preserved
-        var directionEl = $('.qp-direction');
-        if (questionData.direction_text) {
-            directionEl.html($('<p>').html(questionData.direction_text)).show();
-        }
-        if (questionData.direction_image_url) {
-            directionEl.append($('<img>').attr('src', questionData.direction_image_url).css('max-width', '100%'));
-        }
+            var directionEl = $('.qp-direction');
+            directionEl.empty().hide(); 
+            if (questionData.direction_text) {
+                directionEl.html($('<p>').html(questionData.direction_text));
+            }
+            if (questionData.direction_image_url) {
+                directionEl.append($('<img>').attr('src', questionData.direction_image_url).css('max-width', '100%'));
+            }
+            if (questionData.direction_text || questionData.direction_image_url) {
+                directionEl.show();
+            }
 
-        $('#qp-question-subject').text('Subject: ' + questionData.subject_name);
-        $('#qp-question-id').text('Question ID: ' + questionData.custom_question_id);
-        $('#qp-question-text-area').html(questionData.question_text);
 
-        var optionsArea = $('.qp-options-area');
-        optionsArea.empty();
-        $.each(questionData.options, function(index, option) {
-            var optionHtml = $('<label class="option"></label>')
-                .append($('<input type="radio" name="qp_option">').val(option.option_id), ' ')
-                .append($('<span>').html(option.option_text)); // Use .html() here too
-            optionsArea.append(optionHtml);
-        });
+            $('#qp-question-subject').text('Subject: ' + questionData.subject_name);
+            $('#qp-question-id').text('Question ID: ' + questionData.custom_question_id);
+            $('#qp-question-text-area').html(questionData.question_text);
 
-        // --- Step 2: Render LaTeX in each specific, newly added element ---
-        if (typeof renderMathInElement !== 'undefined') {
-            // This is the key change: render each part individually.
-            var elementsToRender = [
-                directionEl.get(0),
-                document.getElementById('qp-question-text-area'),
-                ...optionsArea.find('.option').toArray()
-            ];
+            var optionsArea = $('.qp-options-area');
+            optionsArea.empty();
+            $.each(questionData.options, function(index, option) {
 
-            elementsToRender.forEach(function(element) {
-                if (element) { // Ensure the element exists before trying to render
-                     renderMathInElement(element, {
-                        delimiters: [
-                            {left: '$$', right: '$$', display: true},
-                            {left: '$', right: '$', display: false},
-                            {left: '\\[', right: '\\]', display: true},
-                            {left: '\\(', right: '\\)', display: false}
-                        ],
-                        throwOnError: false
-                    });
+                var optionHtml = $('<label class="option"></label>')
+                    .append($('<input type="radio" name="qp_option">').val(option.option_id), ' ')
+                    .append($('<span>').html(option.option_text)); 
+
+                if (
+                  previousState &&
+                  previousState.type === "answered" &&
+                  previousState.selected_option_id == option.option_id
+                ) {
+                  optionHtml.find("input").prop("checked", true);
                 }
+                optionsArea.append(optionHtml);
             });
-        }
 
-          var optionsArea = $(".qp-options-area");
-          optionsArea.empty();
-          $.each(questionData.options, function (index, option) {
-            // --- FIX: Un-escape backslashes for KaTeX ---
-            if (option.option_text) {
-              option.option_text = option.option_text.replace(/\\\\/g, "\\");
+            if (typeof renderMathInElement !== 'undefined') {
+                var elementsToRender = [
+                    directionEl.get(0),
+                    document.getElementById('qp-question-text-area'),
+                    ...optionsArea.find('.option').toArray()
+                ];
+
+                elementsToRender.forEach(function(element) {
+                    if (element) { 
+                         renderMathInElement(element, {
+                            delimiters: [
+                                {left: '$$', right: '$$', display: true},
+                                {left: '$', right: '$', display: false},
+                                {left: '\\[', right: '\\]', display: true},
+                                {left: '\\(', right: '\\)', display: false}
+                            ],
+                            throwOnError: false
+                        });
+                    }
+                });
             }
-            // --- END OF FIX ---
-            var optionHtml = $('<label class="option"></label>')
-              .append(
-                $('<input type="radio" name="qp_option">').val(
-                  option.option_id
-                ),
-                " "
-              )
-              .append($("<span>").html(option.option_text));
-            if (
-              previousState &&
-              previousState.type === "answered" &&
-              previousState.selected_option_id == option.option_id
-            ) {
-              optionHtml.find("input").prop("checked", true);
-            }
-            optionsArea.append(optionHtml);
-          });
 
-          // Manage button states and display previous results
-          if (previousState) {
-            $("#qp-next-btn").prop("disabled", false);
-            $(".qp-options-area .option").addClass("disabled");
+              if (previousState) {
+                $("#qp-next-btn").prop("disabled", false);
+                $(".qp-options-area .option").addClass("disabled");
 
-            if (previousState.type === "answered") {
-              $("#qp-skip-btn").prop("disabled", true); // Can't skip after answering
-              if (previousState.is_correct) {
-                $('input[value="' + previousState.selected_option_id + '"]')
-                  .closest(".option")
-                  .addClass("correct");
+                if (previousState.type === "answered") {
+                  $("#qp-skip-btn").prop("disabled", true); 
+                  if (previousState.is_correct) {
+                    $('input[value="' + previousState.selected_option_id + '"]')
+                      .closest(".option")
+                      .addClass("correct");
+                  } else {
+                    $('input[value="' + previousState.selected_option_id + '"]')
+                      .closest(".option")
+                      .addClass("incorrect");
+                    $('input[value="' + previousState.correct_option_id + '"]')
+                      .closest(".option")
+                      .addClass("correct");
+                  }
+                } else if (previousState.type === "skipped") {
+                  $("#qp-skip-btn, .qp-user-report-btn, .qp-admin-report-btn").prop(
+                    "disabled",
+                    true
+                  ); 
+                }
+                
+                if (
+                  previousState.reported_as &&
+                  previousState.reported_as.length > 0
+                ) {
+                  $("#qp-reported-indicator").show();
+                  previousState.reported_as.forEach(function (labelName) {
+                    $('.qp-report-button[data-label="' + labelName + '"]')
+                      .prop("disabled", true)
+                      .text("Reported");
+                  });
+                }
               } else {
-                $('input[value="' + previousState.selected_option_id + '"]')
-                  .closest(".option")
-                  .addClass("incorrect");
-                $('input[value="' + previousState.correct_option_id + '"]')
-                  .closest(".option")
-                  .addClass("correct");
+                $("#qp-next-btn").prop("disabled", true);
+                if (sessionSettings.timer_enabled) {
+                  startTimer(sessionSettings.timer_seconds);
+                }
               }
-            } else if (previousState.type === "skipped") {
-              $("#qp-skip-btn, .qp-user-report-btn, .qp-admin-report-btn").prop(
-                "disabled",
-                true
-              ); // Disable all actions if skipped
-            }
 
-            // ONLY show the reported indicator if a report was actually filed
-            if (
-              previousState.reported_as &&
-              previousState.reported_as.length > 0
-            ) {
-              $("#qp-reported-indicator").show();
-              previousState.reported_as.forEach(function (labelName) {
-                $('.qp-report-button[data-label="' + labelName + '"]')
-                  .prop("disabled", true)
-                  .text("Reported");
-              });
-            }
-          } else {
-            $("#qp-next-btn").prop("disabled", true); // Next is disabled for new questions
-            if (sessionSettings.timer_enabled) {
-              startTimer(sessionSettings.timer_seconds);
-            }
-          }
-
-          $("#qp-prev-btn").prop("disabled", currentQuestionIndex === 0);
+              $("#qp-prev-btn").prop("disabled", currentQuestionIndex === 0);
         }
       },
     });
