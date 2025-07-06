@@ -3,9 +3,6 @@ if (!defined('ABSPATH')) exit;
 
 class QP_Dashboard {
 
-    // In public/class-qp-dashboard.php
-
-
     public static function render() {
         if (!is_user_logged_in()) {
             return '<p>You must be logged in to view your dashboard. <a href="' . wp_login_url(get_permalink()) . '">Click here to log in.</a></p>';
@@ -29,7 +26,7 @@ class QP_Dashboard {
         ob_start();
         ?>
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <div class="qp-dashboard-wrapper">
+        <div class="qp-container qp-dashboard-wrapper">
             <h2>My Practice History</h2>
             <div class="qp-dashboard-actions">
                 <a href="/practice-zone/" class="qp-button qp-button-primary">Start a New Practice</a>

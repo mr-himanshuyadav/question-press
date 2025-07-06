@@ -15,13 +15,13 @@ class QP_Shortcodes
         return $output;
     }
 
-     public static function render_settings_form()
+    public static function render_settings_form()
     {
         global $wpdb;
         $subjects = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}qp_subjects ORDER BY subject_name ASC");
         ob_start();
 ?>
-        <div class="qp-practice-form-wrapper">
+        <div class="qp-container qp-practice-form-wrapper">
             <h2>Start a New Practice Session</h2>
             <form id="qp-start-practice-form" method="post" action="">
 
@@ -92,41 +92,36 @@ class QP_Shortcodes
         return ob_get_clean();
     }
 
-
-    /**
-     * Renders the static HTML layout for the main practice screen.
-     * Changed to public so our AJAX handler can access it.
-     */
-    // In public/class-qp-shortcodes.php
-
-    // In public/class-qp-shortcodes.php
-
     public static function render_practice_ui()
     {
         ob_start();
     ?>
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <div class="qp-practice-wrapper">
+        <div class="qp-container qp-practice-wrapper">
             <div class="qp-header">
-                <div class="qp-header-stat timer-stat">
-                    <div class="label">Timer</div>
-                    <div class="value" id="qp-timer">--:--</div>
+                <div class="qp-header-top-row">
+                    <div class="qp-header-stat score">
+                        <div class="label">Score</div>
+                        <div class="value" id="qp-score">0.00</div>
+                    </div>
+                    <div class="qp-header-stat timer-stat">
+                        <div class="label">Timer</div>
+                        <div class="value" id="qp-timer">--:--</div>
+                    </div>
                 </div>
-                <div class="qp-header-stat">
-                    <div class="label">Score</div>
-                    <div class="value" id="qp-score">0</div>
-                </div>
-                <div class="qp-header-stat">
-                    <div class="label">Correct</div>
-                    <div class="value" id="qp-correct-count">0</div>
-                </div>
-                <div class="qp-header-stat">
-                    <div class="label">Incorrect</div>
-                    <div class="value" id="qp-incorrect-count">0</div>
-                </div>
-                <div class="qp-header-stat">
-                    <div class="label">Skipped</div>
-                    <div class="value" id="qp-skipped-count">0</div>
+                <div class="qp-header-bottom-row">
+                    <div class="qp-header-stat correct">
+                        <span class="value" id="qp-correct-count">0</span>
+                        <span class="label">Correct</span>
+                    </div>
+                    <div class="qp-header-stat incorrect">
+                        <span class="value" id="qp-incorrect-count">0</span>
+                        <span class="label">Incorrect</span>
+                    </div>
+                    <div class="qp-header-stat skipped">
+                        <span class="value" id="qp-skipped-count">0</span>
+                        <span class="label">Skipped</span>
+                    </div>
                 </div>
             </div>
 
