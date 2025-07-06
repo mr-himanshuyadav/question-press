@@ -498,10 +498,13 @@ function qp_start_practice_session_ajax() {
         $query_args = array_merge($query_args, $review_label_ids);
     }
     
-    // --- NEW: Revision Mode Logic ---
+    // --- UPDATED: Revision & Standard Mode Logic ---
     if ($session_settings['revise_mode']) {
-        // If revision mode is on, select from questions the user has previously attempted.
+        // REVISION MODE: Only select from questions the user has previously attempted.
         $where_clauses[] = $wpdb->prepare("q.question_id IN (SELECT DISTINCT question_id FROM $a_table WHERE user_id = %d)", $user_id);
+    } else {
+        // STANDARD MODE: Exclude all questions the user has previously attempted.
+        $where_clauses[] = $wpdb->prepare("q.question_id NOT IN (SELECT DISTINCT question_id FROM $a_table WHERE user_id = %d)", $user_id);
     }
 
     if ($session_settings['subject_id'] !== 'all') {
@@ -522,11 +525,14 @@ function qp_start_practice_session_ajax() {
     $question_ids = $wpdb->get_col($wpdb->prepare($query, $query_args));
 
     if (empty($question_ids)) {
-        $message = $session_settings['revise_mode'] ? 'No previously attempted questions found for this criteria.' : 'No questions found matching your criteria.';
+        if ($session_settings['revise_mode']) {
+            $message = 'No previously attempted questions found for this criteria.';
+        } else {
+            $message = 'No new questions found matching your criteria. You may have attempted all of them. Try Revision Mode to practice them again.';
+        }
         wp_send_json_error(['message' => $message]);
     }
     
-    // Create the session and send the response (this part is unchanged)
     $sessions_table = $wpdb->prefix . 'qp_user_sessions';
     $wpdb->insert($sessions_table, ['user_id' => $user_id, 'settings_snapshot' => wp_json_encode($session_settings)]);
     $session_id = $wpdb->insert_id;
