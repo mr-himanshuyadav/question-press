@@ -512,8 +512,12 @@ function qp_start_practice_session_ajax() {
         $where_clauses[] = "q.is_pyq = 1";
     }
 
+    $options = get_option('qp_settings');
+    $question_order = isset($options['question_order']) ? $options['question_order'] : 'random';
+    $order_by_sql = ($question_order === 'in_order') ? 'ORDER BY q.custom_question_id ASC' : 'ORDER BY RAND()';
+
     $where_sql = implode(' AND ', $where_clauses);
-    $query = "SELECT q.question_id FROM {$q_table} q LEFT JOIN {$g_table} g ON q.group_id = g.group_id WHERE {$where_sql} ORDER BY RAND()";
+    $query = "SELECT q.question_id FROM {$q_table} q LEFT JOIN {$g_table} g ON q.group_id = g.group_id WHERE {$where_sql} {$order_by_sql}";
     
     $question_ids = $wpdb->get_col($wpdb->prepare($query, $query_args));
 
@@ -533,7 +537,6 @@ add_action('wp_ajax_start_practice_session', 'qp_start_practice_session_ajax');
 
 // In question-press.php, REPLACE this function
 
-// In question-press.php
 function qp_get_question_data_ajax() {
     check_ajax_referer('qp_practice_nonce', 'nonce');
     $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
@@ -544,15 +547,24 @@ function qp_get_question_data_ajax() {
 
     $question_data = $wpdb->get_row($wpdb->prepare("SELECT q.custom_question_id, q.question_text, q.source_file, q.source_page, q.source_number, g.direction_text, g.direction_image_id, s.subject_name FROM {$q_table} q LEFT JOIN {$g_table} g ON q.group_id = g.group_id LEFT JOIN {$s_table} s ON g.subject_id = s.subject_id WHERE q.question_id = %d", $question_id), ARRAY_A);
     if (!$question_data) { wp_send_json_error(['message' => 'Question not found.']); }
+
+    $options = get_option('qp_settings');
+    $show_source_meta = isset($options['show_source_meta']) ? (bool) $options['show_source_meta'] : false;
+    $is_admin = current_user_can('manage_options');
+
+    if (!$is_admin || !$show_source_meta) {
+        unset($question_data['source_file']);
+        unset($question_data['source_page']);
+        unset($question_data['source_number']);
+    }
     
-    // NEW: Get image URL if an ID exists
     $question_data['direction_image_url'] = $question_data['direction_image_id'] ? wp_get_attachment_url($question_data['direction_image_id']) : null;
 
     $question_data['options'] = $wpdb->get_results($wpdb->prepare("SELECT option_id, option_text FROM {$o_table} WHERE question_id = %d ORDER BY RAND()", $question_id), ARRAY_A);
     $user_id = get_current_user_id();
     $attempt_count = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $a_table WHERE user_id = %d AND question_id = %d", $user_id, $question_id));
     
-    wp_send_json_success(['question' => $question_data, 'is_revision' => ($attempt_count > 0), 'is_admin' => current_user_can('manage_options')]);
+    wp_send_json_success(['question' => $question_data, 'is_revision' => ($attempt_count > 0), 'is_admin' => $is_admin]);
 }
 add_action('wp_ajax_get_question_data', 'qp_get_question_data_ajax');
 

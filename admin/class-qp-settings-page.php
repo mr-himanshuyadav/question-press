@@ -7,34 +7,24 @@ class QP_Settings_Page {
      * Renders the main settings page wrapper and form.
      */
     public static function render() {
-    ?>
-    <div class="wrap">
-        <h1>Question Press Settings</h1>
-
-        <?php
-        // WordPress automatically displays the "Settings saved." notice here
-        settings_errors(); 
         ?>
-
-        <form action="options.php" method="post">
+        <div class="wrap">
+            <h1>Question Press Settings</h1>
             <?php
-            // This function adds the necessary hidden fields for the Settings API to work correctly
-            settings_fields('qp_settings_group');
-
-            // Add the top save button
-            submit_button('Save Settings', 'primary', 'submit_top', false);
+                settings_errors();
             ?>
-            <hr>
-            <?php
-            do_settings_sections('qp-settings-page');
-
-            // This is the original bottom save button
-            submit_button('Save Settings');
-            ?>
-        </form>
-    </div>
-    <?php
-}
+            <form action="options.php" method="post">
+                <?php
+                settings_fields('qp_settings_group');
+                // Add the top save button
+                submit_button('Save Settings', 'primary', 'submit_top', false);
+                do_settings_sections('qp-settings-page');
+                submit_button('Save Settings');
+                ?>
+            </form>
+        </div>
+        <?php
+    }
 
     /**
      * Registers all settings, sections, and fields.
@@ -42,6 +32,8 @@ class QP_Settings_Page {
     public static function register_settings() {
         register_setting('qp_settings_group', 'qp_settings', ['sanitize_callback' => [self::class, 'sanitize_settings']]);
         add_settings_section('qp_data_settings_section', 'Data Management', [self::class, 'render_data_section_text'], 'qp-settings-page');
+        add_settings_field('qp_question_order', 'Question Order in Practice', [self::class, 'render_question_order_input'], 'qp-settings-page', 'qp_data_settings_section');
+        add_settings_field('qp_show_source_meta', 'Display Source Meta', [self::class, 'render_show_source_meta_checkbox'], 'qp-settings-page', 'qp_data_settings_section');
         add_settings_field('qp_delete_on_uninstall', 'Delete Data on Uninstall', [self::class, 'render_delete_data_checkbox'], 'qp-settings-page', 'qp_data_settings_section');
         
         add_settings_section('qp_api_settings_section', 'REST API Documentation', [self::class, 'render_api_section_text'], 'qp-settings-page');
@@ -64,16 +56,31 @@ class QP_Settings_Page {
         echo '<p>Use these endpoints and the secret key to connect your mobile application to this website.</p>';
     }
 
-
-    // NEW: Renders the input for questions per page
-    public static function render_per_page_input() {
+    public static function render_question_order_input() {
         $options = get_option('qp_settings');
-        $value = isset($options['questions_per_page']) ? $options['questions_per_page'] : 20;
-        echo '<input type="number" name="qp_settings[questions_per_page]" value="' . esc_attr($value) . '" min="1" max="100" /> <p class="description">Number of questions to show per page in the "All Questions" list.</p>';
+        $value = isset($options['question_order']) ? $options['question_order'] : 'random';
+        ?>
+        <fieldset>
+            <label>
+                <input type="radio" name="qp_settings[question_order]" value="random" <?php checked('random', $value); ?>>
+                <span>Random</span>
+            </label><br>
+            <label>
+                <input type="radio" name="qp_settings[question_order]" value="in_order" <?php checked('in_order', $value); ?>>
+                <span>In Order (by Question ID)</span>
+            </label>
+            <p class="description">Choose how questions are ordered when a user starts a practice session.</p>
+        </fieldset>
+        <?php
     }
-    /**
-     * Callback to render our checkbox setting.
-     */
+
+    public static function render_show_source_meta_checkbox() {
+        $options = get_option('qp_settings');
+        $checked = isset($options['show_source_meta']) ? $options['show_source_meta'] : 0;
+        echo '<label><input type="checkbox" name="qp_settings[show_source_meta]" value="1" ' . checked(1, $checked, false) . ' /> ';
+        echo '<span>Check this box to display the source file, page, and number to administrators on the practice screen.</span></label>';
+    }
+
     public static function render_delete_data_checkbox() {
         $options = get_option('qp_settings');
         $checked = isset($options['delete_on_uninstall']) ? $options['delete_on_uninstall'] : 0;
@@ -81,7 +88,6 @@ class QP_Settings_Page {
         echo '<span>Check this box to permanently delete all questions, subjects, labels, and user history when the plugin is uninstalled. This action cannot be undone.</span></label>';
     }
 
-    // NEW: Renders the API key field and regenerate button
     public static function render_api_key_field() {
         $key = get_option('qp_jwt_secret_key');
         $nonce = wp_create_nonce('qp_regenerate_api_key_nonce');
@@ -140,10 +146,18 @@ class QP_Settings_Page {
         <?php
     }
 
-    // UPDATED: Sanitize the new setting
     public static function sanitize_settings($input) {
         $new_input = [];
         if (isset($input['delete_on_uninstall'])) { $new_input['delete_on_uninstall'] = absint($input['delete_on_uninstall']); }
+        
+        if (isset($input['question_order']) && in_array($input['question_order'], ['random', 'in_order'])) {
+            $new_input['question_order'] = sanitize_text_field($input['question_order']);
+        } else {
+            $new_input['question_order'] = 'random';
+        }
+
+        $new_input['show_source_meta'] = isset($input['show_source_meta']) ? 1 : 0;
+        
         return $new_input;
     }
 }
