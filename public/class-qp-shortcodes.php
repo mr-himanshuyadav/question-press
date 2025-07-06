@@ -19,6 +19,12 @@ class QP_Shortcodes
     {
         global $wpdb;
         $subjects = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}qp_subjects ORDER BY subject_name ASC");
+
+        // Get the dynamic URL for the dashboard page
+        $options = get_option('qp_settings');
+        $dashboard_page_id = isset($options['dashboard_page']) ? absint($options['dashboard_page']) : 0;
+        $dashboard_page_url = $dashboard_page_id ? get_permalink($dashboard_page_id) : '';
+
         ob_start();
 ?>
         <div class="qp-container qp-practice-form-wrapper">
@@ -83,8 +89,11 @@ class QP_Shortcodes
                     </div>
                 </div>
 
-                <div class="qp-form-group">
+                <div class="qp-form-group qp-action-buttons">
                     <input type="submit" name="qp_start_practice" value="Start Practice" class="qp-button qp-button-primary">
+                    <?php if ($dashboard_page_url) : ?>
+                        <a href="<?php echo esc_url($dashboard_page_url); ?>" class="qp-button qp-button-secondary">Go to Dashboard</a>
+                    <?php endif; ?>
                 </div>
             </form>
         </div>
