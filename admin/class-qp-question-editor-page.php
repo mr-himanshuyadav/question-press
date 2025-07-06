@@ -200,7 +200,7 @@ class QP_Question_Editor_Page {
                                     <div class="submitbox" id="submitpost">
                                         <div id="major-publishing-actions">
                                             <div id="publishing-action">
-                                                <input name="save_group" type="submit" class="button button-primary button-large" id="publish" value="<?php echo $is_editing ? 'Update Question Group' : 'Save Question Group'; ?>">
+                                                <input name="save_group" type="submit" class="button button-primary button-large" id="publish" value="<?php echo $is_editing ? 'Update Question(s)' : 'Save Question(s)'; ?>">
                                             </div>
                                             <div class="clear"></div>
                                         </div>

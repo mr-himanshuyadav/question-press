@@ -6,10 +6,6 @@ if (!defined('ABSPATH')) {
 
 class QP_Export_Page {
 
-    /**
-     * This method is hooked into 'admin_init' to catch the form submission
-     * before any HTML is rendered.
-     */
     public static function handle_export_submission() {
         if (isset($_GET['page']) && $_GET['page'] === 'qp-export' && isset($_POST['export_questions'])) {
             if (check_admin_referer('qp_export_nonce_action', 'qp_export_nonce_field')) {
@@ -18,9 +14,6 @@ class QP_Export_Page {
         }
     }
 
-    /**
-     * Renders the Export admin page form.
-     */
     public static function render() {
         global $wpdb;
         $subjects_table = $wpdb->prefix . 'qp_subjects';
@@ -57,9 +50,6 @@ class QP_Export_Page {
         <?php
     }
 
-    /**
-     * Handles the data fetching and ZIP file generation.
-     */
     private static function generate_zip() {
         if (empty($_POST['subject_ids'])) {
             wp_die('Please select at least one subject to export.');
@@ -73,13 +63,15 @@ class QP_Export_Page {
         $g_table = $wpdb->prefix . 'qp_question_groups';
         $o_table = $wpdb->prefix . 'qp_options';
         $s_table = $wpdb->prefix . 'qp_subjects';
+        $t_table = $wpdb->prefix . 'qp_topics'; // New table
 
-        // CORRECTED: Using LEFT JOIN for more robust fetching
         $questions_data = $wpdb->get_results($wpdb->prepare(
-            "SELECT q.question_id, q.custom_question_id, q.question_text, q.is_pyq, g.group_id, g.direction_text, s.subject_name
+            "SELECT q.question_id, q.custom_question_id, q.question_text, q.is_pyq, 
+                    g.group_id, g.direction_text, s.subject_name, t.topic_name
              FROM {$q_table} q
              LEFT JOIN {$g_table} g ON q.group_id = g.group_id
              LEFT JOIN {$s_table} s ON g.subject_id = s.subject_id
+             LEFT JOIN {$t_table} t ON q.topic_id = t.topic_id
              WHERE g.subject_id IN ($subject_ids_placeholder)",
             $subject_ids
         ));
@@ -88,7 +80,6 @@ class QP_Export_Page {
             wp_die('No questions found for the selected subjects.');
         }
 
-        // Process data into the correct JSON structure
         $grouped_by_group = [];
         foreach ($questions_data as $q) {
             if (!isset($grouped_by_group[$q->group_id])) {
@@ -100,7 +91,6 @@ class QP_Export_Page {
                 ];
             }
 
-            // Fetch options for this question
             $options = $wpdb->get_results($wpdb->prepare("SELECT option_text, is_correct FROM {$o_table} WHERE question_id = %d", $q->question_id));
             $options_array = [];
             foreach ($options as $opt) {
@@ -110,6 +100,7 @@ class QP_Export_Page {
             $grouped_by_group[$q->group_id]['questions'][] = [
                 'questionId' => $q->custom_question_id ? 'custom_' . $q->custom_question_id : 'db_' . $q->question_id,
                 'questionText' => $q->question_text,
+                'topicName' => $q->topic_name, // Add topic name to the export
                 'isPYQ' => (bool)$q->is_pyq,
                 'options' => $options_array,
                 'source' => null
@@ -120,13 +111,13 @@ class QP_Export_Page {
         $json_filename = 'questions.json';
 
         $final_json = [
-            'schemaVersion' => '1.2',
+            'schemaVersion' => '1.3', // Increment schema version
             'exportTimestamp' => date('c'),
             'sourceFile' => 'database_export',
             'questionGroups' => array_values($grouped_by_group)
         ];
         
-        $json_data = json_encode($final_json, JSON_PRETTY_PRINT);
+        $json_data = json_encode($final_json, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
         
         $zip_path = tempnam(sys_get_temp_dir(), 'qp_export');
         $zip = new ZipArchive();

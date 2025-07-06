@@ -6,9 +6,6 @@ if (!defined('ABSPATH')) {
 
 class QP_Importer {
 
-    /**
-     * Handles the entire import process.
-     */
     public function handle_import() {
         if (!isset($_POST['qp_import_nonce_field']) || !wp_verify_nonce($_POST['qp_import_nonce_field'], 'qp_import_nonce_action')) {
             wp_die('Security check failed.');
@@ -56,14 +53,10 @@ class QP_Importer {
         $this->display_results($result);
     }
 
-    /**
-     * Processes the parsed JSON data and inserts it into the database.
-     */
-    // In admin/class-qp-importer.php
-
 private function process_data($data) {
     global $wpdb;
     $subjects_table = $wpdb->prefix . 'qp_subjects';
+    $topics_table = $wpdb->prefix . 'qp_topics'; // New table
     $groups_table = $wpdb->prefix . 'qp_question_groups';
     $questions_table = $wpdb->prefix . 'qp_questions';
     $options_table = $wpdb->prefix . 'qp_options';
@@ -79,6 +72,7 @@ private function process_data($data) {
     }
 
     foreach ($data['questionGroups'] as $group) {
+        // Find or create subject
         $subject_name = !empty($group['subject']) ? sanitize_text_field($group['subject']) : 'Uncategorized';
         $subject_id = $wpdb->get_var($wpdb->prepare("SELECT subject_id FROM $subjects_table WHERE subject_name = %s", $subject_name));
         if (!$subject_id) {
@@ -91,10 +85,20 @@ private function process_data($data) {
         $group_id = $wpdb->insert_id;
 
         foreach ($group['questions'] as $question) {
+            // Find or create topic
+            $topic_id = null;
+            $topic_name = !empty($question['topicName']) ? sanitize_text_field($question['topicName']) : null;
+            if ($topic_name) {
+                $topic_id = $wpdb->get_var($wpdb->prepare("SELECT topic_id FROM $topics_table WHERE topic_name = %s AND subject_id = %d", $topic_name, $subject_id));
+                if (!$topic_id) {
+                    $wpdb->insert($topics_table, ['topic_name' => $topic_name, 'subject_id' => $subject_id]);
+                    $topic_id = $wpdb->insert_id;
+                }
+            }
+            
             $question_text = $question['questionText'];
             $hash = md5(strtolower(trim(preg_replace('/\s+/', '', $question_text))));
 
-            // Get the ID of the existing question, not just a true/false value
             $existing_question_id = $wpdb->get_var($wpdb->prepare("SELECT question_id FROM $questions_table WHERE question_text_hash = %s", $hash));
 
             $next_custom_id = get_option('qp_next_custom_question_id', 1000);
@@ -102,13 +106,14 @@ private function process_data($data) {
             $wpdb->insert($questions_table, [
                 'custom_question_id' => $next_custom_id,
                 'group_id' => $group_id,
+                'topic_id' => $topic_id,
                 'question_text' => $question['questionText'],
                 'question_text_hash' => $hash,
                 'is_pyq' => isset($question['isPYQ']) ? (int)$question['isPYQ'] : 0,
                 'source_file' => isset($data['sourceFile']) ? sanitize_text_field($data['sourceFile']) : null,
                 'source_page' => isset($question['source']['page']) ? absint($question['source']['page']) : null,
                 'source_number' => isset($question['source']['number']) ? absint($question['source']['number']) : null,
-                'duplicate_of' => $existing_question_id ? $existing_question_id : null // Save the original ID
+                'duplicate_of' => $existing_question_id ? $existing_question_id : null
             ]);
             $question_id = $wpdb->insert_id;
             update_option('qp_next_custom_question_id', $next_custom_id + 1);
@@ -140,9 +145,6 @@ private function process_data($data) {
         return rmdir($dir);
     }
 
-    /**
-     * Displays the results of the import process.
-     */
     private function display_results($result) {
         ?>
         <div class="wrap">
