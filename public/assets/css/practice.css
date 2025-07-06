@@ -1,11 +1,11 @@
 /* =================================================================
-   Question Press Frontend Styles - v7.0 Final
+   Question Press Frontend Styles - v7.4 Final
    ================================================================= */
 
 :root {
     --qp-primary-color: #2271b1;
     --qp-primary-hover: #1d5f96;
-    --qp-score-color: #3f51b5; /* A nice Indigo for the score */
+    --qp-score-color: #3f51b5;
     --qp-correct-color: #2e7d32;
     --qp-correct-bg: #e8f5e9;
     --qp-incorrect-color: #c62828;
@@ -33,7 +33,6 @@ body {
     -moz-osx-font-smoothing: grayscale;
 }
 
-/* --- Unified Container Style --- */
 .qp-container {
     max-width: 800px;
     margin: 0 auto;
@@ -56,6 +55,8 @@ body {
 .qp-button-primary { background-color: var(--qp-primary-color); color: var(--qp-bg-white); border-color: var(--qp-primary-color); }
 .qp-button-secondary { background-color: var(--qp-bg-white); color: var(--qp-dark-text); border-color: var(--qp-border-color); }
 .qp-button:hover { transform: translateY(-1px); box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+.qp-button-danger { background-color: #d63638; color: #fff; border-color: #d63638; }
+.qp-button-danger:hover { background-color: #b02a2a; border-color: #b02a2a; }
 
 /* --- Settings Form --- */
 .qp-practice-form-wrapper h2 { text-align: center; margin-top: 0; margin-bottom: 2rem; font-size: 22px; }
@@ -102,19 +103,33 @@ body {
 .qp-header-stat.correct { color: var(--qp-correct-color); }
 .qp-header-stat.incorrect { color: var(--qp-incorrect-color); }
 .qp-header-stat.skipped { color: var(--qp-skipped-color); }
-.qp-header-stat.timer-stat { display: block; text-align: right; } /* Always show timer */
+.qp-header-stat.timer-stat { display: none; text-align: right; }
 .qp-header-stat.timer-stat .label { color: var(--qp-light-text); }
 .qp-header-stat.timer-stat .value { font-size: 20px; font-weight: 600; color: var(--qp-dark-text); }
 
 /* --- Practice Screen Content --- */
 .qp-question-area .question-text { font-size: 20px; font-weight: 500; line-height: 1.6; margin-bottom: 2rem; }
-.qp-options-area .option { display: block; padding: 1rem; margin-bottom: 0.75rem; border: 2px solid var(--qp-border-color); border-radius: var(--qp-radius); font-size: 16px; cursor: pointer; transition: all 0.2s ease-in-out; }
+.qp-options-area .option { display: block; padding: 1rem; margin-bottom: 0.75rem; border: 2px solid var(--qp-border-color); border-radius: var(--qp-radius); font-size: 16px; cursor: pointer; transition: all 0.2s ease-in-out; position: relative; }
+.qp-options-area .option input { display: none; }
+.qp-options-area .option.disabled { cursor: not-allowed; } /* Updated */
 .qp-options-area .option.correct { border-color: var(--qp-correct-color) !important; background: var(--qp-correct-bg); color: var(--qp-correct-text); font-weight: 600; }
 .qp-options-area .option.incorrect { border-color: var(--qp-incorrect-color) !important; background: var(--qp-incorrect-bg); color: var(--qp-incorrect-text); }
 .qp-footer-nav { margin-top: 2rem; display: flex; gap: 10px; }
 .qp-footer-nav button { padding: 10px; font-weight: 600; flex: 1; }
 .qp-footer-controls { margin-top: 20px; display: flex; justify-content: center; }
-.qp-footer-nav button:disabled { background-color: #f0f0f1; border-color: #dcdcde; color: #a7aaad; cursor: not-allowed; }
+.qp-footer-nav button:disabled { background-color: #f0f0f1; border-color: #dcdcde; color: #a7aaad; cursor: not-allowed; } /* Updated */
+
+/* --- Report Buttons --- */
+.qp-admin-report-area, .qp-user-report-area { margin-top: 30px; padding-top: 20px; border-top: 1px dashed var(--qp-border-color); text-align: center; }
+.qp-admin-report-area h4, .qp-user-report-area h4 { margin-top: 0; margin-bottom: 15px; color: var(--qp-light-text); font-size: 16px; }
+.qp-admin-report-area .button-group, .qp-user-report-area .button-group { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
+.qp-report-button { border: none; color: #fff; cursor: pointer; border-radius: 4px; padding: 8px 14px; font-size: 13px; font-weight: 500; transition: all 0.2s ease; }
+.qp-report-button:hover:not(:disabled) { opacity: 0.85; transform: translateY(-1px); }
+.qp-report-button:disabled { opacity: 0.5; cursor: not-allowed; }
+.qp-report-color-error { background-color: #e57373; }
+.qp-report-color-warning { background-color: #ffb74d; }
+.qp-report-color-info { background-color: #64b5f6; }
+.qp-report-color-neutral { background-color: #90a4ae; }
 
 /* --- Dashboard Screen --- */
 .qp-dashboard-wrapper h2 { font-size: 22px; text-align: center; margin: 0 auto 1.5rem auto; }
@@ -125,21 +140,16 @@ body {
 .qp-dashboard-table td { display: flex; justify-content: space-between; align-items: center; padding: .6rem 0; text-align: right; border-bottom: 1px dashed #e7e7e7; font-size: 14px; }
 .qp-dashboard-table td:last-child { border-bottom: 0; }
 .qp-dashboard-table td::before { content: attr(data-label); font-weight: 600; text-align: left; color: var(--qp-dark-text); }
-
-/* --- Report Buttons --- */
-.qp-report-button { border: none; color: #fff; cursor: pointer; border-radius: 4px; padding: 8px 14px; font-size: 13px; font-weight: 500; }
-.qp-report-button:disabled { opacity: 0.5; cursor: not-allowed; }
-.qp-report-color-error { background-color: #e57373; }
-.qp-report-color-warning { background-color: #ffb74d; }
+.qp-delete-session-btn { background: none; border: 1px solid #d63638; color: #d63638; cursor: pointer; border-radius: 4px; padding: 4px 8px; font-size: 12px; transition: all 0.2s; }
 
 /* =================================================================
    DESKTOP AND LARGER SCREENS
    ================================================================= */
 @media (min-width: 768px) {
-    #qp-practice-app-wrapper { padding: 2rem; }
     .qp-container { padding: 2rem 2.5rem; border-radius: var(--qp-radius); }
     .qp-marks-group { flex-direction: row; gap: 1.5rem; }
 
+    /* Restore Desktop Header */
     .qp-header { display: flex; justify-content: space-around; align-items: center; }
     .qp-header-top-row, .qp-header-bottom-row { display: contents; }
     .qp-header-stat { display: block; }

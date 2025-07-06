@@ -483,28 +483,39 @@ add_action('init', 'qp_public_init');
 function qp_public_enqueue_scripts() {
     global $post;
     if (is_a($post, 'WP_Post') && (has_shortcode($post->post_content, 'question_press_practice') || has_shortcode($post->post_content, 'question_press_dashboard'))) {
-        wp_enqueue_style('qp-practice-styles', QP_PLUGIN_URL . 'public/assets/css/practice.css', [], '1.0.3');
+        
+        // --- Cache Busting Logic ---
+        // Get the server path and modification time for each asset.
+        $css_file_path = QP_PLUGIN_DIR . 'public/assets/css/practice.css';
+        $css_version = file_exists($css_file_path) ? filemtime($css_file_path) : '1.0.0';
+
+        $practice_js_file_path = QP_PLUGIN_DIR . 'public/assets/js/practice.js';
+        $practice_js_version = file_exists($practice_js_file_path) ? filemtime($practice_js_file_path) : '1.0.0';
+
+        $dashboard_js_file_path = QP_PLUGIN_DIR . 'public/assets/js/dashboard.js';
+        $dashboard_js_version = file_exists($dashboard_js_file_path) ? filemtime($dashboard_js_file_path) : '1.0.0';
+        // --- End of Cache Busting Logic ---
+
+        // Enqueue style with the dynamic version number
+        wp_enqueue_style('qp-practice-styles', QP_PLUGIN_URL . 'public/assets/css/practice.css', [], $css_version);
+        
         $ajax_data = ['ajax_url' => admin_url('admin-ajax.php'), 'nonce' => wp_create_nonce('qp_practice_nonce')];
+        
         if (has_shortcode($post->post_content, 'question_press_practice')) {
-            // --- FINAL KaTeX IMPLEMENTATION ---
-            // 1. Load KaTeX CSS
+            // KaTeX styles and scripts
             wp_enqueue_style('katex-css', 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css', [], '0.16.9');
-
-            // 2. Load KaTeX JavaScript Library
             wp_enqueue_script('katex-js', 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js', [], '0.16.9', true);
-
-            // 3. NEW: Load the Chemistry (mhchem) Extension
             wp_enqueue_script('katex-mhchem', 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/mhchem.min.js', ['katex-js'], '0.16.9', true);
-
-            // 4. Load the Auto-Render Extension, making sure it depends on the chemistry extension
             wp_enqueue_script('katex-auto-render', 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js', ['katex-mhchem'], '0.16.9', true);
 
-            // 5. Load your practice script, making it dependent on the auto-renderer
-            wp_enqueue_script('qp-practice-script', QP_PLUGIN_URL . 'public/assets/js/practice.js', ['jquery', 'katex-auto-render'], '1.0.7', true);
+            // Enqueue script with the dynamic version number
+            wp_enqueue_script('qp-practice-script', QP_PLUGIN_URL . 'public/assets/js/practice.js', ['jquery', 'katex-auto-render'], $practice_js_version, true);
             wp_localize_script('qp-practice-script', 'qp_ajax_object', $ajax_data);
         }
+        
         if (has_shortcode($post->post_content, 'question_press_dashboard')) {
-            wp_enqueue_script('qp-dashboard-script', QP_PLUGIN_URL . 'public/assets/js/dashboard.js', ['jquery'], '1.0.0', true);
+            // Enqueue script with the dynamic version number
+            wp_enqueue_script('qp-dashboard-script', QP_PLUGIN_URL . 'public/assets/js/dashboard.js', ['jquery'], $dashboard_js_version, true);
             wp_localize_script('qp-dashboard-script', 'qp_ajax_object', $ajax_data);
         }
     }
