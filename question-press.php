@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       Question Press
  * Description:       A complete plugin for creating, managing, and practicing questions.
- * Version:           1.0.0
+ * Version:           1.1.0
  * Author:            Himanshu
  */
 
@@ -15,6 +15,7 @@ define('QP_PLUGIN_URL', plugin_dir_url(QP_PLUGIN_FILE));
 
 require_once QP_PLUGIN_DIR . 'admin/class-qp-subjects-page.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-labels-page.php';
+require_once QP_PLUGIN_DIR . 'admin/class-qp-topics-page.php'; 
 require_once QP_PLUGIN_DIR . 'admin/class-qp-import-page.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-importer.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-export-page.php';
@@ -47,6 +48,18 @@ function qp_activate_plugin() {
         $wpdb->insert($table_subjects, ['subject_name' => 'Uncategorized', 'description' => 'Default subject for questions without an assigned one.']);
     }
 
+    // *** NEW: Table for Topics ***
+    $table_topics = $wpdb->prefix . 'qp_topics';
+    $sql_topics = "CREATE TABLE $table_topics (
+        topic_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+        topic_name VARCHAR(255) NOT NULL,
+        subject_id BIGINT(20) UNSIGNED NOT NULL,
+        PRIMARY KEY (topic_id),
+        KEY subject_id (subject_id)
+    ) $charset_collate;";
+    dbDelta($sql_topics);
+    // *** END OF NEW TABLE ***
+
     // Table: Labels
     $table_labels = $wpdb->prefix . 'qp_labels';
     $sql_labels = "CREATE TABLE $table_labels (
@@ -71,8 +84,6 @@ function qp_activate_plugin() {
         }
     }
 
-    // --- THIS IS THE MISSING TABLE ---
-    // Table: Question Groups
     $table_groups = $wpdb->prefix . 'qp_question_groups';
     $sql_groups = "CREATE TABLE $table_groups (
         group_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -83,14 +94,14 @@ function qp_activate_plugin() {
         KEY subject_id (subject_id)
     ) $charset_collate;";
     dbDelta($sql_groups);
-    // --- END OF MISSING TABLE ---
 
-    // Table: Questions (Reviewed and corrected to match working schema)
+    // *** UPDATED: Questions table with topic_id ***
     $table_questions = $wpdb->prefix . 'qp_questions';
     $sql_questions = "CREATE TABLE $table_questions (
         question_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
         custom_question_id BIGINT(20) UNSIGNED,
         group_id BIGINT(20) UNSIGNED,
+        topic_id BIGINT(20) UNSIGNED DEFAULT NULL,
         question_text LONGTEXT NOT NULL,
         question_text_hash VARCHAR(32) NOT NULL,
         is_pyq BOOLEAN NOT NULL DEFAULT 0,
@@ -104,6 +115,7 @@ function qp_activate_plugin() {
         PRIMARY KEY (question_id),
         UNIQUE KEY custom_question_id (custom_question_id),
         KEY group_id (group_id),
+        KEY topic_id (topic_id),
         KEY status (status),
         KEY is_pyq (is_pyq),
         KEY question_text_hash (question_text_hash)
@@ -207,6 +219,7 @@ function qp_admin_menu() {
     add_submenu_page('question-press', 'Import', 'Import', 'manage_options', 'qp-import', ['QP_Import_Page', 'render']);
     add_submenu_page('question-press', 'Export', 'Export', 'manage_options', 'qp-export', ['QP_Export_Page', 'render']);
     add_submenu_page('question-press', 'Subjects', 'Subjects', 'manage_options', 'qp-subjects', ['QP_Subjects_Page', 'render']);
+    add_submenu_page('question-press', 'Topics', 'Topics', 'manage_options', 'qp-topics', ['QP_Topics_Page', 'render']); // *** ADD THIS LINE ***
     add_submenu_page('question-press', 'Labels', 'Labels', 'manage_options', 'qp-labels', ['QP_Labels_Page', 'render']);
     add_submenu_page('question-press', 'Logs', 'Logs', 'manage_options', 'qp-logs', ['QP_Logs_Page', 'render']);
     add_submenu_page('question-press', 'Settings', 'Settings', 'manage_options', 'qp-settings', ['QP_Settings_Page', 'render']);
@@ -270,11 +283,51 @@ add_action('admin_enqueue_scripts', 'qp_admin_enqueue_scripts');
 function qp_handle_form_submissions() {
     QP_Export_Page::handle_export_submission();
     qp_handle_save_question_group();
+    qp_handle_topic_forms();
     QP_Settings_Page::register_settings();
     qp_handle_clear_logs();
     qp_handle_resolve_log();
 }
 add_action('admin_init', 'qp_handle_form_submissions');
+
+// *** ADD THIS ENTIRE NEW FUNCTION ***
+function qp_handle_topic_forms() {
+    global $wpdb;
+    $topics_table = $wpdb->prefix . 'qp_topics';
+
+    // Handle Add Topic
+    if (isset($_POST['add_topic']) && check_admin_referer('qp_add_topic_nonce')) {
+        $topic_name = sanitize_text_field($_POST['topic_name']);
+        $subject_id = absint($_POST['subject_id']);
+        if (!empty($topic_name) && $subject_id > 0) {
+            $wpdb->insert($topics_table, ['topic_name' => $topic_name, 'subject_id' => $subject_id]);
+        }
+        wp_safe_redirect(admin_url('admin.php?page=qp-topics'));
+        exit;
+    }
+
+    // Handle Update Topic
+    if (isset($_POST['update_topic']) && isset($_POST['topic_id']) && check_admin_referer('qp_update_topic_nonce')) {
+        $topic_id = absint($_POST['topic_id']);
+        $topic_name = sanitize_text_field($_POST['topic_name']);
+        $subject_id = absint($_POST['subject_id']);
+        if (!empty($topic_name) && $subject_id > 0) {
+            $wpdb->update($topics_table, ['topic_name' => $topic_name, 'subject_id' => $subject_id], ['topic_id' => $topic_id]);
+        }
+        wp_safe_redirect(admin_url('admin.php?page=qp-topics'));
+        exit;
+    }
+
+    // Handle Delete Topic
+    if (isset($_GET['action']) && $_GET['action'] === 'delete' && isset($_GET['topic_id'])) {
+        $topic_id = absint($_GET['topic_id']);
+        if (isset($_GET['_wpnonce']) && wp_verify_nonce($_GET['_wpnonce'], 'qp_delete_topic_' . $topic_id)) {
+            $wpdb->delete($topics_table, ['topic_id' => $topic_id]);
+        }
+        wp_safe_redirect(admin_url('admin.php?page=qp-topics'));
+        exit;
+    }
+}
 
 function qp_all_questions_page_cb() {
     $list_table = new QP_Questions_List_Table();
