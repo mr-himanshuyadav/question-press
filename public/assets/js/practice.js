@@ -380,6 +380,12 @@ jQuery(document).ready(function ($) {
 
             $('#qp-question-subject').text('Subject: ' + questionData.subject_name);
             $('#qp-question-id').text('Question ID: ' + questionData.custom_question_id);
+
+            var subjectHtml = 'Subject: ' + questionData.subject_name;
+            if (questionData.topic_name) {
+                subjectHtml += ' / ' + questionData.topic_name;
+            }
+            $('#qp-question-subject').html(subjectHtml);
             
             // Handle source display for admins
             if(response.data.is_admin && (questionData.source_file || questionData.source_page || questionData.source_number)) {

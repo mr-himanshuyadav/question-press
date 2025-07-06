@@ -9,6 +9,7 @@ jQuery(document).ready(function($) {
         var $editRow = $('#edit-' + questionId);
         var $postRow = $('#post-' + questionId);
 
+        // Hide any other open quick edit rows
         $('.quick-edit-row').hide();
         $('tr.inline-editor').removeClass('inline-editor');
         
@@ -20,17 +21,46 @@ jQuery(document).ready(function($) {
             url: ajaxurl, type: 'POST',
             data: {
                 action: 'get_quick_edit_form',
-                nonce: nonce,
+                nonce: nonce, // RESTORED: Use 'nonce' as the key
                 question_id: questionId
             },
             success: function(response) {
                 if (response.success) {
                     $editRow.find('.inline-edit-col').html(response.data.form);
+                    // Manually trigger the change event to populate topics on load
+                    $editRow.find('.qe-subject-select').trigger('change');
                 } else {
                     $editRow.find('.inline-edit-col').html('<p style="color:red;">Could not load editor.</p>');
                 }
             }
         });
+    });
+
+    // Handle the dynamic topic dropdown
+    wrapper.on('change', '.qe-subject-select', function() {
+        var subjectSelect = $(this);
+        var topicSelect = subjectSelect.closest('.form-row-flex').find('.qe-topic-select');
+        var selectedSubjectId = subjectSelect.val();
+
+        topicSelect.empty();
+
+        // Use the topic data that was loaded with the form
+        if (typeof qp_quick_edit_topics_data !== 'undefined' && selectedSubjectId && qp_quick_edit_topics_data[selectedSubjectId]) {
+            topicSelect.prop('disabled', false);
+            topicSelect.append('<option value="">— Select a Topic —</option>');
+
+            $.each(qp_quick_edit_topics_data[selectedSubjectId], function(index, topic) {
+                var option = $('<option></option>').val(topic.id).text(topic.name);
+                // Use qp_current_topic_id which was set when the form was loaded
+                if (typeof qp_current_topic_id !== 'undefined' && topic.id == qp_current_topic_id) {
+                    option.prop('selected', true);
+                }
+                topicSelect.append(option);
+            });
+        } else {
+            topicSelect.prop('disabled', true);
+            topicSelect.append('<option value="">— No topics —</option>');
+        }
     });
 
     // Handle cancelling the quick edit
@@ -48,16 +78,15 @@ jQuery(document).ready(function($) {
         var $button = $(this);
         var $formWrapper = $button.closest('.quick-edit-form-wrapper');
         var questionId = $formWrapper.find('input[name="question_id"]').val();
-        var nonce = qp_quick_edit_object.save_nonce;
-
+        
         $button.prop('disabled', true).text('Updating...');
 
         $.ajax({
             url: ajaxurl, type: 'POST',
             data: {
                 action: 'save_quick_edit_data',
-                nonce: nonce,
-                question_id: questionId, // Sending the ID explicitly to prevent errors
+                nonce: qp_quick_edit_object.save_nonce, // RESTORED: Use 'nonce' as the key
+                question_id: questionId,
                 form_data: $formWrapper.find(':input').serialize()
             },
             success: function(response) {
