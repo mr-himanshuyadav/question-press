@@ -193,8 +193,6 @@ register_activation_hook(QP_PLUGIN_FILE, 'qp_activate_plugin');
 function qp_deactivate_plugin() {}
 register_deactivation_hook(QP_PLUGIN_FILE, 'qp_deactivate_plugin');
 
-function qp_uninstall_plugin() {}
-register_uninstall_hook(QP_PLUGIN_FILE, 'qp_uninstall_plugin');
 
 // ADMIN MENU & SCRIPTS SETUP
 function qp_admin_menu() {

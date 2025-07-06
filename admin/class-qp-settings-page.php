@@ -7,19 +7,34 @@ class QP_Settings_Page {
      * Renders the main settings page wrapper and form.
      */
     public static function render() {
-        ?>
-        <div class="wrap">
-            <h1>Question Press Settings</h1>
-            <form action="options.php" method="post">
-                <?php
-                settings_fields('qp_settings_group');
-                do_settings_sections('qp-settings-page');
-                submit_button('Save Settings');
-                ?>
-            </form>
-        </div>
+    ?>
+    <div class="wrap">
+        <h1>Question Press Settings</h1>
+
         <?php
-    }
+        // WordPress automatically displays the "Settings saved." notice here
+        settings_errors(); 
+        ?>
+
+        <form action="options.php" method="post">
+            <?php
+            // This function adds the necessary hidden fields for the Settings API to work correctly
+            settings_fields('qp_settings_group');
+
+            // Add the top save button
+            submit_button('Save Settings', 'primary', 'submit_top', false);
+            ?>
+            <hr>
+            <?php
+            do_settings_sections('qp-settings-page');
+
+            // This is the original bottom save button
+            submit_button('Save Settings');
+            ?>
+        </form>
+    </div>
+    <?php
+}
 
     /**
      * Registers all settings, sections, and fields.
@@ -27,8 +42,6 @@ class QP_Settings_Page {
     public static function register_settings() {
         register_setting('qp_settings_group', 'qp_settings', ['sanitize_callback' => [self::class, 'sanitize_settings']]);
         add_settings_section('qp_data_settings_section', 'Data Management', [self::class, 'render_data_section_text'], 'qp-settings-page');
-        // NEW: Add the pagination setting field
-        add_settings_field('qp_questions_per_page', 'Questions Per Page', [self::class, 'render_per_page_input'], 'qp-settings-page', 'qp_data_settings_section');
         add_settings_field('qp_delete_on_uninstall', 'Delete Data on Uninstall', [self::class, 'render_delete_data_checkbox'], 'qp-settings-page', 'qp_data_settings_section');
         
         add_settings_section('qp_api_settings_section', 'REST API Documentation', [self::class, 'render_api_section_text'], 'qp-settings-page');
@@ -131,7 +144,6 @@ class QP_Settings_Page {
     public static function sanitize_settings($input) {
         $new_input = [];
         if (isset($input['delete_on_uninstall'])) { $new_input['delete_on_uninstall'] = absint($input['delete_on_uninstall']); }
-        if (isset($input['questions_per_page'])) { $new_input['questions_per_page'] = absint($input['questions_per_page']); }
         return $new_input;
     }
 }
