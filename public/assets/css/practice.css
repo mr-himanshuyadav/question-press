@@ -90,6 +90,20 @@
 .qp-options-area .option.disabled { cursor: not-allowed; opacity: 0.9; } .qp-options-area .option.disabled:not(.correct):not(.incorrect) { background: var(--qp-bg-light); }
 .qp-footer-nav, .qp-footer-controls { margin-top: 2rem; display: flex; align-items: center; justify-content: space-between; }
 .qp-footer-nav button { padding: 10px 20px; font-weight: 600; }
+
+.qp-footer-nav button:disabled {
+    background-color: #f0f0f1;
+    border-color: #dcdcde;
+    color: #a7aaad;
+    cursor: not-allowed;
+    box-shadow: none;
+    transform: none;
+}
+.qp-footer-nav button:disabled:hover {
+    background-color: #f0f0f1;
+    border-color: #dcdcde;
+}
+
 #qp-skip-btn { border-color: var(--qp-border-color); }
 #qp-report-btn { background: none!important; border: none!important; color: var(--qp-light-text)!important; text-decoration: underline; font-weight: normal; box-shadow: none; }
 #qp-end-practice-btn { background-color: #d63638; color: #fff; border-color: #d63638; }
