@@ -15,7 +15,7 @@ class QP_Shortcodes
         return $output;
     }
 
-    public static function render_settings_form()
+     public static function render_settings_form()
     {
         global $wpdb;
         $subjects = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}qp_subjects ORDER BY subject_name ASC");
@@ -33,6 +33,13 @@ class QP_Shortcodes
                         <?php foreach ($subjects as $subject) : ?>
                             <option value="<?php echo esc_attr($subject->subject_id); ?>"><?php echo esc_html($subject->subject_name); ?></option>
                         <?php endforeach; ?>
+                    </select>
+                </div>
+                
+                <div class="qp-form-group" id="qp-topic-group" style="display: none;">
+                    <label for="qp_topic">Select Topic:</label>
+                    <select name="qp_topic" id="qp_topic" disabled>
+                        <option value="">-- Select a subject first --</option>
                     </select>
                 </div>
 

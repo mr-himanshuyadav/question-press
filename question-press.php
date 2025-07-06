@@ -511,7 +511,23 @@ function qp_public_enqueue_scripts() {
 }
 add_action('wp_enqueue_scripts', 'qp_public_enqueue_scripts');
 
-// In question-press.php
+
+// *** ADD THIS ENTIRE NEW FUNCTION ***
+function qp_get_topics_for_subject_ajax() {
+    check_ajax_referer('qp_practice_nonce', 'nonce');
+    $subject_id = isset($_POST['subject_id']) ? absint($_POST['subject_id']) : 0;
+
+    if (!$subject_id) {
+        wp_send_json_error(['message' => 'Invalid subject ID.']);
+    }
+
+    global $wpdb;
+    $topics_table = $wpdb->prefix . 'qp_topics';
+    $topics = $wpdb->get_results($wpdb->prepare("SELECT topic_id, topic_name FROM $topics_table WHERE subject_id = %d ORDER BY topic_name ASC", $subject_id));
+
+    wp_send_json_success(['topics' => $topics]);
+}
+add_action('wp_ajax_get_topics_for_subject', 'qp_get_topics_for_subject_ajax');
 
 function qp_start_practice_session_ajax() {
     check_ajax_referer('qp_practice_nonce', 'nonce');
@@ -521,6 +537,7 @@ function qp_start_practice_session_ajax() {
 
     $session_settings = [
         'subject_id'      => isset($form_settings['qp_subject']) ? $form_settings['qp_subject'] : '',
+        'topic_id'        => isset($form_settings['qp_topic']) ? $form_settings['qp_topic'] : 'all', // Get topic_id
         'pyq_only'        => isset($form_settings['qp_pyq_only']),
         'revise_mode'     => isset($form_settings['qp_revise_mode']),
         'marks_correct'   => isset($form_settings['qp_marks_correct']) ? floatval($form_settings['qp_marks_correct']) : 4.0,
@@ -539,7 +556,6 @@ function qp_start_practice_session_ajax() {
     $l_table = $wpdb->prefix . 'qp_labels';
     $ql_table = $wpdb->prefix . 'qp_question_labels';
 
-    // --- Base criteria for questions, without considering user attempts ---
     $base_where_clauses = ["q.status = 'publish'"];
     $query_args = [];
 
@@ -554,13 +570,19 @@ function qp_start_practice_session_ajax() {
         $base_where_clauses[] = "g.subject_id = %d";
         $query_args[] = absint($session_settings['subject_id']);
     }
+
+    // Filter by topic if a specific topic is selected
+    if ($session_settings['topic_id'] !== 'all' && is_numeric($session_settings['topic_id'])) {
+        $base_where_clauses[] = "q.topic_id = %d";
+        $query_args[] = absint($session_settings['topic_id']);
+    }
+    
     if ($session_settings['pyq_only']) {
         $base_where_clauses[] = "q.is_pyq = 1";
     }
 
     $base_where_sql = implode(' AND ', $base_where_clauses);
     
-    // --- Now, add attempt-based criteria for the final query ---
     $final_where_clauses = $base_where_clauses;
     if ($session_settings['revise_mode']) {
         $final_where_clauses[] = $wpdb->prepare("q.question_id IN (SELECT DISTINCT question_id FROM $a_table WHERE user_id = %d)", $user_id);
@@ -579,7 +601,6 @@ function qp_start_practice_session_ajax() {
     $question_ids = $wpdb->get_col($wpdb->prepare($query, $query_args));
 
     if (empty($question_ids)) {
-        // Now we check the *base* query to see if any questions existed in the first place.
         $total_questions_matching_criteria = $wpdb->get_var(
             $wpdb->prepare("SELECT COUNT(q.question_id) FROM {$q_table} q LEFT JOIN {$g_table} g ON q.group_id = g.group_id WHERE " . $base_where_sql, $query_args)
         );

@@ -89,6 +89,43 @@ jQuery(document).ready(function ($) {
       }
     });
   });
+
+  // *** NEW: Handler for the dynamic topic dropdown ***
+  wrapper.on('change', '#qp_subject', function() {
+    var subjectId = $(this).val();
+    var topicGroup = $('#qp-topic-group');
+    var topicSelect = $('#qp_topic');
+
+    if (subjectId && subjectId !== 'all') {
+        $.ajax({
+            url: qp_ajax_object.ajax_url,
+            type: 'POST',
+            data: {
+                action: 'get_topics_for_subject',
+                nonce: qp_ajax_object.nonce,
+                subject_id: subjectId
+            },
+            beforeSend: function() {
+                topicSelect.prop('disabled', true).html('<option>Loading topics...</option>');
+                topicGroup.slideDown();
+            },
+            success: function(response) {
+                if (response.success && response.data.topics.length > 0) {
+                    topicSelect.prop('disabled', false).empty();
+                    topicSelect.append('<option value="all">All Topics</option>');
+                    $.each(response.data.topics, function(index, topic) {
+                        topicSelect.append($('<option></option>').val(topic.topic_id).text(topic.topic_name));
+                    });
+                } else {
+                    topicSelect.prop('disabled', true).html('<option value="all">No topics found</option>');
+                }
+            }
+        });
+    } else {
+        topicGroup.slideUp();
+        topicSelect.prop('disabled', true).html('<option>-- Select a subject first --</option>');
+    }
+  });
   
   // Handlers for the new error screen buttons
   wrapper.on('click', '#qp-try-revision-btn, #qp-go-back-btn', function() {
