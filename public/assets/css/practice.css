@@ -82,7 +82,9 @@
 .qp-question-area .question-text { font-size: 22px; font-weight: 500; line-height: 1.5; color: var(--qp-dark-text); margin-bottom: 2rem; }
 .qp-options-area .option { display: block; padding: 1rem; margin-bottom: 0.75rem; border: 2px solid var(--qp-border-color); border-radius: var(--qp-radius); font-size: 16px; cursor: pointer; transition: border-color 0.15s ease-in-out; position: relative; }
 .qp-options-area .option input { display: none; } /* Completely hide radio button */
-.qp-options-area .option:hover { border-color: var(--qp-primary-hover); }
+
+.qp-options-area .option:not(.disabled):hover { border-color: var(--qp-primary-hover); }
+
 .qp-options-area .option.correct { border-color: var(--qp-correct-border) !important; background: var(--qp-correct-bg); color: var(--qp-correct-text); font-weight: 600; }
 .qp-options-area .option.incorrect { border-color: var(--qp-incorrect-border) !important; background: var(--qp-incorrect-bg); color: var(--qp-incorrect-text); }
 .qp-options-area .option.disabled { cursor: not-allowed; opacity: 0.9; } .qp-options-area .option.disabled:not(.correct):not(.incorrect) { background: var(--qp-bg-light); }
