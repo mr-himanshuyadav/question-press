@@ -105,6 +105,7 @@ class QP_Shortcodes
     {
         ob_start();
     ?>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <div class="qp-practice-wrapper">
             <div class="qp-header">
                 <div class="qp-header-stat timer-stat">
