@@ -487,50 +487,50 @@ function qp_start_practice_session_ajax() {
     $l_table = $wpdb->prefix . 'qp_labels';
     $ql_table = $wpdb->prefix . 'qp_question_labels';
 
-    $where_clauses = ["q.status = 'publish'"];
+    // --- Base criteria for questions, without considering user attempts ---
+    $base_where_clauses = ["q.status = 'publish'"];
     $query_args = [];
 
-    // Exclude questions needing review
     $review_label_ids = $wpdb->get_col("SELECT label_id FROM $l_table WHERE label_name IN ('Wrong Answer', 'No Answer')");
     if (!empty($review_label_ids)) {
         $ids_placeholder = implode(',', array_fill(0, count($review_label_ids), '%d'));
-        $where_clauses[] = "q.question_id NOT IN (SELECT question_id FROM $ql_table WHERE label_id IN ($ids_placeholder))";
+        $base_where_clauses[] = "q.question_id NOT IN (SELECT question_id FROM $ql_table WHERE label_id IN ($ids_placeholder))";
         $query_args = array_merge($query_args, $review_label_ids);
-    }
-    
-    // --- UPDATED: Revision & Standard Mode Logic ---
-    if ($session_settings['revise_mode']) {
-        // REVISION MODE: Only select from questions the user has previously attempted.
-        $where_clauses[] = $wpdb->prepare("q.question_id IN (SELECT DISTINCT question_id FROM $a_table WHERE user_id = %d)", $user_id);
-    } else {
-        // STANDARD MODE: Exclude all questions the user has previously attempted.
-        $where_clauses[] = $wpdb->prepare("q.question_id NOT IN (SELECT DISTINCT question_id FROM $a_table WHERE user_id = %d)", $user_id);
     }
 
     if ($session_settings['subject_id'] !== 'all') {
-        $where_clauses[] = "g.subject_id = %d";
+        $base_where_clauses[] = "g.subject_id = %d";
         $query_args[] = absint($session_settings['subject_id']);
     }
     if ($session_settings['pyq_only']) {
-        $where_clauses[] = "q.is_pyq = 1";
+        $base_where_clauses[] = "q.is_pyq = 1";
     }
+
+    $base_where_sql = implode(' AND ', $base_where_clauses);
+    
+    // --- Now, add attempt-based criteria for the final query ---
+    $final_where_clauses = $base_where_clauses;
+    if ($session_settings['revise_mode']) {
+        $final_where_clauses[] = $wpdb->prepare("q.question_id IN (SELECT DISTINCT question_id FROM $a_table WHERE user_id = %d)", $user_id);
+    } else {
+        $final_where_clauses[] = $wpdb->prepare("q.question_id NOT IN (SELECT DISTINCT question_id FROM $a_table WHERE user_id = %d)", $user_id);
+    }
+    
+    $final_where_sql = implode(' AND ', $final_where_clauses);
 
     $options = get_option('qp_settings');
     $question_order = isset($options['question_order']) ? $options['question_order'] : 'random';
     $order_by_sql = ($question_order === 'in_order') ? 'ORDER BY q.custom_question_id ASC' : 'ORDER BY RAND()';
 
-    $where_sql = implode(' AND ', $where_clauses);
-    $query = "SELECT q.question_id FROM {$q_table} q LEFT JOIN {$g_table} g ON q.group_id = g.group_id WHERE {$where_sql} {$order_by_sql}";
+    $query = "SELECT q.question_id FROM {$q_table} q LEFT JOIN {$g_table} g ON q.group_id = g.group_id WHERE {$final_where_sql} {$order_by_sql}";
     
     $question_ids = $wpdb->get_col($wpdb->prepare($query, $query_args));
 
     if (empty($question_ids)) {
-        // Check if there are any questions matching the criteria *before* excluding attempted questions
-        $all_questions_query = $wpdb->prepare(
-            "SELECT COUNT(q.question_id) FROM {$q_table} q LEFT JOIN {$g_table} g ON q.group_id = g.group_id WHERE " . $where_sql,
-            $query_args
+        // Now we check the *base* query to see if any questions existed in the first place.
+        $total_questions_matching_criteria = $wpdb->get_var(
+            $wpdb->prepare("SELECT COUNT(q.question_id) FROM {$q_table} q LEFT JOIN {$g_table} g ON q.group_id = g.group_id WHERE " . $base_where_sql, $query_args)
         );
-        $total_questions_matching_criteria = $wpdb->get_var($all_questions_query);
 
         $error_code = ($total_questions_matching_criteria > 0) ? 'ALL_ATTEMPTED' : 'NO_QUESTIONS_EXIST';
         
