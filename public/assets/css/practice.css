@@ -1,5 +1,5 @@
 /* =================================================================
-   Question Press Frontend Styles - v7.4 Final
+   Question Press Frontend Styles - v7.5 Final Polish
    ================================================================= */
 
 :root {
@@ -111,13 +111,14 @@ body {
 .qp-question-area .question-text { font-size: 20px; font-weight: 500; line-height: 1.6; margin-bottom: 2rem; }
 .qp-options-area .option { display: block; padding: 1rem; margin-bottom: 0.75rem; border: 2px solid var(--qp-border-color); border-radius: var(--qp-radius); font-size: 16px; cursor: pointer; transition: all 0.2s ease-in-out; position: relative; }
 .qp-options-area .option input { display: none; }
-.qp-options-area .option.disabled { cursor: not-allowed; } /* Updated */
+.qp-options-area .option.disabled { cursor: not-allowed; }
 .qp-options-area .option.correct { border-color: var(--qp-correct-color) !important; background: var(--qp-correct-bg); color: var(--qp-correct-text); font-weight: 600; }
 .qp-options-area .option.incorrect { border-color: var(--qp-incorrect-color) !important; background: var(--qp-incorrect-bg); color: var(--qp-incorrect-text); }
 .qp-footer-nav { margin-top: 2rem; display: flex; gap: 10px; }
 .qp-footer-nav button { padding: 10px; font-weight: 600; flex: 1; }
 .qp-footer-controls { margin-top: 20px; display: flex; justify-content: center; }
-.qp-footer-nav button:disabled { background-color: #f0f0f1; border-color: #dcdcde; color: #a7aaad; cursor: not-allowed; } /* Updated */
+.qp-footer-nav button:disabled { background-color: #f0f0f1; border-color: #dcdcde; color: #a7aaad; cursor: not-allowed; }
+#qp-prev-btn { background-color: var(--qp-bg-light); color: var(--qp-dark-text); } /* Unique style for Previous button */
 
 /* --- Report Buttons --- */
 .qp-admin-report-area, .qp-user-report-area { margin-top: 30px; padding-top: 20px; border-top: 1px dashed var(--qp-border-color); text-align: center; }

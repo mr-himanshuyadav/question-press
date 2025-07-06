@@ -89,6 +89,43 @@ jQuery(document).ready(function ($) {
       }
     });
   });
+
+  // *** NEW: Handler for the dynamic topic dropdown ***
+  wrapper.on('change', '#qp_subject', function() {
+    var subjectId = $(this).val();
+    var topicGroup = $('#qp-topic-group');
+    var topicSelect = $('#qp_topic');
+
+    if (subjectId && subjectId !== 'all') {
+        $.ajax({
+            url: qp_ajax_object.ajax_url,
+            type: 'POST',
+            data: {
+                action: 'get_topics_for_subject',
+                nonce: qp_ajax_object.nonce,
+                subject_id: subjectId
+            },
+            beforeSend: function() {
+                topicSelect.prop('disabled', true).html('<option>Loading topics...</option>');
+                topicGroup.slideDown();
+            },
+            success: function(response) {
+                if (response.success && response.data.topics.length > 0) {
+                    topicSelect.prop('disabled', false).empty();
+                    topicSelect.append('<option value="all">All Topics</option>');
+                    $.each(response.data.topics, function(index, topic) {
+                        topicSelect.append($('<option></option>').val(topic.topic_id).text(topic.topic_name));
+                    });
+                } else {
+                    topicSelect.prop('disabled', true).html('<option value="all">No topics found</option>');
+                }
+            }
+        });
+    } else {
+        topicGroup.slideUp();
+        topicSelect.prop('disabled', true).html('<option>-- Select a subject first --</option>');
+    }
+  });
   
   // Handlers for the new error screen buttons
   wrapper.on('click', '#qp-try-revision-btn, #qp-go-back-btn', function() {
@@ -116,12 +153,10 @@ jQuery(document).ready(function ($) {
   wrapper.on("click", ".qp-options-area .option:not(.disabled)", function () {
     clearInterval(questionTimer);
     var selectedOption = $(this);
+    var selectedOptionID = selectedOption.find('input[type="radio"]').val();
     var questionID = sessionQuestionIDs[currentQuestionIndex];
-    
-    // Disable all options immediately
-    $('.qp-options-area .option').addClass('disabled');
-    $('.qp-options-area .option input[type="radio"]').prop('disabled', true);
-    $("#qp-skip-btn").prop("disabled", true);
+
+    $(".qp-options-area .option, #qp-skip-btn").prop("disabled", true);
     $("#qp-next-btn").prop("disabled", false);
 
     $.ajax({
@@ -132,15 +167,16 @@ jQuery(document).ready(function ($) {
         nonce: qp_ajax_object.nonce,
         session_id: sessionID,
         question_id: questionID,
-        option_id: selectedOption.find('input[type="radio"]').val()
+        option_id: selectedOptionID,
       },
       success: function (response) {
         if (response.success) {
+          $('.qp-options-area .option input[type="radio"]').prop('disabled', true);
           answeredStates[questionID] = {
             type: "answered",
             is_correct: response.data.is_correct,
             correct_option_id: response.data.correct_option_id,
-            selected_option_id: selectedOption.find('input[type="radio"]').val(),
+            selected_option_id: selectedOptionID,
             reported_as: answeredStates[questionID]?.reported_as || [],
           };
           if (response.data.is_correct) {
@@ -194,6 +230,7 @@ jQuery(document).ready(function ($) {
       $button.prop("disabled", true);
       if ($button.data("label")) $button.text("Processing...");
 
+      // If a user reports a question they already answered, we must reverse the score.
       if (
         !isAdminAction && !isSkipAction &&
         answeredStates[questionID] &&
@@ -237,8 +274,10 @@ jQuery(document).ready(function ($) {
             }
 
             if (isAdminAction) {
+              // Admin action just labels. Reload the same question to show the disabled button.
               loadQuestion(questionID);
             } else {
+              // User action always counts as a skip.
               if (
                 !answeredStates[questionID] ||
                 answeredStates[questionID].type !== "skipped"
@@ -299,6 +338,7 @@ jQuery(document).ready(function ($) {
   function loadQuestion(questionID) {
     if (!questionID) return;
 
+    // Reset UI elements for the new question
     $("#qp-question-text-area").html("Loading...");
     $(".qp-options-area").empty();
     $("#qp-revision-indicator, .qp-direction, #qp-reported-indicator, #qp-question-source").hide();
@@ -339,13 +379,16 @@ jQuery(document).ready(function ($) {
             }
 
 
+            $('#qp-question-subject').text('Subject: ' + questionData.subject_name);
+            $('#qp-question-id').text('Question ID: ' + questionData.custom_question_id);
+
             var subjectHtml = 'Subject: ' + questionData.subject_name;
             if (questionData.topic_name) {
                 subjectHtml += ' / ' + questionData.topic_name;
             }
             $('#qp-question-subject').html(subjectHtml);
-            $('#qp-question-id').text('Question ID: ' + questionData.custom_question_id);
             
+            // Handle source display for admins
             if(response.data.is_admin && (questionData.source_file || questionData.source_page || questionData.source_number)) {
                 var sourceInfo = [];
                 if (questionData.source_file) sourceInfo.push('File: ' + questionData.source_file);
@@ -362,10 +405,16 @@ jQuery(document).ready(function ($) {
             var optionsArea = $('.qp-options-area');
             optionsArea.empty();
             $.each(questionData.options, function(index, option) {
+
                 var optionHtml = $('<label class="option"></label>')
                     .append($('<input type="radio" name="qp_option">').val(option.option_id), ' ')
                     .append($('<span>').html(option.option_text)); 
-                if (previousState && previousState.type === "answered" && previousState.selected_option_id == option.option_id) {
+
+                if (
+                  previousState &&
+                  previousState.type === "answered" &&
+                  previousState.selected_option_id == option.option_id
+                ) {
                   optionHtml.find("input").prop("checked", true);
                 }
                 optionsArea.append(optionHtml);
@@ -378,10 +427,16 @@ jQuery(document).ready(function ($) {
                     document.getElementById('qp-question-source'),
                     ...optionsArea.find('.option').toArray()
                 ];
+
                 elementsToRender.forEach(function(element) {
                     if (element) { 
                          renderMathInElement(element, {
-                            delimiters: [ {left: '$$', right: '$$', display: true}, {left: '$', right: '$', display: false}, {left: '\\[', right: '\\]', display: true}, {left: '\\(', right: '\\)', display: false} ],
+                            delimiters: [
+                                {left: '$$', right: '$$', display: true},
+                                {left: '$', right: '$', display: false},
+                                {left: '\\[', right: '\\]', display: true},
+                                {left: '\\(', right: '\\)', display: false}
+                            ],
                             throwOnError: false
                         });
                     }
@@ -392,21 +447,37 @@ jQuery(document).ready(function ($) {
                 $("#qp-next-btn").prop("disabled", false);
                 $(".qp-options-area .option").addClass("disabled");
                 $('.qp-options-area .option input[type="radio"]').prop('disabled', true);
+
                 if (previousState.type === "answered") {
                   $("#qp-skip-btn").prop("disabled", true); 
                   if (previousState.is_correct) {
-                    $('input[value="' + previousState.selected_option_id + '"]').closest(".option").addClass("correct");
+                    $('input[value="' + previousState.selected_option_id + '"]')
+                      .closest(".option")
+                      .addClass("correct");
                   } else {
-                    $('input[value="' + previousState.selected_option_id + '"]').closest(".option").addClass("incorrect");
-                    $('input[value="' + previousState.correct_option_id + '"]').closest(".option").addClass("correct");
+                    $('input[value="' + previousState.selected_option_id + '"]')
+                      .closest(".option")
+                      .addClass("incorrect");
+                    $('input[value="' + previousState.correct_option_id + '"]')
+                      .closest(".option")
+                      .addClass("correct");
                   }
                 } else if (previousState.type === "skipped") {
-                  $("#qp-skip-btn, .qp-report-button").prop("disabled", true); 
+                  $("#qp-skip-btn, .qp-report-button").prop(
+                    "disabled",
+                    true
+                  ); 
                 }
-                if (previousState.reported_as && previousState.reported_as.length > 0) {
+                
+                if (
+                  previousState.reported_as &&
+                  previousState.reported_as.length > 0
+                ) {
                   $("#qp-reported-indicator").show();
                   previousState.reported_as.forEach(function (labelName) {
-                    $('.qp-report-button[data-label="' + labelName + '"]').prop("disabled", true).text("Reported");
+                    $('.qp-report-button[data-label="' + labelName + '"]')
+                      .prop("disabled", true)
+                      .text("Reported");
                   });
                 }
               } else {
@@ -420,14 +491,18 @@ jQuery(document).ready(function ($) {
         }
       },
     });
-  }
+}
 
   function loadNextQuestion() {
     currentQuestionIndex++;
     if (currentQuestionIndex >= sessionQuestionIDs.length) {
       practiceInProgress = false;
       clearInterval(questionTimer);
-      if (confirm("Congratulations, you've completed all available questions! Click OK to end this session and see your summary.")) {
+      if (
+        confirm(
+          "Congratulations, you've completed all available questions! Click OK to end this session and see your summary."
+        )
+      ) {
         $("#qp-end-practice-btn").click();
       }
       return;
@@ -458,7 +533,11 @@ jQuery(document).ready(function ($) {
       updateDisplay();
       if (remainingTime <= 0) {
         clearInterval(questionTimer);
-        if (confirm("Time's up for this question! Click OK to move to the next question.")) {
+        if (
+          confirm(
+            "Time's up for this question! Click OK to move to the next question."
+          )
+        ) {
           $("#qp-skip-btn").click();
         }
       }
@@ -470,12 +549,22 @@ jQuery(document).ready(function ($) {
     var summaryHtml = `
             <div class="qp-summary-wrapper">
                 <h2>Session Summary</h2>
-                <div class="qp-summary-score"><div class="label">Final Score</div>${parseFloat(summaryData.final_score).toFixed(2)}</div>
+                <div class="qp-summary-score"><div class="label">Final Score</div>${parseFloat(
+                  summaryData.final_score
+                ).toFixed(2)}</div>
                 <div class="qp-summary-stats">
-                    <div class="stat"><div class="value">${summaryData.total_attempted}</div><div class="label">Attempted</div></div>
-                    <div class="stat"><div class="value">${summaryData.correct_count}</div><div class="label">Correct</div></div>
-                    <div class="stat"><div class="value">${summaryData.incorrect_count}</div><div class="label">Incorrect</div></div>
-                    <div class="stat"><div class="value">${summaryData.skipped_count}</div><div class="label">Skipped</div></div>
+                    <div class="stat"><div class="value">${
+                      summaryData.total_attempted
+                    }</div><div class="label">Attempted</div></div>
+                    <div class="stat"><div class="value">${
+                      summaryData.correct_count
+                    }</div><div class="label">Correct</div></div>
+                    <div class="stat"><div class="value">${
+                      summaryData.incorrect_count
+                    }</div><div class="label">Incorrect</div></div>
+                    <div class="stat"><div class="value">${
+                      summaryData.skipped_count
+                    }</div><div class="label">Skipped</div></div>
                 </div>
                 <div class="qp-summary-actions">
                     <a href="/dashboard/" class="qp-button qp-button-secondary">View Dashboard</a>
