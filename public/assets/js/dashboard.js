@@ -24,7 +24,7 @@ jQuery(document).ready(function($) {
         }
     });
 
-    // NEW: Handler for deleting all revision history
+    // Handler for deleting all revision history
     wrapper.on('click', '#qp-delete-history-btn', function(e) {
         e.preventDefault();
         var button = $(this);
@@ -33,20 +33,24 @@ jQuery(document).ready(function($) {
                 url: qp_ajax_object.ajax_url, type: 'POST',
                 data: { action: 'delete_revision_history', nonce: qp_ajax_object.nonce },
                 beforeSend: function() {
-                    button.text('Deleting History...');
-                    button.prop('disabled', true);
+                    button.text('Deleting History...').prop('disabled', true);
                 },
                 success: function(response) {
                     if (response.success) {
-                        alert('Your revision history has been successfully deleted.');
+                        var tableBody = wrapper.find('.qp-dashboard-table tbody');
+                        // Fade out the table body, empty it, add the success message, and fade it back in.
+                        tableBody.fadeOut(400, function() {
+                            $(this).empty().html('<tr><td colspan="8" style="text-align: center;">Your history has been cleared.</td></tr>').fadeIn(400);
+                        });
+                        // Update the button state to reflect the action.
                         button.text('History Deleted').css('opacity', 0.7);
                     } else {
-                        alert('Error: ' + response.data.message);
+                        alert('Error: ' + (response.data.message || 'An unknown error occurred.'));
                         button.text('Delete All Revision History').prop('disabled', false);
                     }
                 },
                 error: function() {
-                    alert('An unknown error occurred.');
+                    alert('An unknown server error occurred.');
                     button.text('Delete All Revision History').prop('disabled', false);
                 }
             });
