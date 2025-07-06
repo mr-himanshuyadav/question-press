@@ -485,7 +485,6 @@ function qp_public_enqueue_scripts() {
     if (is_a($post, 'WP_Post') && (has_shortcode($post->post_content, 'question_press_practice') || has_shortcode($post->post_content, 'question_press_dashboard'))) {
         
         // --- Cache Busting Logic ---
-        // Get the server path and modification time for each asset.
         $css_file_path = QP_PLUGIN_DIR . 'public/assets/css/practice.css';
         $css_version = file_exists($css_file_path) ? filemtime($css_file_path) : '1.0.0';
 
@@ -496,10 +495,22 @@ function qp_public_enqueue_scripts() {
         $dashboard_js_version = file_exists($dashboard_js_file_path) ? filemtime($dashboard_js_file_path) : '1.0.0';
         // --- End of Cache Busting Logic ---
 
-        // Enqueue style with the dynamic version number
         wp_enqueue_style('qp-practice-styles', QP_PLUGIN_URL . 'public/assets/css/practice.css', [], $css_version);
         
-        $ajax_data = ['ajax_url' => admin_url('admin-ajax.php'), 'nonce' => wp_create_nonce('qp_practice_nonce')];
+        // Get dynamic URLs from settings
+        $options = get_option('qp_settings');
+        $practice_page_id = isset($options['practice_page']) ? absint($options['practice_page']) : 0;
+        $dashboard_page_id = isset($options['dashboard_page']) ? absint($options['dashboard_page']) : 0;
+        
+        $practice_page_url = $practice_page_id ? get_permalink($practice_page_id) : home_url('/');
+        $dashboard_page_url = $dashboard_page_id ? get_permalink($dashboard_page_id) : home_url('/');
+        
+        $ajax_data = [
+            'ajax_url'           => admin_url('admin-ajax.php'), 
+            'nonce'              => wp_create_nonce('qp_practice_nonce'),
+            'practice_page_url'  => $practice_page_url,
+            'dashboard_page_url' => $dashboard_page_url
+        ];
         
         if (has_shortcode($post->post_content, 'question_press_practice')) {
             // KaTeX styles and scripts
@@ -508,13 +519,11 @@ function qp_public_enqueue_scripts() {
             wp_enqueue_script('katex-mhchem', 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/mhchem.min.js', ['katex-js'], '0.16.9', true);
             wp_enqueue_script('katex-auto-render', 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js', ['katex-mhchem'], '0.16.9', true);
 
-            // Enqueue script with the dynamic version number
             wp_enqueue_script('qp-practice-script', QP_PLUGIN_URL . 'public/assets/js/practice.js', ['jquery', 'katex-auto-render'], $practice_js_version, true);
             wp_localize_script('qp-practice-script', 'qp_ajax_object', $ajax_data);
         }
         
         if (has_shortcode($post->post_content, 'question_press_dashboard')) {
-            // Enqueue script with the dynamic version number
             wp_enqueue_script('qp-dashboard-script', QP_PLUGIN_URL . 'public/assets/js/dashboard.js', ['jquery'], $dashboard_js_version, true);
             wp_localize_script('qp-dashboard-script', 'qp_ajax_object', $ajax_data);
         }
@@ -1095,5 +1104,3 @@ function qp_regenerate_api_key_ajax() {
     wp_send_json_success(['new_key' => $new_key]);
 }
 add_action('wp_ajax_regenerate_api_key', 'qp_regenerate_api_key_ajax');
-
-

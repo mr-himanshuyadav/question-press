@@ -23,13 +23,19 @@ class QP_Dashboard {
             $user_id
         ));
 
+        // Get the dynamic URL for the practice page
+        $options = get_option('qp_settings');
+        $practice_page_id = isset($options['practice_page']) ? absint($options['practice_page']) : 0;
+        $practice_page_url = $practice_page_id ? get_permalink($practice_page_id) : home_url('/');
+
+
         ob_start();
         ?>
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <div class="qp-container qp-dashboard-wrapper">
             <h2>My Practice History</h2>
             <div class="qp-dashboard-actions">
-                <a href="/practice-zone/" class="qp-button qp-button-primary">Start a New Practice</a>
+                <a href="<?php echo esc_url($practice_page_url); ?>" class="qp-button qp-button-primary">Start a New Practice</a>
                 <button id="qp-delete-history-btn" class="qp-button qp-button-danger">Delete All Revision History</button>
             </div>
             <table class="qp-dashboard-table">

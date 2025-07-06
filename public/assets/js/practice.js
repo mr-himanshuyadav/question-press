@@ -568,8 +568,8 @@ jQuery(document).ready(function ($) {
                     }</div><div class="label">Skipped</div></div>
                 </div>
                 <div class="qp-summary-actions">
-                    <a href="/dashboard/" class="qp-button qp-button-secondary">View Dashboard</a>
-                    <a href="" class="qp-button qp-button-primary">Start Another Practice</a>
+                    <a href="${qp_ajax_object.dashboard_page_url}" class="qp-button qp-button-secondary">View Dashboard</a>
+                    <a href="${qp_ajax_object.practice_page_url}" class="qp-button qp-button-primary">Start Another Practice</a>
                 </div>
             </div>`;
     wrapper.html(summaryHtml);

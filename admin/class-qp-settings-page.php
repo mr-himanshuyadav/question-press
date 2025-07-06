@@ -31,16 +31,59 @@ class QP_Settings_Page {
      */
     public static function register_settings() {
         register_setting('qp_settings_group', 'qp_settings', ['sanitize_callback' => [self::class, 'sanitize_settings']]);
+        
+        // New Page Settings Section
+        add_settings_section('qp_page_settings_section', 'Page Settings', [self::class, 'render_page_section_text'], 'qp-settings-page');
+        add_settings_field('qp_practice_page', 'Practice Page', [self::class, 'render_practice_page_dropdown'], 'qp-settings-page', 'qp_page_settings_section');
+        add_settings_field('qp_dashboard_page', 'Dashboard Page', [self::class, 'render_dashboard_page_dropdown'], 'qp-settings-page', 'qp_page_settings_section');
+
+        // Data Management Section
         add_settings_section('qp_data_settings_section', 'Data Management', [self::class, 'render_data_section_text'], 'qp-settings-page');
         add_settings_field('qp_question_order', 'Question Order in Practice', [self::class, 'render_question_order_input'], 'qp-settings-page', 'qp_data_settings_section');
         add_settings_field('qp_show_source_meta', 'Display Source Meta', [self::class, 'render_show_source_meta_checkbox'], 'qp-settings-page', 'qp_data_settings_section');
         add_settings_field('qp_delete_on_uninstall', 'Delete Data on Uninstall', [self::class, 'render_delete_data_checkbox'], 'qp-settings-page', 'qp_data_settings_section');
         
+        // API Section
         add_settings_section('qp_api_settings_section', 'REST API Documentation', [self::class, 'render_api_section_text'], 'qp-settings-page');
         add_settings_field('qp_api_secret_key', 'JWT Secret Key', [self::class, 'render_api_key_field'], 'qp-settings-page', 'qp_api_settings_section');
     }
 
-    
+    /**
+     * Callback to render the description for the page settings section.
+     */
+    public static function render_page_section_text() {
+        echo '<p>Select the pages where you have placed the Question Press shortcodes. This ensures all links and redirects work correctly.</p>';
+    }
+
+    /**
+     * Callback to render the practice page dropdown.
+     */
+    public static function render_practice_page_dropdown() {
+        $options = get_option('qp_settings');
+        $selected = isset($options['practice_page']) ? $options['practice_page'] : 0;
+        wp_dropdown_pages([
+            'name' => 'qp_settings[practice_page]',
+            'selected' => $selected,
+            'show_option_none' => '— Select a Page —',
+            'option_none_value' => '0'
+        ]);
+        echo '<p class="description">Select the page that contains the <code>[question_press_practice]</code> shortcode.</p>';
+    }
+
+    /**
+     * Callback to render the dashboard page dropdown.
+     */
+    public static function render_dashboard_page_dropdown() {
+        $options = get_option('qp_settings');
+        $selected = isset($options['dashboard_page']) ? $options['dashboard_page'] : 0;
+        wp_dropdown_pages([
+            'name' => 'qp_settings[dashboard_page]',
+            'selected' => $selected,
+            'show_option_none' => '— Select a Page —',
+            'option_none_value' => '0'
+        ]);
+        echo '<p class="description">Select the page that contains the <code>[question_press_dashboard]</code> shortcode.</p>';
+    }
 
     /**
      * Callback to render the description for the data section.
@@ -148,6 +191,16 @@ class QP_Settings_Page {
 
     public static function sanitize_settings($input) {
         $new_input = [];
+        
+        // Sanitize new page settings
+        if (isset($input['practice_page'])) {
+            $new_input['practice_page'] = absint($input['practice_page']);
+        }
+        if (isset($input['dashboard_page'])) {
+            $new_input['dashboard_page'] = absint($input['dashboard_page']);
+        }
+        
+        // Sanitize existing settings
         if (isset($input['delete_on_uninstall'])) { $new_input['delete_on_uninstall'] = absint($input['delete_on_uninstall']); }
         
         if (isset($input['question_order']) && in_array($input['question_order'], ['random', 'in_order'])) {
