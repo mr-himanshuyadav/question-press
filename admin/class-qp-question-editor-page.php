@@ -12,6 +12,7 @@ class QP_Question_Editor_Page {
         $direction_text = '';
         $direction_image_id = 0;
         $current_subject_id = 0;
+        $current_topic_id = 0; // New variable for topic
         $questions_in_group = [];
         $is_pyq_group = false;
 
@@ -27,28 +28,26 @@ class QP_Question_Editor_Page {
                 $direction_text = $group_data->direction_text;
                 $direction_image_id = $group_data->direction_image_id;
                 $current_subject_id = $group_data->subject_id;
-                // CORRECTED: The query now fetches all required source fields.
-        $questions_in_group = $wpdb->get_results($wpdb->prepare(
-            "SELECT question_id, custom_question_id, question_text, is_pyq, source_file, source_page, source_number 
-             FROM {$wpdb->prefix}qp_questions WHERE group_id = %d ORDER BY question_id ASC", $group_id
-        ));
+                
+                $questions_in_group = $wpdb->get_results($wpdb->prepare(
+                    "SELECT question_id, custom_question_id, question_text, is_pyq, topic_id, source_file, source_page, source_number 
+                     FROM {$q_table} WHERE group_id = %d ORDER BY question_id ASC", $group_id
+                ));
                 
                 if (!empty($questions_in_group)) {
                     $is_pyq_group = (bool)$questions_in_group[0]->is_pyq; 
+                    $current_topic_id = $questions_in_group[0]->topic_id; // Get topic from the first question
                     foreach ($questions_in_group as $q) {
                         $q->options = $wpdb->get_results($wpdb->prepare("SELECT * FROM $o_table WHERE question_id = %d ORDER BY option_id ASC", $q->question_id));
-                        // Fetch the full label object now, not just the ID
                         $q->labels = $wpdb->get_results($wpdb->prepare("SELECT l.label_id, l.label_name, l.label_color FROM {$ql_table} ql JOIN {$l_table} l ON ql.label_id = l.label_id WHERE ql.question_id = %d", $q->question_id));
                     }
                 }
             }
 
-            // NEW: Fetch logs associated with any question in this group
             $question_ids_in_group = wp_list_pluck($questions_in_group, 'question_id');
             if (!empty($question_ids_in_group)) {
                 $ids_placeholder = implode(',', array_map('absint', $question_ids_in_group));
                 $logs_table = $wpdb->prefix . 'qp_logs';
-                // Only fetch UNRESOLVED logs
                 $question_logs = $wpdb->get_results("SELECT * FROM $logs_table WHERE resolved = 0 AND log_data LIKE '%\"question_id\"%' AND JSON_EXTRACT(log_data, '$.question_id') IN ($ids_placeholder) ORDER BY log_date DESC");
             }
         }
@@ -58,7 +57,23 @@ class QP_Question_Editor_Page {
         }
 
         $all_subjects = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}qp_subjects ORDER BY subject_name ASC");
+        $all_topics = $wpdb->get_results("SELECT topic_id, topic_name, subject_id FROM {$wpdb->prefix}qp_topics ORDER BY topic_name ASC");
         $all_labels = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}qp_labels ORDER BY label_name ASC");
+        
+        // Prepare topics data for JavaScript
+        $topics_by_subject = [];
+        foreach ($all_topics as $topic) {
+            if (!isset($topics_by_subject[$topic->subject_id])) {
+                $topics_by_subject[$topic->subject_id] = [];
+            }
+            $topics_by_subject[$topic->subject_id][] = ['id' => $topic->topic_id, 'name' => $topic->topic_name];
+        }
+
+        // Pass data to JavaScript
+        wp_localize_script('qp-editor-script', 'qp_editor_data', [
+            'topics_by_subject' => $topics_by_subject,
+            'current_topic_id' => $current_topic_id,
+        ]);
         
         if (isset($_GET['message'])) {
             $message = $_GET['message'] === '1' ? 'Question(s) updated successfully.' : 'Question(s) saved successfully.';
@@ -66,7 +81,7 @@ class QP_Question_Editor_Page {
         }
         ?>
         <div class="wrap">
-            <h1 class="wp-heading-inline"><?php echo $is_editing ? 'Edit Question' : 'Add New Question'; ?></h1>
+            <h1 class="wp-heading-inline"><?php echo $is_editing ? 'Edit Question Group' : 'Add New Question Group'; ?></h1>
             <a href="<?php echo admin_url('admin.php?page=question-press'); ?>" class="page-title-action">Back to All Questions</a>
             <hr class="wp-header-end">
 
@@ -117,8 +132,6 @@ class QP_Question_Editor_Page {
                             <div id="qp-question-blocks-container">
                                 <?php foreach ($questions_in_group as $q_index => $question) : 
                                     $current_label_ids = wp_list_pluck($question->labels, 'label_id');
-                                    // NEW: Prepare source text for display
-                                    // NEW: Prepare a more detailed source text string for display
                 $source_parts = [];
                 if (!empty($question->source_file)) { $source_parts[] = 'File: ' . esc_html($question->source_file); }
                 if (!empty($question->source_page)) { $source_parts[] = 'Page: ' . esc_html($question->source_page); }
@@ -187,7 +200,7 @@ class QP_Question_Editor_Page {
                                     <div class="submitbox" id="submitpost">
                                         <div id="major-publishing-actions">
                                             <div id="publishing-action">
-                                                <input name="save_group" type="submit" class="button button-primary button-large" id="publish" value="<?php echo $is_editing ? 'Update Question(s)' : 'Save Question(s)'; ?>">
+                                                <input name="save_group" type="submit" class="button button-primary button-large" id="publish" value="<?php echo $is_editing ? 'Update Question Group' : 'Save Question Group'; ?>">
                                             </div>
                                             <div class="clear"></div>
                                         </div>
@@ -195,15 +208,24 @@ class QP_Question_Editor_Page {
                                 </div>
                             </div>
                              <div class="postbox">
-                                <h2 class="hndle"><span>Subject</span></h2>
+                                <h2 class="hndle"><span>Categorization</span></h2>
                                 <div class="inside">
-                                    <select name="subject_id" style="width: 100%;">
-                                        <?php foreach($all_subjects as $subject) : ?>
-                                            <option value="<?php echo esc_attr($subject->subject_id); ?>" <?php selected($current_subject_id, $subject->subject_id); ?>>
-                                                <?php echo esc_html($subject->subject_name); ?>
-                                            </option>
-                                        <?php endforeach; ?>
-                                    </select>
+                                    <p>
+                                        <label for="subject_id" style="font-weight: bold; display: block; margin-bottom: 5px;">Subject</label>
+                                        <select name="subject_id" id="subject_id" style="width: 100%;">
+                                            <?php foreach($all_subjects as $subject) : ?>
+                                                <option value="<?php echo esc_attr($subject->subject_id); ?>" <?php selected($current_subject_id, $subject->subject_id); ?>>
+                                                    <?php echo esc_html($subject->subject_name); ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </p>
+                                    <p>
+                                        <label for="topic_id" style="font-weight: bold; display: block; margin-bottom: 5px;">Topic</label>
+                                        <select name="topic_id" id="topic_id" style="width: 100%;" disabled>
+                                            <option value="">— Select a subject first —</option>
+                                        </select>
+                                    </p>
                                 </div>
                             </div>
                             <div class="postbox">

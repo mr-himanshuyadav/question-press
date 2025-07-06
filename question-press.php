@@ -381,17 +381,17 @@ function qp_handle_save_question_group() {
     $group_id = isset($_POST['group_id']) ? absint($_POST['group_id']) : 0;
     $is_editing = $group_id > 0;
 
-    // --- FIX: Apply stripslashes to all incoming text data ---
     $direction_text = isset($_POST['direction_text']) ? stripslashes($_POST['direction_text']) : '';
     $direction_image_id = absint($_POST['direction_image_id']);
     $subject_id = absint($_POST['subject_id']);
+    $topic_id = isset($_POST['topic_id']) ? absint($_POST['topic_id']) : 0; // Get the topic ID
     $is_pyq = isset($_POST['is_pyq']) ? 1 : 0;
     $questions_from_form = isset($_POST['questions']) ? (array) $_POST['questions'] : [];
 
     if (empty($subject_id) || empty($questions_from_form)) { return; }
 
     $group_data = [
-        'direction_text' => sanitize_textarea_field($direction_text), // Sanitize AFTER stripping slashes
+        'direction_text' => sanitize_textarea_field($direction_text),
         'direction_image_id' => $direction_image_id,
         'subject_id' => $subject_id
     ];
@@ -409,13 +409,13 @@ function qp_handle_save_question_group() {
     $submitted_q_ids = [];
     if (!empty($questions_from_form)) {
         foreach ($questions_from_form as $q_index => $q_data) {
-            // --- FIX: Apply stripslashes here ---
             $question_text = isset($q_data['question_text']) ? stripslashes($q_data['question_text']) : '';
             if (empty(trim($question_text))) { continue; }
 
             $question_id = isset($q_data['question_id']) ? absint($q_data['question_id']) : 0;
             $question_db_data = [
                 'group_id' => $group_id,
+                'topic_id' => $topic_id > 0 ? $topic_id : null, // Save the topic ID
                 'question_text' => sanitize_textarea_field($question_text),
                 'is_pyq' => $is_pyq,
                 'question_text_hash' => md5(strtolower(trim(preg_replace('/\s+/', '', $question_text))))
@@ -439,7 +439,6 @@ function qp_handle_save_question_group() {
 
             foreach ($options as $index => $option_text) {
                 if (!empty(trim($option_text))) {
-                    // --- FIX: Apply stripslashes here ---
                     $clean_option_text = stripslashes($option_text);
                     $wpdb->insert($o_table, [
                         'question_id' => $question_id,

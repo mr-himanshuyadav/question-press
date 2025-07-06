@@ -1,5 +1,47 @@
 jQuery(document).ready(function($) {
-    // Add a new question block
+    var subjectSelect = $('#subject_id');
+    var topicSelect = $('#topic_id');
+
+    // Function to update the topics dropdown
+    function updateTopics() {
+        var selectedSubjectId = subjectSelect.val();
+        var currentTopicId = qp_editor_data.current_topic_id;
+        
+        // Clear current options
+        topicSelect.empty();
+
+        // Check if a subject is selected and if it has topics
+        if (selectedSubjectId && qp_editor_data.topics_by_subject[selectedSubjectId]) {
+            topicSelect.prop('disabled', false);
+            topicSelect.append('<option value="">— Select a Topic —</option>');
+
+            // Add new options
+            $.each(qp_editor_data.topics_by_subject[selectedSubjectId], function(index, topic) {
+                var option = $('<option></option>').val(topic.id).text(topic.name);
+                if (topic.id == currentTopicId) {
+                    option.prop('selected', true);
+                }
+                topicSelect.append(option);
+            });
+        } else {
+            // Disable if no subject selected or no topics for the subject
+            topicSelect.prop('disabled', true);
+            topicSelect.append('<option value="">— No topics for this subject —</option>');
+        }
+    }
+
+    // Bind the event handler
+    subjectSelect.on('change', function() {
+        // When subject changes, reset the saved topic ID so it doesn't get pre-selected incorrectly
+        qp_editor_data.current_topic_id = ''; 
+        updateTopics();
+    });
+
+    // Initial population on page load
+    updateTopics();
+
+
+    // --- Existing logic for adding/removing question blocks ---
     $('#add-new-question-block').on('click', function(e) {
         e.preventDefault();
 
