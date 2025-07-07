@@ -9,7 +9,8 @@ class QP_Dashboard {
         }
 
         global $wpdb;
-        $user_id = get_current_user_id();
+        $current_user = wp_get_current_user(); // Get current user object
+        $user_id = $current_user->ID;
         $sessions_table = $wpdb->prefix . 'qp_user_sessions';
 
         $subjects_raw = $wpdb->get_results("SELECT subject_id, subject_name FROM {$wpdb->prefix}qp_subjects");
@@ -33,7 +34,12 @@ class QP_Dashboard {
         ?>
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <div class="qp-container qp-dashboard-wrapper">
-            <h2>My Practice History</h2>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <h2>Welcome, <?php echo esc_html($current_user->display_name); ?>!</h2>
+                <a href="<?php echo wp_logout_url(wp_login_url()); ?>" style="font-size: 14px;">(Logout)</a>
+            </div>
+            <p>Your Practice History</p>
+            
             <div class="qp-dashboard-actions">
                 <a href="<?php echo esc_url($practice_page_url); ?>" class="qp-button qp-button-primary">Start a New Practice</a>
                 <button id="qp-delete-history-btn" class="qp-button qp-button-danger">Delete All Revision History</button>
