@@ -7,7 +7,11 @@ class QP_Shortcodes
     public static function render_practice_form()
     {
         if (!is_user_logged_in()) {
-            return '<p>You must be logged in to start a practice session. <a href="' . wp_login_url(get_permalink()) . '">Click here to log in.</a></p>';
+            return '<div style="text-align:center; padding: 40px 20px; background-color: #fff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                        <h3 style="margin-top:0; font-size: 22px;">Please Log In to Begin</h3>
+                        <p style="font-size: 16px; color: #555; margin-bottom: 25px;">You need to be logged in to start a new practice session and track your progress.</p>
+                        <a href="' . wp_login_url(get_permalink()) . '" class="qp-button qp-button-primary" style="text-decoration: none;">Click Here to Log In</a>
+                    </div>';
         }
         $output = '<div id="qp-practice-app-wrapper">';
         $output .= self::render_settings_form();
