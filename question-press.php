@@ -625,13 +625,14 @@ function qp_start_practice_session_ajax() {
             $wpdb->prepare("SELECT COUNT(q.question_id) FROM {$q_table} q LEFT JOIN {$g_table} g ON q.group_id = g.group_id WHERE " . $base_where_sql, $query_args)
         );
 
-        $error_code = ($total_questions_matching_criteria > 0) ? 'ALL_ATTEMPTED' : 'NO_QUESTIONS_EXIST';
-        
+        $error_code = 'NO_QUESTIONS_EXIST'; // Default error
         if ($session_settings['revise_mode']) {
-             wp_send_json_error(['message' => 'No previously attempted questions found for this criteria.']);
-        } else {
-             wp_send_json_error(['error_code' => $error_code]);
+            $error_code = 'NO_REVISION_QUESTIONS'; // Specific error for revision mode
+        } else if ($total_questions_matching_criteria > 0) {
+            $error_code = 'ALL_ATTEMPTED'; // All non-revision questions attempted
         }
+
+        wp_send_json_error(['error_code' => $error_code]);
     }
     
     $sessions_table = $wpdb->prefix . 'qp_user_sessions';

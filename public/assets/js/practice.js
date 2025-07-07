@@ -65,16 +65,24 @@ jQuery(document).ready(function ($) {
 
           if (errorCode === 'ALL_ATTEMPTED') {
             errorMessage = `
-              <div class="qp-practice-form-wrapper" style="text-align: center;">
-                <h2>You've Mastered It!</h2>
-                <p style="margin: 20px 0;">You have attempted all of the available questions for this criteria. Try Revision Mode to practice them again.</p>
+              <div class="qp-practice-form-wrapper" style="text-align: center; padding: 40px 20px; background-color: #fff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                <h2 style="margin-top:0; font-size: 22px;">You've Mastered It!</h2>
+                <p style="font-size: 16px; color: #555; margin-bottom: 25px;">You have attempted all of the available questions for this criteria. Try Revision Mode to practice them again, or go back to try different settings.</p>
                 <button id="qp-try-revision-btn" class="qp-button qp-button-primary">Try Revision Mode</button>
+                <button id="qp-go-back-btn" class="qp-button qp-button-secondary" style="margin-left: 10px;">Back to Form</button>
+              </div>`;
+          } else if (errorCode === 'NO_REVISION_QUESTIONS') {
+             errorMessage = `
+              <div class="qp-practice-form-wrapper" style="text-align: center; padding: 40px 20px; background-color: #fff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                <h2 style="margin-top:0; font-size: 22px;">Nothing to Revise Yet!</h2>
+                <p style="font-size: 16px; color: #555; margin-bottom: 25px;">You haven't attempted any questions matching this criteria yet. Try a regular practice session first.</p>
+                <button id="qp-go-back-btn" class="qp-button qp-button-primary">Back to Practice Form</button>
               </div>`;
           } else if (errorCode === 'NO_QUESTIONS_EXIST') {
             errorMessage = `
-              <div class="qp-practice-form-wrapper" style="text-align: center;">
-                <h2>Fresh Questions Coming Soon!</h2>
-                <p style="margin: 20px 0;">We are adding more questions to your selected practice area soon. Try different options and subjects.</p>
+              <div class="qp-practice-form-wrapper" style="text-align: center; padding: 40px 20px; background-color: #fff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                <h2 style="margin-top:0; font-size: 22px;">Fresh Questions Coming Soon!</h2>
+                <p style="font-size: 16px; color: #555; margin-bottom: 25px;">We are adding more questions to your selected practice area soon. Try different options and subjects.</p>
                 <button id="qp-go-back-btn" class="qp-button qp-button-secondary">Back to Practice Form</button>
               </div>`;
           } else {
