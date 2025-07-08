@@ -689,10 +689,12 @@ function qp_get_question_data_ajax() {
     if (!$question_data) { wp_send_json_error(['message' => 'Question not found.']); }
 
     $options = get_option('qp_settings');
-    $show_source_meta = isset($options['show_source_meta']) ? (bool) $options['show_source_meta'] : false;
-    $is_admin = current_user_can('manage_options');
+    $allowed_roles = isset($options['show_source_meta_roles']) ? $options['show_source_meta_roles'] : [];
+    $user = wp_get_current_user();
+    $user_can_view = !empty(array_intersect($allowed_roles, $user->roles));
 
-    if (!$is_admin || !$show_source_meta) {
+
+    if (!$user_can_view) {
         unset($question_data['source_file']);
         unset($question_data['source_page']);
         unset($question_data['source_number']);
@@ -704,7 +706,7 @@ function qp_get_question_data_ajax() {
     $user_id = get_current_user_id();
     $attempt_count = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $a_table WHERE user_id = %d AND question_id = %d", $user_id, $question_id));
     
-    wp_send_json_success(['question' => $question_data, 'is_revision' => ($attempt_count > 0), 'is_admin' => $is_admin]);
+    wp_send_json_success(['question' => $question_data, 'is_revision' => ($attempt_count > 0), 'is_admin' => $user_can_view]);
 }
 add_action('wp_ajax_get_question_data', 'qp_get_question_data_ajax');
 

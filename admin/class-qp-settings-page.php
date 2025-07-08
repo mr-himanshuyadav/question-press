@@ -40,7 +40,7 @@ class QP_Settings_Page {
         // Data Management Section
         add_settings_section('qp_data_settings_section', 'Data Management', [self::class, 'render_data_section_text'], 'qp-settings-page');
         add_settings_field('qp_question_order', 'Question Order in Practice', [self::class, 'render_question_order_input'], 'qp-settings-page', 'qp_data_settings_section');
-        add_settings_field('qp_show_source_meta', 'Display Source Meta', [self::class, 'render_show_source_meta_checkbox'], 'qp-settings-page', 'qp_data_settings_section');
+        add_settings_field('qp_show_source_meta_roles', 'Display Source Meta To', [self::class, 'render_source_meta_role_multiselect'], 'qp-settings-page', 'qp_data_settings_section');
         add_settings_field('qp_delete_on_uninstall', 'Delete Data on Uninstall', [self::class, 'render_delete_data_checkbox'], 'qp-settings-page', 'qp_data_settings_section');
         
         // API Section
@@ -117,11 +117,18 @@ class QP_Settings_Page {
         <?php
     }
 
-    public static function render_show_source_meta_checkbox() {
+    public static function render_source_meta_role_multiselect() {
         $options = get_option('qp_settings');
-        $checked = isset($options['show_source_meta']) ? $options['show_source_meta'] : 0;
-        echo '<label><input type="checkbox" name="qp_settings[show_source_meta]" value="1" ' . checked(1, $checked, false) . ' /> ';
-        echo '<span>Check this box to display the source file, page, and number to administrators on the practice screen.</span></label>';
+        $selected_roles = isset($options['show_source_meta_roles']) && is_array($options['show_source_meta_roles']) ? $options['show_source_meta_roles'] : [];
+        
+        echo '<fieldset><div style="display: flex; flex-wrap: wrap; gap: 10px 20px;">';
+        foreach (get_editable_roles() as $role_slug => $role_info) {
+            $checked = in_array($role_slug, $selected_roles);
+            echo '<label><input type="checkbox" name="qp_settings[show_source_meta_roles][]" value="' . esc_attr($role_slug) . '" ' . checked(true, $checked, false) . ' /> ';
+            echo '<span>' . esc_html($role_info['name']) . '</span></label>';
+        }
+        echo '</div></fieldset>';
+        echo '<p class="description">Select the user roles that can see the source file, page, and number on the practice screen.</p>';
     }
 
     public static function render_delete_data_checkbox() {
@@ -192,7 +199,6 @@ class QP_Settings_Page {
     public static function sanitize_settings($input) {
         $new_input = [];
         
-        // Sanitize new page settings
         if (isset($input['practice_page'])) {
             $new_input['practice_page'] = absint($input['practice_page']);
         }
@@ -200,7 +206,6 @@ class QP_Settings_Page {
             $new_input['dashboard_page'] = absint($input['dashboard_page']);
         }
         
-        // Sanitize existing settings
         if (isset($input['delete_on_uninstall'])) { $new_input['delete_on_uninstall'] = absint($input['delete_on_uninstall']); }
         
         if (isset($input['question_order']) && in_array($input['question_order'], ['random', 'in_order'])) {
@@ -209,7 +214,11 @@ class QP_Settings_Page {
             $new_input['question_order'] = 'random';
         }
 
-        $new_input['show_source_meta'] = isset($input['show_source_meta']) ? 1 : 0;
+        if (isset($input['show_source_meta_roles']) && is_array($input['show_source_meta_roles'])) {
+            $new_input['show_source_meta_roles'] = array_map('sanitize_key', $input['show_source_meta_roles']);
+        } else {
+            $new_input['show_source_meta_roles'] = [];
+        }
         
         return $new_input;
     }
