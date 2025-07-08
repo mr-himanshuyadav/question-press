@@ -7,53 +7,57 @@ if (!defined('ABSPATH')) {
 class QP_Importer {
 
     public function handle_import() {
-        if (!isset($_POST['qp_import_nonce_field']) || !wp_verify_nonce($_POST['qp_import_nonce_field'], 'qp_import_nonce_action')) {
-            wp_die('Security check failed.');
-        }
-
-        if (!isset($_FILES['question_zip_file']) || $_FILES['question_zip_file']['error'] !== UPLOAD_ERR_OK) {
-            wp_die('File upload error. Please try again.');
-        }
-
-        $file = $_FILES['question_zip_file'];
-        $file_path = $file['tmp_name'];
-
-        if ($file['type'] !== 'application/zip' && $file['type'] !== 'application/x-zip-compressed') {
-            wp_die('Invalid file type. Please upload a .zip file.');
-        }
-
-        $upload_dir = wp_upload_dir();
-        $temp_dir = trailingslashit($upload_dir['basedir']) . 'qp_temp_import';
-        wp_mkdir_p($temp_dir);
-
-        $zip = new ZipArchive;
-        if ($zip->open($file_path) === TRUE) {
-            $zip->extractTo($temp_dir);
-            $zip->close();
-        } else {
-            wp_die('Failed to unzip the file.');
-        }
-
-        $json_file = trailingslashit($temp_dir) . 'questions.json';
-        if (!file_exists($json_file)) {
-            $this->cleanup($temp_dir);
-            wp_die('The zip file does not contain a questions.json file.');
-        }
-
-        $json_content = file_get_contents($json_file);
-        $data = json_decode($json_content, true);
-
-        if (json_last_error() !== JSON_ERROR_NONE) {
-            $this->cleanup($temp_dir);
-            wp_die('Invalid JSON format in questions.json file.');
-        }
-
-        $result = $this->process_data($data);
-        $this->cleanup($temp_dir);
-        $this->display_results($result);
+    if (!isset($_POST['qp_import_nonce_field']) || !wp_verify_nonce($_POST['qp_import_nonce_field'], 'qp_import_nonce_action')) {
+        wp_die('Security check failed.');
     }
 
-private function process_data($data) {
+    if (!isset($_FILES['question_zip_file']) || $_FILES['question_zip_file']['error'] !== UPLOAD_ERR_OK) {
+        wp_die('File upload error. Please try again.');
+    }
+
+    // NEW: Get the labels to apply from the form submission
+    $labels_to_apply = isset($_POST['labels_to_apply']) ? array_map('absint', $_POST['labels_to_apply']) : [];
+
+    $file = $_FILES['question_zip_file'];
+    $file_path = $file['tmp_name'];
+
+    if ($file['type'] !== 'application/zip' && $file['type'] !== 'application/x-zip-compressed') {
+        wp_die('Invalid file type. Please upload a .zip file.');
+    }
+
+    $upload_dir = wp_upload_dir();
+    $temp_dir = trailingslashit($upload_dir['basedir']) . 'qp_temp_import';
+    wp_mkdir_p($temp_dir);
+
+    $zip = new ZipArchive;
+    if ($zip->open($file_path) === TRUE) {
+        $zip->extractTo($temp_dir);
+        $zip->close();
+    } else {
+        wp_die('Failed to unzip the file.');
+    }
+
+    $json_file = trailingslashit($temp_dir) . 'questions.json';
+    if (!file_exists($json_file)) {
+        $this->cleanup($temp_dir);
+        wp_die('The zip file does not contain a questions.json file.');
+    }
+
+    $json_content = file_get_contents($json_file);
+    $data = json_decode($json_content, true);
+
+    if (json_last_error() !== JSON_ERROR_NONE) {
+        $this->cleanup($temp_dir);
+        wp_die('Invalid JSON format in questions.json file.');
+    }
+
+    // MODIFIED: Pass the labels array to process_data
+    $result = $this->process_data($data, $labels_to_apply);
+    $this->cleanup($temp_dir);
+    $this->display_results($result);
+}
+
+private function process_data($data, $labels_to_apply = []) {
     global $wpdb;
     $subjects_table = $wpdb->prefix . 'qp_subjects';
     $topics_table = $wpdb->prefix . 'qp_topics'; // New table
@@ -131,6 +135,17 @@ private function process_data($data) {
                 $duplicate_count++;
             }
             $imported_count++;
+
+            // NEW: Apply the selected labels from the import form
+            if (!empty($labels_to_apply)) {
+                foreach ($labels_to_apply as $label_id) {
+                    // Avoid inserting duplicate label assignments
+                    $wpdb->query($wpdb->prepare(
+                        "INSERT IGNORE INTO $question_labels_table (question_id, label_id) VALUES (%d, %d)",
+                        $question_id, $label_id
+                    ));
+                }
+            }
         }
     }
     return ['imported' => $imported_count, 'duplicates' => $duplicate_count];
