@@ -723,17 +723,17 @@ function qp_check_answer_ajax() {
 }
 add_action('wp_ajax_check_answer', 'qp_check_answer_ajax');
 
-function qp_skip_question_ajax() {
-    check_ajax_referer('qp_practice_nonce', 'nonce');
-    $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
-    $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
-    if (!$session_id || !$question_id) { wp_send_json_error(['message' => 'Invalid data submitted.']); }
-    global $wpdb;
-    $attempts_table = $wpdb->prefix . 'qp_user_attempts';
-    $wpdb->insert($attempts_table, ['session_id' => $session_id, 'user_id' => get_current_user_id(), 'question_id' => $question_id, 'is_correct' => null]);
-    wp_send_json_success();
-}
-add_action('wp_ajax_skip_question', 'qp_skip_question_ajax');
+// function qp_skip_question_ajax() {
+//     check_ajax_referer('qp_practice_nonce', 'nonce');
+//     $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
+//     $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
+//     if (!$session_id || !$question_id) { wp_send_json_error(['message' => 'Invalid data submitted.']); }
+//     global $wpdb;
+//     $attempts_table = $wpdb->prefix . 'qp_user_attempts';
+//     $wpdb->insert($attempts_table, ['session_id' => $session_id, 'user_id' => get_current_user_id(), 'question_id' => $question_id, 'is_correct' => null]);
+//     wp_send_json_success();
+// }
+// add_action('wp_ajax_skip_question', 'qp_skip_question_ajax');
 
 
 /**
