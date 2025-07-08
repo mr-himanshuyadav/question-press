@@ -134,6 +134,51 @@ jQuery(document).ready(function ($) {
         topicSelect.prop('disabled', true).html('<option>-- Select a subject first --</option>');
     }
   });
+
+// *** UPDATED: Handler for the topic dropdown to dynamically load sheets ***
+wrapper.on('change', '#qp_topic', function() {
+    var topicId = $(this).val();
+    var sheetGroup = $('#qp-sheet-group');
+    var sheetSelect = $('#qp_sheet_label');
+
+    // If a specific topic is selected (not 'all' or empty)
+    if (topicId && topicId !== 'all') {
+        $.ajax({
+            url: qp_ajax_object.ajax_url,
+            type: 'POST',
+            data: {
+                action: 'get_sheets_for_topic',
+                nonce: qp_ajax_object.nonce,
+                topic_id: topicId
+            },
+            beforeSend: function() {
+                sheetSelect.prop('disabled', true).html('<option>Loading sheets...</option>');
+                sheetGroup.slideDown();
+            },
+            success: function(response) {
+                sheetSelect.prop('disabled', false).empty();
+                sheetSelect.append('<option value="all">All Sheets</option>');
+
+                if (response.success && response.data.labels.length > 0) {
+                    $.each(response.data.labels, function(index, label) {
+                        sheetSelect.append($('<option></option>').val(label.label_id).text(label.label_name));
+                    });
+                    sheetGroup.slideDown(); // Ensure it's visible if labels are found
+                } else {
+                    // If no relevant sheets are found, hide the dropdown
+                    sheetGroup.slideUp();
+                }
+            },
+            error: function() {
+                sheetSelect.prop('disabled', true).html('<option>Error loading sheets</option>');
+                sheetGroup.slideUp();
+            }
+        });
+    } else {
+        // If "All Topics" is selected, hide the sheets group
+        sheetGroup.slideUp();
+    }
+});
   
   // Handlers for the new error screen buttons
   wrapper.on('click', '#qp-try-revision-btn, #qp-go-back-btn', function() {

@@ -558,7 +558,8 @@ function qp_start_practice_session_ajax() {
 
     $session_settings = [
         'subject_id'      => isset($form_settings['qp_subject']) ? $form_settings['qp_subject'] : '',
-        'topic_id'        => isset($form_settings['qp_topic']) ? $form_settings['qp_topic'] : 'all', // Get topic_id
+        'topic_id'        => isset($form_settings['qp_topic']) ? $form_settings['qp_topic'] : 'all',
+        'sheet_label_id'  => isset($form_settings['qp_sheet_label']) ? $form_settings['qp_sheet_label'] : 'all', // NEW: Get sheet label ID
         'pyq_only'        => isset($form_settings['qp_pyq_only']),
         'revise_mode'     => isset($form_settings['qp_revise_mode']),
         'marks_correct'   => isset($form_settings['qp_marks_correct']) ? floatval($form_settings['qp_marks_correct']) : 4.0,
@@ -579,6 +580,7 @@ function qp_start_practice_session_ajax() {
 
     $base_where_clauses = ["q.status = 'publish'"];
     $query_args = [];
+    $joins = "LEFT JOIN {$g_table} g ON q.group_id = g.group_id"; // Start with base join
 
     $review_label_ids = $wpdb->get_col("SELECT label_id FROM $l_table WHERE label_name IN ('Wrong Answer', 'No Answer')");
     if (!empty($review_label_ids)) {
@@ -592,10 +594,16 @@ function qp_start_practice_session_ajax() {
         $query_args[] = absint($session_settings['subject_id']);
     }
 
-    // Filter by topic if a specific topic is selected
     if ($session_settings['topic_id'] !== 'all' && is_numeric($session_settings['topic_id'])) {
         $base_where_clauses[] = "q.topic_id = %d";
         $query_args[] = absint($session_settings['topic_id']);
+    }
+
+    // NEW: Add join and filter for sheet label if selected
+    if ($session_settings['sheet_label_id'] !== 'all' && is_numeric($session_settings['sheet_label_id'])) {
+        $joins .= " JOIN {$ql_table} ql ON q.question_id = ql.question_id";
+        $base_where_clauses[] = "ql.label_id = %d";
+        $query_args[] = absint($session_settings['sheet_label_id']);
     }
     
     if ($session_settings['pyq_only']) {
@@ -617,20 +625,20 @@ function qp_start_practice_session_ajax() {
     $question_order = isset($options['question_order']) ? $options['question_order'] : 'random';
     $order_by_sql = ($question_order === 'in_order') ? 'ORDER BY q.custom_question_id ASC' : 'ORDER BY RAND()';
 
-    $query = "SELECT q.question_id FROM {$q_table} q LEFT JOIN {$g_table} g ON q.group_id = g.group_id WHERE {$final_where_sql} {$order_by_sql}";
+    $query = "SELECT DISTINCT q.question_id FROM {$q_table} q {$joins} WHERE {$final_where_sql} {$order_by_sql}";
     
     $question_ids = $wpdb->get_col($wpdb->prepare($query, $query_args));
 
     if (empty($question_ids)) {
         $total_questions_matching_criteria = $wpdb->get_var(
-            $wpdb->prepare("SELECT COUNT(q.question_id) FROM {$q_table} q LEFT JOIN {$g_table} g ON q.group_id = g.group_id WHERE " . $base_where_sql, $query_args)
+            $wpdb->prepare("SELECT COUNT(DISTINCT q.question_id) FROM {$q_table} q {$joins} WHERE " . $base_where_sql, $query_args)
         );
 
-        $error_code = 'NO_QUESTIONS_EXIST'; // Default error
+        $error_code = 'NO_QUESTIONS_EXIST';
         if ($session_settings['revise_mode']) {
-            $error_code = 'NO_REVISION_QUESTIONS'; // Specific error for revision mode
+            $error_code = 'NO_REVISION_QUESTIONS';
         } else if ($total_questions_matching_criteria > 0) {
-            $error_code = 'ALL_ATTEMPTED'; // All non-revision questions attempted
+            $error_code = 'ALL_ATTEMPTED';
         }
 
         wp_send_json_error(['error_code' => $error_code]);
@@ -1122,3 +1130,37 @@ function qp_admin_head_styles_for_list_table() {
     }
 }
 add_action('admin_head', 'qp_admin_head_styles_for_list_table');
+
+/**
+ * AJAX handler to get "Sheet" labels relevant to a specific topic.
+ */
+function qp_get_sheets_for_topic_ajax() {
+    check_ajax_referer('qp_practice_nonce', 'nonce');
+    $topic_id = isset($_POST['topic_id']) ? absint($_POST['topic_id']) : 0;
+
+    if (!$topic_id) {
+        wp_send_json_success(['labels' => []]); // Send empty array if no topic is selected
+        return;
+    }
+
+    global $wpdb;
+    $q_table = $wpdb->prefix . 'qp_questions';
+    $l_table = $wpdb->prefix . 'qp_labels';
+    $ql_table = $wpdb->prefix . 'qp_question_labels';
+
+    // This query finds labels that start with "Sheet" AND are linked to at least one question with the given topic_id.
+    $sheet_labels = $wpdb->get_results($wpdb->prepare(
+        "SELECT DISTINCT l.label_id, l.label_name
+         FROM {$l_table} l
+         JOIN {$ql_table} ql ON l.label_id = ql.label_id
+         JOIN {$q_table} q ON ql.question_id = q.question_id
+         WHERE l.label_name LIKE %s
+         AND q.topic_id = %d
+         ORDER BY l.label_name ASC",
+        'Sheet%',
+        $topic_id
+    ));
+
+    wp_send_json_success(['labels' => $sheet_labels]);
+}
+add_action('wp_ajax_get_sheets_for_topic', 'qp_get_sheets_for_topic_ajax');

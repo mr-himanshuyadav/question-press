@@ -52,6 +52,20 @@ class QP_Shortcodes
                         <option value="">-- Select a subject first --</option>
                     </select>
                 </div>
+                <?php
+                // Find all labels that start with "Sheet"
+                $sheet_labels = $wpdb->get_results(
+                    $wpdb->prepare("SELECT label_id, label_name FROM {$wpdb->prefix}qp_labels WHERE label_name LIKE %s ORDER BY label_name ASC", 'Sheet%')
+                );
+
+                if (!empty($sheet_labels)) : ?>
+                <div class="qp-form-group" id="qp-sheet-group" style="display: none;">
+    <label for="qp_sheet_label">Select Sheet:</label>
+    <select name="qp_sheet_label" id="qp_sheet_label">
+        <option value="all">All Sheets</option>
+    </select>
+</div>
+                <?php endif; ?>
 
                 <div class="qp-form-group qp-checkbox-group">
                     <label class="qp-custom-checkbox">
