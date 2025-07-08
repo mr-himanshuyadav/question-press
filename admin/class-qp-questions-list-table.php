@@ -119,24 +119,36 @@ class QP_Questions_List_Table extends WP_List_Table
         $current_subject = isset($_REQUEST['filter_by_subject']) ? absint($_REQUEST['filter_by_subject']) : '';
         $current_labels = isset($_REQUEST['filter_by_label']) ? array_map('absint', (array)$_REQUEST['filter_by_label']) : [];
 ?>
-        <div class="alignleft actions">
-            <select name="filter_by_subject">
-                <option value="">All Subjects</option>
-                <?php foreach ($subjects as $subject) {
-                    echo sprintf('<option value="%s" %s>%s</option>', esc_attr($subject->subject_id), selected($current_subject, $subject->subject_id, false), esc_html($subject->subject_name));
-                } ?>
-            </select>
-            
-            <select name="filter_by_label[]" multiple="multiple" id="qp_label_filter_select" style="min-width: 200px;">
-                <option value="" <?php if (empty($current_labels)) echo 'selected'; ?>>All Labels</option>
-                <?php foreach ($labels as $label) {
-                    $is_selected = in_array($label->label_id, $current_labels);
-                    echo sprintf('<option value="%s" %s>%s</option>', esc_attr($label->label_id), selected($is_selected, true, false), esc_html($label->label_name));
-                } ?>
-            </select>
-            
-            <?php submit_button('Filter', 'button', 'filter_action', false, ['id' => 'post-query-submit']); ?>
-        </div>
+
+
+<div class="alignleft actions">
+    <label for="labels_to_apply" class="screen-reader-text">Apply multiple labels</label>
+    <select name="labels_to_apply[]" id="labels_to_apply" multiple="multiple" style="min-width: 180px;">
+        <option value="">— Apply Labels —</option>
+        <?php foreach ($labels as $label) : ?>
+            <option value="<?php echo esc_attr($label->label_id); ?>"><?php echo esc_html($label->label_name); ?></option>
+        <?php endforeach; ?>
+    </select>
+    <input type="submit" name="apply_labels_submit" id="apply_labels_submit" class="button" value="Apply">
+</div>
+<div class="alignleft actions">
+    <select name="filter_by_subject">
+        <option value="">All Subjects</option>
+        <?php foreach ($subjects as $subject) {
+            echo sprintf('<option value="%s" %s>%s</option>', esc_attr($subject->subject_id), selected($current_subject, $subject->subject_id, false), esc_html($subject->subject_name));
+        } ?>
+    </select>
+    
+    <select name="filter_by_label[]" multiple="multiple" id="qp_label_filter_select" style="min-width: 200px;">
+        <option value="" <?php if (empty($current_labels)) echo 'selected'; ?>>All Labels</option>
+        <?php foreach ($labels as $label) {
+            $is_selected = in_array($label->label_id, $current_labels);
+            echo sprintf('<option value="%s" %s>%s</option>', esc_attr($label->label_id), selected($is_selected, true, false), esc_html($label->label_name));
+        } ?>
+    </select>
+    
+    <?php submit_button('Filter', 'button', 'filter_action', false, ['id' => 'post-query-submit']); ?>
+</div>
     <?php
     }
 }
