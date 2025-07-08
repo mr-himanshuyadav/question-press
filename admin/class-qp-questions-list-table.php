@@ -109,49 +109,62 @@ class QP_Questions_List_Table extends WP_List_Table
         return $views;
     }
 
-    protected function extra_tablenav($which)
-{
-    if ($which == "top") {
-        global $wpdb;
-        $subjects = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}qp_subjects ORDER BY subject_name ASC");
-        $labels = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}qp_labels ORDER BY label_name ASC");
-        
-        $current_subject = isset($_REQUEST['filter_by_subject']) ? absint($_REQUEST['filter_by_subject']) : '';
-        $current_labels = isset($_REQUEST['filter_by_label']) ? array_map('absint', (array)$_REQUEST['filter_by_label']) : [];
-?>
+    protected function extra_tablenav($which) {
+        if ($which == "top") {
+            global $wpdb;
+            
+            // Group 1: Bulk Actions (for the single "Apply" button)
+            echo '<div class="alignleft actions bulkactions">';
+            
+                // Renders the standard "Move to Trash" dropdown
+                $this->bulk_actions();
+                
+                // Our custom "Add Labels" dropdown, placed inside the same group
+                $labels = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}qp_labels ORDER BY label_name ASC");
+                echo '<label for="labels_to_apply" class="screen-reader-text">Add labels to selected questions</label>';
+                echo '<select name="labels_to_apply[]" id="labels_to_apply" multiple="multiple" style="min-width: 180px;">';
+                echo '<option value="">— Add Labels —</option>';
+                foreach ($labels as $label) {
+                    echo sprintf('<option value="%s">%s</option>', esc_attr($label->label_id), esc_html($label->label_name));
+                }
+                echo '</select>';
 
+                // This is the standard "Apply" button, which is automatically added by the parent class
+                // because we have used the "bulkactions" class on our div.
+                submit_button('Apply', 'action', '', false, ['id' => "doaction"]);
 
-<div class="alignleft actions">
-    <label for="labels_to_apply" class="screen-reader-text">Apply multiple labels</label>
-    <select name="labels_to_apply[]" id="labels_to_apply" multiple="multiple" style="min-width: 180px;">
-        <option value="">— Apply Labels —</option>
-        <?php foreach ($labels as $label) : ?>
-            <option value="<?php echo esc_attr($label->label_id); ?>"><?php echo esc_html($label->label_name); ?></option>
-        <?php endforeach; ?>
-    </select>
-    <input type="submit" name="apply_labels_submit" id="apply_labels_submit" class="button" value="Apply">
-</div>
-<div class="alignleft actions">
-    <select name="filter_by_subject">
-        <option value="">All Subjects</option>
-        <?php foreach ($subjects as $subject) {
-            echo sprintf('<option value="%s" %s>%s</option>', esc_attr($subject->subject_id), selected($current_subject, $subject->subject_id, false), esc_html($subject->subject_name));
-        } ?>
-    </select>
-    
-    <select name="filter_by_label[]" multiple="multiple" id="qp_label_filter_select" style="min-width: 200px;">
-        <option value="" <?php if (empty($current_labels)) echo 'selected'; ?>>All Labels</option>
-        <?php foreach ($labels as $label) {
-            $is_selected = in_array($label->label_id, $current_labels);
-            echo sprintf('<option value="%s" %s>%s</option>', esc_attr($label->label_id), selected($is_selected, true, false), esc_html($label->label_name));
-        } ?>
-    </select>
-    
-    <?php submit_button('Filter', 'button', 'filter_action', false, ['id' => 'post-query-submit']); ?>
-</div>
-    <?php
+            echo '</div>'; // End bulkactions div
+
+            // Group 2: Filtering Controls (for the single "Filter" button)
+            echo '<div class="alignleft actions">';
+
+                $subjects = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}qp_subjects ORDER BY subject_name ASC");
+                $current_subject = isset($_REQUEST['filter_by_subject']) ? absint($_REQUEST['filter_by_subject']) : '';
+                $current_labels = isset($_REQUEST['filter_by_label']) ? array_map('absint', (array)$_REQUEST['filter_by_label']) : [];
+
+                // Subject filter
+                echo '<select name="filter_by_subject">';
+                echo '<option value="">All Subjects</option>';
+                foreach ($subjects as $subject) {
+                    echo sprintf('<option value="%s" %s>%s</option>', esc_attr($subject->subject_id), selected($current_subject, $subject->subject_id, false), esc_html($subject->subject_name));
+                }
+                echo '</select>';
+                
+                // Label filter
+                echo '<select name="filter_by_label[]" multiple="multiple" id="qp_label_filter_select" style="min-width: 200px;">';
+                echo '<option value="" ' . (empty($current_labels) ? 'selected' : '') . '>All Labels</option>';
+                foreach ($labels as $label) {
+                    $is_selected = in_array($label->label_id, $current_labels);
+                    echo sprintf('<option value="%s" %s>%s</option>', esc_attr($label->label_id), selected($is_selected, true, false), esc_html($label->label_name));
+                }
+                echo '</select>';
+                
+                // The dedicated "Filter" button
+                submit_button('Filter', 'button', 'filter_action', false, ['id' => 'post-query-submit']);
+
+            echo '</div>'; // End filter actions div
+        }
     }
-}
 
     public function search_box($text, $input_id)
     {
@@ -269,79 +282,67 @@ class QP_Questions_List_Table extends WP_List_Table
      */
     public function process_bulk_action() {
         $action = $this->current_action();
-        if (!$action || $action === -1) return;
+        $labels_to_apply = isset($_POST['labels_to_apply']) ? array_filter(array_map('absint', $_POST['labels_to_apply'])) : [];
 
-        $nonce = isset($_REQUEST['_wpnonce']) ? sanitize_key($_REQUEST['_wpnonce']) : '';
-        $question_ids = isset($_REQUEST['question_ids']) ? array_map('absint', $_REQUEST['question_ids']) : (isset($_REQUEST['question_id']) ? [absint($_REQUEST['question_id'])] : []);
+        if ((!$action || $action === -1) && empty($labels_to_apply)) {
+            return;
+        }
+
+        check_admin_referer('bulk-questions');
         
-        if (empty($question_ids)) return;
+        $question_ids = isset($_REQUEST['question_ids']) ? array_map('absint', $_REQUEST['question_ids']) : [];
+        if (empty($question_ids)) {
+            return;
+        }
 
         global $wpdb;
-        $q_table = $wpdb->prefix . 'qp_questions';
-        $ql_table = $wpdb->prefix . 'qp_question_labels';
-        $ids_placeholder = implode(',', array_fill(0, count($question_ids), '%d'));
-        if ('trash' === $action) {
-            if (!wp_verify_nonce($nonce, 'bulk-questions') && !wp_verify_nonce($nonce, 'qp_trash_question_' . $question_ids[0])) wp_die('Security check failed.');
-            $wpdb->query($wpdb->prepare("UPDATE {$q_table} SET status = 'trash' WHERE question_id IN ($ids_placeholder)", $question_ids));
-        }
-        if ('untrash' === $action) {
-            if (!wp_verify_nonce($nonce, 'bulk-questions') && !wp_verify_nonce($nonce, 'qp_untrash_question_' . $question_ids[0])) wp_die('Security check failed.');
-            $wpdb->query($wpdb->prepare("UPDATE {$q_table} SET status = 'publish' WHERE question_id IN ($ids_placeholder)", $question_ids));
-        }
-        if ('delete' === $action) {
-            if (!wp_verify_nonce($nonce, 'bulk-questions') && !wp_verify_nonce($nonce, 'qp_delete_question_' . $question_ids[0])) wp_die('Security check failed.');
 
-            $g_table = $wpdb->prefix . 'qp_question_groups';
-
-            // First, get the group IDs for the questions about to be deleted.
-            $group_ids = $wpdb->get_col($wpdb->prepare("SELECT DISTINCT group_id FROM {$q_table} WHERE question_id IN ($ids_placeholder)", $question_ids));
-            $group_ids = array_filter($group_ids); // Remove any null/empty group IDs
-
-            // Now, delete the questions and their related data.
-            $wpdb->query($wpdb->prepare("DELETE FROM {$wpdb->prefix}qp_options WHERE question_id IN ($ids_placeholder)", $question_ids));
-            $wpdb->query($wpdb->prepare("DELETE FROM {$wpdb->prefix}qp_question_labels WHERE question_id IN ($ids_placeholder)", $question_ids));
-            $wpdb->query($wpdb->prepare("DELETE FROM {$q_table} WHERE question_id IN ($ids_placeholder)", $question_ids));
-
-            // Finally, check if the parent groups are now empty.
-            if (!empty($group_ids)) {
-                foreach ($group_ids as $group_id) {
-                    $remaining_questions = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$q_table} WHERE group_id = %d", $group_id));
-                    if ($remaining_questions == 0) {
-                        $wpdb->delete($g_table, ['group_id' => $group_id]);
-                    }
+        if (!empty($labels_to_apply)) {
+            $ql_table = $wpdb->prefix . 'qp_question_labels';
+            foreach ($question_ids as $question_id) {
+                foreach ($labels_to_apply as $label_id) {
+                    $wpdb->query($wpdb->prepare(
+                        "INSERT IGNORE INTO {$ql_table} (question_id, label_id) VALUES (%d, %d)",
+                        $question_id, $label_id
+                    ));
                 }
             }
         }
 
-        // NEW: Handle the dynamic remove label action
-        if (strpos($action, 'remove_label_') === 0) {
-            if (!wp_verify_nonce($nonce, 'bulk-questions')) wp_die('Security check failed.');
-            
-            $label_id_to_remove = absint(str_replace('remove_label_', '', $action));
-            
-            if ($label_id_to_remove > 0) {
-                $wpdb->query($wpdb->prepare(
-                    "DELETE FROM {$ql_table} WHERE label_id = %d AND question_id IN ($ids_placeholder)",
-                    $label_id_to_remove, ...$question_ids
-                ));
+        if ($action && $action !== -1) {
+            $q_table = $wpdb->prefix . 'qp_questions';
+            $ids_placeholder = implode(',', $question_ids);
+
+            if ('trash' === $action) {
+                $wpdb->query("UPDATE {$q_table} SET status = 'trash' WHERE question_id IN ({$ids_placeholder})");
             }
-        }
-        // NEW: Handle the new bulk action
-        if ('remove_review_labels' === $action) {
-            if (!wp_verify_nonce($nonce, 'bulk-questions')) wp_die('Security check failed.');
+            if ('untrash' === $action) {
+                $wpdb->query("UPDATE {$q_table} SET status = 'publish' WHERE question_id IN ({$ids_placeholder})");
+            }
+            if ('delete' === $action) {
+                $g_table = $wpdb->prefix . 'qp_question_groups';
+                $group_ids = $wpdb->get_col("SELECT DISTINCT group_id FROM {$q_table} WHERE question_id IN ({$ids_placeholder})");
+                $group_ids = array_filter($group_ids);
 
-            $labels_table = $wpdb->prefix . 'qp_labels';
-            $review_label_ids = $wpdb->get_col("SELECT label_id FROM $labels_table WHERE label_name IN ('Wrong Answer', 'No Answer')");
+                $wpdb->query("DELETE FROM {$wpdb->prefix}qp_options WHERE question_id IN ({$ids_placeholder})");
+                $wpdb->query("DELETE FROM {$wpdb->prefix}qp_question_labels WHERE question_id IN ({$ids_placeholder})");
+                $wpdb->query("DELETE FROM {$q_table} WHERE question_id IN ({$ids_placeholder})");
 
-            if (!empty($review_label_ids)) {
-                $label_ids_placeholder = implode(',', array_fill(0, count($review_label_ids), '%d'));
-
-                $args = array_merge($question_ids, $review_label_ids);
-
-                $wpdb->query($wpdb->prepare(
-                    "DELETE FROM {$ql_table} WHERE question_id IN ($ids_placeholder) AND label_id IN ($label_ids_placeholder)",
-                    $args
-                ));
+                if (!empty($group_ids)) {
+                    foreach ($group_ids as $group_id) {
+                        $remaining = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$q_table} WHERE group_id = %d", $group_id));
+                        if ($remaining == 0) {
+                            $wpdb->delete($g_table, ['group_id' => $group_id]);
+                        }
+                    }
+                }
+            }
+            if (strpos($action, 'remove_label_') === 0) {
+                $ql_table = $wpdb->prefix . 'qp_question_labels';
+                $label_id_to_remove = absint(str_replace('remove_label_', '', $action));
+                if ($label_id_to_remove > 0) {
+                    $wpdb->query("DELETE FROM {$ql_table} WHERE label_id = {$label_id_to_remove} AND question_id IN ({$ids_placeholder})");
+                }
             }
         }
     }
