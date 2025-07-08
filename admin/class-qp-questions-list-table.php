@@ -50,30 +50,33 @@ class QP_Questions_List_Table extends WP_List_Table
      * UPDATED: Define the bulk actions based on the current view
      */
     protected function get_bulk_actions() {
-        $actions = [];
-        $status = isset($_REQUEST['status']) ? sanitize_key($_REQUEST['status']) : 'publish';
-        
-        // Actions for the Trash view
-        if ($status === 'trash') {
-            return ['untrash' => 'Restore', 'delete'  => 'Delete Permanently'];
-        }
-        
-        // Default action for published views
-        $actions['trash'] = 'Move to Trash';
+    $actions = [];
+    $status = isset($_REQUEST['status']) ? sanitize_key($_REQUEST['status']) : 'publish';
+    
+    if ($status === 'trash') {
+        return ['untrash' => 'Restore', 'delete'  => 'Delete Permanently'];
+    }
+    
+    $actions['trash'] = 'Move to Trash';
 
-        // NEW: Add contextual action if a label is being filtered
-        if (!empty($_REQUEST['filter_by_label'])) {
-            global $wpdb;
-            $label_id = absint($_REQUEST['filter_by_label']);
-            $label_name = $wpdb->get_var($wpdb->prepare("SELECT label_name FROM {$wpdb->prefix}qp_labels WHERE label_id = %d", $label_id));
-            if ($label_name) {
-                // The key must be unique, so we add the label ID
-                $actions['remove_label_' . $label_id] = 'Remove "' . esc_html($label_name) . '" label';
+    if (!empty($_REQUEST['filter_by_label'])) {
+        global $wpdb;
+        $label_ids = array_map('absint', (array)$_REQUEST['filter_by_label']);
+        
+        if (!empty($label_ids)) {
+            $labels_table = $wpdb->prefix . 'qp_labels';
+            $ids_placeholder = implode(',', $label_ids);
+            
+            $selected_labels = $wpdb->get_results("SELECT label_id, label_name FROM {$labels_table} WHERE label_id IN ({$ids_placeholder})");
+            
+            foreach ($selected_labels as $label) {
+                $actions['remove_label_' . $label->label_id] = 'Remove "' . esc_html($label->label_name) . '" label';
             }
         }
-        
-        return $actions;
     }
+    
+    return $actions;
+}
 
     // REPLACE this method
     protected function get_views()
@@ -107,32 +110,36 @@ class QP_Questions_List_Table extends WP_List_Table
     }
 
     protected function extra_tablenav($which)
-    {
-        if ($which == "top") {
-            global $wpdb;
-            $subjects = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}qp_subjects ORDER BY subject_name ASC");
-            $labels = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}qp_labels ORDER BY label_name ASC");
-            $current_subject = isset($_REQUEST['filter_by_subject']) ? absint($_REQUEST['filter_by_subject']) : '';
-            $current_label = isset($_REQUEST['filter_by_label']) ? absint($_REQUEST['filter_by_label']) : '';
+{
+    if ($which == "top") {
+        global $wpdb;
+        $subjects = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}qp_subjects ORDER BY subject_name ASC");
+        $labels = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}qp_labels ORDER BY label_name ASC");
+        
+        $current_subject = isset($_REQUEST['filter_by_subject']) ? absint($_REQUEST['filter_by_subject']) : '';
+        $current_labels = isset($_REQUEST['filter_by_label']) ? array_map('absint', (array)$_REQUEST['filter_by_label']) : [];
 ?>
-            <div class="alignleft actions">
-                <select name="filter_by_subject">
-                    <option value="">All Subjects</option>
-                    <?php foreach ($subjects as $subject) {
-                        echo sprintf('<option value="%s" %s>%s</option>', esc_attr($subject->subject_id), selected($current_subject, $subject->subject_id, false), esc_html($subject->subject_name));
-                    } ?>
-                </select>
-                <select name="filter_by_label">
-                    <option value="">All Labels</option>
-                    <?php foreach ($labels as $label) {
-                        echo sprintf('<option value="%s" %s>%s</option>', esc_attr($label->label_id), selected($current_label, $label->label_id, false), esc_html($label->label_name));
-                    } ?>
-                </select>
-                <?php submit_button('Filter', 'button', 'filter_action', false, ['id' => 'post-query-submit']); ?>
-            </div>
-        <?php
-        }
+        <div class="alignleft actions">
+            <select name="filter_by_subject">
+                <option value="">All Subjects</option>
+                <?php foreach ($subjects as $subject) {
+                    echo sprintf('<option value="%s" %s>%s</option>', esc_attr($subject->subject_id), selected($current_subject, $subject->subject_id, false), esc_html($subject->subject_name));
+                } ?>
+            </select>
+            
+            <select name="filter_by_label[]" multiple="multiple" id="qp_label_filter_select" style="min-width: 200px;">
+                <option value="" <?php if (empty($current_labels)) echo 'selected'; ?>>All Labels</option>
+                <?php foreach ($labels as $label) {
+                    $is_selected = in_array($label->label_id, $current_labels);
+                    echo sprintf('<option value="%s" %s>%s</option>', esc_attr($label->label_id), selected($is_selected, true, false), esc_html($label->label_name));
+                } ?>
+            </select>
+            
+            <?php submit_button('Filter', 'button', 'filter_action', false, ['id' => 'post-query-submit']); ?>
+        </div>
+    <?php
     }
+}
 
     public function search_box($text, $input_id)
     {
@@ -148,99 +155,102 @@ class QP_Questions_List_Table extends WP_List_Table
     <?php
     }
 
-    // REPLACE this method
     public function prepare_items()
-    {
-        global $wpdb;
-        $this->process_bulk_action();
-        // UPDATED: Now respects screen options
-        $columns = $this->get_columns();        
-        $hidden = get_hidden_columns($this->screen);
-        $sortable = $this->get_sortable_columns();
-        $this->_column_headers = [$columns, $hidden, $sortable, 'custom_question_id'];
-        // UPDATED: Use the saved setting for per_page value
-        $options = get_option('qp_settings');
-         $per_page = $this->get_items_per_page('qp_questions_per_page', 20);
-        $current_page = $this->get_pagenum();
-        $offset = ($current_page - 1) * $per_page;
-        $orderby = isset($_GET['orderby']) ? sanitize_key($_GET['orderby']) : 'import_date';
-        $order = isset($_GET['order']) ? sanitize_key($_GET['order']) : 'desc';
+{
+    global $wpdb;
+    $this->process_bulk_action();
 
-        $q_table = $wpdb->prefix . 'qp_questions';
-        $g_table = $wpdb->prefix . 'qp_question_groups';
-        $s_table = $wpdb->prefix . 'qp_subjects';
-        $ql_table = $wpdb->prefix . 'qp_question_labels';
+    $columns = $this->get_columns();
+    $hidden = get_hidden_columns($this->screen);
+    $sortable = $this->get_sortable_columns();
+    $this->_column_headers = [$columns, $hidden, $sortable, 'custom_question_id'];
 
-        $sql_query_from = " FROM {$q_table} q LEFT JOIN {$g_table} g ON q.group_id = g.group_id LEFT JOIN {$s_table} s ON g.subject_id = s.subject_id";
-        $where = [];
-        $current_status = isset($_REQUEST['status']) ? sanitize_key($_REQUEST['status']) : 'all';
+    $per_page = $this->get_items_per_page('qp_questions_per_page', 20);
+    $current_page = $this->get_pagenum();
+    $offset = ($current_page - 1) * $per_page;
 
-        if ($current_status === 'trash') {
-            $where[] = "q.status = 'trash'";
-        } else if ($current_status === 'needs_review') {
-            $review_label_ids = $wpdb->get_col("SELECT label_id FROM {$wpdb->prefix}qp_labels WHERE label_name IN ('Wrong Answer', 'No Answer')");
-            if (!empty($review_label_ids)) {
-                $ids_placeholder = implode(',', array_fill(0, count($review_label_ids), '%d'));
-                $where[] = $wpdb->prepare("q.question_id IN (SELECT question_id FROM {$ql_table} WHERE label_id IN ($ids_placeholder))", $review_label_ids);
-            } else {
-                $where[] = "1=0"; // No review labels found, so show no results
-            }
-        } else {
-            $where[] = "q.status = 'publish'";
-        }
+    $orderby = isset($_GET['orderby']) ? sanitize_key($_GET['orderby']) : 'import_date';
+    $order = isset($_GET['order']) ? sanitize_key($_GET['order']) : 'desc';
 
-        if (!empty($_REQUEST['filter_by_subject'])) {
-            $where[] = $wpdb->prepare("g.subject_id = %d", absint($_REQUEST['filter_by_subject']));
-        }
-        if (!empty($_REQUEST['filter_by_label'])) {
-            $where[] = $wpdb->prepare("q.question_id IN (SELECT question_id FROM {$ql_table} WHERE label_id = %d)", absint($_REQUEST['filter_by_label']));
-        }
-        if (!empty($_REQUEST['s'])) {
-            $search_term = '%' . $wpdb->esc_like(stripslashes($_REQUEST['s'])) . '%';
-            $where[] = $wpdb->prepare("(q.question_text LIKE %s OR q.custom_question_id LIKE %s)", $search_term, $search_term);
-        }
+    $q_table = $wpdb->prefix . 'qp_questions';
+    $g_table = $wpdb->prefix . 'qp_question_groups';
+    $s_table = $wpdb->prefix . 'qp_subjects';
+    $ql_table = $wpdb->prefix . 'qp_question_labels';
 
-        $sql_query_where = " WHERE " . implode(' AND ', $where);
-
-        $total_items = $wpdb->get_var("SELECT COUNT(q.question_id)" . $sql_query_from . $sql_query_where);
-
-        // UPDATED: Select the source columns
-        $data_query = "SELECT q.question_id, q.custom_question_id, q.question_text, q.is_pyq, q.import_date, q.source_file, q.source_page, q.source_number, q.duplicate_of, s.subject_name, g.direction_text, g.direction_image_id" . $sql_query_from . $sql_query_where;
-        $data_query .= $wpdb->prepare(" ORDER BY %s %s LIMIT %d OFFSET %d", $orderby, $order, $per_page, $offset);
+    $where_conditions = [];
     
+    // --- Build base query for Question IDs ---
+    $id_query_from = "FROM {$q_table} q";
+    $id_query_joins = " LEFT JOIN {$g_table} g ON q.group_id = g.group_id";
+
+    // --- Handle Filters ---
+    $current_status = isset($_REQUEST['status']) ? sanitize_key($_REQUEST['status']) : 'all';
+    if ($current_status === 'trash') { $where_conditions[] = "q.status = 'trash'"; }
+    else if ($current_status === 'needs_review') {
+        $review_label_ids = $wpdb->get_col("SELECT label_id FROM {$wpdb->prefix}qp_labels WHERE label_name IN ('Wrong Answer', 'No Answer')");
+        if (!empty($review_label_ids)) {
+            $ids_placeholder = implode(',', $review_label_ids);
+            $where_conditions[] = "q.question_id IN (SELECT question_id FROM {$ql_table} WHERE label_id IN ($ids_placeholder))";
+        } else { $where_conditions[] = "1=0"; }
+    } else { $where_conditions[] = "q.status = 'publish'"; }
+
+    if (!empty($_REQUEST['filter_by_subject'])) { $where_conditions[] = $wpdb->prepare("g.subject_id = %d", absint($_REQUEST['filter_by_subject'])); }
+    if (!empty($_REQUEST['s'])) {
+        $search_term = '%' . $wpdb->esc_like(stripslashes($_REQUEST['s'])) . '%';
+        $where_conditions[] = $wpdb->prepare("(q.question_text LIKE %s OR q.custom_question_id LIKE %s)", $search_term, $search_term);
+    }
+
+    // --- Handle Multi-Label Filter ---
+    $selected_label_ids = isset($_REQUEST['filter_by_label']) ? array_filter(array_map('absint', (array)$_REQUEST['filter_by_label'])) : [];
+    if (!empty($selected_label_ids)) {
+        foreach($selected_label_ids as $index => $label_id) {
+            $alias = "ql" . $index;
+            $id_query_joins .= " JOIN {$ql_table} AS {$alias} ON q.question_id = {$alias}.question_id";
+            $where_conditions[] = $wpdb->prepare("{$alias}.label_id = %d", $label_id);
+        }
+    }
+
+    $where_clause = ' WHERE ' . implode(' AND ', $where_conditions);
+    
+    // --- Execute Query ---
+    $id_query = "SELECT DISTINCT q.question_id {$id_query_from} {$id_query_joins} {$where_clause}";
+    $matching_question_ids = $wpdb->get_col($id_query);
+    
+    $total_items = count($matching_question_ids);
+
+    if (empty($matching_question_ids)) {
+        $this->items = [];
+    } else {
+        $ids_placeholder = implode(',', $matching_question_ids);
+        $data_query = "SELECT q.*, s.subject_name, g.group_id, g.direction_text, g.direction_image_id
+            FROM {$q_table} q
+            LEFT JOIN {$g_table} g ON q.group_id = g.group_id
+            LEFT JOIN {$s_table} s ON g.subject_id = s.subject_id
+            WHERE q.question_id IN ({$ids_placeholder})
+            ORDER BY {$orderby} {$order}
+            LIMIT {$per_page} OFFSET {$offset}";
+        
         $this->items = $wpdb->get_results($data_query, ARRAY_A);
-
-        // CORRECTED: Logic to fetch full label data including color
-        $question_ids = wp_list_pluck($this->items, 'question_id');
-        if (!empty($question_ids)) {
-            $ql_table = $wpdb->prefix . 'qp_question_labels';
-            $l_table = $wpdb->prefix . 'qp_labels';
-            $ids_placeholder = implode(',', array_map('absint', $question_ids));
-
-            $labels_results = $wpdb->get_results(
-                "SELECT ql.question_id, l.label_name, l.label_color
-                 FROM {$ql_table} ql
-                 JOIN {$l_table} l ON ql.label_id = l.label_id
-                 WHERE ql.question_id IN ($ids_placeholder)"
-            );
-            
-            $labels_by_question_id = [];
-            foreach ($labels_results as $label) {
-                if (!isset($labels_by_question_id[$label->question_id])) {
-                    $labels_by_question_id[$label->question_id] = [];
-                }
-                $labels_by_question_id[$label->question_id][] = $label;
-            }
-
-            foreach ($this->items as &$item) {
-                if (isset($labels_by_question_id[$item['question_id']])) {
-                    $item['labels'] = $labels_by_question_id[$item['question_id']];
-                }
-            }
+    }
+    
+    // Fetch labels for the items on the current page
+    $question_ids_on_page = wp_list_pluck($this->items, 'question_id');
+    if (!empty($question_ids_on_page)) {
+        $labels_placeholder = implode(',', $question_ids_on_page);
+        $labels_results = $wpdb->get_results("SELECT ql.question_id, l.label_name, l.label_color FROM {$ql_table} ql JOIN {$wpdb->prefix}qp_labels l ON ql.label_id = l.label_id WHERE ql.question_id IN ({$labels_placeholder})");
+        
+        $labels_by_question_id = [];
+        foreach ($labels_results as $label) {
+            $labels_by_question_id[$label->question_id][] = $label;
         }
 
-        $this->set_pagination_args(['total_items' => $total_items, 'per_page' => $per_page]);
+        foreach ($this->items as &$item) {
+            $item['labels'] = $labels_by_question_id[$item['question_id']] ?? [];
+        }
     }
+
+    $this->set_pagination_args(['total_items' => $total_items, 'per_page' => $per_page]);
+}
 
 /**
      * UPDATED: Process all bulk actions, including the new contextual one

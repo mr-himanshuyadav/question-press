@@ -265,6 +265,7 @@ function qp_admin_enqueue_scripts($hook_suffix) {
         wp_localize_script('qp-quick-edit-script', 'qp_quick_edit_object', [
             'save_nonce' => wp_create_nonce('qp_save_quick_edit_nonce')
         ]);
+        wp_enqueue_script('qp-multi-select-dropdown-script', QP_PLUGIN_URL . 'admin/assets/js/multi-select-dropdown.js', ['jquery'], '1.0.1', true);
     }
     if ($hook_suffix === 'question-press_page_qp-labels') {
         add_action('admin_footer', function() {
@@ -1105,3 +1106,19 @@ function qp_regenerate_api_key_ajax() {
     wp_send_json_success(['new_key' => $new_key]);
 }
 add_action('wp_ajax_regenerate_api_key', 'qp_regenerate_api_key_ajax');
+
+
+function qp_admin_head_styles_for_list_table() {
+    $screen = get_current_screen();
+    if ($screen && $screen->id === 'toplevel_page_question-press') {
+        ?>
+        <style type="text/css">
+            .qp-multi-select-dropdown { position: relative; display: inline-block; vertical-align: middle; }
+            .qp-multi-select-list { display: none; position: absolute; background-color: white; border: 1px solid #ccc; z-index: 1000; padding: 10px; max-height: 250px; overflow-y: auto; }
+            .qp-multi-select-list label { display: block; white-space: nowrap; padding: 5px; }
+            .qp-multi-select-list label:hover { background-color: #f1f1f1; }
+        </style>
+        <?php
+    }
+}
+add_action('admin_head', 'qp_admin_head_styles_for_list_table');
