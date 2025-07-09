@@ -97,14 +97,27 @@ jQuery(document).ready(function($) {
             url: ajaxurl, type: 'POST',
             data: {
                 action: 'save_quick_edit_data',
-                nonce: qp_quick_edit_object.save_nonce, // RESTORED: Use 'nonce' as the key
+                nonce: qp_quick_edit_object.save_nonce,
                 question_id: questionId,
                 form_data: $formWrapper.find(':input').serialize()
             },
             success: function(response) {
                 if (response.success && response.data.row_html) {
-                    $('#post-' + questionId).replaceWith(response.data.row_html);
-                    $('#edit-' + questionId).hide().find('.inline-edit-col').empty();
+                    // --- THIS IS THE CORRECTED LOGIC ---
+                    var $postRow = $('#post-' + questionId);
+                    var $editRow = $postRow.next('tr.quick-edit-row');
+
+                    // First, hide the editor form and remove its content
+                    $editRow.hide().find('.inline-edit-col').empty();
+                    
+                    // Then, replace the old row with the new one
+                    $postRow.replaceWith(response.data.row_html);
+                    
+                    // **CRUCIAL FIX**: After replacing, we must find the NEW row in the DOM
+                    // and remove the class from it to collapse the space.
+                    $('#post-' + questionId).removeClass('inline-editor');
+                    // --- END OF FIX ---
+
                 } else {
                     alert('Error: ' + (response.data.message || 'Could not save changes.'));
                     $button.prop('disabled', false).text('Update');
