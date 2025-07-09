@@ -1,6 +1,6 @@
 jQuery(document).ready(function($) {
-    // Target all multi-selects within the top navigation of the list table
-    var $multiSelects = $('.tablenav.top .actions select[multiple]');
+    // UPDATED: Target multi-selects in BOTH top and bottom navigation bars
+    var $multiSelects = $('.tablenav.top .actions select[multiple], .tablenav.bottom .actions select[multiple]');
 
     // Apply the custom dropdown transformation to each one found
     $multiSelects.each(function() {

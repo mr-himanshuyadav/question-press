@@ -128,7 +128,7 @@ class QP_Questions_List_Table extends WP_List_Table
         }
         // --- END CUSTOM DROPDOWN ---
 
-        submit_button( __( 'Apply' ), 'action', '', false, array( 'id' => 'doaction' . ( 'top' === $which ? '' : '2' ) ) );
+        submit_button( __( 'Apply' ), 'action', '', false, array( 'id' => 'doaction' . ( 'top' === $which ? '' : '2' ), 'style' => 'margin-left: 5px;'  ) );
         echo "\n";
     }
 
