@@ -1,7 +1,7 @@
 jQuery(document).ready(function($) {
     var wrapper = $('#the-list'); // The table body
 
-    // Show the quick edit form
+    // UPDATED: Show/Hide the quick edit form (Toggle Behavior)
     wrapper.on('click', '.editinline', function(e) {
         e.preventDefault();
         var questionId = $(this).data('question-id');
@@ -9,10 +9,22 @@ jQuery(document).ready(function($) {
         var $editRow = $('#edit-' + questionId);
         var $postRow = $('#post-' + questionId);
 
-        // Hide any other open quick edit rows
-        $('.quick-edit-row').hide();
-        $('tr.inline-editor').removeClass('inline-editor');
+        // Check if the form for this row is already open
+        if ($editRow.is(':visible')) {
+            $editRow.hide();
+            $postRow.removeClass('inline-editor');
+            $editRow.find('.inline-edit-col').empty();
+            return; // Exit the function
+        }
+
+        // Hide any other open quick edit rows before opening a new one
+        $('.quick-edit-row:visible').each(function() {
+            $(this).hide();
+            $(this).prev('tr').removeClass('inline-editor');
+            $(this).find('.inline-edit-col').empty();
+        });
         
+        // Show the current form
         $editRow.show();
         $postRow.addClass('inline-editor');
         $editRow.find('.inline-edit-col').html('<p>Loading...</p>');
@@ -21,7 +33,7 @@ jQuery(document).ready(function($) {
             url: ajaxurl, type: 'POST',
             data: {
                 action: 'get_quick_edit_form',
-                nonce: nonce, // RESTORED: Use 'nonce' as the key
+                nonce: nonce,
                 question_id: questionId
             },
             success: function(response) {
