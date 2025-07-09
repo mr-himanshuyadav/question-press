@@ -939,6 +939,7 @@ function qp_get_quick_edit_form_ajax() {
     if (!$question_id) { wp_send_json_error(); }
 
     global $wpdb;
+    // ... (database queries and data preparation remain the same) ...
     $question = $wpdb->get_row($wpdb->prepare(
         "SELECT q.question_text, q.is_pyq, q.topic_id, g.subject_id 
          FROM {$wpdb->prefix}qp_questions q 
@@ -967,63 +968,103 @@ function qp_get_quick_edit_form_ajax() {
         var qp_current_topic_id = <?php echo json_encode($question->topic_id); ?>;
     </script>
     <form class="quick-edit-form-wrapper">
-        <h4>Quick Edit: <span class="title"><?php echo esc_html(wp_trim_words($question->question_text, 10, '...')); ?></span></h4>
+        <h4><span style ="font-weight: 700;">Question:</span> <span class="title"><?php echo esc_html(wp_trim_words($question->question_text, 10, '...')); ?></span></h4>
         <input type="hidden" name="question_id" value="<?php echo esc_attr($question_id); ?>">
         
-        <div class="form-row">
-            <label class="form-label"><strong>Correct Answer</strong></label>
-            <div class="options-group">
-                <?php foreach ($options as $index => $option): ?>
-                <label class="option-label">
-                    <input type="radio" name="correct_option_id" value="<?php echo esc_attr($option->option_id); ?>" <?php checked($option->is_correct, 1); ?>>
-                    <input type="text" readonly value="<?php echo esc_attr($option->option_text); ?>">
-                </label>
-                <?php endforeach; ?>
-            </div>
-        </div>
-        <div class="form-row form-row-flex">
-            <div class="form-group-half">
-                <label for="qe-subject-<?php echo esc_attr($question_id); ?>"><strong>Subject</strong></label>
-                <select name="subject_id" id="qe-subject-<?php echo esc_attr($question_id); ?>" class="qe-subject-select">
-                    <?php foreach ($all_subjects as $subject) : ?>
-                        <option value="<?php echo esc_attr($subject->subject_id); ?>" <?php selected($subject->subject_id, $question->subject_id); ?>><?php echo esc_html($subject->subject_name); ?></option>
+        <div class="quick-edit-main-container">
+            <div class="quick-edit-col-left">
+                <label><strong>Correct Answer</strong></label>
+                <div class="options-group">
+                    <?php foreach ($options as $index => $option): ?>
+                    <label class="option-label">
+                        <input type="radio" name="correct_option_id" value="<?php echo esc_attr($option->option_id); ?>" <?php checked($option->is_correct, 1); ?>>
+                        <input type="text" readonly value="<?php echo esc_attr($option->option_text); ?>">
+                    </label>
                     <?php endforeach; ?>
-                </select>
+                </div>
             </div>
-            <div class="form-group-half">
-                <label for="qe-topic-<?php echo esc_attr($question_id); ?>"><strong>Topic</strong></label>
-                <select name="topic_id" id="qe-topic-<?php echo esc_attr($question_id); ?>" class="qe-topic-select" disabled>
-                     <option value="">— Select subject first —</option>
-                </select>
+            <div class="quick-edit-col-right">
+                 <div class="form-row-flex">
+                    <div class="form-group-half">
+                        <label for="qe-subject-<?php echo esc_attr($question_id); ?>"><strong>Subject</strong></label>
+                        <select name="subject_id" id="qe-subject-<?php echo esc_attr($question_id); ?>" class="qe-subject-select">
+                            <?php foreach ($all_subjects as $subject) : ?>
+                                <option value="<?php echo esc_attr($subject->subject_id); ?>" <?php selected($subject->subject_id, $question->subject_id); ?>><?php echo esc_html($subject->subject_name); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="form-group-half">
+                        <label for="qe-topic-<?php echo esc_attr($question_id); ?>"><strong>Topic</strong></label>
+                        <select name="topic_id" id="qe-topic-<?php echo esc_attr($question_id); ?>" class="qe-topic-select" disabled>
+                             <option value="">— Select subject first —</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                     <label class="inline-checkbox"><input type="checkbox" name="is_pyq" value="1" <?php checked($question->is_pyq, 1); ?>> Is PYQ?</label>
+                </div>
+                <div class="form-row">
+                    <label><strong>Labels</strong></label>
+                    <div class="labels-group">
+                        <?php foreach ($all_labels as $label) : ?>
+                            <label class="inline-checkbox"><input type="checkbox" name="labels[]" value="<?php echo esc_attr($label->label_id); ?>" <?php checked(in_array($label->label_id, $current_labels)); ?>> <?php echo esc_html($label->label_name); ?></label>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
             </div>
         </div>
-        <div class="form-row">
-             <label class="inline-checkbox"><input type="checkbox" name="is_pyq" value="1" <?php checked($question->is_pyq, 1); ?>> Is PYQ?</label>
-        </div>
-        <div class="form-row">
-            <label class="form-label"><strong>Labels</strong></label>
-            <div class="labels-group">
-                <?php foreach ($all_labels as $label) : ?>
-                    <label class="inline-checkbox"><input type="checkbox" name="labels[]" value="<?php echo esc_attr($label->label_id); ?>" <?php checked(in_array($label->label_id, $current_labels)); ?>> <?php echo esc_html($label->label_name); ?></label>
-                <?php endforeach; ?>
-            </div>
-        </div>
+
         <p class="submit inline-edit-save">
             <button type="button" class="button-secondary cancel">Cancel</button>
             <button type="button" class="button-primary save">Update</button>
         </p>
     </form>
+
     <style>
-        .quick-edit-form-wrapper { padding: 1rem; }
-        .quick-edit-form-wrapper .form-row { margin-bottom: 1rem; }
-        .quick-edit-form-wrapper .form-row-flex { display: flex; gap: 1rem; align-items: flex-end; }
-        .quick-edit-form-wrapper .form-group-half { flex: 1; }
-        .quick-edit-form-wrapper .form-group-center-align { padding-bottom: 5px; }
-        .quick-edit-form-wrapper .form-label, .quick-edit-form-wrapper .title, .quick-edit-form-wrapper strong { font-weight: 600; display: block; margin-bottom: .5rem;}
-        .quick-edit-form-wrapper textarea, .quick-edit-form-wrapper select, .quick-edit-form-wrapper .options-group input[type="text"] { width: 100%; }
-        .quick-edit-form-wrapper .options-group .option-label { display: flex; align-items: center; gap: .5rem; margin-bottom: .5rem; }
-        .quick-edit-form-wrapper .labels-group { display: flex; flex-wrap: wrap; gap: .5rem 1rem; padding: .5rem; border: 1px solid #ddd; background: #fff; }
-        .quick-edit-form-wrapper .inline-checkbox { white-space: nowrap; }
+        .quick-edit-form-wrapper h4 {
+            font-size: 16px; /* Increased font size for visibility */
+            margin-top: 20px;
+            margin-bottom: 10px;
+            Padding: 10px 20px;
+        }
+        .inline-edit-row .submit{
+            padding: 20px;
+        }
+        .quick-edit-form-wrapper .title {
+            font-size: 15px; /* Also increased */
+            font-weight: 500;
+            color: #555;
+        }
+        .quick-edit-form-wrapper .form-row, .quick-edit-form-wrapper .form-row-flex { margin-bottom: 1rem; }
+        .quick-edit-form-wrapper .form-row:last-child { margin-bottom: 0; }
+        .quick-edit-form-wrapper strong, .quick-edit-form-wrapper label { font-weight: 600; display: block; margin-bottom: .5rem;}
+        .quick-edit-form-wrapper select { width: 100%; }
+
+        .quick-edit-main-container { display: flex; gap: 20px; margin-bottom: 1rem; padding: 0px 20px;}
+        .quick-edit-col-left { flex: 0 0 40%; }
+        .quick-edit-col-right { flex: 1; }
+
+        .options-group { display: flex; flex-direction: column; justify-content: space-between; align-items: space-between; padding: .5rem; border: 1px solid #ddd; background: #fff; height: 100%; box-sizing: border-box; }
+        .options-group label:last-child {margin-bottom: 0;}
+        .option-label {
+            display: flex;
+            align-items: center; /* Vertically aligns the radio button and text */
+            gap: .5rem;
+            margin-bottom: .5rem;
+        }
+
+        /* Crucial fix for radio button alignment */
+        .option-label input[type="radio"] {
+           margin-top: 0; /* Resets default WordPress top margin on radio buttons */
+           align-self: center;
+        }
+        .option-label input[type="text"] { width: 90%; background-color: #f0f0f1; }
+
+        .form-row-flex { display: flex; gap: 1rem; }
+        .form-group-half { flex: 1; }
+        
+        .labels-group { display: flex; flex-wrap: wrap; gap: .5rem 1rem; padding: .5rem; border: 1px solid #ddd; background: #fff; }
+        .inline-checkbox { white-space: nowrap; }
     </style>
      <?php
     wp_send_json_success(['form' => ob_get_clean()]);
