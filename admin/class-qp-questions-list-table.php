@@ -151,7 +151,14 @@ class QP_Questions_List_Table extends WP_List_Table
         $review_count = 0;
         if (!empty($review_label_ids)) {
             $ids_placeholder = implode(',', array_fill(0, count($review_label_ids), '%d'));
-            $review_count = $wpdb->get_var($wpdb->prepare("SELECT COUNT(DISTINCT question_id) FROM $ql_table WHERE label_id IN ($ids_placeholder)", $review_label_ids));
+            // UPDATED: Query now joins the questions table to check the status is 'publish'
+            $review_count = $wpdb->get_var($wpdb->prepare(
+                "SELECT COUNT(DISTINCT ql.question_id) 
+                 FROM {$ql_table} ql 
+                 JOIN {$q_table} q ON ql.question_id = q.question_id 
+                 WHERE ql.label_id IN ($ids_placeholder) AND q.status = 'publish'", 
+                $review_label_ids
+            ));
         }
 
         $views = [
@@ -231,7 +238,7 @@ class QP_Questions_List_Table extends WP_List_Table
     $current_page = $this->get_pagenum();
     $offset = ($current_page - 1) * $per_page;
 
-    $orderby = isset($_GET['orderby']) ? sanitize_key($_GET['orderby']) : 'import_date';
+    $orderby = isset($_GET['orderby']) ? sanitize_key($_GET['orderby']) : 'custom_question_id';
     $order = isset($_GET['order']) ? sanitize_key($_GET['order']) : 'desc';
 
     $q_table = $wpdb->prefix . 'qp_questions';

@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       Question Press
  * Description:       A complete plugin for creating, managing, and practicing questions.
- * Version:           1.1.0
+ * Version:           1.1.1
  * Author:            Himanshu
  */
 
@@ -463,7 +463,21 @@ function qp_handle_save_question_group() {
         exit;
     }
 
-    $redirect_url = $is_editing ? admin_url('admin.php?page=question-press&message=1') : admin_url('admin.php?page=qp-edit-group&group_id=' . $group_id . '&message=2');
+    // --- UPDATED REDIRECT LOGIC ---
+    $redirect_url = admin_url('admin.php?page=question-press');
+    if ($is_editing) {
+        // If editing, preserve the user's page and filters from the referring URL
+        if (isset($_POST['_wp_http_referer'])) {
+             wp_safe_redirect(wp_unslash($_POST['_wp_http_referer']));
+             exit;
+        }
+        // Fallback if referer is not set
+        $redirect_url = add_query_arg('message', '1', $redirect_url);
+    } else {
+        // If creating a new question, redirect to the new edit page
+        $redirect_url = admin_url('admin.php?page=qp-edit-group&group_id=' . $group_id . '&message=2');
+    }
+    
     wp_safe_redirect($redirect_url);
     exit;
 }
