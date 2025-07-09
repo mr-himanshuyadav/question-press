@@ -104,6 +104,8 @@ class QP_Question_Editor_Page {
 
             <form method="post" action="">
                 <?php wp_nonce_field('qp_save_question_group_nonce'); ?>
+                <?php // ADD THIS LINE to pass the referer URL
+                wp_referer_field(); ?>
                 <input type="hidden" name="group_id" value="<?php echo esc_attr($group_id); ?>">
 
                 <div id="poststuff">
