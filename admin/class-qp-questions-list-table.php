@@ -47,36 +47,90 @@ class QP_Questions_List_Table extends WP_List_Table
 
     
     /**
-     * UPDATED: Define the bulk actions based on the current view
+     * UPDATED: Define the bulk actions. This now includes the contextual "Remove Label" action.
      */
     protected function get_bulk_actions() {
-    $actions = [];
-    $status = isset($_REQUEST['status']) ? sanitize_key($_REQUEST['status']) : 'publish';
-    
-    if ($status === 'trash') {
-        return ['untrash' => 'Restore', 'delete'  => 'Delete Permanently'];
-    }
-    
-    $actions['trash'] = 'Move to Trash';
-
-    if (!empty($_REQUEST['filter_by_label'])) {
         global $wpdb;
-        $label_ids = array_map('absint', (array)$_REQUEST['filter_by_label']);
+        $actions = [];
+        $status = isset($_REQUEST['status']) ? sanitize_key($_REQUEST['status']) : 'publish';
         
-        if (!empty($label_ids)) {
-            $labels_table = $wpdb->prefix . 'qp_labels';
-            $ids_placeholder = implode(',', $label_ids);
+        if ($status === 'trash') {
+            return ['untrash' => 'Restore', 'delete'  => 'Delete Permanently'];
+        }
+        
+        $actions['trash'] = 'Move to Trash';
+
+        // Add "Remove Label" action only when filtering by a label
+        if (!empty($_REQUEST['filter_by_label'])) {
+            $label_ids = array_map('absint', (array)$_REQUEST['filter_by_label']);
             
-            $selected_labels = $wpdb->get_results("SELECT label_id, label_name FROM {$labels_table} WHERE label_id IN ({$ids_placeholder})");
-            
-            foreach ($selected_labels as $label) {
-                $actions['remove_label_' . $label->label_id] = 'Remove "' . esc_html($label->label_name) . '" label';
+            if (!empty($label_ids)) {
+                $labels_table = $wpdb->prefix . 'qp_labels';
+                $ids_placeholder = implode(',', array_fill(0, count($label_ids), '%d'));
+                
+                $selected_labels = $wpdb->get_results($wpdb->prepare("SELECT label_id, label_name FROM {$labels_table} WHERE label_id IN ({$ids_placeholder})", $label_ids));
+                
+                if ($selected_labels) {
+                     $actions['remove_label_group_start'] = '--- Remove Labels ---';
+                    foreach ($selected_labels as $label) {
+                        $actions['remove_label_' . $label->label_id] = 'Remove "' . esc_html($label->label_name) . '" label';
+                    }
+                }
             }
         }
+        
+        return $actions;
     }
-    
-    return $actions;
-}
+
+    /**
+     * NEW: Overriding the parent bulk_actions method to insert our custom controls.
+     * This creates the side-by-side dropdowns with a single Apply button.
+     */
+    protected function bulk_actions( $which = '' ) {
+        if ( is_null( $this->_actions ) ) {
+            $this->_actions = $this->get_bulk_actions();
+            // Remove visual separators from the <select> dropdown
+            $this->_actions = array_filter($this->_actions, function($key) {
+                return strpos($key, '_group_start') === false;
+            }, ARRAY_FILTER_USE_KEY);
+        }
+        if ( empty( $this->_actions ) ) {
+            return;
+        }
+
+        echo '<label for="bulk-action-selector-' . esc_attr( $which ) . '" class="screen-reader-text">' . __( 'Select bulk action' ) . '</label>';
+        echo '<select name="action" id="bulk-action-selector-' . esc_attr( $which ) . '">';
+        echo '<option value="-1">' . __( 'Bulk Actions' ) . '</option>';
+
+        foreach ( $this->get_bulk_actions() as $name => $title ) {
+            $class = 'edit' === $name ? 'hide-if-no-js' : '';
+            // Use an <optgroup> for visual separation
+            if (strpos($name, '_group_start') !== false) {
+                 echo '<optgroup label="' . esc_attr( $title ) . '">';
+                 continue;
+            }
+            echo "\n" . '<option value="' . esc_attr($name) . '" class="' . $class . '">' . $title . '</option>';
+        }
+        echo '</select>';
+
+        // --- ADDING OUR CUSTOM MULTI-LABEL DROPDOWN ---
+        global $wpdb;
+        $labels = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}qp_labels ORDER BY label_name ASC");
+        if ($labels) {
+            echo '<span style="margin-left: 5px;"></span>'; // Add a small gap
+            echo '<label for="labels_to_apply" class="screen-reader-text">Add labels to selected questions</label>';
+            echo '<select name="labels_to_apply[]" id="labels_to_apply" multiple="multiple" style="min-width: 180px;">';
+            echo '<option value="">— Add Labels —</option>';
+            foreach ($labels as $label) {
+                echo sprintf('<option value="%s">%s</option>', esc_attr($label->label_id), esc_html($label->label_name));
+            }
+            echo '</select>';
+        }
+        // --- END CUSTOM DROPDOWN ---
+
+        submit_button( __( 'Apply' ), 'action', '', false, array( 'id' => 'doaction' . ( 'top' === $which ? '' : '2' ) ) );
+        echo "\n";
+    }
 
     // REPLACE this method
     protected function get_views()
@@ -109,41 +163,24 @@ class QP_Questions_List_Table extends WP_List_Table
         return $views;
     }
 
+    /**
+     * NEW: Adding back a simplified extra_tablenav just for the filters.
+     */
     protected function extra_tablenav($which) {
         if ($which == "top") {
             global $wpdb;
             
-            // Group 1: Bulk Actions (for the single "Apply" button)
-            echo '<div class="alignleft actions bulkactions">';
-            
-                // Renders the standard "Move to Trash" dropdown
-                $this->bulk_actions();
-                
-                // Our custom "Add Labels" dropdown, placed inside the same group
-                $labels = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}qp_labels ORDER BY label_name ASC");
-                echo '<label for="labels_to_apply" class="screen-reader-text">Add labels to selected questions</label>';
-                echo '<select name="labels_to_apply[]" id="labels_to_apply" multiple="multiple" style="min-width: 180px;">';
-                echo '<option value="">— Add Labels —</option>';
-                foreach ($labels as $label) {
-                    echo sprintf('<option value="%s">%s</option>', esc_attr($label->label_id), esc_html($label->label_name));
-                }
-                echo '</select>';
-
-                // This is the standard "Apply" button, which is automatically added by the parent class
-                // because we have used the "bulkactions" class on our div.
-                submit_button('Apply', 'action', '', false, ['id' => "doaction"]);
-
-            echo '</div>'; // End bulkactions div
-
-            // Group 2: Filtering Controls (for the single "Filter" button)
+            // This container will hold our filter controls
             echo '<div class="alignleft actions">';
 
                 $subjects = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}qp_subjects ORDER BY subject_name ASC");
                 $current_subject = isset($_REQUEST['filter_by_subject']) ? absint($_REQUEST['filter_by_subject']) : '';
+
+                $labels = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}qp_labels ORDER BY label_name ASC");
                 $current_labels = isset($_REQUEST['filter_by_label']) ? array_map('absint', (array)$_REQUEST['filter_by_label']) : [];
 
                 // Subject filter
-                echo '<select name="filter_by_subject">';
+                echo '<select name="filter_by_subject" style="margin-left: 5px;">';
                 echo '<option value="">All Subjects</option>';
                 foreach ($subjects as $subject) {
                     echo sprintf('<option value="%s" %s>%s</option>', esc_attr($subject->subject_id), selected($current_subject, $subject->subject_id, false), esc_html($subject->subject_name));
@@ -151,16 +188,16 @@ class QP_Questions_List_Table extends WP_List_Table
                 echo '</select>';
                 
                 // Label filter
-                echo '<select name="filter_by_label[]" multiple="multiple" id="qp_label_filter_select" style="min-width: 200px;">';
-                echo '<option value="" ' . (empty($current_labels) ? 'selected' : '') . '>All Labels</option>';
+                echo '<select name="filter_by_label[]" multiple="multiple" id="qp_label_filter_select" style="min-width: 200px; margin-left: 5px;">';
+                echo '<option value="" ' . (empty($current_labels) ? 'selected' : '') . '>Filter by Label(s)</option>';
                 foreach ($labels as $label) {
                     $is_selected = in_array($label->label_id, $current_labels);
                     echo sprintf('<option value="%s" %s>%s</option>', esc_attr($label->label_id), selected($is_selected, true, false), esc_html($label->label_name));
                 }
                 echo '</select>';
                 
-                // The dedicated "Filter" button
-                submit_button('Filter', 'button', 'filter_action', false, ['id' => 'post-query-submit']);
+                // The dedicated "Filter" button with a gap
+                submit_button('Filter', 'button', 'filter_action', false, ['id' => 'post-query-submit', 'style' => 'margin-left: 5px;']);
 
             echo '</div>'; // End filter actions div
         }
