@@ -391,12 +391,22 @@ function qp_handle_save_question_group() {
         'subject_id' => $subject_id
     ];
 
+    // --- FINAL, CORRECTED REDIRECT LOGIC ---
     if ($is_editing) {
-        $wpdb->update("{$wpdb->prefix}qp_question_groups", $group_data, ['group_id' => $group_id]);
+        // This part is for when you are EDITING an existing question. It is correct.
+        if (!empty($_POST['redirect_to'])) {
+             wp_safe_redirect(esc_url_raw($_POST['redirect_to']));
+             exit;
+        }
+        $redirect_url = admin_url('admin.php?page=question-press&message=1');
     } else {
-        $wpdb->insert("{$wpdb->prefix}qp_question_groups", $group_data);
-        $group_id = $wpdb->insert_id;
+        // UPDATED: This is the fix.
+        // When creating a NEW question, redirect back to the blank "Add New" page with a success message.
+        $redirect_url = admin_url('admin.php?page=qp-question-editor&message=2');
     }
+    
+    wp_safe_redirect($redirect_url);
+    exit;
 
     $q_table = "{$wpdb->prefix}qp_questions"; $o_table = "{$wpdb->prefix}qp_options"; $ql_table = "{$wpdb->prefix}qp_question_labels";
     $existing_q_ids = $is_editing ? $wpdb->get_col($wpdb->prepare("SELECT question_id FROM $q_table WHERE group_id = %d", $group_id)) : [];
