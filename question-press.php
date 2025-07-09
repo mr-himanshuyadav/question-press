@@ -1062,6 +1062,8 @@ function qp_get_quick_edit_form_ajax() {
 
         .form-row-flex { display: flex; gap: 1rem; }
         .form-group-half { flex: 1; }
+
+        .quick-edit-form-wrapper p.submit button.button-secondary {margin-right: 10px;}
         
         .labels-group { display: flex; flex-wrap: wrap; gap: .5rem 1rem; padding: .5rem; border: 1px solid #ddd; background: #fff; }
         .inline-checkbox { white-space: nowrap; }
