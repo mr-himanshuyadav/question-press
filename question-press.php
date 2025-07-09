@@ -333,12 +333,6 @@ function qp_handle_topic_forms() {
 function qp_all_questions_page_cb() {
     $list_table = new QP_Questions_List_Table();
     $list_table->prepare_items();
-    global $wpdb;
-    if (!empty($list_table->items)) {
-        foreach ($list_table->items as &$item) {
-            $item['group_id'] = $wpdb->get_var($wpdb->prepare("SELECT group_id FROM {$wpdb->prefix}qp_questions WHERE question_id = %d", $item['question_id']));
-        }
-    }
     ?>
     <div class="wrap">
         <h1 class="wp-heading-inline">All Questions</h1>
