@@ -216,13 +216,14 @@ function qp_activate_plugin()
     ) $charset_collate;";
     dbDelta($sql_sessions);
 
-    // Table: User Attempts
+    // --- UPDATED: User Attempts table with selected_option_id ---
     $table_attempts = $wpdb->prefix . 'qp_user_attempts';
     $sql_attempts = "CREATE TABLE $table_attempts (
         attempt_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
         session_id BIGINT(20) UNSIGNED NOT NULL,
         user_id BIGINT(20) UNSIGNED NOT NULL,
         question_id BIGINT(20) UNSIGNED NOT NULL,
+        selected_option_id BIGINT(20) UNSIGNED,
         is_correct BOOLEAN,
         attempt_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY (attempt_id),
@@ -886,21 +887,29 @@ function qp_get_question_data_ajax() {
 }
 add_action('wp_ajax_get_question_data', 'qp_get_question_data_ajax');
 
-function qp_check_answer_ajax()
-{
+function qp_check_answer_ajax() {
     check_ajax_referer('qp_practice_nonce', 'nonce');
     $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
     $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
     $option_id = isset($_POST['option_id']) ? absint($_POST['option_id']) : 0;
-    if (!$session_id || !$question_id || !$option_id) {
-        wp_send_json_error(['message' => 'Invalid data submitted.']);
-    }
+    if (!$session_id || !$question_id || !$option_id) { wp_send_json_error(['message' => 'Invalid data submitted.']); }
+
     global $wpdb;
     $o_table = $wpdb->prefix . 'qp_options';
     $attempts_table = $wpdb->prefix . 'qp_user_attempts';
+    
     $is_correct = (bool) $wpdb->get_var($wpdb->prepare("SELECT is_correct FROM $o_table WHERE question_id = %d AND option_id = %d", $question_id, $option_id));
     $correct_option_id = $wpdb->get_var($wpdb->prepare("SELECT option_id FROM $o_table WHERE question_id = %d AND is_correct = 1", $question_id));
-    $wpdb->insert($attempts_table, ['session_id' => $session_id, 'user_id' => get_current_user_id(), 'question_id' => $question_id, 'is_correct' => $is_correct ? 1 : 0]);
+
+    // --- UPDATED: Save the selected option ID along with the attempt ---
+    $wpdb->insert($attempts_table, [
+        'session_id' => $session_id,
+        'user_id' => get_current_user_id(),
+        'question_id' => $question_id,
+        'selected_option_id' => $option_id,
+        'is_correct' => $is_correct ? 1 : 0
+    ]);
+    
     wp_send_json_success(['is_correct' => $is_correct, 'correct_option_id' => $correct_option_id]);
 }
 add_action('wp_ajax_check_answer', 'qp_check_answer_ajax');
