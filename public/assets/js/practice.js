@@ -405,13 +405,23 @@ jQuery(document).ready(function ($) {
                 if (questionData.topic_name) subjectHtml += ' / ' + questionData.topic_name;
                 $('#qp-question-subject').html(subjectHtml);
                 $('#qp-question-id').text('Question ID: ' + questionData.custom_question_id);
-                if (response.data.is_admin && (questionData.source_file || questionData.source_page || questionData.source_number)) {
-                    var sourceInfo = [];
-                    if (questionData.source_file) sourceInfo.push('File: ' + questionData.source_file);
-                    if (questionData.source_page) sourceInfo.push('Page: ' + questionData.source_page);
-                    if (questionData.source_number) sourceInfo.push('No: ' + questionData.source_number);
-                    if (sourceInfo.length > 0) $('#qp-question-source').html(sourceInfo.join(' | ')).show();
-                }
+var sourceDisplayArea = $('#qp-question-source').hide().empty();
+// Check if the permission flag is true AND if there is actually any source data to show
+if (response.data.is_admin && (questionData.source_name || questionData.section_name || questionData.question_number_in_section)) {
+    var sourceInfo = [];
+    if (questionData.source_name) {
+        sourceInfo.push('<strong>Source:</strong> ' + questionData.source_name);
+    }
+    if (questionData.section_name) {
+        sourceInfo.push('<strong>Section:</strong> ' + questionData.section_name);
+    }
+    if (questionData.question_number_in_section) {
+        sourceInfo.push('<strong>Number:</strong> ' + questionData.question_number_in_section);
+    }
+    if (sourceInfo.length > 0) {
+        sourceDisplayArea.html(sourceInfo.join(' | ')).show();
+    }
+}
                 $('#qp-question-text-area').html(questionData.question_text);
 
                 // --- Render options ---

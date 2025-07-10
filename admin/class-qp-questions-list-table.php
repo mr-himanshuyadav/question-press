@@ -224,8 +224,7 @@ class QP_Questions_List_Table extends WP_List_Table
     <?php
     }
 
-    public function prepare_items()
-{
+    public function prepare_items() {
     global $wpdb;
     $this->process_bulk_action();
 
@@ -245,14 +244,13 @@ class QP_Questions_List_Table extends WP_List_Table
     $g_table = $wpdb->prefix . 'qp_question_groups';
     $s_table = $wpdb->prefix . 'qp_subjects';
     $ql_table = $wpdb->prefix . 'qp_question_labels';
+    $src_table = $wpdb->prefix . 'qp_sources';
+    $sec_table = $wpdb->prefix . 'qp_source_sections';
 
     $where_conditions = [];
-    
-    // --- Build base query for Question IDs ---
     $id_query_from = "FROM {$q_table} q";
     $id_query_joins = " LEFT JOIN {$g_table} g ON q.group_id = g.group_id";
 
-    // --- Handle Filters ---
     $current_status = isset($_REQUEST['status']) ? sanitize_key($_REQUEST['status']) : 'all';
     if ($current_status === 'trash') { $where_conditions[] = "q.status = 'trash'"; }
     else if ($current_status === 'needs_review') {
@@ -269,7 +267,6 @@ class QP_Questions_List_Table extends WP_List_Table
         $where_conditions[] = $wpdb->prepare("(q.question_text LIKE %s OR q.custom_question_id LIKE %s)", $search_term, $search_term);
     }
 
-    // --- Handle Multi-Label Filter ---
     $selected_label_ids = isset($_REQUEST['filter_by_label']) ? array_filter(array_map('absint', (array)$_REQUEST['filter_by_label'])) : [];
     if (!empty($selected_label_ids)) {
         foreach($selected_label_ids as $index => $label_id) {
@@ -280,34 +277,34 @@ class QP_Questions_List_Table extends WP_List_Table
     }
 
     $where_clause = ' WHERE ' . implode(' AND ', $where_conditions);
-    
-    // --- Execute Query ---
     $id_query = "SELECT DISTINCT q.question_id {$id_query_from} {$id_query_joins} {$where_clause}";
     $matching_question_ids = $wpdb->get_col($id_query);
-    
+
     $total_items = count($matching_question_ids);
 
     if (empty($matching_question_ids)) {
         $this->items = [];
     } else {
         $ids_placeholder = implode(',', $matching_question_ids);
-        $data_query = "SELECT q.*, s.subject_name, g.group_id, g.direction_text, g.direction_image_id
+        $data_query = "SELECT q.*, s.subject_name, g.group_id, g.direction_text, g.direction_image_id, g.is_pyq,
+                        src.source_name, sec.section_name
             FROM {$q_table} q
             LEFT JOIN {$g_table} g ON q.group_id = g.group_id
             LEFT JOIN {$s_table} s ON g.subject_id = s.subject_id
+            LEFT JOIN {$src_table} src ON q.source_id = src.source_id
+            LEFT JOIN {$sec_table} sec ON q.section_id = sec.section_id
             WHERE q.question_id IN ({$ids_placeholder})
             ORDER BY {$orderby} {$order}
             LIMIT {$per_page} OFFSET {$offset}";
-        
+
         $this->items = $wpdb->get_results($data_query, ARRAY_A);
     }
-    
-    // Fetch labels for the items on the current page
+
     $question_ids_on_page = wp_list_pluck($this->items, 'question_id');
     if (!empty($question_ids_on_page)) {
         $labels_placeholder = implode(',', $question_ids_on_page);
         $labels_results = $wpdb->get_results("SELECT ql.question_id, l.label_name, l.label_color FROM {$ql_table} ql JOIN {$wpdb->prefix}qp_labels l ON ql.label_id = l.label_id WHERE ql.question_id IN ({$labels_placeholder})");
-        
+
         $labels_by_question_id = [];
         foreach ($labels_results as $label) {
             $labels_by_question_id[$label->question_id][] = $label;
@@ -551,26 +548,25 @@ public function column_question_text($item) {
 }
 
     public function column_is_pyq($item)
-    {
-        return $item['is_pyq'] ? 'Yes' : 'No';
-    }
+{
+    return $item['is_pyq'] ? 'Yes' : 'No';
+}
+    
 
-    /**
-     * NEW: Custom renderer for our new Source column
-     */
-    public function column_source($item) {
-        $source_info = [];
-        if (!empty($item['source_file'])) {
-            $source_info[] = '<strong>File:</strong> ' . esc_html($item['source_file']);
-        }
-        if (!empty($item['source_page'])) {
-            $source_info[] = '<strong>Page:</strong> ' . esc_html($item['source_page']);
-        }
-        if (!empty($item['source_number'])) {
-            $source_info[] = '<strong>No:</strong> ' . esc_html($item['source_number']);
-        }
-        return implode('<br>', $source_info);
+public function column_source($item) {
+    $source_info = [];
+    // Reads from the joined source and section data
+    if (!empty($item['source_name'])) {
+        $source_info[] = '<strong>Source:</strong> ' . esc_html($item['source_name']);
     }
+    if (!empty($item['section_name'])) {
+        $source_info[] = '<strong>Section:</strong> ' . esc_html($item['section_name']);
+    }
+    if (!empty($item['question_number_in_section'])) {
+        $source_info[] = '<strong>No:</strong> ' . esc_html($item['question_number_in_section']);
+    }
+    return implode('<br>', $source_info);
+}
 
     public function column_default($item, $column_name) {
         return isset($item[$column_name]) ? esc_html($item[$column_name]) : 'N/A';
