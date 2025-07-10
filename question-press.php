@@ -15,7 +15,9 @@ define('QP_PLUGIN_URL', plugin_dir_url(QP_PLUGIN_FILE));
 
 require_once QP_PLUGIN_DIR . 'admin/class-qp-subjects-page.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-labels-page.php';
-require_once QP_PLUGIN_DIR . 'admin/class-qp-topics-page.php'; 
+require_once QP_PLUGIN_DIR . 'admin/class-qp-topics-page.php';
+require_once QP_PLUGIN_DIR . 'admin/class-qp-exams-page.php'; // <-- ADD THIS
+require_once QP_PLUGIN_DIR . 'admin/class-qp-sources-page.php'; 
 require_once QP_PLUGIN_DIR . 'admin/class-qp-import-page.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-importer.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-export-page.php';
@@ -253,25 +255,64 @@ function qp_deactivate_plugin() {}
 register_deactivation_hook(QP_PLUGIN_FILE, 'qp_deactivate_plugin');
 
 
-// ADMIN MENU & SCRIPTS SETUP
+// In question-press.php, replace the existing qp_admin_menu function
 function qp_admin_menu() {
-    // Add top-level menu page and store the returned hook suffix
+    // Add top-level menu page for "All Questions" and store the hook
     $hook = add_menu_page('All Questions', 'Question Press', 'manage_options', 'question-press', 'qp_all_questions_page_cb', 'dashicons-forms', 25);
-    
-    // Use this hook to add screen options
+
+    // Use this hook to add screen options for the questions list table
     add_action("load-{$hook}", 'qp_add_screen_options');
+
+    // Primary Submenu Pages
     add_submenu_page('question-press', 'All Questions', 'All Questions', 'manage_options', 'question-press', 'qp_all_questions_page_cb');
     add_submenu_page('question-press', 'Add New', 'Add New', 'manage_options', 'qp-question-editor', ['QP_Question_Editor_Page', 'render']);
-    add_submenu_page(null, 'Edit Question', 'Edit Question', 'manage_options', 'qp-edit-group', ['QP_Question_Editor_Page', 'render']);
+
+    // --- NEW: Unified Organization Page ---
+    add_submenu_page('question-press', 'Organization', 'Organization', 'manage_options', 'qp-organization', 'qp_render_organization_page');
+
     add_submenu_page('question-press', 'Import', 'Import', 'manage_options', 'qp-import', ['QP_Import_Page', 'render']);
     add_submenu_page('question-press', 'Export', 'Export', 'manage_options', 'qp-export', ['QP_Export_Page', 'render']);
-    add_submenu_page('question-press', 'Subjects', 'Subjects', 'manage_options', 'qp-subjects', ['QP_Subjects_Page', 'render']);
-    add_submenu_page('question-press', 'Topics', 'Topics', 'manage_options', 'qp-topics', ['QP_Topics_Page', 'render']); // *** ADD THIS LINE ***
-    add_submenu_page('question-press', 'Labels', 'Labels', 'manage_options', 'qp-labels', ['QP_Labels_Page', 'render']);
     add_submenu_page('question-press', 'Logs', 'Logs', 'manage_options', 'qp-logs', ['QP_Logs_Page', 'render']);
     add_submenu_page('question-press', 'Settings', 'Settings', 'manage_options', 'qp-settings', ['QP_Settings_Page', 'render']);
+
+    // Hidden pages (for editing links and backwards compatibility)
+    add_submenu_page(null, 'Edit Question', 'Edit Question', 'manage_options', 'qp-edit-group', ['QP_Question_Editor_Page', 'render']);
 }
 add_action('admin_menu', 'qp_admin_menu');
+
+
+function qp_render_organization_page() {
+    $tabs = [
+        'subjects' => ['label' => 'Subjects', 'callback' => ['QP_Subjects_Page', 'render']],
+        'topics'   => ['label' => 'Topics', 'callback' => ['QP_Topics_Page', 'render']],
+        'labels'   => ['label' => 'Labels', 'callback' => ['QP_Labels_Page', 'render']],
+        'exams'    => ['label' => 'Exams', 'callback' => ['QP_Exams_Page', 'render']],
+        'sources'  => ['label' => 'Sources', 'callback' => ['QP_Sources_Page', 'render']],
+    ];
+    $active_tab = isset($_GET['tab']) && array_key_exists($_GET['tab'], $tabs) ? $_GET['tab'] : 'subjects';
+    ?>
+    <div class="wrap">
+        <h1 class="wp-heading-inline">Organization</h1>
+        <hr class="wp-header-end">
+
+        <nav class="nav-tab-wrapper wp-clearfix" aria-label="Secondary menu">
+            <?php
+            foreach ($tabs as $tab_id => $tab_data) {
+                $class = ($tab_id === $active_tab) ? ' nav-tab-active' : '';
+                echo '<a href="?page=qp-organization&tab=' . esc_attr($tab_id) . '" class="nav-tab' . esc_attr($class) . '">' . esc_html($tab_data['label']) . '</a>';
+            }
+            ?>
+        </nav>
+
+        <div class="tab-content" style="margin-top: 1.5rem;">
+            <?php
+            // Call the render method for the active tab
+            call_user_func($tabs[$active_tab]['callback']);
+            ?>
+        </div>
+    </div>
+    <?php
+}
 
 // CORRECTED: Function to add screen options
 function qp_add_screen_options() {

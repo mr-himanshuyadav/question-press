@@ -91,16 +91,6 @@ class QP_Subjects_Page {
         // Get all subjects from the database
         $subjects = $wpdb->get_results("SELECT * FROM $table_name ORDER BY subject_name ASC");
         ?>
-        <div class="wrap">
-            <h1 class="wp-heading-inline">Subjects</h1>
-
-            <?php if (!empty($message)) : ?>
-                <div id="message" class="notice notice-<?php echo esc_attr($message_type); ?> is-dismissible">
-                    <p><?php echo esc_html($message); ?></p>
-                </div>
-            <?php endif; ?>
-
-            <hr class="wp-header-end">
 
             <div id="col-container" class="wp-clearfix">
                 <div id="col-left">

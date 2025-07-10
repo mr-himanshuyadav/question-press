@@ -89,16 +89,7 @@ class QP_Labels_Page {
         // Get all labels from the database
         $labels = $wpdb->get_results("SELECT * FROM $table_name ORDER BY is_default DESC, label_name ASC");
         ?>
-        <div class="wrap">
-            <h1 class="wp-heading-inline">Labels</h1>
-
-            <?php if (!empty($message)) : ?>
-                <div id="message" class="notice notice-<?php echo esc_attr($message_type); ?> is-dismissible">
-                    <p><?php echo esc_html($message); ?></p>
-                </div>
-            <?php endif; ?>
-
-            <hr class="wp-header-end">
+                
 
             <div id="col-container" class="wp-clearfix">
                 <div id="col-left">

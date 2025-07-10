@@ -34,16 +34,6 @@ class QP_Topics_Page {
             ORDER BY s.subject_name, t.topic_name ASC
         ");
         ?>
-        <div class="wrap">
-            <h1 class="wp-heading-inline">Topics</h1>
-
-            <?php if (!empty($message)) : ?>
-                <div id="message" class="notice notice-<?php echo esc_attr($message_type); ?> is-dismissible">
-                    <p><?php echo esc_html($message); ?></p>
-                </div>
-            <?php endif; ?>
-
-            <hr class="wp-header-end">
 
             <div id="col-container" class="wp-clearfix">
                 <div id="col-left">
