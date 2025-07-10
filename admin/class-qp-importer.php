@@ -61,51 +61,29 @@ class QP_Importer {
             "SELECT post_id FROM {$wpdb->postmeta} WHERE meta_key = '_wp_attached_file' AND meta_value LIKE %s",
             '%' . $wpdb->esc_like($filename)
         ));
-
-        if ($post_id) {
-            return (int) $post_id;
-        }
-        return null;
+        return $post_id ? (int) $post_id : null;
     }
 
     private function get_or_upload_image($image_filename, $temp_dir) {
-        if (empty($image_filename)) {
-            return null;
-        }
-
-        $existing_attachment_id = $this->find_attachment_id_by_filename($image_filename);
-        if ($existing_attachment_id) {
-            return ['id' => $existing_attachment_id, 'is_new' => false];
+        if (empty($image_filename)) return null;
+        if ($existing_id = $this->find_attachment_id_by_filename($image_filename)) {
+            return ['id' => $existing_id, 'is_new' => false];
         }
 
         $image_path = trailingslashit($temp_dir) . 'images/' . $image_filename;
+        if (!file_exists($image_path)) return null;
 
-        if (!file_exists($image_path)) {
-            return null;
-        }
-        
         require_once(ABSPATH . 'wp-admin/includes/image.php');
         require_once(ABSPATH . 'wp-admin/includes/file.php');
         require_once(ABSPATH . 'wp-admin/includes/media.php');
 
-        $temp_file = tmpfile();
-        fwrite($temp_file, file_get_contents($image_path));
-        $meta = stream_get_meta_data($temp_file);
-        
-        $file_array = [
-            'name'     => $image_filename,
-            'tmp_name' => $meta['uri']
-        ];
-        
+        $file_array = ['name' => $image_filename, 'tmp_name' => $image_path];
         $attachment_id = media_handle_sideload($file_array, 0);
-        
-        fclose($temp_file);
 
         if (is_wp_error($attachment_id)) {
             error_log('Question Press Importer Error: ' . $attachment_id->get_error_message());
             return null;
         }
-
         return ['id' => $attachment_id, 'is_new' => true];
     }
 
@@ -132,7 +110,6 @@ class QP_Importer {
         }
 
         foreach ($data['questionGroups'] as $group) {
-            // --- Subject Handling ---
             $subject_name = !empty($group['subject']) ? sanitize_text_field($group['subject']) : 'Uncategorized';
             $subject_id = $wpdb->get_var($wpdb->prepare("SELECT subject_id FROM $subjects_table WHERE subject_name = %s", $subject_name));
             if (!$subject_id) {
@@ -140,7 +117,6 @@ class QP_Importer {
                 $subject_id = $wpdb->insert_id;
             }
 
-            // --- Source Handling ---
             $source_id = null;
             if (!empty($group['sourceName'])) {
                 $source_name = sanitize_text_field($group['sourceName']);
@@ -151,7 +127,6 @@ class QP_Importer {
                 }
             }
             
-            // --- Section Handling ---
             $section_id = null;
             if ($source_id && !empty($group['sectionName'])) {
                 $section_name = sanitize_text_field($group['sectionName']);
@@ -162,7 +137,16 @@ class QP_Importer {
                 }
             }
 
-            // --- Direction Handling ---
+            $exam_id = null;
+            if (!empty($group['examName'])) {
+                $exam_name = sanitize_text_field($group['examName']);
+                $exam_id = $wpdb->get_var($wpdb->prepare("SELECT exam_id FROM $exams_table WHERE exam_name = %s", $exam_name));
+                if (!$exam_id) {
+                    $wpdb->insert($exams_table, ['exam_name' => $exam_name]);
+                    $exam_id = $wpdb->insert_id;
+                }
+            }
+
             $direction_image_id = null;
             if (isset($group['Direction']['image'])) {
                 $image_result = $this->get_or_upload_image($group['Direction']['image'], $temp_dir);
@@ -171,17 +155,19 @@ class QP_Importer {
                     if ($image_result['is_new']) $new_images_count++;
                 }
             }
-            $direction_text = isset($group['Direction']['text']) ? $group['Direction']['text'] : null;
 
+            // --- CORRECTED: Insert group data, including new PYQ fields ---
             $wpdb->insert($groups_table, [
-                'direction_text' => $direction_text,
+                'direction_text' => isset($group['Direction']['text']) ? $group['Direction']['text'] : null,
                 'direction_image_id' => $direction_image_id,
-                'subject_id' => $subject_id
+                'subject_id' => $subject_id,
+                'is_pyq' => isset($group['isPYQ']) ? (int)$group['isPYQ'] : 0,
+                'exam_id' => $exam_id,
+                'pyq_year' => isset($group['pyqYear']) ? sanitize_text_field($group['pyqYear']) : null,
             ]);
             $group_id = $wpdb->insert_id;
 
             foreach ($group['questions'] as $question) {
-                // --- Topic Handling ---
                 $topic_id = null;
                 if (!empty($question['topicName'])) {
                     $topic_name = sanitize_text_field($question['topicName']);
@@ -192,22 +178,12 @@ class QP_Importer {
                     }
                 }
                 
-                // --- Exam Handling ---
-                $exam_id = null;
-                if (!empty($question['examName'])) {
-                    $exam_name = sanitize_text_field($question['examName']);
-                    $exam_id = $wpdb->get_var($wpdb->prepare("SELECT exam_id FROM $exams_table WHERE exam_name = %s", $exam_name));
-                    if (!$exam_id) {
-                        $wpdb->insert($exams_table, ['exam_name' => $exam_name]);
-                        $exam_id = $wpdb->insert_id;
-                    }
-                }
-                
                 $question_text = $question['questionText'];
                 $hash = md5(strtolower(trim(preg_replace('/\s+/', '', $question_text))));
                 $existing_question_id = $wpdb->get_var($wpdb->prepare("SELECT question_id FROM $questions_table WHERE question_text_hash = %s", $hash));
                 $next_custom_id = get_option('qp_next_custom_question_id', 1000);
 
+                // --- CORRECTED: Insert question data without PYQ fields ---
                 $wpdb->insert($questions_table, [
                     'custom_question_id' => $next_custom_id,
                     'group_id' => $group_id,
@@ -217,9 +193,6 @@ class QP_Importer {
                     'question_number_in_section' => isset($question['questionNumber']) ? sanitize_text_field($question['questionNumber']) : null,
                     'question_text' => $question['questionText'],
                     'question_text_hash' => $hash,
-                    'is_pyq' => isset($question['isPYQ']) ? (int)$question['isPYQ'] : 0,
-                    'exam_id' => $exam_id,
-                    'pyq_year' => isset($question['pyqYear']) ? sanitize_text_field($question['pyqYear']) : null,
                     'duplicate_of' => $existing_question_id ? $existing_question_id : null
                 ]);
                 $question_id = $wpdb->insert_id;
@@ -241,10 +214,7 @@ class QP_Importer {
 
                 if (!empty($labels_to_apply)) {
                     foreach ($labels_to_apply as $label_id) {
-                        $wpdb->query($wpdb->prepare(
-                            "INSERT IGNORE INTO $question_labels_table (question_id, label_id) VALUES (%d, %d)",
-                            $question_id, $label_id
-                        ));
+                        $wpdb->query($wpdb->prepare("INSERT IGNORE INTO $question_labels_table (question_id, label_id) VALUES (%d, %d)", $question_id, $label_id));
                     }
                 }
             }
@@ -252,18 +222,12 @@ class QP_Importer {
         return ['imported' => $imported_count, 'duplicates' => $duplicate_count, 'new_images' => $new_images_count];
     }
 
-
     private function cleanup($dir) {
         if (!is_dir($dir)) return;
-
         $it = new RecursiveDirectoryIterator($dir, RecursiveDirectoryIterator::SKIP_DOTS);
         $files = new RecursiveIteratorIterator($it, RecursiveIteratorIterator::CHILD_FIRST);
         foreach($files as $file) {
-            if ($file->isDir()){
-                rmdir($file->getRealPath());
-            } else {
-                unlink($file->getRealPath());
-            }
+            if ($file->isDir()){ rmdir($file->getRealPath()); } else { unlink($file->getRealPath()); }
         }
         rmdir($dir);
     }

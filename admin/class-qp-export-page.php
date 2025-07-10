@@ -23,7 +23,7 @@ class QP_Export_Page {
             <h1 class="wp-heading-inline">Export Questions</h1>
             <hr class="wp-header-end">
 
-            <p>Select the subjects you wish to export. All questions within the selected subjects will be exported into a single <code>.zip</code> file.</p>
+            <p>Select the subjects you wish to export. All questions within the selected subjects will be exported into a single <code>.zip</code> file conforming to schema v2.2.</p>
 
             <form method="post" action="admin.php?page=qp-export">
                 <?php wp_nonce_field('qp_export_nonce_action', 'qp_export_nonce_field'); ?>
@@ -63,58 +63,88 @@ class QP_Export_Page {
         $g_table = $wpdb->prefix . 'qp_question_groups';
         $o_table = $wpdb->prefix . 'qp_options';
         $s_table = $wpdb->prefix . 'qp_subjects';
-        $t_table = $wpdb->prefix . 'qp_topics'; // New table
+        $t_table = $wpdb->prefix . 'qp_topics';
+        $src_table = $wpdb->prefix . 'qp_sources';
+        $sec_table = $wpdb->prefix . 'qp_source_sections';
+        $e_table = $wpdb->prefix . 'qp_exams';
 
-        $questions_data = $wpdb->get_results($wpdb->prepare(
-            "SELECT q.question_id, q.custom_question_id, q.question_text, q.is_pyq, 
-                    g.group_id, g.direction_text, s.subject_name, t.topic_name
-             FROM {$q_table} q
-             LEFT JOIN {$g_table} g ON q.group_id = g.group_id
+        // Get all groups within the selected subjects
+        $groups_data = $wpdb->get_results($wpdb->prepare(
+            "SELECT g.group_id, g.direction_text, g.direction_image_id, g.is_pyq, g.pyq_year,
+                    s.subject_name, e.exam_name
+             FROM {$g_table} g
              LEFT JOIN {$s_table} s ON g.subject_id = s.subject_id
-             LEFT JOIN {$t_table} t ON q.topic_id = t.topic_id
+             LEFT JOIN {$e_table} e ON g.exam_id = e.exam_id
              WHERE g.subject_id IN ($subject_ids_placeholder)",
             $subject_ids
         ));
 
-        if (empty($questions_data)) {
-            wp_die('No questions found for the selected subjects.');
+        if (empty($groups_data)) {
+            wp_die('No question groups found for the selected subjects.');
         }
 
-        $grouped_by_group = [];
-        foreach ($questions_data as $q) {
-            if (!isset($grouped_by_group[$q->group_id])) {
-                $grouped_by_group[$q->group_id] = [
-                    'groupId' => 'db_group_' . $q->group_id,
-                    'subject' => $q->subject_name,
-                    'Direction' => ['text' => $q->direction_text, 'image' => null],
-                    'questions' => []
+        $final_question_groups = [];
+
+        foreach ($groups_data as $group) {
+            // Get all questions for the current group
+            $questions_in_group = $wpdb->get_results($wpdb->prepare(
+                "SELECT q.question_id, q.custom_question_id, q.question_text, q.question_number_in_section,
+                        t.topic_name, src.source_name, sec.section_name
+                 FROM {$q_table} q
+                 LEFT JOIN {$t_table} t ON q.topic_id = t.topic_id
+                 LEFT JOIN {$src_table} src ON q.source_id = src.source_id
+                 LEFT JOIN {$sec_table} sec ON q.section_id = sec.section_id
+                 WHERE q.group_id = %d",
+                $group->group_id
+            ));
+            
+            if(empty($questions_in_group)) continue; // Skip groups with no questions
+
+            $direction_image_name = $group->direction_image_id ? basename(get_attached_file($group->direction_image_id)) : null;
+
+            $group_output = [
+                'groupId'       => 'db_group_' . $group->group_id,
+                'subject'       => $group->subject_name,
+                // These source fields are taken from the first question, assuming they are consistent for the group
+                'sourceName'    => $questions_in_group[0]->source_name,
+                'sectionName'   => $questions_in_group[0]->section_name,
+                'isPYQ'         => (bool)$group->is_pyq,
+                'examName'      => $group->exam_name,
+                'pyqYear'       => $group->pyq_year,
+                'Direction'     => [
+                    'text'  => $group->direction_text,
+                    'image' => $direction_image_name
+                ],
+                'questions'     => []
+            ];
+
+            foreach ($questions_in_group as $question) {
+                $options = $wpdb->get_results($wpdb->prepare("SELECT option_text, is_correct FROM {$o_table} WHERE question_id = %d", $question->question_id));
+                $options_array = [];
+                foreach ($options as $opt) {
+                    $options_array[] = ['optionText' => $opt->option_text, 'isCorrect' => (bool)$opt->is_correct];
+                }
+
+                $group_output['questions'][] = [
+                    'questionId'        => 'db_question_' . $question->question_id,
+                    'topicName'         => $question->topic_name,
+                    'questionText'      => $question->question_text,
+                    'questionNumber'    => $question->question_number_in_section,
+                    'options'           => $options_array,
                 ];
             }
-
-            $options = $wpdb->get_results($wpdb->prepare("SELECT option_text, is_correct FROM {$o_table} WHERE question_id = %d", $q->question_id));
-            $options_array = [];
-            foreach ($options as $opt) {
-                $options_array[] = ['optionText' => $opt->option_text, 'isCorrect' => (bool)$opt->is_correct];
-            }
-
-            $grouped_by_group[$q->group_id]['questions'][] = [
-                'questionId' => $q->custom_question_id ? 'custom_' . $q->custom_question_id : 'db_' . $q->question_id,
-                'questionText' => $q->question_text,
-                'topicName' => $q->topic_name, // Add topic name to the export
-                'isPYQ' => (bool)$q->is_pyq,
-                'options' => $options_array,
-                'source' => null
-            ];
+            $final_question_groups[] = $group_output;
         }
+
 
         $filename = 'qp-export-' . date('Y-m-d') . '.zip';
         $json_filename = 'questions.json';
 
         $final_json = [
-            'schemaVersion' => '1.3', // Increment schema version
+            'schemaVersion' => '2.2',
             'exportTimestamp' => date('c'),
             'sourceFile' => 'database_export',
-            'questionGroups' => array_values($grouped_by_group)
+            'questionGroups' => $final_question_groups
         ];
         
         $json_data = json_encode($final_json, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
