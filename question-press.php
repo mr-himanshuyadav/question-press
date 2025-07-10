@@ -1512,16 +1512,42 @@ function qp_run_unified_data_migration() {
     $sources_table = $wpdb->prefix . 'qp_sources';
     $subjects_table = $wpdb->prefix . 'qp_subjects';
 
-    // === STEP 1 & 2: MIGRATE SOURCES AND FIX ORPHANS ===
+    // === STEP 1: MIGRATE LEGACY source_file to qp_sources TABLE ===
     if ($wpdb->get_col("SHOW COLUMNS FROM {$questions_table} LIKE 'source_file'")) {
-        // (Logic for steps 1 and 2 remains the same)
-        $messages[] = "Legacy source migration logic executed.";
+        $old_source_files = $wpdb->get_col("SELECT DISTINCT source_file FROM {$questions_table} WHERE source_file IS NOT NULL AND source_file != ''");
+        if (!empty($old_source_files)) {
+            $migrated_source_count = 0;
+            foreach ($old_source_files as $source_file_name) {
+                $existing_source_id = $wpdb->get_var($wpdb->prepare("SELECT source_id FROM {$sources_table} WHERE source_name = %s", $source_file_name));
+                if (null === $existing_source_id) {
+                    $wpdb->insert($sources_table, ['source_name' => $source_file_name, 'description' => 'Migrated from old source file.', 'subject_id' => 0]);
+                    $new_source_id = $wpdb->insert_id;
+                    $migrated_source_count++;
+                } else {
+                    $new_source_id = $existing_source_id;
+                }
+                $wpdb->update($questions_table, ['source_id' => $new_source_id], ['source_file' => $source_file_name]);
+            }
+            if ($migrated_source_count > 0) $messages[] = "Step 1: Created {$migrated_source_count} new entries in the Sources table from legacy data.";
+        }
+    }
+
+    // === STEP 2: ASSIGN ORPHANED SOURCES TO "UNCATEGORIZED" SUBJECT ===
+    $uncategorized_id = $wpdb->get_var($wpdb->prepare("SELECT subject_id FROM {$subjects_table} WHERE subject_name = %s", 'Uncategorized'));
+    if ($uncategorized_id) {
+        $updated_rows = $wpdb->update($sources_table, ['subject_id' => $uncategorized_id], ['subject_id' => 0]);
+        if ($updated_rows > 0) $messages[] = "Step 2: Assigned {$updated_rows} orphaned sources to the 'Uncategorized' subject.";
     }
 
     // === STEP 3: MIGRATE LEGACY source_number TO question_number_in_section ===
     if ($wpdb->get_col("SHOW COLUMNS FROM {$questions_table} LIKE 'source_number'")) {
-         // (Logic for step 3 remains the same)
-         $messages[] = "Legacy question number migration logic executed.";
+        $questions_to_migrate_num = $wpdb->get_results("SELECT question_id, source_number FROM {$questions_table} WHERE source_number IS NOT NULL AND (question_number_in_section IS NULL OR question_number_in_section = '')");
+        if (!empty($questions_to_migrate_num)) {
+            foreach ($questions_to_migrate_num as $q) {
+                $wpdb->update($questions_table, ['question_number_in_section' => $q->source_number], ['question_id' => $q->question_id]);
+            }
+            $messages[] = "Step 3: Migrated question numbers for " . count($questions_to_migrate_num) . " questions.";
+        }
     }
     
     // === STEP 4 (IMPROVED): MIGRATE PYQ STATUS TO GROUPS ===

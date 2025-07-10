@@ -416,7 +416,7 @@ if (response.data.is_admin && (questionData.source_name || questionData.section_
         sourceInfo.push('<strong>Section:</strong> ' + questionData.section_name);
     }
     if (questionData.question_number_in_section) {
-        sourceInfo.push('<strong>Number:</strong> ' + questionData.question_number_in_section);
+        sourceInfo.push('<strong>Q:</strong> ' + questionData.question_number_in_section);
     }
     if (sourceInfo.length > 0) {
         sourceDisplayArea.html(sourceInfo.join(' | ')).show();
