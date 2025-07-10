@@ -113,6 +113,9 @@ class QP_Importer {
         global $wpdb;
         $subjects_table = $wpdb->prefix . 'qp_subjects';
         $topics_table = $wpdb->prefix . 'qp_topics';
+        $sources_table = $wpdb->prefix . 'qp_sources';
+        $sections_table = $wpdb->prefix . 'qp_source_sections';
+        $exams_table = $wpdb->prefix . 'qp_exams';
         $groups_table = $wpdb->prefix . 'qp_question_groups';
         $questions_table = $wpdb->prefix . 'qp_questions';
         $options_table = $wpdb->prefix . 'qp_options';
@@ -121,7 +124,7 @@ class QP_Importer {
 
         $imported_count = 0;
         $duplicate_count = 0;
-        $new_images_count = 0; // Initialize image counter
+        $new_images_count = 0;
         $duplicate_label_id = $wpdb->get_var($wpdb->prepare("SELECT label_id FROM $labels_table WHERE label_name = %s", 'Duplicate'));
 
         if (!isset($data['questionGroups']) || !is_array($data['questionGroups'])) {
@@ -129,25 +132,47 @@ class QP_Importer {
         }
 
         foreach ($data['questionGroups'] as $group) {
+            // --- Subject Handling ---
             $subject_name = !empty($group['subject']) ? sanitize_text_field($group['subject']) : 'Uncategorized';
             $subject_id = $wpdb->get_var($wpdb->prepare("SELECT subject_id FROM $subjects_table WHERE subject_name = %s", $subject_name));
             if (!$subject_id) {
-                $wpdb->insert($subjects_table, ['subject_name' => $subject_name, 'description' => '']);
+                $wpdb->insert($subjects_table, ['subject_name' => $subject_name]);
                 $subject_id = $wpdb->insert_id;
             }
 
+            // --- Source Handling ---
+            $source_id = null;
+            if (!empty($group['sourceName'])) {
+                $source_name = sanitize_text_field($group['sourceName']);
+                $source_id = $wpdb->get_var($wpdb->prepare("SELECT source_id FROM $sources_table WHERE source_name = %s AND subject_id = %d", $source_name, $subject_id));
+                if (!$source_id) {
+                    $wpdb->insert($sources_table, ['source_name' => $source_name, 'subject_id' => $subject_id]);
+                    $source_id = $wpdb->insert_id;
+                }
+            }
+            
+            // --- Section Handling ---
+            $section_id = null;
+            if ($source_id && !empty($group['sectionName'])) {
+                $section_name = sanitize_text_field($group['sectionName']);
+                $section_id = $wpdb->get_var($wpdb->prepare("SELECT section_id FROM $sections_table WHERE section_name = %s AND source_id = %d", $section_name, $source_id));
+                if (!$section_id) {
+                    $wpdb->insert($sections_table, ['section_name' => $section_name, 'source_id' => $source_id]);
+                    $section_id = $wpdb->insert_id;
+                }
+            }
+
+            // --- Direction Handling ---
             $direction_image_id = null;
             if (isset($group['Direction']['image'])) {
                 $image_result = $this->get_or_upload_image($group['Direction']['image'], $temp_dir);
                 if ($image_result) {
                     $direction_image_id = $image_result['id'];
-                    if ($image_result['is_new']) {
-                        $new_images_count++;
-                    }
+                    if ($image_result['is_new']) $new_images_count++;
                 }
             }
-
             $direction_text = isset($group['Direction']['text']) ? $group['Direction']['text'] : null;
+
             $wpdb->insert($groups_table, [
                 'direction_text' => $direction_text,
                 'direction_image_id' => $direction_image_id,
@@ -156,9 +181,10 @@ class QP_Importer {
             $group_id = $wpdb->insert_id;
 
             foreach ($group['questions'] as $question) {
+                // --- Topic Handling ---
                 $topic_id = null;
-                $topic_name = !empty($question['topicName']) ? sanitize_text_field($question['topicName']) : null;
-                if ($topic_name) {
+                if (!empty($question['topicName'])) {
+                    $topic_name = sanitize_text_field($question['topicName']);
                     $topic_id = $wpdb->get_var($wpdb->prepare("SELECT topic_id FROM $topics_table WHERE topic_name = %s AND subject_id = %d", $topic_name, $subject_id));
                     if (!$topic_id) {
                         $wpdb->insert($topics_table, ['topic_name' => $topic_name, 'subject_id' => $subject_id]);
@@ -166,23 +192,34 @@ class QP_Importer {
                     }
                 }
                 
+                // --- Exam Handling ---
+                $exam_id = null;
+                if (!empty($question['examName'])) {
+                    $exam_name = sanitize_text_field($question['examName']);
+                    $exam_id = $wpdb->get_var($wpdb->prepare("SELECT exam_id FROM $exams_table WHERE exam_name = %s", $exam_name));
+                    if (!$exam_id) {
+                        $wpdb->insert($exams_table, ['exam_name' => $exam_name]);
+                        $exam_id = $wpdb->insert_id;
+                    }
+                }
+                
                 $question_text = $question['questionText'];
                 $hash = md5(strtolower(trim(preg_replace('/\s+/', '', $question_text))));
-
                 $existing_question_id = $wpdb->get_var($wpdb->prepare("SELECT question_id FROM $questions_table WHERE question_text_hash = %s", $hash));
-
                 $next_custom_id = get_option('qp_next_custom_question_id', 1000);
 
                 $wpdb->insert($questions_table, [
                     'custom_question_id' => $next_custom_id,
                     'group_id' => $group_id,
                     'topic_id' => $topic_id,
+                    'source_id' => $source_id,
+                    'section_id' => $section_id,
+                    'question_number_in_section' => isset($question['questionNumber']) ? sanitize_text_field($question['questionNumber']) : null,
                     'question_text' => $question['questionText'],
                     'question_text_hash' => $hash,
                     'is_pyq' => isset($question['isPYQ']) ? (int)$question['isPYQ'] : 0,
-                    'source_file' => isset($data['sourceFile']) ? sanitize_text_field($data['sourceFile']) : null,
-                    'source_page' => isset($question['source']['page']) ? absint($question['source']['page']) : null,
-                    'source_number' => isset($question['source']['number']) ? absint($question['source']['number']) : null,
+                    'exam_id' => $exam_id,
+                    'pyq_year' => isset($question['pyqYear']) ? sanitize_text_field($question['pyqYear']) : null,
                     'duplicate_of' => $existing_question_id ? $existing_question_id : null
                 ]);
                 $question_id = $wpdb->insert_id;
@@ -214,6 +251,7 @@ class QP_Importer {
         }
         return ['imported' => $imported_count, 'duplicates' => $duplicate_count, 'new_images' => $new_images_count];
     }
+
 
     private function cleanup($dir) {
         if (!is_dir($dir)) return;

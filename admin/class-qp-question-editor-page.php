@@ -23,6 +23,7 @@ class QP_Question_Editor_Page
         $current_pyq_year = '';
         $current_source_id = 0;
         $current_section_id = 0;
+        // This is no longer needed per-question, but we keep a single instance for the group
         $current_question_num = '';
 
 
@@ -35,9 +36,14 @@ class QP_Question_Editor_Page
 
             $group_data = $wpdb->get_row($wpdb->prepare("SELECT * FROM $g_table WHERE group_id = %d", $group_id));
             if ($group_data) {
+                // --- UPDATED: Load all group-level data, including new PYQ fields ---
                 $direction_text = $group_data->direction_text;
                 $direction_image_id = $group_data->direction_image_id;
                 $current_subject_id = $group_data->subject_id;
+                $is_pyq_group = !empty($group_data->is_pyq);
+                $current_exam_id = $group_data->exam_id ?? 0;
+                $current_pyq_year = $group_data->pyq_year ?? '';
+
 
                 $questions_in_group = $wpdb->get_results($wpdb->prepare(
                     "SELECT * FROM {$q_table} WHERE group_id = %d ORDER BY question_id ASC",
@@ -45,12 +51,9 @@ class QP_Question_Editor_Page
                 ));
 
                 if (!empty($questions_in_group)) {
-                    // --- Get details from the FIRST question to populate metaboxes ---
+                    // --- Get details from the FIRST question to populate metaboxes that are shared ---
                     $first_q = $questions_in_group[0];
-                    $is_pyq_group = !empty($first_q->is_pyq);
                     $current_topic_id = $first_q->topic_id ?? 0;
-                    $current_exam_id = $first_q->exam_id ?? 0;
-                    $current_pyq_year = $first_q->pyq_year ?? '';
                     $current_source_id = $first_q->source_id ?? 0;
                     $current_section_id = $first_q->section_id ?? 0;
                     $current_question_num = $first_q->question_number_in_section ?? '';
@@ -66,7 +69,7 @@ class QP_Question_Editor_Page
 
         if (empty($questions_in_group)) {
             // Default for a new, empty form
-            $questions_in_group[] = (object)['question_id' => 0, 'custom_question_id' => 'New', 'question_text' => '', 'is_pyq' => 0, 'options' => [], 'labels' => []];
+            $questions_in_group[] = (object)['question_id' => 0, 'custom_question_id' => 'New', 'question_text' => '', 'options' => [], 'labels' => []];
         }
 
         // --- Fetch ALL data needed for the form dropdowns ---

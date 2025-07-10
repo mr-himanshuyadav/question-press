@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Plugin Name:       Question Press
  * Description:       A complete plugin for creating, managing, and practicing questions.
@@ -21,7 +22,7 @@ require_once QP_PLUGIN_DIR . 'admin/class-qp-subjects-page.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-labels-page.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-topics-page.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-exams-page.php'; // <-- ADD THIS
-require_once QP_PLUGIN_DIR . 'admin/class-qp-sources-page.php'; 
+require_once QP_PLUGIN_DIR . 'admin/class-qp-sources-page.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-import-page.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-importer.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-export-page.php';
@@ -131,34 +132,34 @@ function qp_activate_plugin() {
         }
     }
 
+    // --- UPDATED: Question Groups table with PYQ columns ---
     $table_groups = $wpdb->prefix . 'qp_question_groups';
     $sql_groups = "CREATE TABLE $table_groups (
         group_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
         direction_text LONGTEXT,
         direction_image_id BIGINT(20) UNSIGNED,
         subject_id BIGINT(20) UNSIGNED NOT NULL,
+        is_pyq BOOLEAN NOT NULL DEFAULT 0,
+        exam_id BIGINT(20) UNSIGNED DEFAULT NULL,
+        pyq_year VARCHAR(4) DEFAULT NULL,
         PRIMARY KEY (group_id),
-        KEY subject_id (subject_id)
+        KEY subject_id (subject_id),
+        KEY is_pyq (is_pyq)
     ) $charset_collate;";
     dbDelta($sql_groups);
 
-    // --- UPDATED: Questions table with new columns ---
+    // --- UPDATED: Questions table with PYQ columns removed ---
     $table_questions = $wpdb->prefix . 'qp_questions';
     $sql_questions = "CREATE TABLE $table_questions (
         question_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
         custom_question_id BIGINT(20) UNSIGNED,
         group_id BIGINT(20) UNSIGNED,
         topic_id BIGINT(20) UNSIGNED DEFAULT NULL,
-        exam_id BIGINT(20) UNSIGNED DEFAULT NULL,
         source_id BIGINT(20) UNSIGNED DEFAULT NULL,
         section_id BIGINT(20) UNSIGNED DEFAULT NULL,
         question_number_in_section VARCHAR(20) DEFAULT NULL,
         question_text LONGTEXT NOT NULL,
         question_text_hash VARCHAR(32) NOT NULL,
-        is_pyq BOOLEAN NOT NULL DEFAULT 0,
-        source_file VARCHAR(255),
-        source_page INT,
-        source_number INT,
         duplicate_of BIGINT(20) UNSIGNED DEFAULT NULL,
         import_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         status VARCHAR(20) NOT NULL DEFAULT 'publish',
@@ -167,11 +168,9 @@ function qp_activate_plugin() {
         UNIQUE KEY custom_question_id (custom_question_id),
         KEY group_id (group_id),
         KEY topic_id (topic_id),
-        KEY exam_id (exam_id),
         KEY source_id (source_id),
         KEY section_id (section_id),
         KEY status (status),
-        KEY is_pyq (is_pyq),
         KEY question_text_hash (question_text_hash)
     ) $charset_collate;";
     dbDelta($sql_questions);
@@ -261,7 +260,8 @@ register_deactivation_hook(QP_PLUGIN_FILE, 'qp_deactivate_plugin');
 
 
 // In question-press.php, replace the existing qp_admin_menu function
-function qp_admin_menu() {
+function qp_admin_menu()
+{
     // Add top-level menu page for "All Questions" and store the hook
     $hook = add_menu_page('All Questions', 'Question Press', 'manage_options', 'question-press', 'qp_all_questions_page_cb', 'dashicons-forms', 25);
 
@@ -286,7 +286,8 @@ function qp_admin_menu() {
 add_action('admin_menu', 'qp_admin_menu');
 
 
-function qp_render_organization_page() {
+function qp_render_organization_page()
+{
     $tabs = [
         'subjects' => ['label' => 'Subjects', 'callback' => ['QP_Subjects_Page', 'render']],
         'topics'   => ['label' => 'Topics', 'callback' => ['QP_Topics_Page', 'render']],
@@ -295,7 +296,7 @@ function qp_render_organization_page() {
         'sources'  => ['label' => 'Sources', 'callback' => ['QP_Sources_Page', 'render']],
     ];
     $active_tab = isset($_GET['tab']) && array_key_exists($_GET['tab'], $tabs) ? $_GET['tab'] : 'subjects';
-    ?>
+?>
     <div class="wrap">
         <h1 class="wp-heading-inline">Organize</h1>
         <p>Organize you questions using different taxanomies here.</p>
@@ -317,11 +318,12 @@ function qp_render_organization_page() {
             ?>
         </div>
     </div>
-    <?php
+<?php
 }
 
 // CORRECTED: Function to add screen options
-function qp_add_screen_options() {
+function qp_add_screen_options()
+{
     $option = 'per_page';
     $args = [
         'label'   => 'Questions per page',
@@ -333,7 +335,8 @@ function qp_add_screen_options() {
 }
 
 // CORRECTED: Function to save the screen options
-function qp_save_screen_options($status, $option, $value) {
+function qp_save_screen_options($status, $option, $value)
+{
     if ('qp_questions_per_page' === $option) {
         return $value;
     }
@@ -344,7 +347,8 @@ add_filter('set-screen-option', 'qp_save_screen_options', 10, 3);
 
 
 
-function qp_admin_enqueue_scripts($hook_suffix) {
+function qp_admin_enqueue_scripts($hook_suffix)
+{
     if (strpos($hook_suffix, 'qp-') !== false || strpos($hook_suffix, 'question-press') !== false) {
         wp_enqueue_style('wp-color-picker');
         wp_enqueue_script('wp-color-picker');
@@ -362,7 +366,7 @@ function qp_admin_enqueue_scripts($hook_suffix) {
         wp_enqueue_script('qp-multi-select-dropdown-script', QP_PLUGIN_URL . 'admin/assets/js/multi-select-dropdown.js', ['jquery'], '1.0.1', true);
     }
     if ($hook_suffix === 'question-press_page_qp-labels') {
-        add_action('admin_footer', function() {
+        add_action('admin_footer', function () {
             echo '<script>jQuery(document).ready(function($){$(".qp-color-picker").wpColorPicker();});</script>';
         });
     }
@@ -375,13 +379,14 @@ function qp_admin_enqueue_scripts($hook_suffix) {
 add_action('admin_enqueue_scripts', 'qp_admin_enqueue_scripts');
 
 // FORM & ACTION HANDLERS
-function qp_handle_form_submissions() {
+function qp_handle_form_submissions()
+{
     if (isset($_GET['page']) && $_GET['page'] === 'qp-organization') {
         QP_Sources_Page::handle_forms(); // <-- ADD THIS LINE
         QP_Topics_Page::handle_forms();
         QP_Subjects_Page::handle_forms(); // <-- ADD THIS LINE
-        QP_Labels_Page::handle_forms(); 
-        QP_Exams_Page::handle_forms(); 
+        QP_Labels_Page::handle_forms();
+        QP_Exams_Page::handle_forms();
     }
     QP_Export_Page::handle_export_submission();
     qp_handle_save_question_group();
@@ -399,7 +404,8 @@ add_action('admin_init', 'qp_run_orphan_source_migration');
 add_action('admin_notices', 'qp_show_orphan_source_notice');
 
 // *** ADD THIS ENTIRE NEW FUNCTION ***
-function qp_handle_topic_forms() {
+function qp_handle_topic_forms()
+{
     global $wpdb;
     $topics_table = $wpdb->prefix . 'qp_topics';
 
@@ -437,40 +443,60 @@ function qp_handle_topic_forms() {
     }
 }
 
-function qp_all_questions_page_cb() {
+function qp_all_questions_page_cb()
+{
     $list_table = new QP_Questions_List_Table();
     $list_table->prepare_items();
-    ?>
+?>
     <div class="wrap">
         <h1 class="wp-heading-inline">All Questions</h1>
         <a href="<?php echo admin_url('admin.php?page=qp-question-editor'); ?>" class="page-title-action">Add New</a>
         <?php if (isset($_GET['message'])) {
             $messages = ['1' => 'Question(s) updated successfully.', '2' => 'Question(s) saved successfully.'];
             $message_id = absint($_GET['message']);
-            if (isset($messages[$message_id])) { echo '<div id="message" class="notice notice-success is-dismissible"><p>' . esc_html($messages[$message_id]) . '</p></div>'; }
+            if (isset($messages[$message_id])) {
+                echo '<div id="message" class="notice notice-success is-dismissible"><p>' . esc_html($messages[$message_id]) . '</p></div>';
+            }
         } ?>
         <hr class="wp-header-end">
         <?php $list_table->views(); ?>
         <form method="post">
             <?php wp_nonce_field('bulk-questions'); ?>
-            <?php $list_table->search_box('Search Questions', 'question'); $list_table->display(); ?>
+            <?php $list_table->search_box('Search Questions', 'question');
+            $list_table->display(); ?>
         </form>
-    <style type="text/css">
-        .wp-list-table .column-custom_question_id { width: 10%; }
-        .wp-list-table .column-question_text { width: 50%; }
-        .wp-list-table .column-subject_name { width: 15%; }
-        .wp-list-table .column-source { width: 15%; }
-        .wp-list-table .column-import_date { width: 10%; }
-        .wp-list-table.questions #the-list tr td {
-        border-bottom: 1px solid rgb(174, 174, 174);
-    }
-    </style>
+        <style type="text/css">
+            .wp-list-table .column-custom_question_id {
+                width: 10%;
+            }
+
+            .wp-list-table .column-question_text {
+                width: 50%;
+            }
+
+            .wp-list-table .column-subject_name {
+                width: 15%;
+            }
+
+            .wp-list-table .column-source {
+                width: 15%;
+            }
+
+            .wp-list-table .column-import_date {
+                width: 10%;
+            }
+
+            .wp-list-table.questions #the-list tr td {
+                border-bottom: 1px solid rgb(174, 174, 174);
+            }
+        </style>
     </div>
-    <?php
+<?php
 }
 
 // ADD THIS NEW HELPER FUNCTION anywhere in question-press.php
-function get_question_custom_id($question_id) {
+function get_question_custom_id($question_id)
+{
     global $wpdb;
     return $wpdb->get_var($wpdb->prepare("SELECT custom_question_id FROM {$wpdb->prefix}qp_questions WHERE question_id = %d", $question_id));
 }
@@ -493,6 +519,8 @@ function qp_handle_save_question_group() {
     $source_id = isset($_POST['source_id']) ? absint($_POST['source_id']) : 0;
     $section_id = isset($_POST['section_id']) ? absint($_POST['section_id']) : 0;
     $question_num = isset($_POST['question_number_in_section']) ? sanitize_text_field($_POST['question_number_in_section']) : '';
+    
+    // --- UPDATED: Get group-level PYQ data from the form ---
     $is_pyq = isset($_POST['is_pyq']) ? 1 : 0;
     $exam_id = isset($_POST['exam_id']) ? absint($_POST['exam_id']) : 0;
     $pyq_year = isset($_POST['pyq_year']) ? sanitize_text_field($_POST['pyq_year']) : '';
@@ -505,12 +533,16 @@ function qp_handle_save_question_group() {
         return;
     }
 
-    // --- Group Data ---
+    // --- UPDATED: Group Data now includes the PYQ fields ---
     $group_data = [
         'direction_text' => sanitize_textarea_field($direction_text),
         'direction_image_id' => $direction_image_id,
-        'subject_id' => $subject_id
+        'subject_id' => $subject_id,
+        'is_pyq' => $is_pyq,
+        'exam_id' => $is_pyq && $exam_id > 0 ? $exam_id : null,
+        'pyq_year' => $is_pyq ? $pyq_year : null,
     ];
+
     if ($is_editing) {
         $wpdb->update("{$wpdb->prefix}qp_question_groups", $group_data, ['group_id' => $group_id]);
     } else {
@@ -531,7 +563,7 @@ function qp_handle_save_question_group() {
 
         $question_id = isset($q_data['question_id']) ? absint($q_data['question_id']) : 0;
         
-        // --- This data applies to EVERY question in the group ---
+        // --- UPDATED: This data applies to EVERY question in the group, PYQ fields removed ---
         $question_db_data = [
             'group_id' => $group_id,
             'question_text' => sanitize_textarea_field($question_text),
@@ -540,9 +572,6 @@ function qp_handle_save_question_group() {
             'source_id' => $source_id > 0 ? $source_id : null,
             'section_id' => $section_id > 0 ? $section_id : null,
             'question_number_in_section' => $question_num,
-            'is_pyq' => $is_pyq,
-            'exam_id' => $is_pyq && $exam_id > 0 ? $exam_id : null,
-            'pyq_year' => $is_pyq ? $pyq_year : null,
         ];
 
         if ($question_id > 0 && in_array($question_id, $existing_q_ids)) {
@@ -604,16 +633,18 @@ function qp_handle_save_question_group() {
 }
 
 // Public-facing hooks and AJAX handlers
-function qp_public_init() {
+function qp_public_init()
+{
     add_shortcode('question_press_practice', ['QP_Shortcodes', 'render_practice_form']);
     add_shortcode('question_press_dashboard', ['QP_Dashboard', 'render']);
 }
 add_action('init', 'qp_public_init');
 
-function qp_public_enqueue_scripts() {
+function qp_public_enqueue_scripts()
+{
     global $post;
     if (is_a($post, 'WP_Post') && (has_shortcode($post->post_content, 'question_press_practice') || has_shortcode($post->post_content, 'question_press_dashboard'))) {
-        
+
         // --- Cache Busting Logic ---
         $css_file_path = QP_PLUGIN_DIR . 'public/assets/css/practice.css';
         $css_version = file_exists($css_file_path) ? filemtime($css_file_path) : '1.0.0';
@@ -626,22 +657,22 @@ function qp_public_enqueue_scripts() {
         // --- End of Cache Busting Logic ---
 
         wp_enqueue_style('qp-practice-styles', QP_PLUGIN_URL . 'public/assets/css/practice.css', [], $css_version);
-        
+
         // Get dynamic URLs from settings
         $options = get_option('qp_settings');
         $practice_page_id = isset($options['practice_page']) ? absint($options['practice_page']) : 0;
         $dashboard_page_id = isset($options['dashboard_page']) ? absint($options['dashboard_page']) : 0;
-        
+
         $practice_page_url = $practice_page_id ? get_permalink($practice_page_id) : home_url('/');
         $dashboard_page_url = $dashboard_page_id ? get_permalink($dashboard_page_id) : home_url('/');
-        
+
         $ajax_data = [
-            'ajax_url'           => admin_url('admin-ajax.php'), 
+            'ajax_url'           => admin_url('admin-ajax.php'),
             'nonce'              => wp_create_nonce('qp_practice_nonce'),
             'practice_page_url'  => $practice_page_url,
             'dashboard_page_url' => $dashboard_page_url
         ];
-        
+
         if (has_shortcode($post->post_content, 'question_press_practice')) {
             // KaTeX styles and scripts
             wp_enqueue_style('katex-css', 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css', [], '0.16.9');
@@ -652,7 +683,7 @@ function qp_public_enqueue_scripts() {
             wp_enqueue_script('qp-practice-script', QP_PLUGIN_URL . 'public/assets/js/practice.js', ['jquery', 'katex-auto-render'], $practice_js_version, true);
             wp_localize_script('qp-practice-script', 'qp_ajax_object', $ajax_data);
         }
-        
+
         if (has_shortcode($post->post_content, 'question_press_dashboard')) {
             wp_enqueue_script('qp-dashboard-script', QP_PLUGIN_URL . 'public/assets/js/dashboard.js', ['jquery'], $dashboard_js_version, true);
             wp_localize_script('qp-dashboard-script', 'qp_ajax_object', $ajax_data);
@@ -663,7 +694,8 @@ add_action('wp_enqueue_scripts', 'qp_public_enqueue_scripts');
 
 
 // *** ADD THIS ENTIRE NEW FUNCTION ***
-function qp_get_topics_for_subject_ajax() {
+function qp_get_topics_for_subject_ajax()
+{
     check_ajax_referer('qp_practice_nonce', 'nonce');
     $subject_id = isset($_POST['subject_id']) ? absint($_POST['subject_id']) : 0;
 
@@ -679,7 +711,8 @@ function qp_get_topics_for_subject_ajax() {
 }
 add_action('wp_ajax_get_topics_for_subject', 'qp_get_topics_for_subject_ajax');
 
-function qp_start_practice_session_ajax() {
+function qp_start_practice_session_ajax()
+{
     check_ajax_referer('qp_practice_nonce', 'nonce');
     $settings_str = isset($_POST['settings']) ? $_POST['settings'] : '';
     $form_settings = [];
@@ -697,7 +730,9 @@ function qp_start_practice_session_ajax() {
         'timer_seconds'   => isset($form_settings['qp_timer_seconds']) ? absint($form_settings['qp_timer_seconds']) : 60
     ];
 
-    if (empty($session_settings['subject_id'])) { wp_send_json_error(['message' => 'Please select a subject.']); }
+    if (empty($session_settings['subject_id'])) {
+        wp_send_json_error(['message' => 'Please select a subject.']);
+    }
 
     global $wpdb;
     $user_id = get_current_user_id();
@@ -734,20 +769,20 @@ function qp_start_practice_session_ajax() {
         $base_where_clauses[] = "ql.label_id = %d";
         $query_args[] = absint($session_settings['sheet_label_id']);
     }
-    
+
     if ($session_settings['pyq_only']) {
         $base_where_clauses[] = "q.is_pyq = 1";
     }
 
     $base_where_sql = implode(' AND ', $base_where_clauses);
-    
+
     $final_where_clauses = $base_where_clauses;
     if ($session_settings['revise_mode']) {
         $final_where_clauses[] = $wpdb->prepare("q.question_id IN (SELECT DISTINCT question_id FROM $a_table WHERE user_id = %d)", $user_id);
     } else {
         $final_where_clauses[] = $wpdb->prepare("q.question_id NOT IN (SELECT DISTINCT question_id FROM $a_table WHERE user_id = %d)", $user_id);
     }
-    
+
     $final_where_sql = implode(' AND ', $final_where_clauses);
 
     $options = get_option('qp_settings');
@@ -755,7 +790,7 @@ function qp_start_practice_session_ajax() {
     $order_by_sql = ($question_order === 'in_order') ? 'ORDER BY q.custom_question_id ASC' : 'ORDER BY RAND()';
 
     $query = "SELECT DISTINCT q.question_id FROM {$q_table} q {$joins} WHERE {$final_where_sql} {$order_by_sql}";
-    
+
     $question_ids = $wpdb->get_col($wpdb->prepare($query, $query_args));
 
     if (empty($question_ids)) {
@@ -772,7 +807,7 @@ function qp_start_practice_session_ajax() {
 
         wp_send_json_error(['error_code' => $error_code]);
     }
-    
+
     $sessions_table = $wpdb->prefix . 'qp_user_sessions';
     $wpdb->insert($sessions_table, ['user_id' => $user_id, 'settings_snapshot' => wp_json_encode($session_settings)]);
     $session_id = $wpdb->insert_id;
@@ -781,7 +816,8 @@ function qp_start_practice_session_ajax() {
 }
 add_action('wp_ajax_start_practice_session', 'qp_start_practice_session_ajax');
 
-function qp_get_practice_form_html_ajax() {
+function qp_get_practice_form_html_ajax()
+{
     check_ajax_referer('qp_practice_nonce', 'nonce');
     // We can re-use the function from our shortcode class to get the form HTML
     wp_send_json_success(['form_html' => QP_Shortcodes::render_practice_form()]);
@@ -790,17 +826,20 @@ add_action('wp_ajax_get_practice_form_html', 'qp_get_practice_form_html_ajax');
 
 // In question-press.php, REPLACE this function
 
-function qp_get_question_data_ajax() {
+function qp_get_question_data_ajax()
+{
     check_ajax_referer('qp_practice_nonce', 'nonce');
     $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
-    if (!$question_id) { wp_send_json_error(['message' => 'Invalid Question ID.']); }
+    if (!$question_id) {
+        wp_send_json_error(['message' => 'Invalid Question ID.']);
+    }
 
     global $wpdb;
-    $q_table = $wpdb->prefix . 'qp_questions'; 
-    $g_table = $wpdb->prefix . 'qp_question_groups'; 
-    $s_table = $wpdb->prefix . 'qp_subjects'; 
+    $q_table = $wpdb->prefix . 'qp_questions';
+    $g_table = $wpdb->prefix . 'qp_question_groups';
+    $s_table = $wpdb->prefix . 'qp_subjects';
     $t_table = $wpdb->prefix . 'qp_topics'; // Topic table
-    $o_table = $wpdb->prefix . 'qp_options'; 
+    $o_table = $wpdb->prefix . 'qp_options';
     $a_table = $wpdb->prefix . 'qp_user_attempts';
 
     // *** UPDATED QUERY to include topic_name ***
@@ -811,11 +850,13 @@ function qp_get_question_data_ajax() {
          LEFT JOIN {$g_table} g ON q.group_id = g.group_id 
          LEFT JOIN {$s_table} s ON g.subject_id = s.subject_id
          LEFT JOIN {$t_table} t ON q.topic_id = t.topic_id
-         WHERE q.question_id = %d", 
+         WHERE q.question_id = %d",
         $question_id
     ), ARRAY_A);
 
-    if (!$question_data) { wp_send_json_error(['message' => 'Question not found.']); }
+    if (!$question_data) {
+        wp_send_json_error(['message' => 'Question not found.']);
+    }
 
     $options = get_option('qp_settings');
     $allowed_roles = isset($options['show_source_meta_roles']) ? $options['show_source_meta_roles'] : [];
@@ -828,25 +869,29 @@ function qp_get_question_data_ajax() {
         unset($question_data['source_page']);
         unset($question_data['source_number']);
     }
-    
+
     $question_data['direction_image_url'] = $question_data['direction_image_id'] ? wp_get_attachment_url($question_data['direction_image_id']) : null;
 
     $question_data['options'] = $wpdb->get_results($wpdb->prepare("SELECT option_id, option_text FROM {$o_table} WHERE question_id = %d ORDER BY RAND()", $question_id), ARRAY_A);
     $user_id = get_current_user_id();
     $attempt_count = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $a_table WHERE user_id = %d AND question_id = %d", $user_id, $question_id));
-    
+
     wp_send_json_success(['question' => $question_data, 'is_revision' => ($attempt_count > 0), 'is_admin' => $user_can_view]);
 }
 add_action('wp_ajax_get_question_data', 'qp_get_question_data_ajax');
 
-function qp_check_answer_ajax() {
+function qp_check_answer_ajax()
+{
     check_ajax_referer('qp_practice_nonce', 'nonce');
     $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
     $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
     $option_id = isset($_POST['option_id']) ? absint($_POST['option_id']) : 0;
-    if (!$session_id || !$question_id || !$option_id) { wp_send_json_error(['message' => 'Invalid data submitted.']); }
+    if (!$session_id || !$question_id || !$option_id) {
+        wp_send_json_error(['message' => 'Invalid data submitted.']);
+    }
     global $wpdb;
-    $o_table = $wpdb->prefix . 'qp_options'; $attempts_table = $wpdb->prefix . 'qp_user_attempts';
+    $o_table = $wpdb->prefix . 'qp_options';
+    $attempts_table = $wpdb->prefix . 'qp_user_attempts';
     $is_correct = (bool) $wpdb->get_var($wpdb->prepare("SELECT is_correct FROM $o_table WHERE question_id = %d AND option_id = %d", $question_id, $option_id));
     $correct_option_id = $wpdb->get_var($wpdb->prepare("SELECT option_id FROM $o_table WHERE question_id = %d AND is_correct = 1", $question_id));
     $wpdb->insert($attempts_table, ['session_id' => $session_id, 'user_id' => get_current_user_id(), 'question_id' => $question_id, 'is_correct' => $is_correct ? 1 : 0]);
@@ -870,7 +915,8 @@ add_action('wp_ajax_check_answer', 'qp_check_answer_ajax');
 /**
  * AJAX handler for ending a practice session.
  */
-function qp_end_practice_session_ajax() {
+function qp_end_practice_session_ajax()
+{
     check_ajax_referer('qp_practice_nonce', 'nonce');
     $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
 
@@ -898,7 +944,8 @@ function qp_end_practice_session_ajax() {
     $final_score = ($correct_count * $marks_correct) + ($incorrect_count * $marks_incorrect);
 
     // Update the session in the database with the final stats
-    $wpdb->update($sessions_table, 
+    $wpdb->update(
+        $sessions_table,
         [
             'end_time' => current_time('mysql', 1),
             'total_attempted' => $total_attempted,
@@ -923,7 +970,8 @@ add_action('wp_ajax_end_practice_session', 'qp_end_practice_session_ajax');
 
 
 // ADD THIS NEW FUNCTION to the end of the file
-function qp_delete_user_session_ajax() {
+function qp_delete_user_session_ajax()
+{
     check_ajax_referer('qp_practice_nonce', 'nonce');
     $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
 
@@ -955,20 +1003,25 @@ add_action('wp_ajax_delete_user_session', 'qp_delete_user_session_ajax');
  * AJAX handler for reporting an issue with a question.
  */
 // UPDATED: Report issue function
-function qp_report_question_issue_ajax() {
+function qp_report_question_issue_ajax()
+{
     check_ajax_referer('qp_practice_nonce', 'nonce');
     $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
     $report_label_name = isset($_POST['label_name']) ? sanitize_text_field($_POST['label_name']) : 'Incorrect Formatting';
-    if (!$question_id) { wp_send_json_error(['message' => 'Invalid Question ID.']); }
+    if (!$question_id) {
+        wp_send_json_error(['message' => 'Invalid Question ID.']);
+    }
 
     global $wpdb;
     $label_id = $wpdb->get_var($wpdb->prepare("SELECT label_id FROM {$wpdb->prefix}qp_labels WHERE label_name = %s", $report_label_name));
-    if (!$label_id) { wp_send_json_error(['message' => 'Reporting system not configured.']); }
+    if (!$label_id) {
+        wp_send_json_error(['message' => 'Reporting system not configured.']);
+    }
 
     $already_assigned = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$wpdb->prefix}qp_question_labels WHERE question_id = %d AND label_id = %d", $question_id, $label_id));
     if ($already_assigned == 0) {
         $wpdb->insert("{$wpdb->prefix}qp_question_labels", ['question_id' => $question_id, 'label_id' => $label_id]);
-        
+
         // CORRECTED: Use custom_question_id for the log message
         $custom_id = $wpdb->get_var($wpdb->prepare("SELECT custom_question_id FROM {$wpdb->prefix}qp_questions WHERE question_id = %d", $question_id));
         $wpdb->insert("{$wpdb->prefix}qp_logs", [
@@ -985,18 +1038,21 @@ add_action('wp_ajax_report_question_issue', 'qp_report_question_issue_ajax');
 // In question-press.php, ADD this new function
 
 // UPDATED: Report and Skip function
-function qp_report_and_skip_question_ajax() {
+function qp_report_and_skip_question_ajax()
+{
     check_ajax_referer('qp_practice_nonce', 'nonce');
     $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
     $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
     $label_name = isset($_POST['label_name']) ? sanitize_text_field($_POST['label_name']) : '';
-    if (!$session_id || !$question_id || !$label_name) { wp_send_json_error(['message' => 'Invalid data.']); }
+    if (!$session_id || !$question_id || !$label_name) {
+        wp_send_json_error(['message' => 'Invalid data.']);
+    }
 
     global $wpdb;
     $label_id = $wpdb->get_var($wpdb->prepare("SELECT label_id FROM {$wpdb->prefix}qp_labels WHERE label_name = %s", $label_name));
     if ($label_id) {
         $wpdb->insert("{$wpdb->prefix}qp_question_labels", ['question_id' => $question_id, 'label_id' => $label_id]);
-        
+
         // CORRECTED: Use custom_question_id for the log message
         $custom_id = $wpdb->get_var($wpdb->prepare("SELECT custom_question_id FROM {$wpdb->prefix}qp_questions WHERE question_id = %d", $question_id));
         $wpdb->insert("{$wpdb->prefix}qp_logs", [
@@ -1005,7 +1061,7 @@ function qp_report_and_skip_question_ajax() {
             'log_data' => wp_json_encode(['user_id' => get_current_user_id(), 'session_id' => $session_id, 'question_id' => $question_id])
         ]);
     }
-    
+
     $wpdb->insert("{$wpdb->prefix}qp_user_attempts", ['session_id' => $session_id, 'user_id' => get_current_user_id(), 'question_id' => $question_id, 'is_correct' => null]);
     wp_send_json_success(['message' => 'Question reported and skipped.']);
 }
@@ -1015,7 +1071,8 @@ add_action('wp_ajax_report_and_skip_question', 'qp_report_and_skip_question_ajax
 /**
  * AJAX handler for deleting a user's entire revision and session history.
  */
-function qp_delete_revision_history_ajax() {
+function qp_delete_revision_history_ajax()
+{
     check_ajax_referer('qp_practice_nonce', 'nonce');
 
     $user_id = get_current_user_id();
@@ -1038,7 +1095,8 @@ function qp_delete_revision_history_ajax() {
 add_action('wp_ajax_delete_revision_history', 'qp_delete_revision_history_ajax');
 
 // NEW: Function to handle clearing the logs
-function qp_handle_clear_logs() {
+function qp_handle_clear_logs()
+{
     if (isset($_POST['action']) && $_POST['action'] === 'clear_logs') {
         if (!isset($_POST['_wpnonce']) || !wp_verify_nonce($_POST['_wpnonce'], 'qp_clear_logs_nonce')) {
             wp_die('Security check failed.');
@@ -1052,7 +1110,8 @@ function qp_handle_clear_logs() {
 }
 
 // ADD this new function to the file
-function qp_handle_resolve_log() {
+function qp_handle_resolve_log()
+{
     if (isset($_GET['action']) && $_GET['action'] === 'resolve_log' && isset($_GET['log_id'])) {
         $log_id = absint($_GET['log_id']);
         if (!isset($_GET['_wpnonce']) || !wp_verify_nonce($_GET['_wpnonce'], 'qp_resolve_log_' . $log_id)) {
@@ -1060,7 +1119,7 @@ function qp_handle_resolve_log() {
         }
         global $wpdb;
         $wpdb->update("{$wpdb->prefix}qp_logs", ['resolved' => 1], ['log_id' => $log_id]);
-        
+
         // Redirect back to the page the user was on
         wp_safe_redirect(remove_query_arg(['action', 'log_id', '_wpnonce']));
         exit;
@@ -1068,10 +1127,13 @@ function qp_handle_resolve_log() {
 }
 
 
-function qp_get_quick_edit_form_ajax() {
+function qp_get_quick_edit_form_ajax()
+{
     check_ajax_referer('qp_get_quick_edit_form_nonce', 'nonce');
     $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
-    if (!$question_id) { wp_send_json_error(); }
+    if (!$question_id) {
+        wp_send_json_error();
+    }
 
     global $wpdb;
     // ... (database queries and data preparation remain the same) ...
@@ -1079,7 +1141,7 @@ function qp_get_quick_edit_form_ajax() {
         "SELECT q.question_text, q.is_pyq, q.topic_id, g.subject_id 
          FROM {$wpdb->prefix}qp_questions q 
          LEFT JOIN {$wpdb->prefix}qp_question_groups g ON q.group_id = g.group_id 
-         WHERE q.question_id = %d", 
+         WHERE q.question_id = %d",
         $question_id
     ));
     $all_subjects = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}qp_subjects ORDER BY subject_name ASC");
@@ -1095,31 +1157,31 @@ function qp_get_quick_edit_form_ajax() {
         }
         $topics_by_subject[$topic->subject_id][] = ['id' => $topic->topic_id, 'name' => $topic->topic_name];
     }
-    
+
     ob_start();
-    ?>
+?>
     <script>
         var qp_quick_edit_topics_data = <?php echo json_encode($topics_by_subject); ?>;
         var qp_current_topic_id = <?php echo json_encode($question->topic_id); ?>;
     </script>
     <form class="quick-edit-form-wrapper">
-        <h4><span style ="font-weight: 700;">Question:</span> <span class="title"><?php echo esc_html(wp_trim_words($question->question_text, 10, '...')); ?></span></h4>
+        <h4><span style="font-weight: 700;">Question:</span> <span class="title"><?php echo esc_html(wp_trim_words($question->question_text, 10, '...')); ?></span></h4>
         <input type="hidden" name="question_id" value="<?php echo esc_attr($question_id); ?>">
-        
+
         <div class="quick-edit-main-container">
             <div class="quick-edit-col-left">
                 <label><strong>Correct Answer</strong></label>
                 <div class="options-group">
                     <?php foreach ($options as $index => $option): ?>
-                    <label class="option-label">
-                        <input type="radio" name="correct_option_id" value="<?php echo esc_attr($option->option_id); ?>" <?php checked($option->is_correct, 1); ?>>
-                        <input type="text" readonly value="<?php echo esc_attr($option->option_text); ?>">
-                    </label>
+                        <label class="option-label">
+                            <input type="radio" name="correct_option_id" value="<?php echo esc_attr($option->option_id); ?>" <?php checked($option->is_correct, 1); ?>>
+                            <input type="text" readonly value="<?php echo esc_attr($option->option_text); ?>">
+                        </label>
                     <?php endforeach; ?>
                 </div>
             </div>
             <div class="quick-edit-col-right">
-                 <div class="form-row-flex">
+                <div class="form-row-flex">
                     <div class="form-group-half">
                         <label for="qe-subject-<?php echo esc_attr($question_id); ?>"><strong>Subject</strong></label>
                         <select name="subject_id" id="qe-subject-<?php echo esc_attr($question_id); ?>" class="qe-subject-select">
@@ -1131,12 +1193,12 @@ function qp_get_quick_edit_form_ajax() {
                     <div class="form-group-half">
                         <label for="qe-topic-<?php echo esc_attr($question_id); ?>"><strong>Topic</strong></label>
                         <select name="topic_id" id="qe-topic-<?php echo esc_attr($question_id); ?>" class="qe-topic-select" disabled>
-                             <option value="">— Select subject first —</option>
+                            <option value="">— Select subject first —</option>
                         </select>
                     </div>
                 </div>
                 <div class="form-row">
-                     <label class="inline-checkbox"><input type="checkbox" name="is_pyq" value="1" <?php checked($question->is_pyq, 1); ?>> Is PYQ?</label>
+                    <label class="inline-checkbox"><input type="checkbox" name="is_pyq" value="1" <?php checked($question->is_pyq, 1); ?>> Is PYQ?</label>
                 </div>
                 <div class="form-row">
                     <label><strong>Labels</strong></label>
@@ -1157,69 +1219,139 @@ function qp_get_quick_edit_form_ajax() {
 
     <style>
         .quick-edit-form-wrapper h4 {
-            font-size: 16px; /* Increased font size for visibility */
+            font-size: 16px;
+            /* Increased font size for visibility */
             margin-top: 20px;
             margin-bottom: 10px;
             Padding: 10px 20px;
         }
-        .inline-edit-row .submit{
+
+        .inline-edit-row .submit {
             padding: 20px;
         }
+
         .quick-edit-form-wrapper .title {
-            font-size: 15px; /* Also increased */
+            font-size: 15px;
+            /* Also increased */
             font-weight: 500;
             color: #555;
         }
-        .quick-edit-form-wrapper .form-row, .quick-edit-form-wrapper .form-row-flex { margin-bottom: 1rem; }
-        .quick-edit-form-wrapper .form-row:last-child { margin-bottom: 0; }
-        .quick-edit-form-wrapper strong, .quick-edit-form-wrapper label { font-weight: 600; display: block; margin-bottom: .5rem;}
-        .quick-edit-form-wrapper select { width: 100%; }
 
-        .quick-edit-main-container { display: flex; gap: 20px; margin-bottom: 1rem; padding: 0px 20px;}
-        .quick-edit-col-left { flex: 0 0 40%; }
-        .quick-edit-col-right { flex: 1; }
+        .quick-edit-form-wrapper .form-row,
+        .quick-edit-form-wrapper .form-row-flex {
+            margin-bottom: 1rem;
+        }
 
-        .options-group { display: flex; flex-direction: column; justify-content: space-between; align-items: space-between; padding: .5rem; border: 1px solid #ddd; background: #fff; height: 100%; box-sizing: border-box; }
-        .options-group label:last-child {margin-bottom: 0;}
+        .quick-edit-form-wrapper .form-row:last-child {
+            margin-bottom: 0;
+        }
+
+        .quick-edit-form-wrapper strong,
+        .quick-edit-form-wrapper label {
+            font-weight: 600;
+            display: block;
+            margin-bottom: .5rem;
+        }
+
+        .quick-edit-form-wrapper select {
+            width: 100%;
+        }
+
+        .quick-edit-main-container {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 1rem;
+            padding: 0px 20px;
+        }
+
+        .quick-edit-col-left {
+            flex: 0 0 40%;
+        }
+
+        .quick-edit-col-right {
+            flex: 1;
+        }
+
+        .options-group {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: space-between;
+            padding: .5rem;
+            border: 1px solid #ddd;
+            background: #fff;
+            height: 100%;
+            box-sizing: border-box;
+        }
+
+        .options-group label:last-child {
+            margin-bottom: 0;
+        }
+
         .option-label {
             display: flex;
-            align-items: center; /* Vertically aligns the radio button and text */
+            align-items: center;
+            /* Vertically aligns the radio button and text */
             gap: .5rem;
             margin-bottom: .5rem;
         }
 
         /* Crucial fix for radio button alignment */
         .option-label input[type="radio"] {
-           margin-top: 0; /* Resets default WordPress top margin on radio buttons */
-           align-self: center;
+            margin-top: 0;
+            /* Resets default WordPress top margin on radio buttons */
+            align-self: center;
         }
-        .option-label input[type="text"] { width: 90%; background-color: #f0f0f1; }
 
-        .form-row-flex { display: flex; gap: 1rem; }
-        .form-group-half { flex: 1; }
+        .option-label input[type="text"] {
+            width: 90%;
+            background-color: #f0f0f1;
+        }
 
-        .quick-edit-form-wrapper p.submit button.button-secondary {margin-right: 10px;}
-        
-        .labels-group { display: flex; flex-wrap: wrap; gap: .5rem 1rem; padding: .5rem; border: 1px solid #ddd; background: #fff; }
-        .inline-checkbox { white-space: nowrap; }
+        .form-row-flex {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .form-group-half {
+            flex: 1;
+        }
+
+        .quick-edit-form-wrapper p.submit button.button-secondary {
+            margin-right: 10px;
+        }
+
+        .labels-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: .5rem 1rem;
+            padding: .5rem;
+            border: 1px solid #ddd;
+            background: #fff;
+        }
+
+        .inline-checkbox {
+            white-space: nowrap;
+        }
     </style>
-     <?php
+    <?php
     wp_send_json_success(['form' => ob_get_clean()]);
 }
 add_action('wp_ajax_get_quick_edit_form', 'qp_get_quick_edit_form_ajax');
 
-function qp_save_quick_edit_data_ajax() {
+function qp_save_quick_edit_data_ajax()
+{
     check_ajax_referer('qp_save_quick_edit_nonce', 'nonce');
-    
+
     parse_str($_POST['form_data'], $data);
 
     $question_id = isset($data['question_id']) ? absint($data['question_id']) : 0;
     if (!$question_id) {
         wp_send_json_error(['message' => 'Invalid Question ID in form data.']);
     }
-    
+
     global $wpdb;
-    
+
     $wpdb->update("{$wpdb->prefix}qp_questions", [
         'is_pyq' => isset($data['is_pyq']) ? 1 : 0,
         'topic_id' => isset($data['topic_id']) && $data['topic_id'] > 0 ? absint($data['topic_id']) : null,
@@ -1227,10 +1359,10 @@ function qp_save_quick_edit_data_ajax() {
     ], ['question_id' => $question_id]);
 
     $group_id = $wpdb->get_var($wpdb->prepare("SELECT group_id FROM {$wpdb->prefix}qp_questions WHERE question_id = %d", $question_id));
-    if ($group_id) { 
-        $wpdb->update("{$wpdb->prefix}qp_question_groups", ['subject_id' => absint($data['subject_id'])], ['group_id' => $group_id]); 
+    if ($group_id) {
+        $wpdb->update("{$wpdb->prefix}qp_question_groups", ['subject_id' => absint($data['subject_id'])], ['group_id' => $group_id]);
     }
-    
+
     $correct_option_id = isset($data['correct_option_id']) ? absint($data['correct_option_id']) : 0;
     if ($correct_option_id) {
         $wpdb->update("{$wpdb->prefix}qp_options", ['is_correct' => 0], ['question_id' => $question_id]);
@@ -1253,7 +1385,7 @@ function qp_save_quick_edit_data_ajax() {
             break;
         }
     }
-    
+
     if ($found_item) {
         $found_item['group_id'] = $group_id;
         ob_start();
@@ -1270,13 +1402,15 @@ add_action('wp_ajax_save_quick_edit_data', 'qp_save_quick_edit_data_ajax');
 /**
  * Initialize all plugin features that hook into WordPress.
  */
-function qp_init_plugin() {
+function qp_init_plugin()
+{
     QP_Rest_Api::init();
 }
 add_action('init', 'qp_init_plugin');
 
 // NEW: Add this function to the end of the file
-function qp_regenerate_api_key_ajax() {
+function qp_regenerate_api_key_ajax()
+{
     check_ajax_referer('qp_regenerate_api_key_nonce', 'nonce');
     if (!current_user_can('manage_options')) {
         wp_send_json_error(['message' => 'Permission denied.']);
@@ -1290,17 +1424,40 @@ function qp_regenerate_api_key_ajax() {
 add_action('wp_ajax_regenerate_api_key', 'qp_regenerate_api_key_ajax');
 
 
-function qp_admin_head_styles_for_list_table() {
+function qp_admin_head_styles_for_list_table()
+{
     $screen = get_current_screen();
     if ($screen && $screen->id === 'toplevel_page_question-press') {
-        ?>
+    ?>
         <style type="text/css">
-            .qp-multi-select-dropdown { position: relative; display: inline-block; vertical-align: middle; }
-            .qp-multi-select-list { display: none; position: absolute; background-color: white; border: 1px solid #ccc; z-index: 1000; padding: 10px; max-height: 250px; overflow-y: auto; }
-            .qp-multi-select-list label { display: block; white-space: nowrap; padding: 5px; }
-            .qp-multi-select-list label:hover { background-color: #f1f1f1; }
+            .qp-multi-select-dropdown {
+                position: relative;
+                display: inline-block;
+                vertical-align: middle;
+            }
+
+            .qp-multi-select-list {
+                display: none;
+                position: absolute;
+                background-color: white;
+                border: 1px solid #ccc;
+                z-index: 1000;
+                padding: 10px;
+                max-height: 250px;
+                overflow-y: auto;
+            }
+
+            .qp-multi-select-list label {
+                display: block;
+                white-space: nowrap;
+                padding: 5px;
+            }
+
+            .qp-multi-select-list label:hover {
+                background-color: #f1f1f1;
+            }
         </style>
-        <?php
+    <?php
     }
 }
 add_action('admin_head', 'qp_admin_head_styles_for_list_table');
@@ -1308,7 +1465,8 @@ add_action('admin_head', 'qp_admin_head_styles_for_list_table');
 /**
  * AJAX handler to get "Sheet" labels relevant to a specific topic.
  */
-function qp_get_sheets_for_topic_ajax() {
+function qp_get_sheets_for_topic_ajax()
+{
     check_ajax_referer('qp_practice_nonce', 'nonce');
     $topic_id = isset($_POST['topic_id']) ? absint($_POST['topic_id']) : 0;
 
@@ -1346,7 +1504,8 @@ add_action('wp_ajax_get_sheets_for_topic', 'qp_get_sheets_for_topic_ajax');
  * Handles the one-time data migration from the old source_file column
  * to the new sources table. Triggered by a link in an admin notice.
  */
-function qp_run_source_data_migration() {
+function qp_run_source_data_migration()
+{
     // Check if the trigger is present in the URL and if the user is an admin
     if (!isset($_GET['action']) || $_GET['action'] !== 'qp_migrate_sources' || !current_user_can('manage_options')) {
         return;
@@ -1417,7 +1576,8 @@ function qp_run_source_data_migration() {
 /**
  * Displays a persistent admin notice if the source data migration needs to be run.
  */
-function qp_show_migration_admin_notice() {
+function qp_show_migration_admin_notice()
+{
     // Only show this notice to admins and only if the migration is not marked as 'done'
     if (!current_user_can('manage_options') || get_option('qp_source_migration_status') === 'done') {
         return;
@@ -1428,7 +1588,7 @@ function qp_show_migration_admin_notice() {
     if (!$screen || strpos($screen->id, 'qp-') === false && strpos($screen->id, 'question-press') === false) {
         return;
     }
-    
+
     // Display the success message after redirection
     if (isset($_SESSION['qp_admin_message'])) {
         echo '<div id="message" class="notice notice-' . esc_attr($_SESSION['qp_admin_message_type']) . ' is-dismissible"><p>' . esc_html($_SESSION['qp_admin_message']) . '</p></div>';
@@ -1452,13 +1612,14 @@ function qp_show_migration_admin_notice() {
             <a href="<?php echo esc_url($migration_url); ?>" class="button button-primary">Run Data Migration</a>
         </p>
     </div>
-    <?php
+<?php
 }
 
 /**
  * Handles the one-time data migration for question numbers and PYQ status.
  */
-function qp_run_details_data_migration() {
+function qp_run_details_data_migration()
+{
     if (!isset($_GET['action']) || $_GET['action'] !== 'qp_migrate_details' || !current_user_can('manage_options')) {
         return;
     }
@@ -1505,11 +1666,12 @@ function qp_run_details_data_migration() {
 /**
  * Displays an admin notice for the details migration if it needs to be run.
  */
-function qp_show_details_migration_notice() {
+function qp_show_details_migration_notice()
+{
     if (!current_user_can('manage_options') || get_option('qp_details_migration_status') === 'done') {
         return;
     }
-    
+
     // Only show on our plugin pages
     $screen = get_current_screen();
     if (!$screen || strpos($screen->id, 'qp-') === false && strpos($screen->id, 'question-press') === false) {
@@ -1519,7 +1681,7 @@ function qp_show_details_migration_notice() {
     $migration_url = add_query_arg(
         ['action' => 'qp_migrate_details', '_wpnonce' => wp_create_nonce('qp_details_migration_nonce')]
     );
-    ?>
+?>
     <div class="notice notice-info is-dismissible">
         <h3>Question Press Data Update (Step 2)</h3>
         <p>
@@ -1529,7 +1691,7 @@ function qp_show_details_migration_notice() {
             <a href="<?php echo esc_url($migration_url); ?>" class="button button-primary">Migrate Question Numbers</a>
         </p>
     </div>
-    <?php
+<?php
 }
 
 // In question-press.php
@@ -1537,7 +1699,8 @@ function qp_show_details_migration_notice() {
 /**
  * Handles the one-time migration for orphaned sources that have no subject assigned.
  */
-function qp_run_orphan_source_migration() {
+function qp_run_orphan_source_migration()
+{
     if (!isset($_GET['action']) || $_GET['action'] !== 'qp_migrate_orphan_sources' || !current_user_can('manage_options')) {
         return;
     }
@@ -1582,11 +1745,12 @@ function qp_run_orphan_source_migration() {
 /**
  * Displays an admin notice for the orphaned sources migration if it needs to be run.
  */
-function qp_show_orphan_source_notice() {
+function qp_show_orphan_source_notice()
+{
     if (!current_user_can('manage_options') || get_option('qp_orphan_source_migration_status') === 'done') {
         return;
     }
-    
+
     $screen = get_current_screen();
     if (!$screen || strpos($screen->id, 'qp-') === false && strpos($screen->id, 'question-press') === false) {
         return;
@@ -1595,7 +1759,7 @@ function qp_show_orphan_source_notice() {
     $migration_url = add_query_arg(
         ['action' => 'qp_migrate_orphan_sources', '_wpnonce' => wp_create_nonce('qp_orphan_source_migration_nonce')]
     );
-    ?>
+?>
     <div class="notice notice-info is-dismissible">
         <h3>Question Press Data Update (Step 3)</h3>
         <p>
@@ -1605,7 +1769,7 @@ function qp_show_orphan_source_notice() {
             <a href="<?php echo esc_url($migration_url); ?>" class="button button-primary">Find and Assign Orphaned Sources</a>
         </p>
     </div>
-    <?php
+<?php
 }
 
 // In question-press.php
@@ -1613,7 +1777,8 @@ function qp_show_orphan_source_notice() {
 /**
  * Handles the one-time action of dropping old DB columns.
  */
-function qp_run_db_cleanup() {
+function qp_run_db_cleanup()
+{
     if (!isset($_GET['action']) || $_GET['action'] !== 'qp_cleanup_db' || !current_user_can('manage_options')) {
         return;
     }
@@ -1637,12 +1802,15 @@ function qp_run_db_cleanup() {
 /**
  * Displays an admin notice for the final DB cleanup.
  */
-function qp_show_db_cleanup_notice() {
+function qp_show_db_cleanup_notice()
+{
     // Only show if all migrations are done AND cleanup hasn't been done
-    if (get_option('qp_source_migration_status') !== 'done' || 
-        get_option('qp_details_migration_status') !== 'done' || 
+    if (
+        get_option('qp_source_migration_status') !== 'done' ||
+        get_option('qp_details_migration_status') !== 'done' ||
         get_option('qp_orphan_source_migration_status') !== 'done' ||
-        get_option('qp_db_cleanup_status') === 'done') {
+        get_option('qp_db_cleanup_status') === 'done'
+    ) {
         return;
     }
 
@@ -1650,7 +1818,7 @@ function qp_show_db_cleanup_notice() {
     if (!$screen || strpos($screen->id, 'qp-') === false) return;
 
     $cleanup_url = add_query_arg(['action' => 'qp_cleanup_db', '_wpnonce' => wp_create_nonce('qp_db_cleanup_nonce')]);
-    ?>
+?>
     <div class="notice notice-error is-dismissible">
         <h3>Question Press Final Step: Database Cleanup</h3>
         <p>
@@ -1661,7 +1829,7 @@ function qp_show_db_cleanup_notice() {
             <a href="<?php echo esc_url($cleanup_url); ?>" class="button button-danger">Run Final Cleanup</a>
         </p>
     </div>
-    <?php
+<?php
 }
 
 // Add the hooks
