@@ -1607,3 +1607,63 @@ function qp_show_orphan_source_notice() {
     </div>
     <?php
 }
+
+// In question-press.php
+
+/**
+ * Handles the one-time action of dropping old DB columns.
+ */
+function qp_run_db_cleanup() {
+    if (!isset($_GET['action']) || $_GET['action'] !== 'qp_cleanup_db' || !current_user_can('manage_options')) {
+        return;
+    }
+    check_admin_referer('qp_db_cleanup_nonce');
+
+    global $wpdb;
+    $table_name = $wpdb->prefix . 'qp_questions';
+    $wpdb->query("ALTER TABLE {$table_name} DROP COLUMN source_file, DROP COLUMN source_page, DROP COLUMN source_number;");
+
+    update_option('qp_db_cleanup_status', 'done');
+
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        $_SESSION['qp_admin_message'] = 'Database cleanup successful. Old source columns have been removed.';
+        $_SESSION['qp_admin_message_type'] = 'success';
+    }
+
+    wp_safe_redirect(remove_query_arg(['action', '_wpnonce']));
+    exit;
+}
+
+/**
+ * Displays an admin notice for the final DB cleanup.
+ */
+function qp_show_db_cleanup_notice() {
+    // Only show if all migrations are done AND cleanup hasn't been done
+    if (get_option('qp_source_migration_status') !== 'done' || 
+        get_option('qp_details_migration_status') !== 'done' || 
+        get_option('qp_orphan_source_migration_status') !== 'done' ||
+        get_option('qp_db_cleanup_status') === 'done') {
+        return;
+    }
+
+    $screen = get_current_screen();
+    if (!$screen || strpos($screen->id, 'qp-') === false) return;
+
+    $cleanup_url = add_query_arg(['action' => 'qp_cleanup_db', '_wpnonce' => wp_create_nonce('qp_db_cleanup_nonce')]);
+    ?>
+    <div class="notice notice-error is-dismissible">
+        <h3>Question Press Final Step: Database Cleanup</h3>
+        <p>
+            <strong>Warning:</strong> All data has been migrated to the new structure. You can now permanently remove the old, redundant database columns (`source_file`, `source_page`, `source_number`).
+            <strong>This action cannot be undone.</strong> Please ensure you have backed up your database before proceeding.
+        </p>
+        <p>
+            <a href="<?php echo esc_url($cleanup_url); ?>" class="button button-danger">Run Final Cleanup</a>
+        </p>
+    </div>
+    <?php
+}
+
+// Add the hooks
+add_action('admin_init', 'qp_run_db_cleanup');
+add_action('admin_notices', 'qp_show_db_cleanup_notice');
