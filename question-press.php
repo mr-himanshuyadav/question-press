@@ -58,7 +58,47 @@ function qp_activate_plugin() {
         KEY subject_id (subject_id)
     ) $charset_collate;";
     dbDelta($sql_topics);
-    // *** END OF NEW TABLE ***
+    // --- NEW: Table for Exams ---
+    $table_exams = $wpdb->prefix . 'qp_exams';
+    $sql_exams = "CREATE TABLE $table_exams (
+        exam_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+        exam_name VARCHAR(255) NOT NULL,
+        exam_year VARCHAR(4),
+        PRIMARY KEY (exam_id)
+    ) $charset_collate;";
+    dbDelta($sql_exams);
+
+    // --- NEW: Pivot Table for Exam-Subject relationship ---
+    $table_exam_subjects = $wpdb->prefix . 'qp_exam_subjects';
+    $sql_exam_subjects = "CREATE TABLE $table_exam_subjects (
+        exam_id BIGINT(20) UNSIGNED NOT NULL,
+        subject_id BIGINT(20) UNSIGNED NOT NULL,
+        PRIMARY KEY (exam_id, subject_id),
+        KEY subject_id (subject_id)
+    ) $charset_collate;";
+    dbDelta($sql_exam_subjects);
+
+    // --- NEW: Table for Sources ---
+    $table_sources = $wpdb->prefix . 'qp_sources';
+    $sql_sources = "CREATE TABLE $table_sources (
+        source_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+        source_name VARCHAR(255) NOT NULL,
+        description TEXT,
+        PRIMARY KEY (source_id)
+    ) $charset_collate;";
+    dbDelta($sql_sources);
+
+    // --- NEW: Table for Source Sections ---
+    $table_source_sections = $wpdb->prefix . 'qp_source_sections';
+    $sql_source_sections = "CREATE TABLE $table_source_sections (
+        section_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+        source_id BIGINT(20) UNSIGNED NOT NULL,
+        section_name VARCHAR(255) NOT NULL,
+        PRIMARY KEY (section_id),
+        KEY source_id (source_id)
+    ) $charset_collate;";
+    dbDelta($sql_source_sections);
+
 
     // Table: Labels
     $table_labels = $wpdb->prefix . 'qp_labels';
@@ -95,13 +135,17 @@ function qp_activate_plugin() {
     ) $charset_collate;";
     dbDelta($sql_groups);
 
-    // *** UPDATED: Questions table with topic_id ***
+    // --- UPDATED: Questions table with new columns ---
     $table_questions = $wpdb->prefix . 'qp_questions';
     $sql_questions = "CREATE TABLE $table_questions (
         question_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
         custom_question_id BIGINT(20) UNSIGNED,
         group_id BIGINT(20) UNSIGNED,
         topic_id BIGINT(20) UNSIGNED DEFAULT NULL,
+        exam_id BIGINT(20) UNSIGNED DEFAULT NULL,
+        source_id BIGINT(20) UNSIGNED DEFAULT NULL,
+        section_id BIGINT(20) UNSIGNED DEFAULT NULL,
+        question_number_in_section VARCHAR(20) DEFAULT NULL,
         question_text LONGTEXT NOT NULL,
         question_text_hash VARCHAR(32) NOT NULL,
         is_pyq BOOLEAN NOT NULL DEFAULT 0,
@@ -116,6 +160,9 @@ function qp_activate_plugin() {
         UNIQUE KEY custom_question_id (custom_question_id),
         KEY group_id (group_id),
         KEY topic_id (topic_id),
+        KEY exam_id (exam_id),
+        KEY source_id (source_id),
+        KEY section_id (section_id),
         KEY status (status),
         KEY is_pyq (is_pyq),
         KEY question_text_hash (question_text_hash)
