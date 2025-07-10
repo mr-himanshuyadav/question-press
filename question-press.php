@@ -634,55 +634,43 @@ function qp_public_init()
 {
     add_shortcode('question_press_practice', ['QP_Shortcodes', 'render_practice_form']);
     add_shortcode('question_press_dashboard', ['QP_Dashboard', 'render']);
+
+    add_shortcode('question_press_session', ['QP_Shortcodes', 'render_session_page']);
 }
 add_action('init', 'qp_public_init');
 
-function qp_public_enqueue_scripts()
-{
+function qp_public_enqueue_scripts() {
     global $post;
-    if (is_a($post, 'WP_Post') && (has_shortcode($post->post_content, 'question_press_practice') || has_shortcode($post->post_content, 'question_press_dashboard'))) {
-
-        // --- Cache Busting Logic ---
+    if (is_a($post, 'WP_Post') && (has_shortcode($post->post_content, 'question_press_practice') || has_shortcode($post->post_content, 'question_press_dashboard') || has_shortcode($post->post_content, 'question_press_session'))) {
+        
         $css_file_path = QP_PLUGIN_DIR . 'public/assets/css/practice.css';
         $css_version = file_exists($css_file_path) ? filemtime($css_file_path) : '1.0.0';
-
-        $practice_js_file_path = QP_PLUGIN_DIR . 'public/assets/js/practice.js';
-        $practice_js_version = file_exists($practice_js_file_path) ? filemtime($practice_js_file_path) : '1.0.0';
-
-        $dashboard_js_file_path = QP_PLUGIN_DIR . 'public/assets/js/dashboard.js';
-        $dashboard_js_version = file_exists($dashboard_js_file_path) ? filemtime($dashboard_js_file_path) : '1.0.0';
-        // --- End of Cache Busting Logic ---
-
         wp_enqueue_style('qp-practice-styles', QP_PLUGIN_URL . 'public/assets/css/practice.css', [], $css_version);
 
-        // Get dynamic URLs from settings
         $options = get_option('qp_settings');
-        $practice_page_id = isset($options['practice_page']) ? absint($options['practice_page']) : 0;
-        $dashboard_page_id = isset($options['dashboard_page']) ? absint($options['dashboard_page']) : 0;
-
-        $practice_page_url = $practice_page_id ? get_permalink($practice_page_id) : home_url('/');
-        $dashboard_page_url = $dashboard_page_id ? get_permalink($dashboard_page_id) : home_url('/');
-
         $ajax_data = [
-            'ajax_url'           => admin_url('admin-ajax.php'),
+            'ajax_url'           => admin_url('admin-ajax.php'), 
             'nonce'              => wp_create_nonce('qp_practice_nonce'),
-            'practice_page_url'  => $practice_page_url,
-            'dashboard_page_url' => $dashboard_page_url
+            'dashboard_page_url' => isset($options['dashboard_page']) ? get_permalink($options['dashboard_page']) : home_url('/'),
+            'practice_page_url'  => isset($options['practice_page']) ? get_permalink($options['practice_page']) : home_url('/')
         ];
 
-        if (has_shortcode($post->post_content, 'question_press_practice')) {
-            // KaTeX styles and scripts
-            wp_enqueue_style('katex-css', 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css', [], '0.16.9');
-            wp_enqueue_script('katex-js', 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js', [], '0.16.9', true);
-            wp_enqueue_script('katex-mhchem', 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/mhchem.min.js', ['katex-js'], '0.16.9', true);
-            wp_enqueue_script('katex-auto-render', 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js', ['katex-mhchem'], '0.16.9', true);
-
-            wp_enqueue_script('qp-practice-script', QP_PLUGIN_URL . 'public/assets/js/practice.js', ['jquery', 'katex-auto-render'], $practice_js_version, true);
+        // --- CORRECTED SCRIPT ENQUEUEING AND LOCALIZATION ---
+        if (has_shortcode($post->post_content, 'question_press_practice') || has_shortcode($post->post_content, 'question_press_session')) {
+            wp_enqueue_script('qp-practice-script', QP_PLUGIN_URL . 'public/assets/js/practice.js', ['jquery'], filemtime(QP_PLUGIN_DIR . 'public/assets/js/practice.js'), true);
             wp_localize_script('qp-practice-script', 'qp_ajax_object', $ajax_data);
+            
+            // If we are on the session page, get the data from the shortcode class and localize it
+            if (has_shortcode($post->post_content, 'question_press_session')) {
+                $session_data = QP_Shortcodes::get_session_data_for_script();
+                if ($session_data) {
+                    wp_localize_script('qp-practice-script', 'qp_session_data', $session_data);
+                }
+            }
         }
-
+        
         if (has_shortcode($post->post_content, 'question_press_dashboard')) {
-            wp_enqueue_script('qp-dashboard-script', QP_PLUGIN_URL . 'public/assets/js/dashboard.js', ['jquery'], $dashboard_js_version, true);
+            wp_enqueue_script('qp-dashboard-script', QP_PLUGIN_URL . 'public/assets/js/dashboard.js', ['jquery'], filemtime(QP_PLUGIN_DIR . 'public/assets/js/dashboard.js'), true);
             wp_localize_script('qp-dashboard-script', 'qp_ajax_object', $ajax_data);
         }
     }
@@ -788,25 +776,49 @@ function qp_start_practice_session_ajax() {
     $question_ids = $wpdb->get_col($wpdb->prepare($query, $query_args));
 
     if (empty($question_ids)) {
-        $total_questions_matching_criteria = $wpdb->get_var(
-            $wpdb->prepare("SELECT COUNT(DISTINCT q.question_id) FROM {$q_table} q {$joins} WHERE " . $base_where_sql, $query_args)
-        );
-
-        $error_code = 'NO_QUESTIONS_EXIST';
-        if ($session_settings['revise_mode']) {
-            $error_code = 'NO_REVISION_QUESTIONS';
-        } else if ($total_questions_matching_criteria > 0) {
-            $error_code = 'ALL_ATTEMPTED';
+        // ... (logic to determine $error_code remains the same)
+        $error_html = '';
+        if ($error_code === 'ALL_ATTEMPTED') {
+            $error_html = '<div class="qp-practice-form-wrapper" style="text-align: center; padding: 40px 20px; background-color: #fff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);"><h2 style="margin-top:0; font-size: 22px;">You\'ve Mastered It!</h2><p style="font-size: 16px; color: #555; margin-bottom: 25px;">You have attempted all available questions for this criteria. Try Revision Mode or different settings.</p><button id="qp-go-back-btn" class="qp-button qp-button-secondary">Back to Form</button></div>';
+        } else if ($error_code === 'NO_REVISION_QUESTIONS') {
+             $error_html = '<div class="qp-practice-form-wrapper" style="text-align: center; padding: 40px 20px; background-color: #fff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);"><h2 style="margin-top:0; font-size: 22px;">Nothing to Revise Yet!</h2><p style="font-size: 16px; color: #555; margin-bottom: 25px;">You haven\'t attempted any questions matching this criteria yet. Try a regular practice session first.</p><button id="qp-go-back-btn" class="qp-button qp-button-primary">Back to Practice Form</button></div>';
+        } else { // NO_QUESTIONS_EXIST
+            $error_html = '<div class="qp-practice-form-wrapper" style="text-align: center; padding: 40px 20px; background-color: #fff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);"><h2 style="margin-top:0; font-size: 22px;">Fresh Questions Coming Soon!</h2><p style="font-size: 16px; color: #555; margin-bottom: 25px;">No questions were found matching your criteria. Please try different options.</p><button id="qp-go-back-btn" class="qp-button qp-button-secondary">Back to Practice Form</button></div>';
         }
-
-        wp_send_json_error(['error_code' => $error_code]);
+        wp_send_json_error(['html' => $error_html]);
     }
 
-    $sessions_table = $wpdb->prefix . 'qp_user_sessions';
-    $wpdb->insert($sessions_table, ['user_id' => $user_id, 'settings_snapshot' => wp_json_encode($session_settings)]);
+    // Get the Session Page URL from settings
+    $options = get_option('qp_settings');
+    $session_page_id = isset($options['session_page']) ? absint($options['session_page']) : 0;
+    if (!$session_page_id) {
+        wp_send_json_error(['message' => 'The administrator has not configured a session page.']);
+    }
+
+    global $wpdb;
+    // Create the session in the database
+    $wpdb->insert($wpdb->prefix . 'qp_user_sessions', [
+        'user_id'           => get_current_user_id(),
+        'settings_snapshot' => wp_json_encode($session_settings)
+    ]);
     $session_id = $wpdb->insert_id;
-    $response_data = ['ui_html' => QP_Shortcodes::render_practice_ui(), 'question_ids' => $question_ids, 'session_id' => $session_id, 'settings' => $session_settings];
-    wp_send_json_success($response_data);
+
+    // Prepare the data to be passed to the next page
+    $session_data = [
+        'session_id'    => $session_id,
+        'question_ids'  => $question_ids,
+        'settings'      => $session_settings,
+    ];
+
+    // Store this data in a transient (a temporary cached entry) that expires in 5 minutes
+    // The key is unique to the session ID
+    set_transient('qp_session_' . $session_id, $session_data, 5 * MINUTE_IN_SECONDS);
+
+    // Build the redirect URL
+    $redirect_url = add_query_arg('session_id', $session_id, get_permalink($session_page_id));
+
+    // Send the URL back to the JavaScript
+    wp_send_json_success(['redirect_url' => $redirect_url]);
 }
 add_action('wp_ajax_start_practice_session', 'qp_start_practice_session_ajax');
 

@@ -14,6 +14,21 @@ jQuery(document).ready(function ($) {
   var answeredStates = {}; // Stores the state for each question ID
   var practiceInProgress = false;
 
+  // --- NEW: Session Initialization on Page Load ---
+    // The qp_session_data object will only exist on the session page, localized by PHP
+    if (typeof qp_session_data !== 'undefined') {
+        // This code runs immediately when the new session page loads
+        practiceInProgress = true;
+        sessionID = qp_session_data.session_id;
+        sessionQuestionIDs = qp_session_data.question_ids;
+        sessionSettings = qp_session_data.settings;
+        
+        // Initialize UI and load the first question
+        updateHeaderStats();
+        loadQuestion(sessionQuestionIDs[currentQuestionIndex]);
+    }
+
+
   // --- Event Handlers ---
 
   // Logic for the timer checkbox on the settings form
@@ -25,78 +40,44 @@ jQuery(document).ready(function ($) {
     }
   });
 
-  // Handles form submission to start a session
-  wrapper.on("submit", "#qp-start-practice-form", function (e) {
-    e.preventDefault();
-    practiceInProgress = true;
-    var formData = $(this).serialize();
-    $.ajax({
-      url: qp_ajax_object.ajax_url,
-      type: "POST",
-      data: {
-        action: "start_practice_session",
-        nonce: qp_ajax_object.nonce,
-        settings: formData,
-      },
-      beforeSend: function () {
-        wrapper.html(
-          '<p style="text-align:center; padding: 50px;">Setting up your session...</p>'
-        );
-      },
-      success: function (response) {
-        practiceInProgress = false; // Reset flag on response
-        if (response.success) {
-          practiceInProgress = true; // Set flag only on successful session start
-          wrapper.html(response.data.ui_html);
-          sessionID = response.data.session_id;
-          sessionQuestionIDs = response.data.question_ids;
-          sessionSettings = response.data.settings;
-          currentQuestionIndex = 0;
-          score = 0;
-          correctCount = 0;
-          incorrectCount = 0;
-          skippedCount = 0;
-          answeredStates = {};
-          updateHeaderStats();
-          loadQuestion(sessionQuestionIDs[currentQuestionIndex]);
-        } else {
-          var errorCode = response.data.error_code;
-          var errorMessage = '';
+  // --- UPDATED: Form submission now handles a redirect ---
+    wrapper.on("submit", "#qp-start-practice-form", function (e) {
+        e.preventDefault();
+        var form = $(this);
+        var submitButton = form.find('input[type="submit"]');
+        var originalButtonText = submitButton.val();
 
-          if (errorCode === 'ALL_ATTEMPTED') {
-            errorMessage = `
-              <div class="qp-practice-form-wrapper" style="text-align: center; padding: 40px 20px; background-color: #fff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                <h2 style="margin-top:0; font-size: 22px;">You've Mastered It!</h2>
-                <p style="font-size: 16px; color: #555; margin-bottom: 25px;">You have attempted all of the available questions for this criteria. Try Revision Mode to practice them again, or go back to try different settings.</p>
-                <button id="qp-try-revision-btn" class="qp-button qp-button-primary">Try Revision Mode</button>
-                <button id="qp-go-back-btn" class="qp-button qp-button-secondary" style="margin-left: 10px;">Back to Form</button>
-              </div>`;
-          } else if (errorCode === 'NO_REVISION_QUESTIONS') {
-             errorMessage = `
-              <div class="qp-practice-form-wrapper" style="text-align: center; padding: 40px 20px; background-color: #fff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                <h2 style="margin-top:0; font-size: 22px;">Nothing to Revise Yet!</h2>
-                <p style="font-size: 16px; color: #555; margin-bottom: 25px;">You haven't attempted any questions matching this criteria yet. Try a regular practice session first.</p>
-                <button id="qp-go-back-btn" class="qp-button qp-button-primary">Back to Practice Form</button>
-              </div>`;
-          } else if (errorCode === 'NO_QUESTIONS_EXIST') {
-            errorMessage = `
-              <div class="qp-practice-form-wrapper" style="text-align: center; padding: 40px 20px; background-color: #fff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                <h2 style="margin-top:0; font-size: 22px;">Fresh Questions Coming Soon!</h2>
-                <p style="font-size: 16px; color: #555; margin-bottom: 25px;">We are adding more questions to your selected practice area soon. Try different options and subjects.</p>
-                <button id="qp-go-back-btn" class="qp-button qp-button-secondary">Back to Practice Form</button>
-              </div>`;
-          } else {
-            errorMessage = '<p style="text-align:center; color: red;">Error: ' + (response.data.message || 'An unknown error occurred.') + "</p>";
-          }
-          wrapper.html(errorMessage);
+        $.ajax({
+            url: qp_ajax_object.ajax_url,
+            type: "POST",
+            data: {
+                action: "start_practice_session",
+                nonce: qp_ajax_object.nonce,
+                settings: form.serialize(),
+            },
+            beforeSend: function () {
+                submitButton.val('Setting up session...').prop('disabled', true);
+            },
+            success: function (response) {
+    if (response.success && response.data.redirect_url) {
+        window.location.href = response.data.redirect_url;
+    } else {
+        // --- UPDATED ERROR HANDLING ---
+        // The backend now sends HTML directly for errors
+        if (response.data.html) {
+            wrapper.html(response.data.html);
+        } else {
+            alert('Error: ' + (response.data.message || 'An unknown error occurred.'));
+            submitButton.val(originalButtonText).prop('disabled', false);
         }
-      },
-      error: function() {
-        practiceInProgress = false;
-        wrapper.html('<p style="text-align:center; color: red;">A server error occurred. Please try again later.</p>');
-      }
+    }
+},
+            error: function() {
+                alert('A server error occurred. Please try again later.');
+                submitButton.val(originalButtonText).prop('disabled', false);
+            }
+        });
     });
-  });
 
   // Handler for the dynamic topic dropdown
   wrapper.on('change', '#qp_subject', function() {

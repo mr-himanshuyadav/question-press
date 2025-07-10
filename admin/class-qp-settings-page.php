@@ -42,6 +42,7 @@ class QP_Settings_Page {
         add_settings_section('qp_page_settings_section', 'Page Settings', [self::class, 'render_page_section_text'], 'qp-settings-page');
         add_settings_field('qp_practice_page', 'Practice Page', [self::class, 'render_practice_page_dropdown'], 'qp-settings-page', 'qp_page_settings_section');
         add_settings_field('qp_dashboard_page', 'Dashboard Page', [self::class, 'render_dashboard_page_dropdown'], 'qp-settings-page', 'qp_page_settings_section');
+    add_settings_field('qp_session_page', 'Session Page', [self::class, 'render_session_page_dropdown'], 'qp-settings-page', 'qp_page_settings_section');
 
         // Data Management Section
         add_settings_section('qp_data_settings_section', 'Data Management', [self::class, 'render_data_section_text'], 'qp-settings-page');
@@ -94,6 +95,18 @@ class QP_Settings_Page {
         ]);
         echo '<p class="description">Select the page that contains the <code>[question_press_dashboard]</code> shortcode.</p>';
     }
+
+    public static function render_session_page_dropdown() {
+    $options = get_option('qp_settings');
+    $selected = isset($options['session_page']) ? $options['session_page'] : 0;
+    wp_dropdown_pages([
+        'name' => 'qp_settings[session_page]',
+        'selected' => $selected,
+        'show_option_none' => '— Select a Page —',
+        'option_none_value' => '0'
+    ]);
+    echo '<p class="description">Select the page that will contain the <code>[question_press_session]</code> shortcode. This is where users will be redirected to take their test.</p>';
+}
 
     /**
      * Callback to render the description for the data section.
@@ -215,6 +228,9 @@ class QP_Settings_Page {
         if (isset($input['dashboard_page'])) {
             $new_input['dashboard_page'] = absint($input['dashboard_page']);
         }
+        if (isset($input['session_page'])) {
+        $new_input['session_page'] = absint($input['session_page']);
+    }
         
         if (isset($input['delete_on_uninstall'])) { $new_input['delete_on_uninstall'] = absint($input['delete_on_uninstall']); }
         

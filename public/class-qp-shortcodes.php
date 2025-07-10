@@ -4,6 +4,9 @@ if (!defined('ABSPATH')) exit;
 class QP_Shortcodes
 {
 
+    // A static property to temporarily hold session data for the script.
+    private static $session_data_for_script = null;
+
     public static function render_practice_form()
     {
         if (!is_user_logged_in()) {
@@ -17,6 +20,34 @@ class QP_Shortcodes
         $output .= self::render_settings_form();
         $output .= '</div>';
         return $output;
+    }
+
+    public static function render_session_page() {
+        // Check for a session ID in the URL.
+        if (!isset($_GET['session_id']) || !is_numeric($_GET['session_id'])) {
+            return '<div class="qp-container"><p>Error: No valid practice session was found. Please start a new session from the practice page.</p></div>';
+        }
+
+        $session_id = absint($_GET['session_id']);
+        $session_data = get_transient('qp_session_' . $session_id);
+
+        if (false === $session_data) {
+            return '<div class="qp-container"><p>Error: Your session has expired or is invalid. Please start a new session from the practice page.</p></div>';
+        }
+
+        // The transient is single-use, delete it after retrieval.
+        delete_transient('qp_session_' . $session_id);
+        
+        // Store the data in our static property so the enqueue function can access it.
+        self::$session_data_for_script = $session_data;
+
+        // Render the wrapper for our app. The JavaScript will build the UI inside this.
+        return '<div id="qp-practice-app-wrapper">' . self::render_practice_ui() . '</div>';
+    }
+    
+    // Helper function to get the session data
+    public static function get_session_data_for_script() {
+        return self::$session_data_for_script;
     }
 
     public static function render_settings_form()
