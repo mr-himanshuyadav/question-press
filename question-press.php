@@ -6,6 +6,10 @@
  * Author:            Himanshu
  */
 
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
 if (!defined('ABSPATH')) exit;
 
 // Define constants and include files
@@ -370,6 +374,12 @@ add_action('admin_enqueue_scripts', 'qp_admin_enqueue_scripts');
 
 // FORM & ACTION HANDLERS
 function qp_handle_form_submissions() {
+    if (isset($_GET['page']) && $_GET['page'] === 'qp-organization') {
+        QP_Sources_Page::handle_forms(); // <-- ADD THIS LINE
+        QP_Topics_Page::handle_forms();
+        QP_Subjects_Page::handle_forms(); // <-- ADD THIS LINE
+        QP_Labels_Page::handle_forms(); 
+    }
     QP_Export_Page::handle_export_submission();
     qp_handle_save_question_group();
     qp_handle_topic_forms();
@@ -378,6 +388,8 @@ function qp_handle_form_submissions() {
     qp_handle_resolve_log();
 }
 add_action('admin_init', 'qp_handle_form_submissions');
+add_action('admin_init', 'qp_run_source_data_migration');
+add_action('admin_notices', 'qp_show_migration_admin_notice');
 
 // *** ADD THIS ENTIRE NEW FUNCTION ***
 function qp_handle_topic_forms() {
@@ -1301,3 +1313,119 @@ function qp_get_sheets_for_topic_ajax() {
     wp_send_json_success(['labels' => $sheet_labels]);
 }
 add_action('wp_ajax_get_sheets_for_topic', 'qp_get_sheets_for_topic_ajax');
+
+
+// In question-press.php
+
+/**
+ * Handles the one-time data migration from the old source_file column
+ * to the new sources table. Triggered by a link in an admin notice.
+ */
+function qp_run_source_data_migration() {
+    // Check if the trigger is present in the URL and if the user is an admin
+    if (!isset($_GET['action']) || $_GET['action'] !== 'qp_migrate_sources' || !current_user_can('manage_options')) {
+        return;
+    }
+
+    // Security check
+    check_admin_referer('qp_source_migration_nonce');
+
+    global $wpdb;
+    $questions_table = $wpdb->prefix . 'qp_questions';
+    $sources_table = $wpdb->prefix . 'qp_sources';
+
+    // Get all distinct, non-empty source_file entries from the questions table
+    $old_source_files = $wpdb->get_col("SELECT DISTINCT source_file FROM {$questions_table} WHERE source_file IS NOT NULL AND source_file != ''");
+
+    if (empty($old_source_files)) {
+        // Nothing to migrate, so we just mark it as done
+        update_option('qp_source_migration_status', 'done');
+        wp_safe_redirect(remove_query_arg(['action', '_wpnonce']));
+        exit;
+    }
+
+    foreach ($old_source_files as $source_file_name) {
+        // Check if this source already exists in our new table
+        $existing_source_id = $wpdb->get_var($wpdb->prepare("SELECT source_id FROM {$sources_table} WHERE source_name = %s", $source_file_name));
+
+        if (null === $existing_source_id) {
+            // It doesn't exist, so insert it
+            $wpdb->insert(
+                $sources_table,
+                ['source_name' => $source_file_name, 'description' => 'Migrated from old source file.'],
+                ['%s', '%s']
+            );
+            $new_source_id = $wpdb->insert_id;
+        } else {
+            // It already exists, just get its ID
+            $new_source_id = $existing_source_id;
+        }
+
+        // Now, update all questions that used the old source_file name
+        // to point to the new source_id.
+        $wpdb->update(
+            $questions_table,
+            ['source_id' => $new_source_id],
+            ['source_file' => $source_file_name],
+            ['%d'],
+            ['%s']
+        );
+    }
+
+    // VERY IMPORTANT: Mark the migration as complete so the notice disappears.
+    update_option('qp_source_migration_status', 'done');
+
+    // Store a success message to show the user.
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        $_SESSION['qp_admin_message'] = 'Successfully migrated ' . count($old_source_files) . ' legacy sources to the new database structure.';
+        $_SESSION['qp_admin_message_type'] = 'success';
+    }
+
+
+    // Redirect back to the admin page without the action parameters
+    wp_safe_redirect(remove_query_arg(['action', '_wpnonce']));
+    exit;
+}
+
+// In question-press.php
+
+/**
+ * Displays a persistent admin notice if the source data migration needs to be run.
+ */
+function qp_show_migration_admin_notice() {
+    // Only show this notice to admins and only if the migration is not marked as 'done'
+    if (!current_user_can('manage_options') || get_option('qp_source_migration_status') === 'done') {
+        return;
+    }
+
+    // Check if we are on one of the plugin's pages
+    $screen = get_current_screen();
+    if (!$screen || strpos($screen->id, 'qp-') === false && strpos($screen->id, 'question-press') === false) {
+        return;
+    }
+    
+    // Display the success message after redirection
+    if (isset($_SESSION['qp_admin_message'])) {
+        echo '<div id="message" class="notice notice-' . esc_attr($_SESSION['qp_admin_message_type']) . ' is-dismissible"><p>' . esc_html($_SESSION['qp_admin_message']) . '</p></div>';
+        unset($_SESSION['qp_admin_message'], $_SESSION['qp_admin_message_type']);
+    }
+
+    // Create the URL for the migration button
+    $migration_url = add_query_arg(
+        [
+            'action' => 'qp_migrate_sources',
+            '_wpnonce' => wp_create_nonce('qp_source_migration_nonce'),
+        ]
+    );
+    ?>
+    <div class="notice notice-warning is-dismissible">
+        <h3>Question Press Data Update</h3>
+        <p>
+            The Question Press plugin has been updated with a new database structure for question sources. Please run the one-time data update script to migrate your existing data. This is a required step.
+        </p>
+        <p>
+            <a href="<?php echo esc_url($migration_url); ?>" class="button button-primary">Run Data Migration</a>
+        </p>
+    </div>
+    <?php
+}

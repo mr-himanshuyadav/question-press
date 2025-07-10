@@ -1,22 +1,62 @@
 <?php
-
-if (!defined('ABSPATH')) {
-    exit; // Exit if accessed directly.
-}
+if (!defined('ABSPATH')) exit;
 
 class QP_Subjects_Page {
 
-    /**
-     * Handles all logic and rendering for the Subjects admin page.
-     */
+    public static function handle_forms() {
+        if ((!isset($_POST['action']) && !isset($_GET['action'])) || !isset($_GET['tab']) || $_GET['tab'] !== 'subjects') {
+            return;
+        }
+        global $wpdb;
+        $table_name = $wpdb->prefix . 'qp_subjects';
+
+        // Add/Update Handler
+        if (isset($_POST['action']) && ($_POST['action'] === 'add_subject' || $_POST['action'] === 'update_subject') && check_admin_referer('qp_add_edit_subject_nonce')) {
+            $subject_name = sanitize_text_field($_POST['subject_name']);
+            $description = sanitize_textarea_field($_POST['subject_description']);
+
+            if (empty($subject_name)) {
+                QP_Sources_Page::set_message('Subject name cannot be empty.', 'error');
+            } else {
+                $data = ['subject_name' => $subject_name, 'description' => $description];
+                if ($_POST['action'] === 'update_subject') {
+                    $subject_id = absint($_POST['subject_id']);
+                    if (strtolower($wpdb->get_var($wpdb->prepare("SELECT subject_name FROM $table_name WHERE subject_id = %d", $subject_id))) === 'uncategorized') {
+                        unset($data['subject_name']); // Don't allow changing the 'Uncategorized' name
+                    }
+                    $wpdb->update($table_name, $data, ['subject_id' => $subject_id]);
+                    QP_Sources_Page::set_message('Subject updated.', 'updated');
+                } else {
+                    $wpdb->insert($table_name, $data);
+                    QP_Sources_Page::set_message('Subject added.', 'updated');
+                }
+            }
+            QP_Sources_Page::redirect_to_tab('subjects');
+        }
+
+        // Delete Handler
+        if (isset($_GET['action']) && $_GET['action'] === 'delete' && isset($_GET['subject_id']) && check_admin_referer('qp_delete_subject_' . absint($_GET['subject_id']))) {
+            $subject_id = absint($_GET['subject_id']);
+            if (strtolower($wpdb->get_var($wpdb->prepare("SELECT subject_name FROM $table_name WHERE subject_id = %d", $subject_id))) === 'uncategorized') {
+                QP_Sources_Page::set_message('The "Uncategorized" subject cannot be deleted.', 'error');
+            } else {
+                $usage_count = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$wpdb->prefix}qp_question_groups WHERE subject_id = %d", $subject_id));
+                if ($usage_count > 0) {
+                    QP_Sources_Page::set_message("This subject cannot be deleted because it is in use by {$usage_count} question group(s).", 'error');
+                } else {
+                    $wpdb->delete($table_name, ['subject_id' => $subject_id]);
+                    QP_Sources_Page::set_message('Subject deleted successfully.', 'updated');
+                }
+            }
+            QP_Sources_Page::redirect_to_tab('subjects');
+        }
+    }
+
     public static function render() {
         global $wpdb;
         $table_name = $wpdb->prefix . 'qp_subjects';
-        $message = '';
-        $message_type = ''; // 'updated' or 'error'
         $subject_to_edit = null;
 
-        // --- Check if we are in EDIT mode ---
         if (isset($_GET['action']) && $_GET['action'] === 'edit' && isset($_GET['subject_id'])) {
             $subject_id = absint($_GET['subject_id']);
             if (isset($_GET['_wpnonce']) && wp_verify_nonce($_GET['_wpnonce'], 'qp_edit_subject_' . $subject_id)) {
@@ -24,157 +64,86 @@ class QP_Subjects_Page {
             }
         }
         
-        // --- Handle Update Subject Form Submission ---
-        if (isset($_POST['update_subject']) && isset($_POST['subject_id']) && check_admin_referer('qp_update_subject_nonce')) {
-            $subject_id = absint($_POST['subject_id']);
-            $description = sanitize_textarea_field($_POST['subject_description']);
-            $subject_name = sanitize_text_field($_POST['subject_name']);
-            
-            $current_subject = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table_name WHERE subject_id = %d", $subject_id));
-
-            $update_data = ['description' => $description];
-            
-            if ($current_subject && strtolower($current_subject->subject_name) !== 'uncategorized') {
-                $update_data['subject_name'] = $subject_name;
-            }
-
-            $result = $wpdb->update($table_name, $update_data, ['subject_id' => $subject_id]);
-
-            if ($result !== false) {
-                 $message = 'Subject updated successfully.';
-                 $message_type = 'updated';
-            } else {
-                $message = 'An error occurred while updating the subject.';
-                $message_type = 'error';
-            }
-            $subject_to_edit = null; // Clear edit mode
-        }
-
-        // --- Handle Add Subject Form Submission ---
-        if (isset($_POST['add_subject']) && check_admin_referer('qp_add_subject_nonce')) {
-            $subject_name = sanitize_text_field($_POST['subject_name']);
-            $description = sanitize_textarea_field($_POST['subject_description']);
-            if (!empty($subject_name)) {
-                $result = $wpdb->insert($table_name, [
-                    'subject_name' => $subject_name,
-                    'description' => $description
-                ]);
-                if ($result) {
-                    $message = 'Subject added successfully.';
-                    $message_type = 'updated';
-                } else {
-                    $message = 'An error occurred while adding the subject.';
-                    $message_type = 'error';
-                }
-            } else {
-                $message = 'Subject name cannot be empty.';
-                $message_type = 'error';
-            }
-        }
-        
-        // --- Handle Delete Subject Action ---
-        if (isset($_GET['action']) && $_GET['action'] === 'delete' && isset($_GET['subject_id'])) {
-            $subject_id = absint($_GET['subject_id']);
-            if (isset($_GET['_wpnonce']) && wp_verify_nonce($_GET['_wpnonce'], 'qp_delete_subject_' . $subject_id)) {
-                $subject_to_delete = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table_name WHERE subject_id = %d", $subject_id));
-                if ($subject_to_delete && strtolower($subject_to_delete->subject_name) !== 'uncategorized') {
-                    $wpdb->delete($table_name, ['subject_id' => $subject_id]);
-                    $message = 'Subject deleted successfully.';
-                    $message_type = 'updated';
-                } else {
-                    $message = 'The "Uncategorized" subject cannot be deleted.';
-                    $message_type = 'error';
-                }
-            }
-        }
-
-        // Get all subjects from the database
         $subjects = $wpdb->get_results("SELECT * FROM $table_name ORDER BY subject_name ASC");
+        
+        if (isset($_SESSION['qp_admin_message'])) {
+            echo '<div id="message" class="notice notice-' . esc_attr($_SESSION['qp_admin_message_type']) . ' is-dismissible"><p>' . esc_html($_SESSION['qp_admin_message']) . '</p></div>';
+            unset($_SESSION['qp_admin_message'], $_SESSION['qp_admin_message_type']);
+        }
         ?>
-
-            <div id="col-container" class="wp-clearfix">
-                <div id="col-left">
-                    <div class="col-wrap">
-                        <div class="form-wrap">
-                            <h2><?php echo $subject_to_edit ? 'Edit Subject' : 'Add New Subject'; ?></h2>
+        <div id="col-container" class="wp-clearfix">
+            <div id="col-left">
+                <div class="col-wrap">
+                    <div class="form-wrap">
+                        <h2><?php echo $subject_to_edit ? 'Edit Subject' : 'Add New Subject'; ?></h2>
+                        <form method="post" action="admin.php?page=qp-organization&tab=subjects">
+                            <?php wp_nonce_field('qp_add_edit_subject_nonce'); ?>
+                            <input type="hidden" name="action" value="<?php echo $subject_to_edit ? 'update_subject' : 'add_subject'; ?>">
+                            <?php if ($subject_to_edit) : ?>
+                                <input type="hidden" name="subject_id" value="<?php echo esc_attr($subject_to_edit->subject_id); ?>">
+                            <?php endif; ?>
                             
-                            <form method="post" action="admin.php?page=qp-subjects">
+                            <div class="form-field form-required">
+                                <label for="subject-name">Name</label>
+                                <input name="subject_name" id="subject-name" type="text" value="<?php echo $subject_to_edit ? esc_attr($subject_to_edit->subject_name) : ''; ?>" size="40" required <?php echo ($subject_to_edit && strtolower($subject_to_edit->subject_name) === 'uncategorized') ? 'readonly' : ''; ?>>
+                                <?php if ($subject_to_edit && strtolower($subject_to_edit->subject_name) === 'uncategorized'): ?>
+                                <p>The "Uncategorized" name cannot be changed.</p>
+                                <?php endif; ?>
+                            </div>
+
+                            <div class="form-field">
+                                <label for="subject-description">Description</label>
+                                <textarea name="subject_description" id="subject-description" rows="3" cols="40"><?php echo $subject_to_edit && isset($subject_to_edit->description) ? esc_textarea($subject_to_edit->description) : ''; ?></textarea>
+                            </div>
+
+                            <p class="submit">
+                                <input type="submit" class="button button-primary" value="<?php echo $subject_to_edit ? 'Update Subject' : 'Add New Subject'; ?>">
                                 <?php if ($subject_to_edit) : ?>
-                                    <?php wp_nonce_field('qp_update_subject_nonce'); ?>
-                                    <input type="hidden" name="subject_id" value="<?php echo esc_attr($subject_to_edit->subject_id); ?>">
-                                <?php else : ?>
-                                    <?php wp_nonce_field('qp_add_subject_nonce'); ?>
+                                    <a href="admin.php?page=qp-organization&tab=subjects" class="button button-secondary">Cancel Edit</a>
                                 <?php endif; ?>
-                                
-                                <div class="form-field form-required">
-                                    <label for="subject-name">Name</label>
-                                    <input name="subject_name" id="subject-name" type="text" value="<?php echo $subject_to_edit ? esc_attr($subject_to_edit->subject_name) : ''; ?>" size="40" aria-required="true" required <?php echo ($subject_to_edit && strtolower($subject_to_edit->subject_name) === 'uncategorized') ? 'readonly' : ''; ?>>
-                                    <p>The name is how it appears on your site. The "Uncategorized" name cannot be changed.</p>
-                                </div>
-
-                                <div class="form-field">
-                                    <label for="subject-description">Description</label>
-                                    <textarea name="subject_description" id="subject-description" rows="3" cols="40"><?php echo $subject_to_edit && isset($subject_to_edit->description) ? esc_textarea($subject_to_edit->description) : ''; ?></textarea>
-                                    <p>The description is not prominent by default; it is primarily for administrative use.</p>
-                                </div>
-
-                                <p class="submit">
-                                    <?php if ($subject_to_edit) : ?>
-                                        <input type="submit" name="update_subject" id="submit" class="button button-primary" value="Update Subject">
-                                        <a href="admin.php?page=qp-subjects" class="button button-secondary">Cancel Edit</a>
-                                    <?php else : ?>
-                                        <input type="submit" name="add_subject" id="submit" class="button button-primary" value="Add New Subject">
-                                    <?php endif; ?>
-                                </p>
-                            </form>
-                        </div>
+                            </p>
+                        </form>
                     </div>
-                </div><div id="col-right">
-                    <div class="col-wrap">
-                        <table class="wp-list-table widefat fixed striped">
-                            <thead>
+                </div>
+            </div>
+            <div id="col-right">
+                <div class="col-wrap">
+                    <table class="wp-list-table widefat fixed striped">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Description</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php if (!empty($subjects)) : foreach ($subjects as $subject) : ?>
                                 <tr>
-                                    <th scope="col" class="manage-column">Name</th>
-                                    <th scope="col" class="manage-column">Description</th>
-                                    <th scope="col" class="manage-column">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="the-list">
-                                <?php if (!empty($subjects)) : ?>
-                                    <?php foreach ($subjects as $subject) : ?>
-                                        <tr>
-                                            <td><?php echo esc_html($subject->subject_name); ?></td>
-                                            <td><?php echo isset($subject->description) ? esc_html($subject->description) : ''; ?></td>
-                                            <td>
-                                                <?php
-                                                    $edit_nonce = wp_create_nonce('qp_edit_subject_' . $subject->subject_id);
-                                                    $edit_link = sprintf('<a href="?page=%s&action=edit&subject_id=%s&_wpnonce=%s">Edit</a>', esc_attr($_REQUEST['page']), absint($subject->subject_id), $edit_nonce);
+                                    <td><?php echo esc_html($subject->subject_name); ?></td>
+                                    <td><?php echo isset($subject->description) ? esc_html($subject->description) : ''; ?></td>
+                                    <td>
+                                        <?php
+                                            $edit_nonce = wp_create_nonce('qp_edit_subject_' . $subject->subject_id);
+                                            $edit_link = sprintf('<a href="?page=qp-organization&tab=subjects&action=edit&subject_id=%s&_wpnonce=%s">Edit</a>', $subject->subject_id, $edit_nonce);
 
-                                                    if (strtolower($subject->subject_name) !== 'uncategorized') {
-                                                        $delete_nonce = wp_create_nonce('qp_delete_subject_' . $subject->subject_id);
-                                                        $delete_link = sprintf(
-                                                            '<a href="?page=%s&action=delete&subject_id=%s&_wpnonce=%s" style="color:#a00;" onclick="return confirm(\'Are you sure you want to delete this subject?\');">Delete</a>',
-                                                            esc_attr($_REQUEST['page']),
-                                                            absint($subject->subject_id),
-                                                            $delete_nonce
-                                                        );
-                                                        echo $edit_link . ' | ' . $delete_link;
-                                                    } else {
-                                                        echo $edit_link . ' (Default)';
-                                                    }
-                                                ?>
-                                            </td>
-                                        </tr>
-                                    <?php endforeach; ?>
-                                <?php else : ?>
-                                    <tr class="no-items">
-                                        <td class="colspanchange" colspan="3">No subjects found.</td>
-                                    </tr>
-                                <?php endif; ?>
-                            </tbody>
-                        </table>
-                    </div>
-                </div></div></div>
+                                            if (strtolower($subject->subject_name) !== 'uncategorized') {
+                                                $delete_nonce = wp_create_nonce('qp_delete_subject_' . $subject->subject_id);
+                                                $delete_link = sprintf('<a href="?page=qp-organization&tab=subjects&action=delete&subject_id=%s&_wpnonce=%s" style="color:#a00;">Delete</a>', $subject->subject_id, $delete_nonce);
+                                                echo $edit_link . ' | ' . $delete_link;
+                                            } else {
+                                                echo $edit_link;
+                                            }
+                                        ?>
+                                    </td>
+                                </tr>
+                            <?php endforeach; else : ?>
+                                <tr class="no-items"><td colspan="3">No subjects found.</td></tr>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
         <?php
     }
 }
