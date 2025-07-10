@@ -67,11 +67,10 @@ function qp_activate_plugin() {
     // --- NEW: Table for Exams ---
     $table_exams = $wpdb->prefix . 'qp_exams';
     $sql_exams = "CREATE TABLE $table_exams (
-        exam_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
-        exam_name VARCHAR(255) NOT NULL,
-        exam_year VARCHAR(4),
-        PRIMARY KEY (exam_id)
-    ) $charset_collate;";
+    exam_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+    exam_name VARCHAR(255) NOT NULL,
+    PRIMARY KEY (exam_id)
+) $charset_collate;";
     dbDelta($sql_exams);
 
     // --- NEW: Pivot Table for Exam-Subject relationship ---
@@ -87,11 +86,13 @@ function qp_activate_plugin() {
     // --- NEW: Table for Sources ---
     $table_sources = $wpdb->prefix . 'qp_sources';
     $sql_sources = "CREATE TABLE $table_sources (
-        source_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
-        source_name VARCHAR(255) NOT NULL,
-        description TEXT,
-        PRIMARY KEY (source_id)
-    ) $charset_collate;";
+    source_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+    subject_id BIGINT(20) UNSIGNED NOT NULL,
+    source_name VARCHAR(255) NOT NULL,
+    description TEXT,
+    PRIMARY KEY (source_id),
+    KEY subject_id (subject_id)
+) $charset_collate;";
     dbDelta($sql_sources);
 
     // --- NEW: Table for Source Sections ---
@@ -272,7 +273,7 @@ function qp_admin_menu() {
     add_submenu_page('question-press', 'Add New', 'Add New', 'manage_options', 'qp-question-editor', ['QP_Question_Editor_Page', 'render']);
 
     // --- NEW: Unified Organization Page ---
-    add_submenu_page('question-press', 'Organization', 'Organization', 'manage_options', 'qp-organization', 'qp_render_organization_page');
+    add_submenu_page('question-press', 'Organize', 'Organize', 'manage_options', 'qp-organization', 'qp_render_organization_page');
 
     add_submenu_page('question-press', 'Import', 'Import', 'manage_options', 'qp-import', ['QP_Import_Page', 'render']);
     add_submenu_page('question-press', 'Export', 'Export', 'manage_options', 'qp-export', ['QP_Export_Page', 'render']);
@@ -296,7 +297,8 @@ function qp_render_organization_page() {
     $active_tab = isset($_GET['tab']) && array_key_exists($_GET['tab'], $tabs) ? $_GET['tab'] : 'subjects';
     ?>
     <div class="wrap">
-        <h1 class="wp-heading-inline">Organization</h1>
+        <h1 class="wp-heading-inline">Organize</h1>
+        <p>Organize you questions using different taxanomies here.</p>
         <hr class="wp-header-end">
 
         <nav class="nav-tab-wrapper wp-clearfix" aria-label="Secondary menu">
@@ -379,6 +381,7 @@ function qp_handle_form_submissions() {
         QP_Topics_Page::handle_forms();
         QP_Subjects_Page::handle_forms(); // <-- ADD THIS LINE
         QP_Labels_Page::handle_forms(); 
+        QP_Exams_Page::handle_forms(); 
     }
     QP_Export_Page::handle_export_submission();
     qp_handle_save_question_group();
@@ -390,6 +393,10 @@ function qp_handle_form_submissions() {
 add_action('admin_init', 'qp_handle_form_submissions');
 add_action('admin_init', 'qp_run_source_data_migration');
 add_action('admin_notices', 'qp_show_migration_admin_notice');
+add_action('admin_init', 'qp_run_details_data_migration');
+add_action('admin_notices', 'qp_show_details_migration_notice');
+add_action('admin_init', 'qp_run_orphan_source_migration');
+add_action('admin_notices', 'qp_show_orphan_source_notice');
 
 // *** ADD THIS ENTIRE NEW FUNCTION ***
 function qp_handle_topic_forms() {
@@ -470,95 +477,111 @@ function get_question_custom_id($question_id) {
 
 
 function qp_handle_save_question_group() {
-    if (!isset($_POST['save_group']) || !isset($_POST['_wpnonce']) || !wp_verify_nonce($_POST['_wpnonce'], 'qp_save_question_group_nonce')) { return; }
+    if (!isset($_POST['save_group']) || !isset($_POST['_wpnonce']) || !wp_verify_nonce($_POST['_wpnonce'], 'qp_save_question_group_nonce')) {
+        return;
+    }
 
     global $wpdb;
     $group_id = isset($_POST['group_id']) ? absint($_POST['group_id']) : 0;
     $is_editing = $group_id > 0;
 
+    // --- Get all data from the metaboxes ---
     $direction_text = isset($_POST['direction_text']) ? stripslashes($_POST['direction_text']) : '';
     $direction_image_id = absint($_POST['direction_image_id']);
     $subject_id = absint($_POST['subject_id']);
-    $topic_id = isset($_POST['topic_id']) ? absint($_POST['topic_id']) : 0; // Get the topic ID
+    $topic_id = isset($_POST['topic_id']) ? absint($_POST['topic_id']) : 0;
+    $source_id = isset($_POST['source_id']) ? absint($_POST['source_id']) : 0;
+    $section_id = isset($_POST['section_id']) ? absint($_POST['section_id']) : 0;
+    $question_num = isset($_POST['question_number_in_section']) ? sanitize_text_field($_POST['question_number_in_section']) : '';
     $is_pyq = isset($_POST['is_pyq']) ? 1 : 0;
+    $exam_id = isset($_POST['exam_id']) ? absint($_POST['exam_id']) : 0;
+    $pyq_year = isset($_POST['pyq_year']) ? sanitize_text_field($_POST['pyq_year']) : '';
+
+
     $questions_from_form = isset($_POST['questions']) ? (array) $_POST['questions'] : [];
 
-    if (empty($subject_id) || empty($questions_from_form)) { return; }
+    if (empty($subject_id) || empty($questions_from_form)) {
+        // You might want to add an admin notice here for failed validation
+        return;
+    }
 
+    // --- Group Data ---
     $group_data = [
         'direction_text' => sanitize_textarea_field($direction_text),
         'direction_image_id' => $direction_image_id,
         'subject_id' => $subject_id
     ];
-
-    // --- FINAL, CORRECTED REDIRECT LOGIC ---
     if ($is_editing) {
-        // This part is for when you are EDITING an existing question. It is correct.
-        if (!empty($_POST['redirect_to'])) {
-             wp_safe_redirect(esc_url_raw($_POST['redirect_to']));
-             exit;
-        }
-        $redirect_url = admin_url('admin.php?page=question-press&message=1');
+        $wpdb->update("{$wpdb->prefix}qp_question_groups", $group_data, ['group_id' => $group_id]);
     } else {
-        // UPDATED: This is the fix.
-        // When creating a NEW question, redirect back to the blank "Add New" page with a success message.
-        $redirect_url = admin_url('admin.php?page=qp-question-editor&message=2');
+        $wpdb->insert("{$wpdb->prefix}qp_question_groups", $group_data);
+        $group_id = $wpdb->insert_id;
     }
-    
-    wp_safe_redirect($redirect_url);
-    exit;
 
-    $q_table = "{$wpdb->prefix}qp_questions"; $o_table = "{$wpdb->prefix}qp_options"; $ql_table = "{$wpdb->prefix}qp_question_labels";
+    // --- Process Questions ---
+    $q_table = "{$wpdb->prefix}qp_questions";
+    $o_table = "{$wpdb->prefix}qp_options";
+    $ql_table = "{$wpdb->prefix}qp_question_labels";
     $existing_q_ids = $is_editing ? $wpdb->get_col($wpdb->prepare("SELECT question_id FROM $q_table WHERE group_id = %d", $group_id)) : [];
-
     $submitted_q_ids = [];
-    if (!empty($questions_from_form)) {
-        foreach ($questions_from_form as $q_index => $q_data) {
-            $question_text = isset($q_data['question_text']) ? stripslashes($q_data['question_text']) : '';
-            if (empty(trim($question_text))) { continue; }
 
-            $question_id = isset($q_data['question_id']) ? absint($q_data['question_id']) : 0;
-            $question_db_data = [
-                'group_id' => $group_id,
-                'topic_id' => $topic_id > 0 ? $topic_id : null, // Save the topic ID
-                'question_text' => sanitize_textarea_field($question_text),
-                'is_pyq' => $is_pyq,
-                'question_text_hash' => md5(strtolower(trim(preg_replace('/\s+/', '', $question_text))))
-            ];
+    foreach ($questions_from_form as $q_data) {
+        $question_text = isset($q_data['question_text']) ? stripslashes($q_data['question_text']) : '';
+        if (empty(trim($question_text))) continue;
 
-            if ($question_id > 0 && in_array($question_id, $existing_q_ids)) {
-                $wpdb->update($q_table, $question_db_data, ['question_id' => $question_id]);
-                $submitted_q_ids[] = $question_id;
-            } else {
-                $next_custom_id = get_option('qp_next_custom_question_id', 1000);
-                $question_db_data['custom_question_id'] = $next_custom_id;
-                $wpdb->insert($q_table, $question_db_data);
-                $question_id = $wpdb->insert_id;
-                update_option('qp_next_custom_question_id', $next_custom_id + 1);
-                $submitted_q_ids[] = $question_id;
+        $question_id = isset($q_data['question_id']) ? absint($q_data['question_id']) : 0;
+        
+        // --- This data applies to EVERY question in the group ---
+        $question_db_data = [
+            'group_id' => $group_id,
+            'question_text' => sanitize_textarea_field($question_text),
+            'question_text_hash' => md5(strtolower(trim(preg_replace('/\s+/', '', $question_text)))),
+            'topic_id' => $topic_id > 0 ? $topic_id : null,
+            'source_id' => $source_id > 0 ? $source_id : null,
+            'section_id' => $section_id > 0 ? $section_id : null,
+            'question_number_in_section' => $question_num,
+            'is_pyq' => $is_pyq,
+            'exam_id' => $is_pyq && $exam_id > 0 ? $exam_id : null,
+            'pyq_year' => $is_pyq ? $pyq_year : null,
+        ];
+
+        if ($question_id > 0 && in_array($question_id, $existing_q_ids)) {
+            // Update existing question
+            $wpdb->update($q_table, $question_db_data, ['question_id' => $question_id]);
+            $submitted_q_ids[] = $question_id;
+        } else {
+            // Insert new question
+            $next_custom_id = get_option('qp_next_custom_question_id', 1000);
+            $question_db_data['custom_question_id'] = $next_custom_id;
+            $wpdb->insert($q_table, $question_db_data);
+            $question_id = $wpdb->insert_id;
+            update_option('qp_next_custom_question_id', $next_custom_id + 1);
+            $submitted_q_ids[] = $question_id;
+        }
+
+        // --- Process Options ---
+        $wpdb->delete($o_table, ['question_id' => $question_id]);
+        $options = isset($q_data['options']) ? (array)$q_data['options'] : [];
+        $correct_option_index = isset($q_data['is_correct_option']) ? absint($q_data['is_correct_option']) : -1;
+        foreach ($options as $index => $option_text) {
+            if (!empty(trim($option_text))) {
+                $wpdb->insert($o_table, [
+                    'question_id' => $question_id,
+                    'option_text' => sanitize_text_field(stripslashes($option_text)),
+                    'is_correct' => ($index === $correct_option_index) ? 1 : 0
+                ]);
             }
+        }
 
-            $wpdb->delete($o_table, ['question_id' => $question_id]);
-            $options = isset($q_data['options']) ? (array) $q_data['options'] : [];
-            $correct_option_index = isset($q_data['is_correct_option']) ? absint($q_data['is_correct_option']) : -1;
-
-            foreach ($options as $index => $option_text) {
-                if (!empty(trim($option_text))) {
-                    $clean_option_text = stripslashes($option_text);
-                    $wpdb->insert($o_table, [
-                        'question_id' => $question_id,
-                        'option_text' => sanitize_text_field($clean_option_text),
-                        'is_correct' => ($index === $correct_option_index) ? 1 : 0
-                    ]);
-                }
-            }
-
-            $wpdb->delete($ql_table, ['question_id' => $question_id]);
-            $labels = isset($q_data['labels']) ? array_map('absint', $q_data['labels']) : [];
-            foreach ($labels as $label_id) { $wpdb->insert($ql_table, ['question_id' => $question_id, 'label_id' => $label_id]); }
+        // --- Process Labels ---
+        $wpdb->delete($ql_table, ['question_id' => $question_id]);
+        $labels = isset($q_data['labels']) ? array_map('absint', $q_data['labels']) : [];
+        foreach ($labels as $label_id) {
+            $wpdb->insert($ql_table, ['question_id' => $question_id, 'label_id' => $label_id]);
         }
     }
 
+    // --- Clean up removed questions ---
     $questions_to_delete = array_diff($existing_q_ids, $submitted_q_ids);
     if (!empty($questions_to_delete)) {
         $ids_placeholder = implode(',', array_map('absint', $questions_to_delete));
@@ -566,14 +589,16 @@ function qp_handle_save_question_group() {
         $wpdb->query("DELETE FROM $ql_table WHERE question_id IN ($ids_placeholder)");
         $wpdb->query("DELETE FROM $q_table WHERE question_id IN ($ids_placeholder)");
     }
-
-    if ($is_editing && count($submitted_q_ids) === 0) {
+    
+    // --- Delete the group if it becomes empty ---
+    if ($is_editing && empty($submitted_q_ids)) {
         $wpdb->delete("{$wpdb->prefix}qp_question_groups", ['group_id' => $group_id]);
         wp_safe_redirect(admin_url('admin.php?page=question-press&message=1'));
         exit;
     }
 
-    $redirect_url = $is_editing ? admin_url('admin.php?page=question-press&message=1') : admin_url('admin.php?page=qp-edit-group&group_id=' . $group_id . '&message=2');
+    // --- Redirect on success ---
+    $redirect_url = $is_editing ? admin_url('admin.php?page=qp-edit-group&group_id=' . $group_id . '&message=1') : admin_url('admin.php?page=qp-edit-group&group_id=' . $group_id . '&message=2');
     wp_safe_redirect($redirect_url);
     exit;
 }
@@ -1425,6 +1450,159 @@ function qp_show_migration_admin_notice() {
         </p>
         <p>
             <a href="<?php echo esc_url($migration_url); ?>" class="button button-primary">Run Data Migration</a>
+        </p>
+    </div>
+    <?php
+}
+
+/**
+ * Handles the one-time data migration for question numbers and PYQ status.
+ */
+function qp_run_details_data_migration() {
+    if (!isset($_GET['action']) || $_GET['action'] !== 'qp_migrate_details' || !current_user_can('manage_options')) {
+        return;
+    }
+    check_admin_referer('qp_details_migration_nonce');
+
+    global $wpdb;
+    $questions_table = $wpdb->prefix . 'qp_questions';
+
+    // Get all questions that have a legacy source_number but no new question_number_in_section
+    $questions_to_migrate = $wpdb->get_results(
+        "SELECT question_id, source_number FROM {$questions_table} WHERE source_number IS NOT NULL AND (question_number_in_section IS NULL OR question_number_in_section = '')"
+    );
+
+    if (empty($questions_to_migrate)) {
+        update_option('qp_details_migration_status', 'done');
+        wp_safe_redirect(remove_query_arg(['action', '_wpnonce']));
+        exit;
+    }
+
+    $migrated_count = 0;
+    foreach ($questions_to_migrate as $question) {
+        $wpdb->update(
+            $questions_table,
+            ['question_number_in_section' => $question->source_number], // Copy old number to new column
+            ['question_id' => $question->question_id],
+            ['%s'],
+            ['%d']
+        );
+        $migrated_count++;
+    }
+
+    // Mark this specific migration as complete.
+    update_option('qp_details_migration_status', 'done');
+
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        $_SESSION['qp_admin_message'] = 'Successfully migrated question numbers for ' . $migrated_count . ' questions.';
+        $_SESSION['qp_admin_message_type'] = 'success';
+    }
+
+    wp_safe_redirect(remove_query_arg(['action', '_wpnonce']));
+    exit;
+}
+
+/**
+ * Displays an admin notice for the details migration if it needs to be run.
+ */
+function qp_show_details_migration_notice() {
+    if (!current_user_can('manage_options') || get_option('qp_details_migration_status') === 'done') {
+        return;
+    }
+    
+    // Only show on our plugin pages
+    $screen = get_current_screen();
+    if (!$screen || strpos($screen->id, 'qp-') === false && strpos($screen->id, 'question-press') === false) {
+        return;
+    }
+
+    $migration_url = add_query_arg(
+        ['action' => 'qp_migrate_details', '_wpnonce' => wp_create_nonce('qp_details_migration_nonce')]
+    );
+    ?>
+    <div class="notice notice-info is-dismissible">
+        <h3>Question Press Data Update (Step 2)</h3>
+        <p>
+            An update is needed to migrate your legacy question numbers to the new database structure.
+        </p>
+        <p>
+            <a href="<?php echo esc_url($migration_url); ?>" class="button button-primary">Migrate Question Numbers</a>
+        </p>
+    </div>
+    <?php
+}
+
+// In question-press.php
+
+/**
+ * Handles the one-time migration for orphaned sources that have no subject assigned.
+ */
+function qp_run_orphan_source_migration() {
+    if (!isset($_GET['action']) || $_GET['action'] !== 'qp_migrate_orphan_sources' || !current_user_can('manage_options')) {
+        return;
+    }
+    check_admin_referer('qp_orphan_source_migration_nonce');
+
+    global $wpdb;
+    $sources_table = $wpdb->prefix . 'qp_sources';
+    $subjects_table = $wpdb->prefix . 'qp_subjects';
+
+    // Find the ID for the "Uncategorized" subject
+    $uncategorized_subject_id = $wpdb->get_var($wpdb->prepare("SELECT subject_id FROM {$subjects_table} WHERE subject_name = %s", 'Uncategorized'));
+
+    if (!$uncategorized_subject_id) {
+        // Failsafe in case "Uncategorized" was deleted, though it shouldn't be possible.
+        update_option('qp_orphan_source_migration_status', 'done');
+        wp_safe_redirect(remove_query_arg(['action', '_wpnonce']));
+        exit;
+    }
+
+    // Find all sources where subject_id is 0 or NULL
+    $updated_rows = $wpdb->update(
+        $sources_table,
+        ['subject_id' => $uncategorized_subject_id],
+        ['subject_id' => 0],
+        ['%d'],
+        ['%d']
+    );
+
+    // Mark migration as complete
+    update_option('qp_orphan_source_migration_status', 'done');
+
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        $_SESSION['qp_admin_message'] = $updated_rows > 0 ? 'Successfully assigned ' . $updated_rows . ' orphaned sources to the "Uncategorized" subject.' : 'No orphaned sources found to migrate.';
+        $_SESSION['qp_admin_message_type'] = 'success';
+    }
+
+    wp_safe_redirect(remove_query_arg(['action', '_wpnonce']));
+    exit;
+}
+
+
+/**
+ * Displays an admin notice for the orphaned sources migration if it needs to be run.
+ */
+function qp_show_orphan_source_notice() {
+    if (!current_user_can('manage_options') || get_option('qp_orphan_source_migration_status') === 'done') {
+        return;
+    }
+    
+    $screen = get_current_screen();
+    if (!$screen || strpos($screen->id, 'qp-') === false && strpos($screen->id, 'question-press') === false) {
+        return;
+    }
+
+    $migration_url = add_query_arg(
+        ['action' => 'qp_migrate_orphan_sources', '_wpnonce' => wp_create_nonce('qp_orphan_source_migration_nonce')]
+    );
+    ?>
+    <div class="notice notice-info is-dismissible">
+        <h3>Question Press Data Update (Step 3)</h3>
+        <p>
+            An update is needed to find any old question sources that are not assigned to a subject. This script will assign them to "Uncategorized" so you can manage them.
+        </p>
+        <p>
+            <a href="<?php echo esc_url($migration_url); ?>" class="button button-primary">Find and Assign Orphaned Sources</a>
         </p>
     </div>
     <?php

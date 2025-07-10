@@ -1,20 +1,30 @@
 <?php
 if (!defined('ABSPATH')) exit;
 
-class QP_Question_Editor_Page {
+class QP_Question_Editor_Page
+{
 
-    public static function render() {
+    public static function render()
+    {
         global $wpdb;
         $group_id = isset($_GET['group_id']) ? absint($_GET['group_id']) : 0;
         $is_editing = $group_id > 0;
-        
+
         // Data holders
         $direction_text = '';
         $direction_image_id = 0;
         $current_subject_id = 0;
-        $current_topic_id = 0; // New variable for topic
+        $current_topic_id = 0;
         $questions_in_group = [];
+
+        // --- NEW data holders ---
         $is_pyq_group = false;
+        $current_exam_id = 0;
+        $current_pyq_year = '';
+        $current_source_id = 0;
+        $current_section_id = 0;
+        $current_question_num = '';
+
 
         if ($is_editing) {
             $g_table = $wpdb->prefix . 'qp_question_groups';
@@ -22,101 +32,124 @@ class QP_Question_Editor_Page {
             $o_table = $wpdb->prefix . 'qp_options';
             $ql_table = $wpdb->prefix . 'qp_question_labels';
             $l_table = $wpdb->prefix . 'qp_labels';
-            
+
             $group_data = $wpdb->get_row($wpdb->prepare("SELECT * FROM $g_table WHERE group_id = %d", $group_id));
             if ($group_data) {
                 $direction_text = $group_data->direction_text;
                 $direction_image_id = $group_data->direction_image_id;
                 $current_subject_id = $group_data->subject_id;
-                
+
                 $questions_in_group = $wpdb->get_results($wpdb->prepare(
-                    "SELECT question_id, custom_question_id, question_text, is_pyq, topic_id, source_file, source_page, source_number 
-                     FROM {$q_table} WHERE group_id = %d ORDER BY question_id ASC", $group_id
+                    "SELECT * FROM {$q_table} WHERE group_id = %d ORDER BY question_id ASC",
+                    $group_id
                 ));
-                
+
                 if (!empty($questions_in_group)) {
-                    $is_pyq_group = (bool)$questions_in_group[0]->is_pyq; 
-                    $current_topic_id = $questions_in_group[0]->topic_id; // Get topic from the first question
+                    // --- Get details from the FIRST question to populate metaboxes ---
+                    $first_q = $questions_in_group[0];
+                    $is_pyq_group = !empty($first_q->is_pyq);
+                    $current_topic_id = $first_q->topic_id ?? 0;
+                    $current_exam_id = $first_q->exam_id ?? 0;
+                    $current_pyq_year = $first_q->pyq_year ?? '';
+                    $current_source_id = $first_q->source_id ?? 0;
+                    $current_section_id = $first_q->section_id ?? 0;
+                    $current_question_num = $first_q->question_number_in_section ?? '';
+
+
                     foreach ($questions_in_group as $q) {
                         $q->options = $wpdb->get_results($wpdb->prepare("SELECT * FROM $o_table WHERE question_id = %d ORDER BY option_id ASC", $q->question_id));
-                        $q->labels = $wpdb->get_results($wpdb->prepare("SELECT l.label_id, l.label_name, l.label_color FROM {$ql_table} ql JOIN {$l_table} l ON ql.label_id = l.label_id WHERE ql.question_id = %d", $q->question_id));
+                        $q->labels = $wpdb->get_results($wpdb->prepare("SELECT l.label_id, l.label_name FROM {$ql_table} ql JOIN {$l_table} l ON ql.label_id = l.label_id WHERE ql.question_id = %d", $q->question_id));
                     }
                 }
-            }
-
-            $question_ids_in_group = wp_list_pluck($questions_in_group, 'question_id');
-            if (!empty($question_ids_in_group)) {
-                $ids_placeholder = implode(',', array_map('absint', $question_ids_in_group));
-                $logs_table = $wpdb->prefix . 'qp_logs';
-                $question_logs = $wpdb->get_results("SELECT * FROM $logs_table WHERE resolved = 0 AND log_data LIKE '%\"question_id\"%' AND JSON_EXTRACT(log_data, '$.question_id') IN ($ids_placeholder) ORDER BY log_date DESC");
             }
         }
 
         if (empty($questions_in_group)) {
+            // Default for a new, empty form
             $questions_in_group[] = (object)['question_id' => 0, 'custom_question_id' => 'New', 'question_text' => '', 'is_pyq' => 0, 'options' => [], 'labels' => []];
         }
 
+        // --- Fetch ALL data needed for the form dropdowns ---
         $all_subjects = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}qp_subjects ORDER BY subject_name ASC");
         $all_topics = $wpdb->get_results("SELECT topic_id, topic_name, subject_id FROM {$wpdb->prefix}qp_topics ORDER BY topic_name ASC");
         $all_labels = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}qp_labels ORDER BY label_name ASC");
-        
-        // Prepare topics data for JavaScript
+        $all_exams = $wpdb->get_results("SELECT exam_id, exam_name FROM {$wpdb->prefix}qp_exams ORDER BY exam_name ASC");
+        $all_sources = $wpdb->get_results("SELECT source_id, source_name FROM {$wpdb->prefix}qp_sources ORDER BY source_name ASC");
+        $all_sections = $wpdb->get_results("SELECT section_id, section_name, source_id FROM {$wpdb->prefix}qp_source_sections ORDER BY section_name ASC");
+
+
+        // Prepare topics and sections data for JavaScript
         $topics_by_subject = [];
         foreach ($all_topics as $topic) {
-            if (!isset($topics_by_subject[$topic->subject_id])) {
-                $topics_by_subject[$topic->subject_id] = [];
-            }
             $topics_by_subject[$topic->subject_id][] = ['id' => $topic->topic_id, 'name' => $topic->topic_name];
         }
+        $sections_by_source = [];
+        foreach ($all_sections as $section) {
+            $sections_by_source[$section->source_id][] = ['id' => $section->section_id, 'name' => $section->section_name];
+        }
 
-        // Pass data to JavaScript
+        // Pass all necessary data to our JavaScript file
         wp_localize_script('qp-editor-script', 'qp_editor_data', [
-            'topics_by_subject' => $topics_by_subject,
-            'current_topic_id' => $current_topic_id,
+            'topics_by_subject'   => $topics_by_subject,
+            'sections_by_source'  => $sections_by_source,
+            'current_topic_id'    => $current_topic_id,
+            'current_section_id'  => $current_section_id,
         ]);
-        
+
         if (isset($_GET['message'])) {
             $message = $_GET['message'] === '1' ? 'Question(s) updated successfully.' : 'Question(s) saved successfully.';
             echo '<div id="message" class="notice notice-success is-dismissible"><p>' . esc_html($message) . '</p></div>';
         }
-        ?>
+?>
         <div class="wrap">
             <h1 class="wp-heading-inline"><?php echo $is_editing ? 'Edit Question Group' : 'Add New Question Group'; ?></h1>
             <a href="<?php echo admin_url('admin.php?page=question-press'); ?>" class="page-title-action">Back to All Questions</a>
             <hr class="wp-header-end">
 
-            <?php if (!empty($question_logs)) : ?>
-            <div id="qp-question-logs" class="notice notice-warning">
-                <h4><span class="dashicons dashicons-flag"></span> This Question Group has open reports:</h4>
-                <ul style="margin-left: 20px; list-style: disc;">
-                    <?php foreach ($question_logs as $log) : 
-                        $resolve_nonce = wp_create_nonce('qp_resolve_log_' . $log->log_id);
-                        $resolve_link = admin_url('admin.php?page=qp-edit-group&group_id=' . $group_id . '&action=resolve_log&log_id=' . $log->log_id . '&_wpnonce=' . $resolve_nonce);
-                    ?>
-                        <li style="display:flex; justify-content:space-between; align-items:center;">
-                            <span><strong><?php echo esc_html($log->log_date); ?>:</strong> <?php echo esc_html($log->log_message); ?></span>
-                            <a href="<?php echo esc_url($resolve_link); ?>" class="button button-small">Mark as Resolved</a>
-                        </li>
-                    <?php endforeach; ?>
-                </ul>
-            </div>
-            <?php endif; ?>
-
             <form method="post" action="">
                 <?php wp_nonce_field('qp_save_question_group_nonce'); ?>
-                <?php // ADD THIS LINE to pass the referer URL
-                wp_referer_field(); ?>
                 <input type="hidden" name="group_id" value="<?php echo esc_attr($group_id); ?>">
 
                 <div id="poststuff">
                     <div id="post-body" class="metabox-holder columns-2">
                         <div id="post-body-content">
-                            
+                            <div class="postbox">
+                                <h2 class="hndle"><span>PYQ Details</span></h2>
+                                <div class="inside">
+                                    <div class="qp-horizontal-flex-group">
+                                        
+                                        <div class="qp-flex-item qp-flex-item-shrink">
+                                            <label for="is_pyq_checkbox"><strong>Is a PYQ?</strong></label>
+                                            <input type="checkbox" name="is_pyq" id="is_pyq_checkbox" value="1" <?php checked($is_pyq_group, 1); ?>>
+                                        </div>
+
+                                        <div id="pyq_fields_wrapper" class="qp-flex-item-grow" style="<?php echo $is_pyq_group ? '' : 'display: none;'; ?>">
+                                            <div class="qp-horizontal-flex-group">
+                                                <div class="qp-flex-item qp-flex-item-grow">
+                                                    <label for="exam_id"><strong>Exam</strong></label>
+                                                    <select name="exam_id" id="exam_id" style="width: 100%;">
+                                                        <option value="">— Select an Exam —</option>
+                                                        <?php foreach($all_exams as $exam) : ?>
+                                                            <option value="<?php echo esc_attr($exam->exam_id); ?>" <?php selected($current_exam_id, $exam->exam_id); ?>>
+                                                                <?php echo esc_html($exam->exam_name); ?>
+                                                            </option>
+                                                        <?php endforeach; ?>
+                                                    </select>
+                                                </div>
+                                                <div class="qp-flex-item">
+                                                    <label for="pyq_year"><strong>Year</strong></label>
+                                                    <input type="number" name="pyq_year" value="<?php echo esc_attr($current_pyq_year); ?>" style="width: 100%;" placeholder="e.g., 2023">
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                    </div>
+                                </div>
+                            </div>
                             <div class="postbox">
                                 <h2 class="hndle"><span>Direction (Optional Passage)</span></h2>
                                 <div class="inside">
                                     <textarea name="direction_text" style="width: 100%; height: 100px;"><?php echo esc_textarea($direction_text); ?></textarea>
-                                    <p class="description">This text will appear above all questions in this group. You can use LaTeX for math by enclosing it in dollar signs, e.g., <code>$E=mc^2$</code>.</p>
                                     <hr>
                                     <div>
                                         <input type="hidden" name="direction_image_id" id="direction-image-id" value="<?php echo esc_attr($direction_image_id); ?>">
@@ -130,66 +163,43 @@ class QP_Question_Editor_Page {
                                     </div>
                                 </div>
                             </div>
-                            
-                            <div id="qp-question-blocks-container">
-                                <?php foreach ($questions_in_group as $q_index => $question) : 
-                                    $current_label_ids = wp_list_pluck($question->labels, 'label_id');
-                $source_parts = [];
-                if (!empty($question->source_file)) { $source_parts[] = 'File: ' . esc_html($question->source_file); }
-                if (!empty($question->source_page)) { $source_parts[] = 'Page: ' . esc_html($question->source_page); }
-                if (!empty($question->source_number)) { $source_parts[] = 'No: ' . esc_html($question->source_number); }
-                $source_text = implode(' | ', $source_parts);
-                    
-                                ?>
-                                <div class="postbox qp-question-block">
-                                    <div class="postbox-header">
-                                        <h2 class="hndle">
-                                            <span>Question (ID: <?php echo esc_html($question->custom_question_id); ?>)</span>
-                                            <?php if ($source_text) : ?>
-                            <small style="font-weight: normal; margin-left: 10px;">Source: <?php echo $source_text; ?></small>
-                        <?php endif; ?>
-                                        </h2>
-                                        
 
-                                        <div class="handle-actions">
-                                            <button type="button" class="button-link remove-question-block">Remove</button>
+                            <div id="qp-question-blocks-container">
+                                <?php foreach ($questions_in_group as $q_index => $question) :
+                                    $current_label_ids = wp_list_pluck($question->labels, 'label_id');
+                                ?>
+                                    <div class="postbox qp-question-block">
+                                        <div class="postbox-header">
+                                            <h2 class="hndle">
+                                                <span>Question (ID: <?php echo esc_html($question->custom_question_id); ?>)</span>
+                                            </h2>
+                                            <div class="handle-actions">
+                                                <button type="button" class="button-link remove-question-block">Remove</button>
+                                            </div>
                                         </div>
-                                    </div>
-                                    <div class="inside">
-                                        <?php if(!empty($question->labels)) : ?>
-                                            <div class="current-labels-display">
-                                                <?php foreach($question->labels as $label): ?>
-                                                    <span style="background-color: <?php echo esc_attr($label->label_color); ?>; color: #fff; padding: 2px 6px; font-size: 11px; border-radius: 3px;"><?php echo esc_html($label->label_name); ?></span>
+                                        <div class="inside">
+                                            <input type="hidden" name="questions[<?php echo $q_index; ?>][question_id]" class="question-id-input" value="<?php echo esc_attr($question->question_id); ?>">
+                                            <textarea name="questions[<?php echo $q_index; ?>][question_text]" class="question-text-area" style="width: 100%; height: 100px;" placeholder="Enter question text here..." required><?php echo esc_textarea($question->question_text); ?></textarea>
+                                            <hr>
+                                            <p><strong>Options (Select the radio button for the correct answer)</strong></p>
+                                            <?php for ($i = 0; $i < 5; $i++) :
+                                                $option = isset($question->options[$i]) ? $question->options[$i] : null;
+                                                $is_correct = $option ? $option->is_correct : ($i == 0 && !$is_editing);
+                                            ?>
+                                                <div class="qp-option-row" style="display: flex; align-items: center; margin-bottom: 5px;">
+                                                    <input type="radio" name="questions[<?php echo $q_index; ?>][is_correct_option]" value="<?php echo $i; ?>" <?php checked($is_correct); ?>>
+                                                    <input type="text" name="questions[<?php echo $q_index; ?>][options][]" class="option-text-input" value="<?php echo $option ? esc_attr($option->option_text) : ''; ?>" style="flex-grow: 1; margin: 0 5px;" placeholder="Option <?php echo $i + 1; ?>">
+                                                </div>
+                                            <?php endfor; ?>
+                                            <hr>
+                                            <p><strong>Labels for this Question:</strong></p>
+                                            <div class="labels-group">
+                                                <?php foreach ($all_labels as $label) : ?>
+                                                    <label class="inline-checkbox"><input value="<?php echo esc_attr($label->label_id); ?>" type="checkbox" name="questions[<?php echo $q_index; ?>][labels][]" class="label-checkbox" <?php checked(in_array($label->label_id, $current_label_ids)); ?>> <?php echo esc_html($label->label_name); ?></label>
                                                 <?php endforeach; ?>
                                             </div>
-                                        <?php endif; ?>
-
-                                        <input type="hidden" name="questions[<?php echo $q_index; ?>][question_id]" class="question-id-input" value="<?php echo esc_attr($question->question_id); ?>">
-                                        <textarea name="questions[<?php echo $q_index; ?>][question_text]" class="question-text-area" style="width: 100%; height: 100px;" placeholder="Enter question text here..." required><?php echo esc_textarea($question->question_text); ?></textarea>
-                                        <p class="description">You can use LaTeX for math, e.g., <code>$x^2$</code>.</p>
-                                        <hr>
-                                        <p><strong>Options (Select the radio button for the correct answer)</strong></p>
-                                        <?php
-                                        $option_count = 5;
-                                        for ($i = 0; $i < $option_count; $i++) : 
-                                            $option = isset($question->options[$i]) ? $question->options[$i] : null;
-                                            $is_correct = $option ? $option->is_correct : ($i == 0 && !$is_editing);
-                                        ?>
-                                        <div class="qp-option-row" style="display: flex; align-items: center; margin-bottom: 5px;">
-                                            <input type="radio" name="questions[<?php echo $q_index; ?>][is_correct_option]" value="<?php echo $i; ?>" <?php checked($is_correct); ?>>
-                                            <input type="text" name="questions[<?php echo $q_index; ?>][options][]" class="option-text-input" value="<?php echo $option ? esc_attr($option->option_text) : ''; ?>" style="flex-grow: 1; margin: 0 5px;" placeholder="Option <?php echo $i + 1; ?>">
-                                        </div>
-                                        <?php endfor; ?>
-                                        <p class="description">At least 4 options are recommended. You can use LaTeX here too.</p>
-                                        <hr>
-                                        <p><strong>Labels for this Question:</strong></p>
-                                        <div class="labels-group">
-                                            <?php foreach ($all_labels as $label) : ?>
-                                                <label class="inline-checkbox"><input value="<?php echo esc_attr($label->label_id); ?>" type="checkbox" name="questions[<?php echo $q_index; ?>][labels][]" class="label-checkbox" <?php checked(in_array($label->label_id, $current_label_ids)); ?>> <?php echo esc_html($label->label_name); ?></label>
-                                            <?php endforeach; ?>
                                         </div>
                                     </div>
-                                </div>
                                 <?php endforeach; ?>
                             </div>
                             <button type="button" id="add-new-question-block" class="button button-secondary">+ Add Another Question</button>
@@ -199,23 +209,18 @@ class QP_Question_Editor_Page {
                             <div class="postbox">
                                 <h2 class="hndle"><span>Publish</span></h2>
                                 <div class="inside">
-                                    <div class="submitbox" id="submitpost">
-                                        <div id="major-publishing-actions">
-                                            <div id="publishing-action">
-                                                <input name="save_group" type="submit" class="button button-primary button-large" id="publish" value="<?php echo $is_editing ? 'Update Question(s)' : 'Save Question(s)'; ?>">
-                                            </div>
-                                            <div class="clear"></div>
-                                        </div>
+                                    <div id="major-publishing-actions">
+                                        <input name="save_group" type="submit" class="button button-primary button-large" id="publish" value="<?php echo $is_editing ? 'Update Group' : 'Save Group'; ?>">
                                     </div>
                                 </div>
                             </div>
-                             <div class="postbox">
+                            <div class="postbox">
                                 <h2 class="hndle"><span>Categorization</span></h2>
                                 <div class="inside">
                                     <p>
-                                        <label for="subject_id" style="font-weight: bold; display: block; margin-bottom: 5px;">Subject</label>
+                                        <label for="subject_id"><strong>Subject</strong></label>
                                         <select name="subject_id" id="subject_id" style="width: 100%;">
-                                            <?php foreach($all_subjects as $subject) : ?>
+                                            <?php foreach ($all_subjects as $subject) : ?>
                                                 <option value="<?php echo esc_attr($subject->subject_id); ?>" <?php selected($current_subject_id, $subject->subject_id); ?>>
                                                     <?php echo esc_html($subject->subject_name); ?>
                                                 </option>
@@ -223,7 +228,7 @@ class QP_Question_Editor_Page {
                                         </select>
                                     </p>
                                     <p>
-                                        <label for="topic_id" style="font-weight: bold; display: block; margin-bottom: 5px;">Topic</label>
+                                        <label for="topic_id"><strong>Topic</strong></label>
                                         <select name="topic_id" id="topic_id" style="width: 100%;" disabled>
                                             <option value="">— Select a subject first —</option>
                                         </select>
@@ -231,20 +236,67 @@ class QP_Question_Editor_Page {
                                 </div>
                             </div>
                             <div class="postbox">
-                                <h2 class="hndle"><span>Settings</span></h2>
+                                <h2 class="hndle"><span>Source Details</span></h2>
                                 <div class="inside">
-                                    <label><input type="checkbox" name="is_pyq" value="1" <?php checked($is_pyq_group, 1); ?>> PYQ (Applies to all questions in this group)</label>
+                                    <p>
+                                        <label for="source_id"><strong>Source</strong></label>
+                                        <select name="source_id" id="source_id" style="width: 100%;">
+                                            <option value="">— Select a Source —</option>
+                                            <?php foreach ($all_sources as $source) : ?>
+                                                <option value="<?php echo esc_attr($source->source_id); ?>" <?php selected($current_source_id, $source->source_id); ?>>
+                                                    <?php echo esc_html($source->source_name); ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </p>
+                                    <p>
+                                        <label for="section_id"><strong>Section</strong></label>
+                                        <select name="section_id" id="section_id" style="width: 100%;" <?php echo $current_source_id ? '' : 'disabled'; ?>>
+                                            <option value="">— Select a source first —</option>
+                                        </select>
+                                    </p>
+                                    <p>
+                                        <label for="question_number_in_section"><strong>Question Number</strong></label>
+                                        <input type="text" name="question_number_in_section" value="<?php echo esc_attr($current_question_num); ?>" style="width: 100%;">
+                                    </p>
                                 </div>
                             </div>
                         </div>
-                    </div><br class="clear">
-                </div></form>
+                    </div>
+                </div>
+            </form>
+
         </div>
         <style>
-            .current-labels-display { margin-bottom: 10px; display: flex; flex-wrap: wrap; gap: 5px; }
-            .labels-group { display: flex; flex-wrap: wrap; gap: 5px 15px; padding: 5px; border: 1px solid #ddd; background: #fff; max-height: 100px; overflow-y: auto; }
-            .inline-checkbox { white-space: nowrap; }
+            .qp-horizontal-flex-group {
+                display: flex;
+                align-items: flex-end; /* Aligns items to the bottom, looks better with labels above */
+                gap: 20px; /* Space between items */
+                width: 100%;
+            }
+            .qp-flex-item {
+                display: flex;
+                flex-direction: column; /* Stack label on top of input */
+            }
+            .qp-flex-item-grow {
+                flex-grow: 1; /* Allows this item to take up remaining space */
+            }
+            .qp-flex-item-shrink {
+                flex-shrink: 0; /* Prevents this item from shrinking */
+            }
+            .qp-flex-item label {
+                margin-bottom: 3px;
+                font-weight: bold;
+            }
+            /* Specific alignment for the checkbox */
+            .qp-flex-item-shrink label {
+                display: block;
+            }
+            .qp-flex-item-shrink input[type="checkbox"] {
+                transform: scale(1.5); /* Makes checkbox bigger */
+                margin-top: 5px;
+            }
         </style>
-        <?php
+<?php
     }
 }

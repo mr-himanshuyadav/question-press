@@ -381,7 +381,31 @@ class QP_Questions_List_Table extends WP_List_Table
             if ('untrash' === $action) {
                 $wpdb->query("UPDATE {$q_table} SET status = 'publish' WHERE question_id IN ({$ids_placeholder})");
             }
-            // ... (delete and remove_label logic remains the same) ...
+            if ('delete' === $action) {
+                $g_table = $wpdb->prefix . 'qp_question_groups';
+                $group_ids = $wpdb->get_col("SELECT DISTINCT group_id FROM {$q_table} WHERE question_id IN ({$ids_placeholder})");
+                $group_ids = array_filter($group_ids);
+
+                $wpdb->query("DELETE FROM {$wpdb->prefix}qp_options WHERE question_id IN ({$ids_placeholder})");
+                $wpdb->query("DELETE FROM {$wpdb->prefix}qp_question_labels WHERE question_id IN ({$ids_placeholder})");
+                $wpdb->query("DELETE FROM {$q_table} WHERE question_id IN ({$ids_placeholder})");
+
+                if (!empty($group_ids)) {
+                    foreach ($group_ids as $group_id) {
+                        $remaining = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$q_table} WHERE group_id = %d", $group_id));
+                        if ($remaining == 0) {
+                            $wpdb->delete($g_table, ['group_id' => $group_id]);
+                        }
+                    }
+                }
+            }
+            if (strpos($action, 'remove_label_') === 0) {
+                $ql_table = $wpdb->prefix . 'qp_question_labels';
+                $label_id_to_remove = absint(str_replace('remove_label_', '', $action));
+                if ($label_id_to_remove > 0) {
+                    $wpdb->query("DELETE FROM {$ql_table} WHERE label_id = {$label_id_to_remove} AND question_id IN ({$ids_placeholder})");
+                }
+            }
         }
     }
 
