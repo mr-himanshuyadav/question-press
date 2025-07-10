@@ -14,18 +14,56 @@ jQuery(document).ready(function ($) {
   var answeredStates = {}; // Stores the state for each question ID
   var practiceInProgress = false;
 
-  // --- NEW: Session Initialization on Page Load ---
-    // The qp_session_data object will only exist on the session page, localized by PHP
+  // --- UPDATED: Session Initialization with State Restoration ---
     if (typeof qp_session_data !== 'undefined') {
-        // This code runs immediately when the new session page loads
         practiceInProgress = true;
         sessionID = qp_session_data.session_id;
         sessionQuestionIDs = qp_session_data.question_ids;
         sessionSettings = qp_session_data.settings;
         
-        // Initialize UI and load the first question
+        // Restore state from attempt history
+        if (qp_session_data.attempt_history) {
+            var lastAttemptedIndex = -1;
+            for (var i = 0; i < sessionQuestionIDs.length; i++) {
+                var qid = sessionQuestionIDs[i];
+                if (qp_session_data.attempt_history[qid]) {
+                    var attempt = qp_session_data.attempt_history[qid];
+                    lastAttemptedIndex = i;
+
+                    if (attempt.is_correct === null) { // Skipped
+                        answeredStates[qid] = { type: "skipped" };
+                        skippedCount++;
+                    } else { // Answered
+                        var isCorrect = parseInt(attempt.is_correct, 10) === 1;
+                        answeredStates[qid] = {
+                            type: "answered",
+                            is_correct: isCorrect,
+                            selected_option_id: attempt.selected_option_id,
+                            // We don't have correct_option_id here, but it's only needed for display
+                            // and will be fetched when the question loads.
+                        };
+                        if (isCorrect) {
+                            correctCount++;
+                            score += parseFloat(sessionSettings.marks_correct);
+                        } else {
+                            incorrectCount++;
+                            score += parseFloat(sessionSettings.marks_incorrect);
+                        }
+                    }
+                }
+            }
+            // Resume from the next question after the last attempted one
+            currentQuestionIndex = lastAttemptedIndex + 1;
+        }
+
         updateHeaderStats();
-        loadQuestion(sessionQuestionIDs[currentQuestionIndex]);
+
+        if (currentQuestionIndex >= sessionQuestionIDs.length) {
+            // If all questions were already answered, show the summary
+            $("#qp-end-practice-btn").click();
+        } else {
+            loadQuestion(sessionQuestionIDs[currentQuestionIndex]);
+        }
     }
 
 
