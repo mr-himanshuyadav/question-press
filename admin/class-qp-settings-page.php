@@ -11,6 +11,12 @@ class QP_Settings_Page {
         <div class="wrap">
             <h1>Question Press Settings</h1>
             <?php
+                // Display settings errors and messages (including our migration report)
+                if (isset($_SESSION['qp_admin_message'])) {
+                    $message = html_entity_decode($_SESSION['qp_admin_message']);
+                    echo '<div id="message" class="notice notice-' . esc_attr($_SESSION['qp_admin_message_type']) . ' is-dismissible"><p>' . $message . '</p></div>';
+                    unset($_SESSION['qp_admin_message'], $_SESSION['qp_admin_message_type']);
+                }
                 settings_errors();
             ?>
             <form action="options.php" method="post">
@@ -32,7 +38,7 @@ class QP_Settings_Page {
     public static function register_settings() {
         register_setting('qp_settings_group', 'qp_settings', ['sanitize_callback' => [self::class, 'sanitize_settings']]);
         
-        // New Page Settings Section
+        // Page Settings Section
         add_settings_section('qp_page_settings_section', 'Page Settings', [self::class, 'render_page_section_text'], 'qp-settings-page');
         add_settings_field('qp_practice_page', 'Practice Page', [self::class, 'render_practice_page_dropdown'], 'qp-settings-page', 'qp_page_settings_section');
         add_settings_field('qp_dashboard_page', 'Dashboard Page', [self::class, 'render_dashboard_page_dropdown'], 'qp-settings-page', 'qp_page_settings_section');
@@ -43,6 +49,10 @@ class QP_Settings_Page {
         add_settings_field('qp_show_source_meta_roles', 'Display Source Meta To', [self::class, 'render_source_meta_role_multiselect'], 'qp-settings-page', 'qp_data_settings_section');
         add_settings_field('qp_delete_on_uninstall', 'Delete Data on Uninstall', [self::class, 'render_delete_data_checkbox'], 'qp-settings-page', 'qp_data_settings_section');
         
+        // --- CORRECTED: Data Migration Section ---
+        add_settings_section('qp_migration_settings_section', 'Data Tools', [self::class, 'render_migration_section_text'], 'qp-settings-page');
+        add_settings_field('qp_unified_migration', 'Database Migration', [self::class, 'render_unified_migration_button'], 'qp-settings-page', 'qp_migration_settings_section');
+
         // API Section
         add_settings_section('qp_api_settings_section', 'REST API Documentation', [self::class, 'render_api_section_text'], 'qp-settings-page');
         add_settings_field('qp_api_secret_key', 'JWT Secret Key', [self::class, 'render_api_key_field'], 'qp-settings-page', 'qp_api_settings_section');
@@ -221,5 +231,33 @@ class QP_Settings_Page {
         }
         
         return $new_input;
+    }
+
+    /**
+     * Renders the descriptive text for the data migration section.
+     */
+    public static function render_migration_section_text() {
+        echo '<p>Use these tools to update your database to the latest schema. It is recommended to back up your database before running.</p>';
+    }
+
+    /**
+     * Renders the button for the unified data migration tool.
+     */
+    public static function render_unified_migration_button() {
+        $migration_url = add_query_arg(
+            [
+                'action' => 'qp_unified_migration',
+                '_wpnonce' => wp_create_nonce('qp_unified_migration_nonce'),
+            ],
+            admin_url('admin.php?page=qp-settings')
+        );
+        ?>
+        <a href="<?php echo esc_url($migration_url); ?>" class="button button-danger">Run Full Data Migration & Cleanup</a>
+        <p class="description">
+            <strong>Warning:</strong> This tool performs irreversible changes to your database to match the latest schema.
+            <br>It will migrate legacy sources, question numbers, and PYQ status, and then permanently delete the old columns.
+            <br><strong>Please back up your database before proceeding.</strong> It is safe to click this button multiple times.
+        </p>
+        <?php
     }
 }

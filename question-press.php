@@ -37,7 +37,8 @@ require_once QP_PLUGIN_DIR . 'api/class-qp-rest-api.php';
 
 
 // Activation, Deactivation, Uninstall Hooks
-function qp_activate_plugin() {
+function qp_activate_plugin()
+{
     global $wpdb;
     $charset_collate = $wpdb->get_charset_collate();
     require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
@@ -379,12 +380,11 @@ function qp_admin_enqueue_scripts($hook_suffix)
 add_action('admin_enqueue_scripts', 'qp_admin_enqueue_scripts');
 
 // FORM & ACTION HANDLERS
-function qp_handle_form_submissions()
-{
+function qp_handle_form_submissions() {
     if (isset($_GET['page']) && $_GET['page'] === 'qp-organization') {
-        QP_Sources_Page::handle_forms(); // <-- ADD THIS LINE
+        QP_Sources_Page::handle_forms();
         QP_Topics_Page::handle_forms();
-        QP_Subjects_Page::handle_forms(); // <-- ADD THIS LINE
+        QP_Subjects_Page::handle_forms();
         QP_Labels_Page::handle_forms();
         QP_Exams_Page::handle_forms();
     }
@@ -394,14 +394,10 @@ function qp_handle_form_submissions()
     QP_Settings_Page::register_settings();
     qp_handle_clear_logs();
     qp_handle_resolve_log();
+    // --- ADD THIS LINE to hook our new unified migration handler ---
+    qp_run_unified_data_migration();
 }
 add_action('admin_init', 'qp_handle_form_submissions');
-add_action('admin_init', 'qp_run_source_data_migration');
-add_action('admin_notices', 'qp_show_migration_admin_notice');
-add_action('admin_init', 'qp_run_details_data_migration');
-add_action('admin_notices', 'qp_show_details_migration_notice');
-add_action('admin_init', 'qp_run_orphan_source_migration');
-add_action('admin_notices', 'qp_show_orphan_source_notice');
 
 // *** ADD THIS ENTIRE NEW FUNCTION ***
 function qp_handle_topic_forms()
@@ -502,7 +498,8 @@ function get_question_custom_id($question_id)
 }
 
 
-function qp_handle_save_question_group() {
+function qp_handle_save_question_group()
+{
     if (!isset($_POST['save_group']) || !isset($_POST['_wpnonce']) || !wp_verify_nonce($_POST['_wpnonce'], 'qp_save_question_group_nonce')) {
         return;
     }
@@ -519,7 +516,7 @@ function qp_handle_save_question_group() {
     $source_id = isset($_POST['source_id']) ? absint($_POST['source_id']) : 0;
     $section_id = isset($_POST['section_id']) ? absint($_POST['section_id']) : 0;
     $question_num = isset($_POST['question_number_in_section']) ? sanitize_text_field($_POST['question_number_in_section']) : '';
-    
+
     // --- UPDATED: Get group-level PYQ data from the form ---
     $is_pyq = isset($_POST['is_pyq']) ? 1 : 0;
     $exam_id = isset($_POST['exam_id']) ? absint($_POST['exam_id']) : 0;
@@ -562,7 +559,7 @@ function qp_handle_save_question_group() {
         if (empty(trim($question_text))) continue;
 
         $question_id = isset($q_data['question_id']) ? absint($q_data['question_id']) : 0;
-        
+
         // --- UPDATED: This data applies to EVERY question in the group, PYQ fields removed ---
         $question_db_data = [
             'group_id' => $group_id,
@@ -618,7 +615,7 @@ function qp_handle_save_question_group() {
         $wpdb->query("DELETE FROM $ql_table WHERE question_id IN ($ids_placeholder)");
         $wpdb->query("DELETE FROM $q_table WHERE question_id IN ($ids_placeholder)");
     }
-    
+
     // --- Delete the group if it becomes empty ---
     if ($is_editing && empty($submitted_q_ids)) {
         $wpdb->delete("{$wpdb->prefix}qp_question_groups", ['group_id' => $group_id]);
@@ -1498,340 +1495,99 @@ function qp_get_sheets_for_topic_ajax()
 add_action('wp_ajax_get_sheets_for_topic', 'qp_get_sheets_for_topic_ajax');
 
 
-// In question-press.php
-
 /**
- * Handles the one-time data migration from the old source_file column
- * to the new sources table. Triggered by a link in an admin notice.
+ * Handles the complete, on-demand data migration and cleanup process.
+ * This is safe to run multiple times, as each step checks for completion.
  */
-function qp_run_source_data_migration()
-{
-    // Check if the trigger is present in the URL and if the user is an admin
-    if (!isset($_GET['action']) || $_GET['action'] !== 'qp_migrate_sources' || !current_user_can('manage_options')) {
+function qp_run_unified_data_migration() {
+    // Check if the trigger is present in the URL and if the user has permission
+    if (!isset($_GET['action']) || $_GET['action'] !== 'qp_unified_migration' || !current_user_can('manage_options')) {
         return;
     }
 
     // Security check
-    check_admin_referer('qp_source_migration_nonce');
+    check_admin_referer('qp_unified_migration_nonce');
 
     global $wpdb;
+    $messages = [];
     $questions_table = $wpdb->prefix . 'qp_questions';
-    $sources_table = $wpdb->prefix . 'qp_sources';
-
-    // Get all distinct, non-empty source_file entries from the questions table
-    $old_source_files = $wpdb->get_col("SELECT DISTINCT source_file FROM {$questions_table} WHERE source_file IS NOT NULL AND source_file != ''");
-
-    if (empty($old_source_files)) {
-        // Nothing to migrate, so we just mark it as done
-        update_option('qp_source_migration_status', 'done');
-        wp_safe_redirect(remove_query_arg(['action', '_wpnonce']));
-        exit;
-    }
-
-    foreach ($old_source_files as $source_file_name) {
-        // Check if this source already exists in our new table
-        $existing_source_id = $wpdb->get_var($wpdb->prepare("SELECT source_id FROM {$sources_table} WHERE source_name = %s", $source_file_name));
-
-        if (null === $existing_source_id) {
-            // It doesn't exist, so insert it
-            $wpdb->insert(
-                $sources_table,
-                ['source_name' => $source_file_name, 'description' => 'Migrated from old source file.'],
-                ['%s', '%s']
-            );
-            $new_source_id = $wpdb->insert_id;
-        } else {
-            // It already exists, just get its ID
-            $new_source_id = $existing_source_id;
-        }
-
-        // Now, update all questions that used the old source_file name
-        // to point to the new source_id.
-        $wpdb->update(
-            $questions_table,
-            ['source_id' => $new_source_id],
-            ['source_file' => $source_file_name],
-            ['%d'],
-            ['%s']
-        );
-    }
-
-    // VERY IMPORTANT: Mark the migration as complete so the notice disappears.
-    update_option('qp_source_migration_status', 'done');
-
-    // Store a success message to show the user.
-    if (session_status() === PHP_SESSION_ACTIVE) {
-        $_SESSION['qp_admin_message'] = 'Successfully migrated ' . count($old_source_files) . ' legacy sources to the new database structure.';
-        $_SESSION['qp_admin_message_type'] = 'success';
-    }
-
-
-    // Redirect back to the admin page without the action parameters
-    wp_safe_redirect(remove_query_arg(['action', '_wpnonce']));
-    exit;
-}
-
-// In question-press.php
-
-/**
- * Displays a persistent admin notice if the source data migration needs to be run.
- */
-function qp_show_migration_admin_notice()
-{
-    // Only show this notice to admins and only if the migration is not marked as 'done'
-    if (!current_user_can('manage_options') || get_option('qp_source_migration_status') === 'done') {
-        return;
-    }
-
-    // Check if we are on one of the plugin's pages
-    $screen = get_current_screen();
-    if (!$screen || strpos($screen->id, 'qp-') === false && strpos($screen->id, 'question-press') === false) {
-        return;
-    }
-
-    // Display the success message after redirection
-    if (isset($_SESSION['qp_admin_message'])) {
-        echo '<div id="message" class="notice notice-' . esc_attr($_SESSION['qp_admin_message_type']) . ' is-dismissible"><p>' . esc_html($_SESSION['qp_admin_message']) . '</p></div>';
-        unset($_SESSION['qp_admin_message'], $_SESSION['qp_admin_message_type']);
-    }
-
-    // Create the URL for the migration button
-    $migration_url = add_query_arg(
-        [
-            'action' => 'qp_migrate_sources',
-            '_wpnonce' => wp_create_nonce('qp_source_migration_nonce'),
-        ]
-    );
-    ?>
-    <div class="notice notice-warning is-dismissible">
-        <h3>Question Press Data Update</h3>
-        <p>
-            The Question Press plugin has been updated with a new database structure for question sources. Please run the one-time data update script to migrate your existing data. This is a required step.
-        </p>
-        <p>
-            <a href="<?php echo esc_url($migration_url); ?>" class="button button-primary">Run Data Migration</a>
-        </p>
-    </div>
-<?php
-}
-
-/**
- * Handles the one-time data migration for question numbers and PYQ status.
- */
-function qp_run_details_data_migration()
-{
-    if (!isset($_GET['action']) || $_GET['action'] !== 'qp_migrate_details' || !current_user_can('manage_options')) {
-        return;
-    }
-    check_admin_referer('qp_details_migration_nonce');
-
-    global $wpdb;
-    $questions_table = $wpdb->prefix . 'qp_questions';
-
-    // Get all questions that have a legacy source_number but no new question_number_in_section
-    $questions_to_migrate = $wpdb->get_results(
-        "SELECT question_id, source_number FROM {$questions_table} WHERE source_number IS NOT NULL AND (question_number_in_section IS NULL OR question_number_in_section = '')"
-    );
-
-    if (empty($questions_to_migrate)) {
-        update_option('qp_details_migration_status', 'done');
-        wp_safe_redirect(remove_query_arg(['action', '_wpnonce']));
-        exit;
-    }
-
-    $migrated_count = 0;
-    foreach ($questions_to_migrate as $question) {
-        $wpdb->update(
-            $questions_table,
-            ['question_number_in_section' => $question->source_number], // Copy old number to new column
-            ['question_id' => $question->question_id],
-            ['%s'],
-            ['%d']
-        );
-        $migrated_count++;
-    }
-
-    // Mark this specific migration as complete.
-    update_option('qp_details_migration_status', 'done');
-
-    if (session_status() === PHP_SESSION_ACTIVE) {
-        $_SESSION['qp_admin_message'] = 'Successfully migrated question numbers for ' . $migrated_count . ' questions.';
-        $_SESSION['qp_admin_message_type'] = 'success';
-    }
-
-    wp_safe_redirect(remove_query_arg(['action', '_wpnonce']));
-    exit;
-}
-
-/**
- * Displays an admin notice for the details migration if it needs to be run.
- */
-function qp_show_details_migration_notice()
-{
-    if (!current_user_can('manage_options') || get_option('qp_details_migration_status') === 'done') {
-        return;
-    }
-
-    // Only show on our plugin pages
-    $screen = get_current_screen();
-    if (!$screen || strpos($screen->id, 'qp-') === false && strpos($screen->id, 'question-press') === false) {
-        return;
-    }
-
-    $migration_url = add_query_arg(
-        ['action' => 'qp_migrate_details', '_wpnonce' => wp_create_nonce('qp_details_migration_nonce')]
-    );
-?>
-    <div class="notice notice-info is-dismissible">
-        <h3>Question Press Data Update (Step 2)</h3>
-        <p>
-            An update is needed to migrate your legacy question numbers to the new database structure.
-        </p>
-        <p>
-            <a href="<?php echo esc_url($migration_url); ?>" class="button button-primary">Migrate Question Numbers</a>
-        </p>
-    </div>
-<?php
-}
-
-// In question-press.php
-
-/**
- * Handles the one-time migration for orphaned sources that have no subject assigned.
- */
-function qp_run_orphan_source_migration()
-{
-    if (!isset($_GET['action']) || $_GET['action'] !== 'qp_migrate_orphan_sources' || !current_user_can('manage_options')) {
-        return;
-    }
-    check_admin_referer('qp_orphan_source_migration_nonce');
-
-    global $wpdb;
+    $groups_table = $wpdb->prefix . 'qp_question_groups';
     $sources_table = $wpdb->prefix . 'qp_sources';
     $subjects_table = $wpdb->prefix . 'qp_subjects';
 
-    // Find the ID for the "Uncategorized" subject
-    $uncategorized_subject_id = $wpdb->get_var($wpdb->prepare("SELECT subject_id FROM {$subjects_table} WHERE subject_name = %s", 'Uncategorized'));
-
-    if (!$uncategorized_subject_id) {
-        // Failsafe in case "Uncategorized" was deleted, though it shouldn't be possible.
-        update_option('qp_orphan_source_migration_status', 'done');
-        wp_safe_redirect(remove_query_arg(['action', '_wpnonce']));
-        exit;
+    // === STEP 1: MIGRATE LEGACY source_file to qp_sources TABLE ===
+    if ($wpdb->get_col("SHOW COLUMNS FROM {$questions_table} LIKE 'source_file'")) {
+        $old_source_files = $wpdb->get_col("SELECT DISTINCT source_file FROM {$questions_table} WHERE source_file IS NOT NULL AND source_file != ''");
+        if (!empty($old_source_files)) {
+            $migrated_source_count = 0;
+            foreach ($old_source_files as $source_file_name) {
+                $existing_source_id = $wpdb->get_var($wpdb->prepare("SELECT source_id FROM {$sources_table} WHERE source_name = %s", $source_file_name));
+                if (null === $existing_source_id) {
+                    $wpdb->insert($sources_table, ['source_name' => $source_file_name, 'description' => 'Migrated from old source file.', 'subject_id' => 0]);
+                    $new_source_id = $wpdb->insert_id;
+                    $migrated_source_count++;
+                } else {
+                    $new_source_id = $existing_source_id;
+                }
+                $wpdb->update($questions_table, ['source_id' => $new_source_id], ['source_file' => $source_file_name]);
+            }
+            if ($migrated_source_count > 0) $messages[] = "Step 1: Created {$migrated_source_count} new entries in the Sources table from legacy data.";
+        }
     }
 
-    // Find all sources where subject_id is 0 or NULL
-    $updated_rows = $wpdb->update(
-        $sources_table,
-        ['subject_id' => $uncategorized_subject_id],
-        ['subject_id' => 0],
-        ['%d'],
-        ['%d']
-    );
+    // === STEP 2: ASSIGN ORPHANED SOURCES TO "UNCATEGORIZED" SUBJECT ===
+    $uncategorized_id = $wpdb->get_var($wpdb->prepare("SELECT subject_id FROM {$subjects_table} WHERE subject_name = %s", 'Uncategorized'));
+    if ($uncategorized_id) {
+        $updated_rows = $wpdb->update($sources_table, ['subject_id' => $uncategorized_id], ['subject_id' => 0]);
+        if ($updated_rows > 0) $messages[] = "Step 2: Assigned {$updated_rows} orphaned sources to the 'Uncategorized' subject.";
+    }
 
-    // Mark migration as complete
-    update_option('qp_orphan_source_migration_status', 'done');
+    // === STEP 3: MIGRATE LEGACY source_number TO question_number_in_section ===
+    if ($wpdb->get_col("SHOW COLUMNS FROM {$questions_table} LIKE 'source_number'")) {
+        $questions_to_migrate_num = $wpdb->get_results("SELECT question_id, source_number FROM {$questions_table} WHERE source_number IS NOT NULL AND (question_number_in_section IS NULL OR question_number_in_section = '')");
+        if (!empty($questions_to_migrate_num)) {
+            foreach ($questions_to_migrate_num as $q) {
+                $wpdb->update($questions_table, ['question_number_in_section' => $q->source_number], ['question_id' => $q->question_id]);
+            }
+            $messages[] = "Step 3: Migrated question numbers for " . count($questions_to_migrate_num) . " questions.";
+        }
+    }
+    
+    // === STEP 4 (IMPROVED): MIGRATE PYQ STATUS TO GROUPS ===
+    $groups_to_check = $wpdb->get_col("SELECT group_id FROM {$groups_table} WHERE is_pyq = 0");
+    $migrated_groups_count = 0;
+    if (!empty($groups_to_check) && $wpdb->get_col("SHOW COLUMNS FROM {$questions_table} LIKE 'is_pyq'")) {
+        foreach ($groups_to_check as $group_id) {
+            // Check if ANY question in this group has the old is_pyq flag set.
+            $is_legacy_pyq = $wpdb->get_var($wpdb->prepare(
+                "SELECT COUNT(*) FROM {$questions_table} WHERE group_id = %d AND is_pyq = 1", $group_id
+            ));
+            
+            if ($is_legacy_pyq > 0) {
+                $wpdb->update($groups_table, ['is_pyq' => 1], ['group_id' => $group_id]);
+                $migrated_groups_count++;
+            }
+        }
+        if ($migrated_groups_count > 0) $messages[] = "Step 4: Updated PYQ status for {$migrated_groups_count} question groups based on legacy data.";
+    }
 
+    // === STEP 5 (IMPROVED): CLEANUP ALL OLD DATABASE COLUMNS ===
+    if ($wpdb->get_col("SHOW COLUMNS FROM {$questions_table} LIKE 'source_file'")) {
+        // Now drops all legacy columns at once
+        $wpdb->query("ALTER TABLE {$questions_table} DROP COLUMN source_file, DROP COLUMN source_page, DROP COLUMN source_number, DROP COLUMN is_pyq, DROP COLUMN exam_id, DROP COLUMN pyq_year;");
+        $messages[] = "Step 5: Finalized cleanup by removing all old/redundant columns from the questions table.";
+    }
+    
+    // --- Final Redirect ---
     if (session_status() === PHP_SESSION_ACTIVE) {
-        $_SESSION['qp_admin_message'] = $updated_rows > 0 ? 'Successfully assigned ' . $updated_rows . ' orphaned sources to the "Uncategorized" subject.' : 'No orphaned sources found to migrate.';
-        $_SESSION['qp_admin_message_type'] = 'success';
+        if (empty($messages)) {
+            $_SESSION['qp_admin_message'] = 'Database is already fully up-to-date. No migration steps were needed.';
+            $_SESSION['qp_admin_message_type'] = 'info';
+        } else {
+            $_SESSION['qp_admin_message'] = '<strong>Migration & Cleanup Report:</strong><br> - ' . implode('<br> - ', $messages);
+            $_SESSION['qp_admin_message_type'] = 'success';
+        }
     }
-
     wp_safe_redirect(remove_query_arg(['action', '_wpnonce']));
     exit;
 }
-
-
-/**
- * Displays an admin notice for the orphaned sources migration if it needs to be run.
- */
-function qp_show_orphan_source_notice()
-{
-    if (!current_user_can('manage_options') || get_option('qp_orphan_source_migration_status') === 'done') {
-        return;
-    }
-
-    $screen = get_current_screen();
-    if (!$screen || strpos($screen->id, 'qp-') === false && strpos($screen->id, 'question-press') === false) {
-        return;
-    }
-
-    $migration_url = add_query_arg(
-        ['action' => 'qp_migrate_orphan_sources', '_wpnonce' => wp_create_nonce('qp_orphan_source_migration_nonce')]
-    );
-?>
-    <div class="notice notice-info is-dismissible">
-        <h3>Question Press Data Update (Step 3)</h3>
-        <p>
-            An update is needed to find any old question sources that are not assigned to a subject. This script will assign them to "Uncategorized" so you can manage them.
-        </p>
-        <p>
-            <a href="<?php echo esc_url($migration_url); ?>" class="button button-primary">Find and Assign Orphaned Sources</a>
-        </p>
-    </div>
-<?php
-}
-
-// In question-press.php
-
-/**
- * Handles the one-time action of dropping old DB columns.
- */
-function qp_run_db_cleanup()
-{
-    if (!isset($_GET['action']) || $_GET['action'] !== 'qp_cleanup_db' || !current_user_can('manage_options')) {
-        return;
-    }
-    check_admin_referer('qp_db_cleanup_nonce');
-
-    global $wpdb;
-    $table_name = $wpdb->prefix . 'qp_questions';
-    $wpdb->query("ALTER TABLE {$table_name} DROP COLUMN source_file, DROP COLUMN source_page, DROP COLUMN source_number;");
-
-    update_option('qp_db_cleanup_status', 'done');
-
-    if (session_status() === PHP_SESSION_ACTIVE) {
-        $_SESSION['qp_admin_message'] = 'Database cleanup successful. Old source columns have been removed.';
-        $_SESSION['qp_admin_message_type'] = 'success';
-    }
-
-    wp_safe_redirect(remove_query_arg(['action', '_wpnonce']));
-    exit;
-}
-
-/**
- * Displays an admin notice for the final DB cleanup.
- */
-function qp_show_db_cleanup_notice()
-{
-    // Only show if all migrations are done AND cleanup hasn't been done
-    if (
-        get_option('qp_source_migration_status') !== 'done' ||
-        get_option('qp_details_migration_status') !== 'done' ||
-        get_option('qp_orphan_source_migration_status') !== 'done' ||
-        get_option('qp_db_cleanup_status') === 'done'
-    ) {
-        return;
-    }
-
-    $screen = get_current_screen();
-    if (!$screen || strpos($screen->id, 'qp-') === false) return;
-
-    $cleanup_url = add_query_arg(['action' => 'qp_cleanup_db', '_wpnonce' => wp_create_nonce('qp_db_cleanup_nonce')]);
-?>
-    <div class="notice notice-error is-dismissible">
-        <h3>Question Press Final Step: Database Cleanup</h3>
-        <p>
-            <strong>Warning:</strong> All data has been migrated to the new structure. You can now permanently remove the old, redundant database columns (`source_file`, `source_page`, `source_number`).
-            <strong>This action cannot be undone.</strong> Please ensure you have backed up your database before proceeding.
-        </p>
-        <p>
-            <a href="<?php echo esc_url($cleanup_url); ?>" class="button button-danger">Run Final Cleanup</a>
-        </p>
-    </div>
-<?php
-}
-
-// Add the hooks
-add_action('admin_init', 'qp_run_db_cleanup');
-add_action('admin_notices', 'qp_show_db_cleanup_notice');
