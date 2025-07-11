@@ -3,7 +3,7 @@
 /**
  * Plugin Name:       Question Press
  * Description:       A complete plugin for creating, managing, and practicing questions.
- * Version:           1.5.0
+ * Version:           2.0.0
  * Author:            Himanshu
  */
 
