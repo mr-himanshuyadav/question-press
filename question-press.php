@@ -795,8 +795,10 @@ function qp_start_practice_session_ajax() {
     global $wpdb;
     // Create the session in the database
     $wpdb->insert($wpdb->prefix . 'qp_user_sessions', [
-        'user_id'           => get_current_user_id(),
-        'settings_snapshot' => wp_json_encode($session_settings)
+        'user_id'                 => get_current_user_id(),
+        'status'                  => 'active',
+        'settings_snapshot'       => wp_json_encode($session_settings),
+        'question_ids_snapshot'   => wp_json_encode($question_ids)
     ]);
     $session_id = $wpdb->insert_id;
 
