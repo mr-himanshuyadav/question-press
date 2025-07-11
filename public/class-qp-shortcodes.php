@@ -52,9 +52,12 @@ class QP_Shortcodes
 
     // Fetch all attempts for this session to restore state
     $attempt_history = $wpdb->get_results($wpdb->prepare(
-        "SELECT question_id, selected_option_id, is_correct FROM {$wpdb->prefix}qp_user_attempts WHERE session_id = %d",
+        "SELECT a.question_id, a.selected_option_id, a.is_correct, o.option_id as correct_option_id
+         FROM {$wpdb->prefix}qp_user_attempts a
+         LEFT JOIN {$wpdb->prefix}qp_options o ON a.question_id = o.question_id AND o.is_correct = 1
+         WHERE a.session_id = %d",
         $session_id
-    ), OBJECT_K); // OBJECT_K uses question_id as the array key for easy lookup
+    ), OBJECT_K);
 
     $session_data['attempt_history'] = $attempt_history;
     self::$session_data_for_script = $session_data;
