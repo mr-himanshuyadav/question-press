@@ -499,8 +499,7 @@ function get_question_custom_id($question_id)
 }
 
 
-function qp_handle_save_question_group()
-{
+function qp_handle_save_question_group() {
     if (!isset($_POST['save_group']) || !isset($_POST['_wpnonce']) || !wp_verify_nonce($_POST['_wpnonce'], 'qp_save_question_group_nonce')) {
         return;
     }
@@ -509,29 +508,22 @@ function qp_handle_save_question_group()
     $group_id = isset($_POST['group_id']) ? absint($_POST['group_id']) : 0;
     $is_editing = $group_id > 0;
 
-    // --- Get all data from the metaboxes ---
+    // --- Get group-level data from the form ---
     $direction_text = isset($_POST['direction_text']) ? stripslashes($_POST['direction_text']) : '';
     $direction_image_id = absint($_POST['direction_image_id']);
     $subject_id = absint($_POST['subject_id']);
     $topic_id = isset($_POST['topic_id']) ? absint($_POST['topic_id']) : 0;
     $source_id = isset($_POST['source_id']) ? absint($_POST['source_id']) : 0;
     $section_id = isset($_POST['section_id']) ? absint($_POST['section_id']) : 0;
-    $question_num = isset($_POST['question_number_in_section']) ? sanitize_text_field($_POST['question_number_in_section']) : '';
-
-    // --- UPDATED: Get group-level PYQ data from the form ---
     $is_pyq = isset($_POST['is_pyq']) ? 1 : 0;
     $exam_id = isset($_POST['exam_id']) ? absint($_POST['exam_id']) : 0;
     $pyq_year = isset($_POST['pyq_year']) ? sanitize_text_field($_POST['pyq_year']) : '';
 
-
     $questions_from_form = isset($_POST['questions']) ? (array) $_POST['questions'] : [];
 
-    if (empty($subject_id) || empty($questions_from_form)) {
-        // You might want to add an admin notice here for failed validation
-        return;
-    }
+    if (empty($subject_id) || empty($questions_from_form)) { return; }
 
-    // --- UPDATED: Group Data now includes the PYQ fields ---
+    // --- Save Group Data ---
     $group_data = [
         'direction_text' => sanitize_textarea_field($direction_text),
         'direction_image_id' => $direction_image_id,
@@ -548,7 +540,7 @@ function qp_handle_save_question_group()
         $group_id = $wpdb->insert_id;
     }
 
-    // --- Process Questions ---
+    // --- Process Individual Questions ---
     $q_table = "{$wpdb->prefix}qp_questions";
     $o_table = "{$wpdb->prefix}qp_options";
     $ql_table = "{$wpdb->prefix}qp_question_labels";
@@ -560,20 +552,21 @@ function qp_handle_save_question_group()
         if (empty(trim($question_text))) continue;
 
         $question_id = isset($q_data['question_id']) ? absint($q_data['question_id']) : 0;
+        
+        // --- CORRECTED: Get question number from the individual question data array ---
+        $question_num = isset($q_data['question_number_in_section']) ? sanitize_text_field($q_data['question_number_in_section']) : '';
 
-        // --- UPDATED: This data applies to EVERY question in the group, PYQ fields removed ---
         $question_db_data = [
             'group_id' => $group_id,
-            'question_text' => sanitize_textarea_field($question_text),
-            'question_text_hash' => md5(strtolower(trim(preg_replace('/\s+/', '', $question_text)))),
             'topic_id' => $topic_id > 0 ? $topic_id : null,
             'source_id' => $source_id > 0 ? $source_id : null,
             'section_id' => $section_id > 0 ? $section_id : null,
-            'question_number_in_section' => $question_num,
+            'question_number_in_section' => $question_num, // Save the individual number
+            'question_text' => sanitize_textarea_field($question_text),
+            'question_text_hash' => md5(strtolower(trim(preg_replace('/\s+/', '', $question_text)))),
         ];
 
         if ($question_id > 0 && in_array($question_id, $existing_q_ids)) {
-            // Update existing question
             $wpdb->update($q_table, $question_db_data, ['question_id' => $question_id]);
             $submitted_q_ids[] = $question_id;
         } else {

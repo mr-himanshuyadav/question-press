@@ -23,8 +23,6 @@ class QP_Question_Editor_Page
         $current_pyq_year = '';
         $current_source_id = 0;
         $current_section_id = 0;
-        // This is no longer needed per-question, but we keep a single instance for the group
-        $current_question_num = '';
 
 
         if ($is_editing) {
@@ -56,13 +54,12 @@ class QP_Question_Editor_Page
                     $current_topic_id = $first_q->topic_id ?? 0;
                     $current_source_id = $first_q->source_id ?? 0;
                     $current_section_id = $first_q->section_id ?? 0;
-                    $current_question_num = $first_q->question_number_in_section ?? '';
 
 
                     foreach ($questions_in_group as $q) {
-                        $q->options = $wpdb->get_results($wpdb->prepare("SELECT * FROM $o_table WHERE question_id = %d ORDER BY option_id ASC", $q->question_id));
-                        $q->labels = $wpdb->get_results($wpdb->prepare("SELECT l.label_id, l.label_name FROM {$ql_table} ql JOIN {$l_table} l ON ql.label_id = l.label_id WHERE ql.question_id = %d", $q->question_id));
-                    }
+                    $q->options = $wpdb->get_results($wpdb->prepare("SELECT * FROM $o_table WHERE question_id = %d ORDER BY option_id ASC", $q->question_id));
+                    $q->labels = $wpdb->get_results($wpdb->prepare("SELECT l.label_id, l.label_name FROM {$ql_table} ql JOIN {$l_table} l ON ql.label_id = l.label_id WHERE ql.question_id = %d", $q->question_id));
+                }
                 }
             }
         }
@@ -182,6 +179,10 @@ class QP_Question_Editor_Page
                                         </div>
                                         <div class="inside">
                                             <input type="hidden" name="questions[<?php echo $q_index; ?>][question_id]" class="question-id-input" value="<?php echo esc_attr($question->question_id); ?>">
+                                            <p>
+                                            <label for="question_number_in_section_<?php echo $q_index; ?>"><strong>Question Number in Source</strong></label>
+                                            <input type="text" name="questions[<?php echo $q_index; ?>][question_number_in_section]" id="question_number_in_section_<?php echo $q_index; ?>" value="<?php echo esc_attr($question->question_number_in_section); ?>" style="width: 50%;">
+                                        </p>
                                             <textarea name="questions[<?php echo $q_index; ?>][question_text]" class="question-text-area" style="width: 100%; height: 100px;" placeholder="Enter question text here..." required><?php echo esc_textarea($question->question_text); ?></textarea>
                                             <hr>
                                             <p><strong>Options (Select the radio button for the correct answer)</strong></p>
@@ -257,10 +258,6 @@ class QP_Question_Editor_Page
                                         <select name="section_id" id="section_id" style="width: 100%;" <?php echo $current_source_id ? '' : 'disabled'; ?>>
                                             <option value="">— Select a source first —</option>
                                         </select>
-                                    </p>
-                                    <p>
-                                        <label for="question_number_in_section"><strong>Question Number</strong></label>
-                                        <input type="text" name="question_number_in_section" value="<?php echo esc_attr($current_question_num); ?>" style="width: 100%;">
                                     </p>
                                 </div>
                             </div>
