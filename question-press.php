@@ -1588,25 +1588,74 @@ function qp_run_unified_data_migration() {
     $sources_table = $wpdb->prefix . 'qp_sources';
     $subjects_table = $wpdb->prefix . 'qp_subjects';
     $sessions_table = $wpdb->prefix . 'qp_user_sessions';
+    $exams_table = $wpdb->prefix . 'qp_exams';
 
-    // === NEW STEP: MIGRATE qp_user_sessions TABLE SCHEMA ===
+    // === STEP 0: MIGRATE qp_user_sessions TABLE SCHEMA ===
     $sessions_columns = $wpdb->get_col("DESC $sessions_table", 0);
     $columns_to_add = [
         'status' => "ADD COLUMN `status` VARCHAR(20) NOT NULL DEFAULT 'completed' AFTER `end_time`",
         'last_activity' => "ADD COLUMN `last_activity` DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00' AFTER `start_time`",
         'question_ids_snapshot' => "ADD COLUMN `question_ids_snapshot` LONGTEXT AFTER `settings_snapshot`"
     ];
-    
+
     foreach ($columns_to_add as $column_name => $query_part) {
         if (!in_array($column_name, $sessions_columns)) {
             $wpdb->query("ALTER TABLE {$sessions_table} {$query_part};");
             $messages[] = "Step 0: Added `{$column_name}` column to the sessions table.";
         }
     }
-    // Set default last_activity for old records
     $wpdb->query("UPDATE {$sessions_table} SET `last_activity` = `start_time` WHERE `last_activity` = '0000-00-00 00:00:00'");
 
-    // === STEP 1: MIGRATE LEGACY source_file to qp_sources TABLE ===
+    // === STEP 1 (CORRECTED): PARSE LEGACY PYQ TAGS FROM QUESTION TEXT ===
+    // This now checks the OLD `is_pyq` flag directly on the questions table.
+    if ($wpdb->get_col("SHOW COLUMNS FROM {$questions_table} LIKE 'is_pyq'")) {
+        $pyq_questions_to_parse = $wpdb->get_results(
+            "SELECT q.question_id, q.question_text, q.group_id
+             FROM {$questions_table} q
+             JOIN {$groups_table} g ON q.group_id = g.group_id
+             WHERE q.question_text LIKE '%[%' AND g.exam_id IS NULL AND q.is_pyq = 1"
+        );
+
+        if (!empty($pyq_questions_to_parse)) {
+            $parsed_count = 0;
+            foreach ($pyq_questions_to_parse as $question) {
+                preg_match('/\[([A-Z]+)\s*(\d{4})(?:\(\w+\))?\]$/', trim($question->question_text), $matches);
+
+                if (count($matches) === 3) {
+                    $exam_name = sanitize_text_field($matches[1]);
+                    $pyq_year = sanitize_text_field($matches[2]);
+
+                    $exam_id = $wpdb->get_var($wpdb->prepare("SELECT exam_id FROM {$exams_table} WHERE exam_name = %s", $exam_name));
+                    if (!$exam_id) {
+                        $wpdb->insert($exams_table, ['exam_name' => $exam_name]);
+                        $exam_id = $wpdb->insert_id;
+                    }
+
+                    if ($exam_id && $question->group_id) {
+                        $wpdb->update(
+                            $groups_table,
+                            ['exam_id' => $exam_id, 'pyq_year' => $pyq_year],
+                            ['group_id' => $question->group_id]
+                        );
+
+                        $clean_text = preg_replace('/\[([A-Z]+)\s*(\d{4})(?:\(\w+\))?\]$/', '', trim($question->question_text));
+                        $wpdb->update(
+                            $questions_table,
+                            ['question_text' => trim($clean_text)],
+                            ['question_id' => $question->question_id]
+                        );
+                        $parsed_count++;
+                    }
+                }
+            }
+            if ($parsed_count > 0) {
+                $messages[] = "Step 1: Parsed and migrated Exam/Year data for {$parsed_count} PYQ questions.";
+            }
+        }
+    }
+
+
+    // === STEP 2: MIGRATE LEGACY source_file to qp_sources TABLE ===
     if ($wpdb->get_col("SHOW COLUMNS FROM {$questions_table} LIKE 'source_file'")) {
         $old_source_files = $wpdb->get_col("SELECT DISTINCT source_file FROM {$questions_table} WHERE source_file IS NOT NULL AND source_file != ''");
         if (!empty($old_source_files)) {
@@ -1622,29 +1671,29 @@ function qp_run_unified_data_migration() {
                 }
                 $wpdb->update($questions_table, ['source_id' => $new_source_id], ['source_file' => $source_file_name]);
             }
-            if ($migrated_source_count > 0) $messages[] = "Step 1: Created {$migrated_source_count} new entries in the Sources table from legacy data.";
+            if ($migrated_source_count > 0) $messages[] = "Step 2: Created {$migrated_source_count} new entries in the Sources table from legacy data.";
         }
     }
 
-    // === STEP 2: ASSIGN ORPHANED SOURCES TO "UNCATEGORIZED" SUBJECT ===
+    // === STEP 3: ASSIGN ORPHANED SOURCES TO "UNCATEGORIZED" SUBJECT ===
     $uncategorized_id = $wpdb->get_var($wpdb->prepare("SELECT subject_id FROM {$subjects_table} WHERE subject_name = %s", 'Uncategorized'));
     if ($uncategorized_id) {
         $updated_rows = $wpdb->update($sources_table, ['subject_id' => $uncategorized_id], ['subject_id' => 0]);
-        if ($updated_rows > 0) $messages[] = "Step 2: Assigned {$updated_rows} orphaned sources to the 'Uncategorized' subject.";
+        if ($updated_rows > 0) $messages[] = "Step 3: Assigned {$updated_rows} orphaned sources to the 'Uncategorized' subject.";
     }
 
-    // === STEP 3: MIGRATE LEGACY source_number TO question_number_in_section ===
+    // === STEP 4: MIGRATE LEGACY source_number TO question_number_in_section ===
     if ($wpdb->get_col("SHOW COLUMNS FROM {$questions_table} LIKE 'source_number'")) {
         $questions_to_migrate_num = $wpdb->get_results("SELECT question_id, source_number FROM {$questions_table} WHERE source_number IS NOT NULL AND (question_number_in_section IS NULL OR question_number_in_section = '')");
         if (!empty($questions_to_migrate_num)) {
             foreach ($questions_to_migrate_num as $q) {
                 $wpdb->update($questions_table, ['question_number_in_section' => $q->source_number], ['question_id' => $q->question_id]);
             }
-            $messages[] = "Step 3: Migrated question numbers for " . count($questions_to_migrate_num) . " questions.";
+            $messages[] = "Step 4: Migrated question numbers for " . count($questions_to_migrate_num) . " questions.";
         }
     }
     
-    // === STEP 4 (IMPROVED): MIGRATE PYQ STATUS TO GROUPS ===
+    // === STEP 5 (IMPROVED): MIGRATE PYQ STATUS TO GROUPS ===
     if ($wpdb->get_col("SHOW COLUMNS FROM {$questions_table} LIKE 'is_pyq'")) {
         $groups_to_check = $wpdb->get_col("SELECT group_id FROM {$groups_table} WHERE is_pyq = 0");
         $migrated_groups_count = 0;
@@ -1659,22 +1708,21 @@ function qp_run_unified_data_migration() {
                     $migrated_groups_count++;
                 }
             }
-            if ($migrated_groups_count > 0) $messages[] = "Step 4: Updated PYQ status for {$migrated_groups_count} question group(s).";
+            if ($migrated_groups_count > 0) $messages[] = "Step 5: Updated PYQ status for {$migrated_groups_count} question group(s).";
         }
     }
 
-    // === STEP 5 (IMPROVED): ROBUST DATABASE CLEANUP ===
+    // === STEP 6 (IMPROVED): ROBUST DATABASE CLEANUP ===
     $columns_to_drop = ['source_file', 'source_page', 'source_number', 'is_pyq', 'exam_id', 'pyq_year'];
     $dropped_columns = [];
     foreach ($columns_to_drop as $column) {
-        // Check if the column exists before trying to drop it
         if ($wpdb->get_col("SHOW COLUMNS FROM {$questions_table} LIKE '{$column}'")) {
             $wpdb->query("ALTER TABLE {$questions_table} DROP COLUMN {$column};");
             $dropped_columns[] = "<code>{$column}</code>";
         }
     }
     if (!empty($dropped_columns)) {
-        $messages[] = "Step 5: Finalized cleanup by removing old columns: " . implode(', ', $dropped_columns) . " from the questions table.";
+        $messages[] = "Step 6: Finalized cleanup by removing old columns: " . implode(', ', $dropped_columns) . " from the questions table.";
     }
     
     // --- Final Redirect ---
