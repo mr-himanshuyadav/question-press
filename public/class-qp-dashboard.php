@@ -116,7 +116,10 @@ class QP_Dashboard {
         }
         
         // Session History
-        echo '<h3 style="margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #e0e0e0;">Practice History</h3>';
+        echo '<div class="qp-history-header">';
+        echo '<h3 style="margin:0;">Practice History</h3>';
+        echo '<button id="qp-delete-history-btn" class="qp-button qp-button-danger">Delete All History</button>';
+        echo '</div>';
         echo '<table class="qp-dashboard-table">
                 <thead><tr><th>Date</th><th>Subject</th><th>Status</th><th>Score</th><th>Actions</th></tr></thead>
                 <tbody>';

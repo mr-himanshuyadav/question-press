@@ -584,3 +584,36 @@ ul.qp-review-list li {
     background-color: #d63638;
     color: #fff;
 }
+
+
+.qp-tab-link:focus {
+    outline: none;
+    box-shadow: none;
+}
+
+/* Style for the header of the history tab */
+.qp-history-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 2rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--qp-border-color);
+}
+
+/* Styles for the new "View" button */
+.qp-review-list-actions .qp-review-list-view-btn {
+    background-color: var(--qp-primary-color);
+    color: #fff;
+    border: 1px solid var(--qp-primary-color);
+    cursor: pointer;
+    border-radius: 4px;
+    padding: 6px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    transition: all 0.2s;
+    margin-right: 8px;
+}
+.qp-review-list-actions .qp-review-list-view-btn:hover {
+    background-color: var(--qp-primary-hover);
+}
