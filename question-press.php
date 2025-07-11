@@ -1985,7 +1985,7 @@ function qp_get_single_question_for_review_ajax() {
 
     // Fetch options
     $options = $wpdb->get_results($wpdb->prepare(
-        "SELECT option_text, is_correct FROM {$wpdb->prefix}qp_options WHERE question_id = %d ORDER BY option_id ASC",
+        "SELECT option_id, option_text, is_correct FROM {$wpdb->prefix}qp_options WHERE question_id = %d ORDER BY option_id ASC",
         $question_id
     ), ARRAY_A);
 
