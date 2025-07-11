@@ -36,9 +36,9 @@ class QP_Dashboard {
         ob_start();
         ?>
         <div class="qp-container qp-dashboard-wrapper">
-            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
+            <div class="qp-dashboard-header">
                 <h2>Welcome, <?php echo esc_html($current_user->display_name); ?>!</h2>
-                <a href="<?php echo wp_logout_url(wp_login_url()); ?>" style="font-size: 14px;">(Logout)</a>
+                <a href="<?php echo wp_logout_url(wp_login_url()); ?>" class="qp-logout-link">(Logout)</a>
             </div>
             
             <div class="qp-dashboard-actions">

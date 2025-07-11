@@ -473,3 +473,31 @@ ul.qp-review-list li {
     background-color: #d63638;
     color: #fff;
 }
+
+
+/* --- Dashboard Header Styles --- */
+.qp-dashboard-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+.qp-dashboard-header h2 {
+    margin: 0; /* Removes default heading margin */
+}
+.qp-logout-link {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--qp-light-text);
+    text-decoration: none;
+    background-color: #f0f0f1;
+    padding: 6px 12px;
+    border-radius: var(--qp-radius);
+    transition: all 0.2s ease;
+}
+.qp-logout-link:hover {
+    background-color: #e0e0e0;
+    color: var(--qp-dark-text);
+}
