@@ -42,6 +42,7 @@ class QP_Settings_Page {
         add_settings_section('qp_page_settings_section', 'Page Settings', [self::class, 'render_page_section_text'], 'qp-settings-page');
         add_settings_field('qp_practice_page', 'Practice Page', [self::class, 'render_practice_page_dropdown'], 'qp-settings-page', 'qp_page_settings_section');
         add_settings_field('qp_dashboard_page', 'Dashboard Page', [self::class, 'render_dashboard_page_dropdown'], 'qp-settings-page', 'qp_page_settings_section');
+        add_settings_field('qp_review_page', 'Session Review Page', [self::class, 'render_review_page_dropdown'], 'qp-settings-page', 'qp_page_settings_section');
     add_settings_field('qp_session_page', 'Session Page', [self::class, 'render_session_page_dropdown'], 'qp-settings-page', 'qp_page_settings_section');
 
         // Data Management Section
@@ -257,6 +258,9 @@ class QP_Settings_Page {
         if (isset($input['session_timeout'])) {
         $new_input['session_timeout'] = absint($input['session_timeout']) >= 5 ? absint($input['session_timeout']) : 20;
     }
+        if (isset($input['review_page'])) {
+    $new_input['review_page'] = absint($input['review_page']);
+}
         
         return $new_input;
     }
@@ -288,4 +292,16 @@ class QP_Settings_Page {
         </p>
         <?php
     }
+
+    public static function render_review_page_dropdown() {
+    $options = get_option('qp_settings');
+    $selected = isset($options['review_page']) ? $options['review_page'] : 0;
+    wp_dropdown_pages([
+        'name' => 'qp_settings[review_page]',
+        'selected' => $selected,
+        'show_option_none' => '— Select a Page —',
+        'option_none_value' => '0'
+    ]);
+    echo '<p class="description">Select the page that contains the <code>[question_press_review]</code> shortcode.</p>';
+}
 }

@@ -638,6 +638,7 @@ function qp_public_init()
     add_shortcode('question_press_dashboard', ['QP_Dashboard', 'render']);
 
     add_shortcode('question_press_session', ['QP_Shortcodes', 'render_session_page']);
+    add_shortcode('question_press_review', ['QP_Shortcodes', 'render_review_page']);
 }
 add_action('init', 'qp_public_init');
 
