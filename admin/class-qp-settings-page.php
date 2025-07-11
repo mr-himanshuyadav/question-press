@@ -49,6 +49,7 @@ class QP_Settings_Page {
         add_settings_field('qp_question_order', 'Question Order in Practice', [self::class, 'render_question_order_input'], 'qp-settings-page', 'qp_data_settings_section');
         add_settings_field('qp_show_source_meta_roles', 'Display Source Meta To', [self::class, 'render_source_meta_role_multiselect'], 'qp-settings-page', 'qp_data_settings_section');
         add_settings_field('qp_delete_on_uninstall', 'Delete Data on Uninstall', [self::class, 'render_delete_data_checkbox'], 'qp-settings-page', 'qp_data_settings_section');
+        add_settings_field('qp_session_timeout', 'Session Timeout (Minutes)', [self::class, 'render_session_timeout_input'], 'qp-settings-page', 'qp_data_settings_section');
         
         // --- CORRECTED: Data Migration Section ---
         add_settings_section('qp_migration_settings_section', 'Data Tools', [self::class, 'render_migration_section_text'], 'qp-settings-page');
@@ -114,6 +115,13 @@ class QP_Settings_Page {
     public static function render_data_section_text() {
         echo '<p>General plugin and data management settings.</p>';
     }
+
+    public static function render_session_timeout_input() {
+    $options = get_option('qp_settings');
+    $timeout = isset($options['session_timeout']) ? $options['session_timeout'] : 20;
+    echo '<input type="number" name="qp_settings[session_timeout]" value="' . esc_attr($timeout) . '" min="5" /> ';
+    echo '<p class="description">Automatically mark a session as "abandoned" if there is no activity for this many minutes. Minimum: 5 minutes.</p>';
+}
     
     /**
      * Callback to render the description for the API section.
@@ -245,6 +253,10 @@ class QP_Settings_Page {
         } else {
             $new_input['show_source_meta_roles'] = [];
         }
+
+        if (isset($input['session_timeout'])) {
+        $new_input['session_timeout'] = absint($input['session_timeout']) >= 5 ? absint($input['session_timeout']) : 20;
+    }
         
         return $new_input;
     }
