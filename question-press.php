@@ -1511,6 +1511,57 @@ function qp_get_sheets_for_topic_ajax()
 }
 add_action('wp_ajax_get_sheets_for_topic', 'qp_get_sheets_for_topic_ajax');
 
+/**
+ * Schedules the session cleanup event if it's not already scheduled.
+ */
+function qp_schedule_session_cleanup() {
+    if (!wp_next_scheduled('qp_cleanup_abandoned_sessions_event')) {
+        wp_schedule_event(time(), 'hourly', 'qp_cleanup_abandoned_sessions_event');
+    }
+}
+add_action('wp', 'qp_schedule_session_cleanup');
+
+/**
+ * The function that runs on the scheduled cron event to clean up old sessions.
+ */
+function qp_cleanup_abandoned_sessions() {
+    global $wpdb;
+    $options = get_option('qp_settings');
+    $timeout_minutes = isset($options['session_timeout']) ? absint($options['session_timeout']) : 20;
+
+    // A failsafe to ensure the timeout is reasonable
+    if ($timeout_minutes < 5) {
+        $timeout_minutes = 20;
+    }
+
+    $sessions_table = $wpdb->prefix . 'qp_user_sessions';
+    $attempts_table = $wpdb->prefix . 'qp_user_attempts';
+
+    // Find active sessions where the last attempt was longer ago than the timeout
+    $abandoned_sessions = $wpdb->get_col($wpdb->prepare(
+        "SELECT s.session_id
+         FROM {$sessions_table} s
+         LEFT JOIN (
+             SELECT session_id, MAX(attempt_time) as last_activity
+             FROM {$attempts_table}
+             GROUP BY session_id
+         ) a ON s.session_id = a.session_id
+         WHERE s.status = 'active'
+         AND (
+             a.last_activity < NOW() - INTERVAL %d MINUTE
+             OR (a.last_activity IS NULL AND s.start_time < NOW() - INTERVAL %d MINUTE)
+         )",
+        $timeout_minutes,
+        $timeout_minutes
+    ));
+
+    if (!empty($abandoned_sessions)) {
+        $ids_placeholder = implode(',', array_map('absint', $abandoned_sessions));
+        $wpdb->query("UPDATE {$sessions_table} SET status = 'abandoned', end_time = NOW() WHERE session_id IN ({$ids_placeholder})");
+    }
+}
+add_action('qp_cleanup_abandoned_sessions_event', 'qp_cleanup_abandoned_sessions');
+
 
 /**
  * Handles the complete, on-demand data migration and cleanup process.
