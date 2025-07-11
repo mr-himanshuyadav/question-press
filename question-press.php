@@ -1837,3 +1837,45 @@ function qp_update_session_activity_ajax()
     wp_send_json_success();
 }
 add_action('wp_ajax_update_session_activity', 'qp_update_session_activity_ajax');
+
+
+/**
+ * AJAX handler to add or remove a question from the user's review list.
+ */
+function qp_toggle_review_later_ajax() {
+    check_ajax_referer('qp_practice_nonce', 'nonce');
+
+    if (!is_user_logged_in()) {
+        wp_send_json_error(['message' => 'You must be logged in.']);
+    }
+
+    $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
+    $is_marked = isset($_POST['is_marked']) ? (bool)$_POST['is_marked'] : false;
+    $user_id = get_current_user_id();
+
+    if (!$question_id) {
+        wp_send_json_error(['message' => 'Invalid question ID.']);
+    }
+
+    global $wpdb;
+    $review_table = $wpdb->prefix . 'qp_review_later';
+
+    if ($is_marked) {
+        // Add to review list, ignoring if it's already there.
+        $wpdb->insert(
+            $review_table,
+            ['user_id' => $user_id, 'question_id' => $question_id],
+            ['%d', '%d']
+        );
+    } else {
+        // Remove from review list.
+        $wpdb->delete(
+            $review_table,
+            ['user_id' => $user_id, 'question_id' => $question_id],
+            ['%d', '%d']
+        );
+    }
+
+    wp_send_json_success();
+}
+add_action('wp_ajax_qp_toggle_review_later', 'qp_toggle_review_later_ajax');

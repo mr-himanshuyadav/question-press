@@ -267,6 +267,10 @@ public static function render_summary_ui($summaryData) {
 
             <div class="qp-footer-nav">
                 <button id="qp-prev-btn" class="qp-button qp-button-secondary" disabled>&laquo; Previous</button>
+                <label class="qp-review-later-checkbox">
+                    <input type="checkbox" id="qp-mark-for-review-cb">
+                    <span>Mark for Review</span>
+                </label>
                 <button id="qp-skip-btn" class="qp-button qp-button-secondary">Skip</button>
                 <button id="qp-next-btn" class="qp-button qp-button-primary">Next &raquo;</button>
             </div>

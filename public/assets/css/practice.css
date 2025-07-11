@@ -367,3 +367,22 @@ body {
     color: var(--qp-incorrect-color);
 }
 
+/* --- Review Later Checkbox Styles --- */
+.qp-review-later-checkbox {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--qp-light-text);
+    cursor: pointer;
+    padding: 10px;
+    border-radius: var(--qp-radius);
+    transition: all 0.2s ease;
+}
+.qp-review-later-checkbox:hover {
+    background-color: #f0f0f1;
+}
+.qp-review-later-checkbox input {
+    transform: scale(1.2);
+}

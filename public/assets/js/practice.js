@@ -72,6 +72,30 @@ jQuery(document).ready(function ($) {
     }
   });
 
+  // --- NEW: Handler for the "Mark for Review" checkbox ---
+wrapper.on("change", "#qp-mark-for-review-cb", function () {
+    var checkbox = $(this);
+    var questionID = sessionQuestionIDs[currentQuestionIndex];
+
+    // Temporarily disable the checkbox to prevent rapid clicking
+    checkbox.prop('disabled', true);
+
+    $.ajax({
+        url: qp_ajax_object.ajax_url,
+        type: 'POST',
+        data: {
+            action: 'qp_toggle_review_later',
+            nonce: qp_ajax_object.nonce,
+            question_id: questionID,
+            is_marked: checkbox.is(':checked')
+        },
+        complete: function() {
+            // Re-enable the checkbox after the request is complete
+            checkbox.prop('disabled', false);
+        }
+    });
+});
+
   // --- UPDATED: Form submission now handles a redirect ---
   wrapper.on("submit", "#qp-start-practice-form", function (e) {
     e.preventDefault();
