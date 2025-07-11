@@ -1891,3 +1891,63 @@ function qp_toggle_review_later_ajax() {
     wp_send_json_success();
 }
 add_action('wp_ajax_qp_toggle_review_later', 'qp_toggle_review_later_ajax');
+
+
+
+/**
+ * AJAX handler to start a special session with only the questions marked for review.
+ */
+function qp_start_review_session_ajax() {
+    check_ajax_referer('qp_practice_nonce', 'nonce');
+    if (!is_user_logged_in()) {
+        wp_send_json_error(['message' => 'You must be logged in.']);
+    }
+
+    global $wpdb;
+    $user_id = get_current_user_id();
+
+    // Get all question IDs from the user's review list
+    $review_question_ids = $wpdb->get_col($wpdb->prepare(
+        "SELECT question_id FROM {$wpdb->prefix}qp_review_later WHERE user_id = %d ORDER BY review_id ASC",
+        $user_id
+    ));
+
+    if (empty($review_question_ids)) {
+        wp_send_json_error(['message' => 'Your review list is empty.']);
+    }
+
+    // Get the Session Page URL from settings
+    $options = get_option('qp_settings');
+    $session_page_id = isset($options['session_page']) ? absint($options['session_page']) : 0;
+    if (!$session_page_id) {
+        wp_send_json_error(['message' => 'The administrator has not configured a session page.']);
+    }
+
+    // Create a special settings snapshot for this review session
+    $session_settings = [
+        'subject_id'      => 'review', // Special identifier
+        'topic_id'        => 'all',
+        'sheet_label_id'  => 'all',
+        'pyq_only'        => false,
+        'revise_mode'     => true, // Treat it as revision
+        'marks_correct'   => 1.0,  // Or any default you prefer
+        'marks_incorrect' => 0,
+        'timer_enabled'   => false,
+    ];
+
+    // Create the new session record
+    $wpdb->insert($wpdb->prefix . 'qp_user_sessions', [
+        'user_id'                 => $user_id,
+        'status'                  => 'active',
+        'start_time'              => current_time('mysql'),
+        'last_activity'           => current_time('mysql'),
+        'settings_snapshot'       => wp_json_encode($session_settings),
+        'question_ids_snapshot'   => wp_json_encode($review_question_ids)
+    ]);
+    $session_id = $wpdb->insert_id;
+
+    // Build the redirect URL and send it back
+    $redirect_url = add_query_arg('session_id', $session_id, get_permalink($session_page_id));
+    wp_send_json_success(['redirect_url' => $redirect_url]);
+}
+add_action('wp_ajax_qp_start_review_session', 'qp_start_review_session_ajax');
