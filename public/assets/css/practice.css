@@ -693,3 +693,24 @@ ul.qp-review-list li {
     padding: 8px 16px;
     font-size: 14px;
 }
+
+/* --- Responsive Dashboard Actions --- */
+@media (max-width: 767px) {
+    /* Targets the actions on the Review List (View/Remove) */
+    .qp-review-list-actions {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        width: 100px; /* Give the container a fixed width */
+        flex-shrink: 0; /* Prevent it from shrinking */
+    }
+
+    /* Targets the actions on the Active Session Card (Terminate/Continue) */
+    .qp-card-actions {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        align-self: stretch; /* Makes the container take full height of the card */
+        justify-content: center; /* Centers the buttons vertically */
+    }
+}
