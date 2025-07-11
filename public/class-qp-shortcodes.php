@@ -296,4 +296,82 @@ public static function render_summary_ui($summaryData) {
 <?php
         return ob_get_clean();
     }
+
+    public static function render_review_page() {
+        if (!is_user_logged_in()) {
+            return '<p>You must be logged in to review a session. <a href="' . wp_login_url(get_permalink()) . '">Click here to log in.</a></p>';
+        }
+
+        if (!isset($_GET['session_id']) || !is_numeric($_GET['session_id'])) {
+            return '<div class="qp-container"><p>Error: No valid session ID was provided.</p></div>';
+        }
+
+        $session_id = absint($_GET['session_id']);
+        $user_id = get_current_user_id();
+
+        global $wpdb;
+        $sessions_table = $wpdb->prefix . 'qp_user_sessions';
+
+        // Fetch session and verify ownership
+        $session = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$sessions_table} WHERE session_id = %d AND user_id = %d", $session_id, $user_id));
+
+        if (!$session) {
+            return '<div class="qp-container"><p>Error: Session not found or you do not have permission to view it.</p></div>';
+        }
+
+        // Fetch all attempts for this session
+        $attempts = $wpdb->get_results($wpdb->prepare(
+            "SELECT q.question_text, q.direction_text, o.option_text AS selected_answer, o_correct.option_text AS correct_answer, a.is_correct
+             FROM {$wpdb->prefix}qp_user_attempts a
+             JOIN {$wpdb->prefix}qp_questions q ON a.question_id = q.question_id
+             LEFT JOIN {$wpdb->prefix}qp_options o ON a.selected_option_id = o.option_id
+             LEFT JOIN {$wpdb->prefix}qp_options o_correct ON q.question_id = o_correct.question_id AND o_correct.is_correct = 1
+             WHERE a.session_id = %d
+             ORDER BY a.attempt_id ASC",
+            $session_id
+        ));
+        
+        // Start output buffering
+        ob_start();
+        ?>
+        <div class="qp-container qp-review-wrapper">
+            <h2>Session Review</h2>
+            
+            <div class="qp-summary-wrapper qp-review-summary">
+                <div class="qp-summary-stats">
+                     <div class="stat"><div class="value"><?php echo number_format($session->marks_obtained, 2); ?></div><div class="label">Final Score</div></div>
+                    <div class="stat"><div class="value"><?php echo (int)$session->correct_count; ?></div><div class="label">Correct</div></div>
+                    <div class="stat"><div class="value"><?php echo (int)$session->incorrect_count; ?></div><div class="label">Incorrect</div></div>
+                    <div class="stat"><div class="value"><?php echo (int)$session->skipped_count; ?></div><div class="label">Skipped</div></div>
+                </div>
+            </div>
+
+            <div class="qp-review-questions-list">
+                <h3 style="margin-top: 2rem;">Attempted Questions</h3>
+                <?php foreach ($attempts as $index => $attempt) : ?>
+                    <div class="qp-review-question-item">
+                        <div class="qp-review-question-text">
+                            <strong>Q<?php echo $index + 1; ?>:</strong> <?php echo wp_kses_post($attempt->question_text); ?>
+                        </div>
+                        <div class="qp-review-answer-row">
+                            <span class="qp-review-label">Your Answer:</span>
+                            <span class="qp-review-answer <?php echo $attempt->is_correct ? 'correct' : 'incorrect'; ?>">
+                                <?php echo esc_html($attempt->selected_answer ?: 'Skipped'); ?>
+                            </span>
+                        </div>
+                        <?php if (!$attempt->is_correct && $attempt->selected_answer) : ?>
+                            <div class="qp-review-answer-row">
+                                <span class="qp-review-label">Correct Answer:</span>
+                                <span class="qp-review-answer correct">
+                                    <?php echo esc_html($attempt->correct_answer); ?>
+                                </span>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+        <?php
+        return ob_get_clean();
+    }
 }

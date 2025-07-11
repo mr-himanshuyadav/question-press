@@ -96,6 +96,8 @@ class QP_Dashboard {
                                 <td data-label="Status"><span class="qp-status-badge qp-status-<?php echo esc_attr($session->status); ?>"><?php echo esc_html(ucfirst($session->status)); ?></span></td>
                                 <td data-label="Score"><strong><?php echo number_format($session->marks_obtained, 2); ?></strong></td>
                                 <td data-label="Actions">
+                                    
+                                    <a href="<?php echo esc_url(add_query_arg('session_id', $session->session_id, get_permalink($options['review_page']))); ?>" class="qp-button qp-button-secondary" style="padding: 4px 8px; font-size: 12px; text-decoration: none;">Review</a>
                                     <button class="qp-delete-session-btn" data-session-id="<?php echo esc_attr($session->session_id); ?>">
                                         Delete
                                     </button>
