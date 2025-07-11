@@ -1,6 +1,75 @@
 jQuery(document).ready(function($) {
     var wrapper = $('.qp-dashboard-wrapper');
 
+    // --- NEW: Handler for removing an item from the review list ---
+    wrapper.on('click', '.qp-review-list-remove-btn', function(e) {
+        e.preventDefault();
+        var button = $(this);
+        var listItem = button.closest('li');
+        var questionID = listItem.data('question-id');
+
+        if (confirm('Are you sure you want to remove this question from your review list?')) {
+            $.ajax({
+                url: qp_ajax_object.ajax_url,
+                type: 'POST',
+                data: {
+                    action: 'qp_toggle_review_later',
+                    nonce: qp_ajax_object.nonce,
+                    question_id: questionID,
+                    is_marked: 'false' // Send 'false' to remove it
+                },
+                beforeSend: function() {
+                    button.text('Removing...').prop('disabled', true);
+                },
+                success: function(response) {
+                    if (response.success) {
+                        listItem.fadeOut(400, function() {
+                            $(this).remove();
+                            // Update the count in the tab
+                            var reviewTab = $('.qp-tab-link[data-tab="review"]');
+                            var currentCount = parseInt(reviewTab.text().match(/\d+/)[0], 10);
+                            reviewTab.text('Review List (' + (currentCount - 1) + ')');
+                        });
+                    } else {
+                        alert('Could not remove the item. Please try again.');
+                        button.text('Remove').prop('disabled', false);
+                    }
+                }
+            });
+        }
+    });
+
+    // --- NEW: Handler for starting a review session ---
+    wrapper.on('click', '#qp-start-reviewing-btn', function(e) {
+        e.preventDefault();
+        var button = $(this);
+        var originalText = button.text();
+
+        $.ajax({
+            url: qp_ajax_object.ajax_url,
+            type: 'POST',
+            data: {
+                action: 'qp_start_review_session',
+                nonce: qp_ajax_object.nonce,
+            },
+            beforeSend: function() {
+                button.text('Starting...').prop('disabled', true);
+            },
+            success: function(response) {
+                if (response.success && response.data.redirect_url) {
+                    window.location.href = response.data.redirect_url;
+                } else {
+                    alert('Error: ' + (response.data.message || 'Could not start review session.'));
+                    button.text(originalText).prop('disabled', false);
+                }
+            },
+            error: function() {
+                alert('A server error occurred.');
+                button.text(originalText).prop('disabled', false);
+            }
+        });
+    });
+
 
     // --- NEW: Tab Switching Logic ---
     wrapper.on('click', '.qp-tab-link', function(e) {
