@@ -12,26 +12,19 @@ class QP_Dashboard {
         $current_user = wp_get_current_user();
         $user_id = $current_user->ID;
         
-        // --- Fetch all necessary data upfront ---
         $options = get_option('qp_settings');
         $practice_page_url = isset($options['practice_page']) ? get_permalink($options['practice_page']) : home_url('/');
         
-        // Fetch Review Later questions
-        $review_question_ids = $wpdb->get_col($wpdb->prepare(
-            "SELECT question_id FROM {$wpdb->prefix}qp_review_later WHERE user_id = %d",
+        // Fetch "Review Later" questions to get the count for the tab
+        $review_questions = $wpdb->get_results($wpdb->prepare(
+            "SELECT q.question_id, q.question_text, s.subject_name 
+             FROM {$wpdb->prefix}qp_review_later rl
+             JOIN {$wpdb->prefix}qp_questions q ON rl.question_id = q.question_id
+             LEFT JOIN {$wpdb->prefix}qp_question_groups g ON q.group_id = g.group_id
+             LEFT JOIN {$wpdb->prefix}qp_subjects s ON g.subject_id = s.subject_id
+             WHERE rl.user_id = %d ORDER BY rl.review_id DESC",
             $user_id
         ));
-        $review_questions = [];
-        if (!empty($review_question_ids)) {
-            $ids_placeholder = implode(',', array_map('absint', $review_question_ids));
-            $review_questions = $wpdb->get_results(
-                "SELECT q.question_id, q.question_text, s.subject_name 
-                 FROM {$wpdb->prefix}qp_questions q
-                 LEFT JOIN {$wpdb->prefix}qp_question_groups g ON q.group_id = g.group_id
-                 LEFT JOIN {$wpdb->prefix}qp_subjects s ON g.subject_id = s.subject_id
-                 WHERE q.question_id IN ({$ids_placeholder})"
-            );
-        }
 
         ob_start();
         ?>
@@ -51,7 +44,7 @@ class QP_Dashboard {
             </div>
 
             <div id="sessions" class="qp-tab-content active">
-                <?php self::render_sessions_tab_content(); // We'll move the session history logic here ?>
+                <?php self::render_sessions_tab_content(); ?>
             </div>
 
             <div id="review" class="qp-tab-content">
@@ -74,14 +67,13 @@ class QP_Dashboard {
                         <?php endforeach; ?>
                     </ul>
                 <?php else: ?>
-                    <p style="text-align: center; padding: 2rem;">You haven't marked any questions for review yet. You can mark them during any practice session.</p>
+                    <p style="text-align: center; padding: 2rem; background-color: #f9f9f9; border-radius: 8px;">You haven't marked any questions for review yet. You can mark them during any practice session.</p>
                 <?php endif; ?>
             </div>
         </div>
         <?php
         return ob_get_clean();
     }
-
     // NEW: Helper function to render the session history
     public static function render_sessions_tab_content() {
         global $wpdb;

@@ -75,12 +75,8 @@ jQuery(document).ready(function($) {
     wrapper.on('click', '.qp-tab-link', function(e) {
         e.preventDefault();
         var tab_id = $(this).data('tab');
-
-        // Handle active state for tabs
         $('.qp-tab-link').removeClass('active');
         $(this).addClass('active');
-
-        // Show/hide tab content
         $('.qp-tab-content').removeClass('active');
         $("#" + tab_id).addClass('active');
     });
