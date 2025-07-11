@@ -204,7 +204,7 @@ function qp_activate_plugin()
         session_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
         user_id BIGINT(20) UNSIGNED NOT NULL,
         start_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        last_activity DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        last_activity DATETIME,
         end_time DATETIME,
         status VARCHAR(20) NOT NULL DEFAULT 'active',
         total_attempted INT,
@@ -774,7 +774,6 @@ function qp_start_practice_session_ajax() {
     $question_ids = $wpdb->get_col($wpdb->prepare($query, $query_args));
 
     if (empty($question_ids)) {
-        // ... (logic to determine $error_code remains the same)
         $error_html = '';
         if ($error_code === 'ALL_ATTEMPTED') {
             $error_html = '<div class="qp-practice-form-wrapper" style="text-align: center; padding: 40px 20px; background-color: #fff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);"><h2 style="margin-top:0; font-size: 22px;">You\'ve Mastered It!</h2><p style="font-size: 16px; color: #555; margin-bottom: 25px;">You have attempted all available questions for this criteria. Try Revision Mode or different settings.</p><button id="qp-go-back-btn" class="qp-button qp-button-secondary">Back to Form</button></div>';
@@ -796,11 +795,13 @@ function qp_start_practice_session_ajax() {
     global $wpdb;
     // Create the session in the database
     $wpdb->insert($wpdb->prefix . 'qp_user_sessions', [
-        'user_id'                 => get_current_user_id(),
-        'status'                  => 'active',
-        'settings_snapshot'       => wp_json_encode($session_settings),
-        'question_ids_snapshot'   => wp_json_encode($question_ids)
-    ]);
+    'user_id'                 => get_current_user_id(),
+    'status'                  => 'active',
+    'start_time'              => current_time('mysql', 1), // Use UTC
+    'last_activity'           => current_time('mysql', 1), // Use UTC
+    'settings_snapshot'       => wp_json_encode($session_settings),
+    'question_ids_snapshot'   => wp_json_encode($question_ids)
+]);
     $session_id = $wpdb->insert_id;
 
     // Prepare the data to be passed to the next page
@@ -1671,3 +1672,21 @@ function qp_run_unified_data_migration() {
     wp_safe_redirect(remove_query_arg(['action', '_wpnonce']));
     exit;
 }
+
+/**
+ * AJAX handler to update the last_activity timestamp for a session.
+ */
+function qp_update_session_activity_ajax() {
+    check_ajax_referer('qp_practice_nonce', 'nonce');
+    $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
+    if ($session_id > 0) {
+        global $wpdb;
+        $wpdb->update(
+            $wpdb->prefix . 'qp_user_sessions',
+            ['last_activity' => current_time('mysql', 1)], // Use UTC for consistency
+            ['session_id' => $session_id]
+        );
+    }
+    wp_send_json_success();
+}
+add_action('wp_ajax_update_session_activity', 'qp_update_session_activity_ajax');

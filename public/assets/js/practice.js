@@ -268,6 +268,16 @@ jQuery(document).ready(function ($) {
   // Handles navigation clicks
   wrapper.on("click", "#qp-next-btn, #qp-prev-btn", function () {
     clearInterval(questionTimer);
+
+    $.ajax({
+        url: qp_ajax_object.ajax_url,
+        type: "POST",
+        data: {
+            action: "update_session_activity",
+            nonce: qp_ajax_object.nonce,
+            session_id: sessionID,
+        }
+    });
     if ($(this).attr("id") === "qp-next-btn") {
       loadNextQuestion();
     } else {
