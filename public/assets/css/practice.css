@@ -201,3 +201,101 @@ body {
     .qp-dashboard-table td { display: table-cell; padding: 12px 15px; text-align: left; vertical-align: middle; }
     .qp-dashboard-table td::before { display: none; }
 }
+
+/* --- Animation Styles --- */
+.qp-question-area {
+    position: relative;
+    overflow: hidden; /* This is crucial for the sliding effect */
+}
+
+.qp-question-area-content {
+    transition: transform 0.25s ease-in-out;
+}
+
+.slide-out-to-left {
+    transform: translateX(-100%);
+}
+
+.slide-out-to-right {
+    transform: translateX(100%);
+}
+
+.slide-in-from-right {
+    transform: translateX(0);
+    animation: slideInFromRight 0.25s ease-in-out;
+}
+
+.slide-in-from-left {
+    transform: translateX(0);
+    animation: slideInFromLeft 0.25s ease-in-out;
+}
+
+@keyframes slideInFromRight {
+    from { transform: translateX(100%); }
+    to { transform: translateX(0); }
+}
+
+@keyframes slideInFromLeft {
+    from { transform: translateX(-100%); }
+    to { transform: translateX(0); }
+}
+
+/* --- Animation and Progress Indicator Styles --- */
+.qp-animatable-area-container {
+    overflow: hidden;
+    position: relative;
+}
+
+.qp-animatable-area {
+    transition: transform 0.3s ease-in-out;
+}
+
+.slide-out-to-left {
+    transform: translateX(-100%);
+}
+
+.slide-out-to-right {
+    transform: translateX(100%);
+}
+
+.slide-in-from-right {
+    transform: translateX(0);
+    animation: slideInFromRight 0.3s ease-in-out;
+}
+
+.slide-in-from-left {
+    transform: translateX(0);
+    animation: slideInFromLeft 0.3s ease-in-out;
+}
+
+@keyframes slideInFromRight {
+    from { transform: translateX(100%); }
+    to { transform: translateX(0); }
+}
+
+@keyframes slideInFromLeft {
+    from { transform: translateX(-100%); }
+    to { transform: translateX(0); }
+}
+
+.qp-progress-indicator {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    margin: 20px 0;
+    height: 12px;
+}
+
+.qp-progress-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background-color: #d1d5db; /* Inactive color */
+    transition: all 0.3s ease;
+}
+
+.qp-progress-dot.active {
+    background-color: var(--qp-primary-color);
+    transform: scale(1.2);
+}

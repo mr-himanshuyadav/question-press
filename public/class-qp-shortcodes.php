@@ -24,52 +24,54 @@ class QP_Shortcodes
 
     // In public/class-qp-shortcodes.php
 
-    public static function render_session_page() {
-    if (!isset($_GET['session_id']) || !is_numeric($_GET['session_id'])) {
-        return '<div class="qp-container"><p>Error: No valid practice session was found. Please start a new session.</p></div>';
-    }
+    public static function render_session_page()
+    {
+        if (!isset($_GET['session_id']) || !is_numeric($_GET['session_id'])) {
+            return '<div class="qp-container"><p>Error: No valid practice session was found. Please start a new session.</p></div>';
+        }
 
-    $session_id = absint($_GET['session_id']);
-    $user_id = get_current_user_id();
+        $session_id = absint($_GET['session_id']);
+        $user_id = get_current_user_id();
 
-    // Verify this session belongs to the current user and get session data from the DB
-    global $wpdb;
-    $session_db_data = $wpdb->get_row($wpdb->prepare(
-        "SELECT user_id, settings_snapshot, question_ids_snapshot FROM {$wpdb->prefix}qp_user_sessions WHERE session_id = %d",
-        $session_id
-    ));
+        // Verify this session belongs to the current user and get session data from the DB
+        global $wpdb;
+        $session_db_data = $wpdb->get_row($wpdb->prepare(
+            "SELECT user_id, settings_snapshot, question_ids_snapshot FROM {$wpdb->prefix}qp_user_sessions WHERE session_id = %d",
+            $session_id
+        ));
 
-    if (!$session_db_data || (int)$session_db_data->user_id !== $user_id) {
-        return '<div class="qp-container"><p>Error: You do not have permission to access this session or it is invalid.</p></div>';
-    }
+        if (!$session_db_data || (int)$session_db_data->user_id !== $user_id) {
+            return '<div class="qp-container"><p>Error: You do not have permission to access this session or it is invalid.</p></div>';
+        }
 
-    // This is a resumed session. Rebuild session_data from the database.
-    $session_data = [
-        'session_id'    => $session_id,
-        'question_ids'  => json_decode($session_db_data->question_ids_snapshot, true),
-        'settings'      => json_decode($session_db_data->settings_snapshot, true)
-    ];
+        // This is a resumed session. Rebuild session_data from the database.
+        $session_data = [
+            'session_id'    => $session_id,
+            'question_ids'  => json_decode($session_db_data->question_ids_snapshot, true),
+            'settings'      => json_decode($session_db_data->settings_snapshot, true)
+        ];
 
-    // Fetch all attempts for this session to restore state
-    $attempt_history = $wpdb->get_results($wpdb->prepare(
-        "SELECT a.question_id, a.selected_option_id, a.is_correct, o.option_id as correct_option_id
+        // Fetch all attempts for this session to restore state
+        $attempt_history = $wpdb->get_results($wpdb->prepare(
+            "SELECT a.question_id, a.selected_option_id, a.is_correct, o.option_id as correct_option_id
          FROM {$wpdb->prefix}qp_user_attempts a
          LEFT JOIN {$wpdb->prefix}qp_options o ON a.question_id = o.question_id AND o.is_correct = 1
          WHERE a.session_id = %d",
-        $session_id
-    ), OBJECT_K);
+            $session_id
+        ), OBJECT_K);
 
-    $session_data['attempt_history'] = $attempt_history;
-    self::$session_data_for_script = $session_data;
+        $session_data['attempt_history'] = $attempt_history;
+        self::$session_data_for_script = $session_data;
 
-    // We no longer need the transient for loading, but we can delete it to be tidy
-    delete_transient('qp_session_' . $session_id);
+        // We no longer need the transient for loading, but we can delete it to be tidy
+        delete_transient('qp_session_' . $session_id);
 
-    return '<div id="qp-practice-app-wrapper">' . self::render_practice_ui() . '</div>';
-}
-    
+        return '<div id="qp-practice-app-wrapper">' . self::render_practice_ui() . '</div>';
+    }
+
     // Helper function to get the session data
-    public static function get_session_data_for_script() {
+    public static function get_session_data_for_script()
+    {
         return self::$session_data_for_script;
     }
 
@@ -99,7 +101,7 @@ class QP_Shortcodes
                         <?php endforeach; ?>
                     </select>
                 </div>
-                
+
                 <div class="qp-form-group" id="qp-topic-group" style="display: none;">
                     <label for="qp_topic">Select Topic:</label>
                     <select name="qp_topic" id="qp_topic" disabled>
@@ -113,12 +115,12 @@ class QP_Shortcodes
                 );
 
                 if (!empty($sheet_labels)) : ?>
-                <div class="qp-form-group" id="qp-sheet-group" style="display: none;">
-    <label for="qp_sheet_label">Select Sheet:</label>
-    <select name="qp_sheet_label" id="qp_sheet_label">
-        <option value="all">All Sheets</option>
-    </select>
-</div>
+                    <div class="qp-form-group" id="qp-sheet-group" style="display: none;">
+                        <label for="qp_sheet_label">Select Sheet:</label>
+                        <select name="qp_sheet_label" id="qp_sheet_label">
+                            <option value="all">All Sheets</option>
+                        </select>
+                    </div>
                 <?php endif; ?>
 
                 <div class="qp-form-group qp-checkbox-group">
@@ -205,26 +207,33 @@ class QP_Shortcodes
                     </div>
                 </div>
             </div>
-            <div class="question-meta" style="font-size: 12px; color: #777; margin-bottom: 10px;">
-                    <span id="qp-question-subject"></span> | <span id="qp-question-id"></span>
+
+            <div class="qp-animatable-area-container">
+                <div class="qp-animatable-area">
+                    <div class="question-meta" style="font-size: 12px; color: #777; margin-bottom: 10px;">
+                        <span id="qp-question-subject"></span> | <span id="qp-question-id"></span>
+                    </div>
+                    <div id="qp-question-source" style="font-size: 12px; color: #777; margin-bottom: 10px; display: none;"></div>
+
+                    <div class="qp-direction" style="display: none;"></div>
+
+                    <div class="qp-question-area">
+                        <div id="qp-revision-indicator" style="display: none; margin-bottom: 15px; background-color: #fffbe6; border: 1px solid #ffc107; padding: 10px; border-radius: 4px; font-weight: bold; color: #856404;">
+                        &#9851; This is a Revision Question
+                    </div>
+                    <div id="qp-reported-indicator" style="display: none; margin-bottom: 15px; background-color: #fff3cd; border: 1px solid #ffeeba; padding: 10px; border-radius: 4px; font-weight: bold; color: #856404;">
+                        &#9888; You have reported an issue with this question.
+                    </div>
+                        <div class="question-text" id="qp-question-text-area">
+                            <p>Loading question...</p>
+                        </div>
+                    </div>
+
+                    <div class="qp-options-area"></div>
                 </div>
-                <div id="qp-question-source" style="font-size: 12px; color: #777; margin-bottom: 10px; display: none;"></div>
-
-            <div class="qp-direction" style="display: none;"></div>
-
-            <div class="qp-question-area">
-                <div id="qp-revision-indicator" style="display: none; margin-bottom: 15px; background-color: #fffbe6; border: 1px solid #ffc107; padding: 10px; border-radius: 4px; font-weight: bold; color: #856404;">
-                &#9851; This is a Revision Question
-            </div>
-            <div id="qp-reported-indicator" style="display: none; margin-bottom: 15px; background-color: #fff3cd; border: 1px solid #ffeeba; padding: 10px; border-radius: 4px; font-weight: bold; color: #856404;">
-                &#9888; You have reported an issue with this question.
-            </div>
-                <div class="question-text" id="qp-question-text-area">
-                    <p>Loading question...</p>
-                </div>
             </div>
 
-            <div class="qp-options-area"></div>
+            <div class="qp-progress-indicator"></div>
 
             <div class="qp-footer-nav">
                 <button id="qp-prev-btn" class="qp-button qp-button-secondary" disabled>&laquo; Previous</button>
@@ -237,7 +246,7 @@ class QP_Shortcodes
             </div>
 
             <div class="qp-user-report-area">
-                <h4>Report an Issue</h4> 
+                <h4>Report an Issue</h4>
                 <div class="button-group">
                      <button class="qp-report-button qp-report-color-error" data-label="Wrong Answer">Wrong Answer</button>
                      <button class="qp-report-button qp-report-color-warning" data-label="No Answer">No Answer</button>
