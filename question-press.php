@@ -896,6 +896,8 @@ function qp_check_answer_ajax() {
     global $wpdb;
     $o_table = $wpdb->prefix . 'qp_options';
     $attempts_table = $wpdb->prefix . 'qp_user_attempts';
+
+    $wpdb->update($wpdb->prefix . 'qp_user_sessions', ['last_activity' => current_time('mysql', 1)], ['session_id' => $session_id]);
     
     $is_correct = (bool) $wpdb->get_var($wpdb->prepare("SELECT is_correct FROM $o_table WHERE question_id = %d AND option_id = %d", $question_id, $option_id));
     $correct_option_id = $wpdb->get_var($wpdb->prepare("SELECT option_id FROM $o_table WHERE question_id = %d AND is_correct = 1", $question_id));
@@ -1064,6 +1066,7 @@ function qp_report_and_skip_question_ajax()
     }
 
     global $wpdb;
+    $wpdb->update($wpdb->prefix . 'qp_user_sessions', ['last_activity' => current_time('mysql', 1)], ['session_id' => $session_id]);
     $label_id = $wpdb->get_var($wpdb->prepare("SELECT label_id FROM {$wpdb->prefix}qp_labels WHERE label_name = %s", $label_name));
     if ($label_id) {
         $wpdb->insert("{$wpdb->prefix}qp_question_labels", ['question_id' => $question_id, 'label_id' => $label_id]);
