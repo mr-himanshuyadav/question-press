@@ -720,4 +720,21 @@ ul.qp-review-list li {
         box-sizing: border-box; /* Ensures padding is included in the width */
         text-align: center;
     }
+    /* --- Final UI Polish --- */
+.qp-modal-footer input[type="checkbox"]:focus {
+    outline: none;
+    box-shadow: none;
+}
+
+/* --- Font Unification for KaTeX Consistency --- */
+.qp-direction,
+.question-text,
+.qp-options-area .option,
+.qp-review-question-text,
+.qp-review-answer,
+#qp-review-modal-content .question-text,
+#qp-review-modal-content .option {
+    font-family: 'KaTeX_Math', 'Times New Roman', serif;
+    font-size: 1.2rem;
+}
 }
