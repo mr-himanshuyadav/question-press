@@ -1994,3 +1994,39 @@ function qp_get_single_question_for_review_ajax() {
     wp_send_json_success($question_data);
 }
 add_action('wp_ajax_get_single_question_for_review', 'qp_get_single_question_for_review_ajax');
+
+/**
+ * AJAX handler to terminate an active session.
+ */
+function qp_terminate_session_ajax() {
+    check_ajax_referer('qp_practice_nonce', 'nonce');
+
+    if (!is_user_logged_in()) {
+        wp_send_json_error(['message' => 'You must be logged in.']);
+    }
+
+    $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
+    $user_id = get_current_user_id();
+
+    if (!$session_id) {
+        wp_send_json_error(['message' => 'Invalid session ID.']);
+    }
+
+    global $wpdb;
+    $sessions_table = $wpdb->prefix . 'qp_user_sessions';
+
+    // Verify the session belongs to the current user before terminating
+    $session_owner = $wpdb->get_var($wpdb->prepare("SELECT user_id FROM $sessions_table WHERE session_id = %d", $session_id));
+    if ((int)$session_owner !== $user_id) {
+        wp_send_json_error(['message' => 'Permission denied.']);
+    }
+
+    // Reuse the abandonment logic to correctly calculate stats
+    qp_cleanup_abandoned_sessions(); // This will process the session immediately
+
+    // We can just set the status to 'completed' as it was a manual action
+    $wpdb->update($sessions_table, ['status' => 'completed'], ['session_id' => $session_id]);
+
+    wp_send_json_success(['message' => 'Session terminated successfully.']);
+}
+add_action('wp_ajax_qp_terminate_session', 'qp_terminate_session_ajax');

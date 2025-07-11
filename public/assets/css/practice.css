@@ -713,4 +713,11 @@ ul.qp-review-list li {
         align-self: stretch; /* Makes the container take full height of the card */
         justify-content: center; /* Centers the buttons vertically */
     }
+    /* NEW: Make all action buttons full-width inside their containers */
+    .qp-review-list-actions button,
+    .qp-card-actions .qp-button {
+        width: 100%;
+        box-sizing: border-box; /* Ensures padding is included in the width */
+        text-align: center;
+    }
 }

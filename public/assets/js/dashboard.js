@@ -141,6 +141,40 @@ jQuery(document).ready(function($) {
         });
     });
 
+
+    // --- NEW: Handler for the "Terminate" button ---
+    wrapper.on('click', '.qp-terminate-session-btn', function(e) {
+        e.preventDefault();
+        var button = $(this);
+        var sessionID = button.data('session-id');
+
+        if (confirm('Are you sure you want to terminate this session? This will end the session and move it to your history.')) {
+            $.ajax({
+                url: qp_ajax_object.ajax_url,
+                type: 'POST',
+                data: {
+                    action: 'qp_terminate_session',
+                    nonce: qp_ajax_object.nonce,
+                    session_id: sessionID
+                },
+                beforeSend: function() {
+                    button.text('...').prop('disabled', true);
+                    button.closest('.qp-card-actions').find('.qp-button-secondary').prop('disabled', true);
+                },
+                success: function(response) {
+                    if (response.success) {
+                        // Reload the page to see the session moved to the history table
+                        location.reload();
+                    } else {
+                        alert('Error: ' + (response.data.message || 'Could not terminate session.'));
+                        button.text('Terminate').prop('disabled', false);
+                        button.closest('.qp-card-actions').find('.qp-button-secondary').prop('disabled', false);
+                    }
+                }
+            });
+        }
+    });
+
     // --- UPDATED: Handler for the "Show Answer" checkbox in the modal ---
     wrapper.on('change', '#qp-modal-show-answer-cb', function(e) {
         e.stopPropagation(); // Prevent the modal from closing
