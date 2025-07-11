@@ -205,14 +205,17 @@ function qp_activate_plugin()
         user_id BIGINT(20) UNSIGNED NOT NULL,
         start_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         end_time DATETIME,
+        status VARCHAR(20) NOT NULL DEFAULT 'active',
         total_attempted INT,
         correct_count INT,
         incorrect_count INT,
         skipped_count INT,
         marks_obtained DECIMAL(10, 2),
         settings_snapshot TEXT,
+        question_ids_snapshot LONGTEXT,
         PRIMARY KEY (session_id),
-        KEY user_id (user_id)
+        KEY user_id (user_id),
+        KEY status (status)
     ) $charset_collate;";
     dbDelta($sql_sessions);
 
