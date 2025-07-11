@@ -130,8 +130,17 @@ jQuery(document).ready(function($) {
                     modalContent.html(html);
                     modalContent.find('.qp-modal-options').data('correct-option-id', correctOptionId);
 
+                    // Manually trigger KaTeX rendering on the new modal content.
                     if (typeof renderMathInElement === 'function') {
-                        renderMathInElement(modalContent[0]);
+                        renderMathInElement(modalContent[0], {
+                            delimiters: [
+                                {left: '$$', right: '$$', display: true},
+                                {left: '$', right: '$', display: false},
+                                {left: '\\\\[', right: '\\\\]', display: true},
+                                {left: '\\\\(', right: '\\\\)', display: false}
+                            ],
+                            throwOnError: false
+                        });
                     }
 
                 } else {
