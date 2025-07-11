@@ -204,6 +204,7 @@ function qp_activate_plugin()
         session_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
         user_id BIGINT(20) UNSIGNED NOT NULL,
         start_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        last_activity DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         end_time DATETIME,
         status VARCHAR(20) NOT NULL DEFAULT 'active',
         total_attempted INT,
