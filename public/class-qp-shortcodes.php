@@ -24,7 +24,7 @@ class QP_Shortcodes
 
     // In public/class-qp-shortcodes.php
 
-public static function render_session_page() {
+    public static function render_session_page() {
     if (!isset($_GET['session_id']) || !is_numeric($_GET['session_id'])) {
         return '<div class="qp-container"><p>Error: No valid practice session was found. Please start a new session.</p></div>';
     }
@@ -32,31 +32,24 @@ public static function render_session_page() {
     $session_id = absint($_GET['session_id']);
     $user_id = get_current_user_id();
 
-    // Verify this session belongs to the current user
+    // Verify this session belongs to the current user and get session data from the DB
     global $wpdb;
-    $session_owner = $wpdb->get_var($wpdb->prepare("SELECT user_id FROM {$wpdb->prefix}qp_user_sessions WHERE session_id = %d", $session_id));
-    if ((int)$session_owner !== $user_id) {
-        return '<div class="qp-container"><p>Error: You do not have permission to access this session.</p></div>';
+    $session_db_data = $wpdb->get_row($wpdb->prepare(
+        "SELECT user_id, settings_snapshot, question_ids_snapshot FROM {$wpdb->prefix}qp_user_sessions WHERE session_id = %d",
+        $session_id
+    ));
+
+    if (!$session_db_data || (int)$session_db_data->user_id !== $user_id) {
+        return '<div class="qp-container"><p>Error: You do not have permission to access this session or it is invalid.</p></div>';
     }
 
-    // --- UPDATED: Fetch previous attempts and combine with transient data ---
-    $session_data = get_transient('qp_session_' . $session_id);
+    // This is a resumed session. Rebuild session_data from the database.
+    $session_data = [
+        'session_id'    => $session_id,
+        'question_ids'  => json_decode($session_db_data->question_ids_snapshot, true),
+        'settings'      => json_decode($session_db_data->settings_snapshot, true)
+    ];
 
-    if ($session_data) {
-        // This is a new session, transient exists. Delete it after use.
-        delete_transient('qp_session_' . $session_id);
-    } else {
-        // This is a reloaded session. Rebuild session_data from the database.
-        $session_db_data = $wpdb->get_row($wpdb->prepare("SELECT settings_snapshot FROM {$wpdb->prefix}qp_user_sessions WHERE session_id = %d", $session_id));
-        if (!$session_db_data) {
-            return '<div class="qp-container"><p>Error: Your session has expired or is invalid.</p></div>';
-        }
-        $session_data['settings'] = json_decode($session_db_data->settings_snapshot, true);
-        // We need to rebuild the question_ids list based on the settings
-        // This is a simplified version; a full implementation would re-run the query from qp_start_practice_session_ajax
-        $session_data['question_ids'] = $wpdb->get_col($wpdb->prepare("SELECT question_id FROM {$wpdb->prefix}qp_user_attempts WHERE session_id = %d ORDER BY attempt_id ASC", $session_id));
-    }
-    
     // Fetch all attempts for this session to restore state
     $attempt_history = $wpdb->get_results($wpdb->prepare(
         "SELECT question_id, selected_option_id, is_correct FROM {$wpdb->prefix}qp_user_attempts WHERE session_id = %d",
@@ -65,6 +58,9 @@ public static function render_session_page() {
 
     $session_data['attempt_history'] = $attempt_history;
     self::$session_data_for_script = $session_data;
+
+    // We no longer need the transient for loading, but we can delete it to be tidy
+    delete_transient('qp_session_' . $session_id);
 
     return '<div id="qp-practice-app-wrapper">' . self::render_practice_ui() . '</div>';
 }

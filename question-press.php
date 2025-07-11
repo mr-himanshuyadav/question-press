@@ -961,6 +961,7 @@ function qp_end_practice_session_ajax()
         $sessions_table,
         [
             'end_time' => current_time('mysql', 1),
+            'status' => 'completed',
             'total_attempted' => $total_attempted,
             'correct_count' => $correct_count,
             'incorrect_count' => $incorrect_count,
