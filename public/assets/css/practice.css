@@ -123,7 +123,7 @@ body {
 .qp-options-area .option.disabled { cursor: not-allowed; }
 .qp-options-area .option.correct { border-color: var(--qp-correct-color) !important; background: var(--qp-correct-bg); color: var(--qp-correct-text); font-weight: 600; }
 .qp-options-area .option.incorrect { border-color: var(--qp-incorrect-color) !important; background: var(--qp-incorrect-bg); color: var(--qp-incorrect-text); }
-.qp-footer-nav { margin-top: 2rem; display: flex; gap: 10px; }
+.qp-footer-nav { margin-top: .6rem; display: flex; gap: 10px; }
 .qp-footer-nav button { padding: 10px; font-weight: 600; flex: 1; }
 .qp-footer-controls { margin-top: 20px; display: flex; justify-content: center; }
 .qp-footer-nav button:disabled { background-color: #f0f0f1; border-color: #ffffff00; color: #a7aaad; cursor: not-allowed; }
@@ -367,7 +367,7 @@ body {
     color: var(--qp-incorrect-color);
 }
 
-/* --- Review Later Checkbox Styles --- */
+/* --- Review Later Checkbox Styles (Updated) --- */
 .qp-review-later-checkbox {
     display: inline-flex;
     align-items: center;
@@ -379,6 +379,14 @@ body {
     padding: 10px;
     border-radius: var(--qp-radius);
     transition: all 0.2s ease;
+    /* Add some margin for spacing */
+    margin: 10px 0;
+}
+.qp-review-later-checkbox:hover {
+    background-color: #f0f0f1;
+}
+.qp-review-later-checkbox input {
+    transform: scale(1.2);
 }
 .qp-review-later-checkbox:hover {
     background-color: #f0f0f1;
