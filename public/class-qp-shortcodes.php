@@ -312,18 +312,18 @@ public static function render_summary_ui($summaryData) {
         global $wpdb;
         $sessions_table = $wpdb->prefix . 'qp_user_sessions';
 
-        // Fetch session and verify ownership
         $session = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$sessions_table} WHERE session_id = %d AND user_id = %d", $session_id, $user_id));
 
         if (!$session) {
             return '<div class="qp-container"><p>Error: Session not found or you do not have permission to view it.</p></div>';
         }
 
-        // Fetch all attempts for this session
+        // --- CORRECTED QUERY ---
         $attempts = $wpdb->get_results($wpdb->prepare(
-            "SELECT q.question_text, q.direction_text, o.option_text AS selected_answer, o_correct.option_text AS correct_answer, a.is_correct
+            "SELECT q.question_text, g.direction_text, o.option_text AS selected_answer, o_correct.option_text AS correct_answer, a.is_correct
              FROM {$wpdb->prefix}qp_user_attempts a
              JOIN {$wpdb->prefix}qp_questions q ON a.question_id = q.question_id
+             LEFT JOIN {$wpdb->prefix}qp_question_groups g ON q.group_id = g.group_id
              LEFT JOIN {$wpdb->prefix}qp_options o ON a.selected_option_id = o.option_id
              LEFT JOIN {$wpdb->prefix}qp_options o_correct ON q.question_id = o_correct.question_id AND o_correct.is_correct = 1
              WHERE a.session_id = %d
@@ -331,7 +331,6 @@ public static function render_summary_ui($summaryData) {
             $session_id
         ));
         
-        // Start output buffering
         ob_start();
         ?>
         <div class="qp-container qp-review-wrapper">
@@ -350,6 +349,11 @@ public static function render_summary_ui($summaryData) {
                 <h3 style="margin-top: 2rem;">Attempted Questions</h3>
                 <?php foreach ($attempts as $index => $attempt) : ?>
                     <div class="qp-review-question-item">
+                        <?php if (!empty($attempt->direction_text)): ?>
+                            <div class="qp-review-direction-text">
+                                <?php echo wp_kses_post($attempt->direction_text); ?>
+                            </div>
+                        <?php endif; ?>
                         <div class="qp-review-question-text">
                             <strong>Q<?php echo $index + 1; ?>:</strong> <?php echo wp_kses_post($attempt->question_text); ?>
                         </div>
