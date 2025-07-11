@@ -385,7 +385,8 @@ function qp_admin_enqueue_scripts($hook_suffix)
 add_action('admin_enqueue_scripts', 'qp_admin_enqueue_scripts');
 
 // FORM & ACTION HANDLERS
-function qp_handle_form_submissions() {
+function qp_handle_form_submissions()
+{
     if (isset($_GET['page']) && $_GET['page'] === 'qp-organization') {
         QP_Sources_Page::handle_forms();
         QP_Topics_Page::handle_forms();
@@ -503,7 +504,8 @@ function get_question_custom_id($question_id)
 }
 
 
-function qp_handle_save_question_group() {
+function qp_handle_save_question_group()
+{
     if (!isset($_POST['save_group']) || !isset($_POST['_wpnonce']) || !wp_verify_nonce($_POST['_wpnonce'], 'qp_save_question_group_nonce')) {
         return;
     }
@@ -525,7 +527,9 @@ function qp_handle_save_question_group() {
 
     $questions_from_form = isset($_POST['questions']) ? (array) $_POST['questions'] : [];
 
-    if (empty($subject_id) || empty($questions_from_form)) { return; }
+    if (empty($subject_id) || empty($questions_from_form)) {
+        return;
+    }
 
     // --- Save Group Data ---
     $group_data = [
@@ -556,7 +560,7 @@ function qp_handle_save_question_group() {
         if (empty(trim($question_text))) continue;
 
         $question_id = isset($q_data['question_id']) ? absint($q_data['question_id']) : 0;
-        
+
         // --- CORRECTED: Get question number from the individual question data array ---
         $question_num = isset($q_data['question_number_in_section']) ? sanitize_text_field($q_data['question_number_in_section']) : '';
 
@@ -637,17 +641,24 @@ function qp_public_init()
 }
 add_action('init', 'qp_public_init');
 
-function qp_public_enqueue_scripts() {
+function qp_public_enqueue_scripts()
+{
     global $post;
     if (is_a($post, 'WP_Post') && (has_shortcode($post->post_content, 'question_press_practice') || has_shortcode($post->post_content, 'question_press_dashboard') || has_shortcode($post->post_content, 'question_press_session'))) {
-        
+
         $css_file_path = QP_PLUGIN_DIR . 'public/assets/css/practice.css';
         $css_version = file_exists($css_file_path) ? filemtime($css_file_path) : '1.0.0';
+
+        $practice_js_file_path = QP_PLUGIN_DIR . 'public/assets/js/practice.js';
+        $practice_js_version = file_exists($practice_js_file_path) ? filemtime($practice_js_file_path) : '1.0.0';
+
+        $dashboard_js_file_path = QP_PLUGIN_DIR . 'public/assets/js/dashboard.js';
+        $dashboard_js_version = file_exists($dashboard_js_file_path) ? filemtime($dashboard_js_file_path) : '1.0.0';
         wp_enqueue_style('qp-practice-styles', QP_PLUGIN_URL . 'public/assets/css/practice.css', [], $css_version);
 
         $options = get_option('qp_settings');
         $ajax_data = [
-            'ajax_url'           => admin_url('admin-ajax.php'), 
+            'ajax_url'           => admin_url('admin-ajax.php'),
             'nonce'              => wp_create_nonce('qp_practice_nonce'),
             'dashboard_page_url' => isset($options['dashboard_page']) ? get_permalink($options['dashboard_page']) : home_url('/'),
             'practice_page_url'  => isset($options['practice_page']) ? get_permalink($options['practice_page']) : home_url('/')
@@ -655,20 +666,26 @@ function qp_public_enqueue_scripts() {
 
         // --- CORRECTED SCRIPT ENQUEUEING AND LOCALIZATION ---
         if (has_shortcode($post->post_content, 'question_press_practice') || has_shortcode($post->post_content, 'question_press_session')) {
-            wp_enqueue_script('qp-practice-script', QP_PLUGIN_URL . 'public/assets/js/practice.js', ['jquery'], filemtime(QP_PLUGIN_DIR . 'public/assets/js/practice.js'), true);
+            wp_enqueue_script('qp-practice-script', QP_PLUGIN_URL . 'public/assets/js/practice.js', ['jquery'], $practice_js_version, true);
             wp_localize_script('qp-practice-script', 'qp_ajax_object', $ajax_data);
-            
+
             // If we are on the session page, get the data from the shortcode class and localize it
             if (has_shortcode($post->post_content, 'question_press_session')) {
                 $session_data = QP_Shortcodes::get_session_data_for_script();
                 if ($session_data) {
+                    wp_enqueue_style('katex-css', 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css', [], '0.16.9');
+                    wp_enqueue_script('katex-js', 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js', [], '0.16.9', true);
+                    wp_enqueue_script('katex-mhchem', 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/mhchem.min.js', ['katex-js'], '0.16.9', true);
+                    wp_enqueue_script('katex-auto-render', 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js', ['katex-mhchem'], '0.16.9', true);
+
+                    wp_enqueue_script('qp-practice-script', QP_PLUGIN_URL . 'public/assets/js/practice.js', ['jquery', 'katex-auto-render'], $practice_js_version, true);
                     wp_localize_script('qp-practice-script', 'qp_session_data', $session_data);
                 }
             }
         }
-        
+
         if (has_shortcode($post->post_content, 'question_press_dashboard')) {
-            wp_enqueue_script('qp-dashboard-script', QP_PLUGIN_URL . 'public/assets/js/dashboard.js', ['jquery'], filemtime(QP_PLUGIN_DIR . 'public/assets/js/dashboard.js'), true);
+            wp_enqueue_script('qp-dashboard-script', QP_PLUGIN_URL . 'public/assets/js/dashboard.js', ['jquery'], $dashboard_js_version, true);
             wp_localize_script('qp-dashboard-script', 'qp_ajax_object', $ajax_data);
         }
     }
@@ -694,7 +711,8 @@ function qp_get_topics_for_subject_ajax()
 }
 add_action('wp_ajax_get_topics_for_subject', 'qp_get_topics_for_subject_ajax');
 
-function qp_start_practice_session_ajax() {
+function qp_start_practice_session_ajax()
+{
     check_ajax_referer('qp_practice_nonce', 'nonce');
     $settings_str = isset($_POST['settings']) ? $_POST['settings'] : '';
     $form_settings = [];
@@ -712,7 +730,9 @@ function qp_start_practice_session_ajax() {
         'timer_seconds'   => isset($form_settings['qp_timer_seconds']) ? absint($form_settings['qp_timer_seconds']) : 60
     ];
 
-    if (empty($session_settings['subject_id'])) { wp_send_json_error(['message' => 'Please select a subject.']); }
+    if (empty($session_settings['subject_id'])) {
+        wp_send_json_error(['message' => 'Please select a subject.']);
+    }
 
     global $wpdb;
     $user_id = get_current_user_id();
@@ -778,7 +798,7 @@ function qp_start_practice_session_ajax() {
         if ($error_code === 'ALL_ATTEMPTED') {
             $error_html = '<div class="qp-practice-form-wrapper" style="text-align: center; padding: 40px 20px; background-color: #fff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);"><h2 style="margin-top:0; font-size: 22px;">You\'ve Mastered It!</h2><p style="font-size: 16px; color: #555; margin-bottom: 25px;">You have attempted all available questions for this criteria. Try Revision Mode or different settings.</p><button id="qp-go-back-btn" class="qp-button qp-button-secondary">Back to Form</button></div>';
         } else if ($error_code === 'NO_REVISION_QUESTIONS') {
-             $error_html = '<div class="qp-practice-form-wrapper" style="text-align: center; padding: 40px 20px; background-color: #fff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);"><h2 style="margin-top:0; font-size: 22px;">Nothing to Revise Yet!</h2><p style="font-size: 16px; color: #555; margin-bottom: 25px;">You haven\'t attempted any questions matching this criteria yet. Try a regular practice session first.</p><button id="qp-go-back-btn" class="qp-button qp-button-primary">Back to Practice Form</button></div>';
+            $error_html = '<div class="qp-practice-form-wrapper" style="text-align: center; padding: 40px 20px; background-color: #fff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);"><h2 style="margin-top:0; font-size: 22px;">Nothing to Revise Yet!</h2><p style="font-size: 16px; color: #555; margin-bottom: 25px;">You haven\'t attempted any questions matching this criteria yet. Try a regular practice session first.</p><button id="qp-go-back-btn" class="qp-button qp-button-primary">Back to Practice Form</button></div>';
         } else { // NO_QUESTIONS_EXIST
             $error_html = '<div class="qp-practice-form-wrapper" style="text-align: center; padding: 40px 20px; background-color: #fff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);"><h2 style="margin-top:0; font-size: 22px;">Fresh Questions Coming Soon!</h2><p style="font-size: 16px; color: #555; margin-bottom: 25px;">No questions were found matching your criteria. Please try different options.</p><button id="qp-go-back-btn" class="qp-button qp-button-secondary">Back to Practice Form</button></div>';
         }
@@ -833,10 +853,13 @@ add_action('wp_ajax_get_practice_form_html', 'qp_get_practice_form_html_ajax');
 
 // In question-press.php, REPLACE this function
 
-function qp_get_question_data_ajax() {
+function qp_get_question_data_ajax()
+{
     check_ajax_referer('qp_practice_nonce', 'nonce');
     $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
-    if (!$question_id) { wp_send_json_error(['message' => 'Invalid Question ID.']); }
+    if (!$question_id) {
+        wp_send_json_error(['message' => 'Invalid Question ID.']);
+    }
 
     global $wpdb;
     $q_table = $wpdb->prefix . 'qp_questions';
@@ -865,7 +888,9 @@ function qp_get_question_data_ajax() {
         $question_id
     ), ARRAY_A);
 
-    if (!$question_data) { wp_send_json_error(['message' => 'Question not found.']); }
+    if (!$question_data) {
+        wp_send_json_error(['message' => 'Question not found.']);
+    }
 
     $options = get_option('qp_settings');
     $allowed_roles = isset($options['show_source_meta_roles']) ? $options['show_source_meta_roles'] : [];
@@ -887,19 +912,22 @@ function qp_get_question_data_ajax() {
 }
 add_action('wp_ajax_get_question_data', 'qp_get_question_data_ajax');
 
-function qp_check_answer_ajax() {
+function qp_check_answer_ajax()
+{
     check_ajax_referer('qp_practice_nonce', 'nonce');
     $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
     $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
     $option_id = isset($_POST['option_id']) ? absint($_POST['option_id']) : 0;
-    if (!$session_id || !$question_id || !$option_id) { wp_send_json_error(['message' => 'Invalid data submitted.']); }
+    if (!$session_id || !$question_id || !$option_id) {
+        wp_send_json_error(['message' => 'Invalid data submitted.']);
+    }
 
     global $wpdb;
     $o_table = $wpdb->prefix . 'qp_options';
     $attempts_table = $wpdb->prefix . 'qp_user_attempts';
 
     $wpdb->update($wpdb->prefix . 'qp_user_sessions', ['last_activity' => current_time('mysql')], ['session_id' => $session_id]);
-    
+
     $is_correct = (bool) $wpdb->get_var($wpdb->prepare("SELECT is_correct FROM $o_table WHERE question_id = %d AND option_id = %d", $question_id, $option_id));
     $correct_option_id = $wpdb->get_var($wpdb->prepare("SELECT option_id FROM $o_table WHERE question_id = %d AND is_correct = 1", $question_id));
 
@@ -911,7 +939,7 @@ function qp_check_answer_ajax() {
         'selected_option_id' => $option_id,
         'is_correct' => $is_correct ? 1 : 0
     ]);
-    
+
     wp_send_json_success(['is_correct' => $is_correct, 'correct_option_id' => $correct_option_id]);
 }
 add_action('wp_ajax_check_answer', 'qp_check_answer_ajax');
@@ -1476,7 +1504,7 @@ function qp_admin_head_styles_for_list_table()
                 background-color: #f1f1f1;
             }
         </style>
-    <?php
+<?php
     }
 }
 add_action('admin_head', 'qp_admin_head_styles_for_list_table');
@@ -1519,7 +1547,8 @@ add_action('wp_ajax_get_sheets_for_topic', 'qp_get_sheets_for_topic_ajax');
 /**
  * Schedules the session cleanup event if it's not already scheduled.
  */
-function qp_schedule_session_cleanup() {
+function qp_schedule_session_cleanup()
+{
     if (!wp_next_scheduled('qp_cleanup_abandoned_sessions_event')) {
         wp_schedule_event(time(), 'hourly', 'qp_cleanup_abandoned_sessions_event');
     }
@@ -1529,7 +1558,8 @@ add_action('wp', 'qp_schedule_session_cleanup');
 /**
  * The function that runs on the scheduled cron event to clean up old sessions.
  */
-function qp_cleanup_abandoned_sessions() {
+function qp_cleanup_abandoned_sessions()
+{
     global $wpdb;
     $options = get_option('qp_settings');
     $timeout_minutes = isset($options['session_timeout']) ? absint($options['session_timeout']) : 20;
@@ -1562,7 +1592,7 @@ function qp_cleanup_abandoned_sessions() {
 
         $correct_count = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $attempts_table WHERE session_id = %d AND is_correct = 1", $session_id));
         $incorrect_count = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $attempts_table WHERE session_id = %d AND is_correct = 0", $session_id));
-        
+
         // For abandoned sessions, all questions not in the attempts table are considered "skipped"
         $session_data = $wpdb->get_row($wpdb->prepare("SELECT question_ids_snapshot FROM $sessions_table WHERE session_id = %d", $session_id));
         $all_question_ids = json_decode($session_data->question_ids_snapshot, true);
@@ -1595,7 +1625,8 @@ add_action('qp_cleanup_abandoned_sessions_event', 'qp_cleanup_abandoned_sessions
  * Handles the complete, on-demand data migration and cleanup process.
  * This is safe to run multiple times, as each step checks for completion.
  */
-function qp_run_unified_data_migration() {
+function qp_run_unified_data_migration()
+{
     // Check if the trigger is present in the URL and if the user has permission
     if (!isset($_GET['action']) || $_GET['action'] !== 'qp_unified_migration' || !current_user_can('manage_options')) {
         return;
@@ -1715,7 +1746,7 @@ function qp_run_unified_data_migration() {
             $messages[] = "Step 4: Migrated question numbers for " . count($questions_to_migrate_num) . " questions.";
         }
     }
-    
+
     // === STEP 5 (IMPROVED): MIGRATE PYQ STATUS TO GROUPS ===
     if ($wpdb->get_col("SHOW COLUMNS FROM {$questions_table} LIKE 'is_pyq'")) {
         $groups_to_check = $wpdb->get_col("SELECT group_id FROM {$groups_table} WHERE is_pyq = 0");
@@ -1723,9 +1754,10 @@ function qp_run_unified_data_migration() {
         if (!empty($groups_to_check)) {
             foreach ($groups_to_check as $group_id) {
                 $is_legacy_pyq = $wpdb->get_var($wpdb->prepare(
-                    "SELECT COUNT(*) FROM {$questions_table} WHERE group_id = %d AND is_pyq = 1", $group_id
+                    "SELECT COUNT(*) FROM {$questions_table} WHERE group_id = %d AND is_pyq = 1",
+                    $group_id
                 ));
-                
+
                 if ($is_legacy_pyq > 0) {
                     $wpdb->update($groups_table, ['is_pyq' => 1], ['group_id' => $group_id]);
                     $migrated_groups_count++;
@@ -1747,7 +1779,7 @@ function qp_run_unified_data_migration() {
     if (!empty($dropped_columns)) {
         $messages[] = "Step 6: Finalized cleanup by removing old columns: " . implode(', ', $dropped_columns) . " from the questions table.";
     }
-    
+
     // --- Final Redirect ---
     if (session_status() === PHP_SESSION_ACTIVE) {
         if (empty($messages)) {
@@ -1765,7 +1797,8 @@ function qp_run_unified_data_migration() {
 /**
  * AJAX handler to update the last_activity timestamp for a session.
  */
-function qp_update_session_activity_ajax() {
+function qp_update_session_activity_ajax()
+{
     check_ajax_referer('qp_practice_nonce', 'nonce');
     $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
     if ($session_id > 0) {

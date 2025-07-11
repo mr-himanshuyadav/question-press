@@ -277,3 +277,41 @@ body {
     from { transform: translateX(-100%); }
     to { transform: translateX(0); }
 }
+
+\/* --- Active Session Card Styles --- */
+.qp-active-sessions-list {
+    display: grid;
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.qp-active-session-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
+    background-color: var(--qp-bg-light);
+    border: 1px solid var(--qp-border-color);
+    border-left: 5px solid var(--qp-primary-color);
+    border-radius: var(--qp-radius);
+}
+
+.qp-card-details {
+    display: flex;
+    flex-direction: column;
+}
+
+.qp-card-subject {
+    font-weight: 600;
+    font-size: 16px;
+    color: var(--qp-dark-text);
+}
+
+.qp-card-date {
+    font-size: 13px;
+    color: var(--qp-light-text);
+}
+
+.qp-active-session-card .qp-button {
+    padding: 8px 16px;
+}
