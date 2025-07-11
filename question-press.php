@@ -252,6 +252,19 @@ function qp_activate_plugin()
     ) $charset_collate;";
     dbDelta($sql_logs);
 
+    // --- NEW: Table for "Review Later" questions ---
+    $table_review_later = $wpdb->prefix . 'qp_review_later';
+    $sql_review_later = "CREATE TABLE $table_review_later (
+        review_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+        user_id BIGINT(20) UNSIGNED NOT NULL,
+        question_id BIGINT(20) UNSIGNED NOT NULL,
+        PRIMARY KEY (review_id),
+        UNIQUE KEY user_question (user_id, question_id),
+        KEY user_id (user_id),
+        KEY question_id (question_id)
+    ) $charset_collate;";
+    dbDelta($sql_review_later);
+
     // Set default options
     add_option('qp_next_custom_question_id', 1000, '', 'no');
     if (!get_option('qp_jwt_secret_key')) {
