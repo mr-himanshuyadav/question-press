@@ -1850,7 +1850,11 @@ function qp_toggle_review_later_ajax() {
     }
 
     $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
-    $is_marked = isset($_POST['is_marked']) ? (bool)$_POST['is_marked'] : false;
+    // --- THIS IS THE CORRECTED LOGIC ---
+    // We explicitly check if the string from AJAX is 'true'.
+    // Anything else, including 'false', will result in a boolean false.
+    $is_marked = isset($_POST['is_marked']) && $_POST['is_marked'] === 'true';
+    // --- END OF FIX ---
     $user_id = get_current_user_id();
 
     if (!$question_id) {
@@ -1861,14 +1865,14 @@ function qp_toggle_review_later_ajax() {
     $review_table = $wpdb->prefix . 'qp_review_later';
 
     if ($is_marked) {
-        // Add to review list, ignoring if it's already there.
+        // This block now only runs when the box is checked.
         $wpdb->insert(
             $review_table,
             ['user_id' => $user_id, 'question_id' => $question_id],
             ['%d', '%d']
         );
     } else {
-        // Remove from review list.
+        // This block now correctly runs when the box is unchecked.
         $wpdb->delete(
             $review_table,
             ['user_id' => $user_id, 'question_id' => $question_id],
