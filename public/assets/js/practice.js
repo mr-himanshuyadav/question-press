@@ -482,6 +482,8 @@ wrapper.on("change", "#qp-mark-for-review-cb", function () {
     
     if (sessionSettings.revise_mode && data.is_revision) { $('#qp-revision-indicator').show(); }
 
+    $('#qp-mark-for-review-cb').prop('checked', data.is_marked_for_review);
+
     var directionEl = $('.qp-direction');
     directionEl.empty().hide();
     if (questionData.direction_text || questionData.direction_image_url) {

@@ -939,6 +939,14 @@ function qp_get_question_data_ajax()
     $user_id = get_current_user_id();
     $attempt_count = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $a_table WHERE user_id = %d AND question_id = %d", $user_id, $question_id));
 
+    // --- NEW: Check if the question is marked for review ---
+    $review_table = $wpdb->prefix . 'qp_review_later';
+    $is_marked = (bool) $wpdb->get_var($wpdb->prepare(
+        "SELECT COUNT(*) FROM {$review_table} WHERE user_id = %d AND question_id = %d",
+        $user_id,
+        $question_id
+    ));
+
     wp_send_json_success(['question' => $question_data, 'is_revision' => ($attempt_count > 0), 'is_admin' => $user_can_view]);
 }
 add_action('wp_ajax_get_question_data', 'qp_get_question_data_ajax');
