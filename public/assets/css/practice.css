@@ -277,25 +277,3 @@ body {
     from { transform: translateX(-100%); }
     to { transform: translateX(0); }
 }
-
-.qp-progress-indicator {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    gap: 8px;
-    margin: 20px 0;
-    height: 12px;
-}
-
-.qp-progress-dot {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    background-color: #d1d5db; /* Inactive color */
-    transition: all 0.3s ease;
-}
-
-.qp-progress-dot.active {
-    background-color: var(--qp-primary-color);
-    transform: scale(1.2);
-}

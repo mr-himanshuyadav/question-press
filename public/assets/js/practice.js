@@ -15,8 +15,9 @@ jQuery(document).ready(function ($) {
   var practiceInProgress = false;
   var questionCache = {};
 
+
   // --- Session Initialization ---
-  if (typeof qp_session_data !== "undefined") {
+  if (typeof qp_session_data !== 'undefined') {
     practiceInProgress = true;
     sessionID = qp_session_data.session_id;
     sessionQuestionIDs = qp_session_data.question_ids;
@@ -58,11 +59,9 @@ jQuery(document).ready(function ($) {
     if (currentQuestionIndex >= sessionQuestionIDs.length) {
       $("#qp-end-practice-btn").click();
     } else {
-      loadQuestion(sessionQuestionIDs[currentQuestionIndex]); // Initial load without animation
+      loadQuestion(sessionQuestionIDs[currentQuestionIndex]);
     }
   }
-
-  // --- Event Handlers ---
 
   // Logic for the timer checkbox on the settings form
   wrapper.on("change", "#qp_timer_enabled_cb", function () {
@@ -239,7 +238,6 @@ jQuery(document).ready(function ($) {
     clearInterval(questionTimer);
     var selectedOption = $(this);
     $('.qp-options-area .option').addClass('disabled');
-    $('.qp-options-area .option input[type="radio"]').prop('disabled', true);
     $("#qp-skip-btn").prop("disabled", true);
     $("#qp-next-btn").prop("disabled", false);
 
@@ -287,25 +285,11 @@ jQuery(document).ready(function ($) {
     return array;
   }
 
-  function updateProgressIndicator() {
-      var indicator = $('.qp-progress-indicator');
-      indicator.empty();
-      var totalQuestions = sessionQuestionIDs.length;
-
-      for (var i = 0; i < totalQuestions; i++) {
-          var dot = $('<div class="qp-progress-dot"></div>');
-          if (i === currentQuestionIndex) {
-              dot.addClass('active');
-          }
-          indicator.append(dot);
-      }
-  }
 
   // Handles navigation clicks
   wrapper.on("click", "#qp-next-btn, #qp-prev-btn", function () {
     clearInterval(questionTimer);
     var direction = $(this).attr("id") === "qp-next-btn" ? 'next' : 'prev';
-
     $.ajax({
       url: qp_ajax_object.ajax_url,
       type: "POST",
@@ -325,7 +309,6 @@ jQuery(document).ready(function ($) {
       }
     }
   });
-
 
   // --- CORRECTED: Handler for Skip and Report buttons ---
   wrapper.on("click", "#qp-skip-btn, .qp-report-button", function () {
@@ -467,7 +450,6 @@ jQuery(document).ready(function ($) {
     clearInterval(questionTimer);
     var questionData = data.question;
     
-    // --- RENDER QUESTION CONTENT ---
     $("#qp-revision-indicator, .qp-direction, #qp-reported-indicator, #qp-question-source").hide();
     $(".qp-report-button").text(function () { return $(this).data("label"); }).prop("disabled", false);
     $(".qp-footer-nav button").prop("disabled", false);
@@ -546,15 +528,10 @@ jQuery(document).ready(function ($) {
             }
         });
     }
-
-    updateProgressIndicator();
   }
 
   function loadQuestion(questionID, direction) {
-    if (!questionID) return;
-    
     var animatableArea = $('.qp-animatable-area');
-
     function doRender(data) {
         renderQuestion(data, questionID);
         if (direction) {
@@ -562,12 +539,10 @@ jQuery(document).ready(function ($) {
             animatableArea.removeClass('slide-out-to-left slide-out-to-right').addClass(slideInClass);
         }
     }
-
     if (direction) {
         var slideOutClass = direction === 'next' ? 'slide-out-to-left' : 'slide-out-to-right';
         animatableArea.removeClass('slide-in-from-left slide-in-from-right').addClass(slideOutClass);
     }
-    
     setTimeout(function() {
         if (questionCache[questionID]) {
             doRender(questionCache[questionID]);
@@ -575,11 +550,7 @@ jQuery(document).ready(function ($) {
             $.ajax({
                 url: qp_ajax_object.ajax_url,
                 type: "POST",
-                data: {
-                    action: "get_question_data",
-                    nonce: qp_ajax_object.nonce,
-                    question_id: questionID,
-                },
+                data: { action: "get_question_data", nonce: qp_ajax_object.nonce, question_id: questionID },
                 success: function (response) {
                     if (response.success) {
                         var dataToCache = response.data;
@@ -590,7 +561,7 @@ jQuery(document).ready(function ($) {
                 },
             });
         }
-    }, direction ? 300 : 0); // Matches CSS animation duration
+    }, direction ? 300 : 0);
   }
 
   function loadNextQuestion() {
@@ -598,7 +569,7 @@ jQuery(document).ready(function ($) {
     if (currentQuestionIndex >= sessionQuestionIDs.length) {
       practiceInProgress = false;
       clearInterval(questionTimer);
-      currentQuestionIndex--; // Decrement to show the last dot as active
+      currentQuestionIndex--;
       if (confirm("Congratulations, you've completed all available questions! Click OK to end this session and see your summary.")) {
         $("#qp-end-practice-btn").click();
       }

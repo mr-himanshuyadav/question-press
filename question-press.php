@@ -1587,6 +1587,24 @@ function qp_run_unified_data_migration() {
     $groups_table = $wpdb->prefix . 'qp_question_groups';
     $sources_table = $wpdb->prefix . 'qp_sources';
     $subjects_table = $wpdb->prefix . 'qp_subjects';
+    $sessions_table = $wpdb->prefix . 'qp_user_sessions';
+
+    // === NEW STEP: MIGRATE qp_user_sessions TABLE SCHEMA ===
+    $sessions_columns = $wpdb->get_col("DESC $sessions_table", 0);
+    $columns_to_add = [
+        'status' => "ADD COLUMN `status` VARCHAR(20) NOT NULL DEFAULT 'completed' AFTER `end_time`",
+        'last_activity' => "ADD COLUMN `last_activity` DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00' AFTER `start_time`",
+        'question_ids_snapshot' => "ADD COLUMN `question_ids_snapshot` LONGTEXT AFTER `settings_snapshot`"
+    ];
+    
+    foreach ($columns_to_add as $column_name => $query_part) {
+        if (!in_array($column_name, $sessions_columns)) {
+            $wpdb->query("ALTER TABLE {$sessions_table} {$query_part};");
+            $messages[] = "Step 0: Added `{$column_name}` column to the sessions table.";
+        }
+    }
+    // Set default last_activity for old records
+    $wpdb->query("UPDATE {$sessions_table} SET `last_activity` = `start_time` WHERE `last_activity` = '0000-00-00 00:00:00'");
 
     // === STEP 1: MIGRATE LEGACY source_file to qp_sources TABLE ===
     if ($wpdb->get_col("SHOW COLUMNS FROM {$questions_table} LIKE 'source_file'")) {

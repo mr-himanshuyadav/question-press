@@ -233,8 +233,6 @@ class QP_Shortcodes
                 </div>
             </div>
 
-            <div class="qp-progress-indicator"></div>
-
             <div class="qp-footer-nav">
                 <button id="qp-prev-btn" class="qp-button qp-button-secondary" disabled>&laquo; Previous</button>
                 <button id="qp-skip-btn" class="qp-button qp-button-secondary">Skip</button>
