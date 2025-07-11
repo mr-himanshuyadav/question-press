@@ -113,7 +113,10 @@ class QP_Dashboard {
                             <span class="qp-card-subject">'.esc_html($subject_display).'</span>
                             <span class="qp-card-date">Started: '.date_format(date_create($session->start_time), 'M j, Y, g:i a').'</span>
                         </div>
-                        <a href="'.esc_url(add_query_arg('session_id', $session->session_id, $session_page_url)).'" class="qp-button qp-button-secondary">Continue</a>
+                        <div class="qp-card-actions">
+                            <button class="qp-button qp-button-danger qp-terminate-session-btn" data-session-id="'.esc_attr($session->session_id).'">Terminate</button>
+                            <a href="'.esc_url(add_query_arg('session_id', $session->session_id, $session_page_url)).'" class="qp-button qp-button-secondary">Continue</a>
+                        </div>
                       </div>';
             }
             echo '</div>';

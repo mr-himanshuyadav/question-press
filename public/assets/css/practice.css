@@ -682,3 +682,14 @@ ul.qp-review-list li {
     font-weight: 600;
     cursor: pointer;
 }
+
+/* --- Active Session Card Action Styles --- */
+.qp-card-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.qp-active-session-card .qp-button {
+    padding: 8px 16px;
+    font-size: 14px;
+}
