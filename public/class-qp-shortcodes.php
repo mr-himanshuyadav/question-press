@@ -24,50 +24,82 @@ class QP_Shortcodes
 
     // In public/class-qp-shortcodes.php
 
-    public static function render_session_page()
-    {
-        if (!isset($_GET['session_id']) || !is_numeric($_GET['session_id'])) {
-            return '<div class="qp-container"><p>Error: No valid practice session was found. Please start a new session.</p></div>';
-        }
+    
 
-        $session_id = absint($_GET['session_id']);
-        $user_id = get_current_user_id();
+public static function render_session_page() {
+    if (!isset($_GET['session_id']) || !is_numeric($_GET['session_id'])) {
+        return '<div class="qp-container"><p>Error: No valid practice session was found. Please start a new session.</p></div>';
+    }
 
-        // Verify this session belongs to the current user and get session data from the DB
-        global $wpdb;
-        $session_db_data = $wpdb->get_row($wpdb->prepare(
-            "SELECT user_id, settings_snapshot, question_ids_snapshot FROM {$wpdb->prefix}qp_user_sessions WHERE session_id = %d",
-            $session_id
-        ));
+    $session_id = absint($_GET['session_id']);
+    $user_id = get_current_user_id();
 
-        if (!$session_db_data || (int)$session_db_data->user_id !== $user_id) {
-            return '<div class="qp-container"><p>Error: You do not have permission to access this session or it is invalid.</p></div>';
-        }
+    global $wpdb;
+    $sessions_table = $wpdb->prefix . 'qp_user_sessions';
+    $session_data_from_db = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$sessions_table} WHERE session_id = %d", $session_id));
 
-        // This is a resumed session. Rebuild session_data from the database.
-        $session_data = [
-            'session_id'    => $session_id,
-            'question_ids'  => json_decode($session_db_data->question_ids_snapshot, true),
-            'settings'      => json_decode($session_db_data->settings_snapshot, true)
+    if (!$session_data_from_db || (int)$session_data_from_db->user_id !== $user_id) {
+        return '<div class="qp-container"><p>Error: You do not have permission to access this session or it is invalid.</p></div>';
+    }
+
+    // --- NEW: Check if the session is already finished ---
+    if (in_array($session_data_from_db->status, ['completed', 'abandoned'])) {
+        $summary_data = [
+            'final_score' => $session_data_from_db->marks_obtained,
+            'total_attempted' => $session_data_from_db->total_attempted,
+            'correct_count' => $session_data_from_db->correct_count,
+            'incorrect_count' => $session_data_from_db->incorrect_count,
+            'skipped_count' => $session_data_from_db->skipped_count,
         ];
+        // We can reuse the summary UI generating function from the JS by wrapping it in a simple class
+        return '<div id="qp-practice-app-wrapper">' . self::render_summary_ui($summary_data) . '</div>';
+    }
 
-        // Fetch all attempts for this session to restore state
-        $attempt_history = $wpdb->get_results($wpdb->prepare(
-            "SELECT a.question_id, a.selected_option_id, a.is_correct, o.option_id as correct_option_id
+    // --- If the session is active, proceed as normal ---
+    $session_data = [
+        'session_id'    => $session_id,
+        'question_ids'  => json_decode($session_data_from_db->question_ids_snapshot, true),
+        'settings'      => json_decode($session_data_from_db->settings_snapshot, true)
+    ];
+
+    $attempt_history = $wpdb->get_results($wpdb->prepare(
+        "SELECT a.question_id, a.selected_option_id, a.is_correct, o.option_id as correct_option_id
          FROM {$wpdb->prefix}qp_user_attempts a
          LEFT JOIN {$wpdb->prefix}qp_options o ON a.question_id = o.question_id AND o.is_correct = 1
          WHERE a.session_id = %d",
-            $session_id
-        ), OBJECT_K);
+        $session_id
+    ), OBJECT_K);
 
-        $session_data['attempt_history'] = $attempt_history;
-        self::$session_data_for_script = $session_data;
+    $session_data['attempt_history'] = $attempt_history;
+    self::$session_data_for_script = $session_data;
 
-        // We no longer need the transient for loading, but we can delete it to be tidy
-        delete_transient('qp_session_' . $session_id);
+    return '<div id="qp-practice-app-wrapper">' . self::render_practice_ui() . '</div>';
+}
 
-        return '<div id="qp-practice-app-wrapper">' . self::render_practice_ui() . '</div>';
-    }
+public static function render_summary_ui($summaryData) {
+    $options = get_option('qp_settings');
+    $dashboard_page_url = isset($options['dashboard_page']) ? get_permalink($options['dashboard_page']) : home_url('/');
+    $practice_page_url = isset($options['practice_page']) ? get_permalink($options['practice_page']) : home_url('/');
+
+    ob_start();
+    ?>
+    <div class="qp-summary-wrapper">
+        <h2>Session Summary</h2>
+        <div class="qp-summary-score"><div class="label">Final Score</div><?php echo number_format($summaryData['final_score'], 2); ?></div>
+        <div class="qp-summary-stats">
+            <div class="stat"><div class="value"><?php echo (int)$summaryData['total_attempted']; ?></div><div class="label">Attempted</div></div>
+            <div class="stat"><div class="value"><?php echo (int)$summaryData['correct_count']; ?></div><div class="label">Correct</div></div>
+            <div class="stat"><div class="value"><?php echo (int)$summaryData['incorrect_count']; ?></div><div class="label">Incorrect</div></div>
+            <div class="stat"><div class="value"><?php echo (int)$summaryData['skipped_count']; ?></div><div class="label">Skipped</div></div>
+        </div>
+        <div class="qp-summary-actions">
+            <a href="<?php echo esc_url($dashboard_page_url); ?>" class="qp-button qp-button-secondary">View Dashboard</a>
+            <a href="<?php echo esc_url($practice_page_url); ?>" class="qp-button qp-button-primary">Start Another Practice</a>
+        </div>
+    </div>
+    <?php
+    return ob_get_clean();
+}
 
     // Helper function to get the session data
     public static function get_session_data_for_script()
