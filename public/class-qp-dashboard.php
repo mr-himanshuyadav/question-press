@@ -15,9 +15,9 @@ class QP_Dashboard {
         $options = get_option('qp_settings');
         $practice_page_url = isset($options['practice_page']) ? get_permalink($options['practice_page']) : home_url('/');
         
-        // Fetch "Review Later" questions to get the count for the tab
+        // Fetch Review Later questions with metadata
         $review_questions = $wpdb->get_results($wpdb->prepare(
-            "SELECT q.question_id, q.question_text, s.subject_name 
+            "SELECT q.question_id, q.custom_question_id, q.question_text, s.subject_name 
              FROM {$wpdb->prefix}qp_review_later rl
              JOIN {$wpdb->prefix}qp_questions q ON rl.question_id = q.question_id
              LEFT JOIN {$wpdb->prefix}qp_question_groups g ON q.group_id = g.group_id
@@ -58,17 +58,21 @@ class QP_Dashboard {
                             <li data-question-id="<?php echo esc_attr($q->question_id); ?>">
                                 <div class="qp-review-list-q-text">
                                     <?php echo wp_trim_words(esc_html($q->question_text), 25, '...'); ?>
-                                    <small><?php echo esc_html($q->subject_name); ?></small>
+                                    <small>ID: <?php echo esc_html($q->custom_question_id); ?> | Subject: <?php echo esc_html($q->subject_name); ?></small>
                                 </div>
                                 <div class="qp-review-list-actions">
+                                    <button class="qp-review-list-view-btn">View</button>
                                     <button class="qp-review-list-remove-btn">Remove</button>
                                 </div>
                             </li>
                         <?php endforeach; ?>
                     </ul>
                 <?php else: ?>
-                    <p style="text-align: center; padding: 2rem; background-color: #f9f9f9; border-radius: 8px;">You haven't marked any questions for review yet. You can mark them during any practice session.</p>
+                    <p style="text-align: center; padding: 2rem; background-color: #f9f9f9; border-radius: 8px;">You haven't marked any questions for review yet.</p>
                 <?php endif; ?>
+            </div>
+             <div id="qp-review-modal-backdrop" style="display: none;">
+                <div id="qp-review-modal-content"></div>
             </div>
         </div>
         <?php

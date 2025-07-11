@@ -617,3 +617,68 @@ ul.qp-review-list li {
 .qp-review-list-actions .qp-review-list-view-btn:hover {
     background-color: var(--qp-primary-hover);
 }
+
+/* --- Review Modal Styles --- */
+#qp-review-modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.6);
+    z-index: 1000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+#qp-review-modal-content {
+    background: #fff;
+    padding: 2rem;
+    border-radius: var(--qp-radius);
+    max-width: 90%;
+    width: 700px;
+    max-height: 90vh;
+    overflow-y: auto;
+    position: relative;
+}
+
+.qp-modal-close-btn {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    font-size: 24px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--qp-light-text);
+}
+
+#qp-review-modal-content .qp-direction {
+    background-color: var(--qp-bg-light);
+    padding: 1rem;
+    border-radius: var(--qp-radius);
+    margin-bottom: 1rem;
+}
+
+#qp-review-modal-content .option {
+    border: 2px solid var(--qp-border-color);
+    padding: 1rem;
+    margin-bottom: 0.5rem;
+    border-radius: var(--qp-radius);
+}
+#qp-review-modal-content .option.correct {
+    border-color: var(--qp-correct-color);
+    background-color: var(--qp-correct-bg);
+}
+
+.qp-modal-footer {
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--qp-border-color);
+    text-align: right;
+}
+.qp-modal-footer label {
+    font-weight: 600;
+    cursor: pointer;
+}

@@ -660,15 +660,10 @@ function qp_public_enqueue_scripts()
     global $post;
     if (is_a($post, 'WP_Post') && (has_shortcode($post->post_content, 'question_press_practice') || has_shortcode($post->post_content, 'question_press_dashboard') || has_shortcode($post->post_content, 'question_press_session') || has_shortcode($post->post_content, 'question_press_review'))) {
 
-        // --- All file versions are correctly defined here ---
-        $css_file_path = QP_PLUGIN_DIR . 'public/assets/css/practice.css';
-        $css_version = file_exists($css_file_path) ? filemtime($css_file_path) : '1.0.0';
-
-        $practice_js_file_path = QP_PLUGIN_DIR . 'public/assets/js/practice.js';
-        $practice_js_version = file_exists($practice_js_file_path) ? filemtime($practice_js_file_path) : '1.0.0';
-
-        $dashboard_js_file_path = QP_PLUGIN_DIR . 'public/assets/js/dashboard.js';
-        $dashboard_js_version = file_exists($dashboard_js_file_path) ? filemtime($dashboard_js_file_path) : '1.0.0';
+        // File versions for cache busting
+        $css_version = filemtime(QP_PLUGIN_DIR . 'public/assets/css/practice.css');
+        $practice_js_version = filemtime(QP_PLUGIN_DIR . 'public/assets/js/practice.js');
+        $dashboard_js_version = filemtime(QP_PLUGIN_DIR . 'public/assets/js/dashboard.js');
         
         wp_enqueue_style('qp-practice-styles', QP_PLUGIN_URL . 'public/assets/css/practice.css', [], $css_version);
 
@@ -680,44 +675,50 @@ function qp_public_enqueue_scripts()
             'practice_page_url'  => isset($options['practice_page']) ? get_permalink($options['practice_page']) : home_url('/')
         ];
 
-        // --- CORRECTED LOGIC WITH VERSIONING RESTORED ---
+        // --- CORRECTED SCRIPT LOADING LOGIC ---
 
+        // Load dashboard script if the dashboard shortcode is present
         if (has_shortcode($post->post_content, 'question_press_dashboard')) {
             wp_enqueue_script('qp-dashboard-script', QP_PLUGIN_URL . 'public/assets/js/dashboard.js', ['jquery'], $dashboard_js_version, true);
             wp_localize_script('qp-dashboard-script', 'qp_ajax_object', $ajax_data);
         }
 
+        // Load practice script if practice or session shortcodes are present
         if (has_shortcode($post->post_content, 'question_press_practice') || has_shortcode($post->post_content, 'question_press_session')) {
              wp_enqueue_script('qp-practice-script', QP_PLUGIN_URL . 'public/assets/js/practice.js', ['jquery'], $practice_js_version, true);
              wp_localize_script('qp-practice-script', 'qp_ajax_object', $ajax_data);
         }
 
-        if (has_shortcode($post->post_content, 'question_press_session') || has_shortcode($post->post_content, 'question_press_review')) {
+        // Load KaTeX if any page that can display questions is present
+        if (has_shortcode($post->post_content, 'question_press_session') || has_shortcode($post->post_content, 'question_press_review') || has_shortcode($post->post_content, 'question_press_dashboard')) {
             wp_enqueue_style('katex-css', 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css', [], '0.16.9');
             wp_enqueue_script('katex-js', 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js', [], '0.16.9', true);
-            wp_enqueue_script('katex-mhchem', 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/mhchem.min.js', ['katex-js'], '0.16.9', true);
-            wp_enqueue_script('katex-auto-render', 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js', ['katex-js', 'katex-mhchem'], '0.16.9', true);
+            wp_enqueue_script('katex-auto-render', 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js', ['katex-js'], '0.16.9', true);
         
-            if (has_shortcode($post->post_content, 'question_press_session')) {
-                $session_data = QP_Shortcodes::get_session_data_for_script();
-                if ($session_data) {
-                    wp_localize_script('qp-practice-script', 'qp_session_data', $session_data);
-                }
-            }
-
+            // Add the inline script to actually render the math
             wp_add_inline_script('katex-auto-render', "
                 document.addEventListener('DOMContentLoaded', function() {
-                    renderMathInElement(document.body, {
-                        delimiters: [
-                            {left: '$$', right: '$$', display: true},
-                            {left: '$', right: '$', display: false},
-                            {left: '\\\\[', right: '\\\\]', display: true},
-                            {left: '\\\\(', right: '\\\\)', display: false}
-                        ],
-                        throwOnError: false
-                    });
+                    if (typeof renderMathInElement === 'function') {
+                        renderMathInElement(document.body, {
+                            delimiters: [
+                                {left: '$$', right: '$$', display: true},
+                                {left: '$', right: '$', display: false},
+                                {left: '\\\\[', right: '\\\\]', display: true},
+                                {left: '\\\\(', right: '\\\\)', display: false}
+                            ],
+                            throwOnError: false
+                        });
+                    }
                 });
             ");
+        }
+        
+        // Localize session data specifically for the session page
+        if (has_shortcode($post->post_content, 'question_press_session')) {
+            $session_data = QP_Shortcodes::get_session_data_for_script();
+            if ($session_data) {
+                wp_localize_script('qp-practice-script', 'qp_session_data', $session_data);
+            }
         }
     }
 }
@@ -1951,3 +1952,45 @@ function qp_start_review_session_ajax() {
     wp_send_json_success(['redirect_url' => $redirect_url]);
 }
 add_action('wp_ajax_qp_start_review_session', 'qp_start_review_session_ajax');
+
+/**
+ * AJAX handler to get the full data for a single question for the review popup.
+ */
+function qp_get_single_question_for_review_ajax() {
+    check_ajax_referer('qp_practice_nonce', 'nonce');
+    if (!is_user_logged_in()) {
+        wp_send_json_error(['message' => 'Not logged in.']);
+    }
+
+    $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
+    if (!$question_id) {
+        wp_send_json_error(['message' => 'Invalid question ID.']);
+    }
+
+    global $wpdb;
+
+    // Fetch question details
+    $question_data = $wpdb->get_row($wpdb->prepare(
+        "SELECT q.question_text, q.custom_question_id, g.direction_text, s.subject_name
+         FROM {$wpdb->prefix}qp_questions q
+         LEFT JOIN {$wpdb->prefix}qp_question_groups g ON q.group_id = g.group_id
+         LEFT JOIN {$wpdb->prefix}qp_subjects s ON g.subject_id = s.subject_id
+         WHERE q.question_id = %d",
+        $question_id
+    ), ARRAY_A);
+
+    if (!$question_data) {
+        wp_send_json_error(['message' => 'Question not found.']);
+    }
+
+    // Fetch options
+    $options = $wpdb->get_results($wpdb->prepare(
+        "SELECT option_text, is_correct FROM {$wpdb->prefix}qp_options WHERE question_id = %d ORDER BY option_id ASC",
+        $question_id
+    ), ARRAY_A);
+
+    $question_data['options'] = $options;
+
+    wp_send_json_success($question_data);
+}
+add_action('wp_ajax_get_single_question_for_review', 'qp_get_single_question_for_review_ajax');
