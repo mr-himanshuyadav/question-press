@@ -203,8 +203,8 @@ function qp_activate_plugin()
     $sql_sessions = "CREATE TABLE $table_sessions (
         session_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
         user_id BIGINT(20) UNSIGNED NOT NULL,
-        start_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        last_activity DATETIME,
+        start_time DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00',
+        last_activity DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00',
         end_time DATETIME,
         status VARCHAR(20) NOT NULL DEFAULT 'active',
         total_attempted INT,
@@ -795,13 +795,13 @@ function qp_start_practice_session_ajax() {
     global $wpdb;
     // Create the session in the database
     $wpdb->insert($wpdb->prefix . 'qp_user_sessions', [
-    'user_id'                 => get_current_user_id(),
-    'status'                  => 'active',
-    'start_time'              => current_time('mysql', 1), // Use UTC
-    'last_activity'           => current_time('mysql', 1), // Use UTC
-    'settings_snapshot'       => wp_json_encode($session_settings),
-    'question_ids_snapshot'   => wp_json_encode($question_ids)
-]);
+        'user_id'                 => get_current_user_id(),
+        'status'                  => 'active',
+        'start_time'              => current_time('mysql'),
+        'last_activity'           => current_time('mysql'),
+        'settings_snapshot'       => wp_json_encode($session_settings),
+        'question_ids_snapshot'   => wp_json_encode($question_ids)
+    ]);
     $session_id = $wpdb->insert_id;
 
     // Prepare the data to be passed to the next page
@@ -898,7 +898,7 @@ function qp_check_answer_ajax() {
     $o_table = $wpdb->prefix . 'qp_options';
     $attempts_table = $wpdb->prefix . 'qp_user_attempts';
 
-    $wpdb->update($wpdb->prefix . 'qp_user_sessions', ['last_activity' => current_time('mysql', 1)], ['session_id' => $session_id]);
+    $wpdb->update($wpdb->prefix . 'qp_user_sessions', ['last_activity' => current_time('mysql')], ['session_id' => $session_id]);
     
     $is_correct = (bool) $wpdb->get_var($wpdb->prepare("SELECT is_correct FROM $o_table WHERE question_id = %d AND option_id = %d", $question_id, $option_id));
     $correct_option_id = $wpdb->get_var($wpdb->prepare("SELECT option_id FROM $o_table WHERE question_id = %d AND is_correct = 1", $question_id));
@@ -964,7 +964,7 @@ function qp_end_practice_session_ajax()
     $wpdb->update(
         $sessions_table,
         [
-            'end_time' => current_time('mysql', 1),
+            'end_time' => current_time('mysql'),
             'status' => 'completed',
             'total_attempted' => $total_attempted,
             'correct_count' => $correct_count,
@@ -1067,7 +1067,7 @@ function qp_report_and_skip_question_ajax()
     }
 
     global $wpdb;
-    $wpdb->update($wpdb->prefix . 'qp_user_sessions', ['last_activity' => current_time('mysql', 1)], ['session_id' => $session_id]);
+    $wpdb->update($wpdb->prefix . 'qp_user_sessions', ['last_activity' => current_time('mysql')], ['session_id' => $session_id]);
     $label_id = $wpdb->get_var($wpdb->prepare("SELECT label_id FROM {$wpdb->prefix}qp_labels WHERE label_name = %s", $label_name));
     if ($label_id) {
         $wpdb->insert("{$wpdb->prefix}qp_question_labels", ['question_id' => $question_id, 'label_id' => $label_id]);
@@ -1683,7 +1683,7 @@ function qp_update_session_activity_ajax() {
         global $wpdb;
         $wpdb->update(
             $wpdb->prefix . 'qp_user_sessions',
-            ['last_activity' => current_time('mysql', 1)], // Use UTC for consistency
+            ['last_activity' => current_time('mysql')],
             ['session_id' => $session_id]
         );
     }
