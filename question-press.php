@@ -1589,8 +1589,7 @@ add_action('wp', 'qp_schedule_session_cleanup');
 /**
  * The function that runs on the scheduled cron event to clean up old sessions.
  */
-function qp_cleanup_abandoned_sessions()
-{
+function qp_cleanup_abandoned_sessions() {
     global $wpdb;
     $options = get_option('qp_settings');
     $timeout_minutes = isset($options['session_timeout']) ? absint($options['session_timeout']) : 20;
@@ -1602,7 +1601,6 @@ function qp_cleanup_abandoned_sessions()
     $sessions_table = $wpdb->prefix . 'qp_user_sessions';
     $attempts_table = $wpdb->prefix . 'qp_user_attempts';
 
-    // Find active sessions where the last activity was longer ago than the timeout
     $abandoned_sessions = $wpdb->get_results($wpdb->prepare(
         "SELECT session_id, settings_snapshot FROM {$sessions_table}
          WHERE status = 'active' AND last_activity < NOW() - INTERVAL %d MINUTE",
@@ -1617,23 +1615,19 @@ function qp_cleanup_abandoned_sessions()
         $session_id = $session->session_id;
         $settings = json_decode($session->settings_snapshot, true);
 
-        // Calculate stats and score, similar to the qp_end_practice_session_ajax function
         $marks_correct = isset($settings['marks_correct']) ? floatval($settings['marks_correct']) : 0;
         $marks_incorrect = isset($settings['marks_incorrect']) ? floatval($settings['marks_incorrect']) : 0;
 
+        // --- CORRECTED LOGIC FOR COUNTS ---
         $correct_count = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $attempts_table WHERE session_id = %d AND is_correct = 1", $session_id));
         $incorrect_count = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $attempts_table WHERE session_id = %d AND is_correct = 0", $session_id));
-
-        // For abandoned sessions, all questions not in the attempts table are considered "skipped"
-        $session_data = $wpdb->get_row($wpdb->prepare("SELECT question_ids_snapshot FROM $sessions_table WHERE session_id = %d", $session_id));
-        $all_question_ids = json_decode($session_data->question_ids_snapshot, true);
-        $attempted_question_ids = $wpdb->get_col($wpdb->prepare("SELECT question_id FROM $attempts_table WHERE session_id = %d", $session_id));
-        $skipped_count = count($all_question_ids) - count($attempted_question_ids);
-
+        // Correctly count only the questions that were explicitly skipped (is_correct is NULL).
+        $skipped_count = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $attempts_table WHERE session_id = %d AND is_correct IS NULL", $session_id));
+        
         $total_attempted = $correct_count + $incorrect_count;
         $final_score = ($correct_count * $marks_correct) + ($incorrect_count * $marks_incorrect);
+        // --- END OF FIX ---
 
-        // Update the session with final stats and mark as 'abandoned'
         $wpdb->update(
             $sessions_table,
             [

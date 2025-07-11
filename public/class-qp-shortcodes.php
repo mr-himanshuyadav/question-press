@@ -330,11 +330,19 @@ public static function render_summary_ui($summaryData) {
              ORDER BY a.attempt_id ASC",
             $session_id
         ));
+
+
+        $options = get_option('qp_settings');
+        $dashboard_page_url = isset($options['dashboard_page']) ? get_permalink($options['dashboard_page']) : home_url('/');
         
         ob_start();
         ?>
         <div class="qp-container qp-review-wrapper">
-            <h2>Session Review</h2>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                 <h2>Session Review</h2>
+                 <a href="<?php echo esc_url($dashboard_page_url); ?>" class="qp-button qp-button-secondary" style="text-decoration: none;">&laquo; Back to Dashboard</a>
+            </div>
+
             
             <div class="qp-summary-wrapper qp-review-summary">
                 <div class="qp-summary-stats">
