@@ -947,7 +947,7 @@ function qp_get_question_data_ajax()
         $question_id
     ));
 
-    wp_send_json_success(['question' => $question_data, 'is_revision' => ($attempt_count > 0), 'is_admin' => $user_can_view]);
+wp_send_json_success(['question' => $question_data, 'is_revision' => ($attempt_count > 0), 'is_admin' => $user_can_view, 'is_marked_for_review' => $is_marked]);
 }
 add_action('wp_ajax_get_question_data', 'qp_get_question_data_ajax');
 

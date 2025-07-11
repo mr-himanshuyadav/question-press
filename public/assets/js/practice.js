@@ -5,6 +5,7 @@ jQuery(document).ready(function ($) {
   var sessionID = 0;
   var sessionQuestionIDs = [];
   var currentQuestionIndex = 0;
+  var highestQuestionIndexReached = 0; 
   var sessionSettings = {};
   var score = 0;
   var correctCount = 0;
@@ -53,6 +54,8 @@ jQuery(document).ready(function ($) {
         }
       }
       currentQuestionIndex = lastAttemptedIndex + 1;
+
+      highestQuestionIndexReached = lastAttemptedIndex >= 0 ? lastAttemptedIndex + 1 : 0;
     }
     updateHeaderStats();
 
@@ -76,6 +79,7 @@ jQuery(document).ready(function ($) {
 wrapper.on("change", "#qp-mark-for-review-cb", function () {
     var checkbox = $(this);
     var questionID = sessionQuestionIDs[currentQuestionIndex];
+    var isMarked = checkbox.is(':checked');
 
     // Temporarily disable the checkbox to prevent rapid clicking
     checkbox.prop('disabled', true);
@@ -87,14 +91,23 @@ wrapper.on("change", "#qp-mark-for-review-cb", function () {
             action: 'qp_toggle_review_later',
             nonce: qp_ajax_object.nonce,
             question_id: questionID,
-            is_marked: checkbox.is(':checked')
+            is_marked: isMarked
         },
+        // --- THIS SUCCESS CALLBACK IS THE FIX ---
+        success: function() {
+            // Update the cache to reflect the change immediately.
+            if (questionCache[questionID]) {
+                questionCache[questionID].is_marked_for_review = isMarked;
+            }
+        },
+        // --- END OF FIX ---
         complete: function() {
             // Re-enable the checkbox after the request is complete
             checkbox.prop('disabled', false);
         }
     });
 });
+
 
   // --- UPDATED: Form submission now handles a redirect ---
   wrapper.on("submit", "#qp-start-practice-form", function (e) {
