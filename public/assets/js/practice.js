@@ -39,6 +39,7 @@ jQuery(document).ready(function ($) {
                             type: "answered",
                             is_correct: isCorrect,
                             selected_option_id: attempt.selected_option_id,
+                            correct_option_id: attempt.correct_option_id,
                             // We don't have correct_option_id here, but it's only needed for display
                             // and will be fetched when the question loads.
                         };
