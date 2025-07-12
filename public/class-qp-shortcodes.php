@@ -33,7 +33,7 @@ class QP_Shortcodes
                         <h2>Select Practice Mode</h2>
                         <div class="qp-mode-selection-group">
                             <label class="qp-mode-radio-label">
-                                <input type="radio" name="practice_mode_selection" value="2" checked>
+                                <input type="radio" name="practice_mode_selection" value="2">
                                 <span class="qp-mode-radio-button">Normal Practice</span>
                             </label>
                             <label class="qp-mode-radio-label">
@@ -53,9 +53,9 @@ class QP_Shortcodes
                         <?php endif; ?>
                         
                         <div class="qp-step-1-footer">
-                            <button id="qp-step1-next-btn" class="qp-button qp-button-primary">Next</button>
+                            <button id="qp-step1-next-btn" class="qp-button qp-button-primary" disabled>Next</button>
                             <?php if ($dashboard_page_url) : ?>
-                                <a href="<?php echo esc_url($dashboard_page_url); ?>" class="qp-button qp-button-secondary">Go to Dashboard</a>
+                                <a href="<?php echo esc_url($dashboard_page_url); ?>" class="qp-dashboard-link-bottom">Go to Dashboard</a>
                             <?php endif; ?>
                         </div>
                     </div>
@@ -316,7 +316,7 @@ class QP_Shortcodes
             <h2>Start a New Practice Session</h2>
             <form id="qp-start-practice-form" method="post" action="">
                 <input type="hidden" name="practice_mode" value="normal">
-                <input type="hidden" name="question_order" value="incrementing">
+                <input type="hidden" name="question_order" value="random">
 
                 <div class="qp-form-group">
                     <label for="qp_subject">Select Subject:</label>

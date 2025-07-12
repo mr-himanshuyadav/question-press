@@ -843,21 +843,20 @@ ul.qp-review-list li {
     margin-bottom: 1rem;
     display: block;
 }
+
 .qp-order-buttons {
     display: flex;
     justify-content: center;
-    border: 1px solid var(--qp-border-color);
-    border-radius: var(--qp-radius);
-    overflow: hidden;
+    gap: 1rem; /* Creates space between buttons */
 }
 .qp-order-btn {
-    flex: 1;
-    padding: 10px;
-    border: none;
-    background: #fff;
-    cursor: pointer;
-    transition: background-color 0.2s;
+    flex: none; /* Prevents buttons from stretching */
+    padding: 8px 20px;
+    font-size: 14px;
+    border: 1px solid var(--qp-border-color); /* Gives a border when not selected */
+    border-radius: 50px; /* Makes buttons pill-shaped */
 }
+
 .qp-order-btn.active {
     background-color: var(--qp-primary-color);
     color: #fff;
@@ -922,4 +921,36 @@ ul.qp-review-list li {
 
 #qp-start-practice-form, #qp-start-revision-form {
     text-align: left;
+}
+
+.qp-step-1-footer {
+    margin-top: 3rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    align-items: center;
+}
+
+.qp-dashboard-link-bottom {
+    display: inline-block;
+    color: var(--qp-light-text);
+    font-weight: 500;
+    text-decoration: none;
+    transition: color 0.2s ease;
+}
+.qp-dashboard-link-bottom:hover {
+    color: var(--qp-dark-text);
+}
+
+#qp-step1-next-btn:disabled {
+    background-color: #d2e7f7; /* Lighter blue */
+    border-color: #d2e7f7;
+    color: #fff;
+    cursor: not-allowed;
+    box-shadow: none;
+    transform: none;
+}
+#qp-step1-next-btn:disabled:hover {
+     background-color: #d2e7f7; /* Keep color on hover when disabled */
+    border-color: #d2e7f7;
 }

@@ -5,6 +5,11 @@ jQuery(document).ready(function ($) {
   // --- MULTI-STEP FORM LOGIC ---
   if ($(".qp-multi-step-container").length) {
     var multiStepContainer = $(".qp-multi-step-container");
+    $('#qp-step1-next-btn').prop('disabled', true);
+
+    wrapper.on('change', 'input[name="practice_mode_selection"]', function() {
+        $('#qp-step1-next-btn').prop('disabled', false);
+    });
 
     // Function to navigate between steps
     function navigateToStep(targetStepNumber) {
