@@ -156,48 +156,54 @@ wrapper.on("change", "#qp-mark-for-review-cb", function () {
     var subjectId = $(this).val();
     var topicGroup = $("#qp-topic-group");
     var topicSelect = $("#qp_topic");
-    var sectionGroup = $("#qp-section-group"); // Get the new section group
-    var sectionSelect = $("#qp_section"); // Get the new section select
+    var sectionGroup = $("#qp-section-group");
+    var sectionSelect = $("#qp_section");
 
-    // *** THIS IS THE BUG FIX ***
     // Always hide and reset the dependent dropdowns first.
     topicGroup.slideUp();
-    sectionGroup.slideUp();
+    sectionGroup.slideUp(); // This is key to hiding it again
     topicSelect.prop("disabled", true).html("<option value=''>-- Select a subject first --</option>");
     sectionSelect.prop("disabled", true).html("<option value=''>-- Select a subject first --</option>");
 
-
+    // Only proceed if a specific subject is chosen
     if (subjectId && subjectId !== "all") {
-        // --- This part populates the TOPIC dropdown (no changes here) ---
+        
+        // --- Populate the TOPIC dropdown ---
         $.ajax({
-            url: qp_ajax_object.ajax_url, type: "POST",
+            url: qp_ajax_object.ajax_url,
+            type: "POST",
             data: { action: "get_topics_for_subject", nonce: qp_ajax_object.nonce, subject_id: subjectId },
             beforeSend: function () {
                 topicSelect.html("<option>Loading topics...</option>");
             },
             success: function (response) {
+                // Show topics if they exist
                 if (response.success && response.data.topics.length > 0) {
                     topicGroup.slideDown();
                     topicSelect.prop("disabled", false).empty().append('<option value="all">All Topics</option>');
                     $.each(response.data.topics, function (index, topic) {
                         topicSelect.append($("<option></option>").val(topic.topic_id).text(topic.topic_name));
                     });
+                } else {
+                    // If there are no topics, we can hide the dropdown
+                    topicGroup.slideUp();
                 }
             },
         });
 
-        // --- 3. ADD THIS NEW AJAX CALL FOR SECTIONS ---
-        // This populates our new Section dropdown
+        // --- NEW: This AJAX call populates the SECTION dropdown ---
+        // It runs in parallel to the topics call, but its container is hidden by default.
         $.ajax({
-            url: qp_ajax_object.ajax_url, type: "POST",
+            url: qp_ajax_object.ajax_url,
+            type: "POST",
             data: { action: "get_sections_for_subject", nonce: qp_ajax_object.nonce, subject_id: subjectId },
-            beforeSend: function () {
-                sectionSelect.html("<option>Loading sections...</option>");
-            },
             success: function(response) {
                 if (response.success && response.data.sections.length > 0) {
-                    sectionGroup.slideDown();
-                    sectionSelect.prop("disabled", false).empty().append('<option value="all">All Questions</option>');
+                    // We only enable the dropdown here, but we don't show it yet.
+                    sectionSelect.prop("disabled", false).empty()
+                        // Use "All Sections" for clarity
+                        .append('<option value="all">All Sections</option>');
+
                     $.each(response.data.sections, function(index, sec) {
                         var optionText = sec.source_name + ' / ' + sec.section_name;
                         sectionSelect.append($("<option></option>").val(sec.section_id).text(optionText));
@@ -205,10 +211,23 @@ wrapper.on("change", "#qp-mark-for-review-cb", function () {
                 }
             }
         });
-
     }
 });
 
+
+  // This will control the visibility of the Section dropdown.
+wrapper.on("change", "#qp_topic", function() {
+    var topicId = $(this).val();
+    var sectionGroup = $("#qp-section-group");
+
+    // If a specific topic is selected, show the section dropdown.
+    if (topicId && topicId !== 'all') {
+        sectionGroup.slideDown();
+    } else {
+        // Otherwise, hide it.
+        sectionGroup.slideUp();
+    }
+});
   
 
   // Handlers for the new error screen buttons
