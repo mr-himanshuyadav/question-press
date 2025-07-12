@@ -3,7 +3,7 @@
 /**
  * Plugin Name:       Question Press
  * Description:       A complete plugin for creating, managing, and practicing questions.
- * Version:           2.0.0
+ * Version:           2.1.0
  * Author:            Himanshu
  */
 
@@ -858,7 +858,9 @@ function qp_public_enqueue_scripts()
 add_action('wp_enqueue_scripts', 'qp_public_enqueue_scripts');
 
 
-// *** ADD THIS ENTIRE NEW FUNCTION ***
+/**
+ * AJAX handler to get topics for a subject THAT HAVE QUESTIONS.
+ */
 function qp_get_topics_for_subject_ajax()
 {
     check_ajax_referer('qp_practice_nonce', 'nonce');
@@ -870,7 +872,21 @@ function qp_get_topics_for_subject_ajax()
 
     global $wpdb;
     $topics_table = $wpdb->prefix . 'qp_topics';
-    $topics = $wpdb->get_results($wpdb->prepare("SELECT topic_id, topic_name FROM $topics_table WHERE subject_id = %d ORDER BY topic_name ASC", $subject_id));
+    $questions_table = $wpdb->prefix . 'qp_questions';
+    $groups_table = $wpdb->prefix . 'qp_question_groups';
+
+    // THIS IS THE NEW, SMARTER QUERY
+    // It finds topics by joining through the questions and groups tables
+    // to ensure there's at least one question in that topic for the selected subject.
+    $topics = $wpdb->get_results($wpdb->prepare(
+        "SELECT DISTINCT t.topic_id, t.topic_name
+         FROM {$topics_table} t
+         INNER JOIN {$questions_table} q ON t.topic_id = q.topic_id
+         INNER JOIN {$groups_table} g ON q.group_id = g.group_id
+         WHERE g.subject_id = %d
+         ORDER BY t.topic_name ASC",
+        $subject_id
+    ));
 
     wp_send_json_success(['topics' => $topics]);
 }
