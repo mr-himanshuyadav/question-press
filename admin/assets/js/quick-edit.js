@@ -140,13 +140,22 @@ jQuery(document).ready(function($) {
     var allSections = $sectionBulkEdit.html();
 
 
+
+// In admin/assets/js/quick-edit.js
+
 function updateBulkEditDropdowns() {
     var selectedSubject = $subjectFilter.val();
     var selectedSource = $sourceBulkEdit.val();
 
     // --- Update Sources Dropdown ---
-    $sourceBulkEdit.html(allSources); // Reset to all sources
+    $sourceBulkEdit.html(allSources); // Start by resetting to the full list
+
+    // THE FIX: The logic is now much cleaner.
+    // If a specific subject is selected (the value is not an empty string)...
     if (selectedSubject && selectedSubject !== '') {
+        $sourceBulkEdit.prop('disabled', false); // ...then enable the dropdown.
+        
+        // Filter the options within the now-enabled dropdown
         $sourceBulkEdit.find('option').each(function() {
             var $option = $(this);
             if ($option.val() === '') return;
@@ -156,16 +165,19 @@ function updateBulkEditDropdowns() {
                 $option.remove();
             }
         });
+    } else {
+        // ...otherwise (if "All Subjects" is selected), keep it disabled.
+        $sourceBulkEdit.prop('disabled', true);
     }
+    
     $sourceBulkEdit.val(selectedSource);
 
-    // --- Update Sections Dropdown ---
+    // --- The Section Dropdown logic remains the same and will work correctly ---
     var selectedSourceAfterUpdate = $sourceBulkEdit.val();
-    $sectionBulkEdit.html(allSections); // Reset to all sections
+    $sectionBulkEdit.html(allSections);
     
-    // THE FIX IS HERE: We now handle the case where no source is selected.
     if (selectedSourceAfterUpdate && selectedSourceAfterUpdate !== '') {
-        $sectionBulkEdit.prop('disabled', false); // Enable the dropdown
+        $sectionBulkEdit.prop('disabled', false);
         $sectionBulkEdit.find('option').each(function() {
              var $option = $(this);
             if ($option.val() === '') return;
@@ -176,12 +188,10 @@ function updateBulkEditDropdowns() {
             }
         });
     } else {
-        // If no source is selected, disable the section dropdown.
         $sectionBulkEdit.prop('disabled', true);
-        $sectionBulkEdit.val(''); // Reset its value
+        $sectionBulkEdit.val('');
     }
 }
-
     // Trigger the update when the subject filter or source dropdown changes
     $subjectFilter.on('change', updateBulkEditDropdowns);
     $sourceBulkEdit.on('change', updateBulkEditDropdowns);
