@@ -18,9 +18,11 @@ jQuery(document).ready(function ($) {
     }
 
     // Handlers for Mode Selection (Step 1 -> 2 or 3)
-    wrapper.on("click", ".qp-mode-btn", function () {
-      var targetStep = $(this).data("target-step");
-      navigateToStep(targetStep);
+    wrapper.on("click", "#qp-step1-next-btn", function() {
+        var targetStep = $('input[name="practice_mode_selection"]:checked').val();
+        if (targetStep) {
+            navigateToStep(targetStep);
+        }
     });
 
     // Handler for Back buttons

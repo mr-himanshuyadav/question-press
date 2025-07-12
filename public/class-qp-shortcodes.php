@@ -31,24 +31,33 @@ class QP_Shortcodes
                 <div id="qp-step-1" class="qp-form-step active">
                     <div class="qp-step-content">
                         <h2>Select Practice Mode</h2>
-                        <div class="qp-mode-selection-buttons">
-                            <button class="qp-button qp-button-primary qp-mode-btn" data-target-step="2">Normal Practice Mode</button>
-                            <button class="qp-button qp-button-secondary qp-mode-btn" data-target-step="3">Revision Mode</button>
+                        <div class="qp-mode-selection-group">
+                            <label class="qp-mode-radio-label">
+                                <input type="radio" name="practice_mode_selection" value="2" checked>
+                                <span class="qp-mode-radio-button">Normal Practice</span>
+                            </label>
+                            <label class="qp-mode-radio-label">
+                                <input type="radio" name="practice_mode_selection" value="3">
+                                <span class="qp-mode-radio-button">Revision Mode</span>
+                            </label>
                         </div>
 
                         <?php if ($question_order_setting === 'user_input'): ?>
-                            <div class="qp-order-selection">
-                                <label>Order of questions?</label>
-                                <div class="qp-order-buttons">
-                                    <button class="qp-order-btn active" data-order="incrementing">Incrementing</button>
-                                    <button class="qp-order-btn" data-order="random">Random</button>
-                                </div>
+                        <div class="qp-order-selection">
+                            <label>Order of questions?</label>
+                            <div class="qp-order-buttons">
+                                <button type="button" class="qp-order-btn" data-order="incrementing">Incrementing</button>
+                                <button type="button" class="qp-order-btn" data-order="random">Random</button>
                             </div>
+                        </div>
                         <?php endif; ?>
-
-                        <?php if ($dashboard_page_url) : ?>
-                            <a href="<?php echo esc_url($dashboard_page_url); ?>" class="qp-button qp-dashboard-link-bottom">Go to Dashboard</a>
-                        <?php endif; ?>
+                        
+                        <div class="qp-step-1-footer">
+                            <button id="qp-step1-next-btn" class="qp-button qp-button-primary">Next</button>
+                            <?php if ($dashboard_page_url) : ?>
+                                <a href="<?php echo esc_url($dashboard_page_url); ?>" class="qp-button qp-button-secondary">Go to Dashboard</a>
+                            <?php endif; ?>
+                        </div>
                     </div>
                 </div>
 

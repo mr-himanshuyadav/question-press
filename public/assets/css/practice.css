@@ -752,27 +752,71 @@ ul.qp-review-list li {
 .qp-step-content {
     max-width: 500px;
     margin: 0 auto;
-    text-align: center;
 }
 
-.qp-mode-selection-buttons {
+/* --- Step 1 Refactor Styles --- */
+.qp-mode-selection-group {
     display: flex;
     flex-direction: column;
     gap: 1rem;
     margin: 2rem 0;
 }
 
-.qp-mode-selection-buttons .qp-button {
-    font-size: 18px;
-    padding: 15px 30px;
+.qp-mode-radio-label {
+    display: block;
+    position: relative;
+    cursor: pointer;
 }
 
-.qp-dashboard-link-bottom {
+.qp-mode-radio-label input[type="radio"] {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.qp-mode-radio-button {
+    display: block;
+    padding: 15px 30px;
+    border: 2px solid var(--qp-border-color);
+    border-radius: var(--qp-radius);
+    background-color: #fff;
+    transition: all 0.2s ease;
+    font-size: 18px;
+    font-weight: 600;
+    text-align: center;
+}
+
+.qp-mode-radio-label input[type="radio"]:hover + .qp-mode-radio-button {
+    border-color: #a7aaad;
+}
+
+.qp-mode-radio-label input[type="radio"]:checked + .qp-mode-radio-button {
+    background-color: var(--qp-primary-color);
+    border-color: var(--qp-primary-color);
+    color: #fff;
+    box-shadow: 0 4px 15px rgba(34, 113, 177, 0.2);
+}
+
+.qp-order-selection {
+    text-align: center;
+}
+
+.qp-order-btn {
+    padding: 8px 16px; /* smaller padding */
+    font-size: 14px; /* smaller font */
+}
+
+.qp-step-1-footer {
     margin-top: 2rem;
-    display: inline-block;
-    background-color: transparent;
-    color: var(--qp-light-text);
-    font-weight: 500;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.qp-step-1-footer .qp-button {
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .qp-back-btn {
@@ -870,4 +914,12 @@ ul.qp-review-list li {
 }
 .qp-revision-tree > ul > li > label {
     font-weight: bold;
+}
+
+.qp-step-content h2 {
+    text-align: center;
+}
+
+#qp-start-practice-form, #qp-start-revision-form {
+    text-align: left;
 }
