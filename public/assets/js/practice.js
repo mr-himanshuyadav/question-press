@@ -199,16 +199,19 @@ wrapper.on("change", "#qp-mark-for-review-cb", function () {
             data: { action: "get_sections_for_subject", nonce: qp_ajax_object.nonce, subject_id: subjectId },
             success: function(response) {
                 if (response.success && response.data.sections.length > 0) {
-                    // We only enable the dropdown here, but we don't show it yet.
-                    sectionSelect.prop("disabled", false).empty()
-                        // Use "All Sections" for clarity
-                        .append('<option value="all">All Sections</option>');
+            // This part is for when sections ARE found
+            sectionSelect.prop("disabled", false).empty()
+                .append('<option value="all">All Sections</option>');
 
-                    $.each(response.data.sections, function(index, sec) {
-                        var optionText = sec.source_name + ' / ' + sec.section_name;
-                        sectionSelect.append($("<option></option>").val(sec.section_id).text(optionText));
-                    });
-                }
+            $.each(response.data.sections, function(index, sec) {
+                var optionText = sec.source_name + ' / ' + sec.section_name;
+                sectionSelect.append($("<option></option>").val(sec.section_id).text(optionText));
+            });
+        } else {
+            // THIS IS THE FIX: Handle the case where NO sections are found
+            sectionSelect.prop("disabled", true).empty()
+                .append('<option value="all">No separate sections</option>');
+        }
             }
         });
     }
