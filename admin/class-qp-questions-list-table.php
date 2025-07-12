@@ -651,15 +651,19 @@ public function column_question_text($item) {
 
 public function column_source($item) {
     $source_info = [];
-    // Reads from the joined source and section data
-    if (!empty($item['source_name'])) {
-        $source_info[] = '<strong>Source:</strong> ' . esc_html($item['source_name']);
+    // NEW ORDER: Question Number is first
+    if (!empty($item['question_number_in_section'])) {
+        $source_info[] = '<strong>No:</strong> ' . esc_html($item['question_number_in_section']);
     }
+    
+    // NEW ORDER: Section is second
     if (!empty($item['section_name'])) {
         $source_info[] = '<strong>Section:</strong> ' . esc_html($item['section_name']);
     }
-    if (!empty($item['question_number_in_section'])) {
-        $source_info[] = '<strong>No:</strong> ' . esc_html($item['question_number_in_section']);
+
+    // NEW ORDER: Source is last
+    if (!empty($item['source_name'])) {
+        $source_info[] = '<strong>Source:</strong> ' . esc_html($item['source_name']);
     }
     return implode('<br>', $source_info);
 }
