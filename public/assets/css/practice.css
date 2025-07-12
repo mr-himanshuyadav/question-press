@@ -87,8 +87,8 @@ body {
 /* --- Practice Screen Header --- */
 .qp-header {
     text-align: center;
-    margin-bottom: 2rem;
-    padding-bottom: 1.5rem;
+    margin-bottom: 1rem;
+    padding-bottom: 1rem;
     border-bottom: 1px solid var(--qp-border-color);
 }
 .qp-header-top-row {
@@ -117,8 +117,8 @@ body {
 .qp-header-stat.timer-stat .value { font-size: 20px; font-weight: 600; color: var(--qp-dark-text); }
 
 /* --- Practice Screen Content --- */
-.qp-question-area .question-text { font-size: 20px; font-weight: 500; line-height: 1.6; margin-bottom: 2rem; }
-.qp-options-area .option { display: block; padding: 1rem; margin-bottom: 0.75rem; border: 2px solid var(--qp-border-color); border-radius: var(--qp-radius); font-size: 16px; cursor: pointer; transition: all 0.2s ease-in-out; position: relative; }
+.qp-question-area .question-text { font: normal 1.21em KaTeX_Main,Times New Roman,serif; line-height: 1.6; margin-bottom: 2rem; margin-top: 1rem}
+.qp-options-area .option { display: block; font: normal .95em KaTeX_Main,Times New Roman,serif;; padding: 1rem; margin-bottom: 0.75rem; border: 2px solid var(--qp-border-color); border-radius: var(--qp-radius); cursor: pointer; transition: all 0.2s ease-in-out; position: relative; }
 .qp-options-area .option input { display: none; }
 .qp-options-area .option.disabled { cursor: not-allowed; }
 .qp-options-area .option.correct { border-color: var(--qp-correct-color) !important; background: var(--qp-correct-bg); color: var(--qp-correct-text); font-weight: 600; }
@@ -448,16 +448,6 @@ ul.qp-review-list li {
     padding: 1rem 0;
     border-bottom: 1px solid var(--qp-border-color);
 }
-.qp-review-list-q-text {
-    font-size: 15px;
-    padding-right: 1rem;
-}
-.qp-review-list-q-text small {
-    display: block;
-    font-size: 12px;
-    color: var(--qp-light-text);
-    margin-top: 5px;
-}
 .qp-review-list-actions .qp-review-list-remove-btn {
     background: none;
     border: 1px solid #d63638;
@@ -560,7 +550,7 @@ ul.qp-review-list li {
     border-bottom: 1px solid var(--qp-border-color);
 }
 .qp-review-list-q-text {
-    font-size: 15px;
+    font: normal 1.21rem KaTeX_Main,Times New Roman,serif;
     padding-right: 1rem;
 }
 .qp-review-list-q-text small {
@@ -724,17 +714,5 @@ ul.qp-review-list li {
 .qp-modal-footer input[type="checkbox"]:focus {
     outline: none;
     box-shadow: none;
-}
-
-/* --- Font Unification for KaTeX Consistency --- */
-.qp-direction,
-.question-text,
-.qp-options-area .option,
-.qp-review-question-text,
-.qp-review-answer,
-#qp-review-modal-content .question-text,
-#qp-review-modal-content .option {
-    font-family: 'KaTeX_Math', 'Times New Roman', serif;
-    font-size: 1.2rem;
 }
 }

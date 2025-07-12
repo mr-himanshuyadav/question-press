@@ -257,10 +257,10 @@ class QP_Shortcodes
 
             <div class="qp-animatable-area-container">
                 <div class="qp-animatable-area">
-                    <div class="question-meta" style="font-size: 12px; color: #777; margin-bottom: 10px;">
+                    <div class="question-meta" style="font-size: 12px; color: #777; margin-bottom: 7px;">
                         <span id="qp-question-subject"></span> | <span id="qp-question-id"></span>
                     </div>
-                    <div id="qp-question-source" style="font-size: 12px; color: #777; margin-bottom: 10px; display: none;"></div>
+                    <div id="qp-question-source" style="font-size: 12px; color: #777; margin-bottom: 7px; display: none;"></div>
 
                     <div class="qp-direction" style="display: none;"></div>
 
