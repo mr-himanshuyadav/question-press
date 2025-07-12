@@ -314,6 +314,7 @@ class QP_Questions_List_Table extends WP_List_Table
         $ql_table = $wpdb->prefix . 'qp_question_labels';
         $src_table = $wpdb->prefix . 'qp_sources';
         $sec_table = $wpdb->prefix . 'qp_source_sections';
+        $t_table = $wpdb->prefix . 'qp_topics';
 
         $where_conditions = [];
         $id_query_from = "FROM {$q_table} q";
@@ -387,18 +388,19 @@ class QP_Questions_List_Table extends WP_List_Table
             $this->items = [];
         } else {
             $ids_placeholder = implode(',', $matching_question_ids);
-            $data_query = "SELECT q.*, s.subject_name, g.group_id, g.direction_text, g.direction_image_id, g.is_pyq,
+            $data_query = "SELECT q.*, s.subject_name, t.topic_name, g.group_id, g.direction_text, g.direction_image_id, g.is_pyq,
                         src.source_name, sec.section_name
             FROM {$q_table} q
             LEFT JOIN {$g_table} g ON q.group_id = g.group_id
             LEFT JOIN {$s_table} s ON g.subject_id = s.subject_id
             LEFT JOIN {$src_table} src ON q.source_id = src.source_id
             LEFT JOIN {$sec_table} sec ON q.section_id = sec.section_id
+            LEFT JOIN {$t_table} t ON q.topic_id = t.topic_id -- ADD THIS LINE
             WHERE q.question_id IN ({$ids_placeholder})
             ORDER BY {$orderby} {$order}
             LIMIT {$per_page} OFFSET {$offset}";
 
-            $this->items = $wpdb->get_results($data_query, ARRAY_A);
+        $this->items = $wpdb->get_results($data_query, ARRAY_A);
         }
 
         $question_ids_on_page = wp_list_pluck($this->items, 'question_id');
@@ -418,6 +420,28 @@ class QP_Questions_List_Table extends WP_List_Table
 
         $this->set_pagination_args(['total_items' => $total_items, 'per_page' => $per_page]);
     }
+
+    public function column_subject_name($item) {
+    $output = '';
+
+    // Display the Subject
+    if (!empty($item['subject_name'])) {
+        $output .= '<strong>Subject:</strong> ' . esc_html($item['subject_name']);
+    } else {
+        $output .= '<strong>Subject:</strong> <em style="color:#a00;">None</em>';
+    }
+
+    $output .= '<br>'; // Add a line break
+
+    // Display the Topic
+    if (!empty($item['topic_name'])) {
+        $output .= '<strong>Topic:</strong> ' . esc_html($item['topic_name']);
+    } else {
+        $output .= '<strong>Topic:</strong> <em style="color:#888;">None</em>';
+    }
+
+    return $output;
+}
 
     /**
      * UPDATED: Process all bulk actions, now correctly handling nonces for single-item actions.
