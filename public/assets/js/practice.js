@@ -17,6 +17,25 @@ jQuery(document).ready(function ($) {
   var questionCache = {};
 
 
+  // --- NEW: SWIPE GESTURE HANDLING ---
+  // Check if we are on the actual practice screen
+  if (wrapper.find('.qp-practice-wrapper').length > 0) {
+    var practiceArea = document.querySelector('.qp-practice-wrapper');
+    var hammer = new Hammer(practiceArea);
+
+    // Listen for a swipe to the left
+    hammer.on('swipeleft', function(ev) {
+      // Trigger a click on the "Next" button if it's not disabled
+      $('#qp-next-btn:not(:disabled)').trigger('click');
+    });
+
+    // Listen for a swipe to the right
+    hammer.on('swiperight', function(ev) {
+      // Trigger a click on the "Previous" button if it's not disabled
+      $('#qp-prev-btn:not(:disabled)').trigger('click');
+    });
+  }
+
   // --- Session Initialization ---
   if (typeof qp_session_data !== 'undefined') {
     practiceInProgress = true;

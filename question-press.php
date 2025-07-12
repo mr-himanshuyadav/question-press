@@ -818,7 +818,11 @@ function qp_public_enqueue_scripts()
 
         // Load practice script if practice or session shortcodes are present
         if (has_shortcode($post->post_content, 'question_press_practice') || has_shortcode($post->post_content, 'question_press_session')) {
-             wp_enqueue_script('qp-practice-script', QP_PLUGIN_URL . 'public/assets/js/practice.js', ['jquery'], $practice_js_version, true);
+             // NEW: Enqueue the Hammer.js library from a CDN
+    wp_enqueue_script('hammer-js', 'https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js', [], '2.0.8', true);
+
+    // THE FIX: Add 'hammer-js' as a dependency for your practice script
+    wp_enqueue_script('qp-practice-script', QP_PLUGIN_URL . 'public/assets/js/practice.js', ['jquery', 'hammer-js'], $practice_js_version, true);
              wp_localize_script('qp-practice-script', 'qp_ajax_object', $ajax_data);
         }
 
