@@ -316,7 +316,7 @@ class QP_Shortcodes
             <h2>Start a New Practice Session</h2>
             <form id="qp-start-practice-form" method="post" action="">
                 <input type="hidden" name="practice_mode" value="normal">
-                <input type="hidden" name="question_order" value="random">
+                <input type="hidden" name="question_order" value="incrementing">
 
                 <div class="qp-form-group">
                     <label for="qp_subject">Select Subject:</label>
