@@ -177,8 +177,7 @@ protected function extra_tablenav($which) {
 
         // --- ROW 1: Standard Filters ---
         echo '<div class="alignleft actions">';
-
-            // Subject Filter
+            // ... (Standard filters code remains unchanged)
             $subjects = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}qp_subjects ORDER BY subject_name ASC");
             $current_subject = isset($_REQUEST['filter_by_subject']) ? absint($_REQUEST['filter_by_subject']) : '';
             echo '<select name="filter_by_subject" id="qp_filter_by_subject" style="margin-right: 5px;">';
@@ -188,7 +187,6 @@ protected function extra_tablenav($which) {
             }
             echo '</select>';
 
-            // Label Filter
             $labels = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}qp_labels ORDER BY label_name ASC");
             $current_labels = isset($_REQUEST['filter_by_label']) ? array_map('absint', (array)$_REQUEST['filter_by_label']) : [];
             echo '<select name="filter_by_label[]" multiple="multiple" id="qp_label_filter_select" style="min-width: 200px; margin-right: 5px;">';
@@ -198,33 +196,23 @@ protected function extra_tablenav($which) {
             }
             echo '</select>';
 
-            // Filter Button
             submit_button('Filter', 'button', 'filter_action', false, ['id' => 'post-query-submit']);
+        echo '</div>';
 
-        echo '</div>'; // End of the first row of actions
 
-
-        // --- ROW 2: Bulk Edit Controls (only shown when a label is filtered) ---
+        // --- ROW 2: Bulk Edit Controls ---
         if (!empty($_REQUEST['filter_by_label'])) {
-            // This div clears the float from the elements above, creating a new row.
-            echo '<div class="alignleft actions" style="clear: both; padding-top: 5px;">';
+            echo '<div class="alignleft actions" style="clear: both; margin-top: 10px; padding: 10px; border: 1px solid #cce7f6; background-color: #f6f7f7;">';
 
                 $all_exams = $wpdb->get_results("SELECT exam_id, exam_name FROM {$wpdb->prefix}qp_exams ORDER BY exam_name ASC");
                 $all_sources = $wpdb->get_results("SELECT source_id, source_name FROM {$wpdb->prefix}qp_sources ORDER BY source_name ASC");
                 $all_sections = $wpdb->get_results("SELECT section_id, section_name FROM {$wpdb->prefix}qp_source_sections ORDER BY section_name ASC");
 
-                // Bulk Edit Label
                 echo '<span style="font-weight: bold; margin-right: 5px;">Bulk Edit:</span>';
 
-                // Exam Dropdown
-                echo '<select name="bulk_edit_exam" id="bulk_edit_exam" style="margin-right: 5px;">';
-                echo '<option value="">— Change Exam —</option>';
-                foreach ($all_exams as $exam) {
-                    printf('<option value="%s">%s</option>', esc_attr($exam->exam_id), esc_html($exam->exam_name));
-                }
-                echo '</select>';
+                // --- NEW ORDER ---
 
-                // Source Dropdown
+                // Source Dropdown (Now first)
                 echo '<select name="bulk_edit_source" id="bulk_edit_source" style="margin-right: 5px;">';
                 echo '<option value="">— Change Source —</option>';
                 foreach ($all_sources as $source) {
@@ -232,7 +220,7 @@ protected function extra_tablenav($which) {
                 }
                 echo '</select>';
 
-                // Section Dropdown
+                // Section Dropdown (Now second)
                 echo '<select name="bulk_edit_section" id="bulk_edit_section" style="margin-right: 5px;">';
                 echo '<option value="">— Change Section —</option>';
                 foreach ($all_sections as $section) {
@@ -240,12 +228,16 @@ protected function extra_tablenav($which) {
                 }
                 echo '</select>';
                 
-                // Apply Changes Button - MOVED TO THE RIGHT
-                echo '</div>'; // Close the left-aligned actions
+                // Exam Dropdown (Now last)
+                echo '<select name="bulk_edit_exam" id="bulk_edit_exam" style="margin-right: 5px;">';
+                echo '<option value="">— Change Exam —</option>';
+                foreach ($all_exams as $exam) {
+                    printf('<option value="%s">%s</option>', esc_attr($exam->exam_id), esc_html($exam->exam_name));
+                }
+                echo '</select>';
 
-            // This div will float to the right on the same line as the bulk edit dropdowns
-            echo '<div class="alignright actions" style="padding-top: 5px;">';
                 submit_button('Apply Changes', 'primary', 'bulk_edit_apply', false);
+
             echo '</div>';
         }
     }
