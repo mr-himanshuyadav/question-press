@@ -16,14 +16,176 @@ class QP_Shortcodes
                         <a href="' . wp_login_url(get_permalink()) . '" class="qp-button qp-button-primary" style="text-decoration: none;">Click Here to Log In</a>
                     </div>';
         }
-        $output = '<div id="qp-practice-app-wrapper">';
-        $output .= self::render_settings_form();
-        $output .= '</div>';
-        return $output;
+
+        // Get the question order setting
+        $options = get_option('qp_settings');
+        $question_order_setting = isset($options['question_order']) ? $options['question_order'] : 'random';
+        $dashboard_page_id = isset($options['dashboard_page']) ? absint($options['dashboard_page']) : 0;
+        $dashboard_page_url = $dashboard_page_id ? get_permalink($dashboard_page_id) : '';
+
+        ob_start();
+?>
+        <div id="qp-practice-app-wrapper">
+            <div class="qp-multi-step-container">
+
+                <div id="qp-step-1" class="qp-form-step active">
+                    <div class="qp-step-content">
+                        <h2>Select Practice Mode</h2>
+                        <div class="qp-mode-selection-buttons">
+                            <button class="qp-button qp-button-primary qp-mode-btn" data-target-step="2">Normal Practice Mode</button>
+                            <button class="qp-button qp-button-secondary qp-mode-btn" data-target-step="3">Revision Mode</button>
+                        </div>
+
+                        <?php if ($question_order_setting === 'user_input'): ?>
+                            <div class="qp-order-selection">
+                                <label>Order of questions?</label>
+                                <div class="qp-order-buttons">
+                                    <button class="qp-order-btn active" data-order="incrementing">Incrementing</button>
+                                    <button class="qp-order-btn" data-order="random">Random</button>
+                                </div>
+                            </div>
+                        <?php endif; ?>
+
+                        <?php if ($dashboard_page_url) : ?>
+                            <a href="<?php echo esc_url($dashboard_page_url); ?>" class="qp-button qp-dashboard-link-bottom">Go to Dashboard</a>
+                        <?php endif; ?>
+                    </div>
+                </div>
+
+                <div id="qp-step-2" class="qp-form-step">
+                    <div class="qp-step-content">
+                        <button class="qp-back-btn" data-target-step="1">&larr; Back to Mode Selection</button>
+                        <?php echo self::render_settings_form(); // Re-use the existing form function 
+                        ?>
+                    </div>
+                </div>
+
+                <div id="qp-step-3" class="qp-form-step">
+                    <div class="qp-step-content">
+                        <button class="qp-back-btn" data-target-step="1">&larr; Back to Mode Selection</button>
+                        <?php echo self::render_revision_mode_form(); // New function for the revision form 
+                        ?>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    <?php
+        return ob_get_clean();
     }
 
-    // In public/class-qp-shortcodes.php
+    public static function render_revision_mode_form()
+    {
+        global $wpdb;
 
+        // Fetch subjects and topics that the user has actually attempted
+        $user_id = get_current_user_id();
+        $results = $wpdb->get_results($wpdb->prepare(
+            "SELECT DISTINCT s.subject_id, s.subject_name, t.topic_id, t.topic_name
+             FROM {$wpdb->prefix}qp_user_attempts a
+             JOIN {$wpdb->prefix}qp_questions q ON a.question_id = q.question_id
+             JOIN {$wpdb->prefix}qp_question_groups g ON q.group_id = g.group_id
+             JOIN {$wpdb->prefix}qp_subjects s ON g.subject_id = s.subject_id
+             LEFT JOIN {$wpdb->prefix}qp_topics t ON q.topic_id = t.topic_id
+             WHERE a.user_id = %d
+             ORDER BY s.subject_name, t.topic_name",
+            $user_id
+        ));
+
+        $revision_tree = [];
+        foreach ($results as $row) {
+            if (!isset($revision_tree[$row->subject_id])) {
+                $revision_tree[$row->subject_id] = [
+                    'name' => $row->subject_name,
+                    'topics' => []
+                ];
+            }
+            if ($row->topic_id && !isset($revision_tree[$row->subject_id]['topics'][$row->topic_id])) {
+                $revision_tree[$row->subject_id]['topics'][$row->topic_id] = $row->topic_name;
+            }
+        }
+
+        ob_start();
+    ?>
+        <form id="qp-start-revision-form" method="post" action="">
+            <input type="hidden" name="practice_mode" value="revision">
+            <h2>Revision Mode</h2>
+
+            <div class="qp-form-group">
+                <label>Select group of questions</label>
+                <div class="qp-revision-type-buttons">
+                    <button type="button" class="qp-revision-type-btn active" data-type="auto">Auto Select</button>
+                    <button type="button" class="qp-revision-type-btn" data-type="manual">Manual</button>
+                </div>
+            </div>
+
+            <div id="qp-revision-manual-selection" class="qp-form-group" style="display: none;">
+                <label>Select Subjects / Topics</label>
+                <div class="qp-revision-tree">
+                    <?php if (empty($revision_tree)): ?>
+                        <p>You have no previously attempted questions to revise.</p>
+                    <?php else: ?>
+                        <ul>
+                            <?php foreach ($revision_tree as $subject_id => $subject_data): ?>
+                                <li>
+                                    <label>
+                                        <input type="checkbox" name="revision_subjects[]" value="<?php echo esc_attr($subject_id); ?>">
+                                        <?php echo esc_html($subject_data['name']); ?>
+                                    </label>
+                                    <?php if (!empty($subject_data['topics'])): ?>
+                                        <ul>
+                                            <?php foreach ($subject_data['topics'] as $topic_id => $topic_name): ?>
+                                                <li>
+                                                    <label>
+                                                        <input type="checkbox" name="revision_topics[]" value="<?php echo esc_attr($topic_id); ?>">
+                                                        <?php echo esc_html($topic_name); ?>
+                                                    </label>
+                                                </li>
+                                            <?php endforeach; ?>
+                                        </ul>
+                                    <?php endif; ?>
+                                </li>
+                            <?php endforeach; ?>
+                        </ul>
+                    <?php endif; ?>
+                </div>
+            </div>
+
+            <div class="qp-form-group">
+                <label for="qp_revision_questions_per_topic">Number of Questions from each Topic</label>
+                <input type="number" name="qp_revision_questions_per_topic" id="qp_revision_questions_per_topic" value="10" min="1">
+            </div>
+
+            <div class="qp-form-group qp-marks-group">
+                <div>
+                    <label for="qp_revision_marks_correct">Marks for Correct Answer:</label>
+                    <input type="number" name="qp_marks_correct" id="qp_revision_marks_correct" value="1" step="0.01" required>
+                </div>
+                <div>
+                    <label for="qp_revision_marks_incorrect">Penalty for Incorrect Answer:</label>
+                    <input type="number" name="qp_marks_incorrect" id="qp_revision_marks_incorrect" value="0" step="0.01" min="0" required>
+                </div>
+            </div>
+
+            <div class="qp-form-group">
+                <label class="qp-custom-checkbox">
+                    <input type="checkbox" name="qp_timer_enabled">
+                    <span></span>
+                    Enable Timer per Question
+                </label>
+                <div id="qp-revision-timer-input-wrapper" style="display: none; margin-top: 15px;">
+                    <label for="qp_revision_timer_seconds">Time in Seconds:</label>
+                    <input type="number" name="qp_timer_seconds" id="qp_revision_timer_seconds" value="60" min="10">
+                </div>
+            </div>
+
+            <div class="qp-form-group qp-action-buttons">
+                <input type="submit" name="qp_start_revision" value="Start Revision" class="qp-button qp-button-primary">
+            </div>
+        </form>
+    <?php
+        return ob_get_clean();
+    }
 
 
     public static function render_session_page()
@@ -84,7 +246,7 @@ class QP_Shortcodes
         $practice_page_url = isset($options['practice_page']) ? get_permalink($options['practice_page']) : home_url('/');
 
         ob_start();
-?>
+    ?>
         <div class="qp-summary-wrapper">
             <h2>Session Summary</h2>
             <div class="qp-summary-score">
@@ -127,12 +289,12 @@ class QP_Shortcodes
     {
         global $wpdb;
         $subjects = $wpdb->get_results(
-    "SELECT DISTINCT s.subject_id, s.subject_name
+            "SELECT DISTINCT s.subject_id, s.subject_name
      FROM {$wpdb->prefix}qp_subjects s
      JOIN {$wpdb->prefix}qp_question_groups g ON s.subject_id = g.subject_id
      WHERE s.subject_name != 'Uncategorized'
      ORDER BY s.subject_name ASC"
-);
+        );
 
         // Get the dynamic URL for the dashboard page
         $options = get_option('qp_settings');
@@ -144,6 +306,8 @@ class QP_Shortcodes
         <div class="qp-container qp-practice-form-wrapper">
             <h2>Start a New Practice Session</h2>
             <form id="qp-start-practice-form" method="post" action="">
+                <input type="hidden" name="practice_mode" value="normal">
+                <input type="hidden" name="question_order" value="incrementing">
 
                 <div class="qp-form-group">
                     <label for="qp_subject">Select Subject:</label>
@@ -177,9 +341,9 @@ class QP_Shortcodes
                         PYQ Only
                     </label>
                     <label class="qp-custom-checkbox">
-                        <input type="checkbox" name="qp_revise_mode" value="1">
+                        <input type="checkbox" name="qp_include_attempted" value="1">
                         <span></span>
-                        Revision Mode
+                        Include previously attempted questions
                     </label>
                 </div>
                 <div class="qp-form-group-description">

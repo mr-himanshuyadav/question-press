@@ -144,6 +144,10 @@ class QP_Settings_Page {
                 <input type="radio" name="qp_settings[question_order]" value="in_order" <?php checked('in_order', $value); ?>>
                 <span>In Order (by Question ID)</span>
             </label>
+            <label>
+                <input type="radio" name="qp_settings[question_order]" value="user_input" <?php checked('user_input', $value); ?>>
+                <span>Let User Decide</span>
+            </label>
             <p class="description">Choose how questions are ordered when a user starts a practice session.</p>
         </fieldset>
         <?php
@@ -243,12 +247,11 @@ class QP_Settings_Page {
         
         if (isset($input['delete_on_uninstall'])) { $new_input['delete_on_uninstall'] = absint($input['delete_on_uninstall']); }
         
-        if (isset($input['question_order']) && in_array($input['question_order'], ['random', 'in_order'])) {
+        if (isset($input['question_order']) && in_array($input['question_order'], ['random', 'in_order', 'user_input'])) {
             $new_input['question_order'] = sanitize_text_field($input['question_order']);
         } else {
             $new_input['question_order'] = 'random';
         }
-
         if (isset($input['show_source_meta_roles']) && is_array($input['show_source_meta_roles'])) {
             $new_input['show_source_meta_roles'] = array_map('sanitize_key', $input['show_source_meta_roles']);
         } else {
