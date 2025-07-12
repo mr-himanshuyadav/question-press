@@ -49,8 +49,50 @@ class QP_Logs_Reports_Page {
     }
 
     public static function render_log_settings_tab() {
-        // We will build this out in a later step
-        echo '<h2>Manage Report Reasons</h2>';
-        echo '<p>Here you will be able to add, edit, and delete the reasons users can select when reporting a question.</p>';
+    global $wpdb;
+    $reason_to_edit = null;
+    if (isset($_GET['action']) && $_GET['action'] === 'edit' && isset($_GET['reason_id'])) {
+        $reason_to_edit = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$wpdb->prefix}qp_report_reasons WHERE reason_id = %d", absint($_GET['reason_id'])));
     }
+
+    $list_table = new QP_Log_Settings_List_Table();
+    $list_table->prepare_items();
+?>
+    <div id="col-container" class="wp-clearfix">
+        <div id="col-left">
+            <div class="col-wrap">
+                <div class="form-wrap">
+                    <h2><?php echo $reason_to_edit ? 'Edit Reason' : 'Add New Reason'; ?></h2>
+                    <form method="post" action="admin.php?page=qp-logs-reports&tab=log_settings">
+                        <?php wp_nonce_field('qp_add_edit_reason_nonce'); ?>
+                        <input type="hidden" name="action" value="<?php echo $reason_to_edit ? 'update_reason' : 'add_reason'; ?>">
+                        <?php if ($reason_to_edit): ?><input type="hidden" name="reason_id" value="<?php echo esc_attr($reason_to_edit->reason_id); ?>"><?php endif; ?>
+
+                        <div class="form-field form-required">
+                            <label for="reason_text">Reason Text</label>
+                            <input name="reason_text" id="reason_text" type="text" value="<?php echo $reason_to_edit ? esc_attr($reason_to_edit->reason_text) : ''; ?>" size="40" required>
+                        </div>
+                        <div class="form-field">
+                            <label>
+                                <input name="is_active" type="checkbox" value="1" <?php checked($reason_to_edit ? $reason_to_edit->is_active : 1); ?>>
+                                Active (Users can select this reason)
+                            </label>
+                        </div>
+
+                        <p class="submit">
+                            <input type="submit" class="button button-primary" value="<?php echo $reason_to_edit ? 'Update Reason' : 'Add New Reason'; ?>">
+                            <?php if ($reason_to_edit): ?><a href="admin.php?page=qp-logs-reports&tab=log_settings" class="button button-secondary">Cancel</a><?php endif; ?>
+                        </p>
+                    </form>
+                </div>
+            </div>
+        </div>
+        <div id="col-right">
+            <div class="col-wrap">
+                <?php $list_table->display(); ?>
+            </div>
+        </div>
+    </div>
+<?php
+}
 }

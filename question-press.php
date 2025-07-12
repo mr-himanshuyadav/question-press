@@ -980,12 +980,19 @@ add_action('wp_ajax_get_sections_for_subject', 'qp_get_sections_for_subject_ajax
 function qp_start_practice_session_ajax()
 {
     check_ajax_referer('qp_practice_nonce', 'nonce');
-
-    // Determine the practice mode from the submitted form
+    
     $practice_mode = isset($_POST['practice_mode']) ? sanitize_key($_POST['practice_mode']) : 'normal';
+    global $wpdb;
+
+    // --- THIS IS THE KEY ADDITION ---
+    // Get a list of all question IDs that have an open report.
+    $reports_table = $wpdb->prefix . 'qp_question_reports';
+    $reported_question_ids = $wpdb->get_col("SELECT DISTINCT question_id FROM {$reports_table} WHERE status = 'open'");
+    $exclude_sql = !empty($reported_question_ids) ? 'AND q.question_id NOT IN (' . implode(',', $reported_question_ids) . ')' : '';
+    // --- END OF ADDITION ---
 
     if ($practice_mode === 'revision') {
-        // --- REVISION MODE LOGIC ---
+        // ... (The revision mode logic remains the same, but we will add the exclude filter)
         $session_settings = [
             'practice_mode'   => 'revision',
             'selection_type'  => isset($_POST['revision_selection_type']) ? sanitize_key($_POST['revision_selection_type']) : 'auto',
@@ -998,14 +1005,12 @@ function qp_start_practice_session_ajax()
             'timer_seconds'   => isset($_POST['qp_timer_seconds']) ? absint($_POST['qp_timer_seconds']) : 60
         ];
 
-        global $wpdb;
         $user_id = get_current_user_id();
         $attempts_table = $wpdb->prefix . 'qp_user_attempts';
         $questions_table = $wpdb->prefix . 'qp_questions';
-        $groups_table = $wpdb->prefix . 'qp_question_groups';
 
+        // ... (rest of revision logic is the same)
         $topic_ids_to_query = [];
-
         if ($session_settings['selection_type'] === 'manual' && (!empty($session_settings['subjects']) || !empty($session_settings['topics']))) {
             $topic_ids_to_query = $session_settings['topics'];
             if (!empty($session_settings['subjects'])) {
@@ -1013,11 +1018,8 @@ function qp_start_practice_session_ajax()
                 $topics_in_subjects = $wpdb->get_col("SELECT topic_id FROM {$wpdb->prefix}qp_topics WHERE subject_id IN ($subject_ids_placeholder)");
                 $topic_ids_to_query = array_unique(array_merge($topic_ids_to_query, $topics_in_subjects));
             }
-        } else { // Auto-selection
-            $topic_ids_to_query = $wpdb->get_col($wpdb->prepare(
-                "SELECT DISTINCT q.topic_id FROM {$attempts_table} a JOIN {$questions_table} q ON a.question_id = q.question_id WHERE a.user_id = %d AND q.topic_id IS NOT NULL",
-                $user_id
-            ));
+        } else {
+            $topic_ids_to_query = $wpdb->get_col($wpdb->prepare("SELECT DISTINCT q.topic_id FROM {$attempts_table} a JOIN {$questions_table} q ON a.question_id = q.question_id WHERE a.user_id = %d AND q.topic_id IS NOT NULL", $user_id));
         }
 
         if (empty($topic_ids_to_query)) {
@@ -1028,16 +1030,13 @@ function qp_start_practice_session_ajax()
         $questions_per_topic = $session_settings['questions_per'];
 
         foreach ($topic_ids_to_query as $topic_id) {
-            $q_ids = $wpdb->get_col($wpdb->prepare(
-                "SELECT q.question_id FROM {$questions_table} q JOIN {$attempts_table} a ON q.question_id = a.question_id WHERE a.user_id = %d AND q.topic_id = %d ORDER BY RAND() LIMIT %d",
-                $user_id,
-                $topic_id,
-                $questions_per_topic
-            ));
+            // Apply the exclude filter to the revision query
+            $q_ids = $wpdb->get_col($wpdb->prepare("SELECT q.question_id FROM {$questions_table} q JOIN {$attempts_table} a ON q.question_id = a.question_id WHERE a.user_id = %d AND q.topic_id = %d {$exclude_sql} ORDER BY RAND() LIMIT %d", $user_id, $topic_id, $questions_per_topic));
             $final_question_ids = array_merge($final_question_ids, $q_ids);
         }
         $question_ids = array_unique($final_question_ids);
         shuffle($question_ids);
+
     } else {
         // --- NORMAL MODE LOGIC ---
         $session_settings = [
@@ -1046,20 +1045,18 @@ function qp_start_practice_session_ajax()
             'topic_id'         => isset($_POST['qp_topic']) ? $_POST['qp_topic'] : 'all',
             'section_id'       => isset($_POST['qp_section']) ? $_POST['qp_section'] : 'all',
             'pyq_only'         => isset($_POST['qp_pyq_only']),
-            'include_attempted' => isset($_POST['qp_include_attempted']),
+            'include_attempted'=> isset($_POST['qp_include_attempted']),
             'question_order'   => isset($_POST['question_order']) ? sanitize_key($_POST['question_order']) : 'random',
             'marks_correct'    => isset($_POST['qp_marks_correct']) ? floatval($_POST['qp_marks_correct']) : 4.0,
             'marks_incorrect'  => isset($_POST['qp_marks_incorrect']) ? -abs(floatval($_POST['qp_marks_incorrect'])) : -1.0,
             'timer_enabled'    => isset($_POST['qp_timer_enabled']),
             'timer_seconds'    => isset($_POST['qp_timer_seconds']) ? absint($_POST['qp_timer_seconds']) : 60
         ];
-
-        // Only validate subject if in normal mode
+        
         if ($practice_mode === 'normal' && empty($session_settings['subject_id'])) {
             wp_send_json_error(['message' => 'Please select a subject.']);
         }
 
-        global $wpdb;
         $user_id = get_current_user_id();
         $q_table = $wpdb->prefix . 'qp_questions';
         $g_table = $wpdb->prefix . 'qp_question_groups';
@@ -1082,51 +1079,47 @@ function qp_start_practice_session_ajax()
         }
 
         $base_where_sql = implode(' AND ', $where_clauses);
-
-        // Handle question order and inclusion of attempted questions
         $attempted_q_ids_sql = $wpdb->prepare("SELECT DISTINCT question_id FROM $a_table WHERE user_id = %d", $user_id);
 
         if ($session_settings['include_attempted']) {
             if ($session_settings['question_order'] === 'incrementing') {
-                // 6+1 logic: fetch all new and old questions separately, then interleave them
-                $new_questions = $wpdb->get_col($wpdb->prepare("SELECT q.question_id FROM {$q_table} q {$joins} WHERE {$base_where_sql} AND q.question_id NOT IN ($attempted_q_ids_sql) ORDER BY q.custom_question_id ASC", $query_args));
-                $old_questions = $wpdb->get_col($wpdb->prepare("SELECT q.question_id FROM {$q_table} q {$joins} WHERE {$base_where_sql} AND q.question_id IN ($attempted_q_ids_sql) ORDER BY RAND()", $query_args));
-
+                // Apply the exclude filter to both queries
+                $new_questions = $wpdb->get_col($wpdb->prepare("SELECT q.question_id FROM {$q_table} q {$joins} WHERE {$base_where_sql} AND q.question_id NOT IN ($attempted_q_ids_sql) {$exclude_sql} ORDER BY q.custom_question_id ASC", $query_args));
+                $old_questions = $wpdb->get_col($wpdb->prepare("SELECT q.question_id FROM {$q_table} q {$joins} WHERE {$base_where_sql} AND q.question_id IN ($attempted_q_ids_sql) {$exclude_sql} ORDER BY RAND()", $query_args));
+                
                 $question_ids = [];
                 $new_q_index = 0;
-                while ($new_q_index < count($new_questions)) {
-                    // Add up to 6 new questions
+                while($new_q_index < count($new_questions)) {
                     $question_ids = array_merge($question_ids, array_slice($new_questions, $new_q_index, 6));
                     $new_q_index += 6;
-                    // Add 1 random old question if available
                     if (!empty($old_questions)) {
                         $question_ids[] = array_pop($old_questions);
                     }
                 }
             } else { // Random order
-                $query = "SELECT q.question_id FROM {$q_table} q {$joins} WHERE {$base_where_sql} ORDER BY RAND()";
+                // Apply the exclude filter
+                $query = "SELECT q.question_id FROM {$q_table} q {$joins} WHERE {$base_where_sql} {$exclude_sql} ORDER BY RAND()";
                 $question_ids = $wpdb->get_col($wpdb->prepare($query, $query_args));
             }
         } else {
-            // Original logic: only new questions
+            // Original logic: only new questions, with the exclude filter applied
             $order_by_sql = ($session_settings['question_order'] === 'incrementing') ? 'ORDER BY q.custom_question_id ASC' : 'ORDER BY RAND()';
-            $query = "SELECT q.question_id FROM {$q_table} q {$joins} WHERE {$base_where_sql} AND q.question_id NOT IN ($attempted_q_ids_sql) {$order_by_sql}";
+            $query = "SELECT q.question_id FROM {$q_table} q {$joins} WHERE {$base_where_sql} AND q.question_id NOT IN ($attempted_q_ids_sql) {$exclude_sql} {$order_by_sql}";
             $question_ids = $wpdb->get_col($wpdb->prepare($query, $query_args));
         }
     }
 
-    // --- COMMON SESSION CREATION LOGIC ---
+    // --- COMMON SESSION CREATION LOGIC --- (No changes here)
     if (empty($question_ids)) {
         wp_send_json_error(['html' => '<div class="qp-container"><p>No questions were found for the selected criteria. Please try different options.</p><button onclick="window.location.reload();" class="qp-button qp-button-secondary">Go Back</button></div>']);
     }
-
+    
     $options = get_option('qp_settings');
     $session_page_id = isset($options['session_page']) ? absint($options['session_page']) : 0;
     if (!$session_page_id) {
         wp_send_json_error(['message' => 'The administrator has not configured a session page.']);
     }
 
-    global $wpdb;
     $wpdb->insert($wpdb->prefix . 'qp_user_sessions', [
         'user_id'                 => get_current_user_id(),
         'status'                  => 'active',
@@ -2303,3 +2296,36 @@ function qp_terminate_session_ajax()
     wp_send_json_success(['message' => 'Session terminated successfully.']);
 }
 add_action('wp_ajax_qp_terminate_session', 'qp_terminate_session_ajax');
+
+
+function qp_handle_log_settings_forms() {
+    if (!isset($_GET['page']) || $_GET['page'] !== 'qp-logs-reports' || !isset($_GET['tab']) || $_GET['tab'] !== 'log_settings') {
+        return;
+    }
+
+    global $wpdb;
+    $table_name = $wpdb->prefix . 'qp_report_reasons';
+
+    // Add/Update Reason
+    if (isset($_POST['action']) && ($_POST['action'] === 'add_reason' || $_POST['action'] === 'update_reason') && check_admin_referer('qp_add_edit_reason_nonce')) {
+        $reason_text = sanitize_text_field($_POST['reason_text']);
+        $is_active = isset($_POST['is_active']) ? 1 : 0;
+        $data = ['reason_text' => $reason_text, 'is_active' => $is_active];
+
+        if ($_POST['action'] === 'update_reason') {
+            $wpdb->update($table_name, $data, ['reason_id' => absint($_POST['reason_id'])]);
+        } else {
+            $wpdb->insert($table_name, $data);
+        }
+        wp_safe_redirect(admin_url('admin.php?page=qp-logs-reports&tab=log_settings&message=1'));
+        exit;
+    }
+
+    // Delete Reason
+    if (isset($_GET['action']) && $_GET['action'] === 'delete' && isset($_GET['reason_id']) && check_admin_referer('qp_delete_reason_' . absint($_GET['reason_id']))) {
+        $wpdb->delete($table_name, ['reason_id' => absint($_GET['reason_id'])]);
+        wp_safe_redirect(admin_url('admin.php?page=qp-logs-reports&tab=log_settings&message=2'));
+        exit;
+    }
+}
+add_action('admin_init', 'qp_handle_log_settings_forms');
