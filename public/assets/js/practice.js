@@ -5,11 +5,33 @@ jQuery(document).ready(function ($) {
   // --- MULTI-STEP FORM LOGIC ---
   if ($(".qp-multi-step-container").length) {
     var multiStepContainer = $(".qp-multi-step-container");
-    $('#qp-step1-next-btn').prop('disabled', true);
+    
+    function updateStep1NextButton() {
+        var modeSelected = $('input[name="practice_mode_selection"]:checked').length > 0;
+        var orderSelectionVisible = $('.qp-order-selection').is(':visible');
+        var orderSelected = $('.qp-order-btn.active').length > 0;
 
-    wrapper.on('change', 'input[name="practice_mode_selection"]', function() {
-        $('#qp-step1-next-btn').prop('disabled', false);
+        if (modeSelected && (!orderSelectionVisible || orderSelected)) {
+            $('#qp-step1-next-btn').prop('disabled', false);
+        } else {
+            $('#qp-step1-next-btn').prop('disabled', true);
+        }
+    }
+
+    // Call the update function whenever a selection is made
+    wrapper.on('change', 'input[name="practice_mode_selection"]', updateStep1NextButton);
+    wrapper.on('click', '.qp-order-btn', function () {
+        // First, handle the button's active state
+        $('.qp-order-btn').removeClass('active');
+        $(this).addClass('active');
+        $('#qp-start-practice-form input[name="question_order"]').val($(this).data('order'));
+        
+        // Then, check if the Next button can be enabled
+        updateStep1NextButton();
     });
+
+    // Initial check on page load
+    updateStep1NextButton();
 
     // Function to navigate between steps
     function navigateToStep(targetStepNumber) {
@@ -34,16 +56,6 @@ jQuery(document).ready(function ($) {
     wrapper.on("click", ".qp-back-btn", function () {
       var targetStep = $(this).data("target-step");
       navigateToStep(targetStep);
-    });
-
-    // Handler for Question Order buttons
-    wrapper.on("click", ".qp-order-btn", function () {
-      $(".qp-order-btn").removeClass("active");
-      $(this).addClass("active");
-      // Update the hidden input in the normal practice form
-      $('#qp-start-practice-form input[name="question_order"]').val(
-        $(this).data("order")
-      );
     });
 
     // Logic for conditional Question Order display

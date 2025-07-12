@@ -168,11 +168,11 @@ class QP_Shortcodes
             <div class="qp-form-group qp-marks-group">
                 <div>
                     <label for="qp_revision_marks_correct">Marks for Correct Answer:</label>
-                    <input type="number" name="qp_marks_correct" id="qp_revision_marks_correct" value="1" step="0.01" required>
+                    <input type="number" name="qp_marks_correct" id="qp_revision_marks_correct" value="4" step="0.01" required>
                 </div>
                 <div>
                     <label for="qp_revision_marks_incorrect">Penalty for Incorrect Answer:</label>
-                    <input type="number" name="qp_marks_incorrect" id="qp_revision_marks_incorrect" value="0" step="0.01" min="0" required>
+                    <input type="number" name="qp_marks_incorrect" id="qp_revision_marks_incorrect" value="1" step="0.01" min="0" required>
                 </div>
             </div>
 
@@ -363,11 +363,11 @@ class QP_Shortcodes
                 <div class="qp-form-group qp-marks-group" style="display: flex; flex-direction: row; justify-content: space-between;">
                     <div style="width: 48%">
                         <label for="qp_marks_correct">Correct Marks:</label>
-                        <input type="number" name="qp_marks_correct" id="qp_marks_correct" step="0.01" required>
+                        <input type="number" name="qp_marks_correct" id="qp_marks_correct" value="4" step="0.01" required>
                     </div>
                     <div style="width: 48%">
                         <label for="qp_marks_incorrect">Negative Marks:</label>
-                        <input type="number" name="qp_marks_incorrect" id="qp_marks_incorrect" step="0.01" min="0" required>
+                        <input type="number" name="qp_marks_incorrect" id="qp_marks_incorrect" value="1" step="0.01" min="0" required>
                     </div>
                 </div>
 
