@@ -152,32 +152,24 @@ wrapper.on("change", "#qp-mark-for-review-cb", function () {
   });
 
   // Handler for the dynamic topic dropdown
-  wrapper.on("change", "#qp_subject", function () {
+wrapper.on("change", "#qp_subject", function () {
     var subjectId = $(this).val();
     var topicGroup = $("#qp-topic-group");
     var topicSelect = $("#qp_topic");
     var sectionGroup = $("#qp-section-group");
-    var sectionSelect = $("#qp_section");
 
-    // Always hide and reset the dependent dropdowns first.
+    // Always hide and reset BOTH dependent dropdowns when the subject changes.
     topicGroup.slideUp();
-    sectionGroup.slideUp(); // This is key to hiding it again
+    sectionGroup.slideUp();
     topicSelect.prop("disabled", true).html("<option value=''>-- Select a subject first --</option>");
-    sectionSelect.prop("disabled", true).html("<option value=''>-- Select a subject first --</option>");
-
-    // Only proceed if a specific subject is chosen
+    
     if (subjectId && subjectId !== "all") {
-        
-        // --- Populate the TOPIC dropdown ---
+        // This handler now ONLY fetches and shows the Topic dropdown.
         $.ajax({
-            url: qp_ajax_object.ajax_url,
-            type: "POST",
+            url: qp_ajax_object.ajax_url, type: "POST",
             data: { action: "get_topics_for_subject", nonce: qp_ajax_object.nonce, subject_id: subjectId },
-            beforeSend: function () {
-                topicSelect.html("<option>Loading topics...</option>");
-            },
+            beforeSend: function () { topicSelect.html("<option>Loading topics...</option>"); },
             success: function (response) {
-                // Show topics if they exist
                 if (response.success && response.data.topics.length > 0) {
                     topicGroup.slideDown();
                     topicSelect.prop("disabled", false).empty().append('<option value="all">All Topics</option>');
@@ -185,50 +177,50 @@ wrapper.on("change", "#qp-mark-for-review-cb", function () {
                         topicSelect.append($("<option></option>").val(topic.topic_id).text(topic.topic_name));
                     });
                 } else {
-                    // If there are no topics, we can hide the dropdown
                     topicGroup.slideUp();
                 }
             },
-        });
-
-        // --- NEW: This AJAX call populates the SECTION dropdown ---
-        // It runs in parallel to the topics call, but its container is hidden by default.
-        $.ajax({
-            url: qp_ajax_object.ajax_url,
-            type: "POST",
-            data: { action: "get_sections_for_subject", nonce: qp_ajax_object.nonce, subject_id: subjectId },
-            success: function(response) {
-                if (response.success && response.data.sections.length > 0) {
-            // This part is for when sections ARE found
-            sectionSelect.prop("disabled", false).empty()
-                .append('<option value="all">All Sections</option>');
-
-            $.each(response.data.sections, function(index, sec) {
-                var optionText = sec.source_name + ' / ' + sec.section_name;
-                sectionSelect.append($("<option></option>").val(sec.section_id).text(optionText));
-            });
-        } else {
-            // THIS IS THE FIX: Handle the case where NO sections are found
-            sectionSelect.prop("disabled", true).empty()
-                .append('<option value="all">No separate sections</option>');
-        }
-            }
         });
     }
 });
 
 
-  // This will control the visibility of the Section dropdown.
+// REPLACE the existing #qp_topic change handler with this new, more powerful version:
 wrapper.on("change", "#qp_topic", function() {
     var topicId = $(this).val();
+    var subjectId = $("#qp_subject").val(); // We need the subject ID as well
     var sectionGroup = $("#qp-section-group");
+    var sectionSelect = $("#qp_section");
 
-    // If a specific topic is selected, show the section dropdown.
+    // Always hide the section dropdown first when the topic changes.
+    sectionGroup.slideUp();
+    
+    // Only proceed if a specific topic is selected.
     if (topicId && topicId !== 'all') {
-        sectionGroup.slideDown();
-    } else {
-        // Otherwise, hide it.
-        sectionGroup.slideUp();
+        $.ajax({
+            url: qp_ajax_object.ajax_url,
+            type: "POST",
+            // Pass BOTH subject and topic IDs to our upgraded endpoint.
+            data: { action: "get_sections_for_subject", nonce: qp_ajax_object.nonce, subject_id: subjectId, topic_id: topicId },
+            beforeSend: function() {
+                sectionSelect.prop("disabled", true).html("<option>Loading sections...</option>");
+            },
+            success: function(response) {
+                if (response.success && response.data.sections.length > 0) {
+                    // If sections are found, show and populate the dropdown.
+                    sectionGroup.slideDown();
+                    sectionSelect.prop("disabled", false).empty().append('<option value="all">All Sections</option>');
+                    $.each(response.data.sections, function(index, sec) {
+                        var optionText = sec.source_name + ' / ' + sec.section_name;
+                        sectionSelect.append($("<option></option>").val(sec.section_id).text(optionText));
+                    });
+                } else {
+                    // If no sections are found for that specific topic, show the message but keep it hidden.
+                    sectionSelect.prop("disabled", true).empty().append('<option value="all">No separate sections</option>');
+                    sectionGroup.slideUp(); // Ensure it stays hidden
+                }
+            }
+        });
     }
 });
   

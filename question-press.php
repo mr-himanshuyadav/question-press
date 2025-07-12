@@ -779,11 +779,14 @@ function qp_get_topics_for_subject_ajax()
 add_action('wp_ajax_get_topics_for_subject', 'qp_get_topics_for_subject_ajax');
 
 /**
- * AJAX handler to get all sources and sections for a subject.
+ * AJAX handler to get sections containing questions for a given subject and topic.
  */
 function qp_get_sections_for_subject_ajax() {
     check_ajax_referer('qp_practice_nonce', 'nonce');
+
+    // Get subject_id (required) and topic_id (optional) from the request
     $subject_id = isset($_POST['subject_id']) ? absint($_POST['subject_id']) : 0;
+    $topic_id = isset($_POST['topic_id']) ? absint($_POST['topic_id']) : 0;
 
     if (!$subject_id) {
         wp_send_json_error(['message' => 'Invalid subject ID.']);
@@ -792,16 +795,27 @@ function qp_get_sections_for_subject_ajax() {
     global $wpdb;
     $sources_table = $wpdb->prefix . 'qp_sources';
     $sections_table = $wpdb->prefix . 'qp_source_sections';
+    $questions_table = $wpdb->prefix . 'qp_questions';
 
-    // This query joins sources and sections and filters by the parent subject ID of the source.
-    $results = $wpdb->get_results($wpdb->prepare(
-        "SELECT sec.section_id, src.source_name, sec.section_name
-         FROM {$sections_table} sec
-         JOIN {$sources_table} src ON sec.source_id = src.source_id
-         WHERE src.subject_id = %d
-         ORDER BY src.source_name ASC, sec.section_name ASC",
-        $subject_id
-    ));
+    // Base query joins sections to sources and questions
+    $query = "
+        SELECT DISTINCT sec.section_id, src.source_name, sec.section_name
+        FROM {$sections_table} sec
+        JOIN {$sources_table} src ON sec.source_id = src.source_id
+        JOIN {$questions_table} q ON sec.section_id = q.section_id
+        WHERE src.subject_id = %d
+    ";
+    $params = [$subject_id];
+
+    // If a specific topic is selected, add it to the filter
+    if ($topic_id > 0) {
+        $query .= " AND q.topic_id = %d";
+        $params[] = $topic_id;
+    }
+
+    $query .= " ORDER BY src.source_name ASC, sec.section_name ASC";
+
+    $results = $wpdb->get_results($wpdb->prepare($query, $params));
 
     wp_send_json_success(['sections' => $results]);
 }
