@@ -10,6 +10,19 @@ class QP_Question_Editor_Page
         $group_id = isset($_GET['group_id']) ? absint($_GET['group_id']) : 0;
         $is_editing = $group_id > 0;
 
+        $open_reports = [];
+        if ($is_editing) {
+            $reports_table = $wpdb->prefix . 'qp_question_reports';
+            $reasons_table = $wpdb->prefix . 'qp_report_reasons';
+            $open_reports = $wpdb->get_results($wpdb->prepare(
+                "SELECT r.question_id, rr.reason_text 
+         FROM {$reports_table} r 
+         JOIN {$reasons_table} rr ON r.reason_id = rr.reason_id
+         WHERE r.status = 'open' AND r.question_id IN (SELECT question_id FROM {$wpdb->prefix}qp_questions WHERE group_id = %d)",
+                $group_id
+            ));
+        }
+
         // Data holders
         $direction_text = '';
         $direction_image_id = 0;
@@ -57,9 +70,9 @@ class QP_Question_Editor_Page
 
 
                     foreach ($questions_in_group as $q) {
-                    $q->options = $wpdb->get_results($wpdb->prepare("SELECT * FROM $o_table WHERE question_id = %d ORDER BY option_id ASC", $q->question_id));
-                    $q->labels = $wpdb->get_results($wpdb->prepare("SELECT l.label_id, l.label_name FROM {$ql_table} ql JOIN {$l_table} l ON ql.label_id = l.label_id WHERE ql.question_id = %d", $q->question_id));
-                }
+                        $q->options = $wpdb->get_results($wpdb->prepare("SELECT * FROM $o_table WHERE question_id = %d ORDER BY option_id ASC", $q->question_id));
+                        $q->labels = $wpdb->get_results($wpdb->prepare("SELECT l.label_id, l.label_name FROM {$ql_table} ql JOIN {$l_table} l ON ql.label_id = l.label_id WHERE ql.question_id = %d", $q->question_id));
+                    }
                 }
             }
         }
@@ -102,6 +115,33 @@ class QP_Question_Editor_Page
         }
 ?>
         <div class="wrap">
+            <?php if (!empty($open_reports)):
+                $reports_by_question = [];
+                foreach ($open_reports as $report) {
+                    $reports_by_question[$report->question_id][] = $report->reason_text;
+                }
+            ?>
+                <div class="notice notice-error" style="padding: 1rem; border-left-width: 4px;">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+        <div>
+            <h3 style="margin: 0 0 0.5rem 0;">&#9888; Open Reports for this Group</h3>
+            <p style="margin-top: 0;">The following questions have open reports. Resolving them will remove them from the "Needs Review" queue.</p>
+            <ul style="list-style: disc; padding-left: 20px; margin-bottom: 0;">
+                <?php foreach($reports_by_question as $qid => $reasons): ?>
+                    <li><strong>Question #<?php echo esc_html(get_question_custom_id($qid)); ?>:</strong> <?php echo esc_html(implode(', ', array_unique($reasons))); ?></li>
+                <?php endforeach; ?>
+            </ul>
+        </div>
+        <div>
+            <?php
+            $resolve_nonce = wp_create_nonce('qp_resolve_group_reports_' . $group_id);
+            $resolve_url = esc_url(admin_url('admin.php?page=qp-edit-group&group_id=' . $group_id . '&action=resolve_group_reports&_wpnonce=' . $resolve_nonce));
+            ?>
+            <a href="<?php echo $resolve_url; ?>" class="button button-primary">Resolve All Reports</a>
+        </div>
+    </div>
+</div>
+            <?php endif; ?>
             <h1 class="wp-heading-inline"><?php echo $is_editing ? 'Edit Question Group' : 'Add New Question Group'; ?></h1>
             <a href="<?php echo admin_url('admin.php?page=question-press'); ?>" class="page-title-action">Back to All Questions</a>
             <hr class="wp-header-end">
@@ -117,7 +157,7 @@ class QP_Question_Editor_Page
                                 <h2 class="hndle"><span>PYQ Details</span></h2>
                                 <div class="inside">
                                     <div class="qp-horizontal-flex-group">
-                                        
+
                                         <div class="qp-flex-item qp-flex-item-shrink">
                                             <label for="is_pyq_checkbox"><strong>Is a PYQ?</strong></label>
                                             <input type="checkbox" name="is_pyq" id="is_pyq_checkbox" value="1" <?php checked($is_pyq_group, 1); ?>>
@@ -129,7 +169,7 @@ class QP_Question_Editor_Page
                                                     <label for="exam_id"><strong>Exam</strong></label>
                                                     <select name="exam_id" id="exam_id" style="width: 100%;">
                                                         <option value="">— Select an Exam —</option>
-                                                        <?php foreach($all_exams as $exam) : ?>
+                                                        <?php foreach ($all_exams as $exam) : ?>
                                                             <option value="<?php echo esc_attr($exam->exam_id); ?>" <?php selected($current_exam_id, $exam->exam_id); ?>>
                                                                 <?php echo esc_html($exam->exam_name); ?>
                                                             </option>
@@ -180,9 +220,9 @@ class QP_Question_Editor_Page
                                         <div class="inside">
                                             <input type="hidden" name="questions[<?php echo $q_index; ?>][question_id]" class="question-id-input" value="<?php echo esc_attr($question->question_id); ?>">
                                             <p>
-                                            <label for="question_number_in_section_<?php echo $q_index; ?>"><strong>Question Number in Source</strong></label>
-                                            <input type="text" name="questions[<?php echo $q_index; ?>][question_number_in_section]" id="question_number_in_section_<?php echo $q_index; ?>" value="<?php echo esc_attr($question->question_number_in_section); ?>" style="width: 50%;">
-                                        </p>
+                                                <label for="question_number_in_section_<?php echo $q_index; ?>"><strong>Question Number in Source</strong></label>
+                                                <input type="text" name="questions[<?php echo $q_index; ?>][question_number_in_section]" id="question_number_in_section_<?php echo $q_index; ?>" value="<?php echo esc_attr($question->question_number_in_section); ?>" style="width: 50%;">
+                                            </p>
                                             <textarea name="questions[<?php echo $q_index; ?>][question_text]" class="question-text-area" style="width: 100%; height: 100px;" placeholder="Enter question text here..." required><?php echo esc_textarea($question->question_text); ?></textarea>
                                             <hr>
                                             <p><strong>Options (Select the radio button for the correct answer)</strong></p>
@@ -270,30 +310,42 @@ class QP_Question_Editor_Page
         <style>
             .qp-horizontal-flex-group {
                 display: flex;
-                align-items: flex-end; /* Aligns items to the bottom, looks better with labels above */
-                gap: 20px; /* Space between items */
+                align-items: flex-end;
+                /* Aligns items to the bottom, looks better with labels above */
+                gap: 20px;
+                /* Space between items */
                 width: 100%;
             }
+
             .qp-flex-item {
                 display: flex;
-                flex-direction: column; /* Stack label on top of input */
+                flex-direction: column;
+                /* Stack label on top of input */
             }
+
             .qp-flex-item-grow {
-                flex-grow: 1; /* Allows this item to take up remaining space */
+                flex-grow: 1;
+                /* Allows this item to take up remaining space */
             }
+
             .qp-flex-item-shrink {
-                flex-shrink: 0; /* Prevents this item from shrinking */
+                flex-shrink: 0;
+                /* Prevents this item from shrinking */
             }
+
             .qp-flex-item label {
                 margin-bottom: 3px;
                 font-weight: bold;
             }
+
             /* Specific alignment for the checkbox */
             .qp-flex-item-shrink label {
                 display: block;
             }
+
             .qp-flex-item-shrink input[type="checkbox"] {
-                transform: scale(1.5); /* Makes checkbox bigger */
+                transform: scale(1.5);
+                /* Makes checkbox bigger */
                 margin-top: 5px;
             }
         </style>

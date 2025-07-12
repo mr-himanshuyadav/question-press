@@ -140,43 +140,36 @@ class QP_Questions_List_Table extends WP_List_Table
         echo "\n";
     }
 
-    // REPLACE this method
-    protected function get_views()
-    {
-        global $wpdb;
-        $q_table = $wpdb->prefix . 'qp_questions';
-        $l_table = $wpdb->prefix . 'qp_labels';
-        $ql_table = $wpdb->prefix . 'qp_question_labels';
+    protected function get_views() {
+    global $wpdb;
+    $q_table = $wpdb->prefix . 'qp_questions';
+    $reports_table = $wpdb->prefix . 'qp_question_reports';
 
-        $current_status = isset($_REQUEST['status']) ? sanitize_key($_REQUEST['status']) : 'all';
-        $base_url = admin_url('admin.php?page=question-press');
+    $current_status = isset($_REQUEST['status']) ? sanitize_key($_REQUEST['status']) : 'all';
+    $base_url = admin_url('admin.php?page=question-press');
+    
+    // --- THE FIX ---
+    // Correctly count unique questions with "open" reports.
+    $review_count = $wpdb->get_var($wpdb->prepare(
+        "SELECT COUNT(DISTINCT question_id) FROM {$reports_table} WHERE status = %s",
+        'open'
+    ));
+    
+    // Correctly link to the new Reports tab.
+    $review_url = admin_url('admin.php?page=qp-logs-reports&tab=reports');
+    // --- END OF FIX ---
 
-        $publish_count = $wpdb->get_var("SELECT COUNT(*) FROM $q_table WHERE status = 'publish'");
-        $trash_count = $wpdb->get_var("SELECT COUNT(*) FROM $q_table WHERE status = 'trash'");
+    $publish_count = $wpdb->get_var("SELECT COUNT(*) FROM $q_table WHERE status = 'publish'");
+    $trash_count = $wpdb->get_var("SELECT COUNT(*) FROM $q_table WHERE status = 'trash'");
 
-        // NEW: Count for questions needing review
-        $review_label_ids = $wpdb->get_col("SELECT label_id FROM $l_table WHERE label_name IN ('Wrong Answer', 'No Answer')");
-        $review_count = 0;
-        if (!empty($review_label_ids)) {
-            $ids_placeholder = implode(',', array_fill(0, count($review_label_ids), '%d'));
-            // UPDATED: Query now joins the questions table to check the status is 'publish'
-            $review_count = $wpdb->get_var($wpdb->prepare(
-                "SELECT COUNT(DISTINCT ql.question_id) 
-                 FROM {$ql_table} ql 
-                 JOIN {$q_table} q ON ql.question_id = q.question_id 
-                 WHERE ql.label_id IN ($ids_placeholder) AND q.status = 'publish'",
-                $review_label_ids
-            ));
-        }
+    $views = [
+        'all' => sprintf('<a href="%s" class="%s">Published <span class="count">(%d)</span></a>', esc_url($base_url), $current_status === 'all' || $current_status === 'publish' ? 'current' : '', $publish_count),
+        'needs_review' => sprintf('<a href="%s">Needs Review <span class="count" style="color: #c00;">(%d)</span></a>', esc_url($review_url), $review_count),
+        'trash' => sprintf('<a href="%s" class="%s">Trash <span class="count">(%d)</span></a>', esc_url(add_query_arg('status', 'trash', $base_url)), $current_status === 'trash' ? 'current' : '', $trash_count)
+    ];
 
-        $views = [
-            'all' => sprintf('<a href="%s" class="%s">Published <span class="count">(%d)</span></a>', esc_url($base_url), $current_status === 'all' || $current_status === 'publish' ? 'current' : '', $publish_count),
-            'needs_review' => sprintf('<a href="%s" class="%s">Needs Review <span class="count">(%d)</span></a>', esc_url(add_query_arg('status', 'needs_review', $base_url)), $current_status === 'needs_review' ? 'current' : '', $review_count),
-            'trash' => sprintf('<a href="%s" class="%s">Trash <span class="count">(%d)</span></a>', esc_url(add_query_arg('status', 'trash', $base_url)), $current_status === 'trash' ? 'current' : '', $trash_count)
-        ];
-
-        return $views;
-    }
+    return $views;
+}
 
 
     protected function extra_tablenav($which)

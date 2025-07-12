@@ -2329,3 +2329,53 @@ function qp_handle_log_settings_forms() {
     }
 }
 add_action('admin_init', 'qp_handle_log_settings_forms');
+
+function qp_handle_report_actions() {
+    if (!isset($_GET['page']) || $_GET['page'] !== 'qp-logs-reports') {
+        return;
+    }
+
+    // Handle single resolve action
+    if (isset($_GET['action']) && $_GET['action'] === 'resolve_report' && isset($_GET['question_id'])) {
+        $question_id = absint($_GET['question_id']);
+        check_admin_referer('qp_resolve_report_' . $question_id);
+
+        global $wpdb;
+        $wpdb->update(
+            "{$wpdb->prefix}qp_question_reports",
+            ['status' => 'resolved'],
+            ['question_id' => $question_id, 'status' => 'open']
+        );
+
+        wp_safe_redirect(admin_url('admin.php?page=qp-logs-reports&tab=reports&message=3'));
+        exit;
+    }
+}
+add_action('admin_init', 'qp_handle_report_actions');
+
+/**
+ * Handles resolving all open reports for a group from the question editor page.
+ */
+function qp_handle_resolve_from_editor() {
+    if (!isset($_GET['page']) || $_GET['page'] !== 'qp-edit-group' || !isset($_GET['action']) || $_GET['action'] !== 'resolve_group_reports') {
+        return;
+    }
+
+    $group_id = isset($_GET['group_id']) ? absint($_GET['group_id']) : 0;
+    if (!$group_id) return;
+
+    check_admin_referer('qp_resolve_group_reports_' . $group_id);
+
+    global $wpdb;
+    $questions_in_group_ids = $wpdb->get_col($wpdb->prepare("SELECT question_id FROM {$wpdb->prefix}qp_questions WHERE group_id = %d", $group_id));
+
+    if (!empty($questions_in_group_ids)) {
+        $ids_placeholder = implode(',', $questions_in_group_ids);
+        $wpdb->query("UPDATE {$wpdb->prefix}qp_question_reports SET status = 'resolved' WHERE question_id IN ({$ids_placeholder}) AND status = 'open'");
+    }
+
+    // Redirect back to the editor page with a success message
+    wp_safe_redirect(admin_url('admin.php?page=qp-edit-group&group_id=' . $group_id . '&message=1'));
+    exit;
+}
+add_action('admin_init', 'qp_handle_resolve_from_editor');
