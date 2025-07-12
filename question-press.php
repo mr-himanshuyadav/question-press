@@ -805,7 +805,8 @@ function qp_public_enqueue_scripts()
             'ajax_url'           => admin_url('admin-ajax.php'),
             'nonce'              => wp_create_nonce('qp_practice_nonce'),
             'dashboard_page_url' => isset($options['dashboard_page']) ? get_permalink($options['dashboard_page']) : home_url('/'),
-            'practice_page_url'  => isset($options['practice_page']) ? get_permalink($options['practice_page']) : home_url('/')
+            'practice_page_url'  => isset($options['practice_page']) ? get_permalink($options['practice_page']) : home_url('/'),
+            'question_order_setting'   => isset($options['question_order']) ? $options['question_order'] : 'random'
         ];
 
         // --- CORRECTED SCRIPT LOADING LOGIC ---
