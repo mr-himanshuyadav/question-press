@@ -43,15 +43,15 @@ class QP_Shortcodes
                         </div>
 
                         <?php if ($question_order_setting === 'user_input'): ?>
-                        <div class="qp-order-selection">
-                            <label>Order of questions?</label>
-                            <div class="qp-order-buttons">
-                                <button type="button" class="qp-order-btn" data-order="incrementing">Incrementing</button>
-                                <button type="button" class="qp-order-btn" data-order="random">Random</button>
+                            <div class="qp-order-selection">
+                                <label>Order of questions?</label>
+                                <div class="qp-order-buttons">
+                                    <button type="button" class="qp-order-btn" data-order="incrementing">Incrementing</button>
+                                    <button type="button" class="qp-order-btn" data-order="random">Random</button>
+                                </div>
                             </div>
-                        </div>
                         <?php endif; ?>
-                        
+
                         <div class="qp-step-1-footer">
                             <button id="qp-step1-next-btn" class="qp-button qp-button-primary" disabled>Next</button>
                             <?php if ($dashboard_page_url) : ?>
@@ -464,45 +464,26 @@ class QP_Shortcodes
             </div>
 
             <div class="qp-footer-controls">
-    <button id="qp-report-btn" class="qp-button qp-button-secondary">
-        <span class="dashicons dashicons-warning"></span> Report
-    </button>
-    <button id="qp-end-practice-btn" class="qp-button qp-button-danger">End Practice</button>
-</div>
-
-            <div class="qp-user-report-area">
-                <h4>Report an Issue</h4>
-                <div class="button-group">
-                    <button class="qp-report-button qp-report-color-error" data-label="Wrong Answer">Wrong Answer</button>
-                    <button class="qp-report-button qp-report-color-warning" data-label="No Answer">No Answer</button>
-                </div>
+                <button id="qp-report-btn" class="qp-button qp-button-secondary">
+                    <span class="dashicons dashicons-warning"></span> Report
+                </button>
+                <button id="qp-end-practice-btn" class="qp-button qp-button-danger">End Practice</button>
             </div>
-
-            <?php if (current_user_can('manage_options')) : // Admin-only tools 
-            ?>
-                <div class="qp-admin-report-area">
-                    <h4>For Admins Only (Label As)</h4>
-                    <div class="button-group">
-                        <button class="qp-report-button qp-report-color-info" data-label="Incorrect Formatting">Incorrect Formatting</button>
-                        <button class="qp-report-button qp-report-color-neutral" data-label="Wrong Subject">Wrong Subject</button>
-                    </div>
-                </div>
-            <?php endif; ?>
         </div>
         <div id="qp-report-modal-backdrop" style="display: none;">
-    <div id="qp-report-modal-content">
-        <button class="qp-modal-close-btn">&times;</button>
-        <h3>Report an Issue</h3>
-        <p>Please select all issues that apply to the current question.</p>
-        <form id="qp-report-form">
-            <div id="qp-report-options-container">
-                </div>
-            <div class="qp-modal-footer">
-                <button type="submit" class="qp-button qp-button-primary">Submit Report</button>
+            <div id="qp-report-modal-content">
+                <button class="qp-modal-close-btn">&times;</button>
+                <h3>Report an Issue</h3>
+                <p>Please select all issues that apply to the current question.</p>
+                <form id="qp-report-form">
+                    <div id="qp-report-options-container">
+                    </div>
+                    <div class="qp-modal-footer">
+                        <button type="submit" class="qp-button qp-button-primary">Submit Report</button>
+                    </div>
+                </form>
             </div>
-        </form>
-    </div>
-</div>
+        </div>
     <?php
         return ob_get_clean();
     }

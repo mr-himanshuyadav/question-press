@@ -119,6 +119,11 @@ body {
 /* --- Practice Screen Content --- */
 .qp-question-area .question-text { font: normal 1.21em KaTeX_Main,Times New Roman,serif; line-height: 1.6; margin-bottom: 2rem; margin-top: 1rem}
 .qp-options-area .option { display: block; font: normal .95em KaTeX_Main,Times New Roman,serif;; padding: 1rem; margin-bottom: 0.75rem; border: 2px solid var(--qp-border-color); border-radius: var(--qp-radius); cursor: pointer; transition: all 0.2s ease-in-out; position: relative; }
+.qp-options-area.disabled .option {
+    cursor: not-allowed;
+    background-color: #f8f9fa;
+    opacity: 0.7;
+}
 .qp-options-area .option input { display: none; }
 .qp-options-area .option.disabled { cursor: not-allowed; }
 .qp-options-area .option.correct { border-color: var(--qp-correct-color) !important; background: var(--qp-correct-bg); color: var(--qp-correct-text); font-weight: 600; }
@@ -728,12 +733,20 @@ ul.qp-review-list li {
     margin-bottom: 1.5rem;
 }
 
+/* --- Corrected Report Modal Checkbox Styles --- */
 #qp-report-form .qp-custom-checkbox {
+    display: flex; /* Ensures items stay on one line */
     width: 100%;
-    padding: 10px;
+    padding: 12px 15px 12px 40px; /* Adjusted padding: more room on the left */
     background-color: #f9f9f9;
     border: 1px solid var(--qp-border-color);
     border-radius: 4px;
+    box-sizing: border-box; /* Ensures padding is included in width */
+}
+
+/* We need to adjust the position of the custom checkmark */
+#qp-report-form .qp-custom-checkbox span {
+    left: 12px; /* Gives space from the left edge */
 }
 
 /* --- Responsive Dashboard Actions --- */

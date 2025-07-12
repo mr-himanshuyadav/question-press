@@ -980,7 +980,7 @@ add_action('wp_ajax_get_sections_for_subject', 'qp_get_sections_for_subject_ajax
 function qp_start_practice_session_ajax()
 {
     check_ajax_referer('qp_practice_nonce', 'nonce');
-    
+
     // Determine the practice mode from the submitted form
     $practice_mode = isset($_POST['practice_mode']) ? sanitize_key($_POST['practice_mode']) : 'normal';
 
@@ -1030,13 +1030,14 @@ function qp_start_practice_session_ajax()
         foreach ($topic_ids_to_query as $topic_id) {
             $q_ids = $wpdb->get_col($wpdb->prepare(
                 "SELECT q.question_id FROM {$questions_table} q JOIN {$attempts_table} a ON q.question_id = a.question_id WHERE a.user_id = %d AND q.topic_id = %d ORDER BY RAND() LIMIT %d",
-                $user_id, $topic_id, $questions_per_topic
+                $user_id,
+                $topic_id,
+                $questions_per_topic
             ));
             $final_question_ids = array_merge($final_question_ids, $q_ids);
         }
         $question_ids = array_unique($final_question_ids);
         shuffle($question_ids);
-
     } else {
         // --- NORMAL MODE LOGIC ---
         $session_settings = [
@@ -1045,14 +1046,14 @@ function qp_start_practice_session_ajax()
             'topic_id'         => isset($_POST['qp_topic']) ? $_POST['qp_topic'] : 'all',
             'section_id'       => isset($_POST['qp_section']) ? $_POST['qp_section'] : 'all',
             'pyq_only'         => isset($_POST['qp_pyq_only']),
-            'include_attempted'=> isset($_POST['qp_include_attempted']),
+            'include_attempted' => isset($_POST['qp_include_attempted']),
             'question_order'   => isset($_POST['question_order']) ? sanitize_key($_POST['question_order']) : 'random',
             'marks_correct'    => isset($_POST['qp_marks_correct']) ? floatval($_POST['qp_marks_correct']) : 4.0,
             'marks_incorrect'  => isset($_POST['qp_marks_incorrect']) ? -abs(floatval($_POST['qp_marks_incorrect'])) : -1.0,
             'timer_enabled'    => isset($_POST['qp_timer_enabled']),
             'timer_seconds'    => isset($_POST['qp_timer_seconds']) ? absint($_POST['qp_timer_seconds']) : 60
         ];
-        
+
         // Only validate subject if in normal mode
         if ($practice_mode === 'normal' && empty($session_settings['subject_id'])) {
             wp_send_json_error(['message' => 'Please select a subject.']);
@@ -1081,7 +1082,7 @@ function qp_start_practice_session_ajax()
         }
 
         $base_where_sql = implode(' AND ', $where_clauses);
-        
+
         // Handle question order and inclusion of attempted questions
         $attempted_q_ids_sql = $wpdb->prepare("SELECT DISTINCT question_id FROM $a_table WHERE user_id = %d", $user_id);
 
@@ -1090,10 +1091,10 @@ function qp_start_practice_session_ajax()
                 // 6+1 logic: fetch all new and old questions separately, then interleave them
                 $new_questions = $wpdb->get_col($wpdb->prepare("SELECT q.question_id FROM {$q_table} q {$joins} WHERE {$base_where_sql} AND q.question_id NOT IN ($attempted_q_ids_sql) ORDER BY q.custom_question_id ASC", $query_args));
                 $old_questions = $wpdb->get_col($wpdb->prepare("SELECT q.question_id FROM {$q_table} q {$joins} WHERE {$base_where_sql} AND q.question_id IN ($attempted_q_ids_sql) ORDER BY RAND()", $query_args));
-                
+
                 $question_ids = [];
                 $new_q_index = 0;
-                while($new_q_index < count($new_questions)) {
+                while ($new_q_index < count($new_questions)) {
                     // Add up to 6 new questions
                     $question_ids = array_merge($question_ids, array_slice($new_questions, $new_q_index, 6));
                     $new_q_index += 6;
@@ -1118,7 +1119,7 @@ function qp_start_practice_session_ajax()
     if (empty($question_ids)) {
         wp_send_json_error(['html' => '<div class="qp-container"><p>No questions were found for the selected criteria. Please try different options.</p><button onclick="window.location.reload();" class="qp-button qp-button-secondary">Go Back</button></div>']);
     }
-    
+
     $options = get_option('qp_settings');
     $session_page_id = isset($options['session_page']) ? absint($options['session_page']) : 0;
     if (!$session_page_id) {
@@ -1168,14 +1169,14 @@ function qp_get_question_data_ajax()
     $sec_table = $wpdb->prefix . 'qp_source_sections';
     $o_table = $wpdb->prefix . 'qp_options';
     $a_table = $wpdb->prefix . 'qp_user_attempts';
+    $user_id = get_current_user_id();
 
-    // --- CORRECTED QUERY: Fetching from new source/section tables directly ---
+    // --- Fetch question data ---
     $question_data = $wpdb->get_row($wpdb->prepare(
-        "SELECT q.custom_question_id, q.question_text, q.question_number_in_section,
+        "SELECT q.question_id, q.custom_question_id, q.question_text, q.question_number_in_section,
                 g.direction_text, g.direction_image_id,
                 s.subject_name, t.topic_name,
-                src.source_name,
-                sec.section_name
+                src.source_name, sec.section_name
          FROM {$q_table} q
          LEFT JOIN {$g_table} g ON q.group_id = g.group_id
          LEFT JOIN {$s_table} s ON g.subject_id = s.subject_id
@@ -1196,27 +1197,97 @@ function qp_get_question_data_ajax()
     $user_can_view = !empty(array_intersect((array)$user->roles, (array)$allowed_roles));
 
     if (!$user_can_view) {
-        unset($question_data['source_name']);
-        unset($question_data['section_name']);
-        unset($question_data['question_number_in_section']);
+        unset($question_data['source_name'], $question_data['section_name'], $question_data['question_number_in_section']);
     }
 
     $question_data['direction_image_url'] = $question_data['direction_image_id'] ? wp_get_attachment_url($question_data['direction_image_id']) : null;
     $question_data['options'] = $wpdb->get_results($wpdb->prepare("SELECT option_id, option_text FROM {$o_table} WHERE question_id = %d ORDER BY option_id ASC", $question_id), ARRAY_A);
-    $user_id = get_current_user_id();
+    
+    // --- State Checks ---
     $attempt_count = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $a_table WHERE user_id = %d AND question_id = %d", $user_id, $question_id));
-
-    // --- NEW: Check if the question is marked for review ---
     $review_table = $wpdb->prefix . 'qp_review_later';
-    $is_marked = (bool) $wpdb->get_var($wpdb->prepare(
-        "SELECT COUNT(*) FROM {$review_table} WHERE user_id = %d AND question_id = %d",
-        $user_id,
-        $question_id
-    ));
+    $is_marked = (bool) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$review_table} WHERE user_id = %d AND question_id = %d", $user_id, $question_id));
 
-    wp_send_json_success(['question' => $question_data, 'is_revision' => ($attempt_count > 0), 'is_admin' => $user_can_view, 'is_marked_for_review' => $is_marked]);
+    // **THIS IS THE CRITICAL ADDITION**
+    $reports_table = $wpdb->prefix . 'qp_question_reports';
+    $is_reported_by_user = (bool) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$reports_table} WHERE user_id = %d AND question_id = %d", $user_id, $question_id));
+
+    // --- Send Final Response ---
+    wp_send_json_success([
+        'question'             => $question_data,
+        'is_revision'          => ($attempt_count > 0),
+        'is_admin'             => $user_can_view,
+        'is_marked_for_review' => $is_marked,
+        'is_reported_by_user'  => $is_reported_by_user // Send the authoritative state
+    ]);
 }
 add_action('wp_ajax_get_question_data', 'qp_get_question_data_ajax');
+
+/**
+ * AJAX handler to get all active report reasons.
+ */
+function qp_get_report_reasons_ajax()
+{
+    check_ajax_referer('qp_practice_nonce', 'nonce');
+
+    global $wpdb;
+    $reasons_table = $wpdb->prefix . 'qp_report_reasons';
+
+    $reasons = $wpdb->get_results(
+        "SELECT reason_id, reason_text FROM {$reasons_table} WHERE is_active = 1 ORDER BY reason_id ASC"
+    );
+
+    wp_send_json_success(['reasons' => $reasons]);
+}
+add_action('wp_ajax_get_report_reasons', 'qp_get_report_reasons_ajax');
+
+/**
+ * AJAX handler to submit a new question report from the modal.
+ */
+function qp_submit_question_report_ajax()
+{
+    check_ajax_referer('qp_practice_nonce', 'nonce');
+
+    if (!is_user_logged_in()) {
+        wp_send_json_error(['message' => 'You must be logged in.']);
+    }
+
+    $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
+    $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
+    $reasons = isset($_POST['reasons']) && is_array($_POST['reasons']) ? array_map('absint', $_POST['reasons']) : [];
+    $user_id = get_current_user_id();
+
+    if (empty($question_id) || empty($reasons)) {
+        wp_send_json_error(['message' => 'Invalid data provided.']);
+    }
+
+    global $wpdb;
+    $reports_table = $wpdb->prefix . 'qp_question_reports';
+
+    foreach ($reasons as $reason_id) {
+        $wpdb->insert(
+            $reports_table,
+            [
+                'question_id' => $question_id,
+                'user_id'     => $user_id,
+                'reason_id'   => $reason_id,
+                'report_date' => current_time('mysql'),
+                'status'      => 'open'
+            ]
+        );
+    }
+
+    // Add a log entry for the admin panel
+    $custom_id = get_question_custom_id($question_id);
+    $wpdb->insert("{$wpdb->prefix}qp_logs", [
+        'log_type'    => 'User Report',
+        'log_message' => sprintf('User reported question #%s.', $custom_id),
+        'log_data'    => wp_json_encode(['user_id' => $user_id, 'session_id' => $session_id, 'question_id' => $question_id, 'reasons' => $reasons])
+    ]);
+
+    wp_send_json_success(['message' => 'Report submitted.']);
+}
+add_action('wp_ajax_submit_question_report', 'qp_submit_question_report_ajax');
 
 function qp_check_answer_ajax()
 {
@@ -1350,75 +1421,6 @@ function qp_delete_user_session_ajax()
     wp_send_json_success(['message' => 'Session deleted.']);
 }
 add_action('wp_ajax_delete_user_session', 'qp_delete_user_session_ajax');
-
-/**
- * AJAX handler for reporting an issue with a question.
- */
-// UPDATED: Report issue function
-function qp_report_question_issue_ajax()
-{
-    check_ajax_referer('qp_practice_nonce', 'nonce');
-    $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
-    $report_label_name = isset($_POST['label_name']) ? sanitize_text_field($_POST['label_name']) : 'Incorrect Formatting';
-    if (!$question_id) {
-        wp_send_json_error(['message' => 'Invalid Question ID.']);
-    }
-
-    global $wpdb;
-    $label_id = $wpdb->get_var($wpdb->prepare("SELECT label_id FROM {$wpdb->prefix}qp_labels WHERE label_name = %s", $report_label_name));
-    if (!$label_id) {
-        wp_send_json_error(['message' => 'Reporting system not configured.']);
-    }
-
-    $already_assigned = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$wpdb->prefix}qp_question_labels WHERE question_id = %d AND label_id = %d", $question_id, $label_id));
-    if ($already_assigned == 0) {
-        $wpdb->insert("{$wpdb->prefix}qp_question_labels", ['question_id' => $question_id, 'label_id' => $label_id]);
-
-        // CORRECTED: Use custom_question_id for the log message
-        $custom_id = $wpdb->get_var($wpdb->prepare("SELECT custom_question_id FROM {$wpdb->prefix}qp_questions WHERE question_id = %d", $question_id));
-        $wpdb->insert("{$wpdb->prefix}qp_logs", [
-            'log_type' => 'Report',
-            'log_message' => sprintf('User reported question #%s with label: %s', $custom_id, $report_label_name),
-            'log_data' => wp_json_encode(['user_id' => get_current_user_id(), 'question_id' => $question_id])
-        ]);
-    }
-    wp_send_json_success(['message' => 'Issue reported.']);
-}
-add_action('wp_ajax_report_question_issue', 'qp_report_question_issue_ajax');
-
-
-// In question-press.php, ADD this new function
-
-// UPDATED: Report and Skip function
-function qp_report_and_skip_question_ajax()
-{
-    check_ajax_referer('qp_practice_nonce', 'nonce');
-    $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
-    $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
-    $label_name = isset($_POST['label_name']) ? sanitize_text_field($_POST['label_name']) : '';
-    if (!$session_id || !$question_id || !$label_name) {
-        wp_send_json_error(['message' => 'Invalid data.']);
-    }
-
-    global $wpdb;
-    $wpdb->update($wpdb->prefix . 'qp_user_sessions', ['last_activity' => current_time('mysql')], ['session_id' => $session_id]);
-    $label_id = $wpdb->get_var($wpdb->prepare("SELECT label_id FROM {$wpdb->prefix}qp_labels WHERE label_name = %s", $label_name));
-    if ($label_id) {
-        $wpdb->insert("{$wpdb->prefix}qp_question_labels", ['question_id' => $question_id, 'label_id' => $label_id]);
-
-        // CORRECTED: Use custom_question_id for the log message
-        $custom_id = $wpdb->get_var($wpdb->prepare("SELECT custom_question_id FROM {$wpdb->prefix}qp_questions WHERE question_id = %d", $question_id));
-        $wpdb->insert("{$wpdb->prefix}qp_logs", [
-            'log_type' => 'Report',
-            'log_message' => sprintf('User reported question #%s with label: %s', $custom_id, $label_name),
-            'log_data' => wp_json_encode(['user_id' => get_current_user_id(), 'session_id' => $session_id, 'question_id' => $question_id])
-        ]);
-    }
-
-    $wpdb->insert("{$wpdb->prefix}qp_user_attempts", ['session_id' => $session_id, 'user_id' => get_current_user_id(), 'question_id' => $question_id, 'is_correct' => null]);
-    wp_send_json_success(['message' => 'Question reported and skipped.']);
-}
-add_action('wp_ajax_report_and_skip_question', 'qp_report_and_skip_question_ajax');
 
 
 /**
