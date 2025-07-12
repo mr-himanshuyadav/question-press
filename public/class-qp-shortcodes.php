@@ -183,18 +183,18 @@ class QP_Shortcodes
                     </label>
                 </div>
                 <div class="qp-form-group-description">
-                    <p><strong>PYQ Only:</strong> Only include questions that are marked as a "Previous Year Question".</p>
-                    <p><strong>Revision Mode:</strong> Previously answered questions will reappear in your session to help you revise.</p>
+                    <p><strong>PYQ Only:</strong> Only include Previous Year Question.</p>
+                    <p><strong>Revision Mode:</strong> Previously answered questions will reappear in your session.</p>
                 </div>
 
-                <div class="qp-form-group qp-marks-group">
-                    <div>
-                        <label for="qp_marks_correct">Marks for Correct Answer:</label>
-                        <input type="number" name="qp_marks_correct" id="qp_marks_correct" value="4" step="0.1" required>
+                <div class="qp-form-group qp-marks-group" style="display: flex; flex-direction: row; justify-content: space-between;">
+                    <div style="width: 48%">
+                        <label for="qp_marks_correct">Correct Marks:</label>
+                        <input type="number" name="qp_marks_correct" id="qp_marks_correct" step="0.01" required>
                     </div>
-                    <div>
-                        <label for="qp_marks_incorrect">Penalty for Incorrect Answer:</label>
-                        <input type="number" name="qp_marks_incorrect" id="qp_marks_incorrect" value="1" step="0.1" min="0" required>
+                    <div style="width: 48%">
+                        <label for="qp_marks_incorrect">Negative Marks:</label>
+                        <input type="number" name="qp_marks_incorrect" id="qp_marks_incorrect" step="0.01" min="0" required>
                     </div>
                 </div>
 
@@ -202,7 +202,7 @@ class QP_Shortcodes
                     <label class="qp-custom-checkbox">
                         <input type="checkbox" name="qp_timer_enabled" id="qp_timer_enabled_cb">
                         <span></span>
-                        Enable Timer per Question
+                        Question Timer
                     </label>
                     <div id="qp-timer-input-wrapper" style="display: none; margin-top: 15px;">
                         <label for="qp_timer_seconds">Time in Seconds:</label>
