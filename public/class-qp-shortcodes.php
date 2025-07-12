@@ -463,9 +463,12 @@ class QP_Shortcodes
                 <button id="qp-next-btn" class="qp-button qp-button-primary">Next &raquo;</button>
             </div>
 
-            <div class="qp-footer-controls" style="margin-top: 20px; text-align: center;">
-                <button id="qp-end-practice-btn" class="qp-button qp-button-danger">End Practice</button>
-            </div>
+            <div class="qp-footer-controls">
+    <button id="qp-report-btn" class="qp-button qp-button-secondary">
+        <span class="dashicons dashicons-warning"></span> Report
+    </button>
+    <button id="qp-end-practice-btn" class="qp-button qp-button-danger">End Practice</button>
+</div>
 
             <div class="qp-user-report-area">
                 <h4>Report an Issue</h4>
@@ -486,6 +489,20 @@ class QP_Shortcodes
                 </div>
             <?php endif; ?>
         </div>
+        <div id="qp-report-modal-backdrop" style="display: none;">
+    <div id="qp-report-modal-content">
+        <button class="qp-modal-close-btn">&times;</button>
+        <h3>Report an Issue</h3>
+        <p>Please select all issues that apply to the current question.</p>
+        <form id="qp-report-form">
+            <div id="qp-report-options-container">
+                </div>
+            <div class="qp-modal-footer">
+                <button type="submit" class="qp-button qp-button-primary">Submit Report</button>
+            </div>
+        </form>
+    </div>
+</div>
     <?php
         return ob_get_clean();
     }

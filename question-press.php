@@ -29,8 +29,7 @@ require_once QP_PLUGIN_DIR . 'admin/class-qp-export-page.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-questions-list-table.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-question-editor-page.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-settings-page.php';
-require_once QP_PLUGIN_DIR . 'admin/class-qp-logs-page.php';
-require_once QP_PLUGIN_DIR . 'admin/class-qp-logs-list-table.php';
+require_once QP_PLUGIN_DIR . 'admin/class-qp-logs-reports-page.php';
 require_once QP_PLUGIN_DIR . 'public/class-qp-shortcodes.php';
 require_once QP_PLUGIN_DIR . 'public/class-qp-dashboard.php';
 require_once QP_PLUGIN_DIR . 'api/class-qp-rest-api.php';
@@ -265,6 +264,41 @@ function qp_activate_plugin()
     ) $charset_collate;";
     dbDelta($sql_review_later);
 
+    // --- NEW: Table for Report Reasons ---
+    $table_report_reasons = $wpdb->prefix . 'qp_report_reasons';
+    $sql_report_reasons = "CREATE TABLE $table_report_reasons (
+        reason_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+        reason_text VARCHAR(255) NOT NULL,
+        is_active BOOLEAN NOT NULL DEFAULT 1,
+        PRIMARY KEY (reason_id)
+    ) $charset_collate;";
+    dbDelta($sql_report_reasons);
+
+    // --- NEW: Table for storing individual reports ---
+    $table_question_reports = $wpdb->prefix . 'qp_question_reports';
+    $sql_question_reports = "CREATE TABLE $table_question_reports (
+        report_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+        question_id BIGINT(20) UNSIGNED NOT NULL,
+        user_id BIGINT(20) UNSIGNED NOT NULL,
+        reason_id BIGINT(20) UNSIGNED NOT NULL,
+        report_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        status VARCHAR(20) NOT NULL DEFAULT 'open',
+        PRIMARY KEY (report_id),
+        KEY question_id (question_id),
+        KEY user_id (user_id),
+        KEY reason_id (reason_id),
+        KEY status (status)
+    ) $charset_collate;";
+    dbDelta($sql_question_reports);
+
+    // Add some default report reasons if the table is empty
+    if ($wpdb->get_var("SELECT COUNT(*) FROM $table_report_reasons") == 0) {
+        $default_reasons = ['Wrong Answer', 'Typo in question', 'Options are incorrect', 'Image is not loading', 'Question is confusing'];
+        foreach ($default_reasons as $reason) {
+            $wpdb->insert($table_report_reasons, ['reason_text' => $reason]);
+        }
+    }
+
     // Set default options
     add_option('qp_next_custom_question_id', 1000, '', 'no');
     if (!get_option('qp_jwt_secret_key')) {
@@ -296,7 +330,7 @@ function qp_admin_menu()
 
     add_submenu_page('question-press', 'Import', 'Import', 'manage_options', 'qp-import', ['QP_Import_Page', 'render']);
     add_submenu_page('question-press', 'Export', 'Export', 'manage_options', 'qp-export', ['QP_Export_Page', 'render']);
-    add_submenu_page('question-press', 'Logs', 'Logs', 'manage_options', 'qp-logs', ['QP_Logs_Page', 'render']);
+    add_submenu_page('question-press', 'Logs / Reports', 'Logs / Reports', 'manage_options', 'qp-logs-reports', ['QP_Logs_Reports_Page', 'render']);
     add_submenu_page('question-press', 'Settings', 'Settings', 'manage_options', 'qp-settings', ['QP_Settings_Page', 'render']);
 
     // Hidden pages (for editing links and backwards compatibility)

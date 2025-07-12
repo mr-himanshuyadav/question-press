@@ -109,6 +109,25 @@ jQuery(document).ready(function ($) {
 
   }
 
+  // --- Report Modal ---
+wrapper.on('click', '#qp-report-btn', function() {
+    // We will populate the options from the database later
+    // For now, let's just show the modal
+    $('#qp-report-modal-backdrop').fadeIn(200);
+});
+
+// Close the modal
+wrapper.on('click', '.qp-modal-close-btn, #qp-report-modal-backdrop', function(e) {
+    if (e.target === this) { // Only close if the click is on the backdrop itself or the close button
+        $('#qp-report-modal-backdrop').fadeOut(200);
+    }
+});
+
+// Prevent modal from closing when clicking inside its content
+wrapper.on('click', '#qp-report-modal-content', function(e) {
+    e.stopPropagation();
+});
+
   // --- FORM SUBMISSION HANDLERS (SEPARATED FOR RELIABILITY) ---
 
   // Handler for NORMAL Practice Form
