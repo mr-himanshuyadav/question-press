@@ -400,6 +400,13 @@ add_action('admin_enqueue_scripts', 'qp_admin_enqueue_scripts');
 // FORM & ACTION HANDLERS
 function qp_handle_form_submissions()
 {
+    // NEW: Handle list table actions here, before any other output.
+    // We check if the user is on the main "All Questions" page.
+    if (isset($_GET['page']) && $_GET['page'] === 'question-press') {
+        $list_table = new QP_Questions_List_Table();
+        $list_table->process_bulk_action();
+    }
+    
     if (isset($_GET['page']) && $_GET['page'] === 'qp-organization') {
         QP_Sources_Page::handle_forms();
         QP_Topics_Page::handle_forms();
@@ -472,7 +479,13 @@ function qp_all_questions_page_cb()
             if (isset($messages[$message_id])) {
                 echo '<div id="message" class="notice notice-success is-dismissible"><p>' . esc_html($messages[$message_id]) . '</p></div>';
             }
-        } ?>
+        }
+        // NEW: Check for our bulk edit confirmation message
+        if (isset($_GET['bulk_edit_message']) && $_GET['bulk_edit_message'] === '1') {
+            echo '<div id="message" class="notice notice-success is-dismissible"><p>Questions have been bulk updated successfully.</p></div>';
+        }
+        
+        ?>
         <hr class="wp-header-end">
         <?php $list_table->views(); ?>
         <form method="post">

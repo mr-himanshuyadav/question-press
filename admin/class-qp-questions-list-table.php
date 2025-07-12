@@ -262,7 +262,6 @@ class QP_Questions_List_Table extends WP_List_Table
 
     public function prepare_items() {
     global $wpdb;
-    $this->process_bulk_action();
 
     $columns = $this->get_columns();
     $hidden = get_hidden_columns($this->screen);
@@ -358,89 +357,141 @@ class QP_Questions_List_Table extends WP_List_Table
      * UPDATED: Process all bulk actions, now correctly handling nonces for single-item actions.
      */
     public function process_bulk_action() {
-        $action = $this->current_action();
-        $labels_to_apply = isset($_POST['labels_to_apply']) ? array_filter(array_map('absint', $_POST['labels_to_apply'])) : [];
+    // First, check for our new custom bulk edit action.
+    // We check for 'bulk_edit_apply' which is the name of our new apply button.
+    if (isset($_POST['bulk_edit_apply'])) {
+        // Verify the nonce from the bulk actions form.
+        check_admin_referer('bulk-questions', '_wpnonce');
 
-        // Exit if there's no action to perform
-        if ((!$action || $action === -1) && empty($labels_to_apply)) {
-            return;
-        }
+        $question_ids = isset($_POST['question_ids']) ? array_map('absint', $_POST['question_ids']) : [];
 
-        // --- UPDATED: Smarter Nonce Verification ---
-        // Check for a single-item action nonce (from a GET request)
-        if (isset($_GET['question_id']) && isset($_GET['_wpnonce'])) {
-            $question_id = absint($_GET['question_id']);
-            $nonce_action = 'qp_' . $action . '_question_' . $question_id;
-            if (!wp_verify_nonce($_GET['_wpnonce'], $nonce_action)) {
-                wp_die('Security check failed for single item action.');
+        if (!empty($question_ids)) {
+            global $wpdb;
+
+            $exam_id    = !empty($_POST['bulk_edit_exam']) ? absint($_POST['bulk_edit_exam']) : null;
+            $source_id  = !empty($_POST['bulk_edit_source']) ? absint($_POST['bulk_edit_source']) : null;
+            $section_id = !empty($_POST['bulk_edit_section']) ? absint($_POST['bulk_edit_section']) : null;
+
+            $data_to_update = [];
+            if ($source_id) $data_to_update['source_id'] = $source_id;
+            if ($section_id) $data_to_update['section_id'] = $section_id;
+
+            $group_data_to_update = [];
+            if ($exam_id) {
+                $group_data_to_update['exam_id'] = $exam_id;
+                $group_data_to_update['is_pyq'] = 1; // Automatically mark as PYQ if an exam is set.
             }
-        // Check for a bulk action nonce (from a POST request)
-        } elseif (isset($_POST['question_ids'])) {
-            if (!wp_verify_nonce($_POST['_wpnonce'], 'bulk-questions')) {
-                 wp_die('Security check failed for bulk action.');
-            }
-        } else {
-            return; // No items or valid nonce found
-        }
-        // --- END NONCE VERIFICATION ---
 
-        // Consolidate IDs from either a bulk or single action
-        $question_ids = isset($_REQUEST['question_ids']) ? array_map('absint', (array) $_REQUEST['question_ids']) : [absint($_GET['question_id'])];
-        if (empty($question_ids)) {
-            return;
-        }
-
-        global $wpdb;
-
-        if (!empty($labels_to_apply)) {
-            $ql_table = $wpdb->prefix . 'qp_question_labels';
-            foreach ($question_ids as $question_id) {
-                foreach ($labels_to_apply as $label_id) {
-                    $wpdb->query($wpdb->prepare(
-                        "INSERT IGNORE INTO {$ql_table} (question_id, label_id) VALUES (%d, %d)",
-                        $question_id, $label_id
-                    ));
-                }
-            }
-        }
-
-        if ($action && $action !== -1) {
-            $q_table = $wpdb->prefix . 'qp_questions';
-            $ids_placeholder = implode(',', $question_ids);
-
-            if ('trash' === $action) {
-                $wpdb->query("UPDATE {$q_table} SET status = 'trash' WHERE question_id IN ({$ids_placeholder})");
-            }
-            if ('untrash' === $action) {
-                $wpdb->query("UPDATE {$q_table} SET status = 'publish' WHERE question_id IN ({$ids_placeholder})");
-            }
-            if ('delete' === $action) {
+            if (!empty($data_to_update) || !empty($group_data_to_update)) {
+                $q_table = $wpdb->prefix . 'qp_questions';
                 $g_table = $wpdb->prefix . 'qp_question_groups';
-                $group_ids = $wpdb->get_col("SELECT DISTINCT group_id FROM {$q_table} WHERE question_id IN ({$ids_placeholder})");
-                $group_ids = array_filter($group_ids);
+                $ids_placeholder = implode(',', $question_ids);
 
-                $wpdb->query("DELETE FROM {$wpdb->prefix}qp_options WHERE question_id IN ({$ids_placeholder})");
-                $wpdb->query("DELETE FROM {$wpdb->prefix}qp_question_labels WHERE question_id IN ({$ids_placeholder})");
-                $wpdb->query("DELETE FROM {$q_table} WHERE question_id IN ({$ids_placeholder})");
+                if (!empty($data_to_update)) {
+                    // Using $wpdb->update is safer as it handles escaping.
+                    // The "where" clause is an array of conditions.
+                    $wpdb->update($q_table, $data_to_update, ['question_id IN ('.$ids_placeholder.')']);
+                }
 
-                if (!empty($group_ids)) {
-                    foreach ($group_ids as $group_id) {
-                        $remaining = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$q_table} WHERE group_id = %d", $group_id));
-                        if ($remaining == 0) {
-                            $wpdb->delete($g_table, ['group_id' => $group_id]);
-                        }
+                if (!empty($group_data_to_update)) {
+                    $group_ids = $wpdb->get_col("SELECT DISTINCT group_id FROM {$q_table} WHERE question_id IN ({$ids_placeholder})");
+                    $group_ids = array_filter(array_map('absint', $group_ids));
+                    if (!empty($group_ids)) {
+                        $group_ids_placeholder = implode(',', $group_ids);
+                        $wpdb->update($g_table, $group_data_to_update, ['group_id IN ('.$group_ids_placeholder.')']);
                     }
                 }
-            }
-            if (strpos($action, 'remove_label_') === 0) {
-                $ql_table = $wpdb->prefix . 'qp_question_labels';
-                $label_id_to_remove = absint(str_replace('remove_label_', '', $action));
-                if ($label_id_to_remove > 0) {
-                    $wpdb->query("DELETE FROM {$ql_table} WHERE label_id = {$label_id_to_remove} AND question_id IN ({$ids_placeholder})");
-                }
+                
+                // NEW: Add a success message.
+                // We will add a query arg to the URL and check for it to display the notice.
+                $redirect_to = add_query_arg('bulk_edit_message', '1', wp_get_referer());
+                wp_safe_redirect($redirect_to);
+                exit;
             }
         }
     }
+
+
+    // --- The rest of your original bulk action logic ---
+    $action = $this->current_action();
+    $labels_to_apply = isset($_POST['labels_to_apply']) ? array_filter(array_map('absint', $_POST['labels_to_apply'])) : [];
+
+    // Exit if there's no action to perform
+    if ((!$action || $action === -1) && empty($labels_to_apply)) {
+        return;
+    }
+
+    // --- Smarter Nonce Verification ---
+    if (isset($_GET['question_id']) && isset($_GET['_wpnonce'])) {
+        $question_id = absint($_GET['question_id']);
+        $nonce_action = 'qp_' . $action . '_question_' . $question_id;
+        if (!wp_verify_nonce($_GET['_wpnonce'], $nonce_action)) {
+            wp_die('Security check failed for single item action.');
+        }
+    } elseif (isset($_POST['question_ids'])) {
+        if (!wp_verify_nonce($_POST['_wpnonce'], 'bulk-questions')) {
+             wp_die('Security check failed for bulk action.');
+        }
+    } else {
+        return; // No items or valid nonce found
+    }
+
+    $question_ids = isset($_REQUEST['question_ids']) ? array_map('absint', (array) $_REQUEST['question_ids']) : [absint($_GET['question_id'])];
+    if (empty($question_ids)) {
+        return;
+    }
+
+    global $wpdb;
+
+    if (!empty($labels_to_apply)) {
+        $ql_table = $wpdb->prefix . 'qp_question_labels';
+        foreach ($question_ids as $question_id) {
+            foreach ($labels_to_apply as $label_id) {
+                $wpdb->query($wpdb->prepare(
+                    "INSERT IGNORE INTO {$ql_table} (question_id, label_id) VALUES (%d, %d)",
+                    $question_id, $label_id
+                ));
+            }
+        }
+    }
+
+    if ($action && $action !== -1) {
+        $q_table = $wpdb->prefix . 'qp_questions';
+        $ids_placeholder = implode(',', $question_ids);
+
+        if ('trash' === $action) {
+            $wpdb->query("UPDATE {$q_table} SET status = 'trash' WHERE question_id IN ({$ids_placeholder})");
+        }
+        if ('untrash' === $action) {
+            $wpdb->query("UPDATE {$q_table} SET status = 'publish' WHERE question_id IN ({$ids_placeholder})");
+        }
+        if ('delete' === $action) {
+            $g_table = $wpdb->prefix . 'qp_question_groups';
+            $group_ids = $wpdb->get_col("SELECT DISTINCT group_id FROM {$q_table} WHERE question_id IN ({$ids_placeholder})");
+            $group_ids = array_filter($group_ids);
+
+            $wpdb->query("DELETE FROM {$wpdb->prefix}qp_options WHERE question_id IN ({$ids_placeholder})");
+            $wpdb->query("DELETE FROM {$wpdb->prefix}qp_question_labels WHERE question_id IN ({$ids_placeholder})");
+            $wpdb->query("DELETE FROM {$q_table} WHERE question_id IN ({$ids_placeholder})");
+
+            if (!empty($group_ids)) {
+                foreach ($group_ids as $group_id) {
+                    $remaining = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$q_table} WHERE group_id = %d", $group_id));
+                    if ($remaining == 0) {
+                        $wpdb->delete($g_table, ['group_id' => $group_id]);
+                    }
+                }
+            }
+        }
+        if (strpos($action, 'remove_label_') === 0) {
+            $ql_table = $wpdb->prefix . 'qp_question_labels';
+            $label_id_to_remove = absint(str_replace('remove_label_', '', $action));
+            if ($label_id_to_remove > 0) {
+                $wpdb->query("DELETE FROM {$ql_table} WHERE label_id = {$label_id_to_remove} AND question_id IN ({$ids_placeholder})");
+            }
+        }
+    }
+}
 
 
     /**
