@@ -244,8 +244,8 @@ class QP_Questions_List_Table extends WP_List_Table
 
                 // Source Dropdown (Now first)
                 // Add the disabled attribute we just created
-                echo '<select name="bulk_edit_source" id="bulk_edit_source" style="margin-right: 5px;"' . $source_disabled_attr . '>';
-                echo '<option value="">— Change Source —</option>';
+                echo '<select name="bulk_edit_source" id="bulk_edit_source" style="margin-right: 5px;max-width: 18rem;"' . $source_disabled_attr . '>';
+                echo '<option value="">— Filter by Subject to Change Source —</option>';
                 foreach ($all_sources as $source) {
                     printf('<option value="%s">%s</option>', esc_attr($source->source_id), esc_html($source->source_name));
                 }
