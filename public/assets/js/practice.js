@@ -185,14 +185,13 @@ wrapper.on("change", "#qp_subject", function () {
 });
 
 
-// REPLACE the existing #qp_topic change handler with this new, more powerful version:
 wrapper.on("change", "#qp_topic", function() {
     var topicId = $(this).val();
-    var subjectId = $("#qp_subject").val(); // We need the subject ID as well
+    var subjectId = $("#qp_subject").val();
     var sectionGroup = $("#qp-section-group");
     var sectionSelect = $("#qp_section");
 
-    // Always hide the section dropdown first when the topic changes.
+    // Always hide the section dropdown first.
     sectionGroup.slideUp();
     
     // Only proceed if a specific topic is selected.
@@ -200,24 +199,23 @@ wrapper.on("change", "#qp_topic", function() {
         $.ajax({
             url: qp_ajax_object.ajax_url,
             type: "POST",
-            // Pass BOTH subject and topic IDs to our upgraded endpoint.
             data: { action: "get_sections_for_subject", nonce: qp_ajax_object.nonce, subject_id: subjectId, topic_id: topicId },
             beforeSend: function() {
                 sectionSelect.prop("disabled", true).html("<option>Loading sections...</option>");
+                // Show the group immediately with the loading message.
+                sectionGroup.slideDown(); 
             },
             success: function(response) {
                 if (response.success && response.data.sections.length > 0) {
-                    // If sections are found, show and populate the dropdown.
-                    sectionGroup.slideDown();
+                    // If sections are found, populate and enable the dropdown.
                     sectionSelect.prop("disabled", false).empty().append('<option value="all">All Sections</option>');
                     $.each(response.data.sections, function(index, sec) {
                         var optionText = sec.source_name + ' / ' + sec.section_name;
                         sectionSelect.append($("<option></option>").val(sec.section_id).text(optionText));
                     });
                 } else {
-                    // If no sections are found for that specific topic, show the message but keep it hidden.
+                    // THE FIX: If no sections are found, show the message and keep it disabled.
                     sectionSelect.prop("disabled", true).empty().append('<option value="all">No separate sections</option>');
-                    sectionGroup.slideUp(); // Ensure it stays hidden
                 }
             }
         });

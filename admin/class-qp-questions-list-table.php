@@ -170,81 +170,86 @@ class QP_Questions_List_Table extends WP_List_Table
         return $views;
     }
 
-    /**
-     * NEW: Adding back a simplified extra_tablenav just for the filters.
-     */
-    protected function extra_tablenav($which) {
-        if ($which == "top") {
-            global $wpdb;
-            
-            // This container will hold our filter controls
-            echo '<div class="alignleft actions">';
 
-                $subjects = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}qp_subjects ORDER BY subject_name ASC");
-                $current_subject = isset($_REQUEST['filter_by_subject']) ? absint($_REQUEST['filter_by_subject']) : '';
+protected function extra_tablenav($which) {
+    if ($which == "top") {
+        global $wpdb;
 
-                $labels = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}qp_labels ORDER BY label_name ASC");
-                $current_labels = isset($_REQUEST['filter_by_label']) ? array_map('absint', (array)$_REQUEST['filter_by_label']) : [];
+        // --- ROW 1: Standard Filters ---
+        echo '<div class="alignleft actions">';
 
-                // Subject filter
-                echo '<select name="filter_by_subject" id="qp_filter_by_subject" style="margin-left: 5px;">';
-                echo '<option value="">All Subjects</option>';
-                foreach ($subjects as $subject) {
-                    echo sprintf('<option value="%s" %s>%s</option>', esc_attr($subject->subject_id), selected($current_subject, $subject->subject_id, false), esc_html($subject->subject_name));
-                }
-                echo '</select>';
-                
-                // Label filter
-                echo '<select name="filter_by_label[]" multiple="multiple" id="qp_label_filter_select" style="min-width: 200px; margin-left: 5px;">';
-                echo '<option value="" ' . (empty($current_labels) ? 'selected' : '') . '>Filter by Label(s)</option>';
-                foreach ($labels as $label) {
-                    $is_selected = in_array($label->label_id, $current_labels);
-                    echo sprintf('<option value="%s" %s>%s</option>', esc_attr($label->label_id), selected($is_selected, true, false), esc_html($label->label_name));
-                }
-                echo '</select>';
-                
-                // The dedicated "Filter" button with a gap
-                submit_button('Filter', 'button', 'filter_action', false, ['id' => 'post-query-submit', 'style' => 'margin-left: 5px;']);
+            // Subject Filter
+            $subjects = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}qp_subjects ORDER BY subject_name ASC");
+            $current_subject = isset($_REQUEST['filter_by_subject']) ? absint($_REQUEST['filter_by_subject']) : '';
+            echo '<select name="filter_by_subject" id="qp_filter_by_subject" style="margin-right: 5px;">';
+            echo '<option value="">All Subjects</option>';
+            foreach ($subjects as $subject) {
+                printf('<option value="%s" %s>%s</option>', esc_attr($subject->subject_id), selected($current_subject, $subject->subject_id, false), esc_html($subject->subject_name));
+            }
+            echo '</select>';
 
-                // NEW: Bulk Edit UI
-            if (!empty($_REQUEST['filter_by_label'])) {
+            // Label Filter
+            $labels = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}qp_labels ORDER BY label_name ASC");
+            $current_labels = isset($_REQUEST['filter_by_label']) ? array_map('absint', (array)$_REQUEST['filter_by_label']) : [];
+            echo '<select name="filter_by_label[]" multiple="multiple" id="qp_label_filter_select" style="min-width: 200px; margin-right: 5px;">';
+            echo '<option value="" ' . (empty($current_labels) ? 'selected' : '') . '>Filter by Label(s)</option>';
+            foreach ($labels as $label) {
+                printf('<option value="%s" %s>%s</option>', esc_attr($label->label_id), selected(in_array($label->label_id, $current_labels), true, false), esc_html($label->label_name));
+            }
+            echo '</select>';
+
+            // Filter Button
+            submit_button('Filter', 'button', 'filter_action', false, ['id' => 'post-query-submit']);
+
+        echo '</div>'; // End of the first row of actions
+
+
+        // --- ROW 2: Bulk Edit Controls (only shown when a label is filtered) ---
+        if (!empty($_REQUEST['filter_by_label'])) {
+            // This div clears the float from the elements above, creating a new row.
+            echo '<div class="alignleft actions" style="clear: both; padding-top: 5px;">';
+
                 $all_exams = $wpdb->get_results("SELECT exam_id, exam_name FROM {$wpdb->prefix}qp_exams ORDER BY exam_name ASC");
                 $all_sources = $wpdb->get_results("SELECT source_id, source_name FROM {$wpdb->prefix}qp_sources ORDER BY source_name ASC");
                 $all_sections = $wpdb->get_results("SELECT section_id, section_name FROM {$wpdb->prefix}qp_source_sections ORDER BY section_name ASC");
 
-                echo '<span style="margin-left: 10px; font-weight: bold;">| Bulk Edit:</span>';
+                // Bulk Edit Label
+                echo '<span style="font-weight: bold; margin-right: 5px;">Bulk Edit:</span>';
 
                 // Exam Dropdown
-                echo '<select name="bulk_edit_exam" style="margin-left: 5px;">';
-                echo '<option value="">— No Change —</option>';
+                echo '<select name="bulk_edit_exam" id="bulk_edit_exam" style="margin-right: 5px;">';
+                echo '<option value="">— Change Exam —</option>';
                 foreach ($all_exams as $exam) {
-                    echo sprintf('<option value="%s">%s</option>', esc_attr($exam->exam_id), esc_html($exam->exam_name));
+                    printf('<option value="%s">%s</option>', esc_attr($exam->exam_id), esc_html($exam->exam_name));
                 }
                 echo '</select>';
 
                 // Source Dropdown
-                echo '<select name="bulk_edit_source" id="bulk_edit_source" style="margin-left: 5px;">';
-                echo '<option value="">— No Change —</option>';
+                echo '<select name="bulk_edit_source" id="bulk_edit_source" style="margin-right: 5px;">';
+                echo '<option value="">— Change Source —</option>';
                 foreach ($all_sources as $source) {
-                    echo sprintf('<option value="%s">%s</option>', esc_attr($source->source_id), esc_html($source->source_name));
+                    printf('<option value="%s">%s</option>', esc_attr($source->source_id), esc_html($source->source_name));
                 }
                 echo '</select>';
 
                 // Section Dropdown
-                echo '<select name="bulk_edit_section" id="bulk_edit_section" style="margin-left: 5px;">';
-                echo '<option value="">— No Change —</option>';
+                echo '<select name="bulk_edit_section" id="bulk_edit_section" style="margin-right: 5px;">';
+                echo '<option value="">— Change Section —</option>';
                 foreach ($all_sections as $section) {
-                    echo sprintf('<option value="%s">%s</option>', esc_attr($section->section_id), esc_html($section->section_name));
+                    printf('<option value="%s">%s</option>', esc_attr($section->section_id), esc_html($section->section_name));
                 }
                 echo '</select>';
+                
+                // Apply Changes Button - MOVED TO THE RIGHT
+                echo '</div>'; // Close the left-aligned actions
 
-                // Change the name of the "Apply" button to avoid conflicts
-                submit_button('Apply Changes', 'button', 'bulk_edit_apply', false, ['style' => 'margin-left: 5px;']);
-            }
-
-            echo '</div>'; // End filter actions div
+            // This div will float to the right on the same line as the bulk edit dropdowns
+            echo '<div class="alignright actions" style="padding-top: 5px;">';
+                submit_button('Apply Changes', 'primary', 'bulk_edit_apply', false);
+            echo '</div>';
         }
     }
+}
 
     public function search_box($text, $input_id)
     {
