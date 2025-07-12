@@ -126,7 +126,13 @@ class QP_Shortcodes
     public static function render_settings_form()
     {
         global $wpdb;
-        $subjects = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}qp_subjects ORDER BY subject_name ASC");
+        $subjects = $wpdb->get_results(
+    "SELECT DISTINCT s.subject_id, s.subject_name
+     FROM {$wpdb->prefix}qp_subjects s
+     JOIN {$wpdb->prefix}qp_question_groups g ON s.subject_id = g.subject_id
+     WHERE s.subject_name != 'Uncategorized'
+     ORDER BY s.subject_name ASC"
+);
 
         // Get the dynamic URL for the dashboard page
         $options = get_option('qp_settings');
