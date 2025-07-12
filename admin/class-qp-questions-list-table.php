@@ -206,6 +206,42 @@ class QP_Questions_List_Table extends WP_List_Table
                 // The dedicated "Filter" button with a gap
                 submit_button('Filter', 'button', 'filter_action', false, ['id' => 'post-query-submit', 'style' => 'margin-left: 5px;']);
 
+                // NEW: Bulk Edit UI
+            if (!empty($_REQUEST['filter_by_label'])) {
+                $all_exams = $wpdb->get_results("SELECT exam_id, exam_name FROM {$wpdb->prefix}qp_exams ORDER BY exam_name ASC");
+                $all_sources = $wpdb->get_results("SELECT source_id, source_name FROM {$wpdb->prefix}qp_sources ORDER BY source_name ASC");
+                $all_sections = $wpdb->get_results("SELECT section_id, section_name FROM {$wpdb->prefix}qp_source_sections ORDER BY section_name ASC");
+
+                echo '<span style="margin-left: 10px; font-weight: bold;">| Bulk Edit:</span>';
+
+                // Exam Dropdown
+                echo '<select name="bulk_edit_exam" style="margin-left: 5px;">';
+                echo '<option value="">— No Change —</option>';
+                foreach ($all_exams as $exam) {
+                    echo sprintf('<option value="%s">%s</option>', esc_attr($exam->exam_id), esc_html($exam->exam_name));
+                }
+                echo '</select>';
+
+                // Source Dropdown
+                echo '<select name="bulk_edit_source" style="margin-left: 5px;">';
+                echo '<option value="">— No Change —</option>';
+                foreach ($all_sources as $source) {
+                    echo sprintf('<option value="%s">%s</option>', esc_attr($source->source_id), esc_html($source->source_name));
+                }
+                echo '</select>';
+
+                // Section Dropdown
+                echo '<select name="bulk_edit_section" style="margin-left: 5px;">';
+                echo '<option value="">— No Change —</option>';
+                foreach ($all_sections as $section) {
+                    echo sprintf('<option value="%s">%s</option>', esc_attr($section->section_id), esc_html($section->section_name));
+                }
+                echo '</select>';
+
+                // Change the name of the "Apply" button to avoid conflicts
+                submit_button('Apply Changes', 'button', 'bulk_edit_apply', false, ['style' => 'margin-left: 5px;']);
+            }
+
             echo '</div>'; // End filter actions div
         }
     }
