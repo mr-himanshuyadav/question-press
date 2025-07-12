@@ -139,44 +139,48 @@ jQuery(document).ready(function($) {
     var allSources = $sourceBulkEdit.html();
     var allSections = $sectionBulkEdit.html();
 
-    function updateBulkEditDropdowns() {
-        var selectedSubject = $subjectFilter.val();
-        var selectedSource = $sourceBulkEdit.val();
 
-        // --- Update Sources Dropdown ---
-        $sourceBulkEdit.html(allSources); // Reset to all sources
-        if (selectedSubject && selectedSubject !== '') {
-            $sourceBulkEdit.find('option').each(function() {
-                var $option = $(this);
-                if ($option.val() === '') return; // Keep the "No Change" option
+function updateBulkEditDropdowns() {
+    var selectedSubject = $subjectFilter.val();
+    var selectedSource = $sourceBulkEdit.val();
 
-                // Find the source data from our localized object
-                var sourceData = qp_bulk_edit_data.sources.find(s => s.source_id == $option.val());
-                if (!sourceData || sourceData.subject_id != selectedSubject) {
-                    $option.remove();
-                }
-            });
-        }
-        // Restore previous selection if it's still valid
-        $sourceBulkEdit.val(selectedSource);
+    // --- Update Sources Dropdown ---
+    $sourceBulkEdit.html(allSources); // Reset to all sources
+    if (selectedSubject && selectedSubject !== '') {
+        $sourceBulkEdit.find('option').each(function() {
+            var $option = $(this);
+            if ($option.val() === '') return;
 
-
-        // --- Update Sections Dropdown ---
-        $sectionBulkEdit.html(allSections); // Reset to all sections
-        selectedSource = $sourceBulkEdit.val(); // Re-read the value in case it changed
-
-        if (selectedSource && selectedSource !== '') {
-            $sectionBulkEdit.find('option').each(function() {
-                 var $option = $(this);
-                if ($option.val() === '') return; // Keep the "No Change" option
-
-                var sectionData = qp_bulk_edit_data.sections.find(s => s.section_id == $option.val());
-                if (!sectionData || sectionData.source_id != selectedSource) {
-                    $option.remove();
-                }
-            });
-        }
+            var sourceData = qp_bulk_edit_data.sources.find(s => s.source_id == $option.val());
+            if (!sourceData || sourceData.subject_id != selectedSubject) {
+                $option.remove();
+            }
+        });
     }
+    $sourceBulkEdit.val(selectedSource);
+
+    // --- Update Sections Dropdown ---
+    var selectedSourceAfterUpdate = $sourceBulkEdit.val();
+    $sectionBulkEdit.html(allSections); // Reset to all sections
+    
+    // THE FIX IS HERE: We now handle the case where no source is selected.
+    if (selectedSourceAfterUpdate && selectedSourceAfterUpdate !== '') {
+        $sectionBulkEdit.prop('disabled', false); // Enable the dropdown
+        $sectionBulkEdit.find('option').each(function() {
+             var $option = $(this);
+            if ($option.val() === '') return;
+
+            var sectionData = qp_bulk_edit_data.sections.find(s => s.section_id == $option.val());
+            if (!sectionData || sectionData.source_id != selectedSourceAfterUpdate) {
+                $option.remove();
+            }
+        });
+    } else {
+        // If no source is selected, disable the section dropdown.
+        $sectionBulkEdit.prop('disabled', true);
+        $sectionBulkEdit.val(''); // Reset its value
+    }
+}
 
     // Trigger the update when the subject filter or source dropdown changes
     $subjectFilter.on('change', updateBulkEditDropdowns);
@@ -184,5 +188,89 @@ jQuery(document).ready(function($) {
 
     // Run on page load as well to handle pre-selected filters
     updateBulkEditDropdowns();
+
+    
+
+
+
+
+
+
+    // --- NEW: LOGIC FOR ADVANCED ADMIN FILTERS ---
+    var $subjectFilter = $('#qp_filter_by_subject');
+    var $topicFilter = $('#qp_filter_by_topic');
+    var $sourceFilter = $('#qp_filter_by_source_section');
+
+    // Show/hide topic filter based on subject selection
+    $subjectFilter.on('change', function() {
+        var subjectId = $(this).val();
+
+        // Always hide and reset child filters first
+        $topicFilter.hide().val('');
+        $sourceFilter.hide().val('');
+
+        if (subjectId) {
+            $.ajax({
+                url: qp_admin_filter_data.ajax_url,
+                type: 'POST',
+                data: {
+                    action: 'get_topics_for_list_table_filter',
+                    nonce: qp_admin_filter_data.nonce,
+                    subject_id: subjectId
+                },
+                success: function(response) {
+                    if (response.success && response.data.topics.length > 0) {
+                        $topicFilter.empty().append('<option value="">All Topics</option>');
+                        $.each(response.data.topics, function(index, topic) {
+                            $topicFilter.append($('<option></option>').val(topic.topic_id).text(topic.topic_name));
+                        });
+                        $topicFilter.show();
+                    }
+                }
+            });
+        }
+    }).trigger('change'); // Trigger on page load to show if a subject is already selected
+
+    // Show/hide source/section filter based on topic selection
+    $topicFilter.on('change', function() {
+        var topicId = $(this).val();
+        var subjectId = $subjectFilter.val();
+
+        // Always hide and reset child filter
+        $sourceFilter.hide().val('');
+
+        if (topicId) {
+            $.ajax({
+                url: qp_admin_filter_data.ajax_url,
+                type: 'POST',
+                data: {
+                    action: 'get_sources_for_list_table_filter',
+                    nonce: qp_admin_filter_data.nonce,
+                    subject_id: subjectId,
+                    topic_id: topicId
+                },
+                success: function(response) {
+                    if (response.success && response.data.sources.length > 0) {
+                        $sourceFilter.empty().append('<option value="">All Sources / Sections</option>');
+                        
+                        // Populate with <optgroup> for sources and options for sections
+                        $.each(response.data.sources, function(index, source) {
+                            // Add an option for the entire source
+                            $sourceFilter.append($('<option></option>').val('source_' + source.source_id).text(source.source_name));
+                            
+                            // Add an optgroup for its sections
+                            if (source.sections && Object.keys(source.sections).length > 0) {
+                                $.each(source.sections, function(idx, section) {
+                                    // Indent section names for clarity
+                                    $sourceFilter.append($('<option></option>').val('section_' + section.section_id).text('  - ' + section.section_name));
+                                });
+                            }
+                        });
+                        $sourceFilter.show();
+                    }
+                }
+            });
+        }
+    }).trigger('change'); // Trigger on page load
 
 });

@@ -397,6 +397,11 @@ function qp_admin_enqueue_scripts($hook_suffix)
 
     if ($hook_suffix === 'toplevel_page_question-press') {
         wp_enqueue_script('qp-quick-edit-script', QP_PLUGIN_URL . 'admin/assets/js/quick-edit.js', ['jquery'], '1.0.2', true); // Version bump
+         // NEW: Add a nonce specifically for our new admin filters
+    wp_localize_script('qp-quick-edit-script', 'qp_admin_filter_data', [
+        'nonce' => wp_create_nonce('qp_admin_filter_nonce'),
+        'ajax_url' => admin_url('admin-ajax.php')
+    ]);
 
         global $wpdb;
         // Get all sources with their parent subject_id
@@ -678,6 +683,99 @@ function qp_handle_save_question_group()
     wp_safe_redirect($redirect_url);
     exit;
 }
+
+
+/**
+ * AJAX handler for the admin list table.
+ * Gets only topics that have at least one question for a given subject.
+ */
+function qp_get_topics_for_list_table_filter_ajax() {
+    check_ajax_referer('qp_admin_filter_nonce', 'nonce'); // Using a new nonce for admin-side security
+    $subject_id = isset($_POST['subject_id']) ? absint($_POST['subject_id']) : 0;
+
+    if (!$subject_id) {
+        wp_send_json_success(['topics' => []]);
+    }
+
+    global $wpdb;
+    $topics_table = $wpdb->prefix . 'qp_topics';
+    $questions_table = $wpdb->prefix . 'qp_questions';
+    $groups_table = $wpdb->prefix . 'qp_question_groups';
+
+    // This query finds topics that are linked to questions which are linked to groups in the selected subject.
+    $topics = $wpdb->get_results($wpdb->prepare(
+        "SELECT DISTINCT t.topic_id, t.topic_name
+         FROM {$topics_table} t
+         JOIN {$questions_table} q ON t.topic_id = q.topic_id
+         JOIN {$groups_table} g ON q.group_id = g.group_id
+         WHERE g.subject_id = %d
+         ORDER BY t.topic_name ASC",
+        $subject_id
+    ));
+
+    wp_send_json_success(['topics' => $topics]);
+}
+add_action('wp_ajax_get_topics_for_list_table_filter', 'qp_get_topics_for_list_table_filter_ajax');
+
+
+/**
+ * AJAX handler for the admin list table.
+ * Gets sources/sections that have questions for a given subject and topic.
+ */
+function qp_get_sources_for_list_table_filter_ajax() {
+    check_ajax_referer('qp_admin_filter_nonce', 'nonce');
+    $subject_id = isset($_POST['subject_id']) ? absint($_POST['subject_id']) : 0;
+    $topic_id = isset($_POST['topic_id']) ? absint($_POST['topic_id']) : 0;
+
+    if (!$subject_id) {
+        wp_send_json_success(['sources' => []]);
+    }
+
+    global $wpdb;
+    $sources_table = $wpdb->prefix . 'qp_sources';
+    $sections_table = $wpdb->prefix . 'qp_source_sections';
+    $questions_table = $wpdb->prefix . 'qp_questions';
+
+    // We need to fetch both sources and their sections that match the criteria.
+    $query_params = [$subject_id];
+    $sql = "
+        SELECT DISTINCT src.source_id, src.source_name, sec.section_id, sec.section_name
+        FROM {$sources_table} src
+        JOIN {$questions_table} q ON src.source_id = q.source_id
+        LEFT JOIN {$sections_table} sec ON q.section_id = sec.section_id
+        WHERE src.subject_id = %d
+    ";
+
+    if ($topic_id > 0) {
+        $sql .= " AND q.topic_id = %d";
+        $query_params[] = $topic_id;
+    }
+
+    $sql .= " ORDER BY src.source_name ASC, sec.section_name ASC";
+
+    $results = $wpdb->get_results($wpdb->prepare($sql, $query_params));
+    
+    // Group sections under their parent source
+    $sources = [];
+    foreach ($results as $row) {
+        if (!isset($sources[$row->source_id])) {
+            $sources[$row->source_id] = [
+                'source_id' => $row->source_id,
+                'source_name' => $row->source_name,
+                'sections' => []
+            ];
+        }
+        if ($row->section_id && !isset($sources[$row->source_id]['sections'][$row->section_id])) {
+            $sources[$row->source_id]['sections'][$row->section_id] = [
+                'section_id' => $row->section_id,
+                'section_name' => $row->section_name
+            ];
+        }
+    }
+
+    wp_send_json_success(['sources' => array_values($sources)]); // Return as a simple array
+}
+add_action('wp_ajax_get_sources_for_list_table_filter', 'qp_get_sources_for_list_table_filter_ajax');
 
 // Public-facing hooks and AJAX handlers
 function qp_public_init()

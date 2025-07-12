@@ -177,7 +177,12 @@ protected function extra_tablenav($which) {
 
         // --- ROW 1: Standard Filters ---
         echo '<div class="alignleft actions">';
-            // ... (Standard filters code remains unchanged)
+
+            
+
+    
+
+
             $subjects = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}qp_subjects ORDER BY subject_name ASC");
             $current_subject = isset($_REQUEST['filter_by_subject']) ? absint($_REQUEST['filter_by_subject']) : '';
             echo '<select name="filter_by_subject" id="qp_filter_by_subject" style="margin-right: 5px;">';
@@ -186,6 +191,18 @@ protected function extra_tablenav($which) {
                 printf('<option value="%s" %s>%s</option>', esc_attr($subject->subject_id), selected($current_subject, $subject->subject_id, false), esc_html($subject->subject_name));
             }
             echo '</select>';
+
+            // NEW: Topic Filter (initially hidden/disabled)
+    $current_topic = isset($_REQUEST['filter_by_topic']) ? absint($_REQUEST['filter_by_topic']) : '';
+    echo '<select name="filter_by_topic" id="qp_filter_by_topic" style="margin-right: 5px; display: none;">';
+    echo '<option value="">All Topics</option>';
+    echo '</select>';
+
+    // We will control its visibility with JavaScript
+    $current_source_or_section = isset($_REQUEST['filter_by_source']) ? esc_attr($_REQUEST['filter_by_source']) : '';
+    echo '<select name="filter_by_source" id="qp_filter_by_source_section" style="margin-right: 5px; display: none;">';
+    echo '<option value="">All Sources / Sections</option>';
+    echo '</select>';
 
             $labels = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}qp_labels ORDER BY label_name ASC");
             $current_labels = isset($_REQUEST['filter_by_label']) ? array_map('absint', (array)$_REQUEST['filter_by_label']) : [];
@@ -294,6 +311,32 @@ protected function extra_tablenav($which) {
     } else { $where_conditions[] = "q.status = 'publish'"; }
 
     if (!empty($_REQUEST['filter_by_subject'])) { $where_conditions[] = $wpdb->prepare("g.subject_id = %d", absint($_REQUEST['filter_by_subject'])); }
+
+    // Handle the new Topic filter
+if (!empty($_REQUEST['filter_by_topic'])) {
+    $where_conditions[] = $wpdb->prepare("q.topic_id = %d", absint($_REQUEST['filter_by_topic']));
+}
+
+// Handle the new Source/Section filter
+if (!empty($_REQUEST['filter_by_source'])) {
+    $filter_value = sanitize_text_field($_REQUEST['filter_by_source']);
+
+    // Check if the filter is for a whole source (e.g., "source_15")
+    if (strpos($filter_value, 'source_') === 0) {
+        $source_id = absint(str_replace('source_', '', $filter_value));
+        if ($source_id > 0) {
+            $where_conditions[] = $wpdb->prepare("q.source_id = %d", $source_id);
+        }
+    }
+    // Check if the filter is for a specific section (e.g., "section_22")
+    elseif (strpos($filter_value, 'section_') === 0) {
+        $section_id = absint(str_replace('section_', '', $filter_value));
+        if ($section_id > 0) {
+            $where_conditions[] = $wpdb->prepare("q.section_id = %d", $section_id);
+        }
+    }
+}
+
     if (!empty($_REQUEST['s'])) {
         $search_term = '%' . $wpdb->esc_like(stripslashes($_REQUEST['s'])) . '%';
         $where_conditions[] = $wpdb->prepare("(q.question_text LIKE %s OR q.custom_question_id LIKE %s)", $search_term, $search_term);
