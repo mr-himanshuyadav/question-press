@@ -394,6 +394,28 @@ function qp_admin_enqueue_scripts($hook_suffix)
     if ($hook_suffix === 'question-press_page_qp-settings') {
         wp_enqueue_script('qp-settings-script', QP_PLUGIN_URL . 'admin/assets/js/settings-page.js', ['jquery'], '1.0.0', true);
     }
+
+    if ($hook_suffix === 'toplevel_page_question-press') {
+        wp_enqueue_script('qp-quick-edit-script', QP_PLUGIN_URL . 'admin/assets/js/quick-edit.js', ['jquery'], '1.0.2', true); // Version bump
+
+        global $wpdb;
+        // Get all sources with their parent subject_id
+        $all_sources = $wpdb->get_results("SELECT source_id, source_name, subject_id FROM {$wpdb->prefix}qp_sources ORDER BY source_name ASC");
+        
+        // Get all sections with their parent source_id
+        $all_sections = $wpdb->get_results("SELECT section_id, section_name, source_id FROM {$wpdb->prefix}qp_source_sections ORDER BY section_name ASC");
+
+        // Localize BOTH sets of data for our script
+        wp_localize_script('qp-quick-edit-script', 'qp_bulk_edit_data', [
+            'sources' => $all_sources,
+            'sections' => $all_sections
+        ]);
+
+        wp_localize_script('qp-quick-edit-script', 'qp_quick_edit_object', [
+            'save_nonce' => wp_create_nonce('qp_save_quick_edit_nonce')
+        ]);
+        wp_enqueue_script('qp-multi-select-dropdown-script', QP_PLUGIN_URL . 'admin/assets/js/multi-select-dropdown.js', ['jquery'], '1.0.1', true);
+    }
 }
 add_action('admin_enqueue_scripts', 'qp_admin_enqueue_scripts');
 
@@ -406,7 +428,7 @@ function qp_handle_form_submissions()
         $list_table = new QP_Questions_List_Table();
         $list_table->process_bulk_action();
     }
-    
+
     if (isset($_GET['page']) && $_GET['page'] === 'qp-organization') {
         QP_Sources_Page::handle_forms();
         QP_Topics_Page::handle_forms();

@@ -129,4 +129,60 @@ jQuery(document).ready(function($) {
             }
         });
     });
+
+    // --- NEW: Logic for Dynamic Bulk Edit Dropdowns ---
+    var $subjectFilter = $('#qp_filter_by_subject');
+    var $sourceBulkEdit = $('#bulk_edit_source');
+    var $sectionBulkEdit = $('#bulk_edit_section');
+
+    // Keep a copy of the original options
+    var allSources = $sourceBulkEdit.html();
+    var allSections = $sectionBulkEdit.html();
+
+    function updateBulkEditDropdowns() {
+        var selectedSubject = $subjectFilter.val();
+        var selectedSource = $sourceBulkEdit.val();
+
+        // --- Update Sources Dropdown ---
+        $sourceBulkEdit.html(allSources); // Reset to all sources
+        if (selectedSubject && selectedSubject !== '') {
+            $sourceBulkEdit.find('option').each(function() {
+                var $option = $(this);
+                if ($option.val() === '') return; // Keep the "No Change" option
+
+                // Find the source data from our localized object
+                var sourceData = qp_bulk_edit_data.sources.find(s => s.source_id == $option.val());
+                if (!sourceData || sourceData.subject_id != selectedSubject) {
+                    $option.remove();
+                }
+            });
+        }
+        // Restore previous selection if it's still valid
+        $sourceBulkEdit.val(selectedSource);
+
+
+        // --- Update Sections Dropdown ---
+        $sectionBulkEdit.html(allSections); // Reset to all sections
+        selectedSource = $sourceBulkEdit.val(); // Re-read the value in case it changed
+
+        if (selectedSource && selectedSource !== '') {
+            $sectionBulkEdit.find('option').each(function() {
+                 var $option = $(this);
+                if ($option.val() === '') return; // Keep the "No Change" option
+
+                var sectionData = qp_bulk_edit_data.sections.find(s => s.section_id == $option.val());
+                if (!sectionData || sectionData.source_id != selectedSource) {
+                    $option.remove();
+                }
+            });
+        }
+    }
+
+    // Trigger the update when the subject filter or source dropdown changes
+    $subjectFilter.on('change', updateBulkEditDropdowns);
+    $sourceBulkEdit.on('change', updateBulkEditDropdowns);
+
+    // Run on page load as well to handle pre-selected filters
+    updateBulkEditDropdowns();
+
 });

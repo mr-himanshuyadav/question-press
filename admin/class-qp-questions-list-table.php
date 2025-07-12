@@ -187,7 +187,7 @@ class QP_Questions_List_Table extends WP_List_Table
                 $current_labels = isset($_REQUEST['filter_by_label']) ? array_map('absint', (array)$_REQUEST['filter_by_label']) : [];
 
                 // Subject filter
-                echo '<select name="filter_by_subject" style="margin-left: 5px;">';
+                echo '<select name="filter_by_subject" id="qp_filter_by_subject" style="margin-left: 5px;">';
                 echo '<option value="">All Subjects</option>';
                 foreach ($subjects as $subject) {
                     echo sprintf('<option value="%s" %s>%s</option>', esc_attr($subject->subject_id), selected($current_subject, $subject->subject_id, false), esc_html($subject->subject_name));
@@ -223,7 +223,7 @@ class QP_Questions_List_Table extends WP_List_Table
                 echo '</select>';
 
                 // Source Dropdown
-                echo '<select name="bulk_edit_source" style="margin-left: 5px;">';
+                echo '<select name="bulk_edit_source" id="bulk_edit_source" style="margin-left: 5px;">';
                 echo '<option value="">— No Change —</option>';
                 foreach ($all_sources as $source) {
                     echo sprintf('<option value="%s">%s</option>', esc_attr($source->source_id), esc_html($source->source_name));
@@ -231,7 +231,7 @@ class QP_Questions_List_Table extends WP_List_Table
                 echo '</select>';
 
                 // Section Dropdown
-                echo '<select name="bulk_edit_section" style="margin-left: 5px;">';
+                echo '<select name="bulk_edit_section" id="bulk_edit_section" style="margin-left: 5px;">';
                 echo '<option value="">— No Change —</option>';
                 foreach ($all_sections as $section) {
                     echo sprintf('<option value="%s">%s</option>', esc_attr($section->section_id), esc_html($section->section_name));
@@ -357,10 +357,8 @@ class QP_Questions_List_Table extends WP_List_Table
      * UPDATED: Process all bulk actions, now correctly handling nonces for single-item actions.
      */
     public function process_bulk_action() {
-    // First, check for our new custom bulk edit action.
-    // We check for 'bulk_edit_apply' which is the name of our new apply button.
+    // Check for our new custom bulk edit action first.
     if (isset($_POST['bulk_edit_apply'])) {
-        // Verify the nonce from the bulk actions form.
         check_admin_referer('bulk-questions', '_wpnonce');
 
         $question_ids = isset($_POST['question_ids']) ? array_map('absint', $_POST['question_ids']) : [];
@@ -372,42 +370,53 @@ class QP_Questions_List_Table extends WP_List_Table
             $source_id  = !empty($_POST['bulk_edit_source']) ? absint($_POST['bulk_edit_source']) : null;
             $section_id = !empty($_POST['bulk_edit_section']) ? absint($_POST['bulk_edit_section']) : null;
 
-            $data_to_update = [];
-            if ($source_id) $data_to_update['source_id'] = $source_id;
-            if ($section_id) $data_to_update['section_id'] = $section_id;
+            // --- Build the SET clauses for our queries ---
+            $question_set_clauses = [];
+            $group_set_clauses = [];
+            $query_params = [];
 
-            $group_data_to_update = [];
+            if ($source_id) {
+                $question_set_clauses[] = "source_id = %d";
+                $query_params[] = $source_id;
+            }
+            if ($section_id) {
+                $question_set_clauses[] = "section_id = %d";
+                $query_params[] = $section_id;
+            }
             if ($exam_id) {
-                $group_data_to_update['exam_id'] = $exam_id;
-                $group_data_to_update['is_pyq'] = 1; // Automatically mark as PYQ if an exam is set.
+                $group_set_clauses[] = "exam_id = %d";
+                $group_set_clauses[] = "is_pyq = 1"; // Also mark as PYQ
+                // We'll add params for this query later
             }
 
-            if (!empty($data_to_update) || !empty($group_data_to_update)) {
-                $q_table = $wpdb->prefix . 'qp_questions';
-                $g_table = $wpdb->prefix . 'qp_question_groups';
+            // --- Execute the queries ---
+            $q_table = $wpdb->prefix . 'qp_questions';
+            $g_table = $wpdb->prefix . 'qp_question_groups';
+
+            // Update the questions table if there's anything to change
+            if (!empty($question_set_clauses)) {
                 $ids_placeholder = implode(',', $question_ids);
-
-                if (!empty($data_to_update)) {
-                    // Using $wpdb->update is safer as it handles escaping.
-                    // The "where" clause is an array of conditions.
-                    $wpdb->update($q_table, $data_to_update, ['question_id IN ('.$ids_placeholder.')']);
-                }
-
-                if (!empty($group_data_to_update)) {
-                    $group_ids = $wpdb->get_col("SELECT DISTINCT group_id FROM {$q_table} WHERE question_id IN ({$ids_placeholder})");
-                    $group_ids = array_filter(array_map('absint', $group_ids));
-                    if (!empty($group_ids)) {
-                        $group_ids_placeholder = implode(',', $group_ids);
-                        $wpdb->update($g_table, $group_data_to_update, ['group_id IN ('.$group_ids_placeholder.')']);
-                    }
-                }
-                
-                // NEW: Add a success message.
-                // We will add a query arg to the URL and check for it to display the notice.
-                $redirect_to = add_query_arg('bulk_edit_message', '1', wp_get_referer());
-                wp_safe_redirect($redirect_to);
-                exit;
+                $query = "UPDATE {$q_table} SET " . implode(', ', $question_set_clauses) . " WHERE question_id IN ({$ids_placeholder})";
+                $wpdb->query($wpdb->prepare($query, $query_params));
             }
+
+            // Update the question_groups table if there's anything to change
+            if (!empty($group_set_clauses)) {
+                $group_ids = $wpdb->get_col("SELECT DISTINCT group_id FROM {$q_table} WHERE question_id IN (" . implode(',', $question_ids) . ")");
+                $group_ids = array_filter(array_map('absint', $group_ids));
+                if (!empty($group_ids)) {
+                    $group_ids_placeholder = implode(',', $group_ids);
+                    $group_query = "UPDATE {$g_table} SET " . implode(', ', $group_set_clauses) . " WHERE group_id IN ({$group_ids_placeholder})";
+                    // Only add the exam_id param if it's set
+                    $group_params = $exam_id ? [$exam_id] : [];
+                    $wpdb->query($wpdb->prepare($group_query, $group_params));
+                }
+            }
+            
+            // Add a success message and redirect
+            $redirect_to = add_query_arg('bulk_edit_message', '1', wp_get_referer());
+            wp_safe_redirect($redirect_to);
+            exit;
         }
     }
 
