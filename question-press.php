@@ -3,7 +3,7 @@
 /**
  * Plugin Name:       Question Press
  * Description:       A complete plugin for creating, managing, and practicing questions.
- * Version:           2.1.1
+ * Version:           2.1.2
  * Author:            Himanshu
  */
 
@@ -1019,7 +1019,8 @@ function qp_start_practice_session_ajax()
             'timer_seconds'    => isset($_POST['qp_timer_seconds']) ? absint($_POST['qp_timer_seconds']) : 60
         ];
         
-        if (empty($session_settings['subject_id'])) {
+        // Only validate subject if in normal mode
+        if ($practice_mode === 'normal' && empty($session_settings['subject_id'])) {
             wp_send_json_error(['message' => 'Please select a subject.']);
         }
 

@@ -109,20 +109,55 @@ jQuery(document).ready(function ($) {
 
   }
 
-  // --- FORM SUBMISSION (Handles Normal, Revision, and future forms) ---
-  wrapper.on("submit", "#qp-start-practice-form, #qp-start-revision-form", function (e) {
+  // --- FORM SUBMISSION HANDLERS (SEPARATED FOR RELIABILITY) ---
+
+  // Handler for NORMAL Practice Form
+  wrapper.on("submit", "#qp-start-practice-form", function (e) {
+    e.preventDefault();
+    var form = $(this);
+    var submitButton = form.find('input[type="submit"]');
+    var originalButtonText = submitButton.val();
+    
+    var formData = $('#qp-start-practice-form').serialize(); // This will now correctly get all inputs from this specific form
+
+    $.ajax({
+      url: qp_ajax_object.ajax_url,
+      type: "POST",
+      data: formData + "&action=start_practice_session&nonce=" + qp_ajax_object.nonce,
+      beforeSend: function () {
+        submitButton.val("Setting up session...").prop("disabled", true);
+      },
+      success: function (response) {
+        if (response.success && response.data.redirect_url) {
+          window.location.href = response.data.redirect_url;
+        } else {
+          // It's better to show the error inside the form step for context
+          var errorMessage = '<p class="qp-error-message" style="color: red; text-align: center; margin-top: 1rem;">' + (response.data.message || "An unknown error occurred.") + '</p>';
+          form.find('.qp-error-message').remove(); // Remove old errors
+          form.append(errorMessage);
+          submitButton.val(originalButtonText).prop("disabled", false);
+        }
+      },
+      error: function () {
+        alert("A server error occurred. Please try again later.");
+        submitButton.val(originalButtonText).prop("disabled", false);
+      },
+    });
+  });
+
+  // Handler for REVISION Mode Form
+  wrapper.on("submit", "#qp-start-revision-form", function (e) {
     e.preventDefault();
     var form = $(this);
     var submitButton = form.find('input[type="submit"]');
     var originalButtonText = submitButton.val();
 
-    // Serialize form data and add the nonce
-    var formData = form.serialize() + "&action=start_practice_session&nonce=" + qp_ajax_object.nonce;
+    var formData = $('#qp-start-revision-form').serialize(); // This will now correctly get all inputs from this specific form
     
     $.ajax({
       url: qp_ajax_object.ajax_url,
       type: "POST",
-      data: formData, // Send the combined data
+      data: formData + "&action=start_practice_session&nonce=" + qp_ajax_object.nonce,
       beforeSend: function () {
         submitButton.val("Setting up session...").prop("disabled", true);
       },
@@ -131,7 +166,7 @@ jQuery(document).ready(function ($) {
           window.location.href = response.data.redirect_url;
         } else {
           var errorMessage = response.data.html ? response.data.html : '<p>' + (response.data.message || "An unknown error occurred.") + '</p>';
-          wrapper.html(errorMessage);
+          wrapper.html(errorMessage); // This mode has a different error display
         }
       },
       error: function () {
@@ -230,54 +265,6 @@ jQuery(document).ready(function ($) {
       $("#qp-timer-input-wrapper").slideUp();
     }
   });
-
-  // --- NEW: Handler for the "Mark for Review" checkbox ---
-
-
-
-  // --- UPDATED: Form submission now handles a redirect ---
-  wrapper.on("submit", "#qp-start-practice-form", function (e) {
-    e.preventDefault();
-    var form = $(this);
-    var submitButton = form.find('input[type="submit"]');
-    var originalButtonText = submitButton.val();
-
-    $.ajax({
-      url: qp_ajax_object.ajax_url,
-      type: "POST",
-      data: {
-        action: "start_practice_session",
-        nonce: qp_ajax_object.nonce,
-        settings: form.serialize(),
-      },
-      beforeSend: function () {
-        submitButton.val("Setting up session...").prop("disabled", true);
-      },
-      success: function (response) {
-        if (response.success && response.data.redirect_url) {
-          window.location.href = response.data.redirect_url;
-        } else {
-          // --- UPDATED ERROR HANDLING ---
-          // The backend now sends HTML directly for errors
-          if (response.data.html) {
-            wrapper.html(response.data.html);
-          } else {
-            alert(
-              "Error: " +
-                (response.data.message || "An unknown error occurred.")
-            );
-            submitButton.val(originalButtonText).prop("disabled", false);
-          }
-        }
-      },
-      error: function () {
-        alert("A server error occurred. Please try again later.");
-        submitButton.val(originalButtonText).prop("disabled", false);
-      },
-    });
-  });
-
-  // Handler for the dynamic topic dropdown
 
 
 
