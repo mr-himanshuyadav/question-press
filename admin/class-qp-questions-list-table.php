@@ -169,7 +169,7 @@ class QP_Questions_List_Table extends WP_List_Table
     ];
 
     return $views;
-}
+}   
 
 
     protected function extra_tablenav($which)
@@ -313,20 +313,12 @@ class QP_Questions_List_Table extends WP_List_Table
         $id_query_from = "FROM {$q_table} q";
         $id_query_joins = " LEFT JOIN {$g_table} g ON q.group_id = g.group_id";
 
-        $current_status = isset($_REQUEST['status']) ? sanitize_key($_REQUEST['status']) : 'all';
-        if ($current_status === 'trash') {
-            $where_conditions[] = "q.status = 'trash'";
-        } else if ($current_status === 'needs_review') {
-            $review_label_ids = $wpdb->get_col("SELECT label_id FROM {$wpdb->prefix}qp_labels WHERE label_name IN ('Wrong Answer', 'No Answer')");
-            if (!empty($review_label_ids)) {
-                $ids_placeholder = implode(',', $review_label_ids);
-                $where_conditions[] = "q.question_id IN (SELECT question_id FROM {$ql_table} WHERE label_id IN ($ids_placeholder))";
-            } else {
-                $where_conditions[] = "1=0";
-            }
-        } else {
-            $where_conditions[] = "q.status = 'publish'";
-        }
+        $current_status = isset($_REQUEST['status']) ? sanitize_key($_REQUEST['status']) : 'publish';
+if ($current_status === 'trash') {
+    $where_conditions[] = "q.status = 'trash'";
+} else {
+    $where_conditions[] = "q.status = 'publish'";
+}
 
         if (!empty($_REQUEST['filter_by_subject'])) {
             $where_conditions[] = $wpdb->prepare("g.subject_id = %d", absint($_REQUEST['filter_by_subject']));

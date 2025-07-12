@@ -479,8 +479,6 @@ function qp_handle_form_submissions()
     qp_handle_save_question_group();
     qp_handle_topic_forms();
     QP_Settings_Page::register_settings();
-    qp_handle_clear_logs();
-    qp_handle_resolve_log();
     // --- ADD THIS LINE to hook our new unified migration handler ---
     qp_run_unified_data_migration();
 }
@@ -1442,38 +1440,6 @@ function qp_delete_revision_history_ajax()
 }
 add_action('wp_ajax_delete_revision_history', 'qp_delete_revision_history_ajax');
 
-// NEW: Function to handle clearing the logs
-function qp_handle_clear_logs()
-{
-    if (isset($_POST['action']) && $_POST['action'] === 'clear_logs') {
-        if (!isset($_POST['_wpnonce']) || !wp_verify_nonce($_POST['_wpnonce'], 'qp_clear_logs_nonce')) {
-            wp_die('Security check failed.');
-        }
-        global $wpdb;
-        $table_name = $wpdb->prefix . 'qp_logs';
-        $wpdb->query("TRUNCATE TABLE $table_name");
-        wp_safe_redirect(admin_url('admin.php?page=qp-logs&message=1'));
-        exit;
-    }
-}
-
-// ADD this new function to the file
-function qp_handle_resolve_log()
-{
-    if (isset($_GET['action']) && $_GET['action'] === 'resolve_log' && isset($_GET['log_id'])) {
-        $log_id = absint($_GET['log_id']);
-        if (!isset($_GET['_wpnonce']) || !wp_verify_nonce($_GET['_wpnonce'], 'qp_resolve_log_' . $log_id)) {
-            wp_die('Security check failed.');
-        }
-        global $wpdb;
-        $wpdb->update("{$wpdb->prefix}qp_logs", ['resolved' => 1], ['log_id' => $log_id]);
-
-        // Redirect back to the page the user was on
-        wp_safe_redirect(remove_query_arg(['action', 'log_id', '_wpnonce']));
-        exit;
-    }
-}
-
 
 function qp_get_quick_edit_form_ajax()
 {
@@ -1872,47 +1838,21 @@ function qp_cleanup_abandoned_sessions()
     $sessions_table = $wpdb->prefix . 'qp_user_sessions';
     $attempts_table = $wpdb->prefix . 'qp_user_attempts';
 
-    $abandoned_sessions = $wpdb->get_results($wpdb->prepare(
-        "SELECT session_id, settings_snapshot FROM {$sessions_table}
+    // Get the IDs of all sessions that are active but have timed out
+    $abandoned_session_ids = $wpdb->get_col($wpdb->prepare(
+        "SELECT session_id FROM {$sessions_table}
          WHERE status = 'active' AND last_activity < NOW() - INTERVAL %d MINUTE",
         $timeout_minutes
     ));
 
-    if (empty($abandoned_sessions)) {
+    if (empty($abandoned_session_ids)) {
         return; // No sessions to clean up.
     }
 
-    foreach ($abandoned_sessions as $session) {
-        $session_id = $session->session_id;
-        $settings = json_decode($session->settings_snapshot, true);
-
-        $marks_correct = isset($settings['marks_correct']) ? floatval($settings['marks_correct']) : 0;
-        $marks_incorrect = isset($settings['marks_incorrect']) ? floatval($settings['marks_incorrect']) : 0;
-
-        // --- CORRECTED LOGIC FOR COUNTS ---
-        $correct_count = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $attempts_table WHERE session_id = %d AND is_correct = 1", $session_id));
-        $incorrect_count = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $attempts_table WHERE session_id = %d AND is_correct = 0", $session_id));
-        // Correctly count only the questions that were explicitly skipped (is_correct is NULL).
-        $skipped_count = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $attempts_table WHERE session_id = %d AND is_correct IS NULL", $session_id));
-
-        $total_attempted = $correct_count + $incorrect_count;
-        $final_score = ($correct_count * $marks_correct) + ($incorrect_count * $marks_incorrect);
-        // --- END OF FIX ---
-
-        $wpdb->update(
-            $sessions_table,
-            [
-                'status' => 'abandoned',
-                'end_time' => current_time('mysql'),
-                'total_attempted' => $total_attempted,
-                'correct_count' => $correct_count,
-                'incorrect_count' => $incorrect_count,
-                'skipped_count' => $skipped_count,
-                'marks_obtained' => $final_score
-            ],
-            ['session_id' => $session_id]
-        );
-    }
+    // --- THE FIX: Delete the sessions and their attempts in bulk ---
+    $ids_placeholder = implode(',', $abandoned_session_ids);
+    $wpdb->query("DELETE FROM {$attempts_table} WHERE session_id IN ({$ids_placeholder})");
+    $wpdb->query("DELETE FROM {$sessions_table} WHERE session_id IN ({$ids_placeholder})");
 }
 add_action('qp_cleanup_abandoned_sessions_event', 'qp_cleanup_abandoned_sessions');
 
@@ -2280,20 +2220,19 @@ function qp_terminate_session_ajax()
 
     global $wpdb;
     $sessions_table = $wpdb->prefix . 'qp_user_sessions';
+    $attempts_table = $wpdb->prefix . 'qp_user_attempts';
 
-    // Verify the session belongs to the current user before terminating
+    // Security check: ensure the session belongs to the current user
     $session_owner = $wpdb->get_var($wpdb->prepare("SELECT user_id FROM $sessions_table WHERE session_id = %d", $session_id));
     if ((int)$session_owner !== $user_id) {
         wp_send_json_error(['message' => 'Permission denied.']);
     }
 
-    // Reuse the abandonment logic to correctly calculate stats
-    qp_cleanup_abandoned_sessions(); // This will process the session immediately
+    // --- THE FIX: Delete the session and its attempts directly ---
+    $wpdb->delete($attempts_table, ['session_id' => $session_id]);
+    $wpdb->delete($sessions_table, ['session_id' => $session_id]);
 
-    // We can just set the status to 'completed' as it was a manual action
-    $wpdb->update($sessions_table, ['status' => 'completed'], ['session_id' => $session_id]);
-
-    wp_send_json_success(['message' => 'Session terminated successfully.']);
+    wp_send_json_success(['message' => 'Session terminated and removed successfully.']);
 }
 add_action('wp_ajax_qp_terminate_session', 'qp_terminate_session_ajax');
 
