@@ -778,6 +778,35 @@ function qp_get_topics_for_subject_ajax()
 }
 add_action('wp_ajax_get_topics_for_subject', 'qp_get_topics_for_subject_ajax');
 
+/**
+ * AJAX handler to get all sources and sections for a subject.
+ */
+function qp_get_sections_for_subject_ajax() {
+    check_ajax_referer('qp_practice_nonce', 'nonce');
+    $subject_id = isset($_POST['subject_id']) ? absint($_POST['subject_id']) : 0;
+
+    if (!$subject_id) {
+        wp_send_json_error(['message' => 'Invalid subject ID.']);
+    }
+
+    global $wpdb;
+    $sources_table = $wpdb->prefix . 'qp_sources';
+    $sections_table = $wpdb->prefix . 'qp_source_sections';
+
+    // This query joins sources and sections and filters by the parent subject ID of the source.
+    $results = $wpdb->get_results($wpdb->prepare(
+        "SELECT sec.section_id, src.source_name, sec.section_name
+         FROM {$sections_table} sec
+         JOIN {$sources_table} src ON sec.source_id = src.source_id
+         WHERE src.subject_id = %d
+         ORDER BY src.source_name ASC, sec.section_name ASC",
+        $subject_id
+    ));
+
+    wp_send_json_success(['sections' => $results]);
+}
+add_action('wp_ajax_get_sections_for_subject', 'qp_get_sections_for_subject_ajax');
+
 function qp_start_practice_session_ajax()
 {
     check_ajax_referer('qp_practice_nonce', 'nonce');
@@ -788,7 +817,7 @@ function qp_start_practice_session_ajax()
     $session_settings = [
         'subject_id'      => isset($form_settings['qp_subject']) ? $form_settings['qp_subject'] : '',
         'topic_id'        => isset($form_settings['qp_topic']) ? $form_settings['qp_topic'] : 'all',
-        'sheet_label_id'  => isset($form_settings['qp_sheet_label']) ? $form_settings['qp_sheet_label'] : 'all',
+        'section_id'      => isset($form_settings['qp_section']) ? $form_settings['qp_section'] : 'all',
         'pyq_only'        => isset($form_settings['qp_pyq_only']),
         'revise_mode'     => isset($form_settings['qp_revise_mode']),
         'marks_correct'   => isset($form_settings['qp_marks_correct']) ? floatval($form_settings['qp_marks_correct']) : 4.0,
@@ -830,11 +859,10 @@ function qp_start_practice_session_ajax()
         $query_args[] = absint($session_settings['topic_id']);
     }
 
-    if ($session_settings['sheet_label_id'] !== 'all' && is_numeric($session_settings['sheet_label_id'])) {
-        $joins .= " JOIN {$ql_table} ql ON q.question_id = ql.question_id";
-        $base_where_clauses[] = "ql.label_id = %d";
-        $query_args[] = absint($session_settings['sheet_label_id']);
-    }
+    if ($session_settings['section_id'] !== 'all' && is_numeric($session_settings['section_id'])) {
+    $base_where_clauses[] = "q.section_id = %d";
+    $query_args[] = absint($session_settings['section_id']);
+}
 
     // --- CORRECTED: PYQ check now queries the groups table ---
     if ($session_settings['pyq_only']) {

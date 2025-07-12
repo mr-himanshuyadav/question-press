@@ -66,76 +66,6 @@ jQuery(document).ready(function ($) {
     }
   }
 
-
-// --- NEW: Handler for removing an item from the review list ---
-    wrapper.on('click', '.qp-review-list-remove-btn', function(e) {
-        e.preventDefault();
-        var button = $(this);
-        var listItem = button.closest('li');
-        var questionID = listItem.data('question-id');
-
-        if (confirm('Are you sure you want to remove this question from your review list?')) {
-            $.ajax({
-                url: qp_ajax_object.ajax_url,
-                type: 'POST',
-                data: {
-                    action: 'qp_toggle_review_later',
-                    nonce: qp_ajax_object.nonce,
-                    question_id: questionID,
-                    is_marked: 'false' // Send 'false' to remove it
-                },
-                beforeSend: function() {
-                    button.text('Removing...').prop('disabled', true);
-                },
-                success: function(response) {
-                    if (response.success) {
-                        listItem.fadeOut(400, function() {
-                            $(this).remove();
-                            // Update the count in the tab
-                            var reviewTab = $('.qp-tab-link[data-tab="review"]');
-                            var currentCount = parseInt(reviewTab.text().match(/\d+/)[0], 10);
-                            reviewTab.text('Review List (' + (currentCount - 1) + ')');
-                        });
-                    } else {
-                        alert('Could not remove the item. Please try again.');
-                        button.text('Remove').prop('disabled', false);
-                    }
-                }
-            });
-        }
-    });
-
-    // --- NEW: Handler for starting a review session ---
-    wrapper.on('click', '#qp-start-reviewing-btn', function(e) {
-        e.preventDefault();
-        var button = $(this);
-        var originalText = button.text();
-
-        $.ajax({
-            url: qp_ajax_object.ajax_url,
-            type: 'POST',
-            data: {
-                action: 'qp_start_review_session',
-                nonce: qp_ajax_object.nonce,
-            },
-            beforeSend: function() {
-                button.text('Starting...').prop('disabled', true);
-            },
-            success: function(response) {
-                if (response.success && response.data.redirect_url) {
-                    window.location.href = response.data.redirect_url;
-                } else {
-                    alert('Error: ' + (response.data.message || 'Could not start review session.'));
-                    button.text(originalText).prop('disabled', false);
-                }
-            },
-            error: function() {
-                alert('A server error occurred.');
-                button.text(originalText).prop('disabled', false);
-            }
-        });
-    });
-
   // Logic for the timer checkbox on the settings form
   wrapper.on("change", "#qp_timer_enabled_cb", function () {
     if ($(this).is(":checked")) {
@@ -226,92 +156,60 @@ wrapper.on("change", "#qp-mark-for-review-cb", function () {
     var subjectId = $(this).val();
     var topicGroup = $("#qp-topic-group");
     var topicSelect = $("#qp_topic");
+    var sectionGroup = $("#qp-section-group"); // Get the new section group
+    var sectionSelect = $("#qp_section"); // Get the new section select
+
+    // *** THIS IS THE BUG FIX ***
+    // Always hide and reset the dependent dropdowns first.
+    topicGroup.slideUp();
+    sectionGroup.slideUp();
+    topicSelect.prop("disabled", true).html("<option value=''>-- Select a subject first --</option>");
+    sectionSelect.prop("disabled", true).html("<option value=''>-- Select a subject first --</option>");
+
 
     if (subjectId && subjectId !== "all") {
-      $.ajax({
-        url: qp_ajax_object.ajax_url,
-        type: "POST",
-        data: {
-          action: "get_topics_for_subject",
-          nonce: qp_ajax_object.nonce,
-          subject_id: subjectId,
-        },
-        beforeSend: function () {
-          topicSelect
-            .prop("disabled", true)
-            .html("<option>Loading topics...</option>");
-          topicGroup.slideDown();
-        },
-        success: function (response) {
-          if (response.success && response.data.topics.length > 0) {
-            topicSelect.prop("disabled", false).empty();
-            topicSelect.append('<option value="all">All Topics</option>');
-            $.each(response.data.topics, function (index, topic) {
-              topicSelect.append(
-                $("<option></option>")
-                  .val(topic.topic_id)
-                  .text(topic.topic_name)
-              );
-            });
-          } else {
-            topicSelect
-              .prop("disabled", true)
-              .html('<option value="all">No topics found</option>');
-          }
-        },
-      });
-    } else {
-      topicGroup.slideUp();
-      topicSelect
-        .prop("disabled", true)
-        .html("<option>-- Select a subject first --</option>");
-    }
-  });
+        // --- This part populates the TOPIC dropdown (no changes here) ---
+        $.ajax({
+            url: qp_ajax_object.ajax_url, type: "POST",
+            data: { action: "get_topics_for_subject", nonce: qp_ajax_object.nonce, subject_id: subjectId },
+            beforeSend: function () {
+                topicSelect.html("<option>Loading topics...</option>");
+            },
+            success: function (response) {
+                if (response.success && response.data.topics.length > 0) {
+                    topicGroup.slideDown();
+                    topicSelect.prop("disabled", false).empty().append('<option value="all">All Topics</option>');
+                    $.each(response.data.topics, function (index, topic) {
+                        topicSelect.append($("<option></option>").val(topic.topic_id).text(topic.topic_name));
+                    });
+                }
+            },
+        });
 
-  // Handler for the topic dropdown to dynamically load sheets
-  wrapper.on("change", "#qp_topic", function () {
-    var topicId = $(this).val();
-    var sheetGroup = $("#qp-sheet-group");
-    var sheetSelect = $("#qp_sheet_label");
+        // --- 3. ADD THIS NEW AJAX CALL FOR SECTIONS ---
+        // This populates our new Section dropdown
+        $.ajax({
+            url: qp_ajax_object.ajax_url, type: "POST",
+            data: { action: "get_sections_for_subject", nonce: qp_ajax_object.nonce, subject_id: subjectId },
+            beforeSend: function () {
+                sectionSelect.html("<option>Loading sections...</option>");
+            },
+            success: function(response) {
+                if (response.success && response.data.sections.length > 0) {
+                    sectionGroup.slideDown();
+                    sectionSelect.prop("disabled", false).empty().append('<option value="all">All Questions</option>');
+                    $.each(response.data.sections, function(index, sec) {
+                        var optionText = sec.source_name + ' / ' + sec.section_name;
+                        sectionSelect.append($("<option></option>").val(sec.section_id).text(optionText));
+                    });
+                }
+            }
+        });
 
-    if (topicId && topicId !== "all") {
-      $.ajax({
-        url: qp_ajax_object.ajax_url,
-        type: "POST",
-        data: {
-          action: "get_sheets_for_topic",
-          nonce: qp_ajax_object.nonce,
-          topic_id: topicId,
-        },
-        beforeSend: function () {
-          sheetSelect
-            .prop("disabled", true)
-            .html("<option>Loading sheets...</option>");
-        },
-        success: function (response) {
-          if (response.success && response.data.labels.length > 0) {
-            sheetSelect.prop("disabled", false).empty();
-            sheetSelect.append('<option value="all">All Sheets</option>');
-            $.each(response.data.labels, function (index, label) {
-              sheetSelect.append(
-                $("<option></option>")
-                  .val(label.label_id)
-                  .text(label.label_name)
-              );
-            });
-            sheetGroup.slideDown();
-          } else {
-            sheetGroup.slideUp();
-          }
-        },
-        error: function () {
-          sheetGroup.slideUp();
-        },
-      });
-    } else {
-      sheetGroup.slideUp();
     }
-  });
+});
+
+  
 
   // Handlers for the new error screen buttons
   wrapper.on("click", "#qp-try-revision-btn, #qp-go-back-btn", function () {
