@@ -52,22 +52,28 @@ class QP_Dashboard
                 </div>
             </div>
 
-            <div class="qp-overall-stats">
-                <div class="stat-item">
-                    <span class="stat-value"><?php echo round($overall_accuracy, 2); ?>%</span>
-                    <span class="stat-label">Overall Accuracy</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-value"><?php echo (int)$total_attempted; ?></span>
-                    <span class="stat-label">Attempted</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-value"><?php echo (int)$total_correct; ?></span>
-                    <span class="stat-label">Correct</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-value"><?php echo (int)$total_incorrect; ?></span>
-                    <span class="stat-label">Incorrect</span>
+            <div class="qp-stats-section">
+                <h3 class="qp-section-header">Lifetime Stats</h3>
+                <div class="qp-overall-stats">
+                    <div class="stat-item">
+                        <span class="stat-label">Accuracy</span>
+                        <span class="stat-value"><?php echo round($overall_accuracy, 2); ?>%</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Attempted</span>
+                        <span class="stat-value"><?php echo (int)$total_attempted; ?></span>
+                        
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Correct</span>
+                        <span class="stat-value"><?php echo (int)$total_correct; ?></span>
+                        
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Incorrect</span>
+                        <span class="stat-value"><?php echo (int)$total_incorrect; ?></span>
+                        
+                    </div>
                 </div>
             </div>
 
@@ -144,7 +150,9 @@ class QP_Dashboard
 
         // Active Sessions
         if (!empty($active_sessions)) {
-            echo '<h3 style="margin-top: 2rem;">Active Sessions</h3>';
+            echo '<div class="qp-active-sessions-header">
+            <h3>Active Sessions</h3>
+          </div>';
             echo '<div class="qp-active-sessions-list">';
             foreach ($active_sessions as $session) {
                 $settings = json_decode($session->settings_snapshot, true);
@@ -168,17 +176,18 @@ class QP_Dashboard
         $options = get_option('qp_settings');
         $practice_page_url = isset($options['practice_page']) ? get_permalink($options['practice_page']) : home_url('/');
 
-        // **THE FIX**: Moved "Start New Practice" button here
-        echo '<div class="qp-dashboard-actions">
-        <a href="' . esc_url($practice_page_url) . '" class="qp-button qp-button-primary">Start New Practice</a>
-      </div>';
-        echo '<div class="qp-history-header">';
-        echo '<h3 style="margin:0;">Practice History</h3>';
-        // **THE FIX**: Only show this button if the user has permission
+
+        echo '<div class="qp-history-header">
+        <h3 style="margin:0;">Practice History</h3>
+        
+        <div class="qp-history-actions">
+            <a href="' . esc_url($practice_page_url) . '" class="qp-button qp-button-primary">Practice</a>';
+
         if ($can_delete) {
-            echo '<button id="qp-delete-history-btn" class="qp-button qp-button-danger">Delete All History</button>';
+            echo '<button id="qp-delete-history-btn" class="qp-button qp-button-danger">Clear History</button>';
         }
-        echo '</div>';
+        echo    '</div>
+      </div>';
         echo '<table class="qp-dashboard-table">
             <thead><tr><th>Date</th><th>Subject</th><th>Status</th><th>Score</th><th>Actions</th></tr></thead>
             <tbody>';

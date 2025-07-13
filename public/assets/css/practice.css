@@ -387,12 +387,65 @@ body {
     margin-bottom: 1.5rem;
 }
 
+/* --- Final Dashboard UI Polish --- */
+
+.qp-section-header {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--qp-dark-text);
+    margin: 0 0 0.75rem 0;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid var(--qp-border-color);
+}
+
+/* New layout for the history header */
+.qp-history-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap; /* Allows items to wrap on smaller screens */
+}
+
+.qp-history-header h3 {
+    flex-grow: 1; /* Allows the title to take up remaining space */
+}
+
+/* Remove margin from the relocated actions button container */
+.qp-history-header .qp-dashboard-actions {
+    margin-bottom: 0;
+}
+
+/* New layout for the active sessions header */
+.qp-active-sessions-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 2rem;
+}   
+/* --- Dashboard History Header Actions --- */
+.qp-history-actions {
+    display: flex;
+    gap: 10px; /* Sets the space between the buttons */
+}
+
+.qp-history-actions .qp-button {
+    flex: 1; /* Makes the buttons share the space equally */
+    white-space: nowrap; /* Prevents text from wrapping on small buttons */
+}
+
 
 /* --- Responsive layout for mobile phones --- */
 @media (max-width: 767px) {
     .qp-overall-stats {
         grid-template-columns: repeat(2, 1fr); /* 2x2 grid on mobile */
     }
+    .qp-history-actions {
+    width: 100%;
+}
+    .qp-history-actions .qp-button {
+        width: 40%;
+}
 }
 
 /* =================================================================
