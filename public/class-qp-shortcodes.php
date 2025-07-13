@@ -246,14 +246,14 @@ class QP_Shortcodes
         self::$session_data_for_script = $session_data;
 
         $reports_table = $wpdb->prefix . 'qp_question_reports';
-$reported_qids_for_user = $wpdb->get_col($wpdb->prepare(
-    "SELECT DISTINCT question_id FROM {$reports_table} WHERE user_id = %d",
-    $user_id
-));
+        $reported_qids_for_user = $wpdb->get_col($wpdb->prepare(
+            "SELECT DISTINCT question_id FROM {$reports_table} WHERE user_id = %d AND status = 'open'",
+            $user_id
+        ));
 
-$session_data['reported_ids'] = $reported_qids_for_user; // Pass reported IDs to JS
+        $session_data['reported_ids'] = $reported_qids_for_user; // Pass reported IDs to JS
 
-self::$session_data_for_script = $session_data;
+        self::$session_data_for_script = $session_data;
 
         return '<div id="qp-practice-app-wrapper">' . self::render_practice_ui() . '</div>';
     }
@@ -412,17 +412,11 @@ self::$session_data_for_script = $session_data;
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <div class="qp-container qp-practice-wrapper">
             <div class="qp-header">
-                <div class="qp-header-top-row">
-                    <div class="qp-header-stat score">
-                        <div class="label">Score</div>
-                        <div class="value" id="qp-score">0.00</div>
-                    </div>
-                    <div class="qp-header-stat timer-stat">
-                        <div class="label">Timer</div>
-                        <div class="value" id="qp-timer">--:--</div>
-                    </div>
-                </div>
                 <div class="qp-header-bottom-row">
+                    <div class="qp-header-stat score">
+                        <span class="value" id="qp-score">0.00</span>
+                        <span class="label">Score</span>
+                    </div>
                     <div class="qp-header-stat correct">
                         <span class="value" id="qp-correct-count">0</span>
                         <span class="label">Correct</span>
@@ -446,13 +440,15 @@ self::$session_data_for_script = $session_data;
                     <div id="qp-question-source" style="font-size: 12px; color: #777; margin-bottom: 7px; display: none;"></div>
 
                     <div class="qp-indicator-bar" style="display: none;">
-    <div id="qp-revision-indicator" style="display: none;">&#9851; Revision</div>
-    <div id="qp-reported-indicator" style="display: none;">&#9888; Reported</div>
-</div>
+                        <div id="qp-timer-indicator" class="timer-stat" style="display: none;">--:--</div>
+                        <div id="qp-revision-indicator" style="display: none;">&#9851; Revision</div>
+                        <div id="qp-reported-indicator" style="display: none;">&#9888; Reported</div>
+                    </div>
 
-                    <div class="qp-direction" style="display: none;"></div>
+
 
                     <div class="qp-question-area">
+                        <div class="qp-direction" style="display: none;"></div>
                         <div class="question-text" id="qp-question-text-area">
                             <p>Loading question...</p>
                         </div>

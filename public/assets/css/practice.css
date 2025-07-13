@@ -91,24 +91,39 @@ body {
     padding-bottom: 1rem;
     border-bottom: 1px solid var(--qp-border-color);
 }
-.qp-header-top-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    margin-bottom: 1.25rem;
+
+/* --- New Timer and Indicator Styles --- */
+#qp-timer-indicator {
+    padding: 6px 14px;
+    font-size: 14px;
+    font-weight: 700;
+    border-radius: 50px;
+    background-color: #fdd835; /* Yellow */
+    color: #424242; /* Dark Grey */
+    min-width: 50px; /* Ensures it doesn't shrink too small */
+    text-align: center;
 }
+
+/* Adjust the indicator bar to vertically align all items */
+.qp-indicator-bar {
+    align-items: center; /* This is the key change */
+}
+
 .qp-header-bottom-row {
     display: flex;
-    justify-content: center;
+    width: auto;
+    justify-content: space-between;
     gap: 1.5rem;
     background-color: var(--qp-bg-light);
     border-radius: var(--qp-radius);
-    padding: 0.75rem;
+    padding: 0.75rem 1rem;
 }
 .qp-header-stat.score .label { font-size: 14px; font-weight: 500; color: var(--qp-light-text); }
-.qp-header-stat.score .value { font-size: 32px; font-weight: 700; color: var(--qp-score-color); }
-.qp-header-stat .value { font-size: 16px; font-weight: 600; }
-.qp-header-stat .label { font-size: 12px; text-transform: uppercase; margin-left: 6px; }
+.qp-header-stat.score .value {
+    color: var(--qp-score-color); /* This uses the variable defined at the top */
+}
+.qp-header-stat .value { font-size: 18px; font-weight: 600; }
+.qp-header-stat .label { font-size: 12px; text-transform: uppercase; }
 .qp-header-stat.correct { color: var(--qp-correct-color); }
 .qp-header-stat.incorrect { color: var(--qp-incorrect-color); }
 .qp-header-stat.skipped { color: var(--qp-skipped-color); }
@@ -119,9 +134,11 @@ body {
 
 /* --- Indicator Bar Styles --- */
 .qp-indicator-bar {
+    box-sizing: border-box;
     display: flex;
     gap: 10px;
-    margin-bottom: 1rem;
+    margin-top: 1rem;
+    margin-bottom: .5rem;
     align-items: center;
 }
 
@@ -142,8 +159,8 @@ body {
 }
 
 #qp-reported-indicator {
-    background-color: #fff3e0; /* Light Orange */
-    color: #ff9800; /* Orange */
+    background-color: #ffe1e1; /* Light Orange */
+    color: #b02a2a; /* Orange */
 }
 
 #qp-practice-app-wrapper .katex{
@@ -153,7 +170,8 @@ body {
 #qp-practice-app-wrapper .qp-direction{ font: normal 1.21em KaTeX_Main,Times New Roman,serif;}
 
 /* --- Practice Screen Content --- */
-.qp-question-area .question-text { font: normal 1.21em KaTeX_Main,Times New Roman,serif; line-height: 1.6; margin-bottom: 2rem; margin-top: 1rem}
+.qp-question-area {margin-bottom: 1.2rem; margin-top: .5rem}
+.qp-question-area .question-text { font: normal 1.21em KaTeX_Main,Times New Roman,serif; line-height: 1.6; }
 .qp-options-area .option { display: block; font: normal .95em KaTeX_Main,Times New Roman,serif;; padding: 1rem; margin-bottom: 0.75rem; border: 2px solid var(--qp-border-color); border-radius: var(--qp-radius); cursor: pointer; transition: all 0.2s ease-in-out; position: relative; }
 .qp-options-area.disabled .option {
     cursor: not-allowed;
@@ -222,16 +240,21 @@ body {
     }
 
     /* Restore Desktop Header */
-    .qp-header { display: flex; justify-content: space-around; align-items: center; }
-    .qp-header-top-row, .qp-header-bottom-row { display: contents; }
-    .qp-header-stat { display: block; }
-    .qp-header-stat.score .value { font-size: 26px; }
-    .qp-header-stat .value { font-size: 26px; }
-    .qp-header-stat .label { font-size: 12px; margin-left: 0; }
-    .qp-header-stat.correct,
-    .qp-header-stat.incorrect,
-    .qp-header-stat.skipped { color: var(--qp-dark-text); }
-    .qp-header-stat.score .label { color: var(--qp-light-text); }
+
+
+    .qp-header-stat.score .label { font-size: 18px; font-weight: 500; color: var(--qp-light-text); }
+.qp-header-stat.score .value {
+    color: var(--qp-score-color); /* This uses the variable defined at the top */
+}
+.qp-header-stat .value { font-size: 24px; font-weight: 600; }
+.qp-header-stat .label { font-size: 12px; text-transform: uppercase; }
+.qp-header-stat.correct { color: var(--qp-correct-color); }
+.qp-header-stat.incorrect { color: var(--qp-incorrect-color); }
+.qp-header-stat.skipped { color: var(--qp-skipped-color); }
+.qp-header-stat.timer-stat { display: none; text-align: right; }
+.qp-header-stat.timer-stat .label { color: var(--qp-light-text); }
+.qp-header-stat.timer-stat .value { font-size: 20px; font-weight: 600; color: var(--qp-dark-text); }
+    
 
     .qp-summary-stats { display: flex; }
     .qp-summary-actions { flex-direction: row; gap: 1rem; }
@@ -423,6 +446,8 @@ body {
     transition: all 0.2s ease;
     /* Add some margin for spacing */
     margin: 10px 0;
+    
+    background-color: #f0f0f1;
 }
 .qp-review-later-checkbox:hover {
     background-color: #f0f0f1;

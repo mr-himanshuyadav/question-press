@@ -3,7 +3,7 @@
 /**
  * Plugin Name:       Question Press
  * Description:       A complete plugin for creating, managing, and practicing questions.
- * Version:           2.1.3
+ * Version:           2.1.4
  * Author:            Himanshu
  */
 
@@ -1200,8 +1200,8 @@ function qp_get_question_data_ajax()
     $is_marked = (bool) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$review_table} WHERE user_id = %d AND question_id = %d", $user_id, $question_id));
 
     // **THIS IS THE CRITICAL ADDITION**
-    $reports_table = $wpdb->prefix . 'qp_question_reports';
-    $is_reported_by_user = (bool) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$reports_table} WHERE user_id = %d AND question_id = %d", $user_id, $question_id));
+$reports_table = $wpdb->prefix . 'qp_question_reports';
+$is_reported_by_user = (bool) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$reports_table} WHERE user_id = %d AND question_id = %d AND status = 'open'", $user_id, $question_id));
 
     // --- Send Final Response ---
     wp_send_json_success([
