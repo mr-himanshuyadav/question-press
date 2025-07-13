@@ -1058,9 +1058,9 @@ function qp_start_practice_session_ajax()
             'timer_seconds'    => isset($_POST['qp_timer_seconds']) ? absint($_POST['qp_timer_seconds']) : 60
         ];
 
-        if ($practice_mode === 'normal' && $session_settings['subject_id'] === 'all') {
-            wp_send_json_error(['message' => 'Please select a subject.']);
-        }
+        if ($practice_mode === 'normal' && $session_settings['subject_id'] === '') {
+    wp_send_json_error(['message' => 'Please select a subject.']);
+}
 
         $user_id = get_current_user_id();
         $q_table = $wpdb->prefix . 'qp_questions';
@@ -1424,6 +1424,34 @@ function qp_end_practice_session_ajax()
     ]);
 }
 add_action('wp_ajax_end_practice_session', 'qp_end_practice_session_ajax');
+
+/**
+ * AJAX handler to delete an empty/unterminated session record.
+ */
+function qp_delete_empty_session_ajax() {
+    check_ajax_referer('qp_practice_nonce', 'nonce');
+    $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
+    
+    if (!$session_id) {
+        wp_send_json_error(['message' => 'Invalid session ID.']);
+    }
+
+    global $wpdb;
+    $user_id = get_current_user_id();
+    $sessions_table = $wpdb->prefix . 'qp_user_sessions';
+
+    // Security check: ensure the session belongs to the current user
+    $session_owner = $wpdb->get_var($wpdb->prepare("SELECT user_id FROM $sessions_table WHERE session_id = %d", $session_id));
+    if ((int)$session_owner !== $user_id) {
+        wp_send_json_error(['message' => 'Permission denied.']);
+    }
+
+    // Delete the session record from the database
+    $wpdb->delete($sessions_table, ['session_id' => $session_id], ['%d']);
+
+    wp_send_json_success(['message' => 'Empty session deleted.']);
+}
+add_action('wp_ajax_delete_empty_session', 'qp_delete_empty_session_ajax');
 
 
 // ADD THIS NEW FUNCTION to the end of the file

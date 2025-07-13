@@ -1032,32 +1032,62 @@ jQuery(document).ready(function ($) {
   });
 
   wrapper.on("click", "#qp-end-practice-btn", function () {
-    practiceInProgress = false;
     clearInterval(questionTimer);
-    if (confirm("Are you sure you want to end this practice session?")) {
-      $.ajax({
-        url: qp_ajax_object.ajax_url,
-        type: "POST",
-        data: {
-          action: "end_practice_session",
-          nonce: qp_ajax_object.nonce,
-          session_id: sessionID,
-        },
-        beforeSend: function () {
-          wrapper.html(
-            '<p style="text-align:center; padding: 50px;">Generating your results...</p>'
-          );
-        },
-        success: function (response) {
-          if (response.success) {
-            displaySummary(response.data);
-          }
-        },
-      });
+
+    // Check if any questions have been answered.
+    if (correctCount === 0 && incorrectCount === 0) {
+        // --- Handle EMPTY session ---
+        if (confirm("You have not answered any questions. This session will not be saved.\n\nAre you sure you want to leave?")) {
+            practiceInProgress = false; // Allow redirect
+
+            // **THE FIX**: Call the new endpoint to delete the empty session from the DB
+            $.ajax({
+                url: qp_ajax_object.ajax_url,
+                type: 'POST',
+                data: {
+                    action: 'delete_empty_session',
+                    nonce: qp_ajax_object.nonce,
+                    session_id: sessionID,
+                },
+                success: function() {
+                    // Redirect to dashboard after successful deletion
+                    window.location.href = qp_ajax_object.dashboard_page_url;
+                },
+                error: function() {
+                    // Still redirect even if the deletion call fails, to not trap the user
+                    alert("Could not delete the empty session record, but you will be redirected.");
+                    window.location.href = qp_ajax_object.dashboard_page_url;
+                }
+            });
+        }
+        // If user clicks "Cancel", do nothing.
+
     } else {
-      practiceInProgress = true;
+        // --- Handle session WITH attempts (original logic) ---
+        if (confirm("Are you sure you want to end this practice session?")) {
+            practiceInProgress = false;
+            $.ajax({
+                url: qp_ajax_object.ajax_url,
+                type: "POST",
+                data: {
+                    action: "end_practice_session",
+                    nonce: qp_ajax_object.nonce,
+                    session_id: sessionID,
+                },
+                beforeSend: function () {
+                    wrapper.html(
+                        '<p style="text-align:center; padding: 50px;">Generating your results...</p>'
+                    );
+                },
+                success: function (response) {
+                    if (response.success) {
+                        displaySummary(response.data);
+                    }
+                },
+            });
+        }
     }
-  });
+});
 
   $(window).on("beforeunload", function () {
     if (practiceInProgress) {
