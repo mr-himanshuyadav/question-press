@@ -2,6 +2,21 @@ jQuery(document).ready(function ($) {
   var wrapper = $("#qp-practice-app-wrapper");
 
 // --- LOGIC FOR REVISION FORM DROPDOWNS ---
+// --- NEW: Add handler for the "All Subjects" checkbox in revision mode ---
+$('#qp_subject_dropdown_revision').on('change', 'input[value="all"]', function() {
+    var $this = $(this);
+    var $list = $this.closest('.qp-multi-select-list');
+    if ($this.is(':checked')) {
+        // If "All Subjects" is checked, uncheck and disable all other subjects
+        $list.find('input[value!="all"]').prop('checked', false).prop('disabled', true);
+    } else {
+        // If "All Subjects" is unchecked, enable all other subjects
+        $list.find('input[value!="all"]').prop('disabled', false);
+    }
+    // Trigger the change event to update the topics list
+    $list.find('input[type="checkbox"]:first').trigger('change');
+});
+
 // Logic to fetch topics when subjects change in the REVISION form
 $('#qp_subject_dropdown_revision').on('change', 'input[type="checkbox"]', function() {
     var selectedSubjects = [];
