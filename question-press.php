@@ -978,7 +978,7 @@ add_action('wp_ajax_get_sections_for_subject', 'qp_get_sections_for_subject_ajax
 function qp_start_practice_session_ajax()
 {
     check_ajax_referer('qp_practice_nonce', 'nonce');
-    
+
     $practice_mode = isset($_POST['practice_mode']) ? sanitize_key($_POST['practice_mode']) : 'normal';
     global $wpdb;
 
@@ -1034,7 +1034,6 @@ function qp_start_practice_session_ajax()
         }
         $question_ids = array_unique($final_question_ids);
         shuffle($question_ids);
-
     } else {
         // --- NORMAL MODE LOGIC ---
         $session_settings = [
@@ -1043,14 +1042,14 @@ function qp_start_practice_session_ajax()
             'topic_id'         => isset($_POST['qp_topic']) ? $_POST['qp_topic'] : 'all',
             'section_id'       => isset($_POST['qp_section']) ? $_POST['qp_section'] : 'all',
             'pyq_only'         => isset($_POST['qp_pyq_only']),
-            'include_attempted'=> isset($_POST['qp_include_attempted']),
+            'include_attempted' => isset($_POST['qp_include_attempted']),
             'question_order'   => isset($_POST['question_order']) ? sanitize_key($_POST['question_order']) : 'random',
             'marks_correct'    => isset($_POST['qp_marks_correct']) ? floatval($_POST['qp_marks_correct']) : 4.0,
             'marks_incorrect'  => isset($_POST['qp_marks_incorrect']) ? -abs(floatval($_POST['qp_marks_incorrect'])) : -1.0,
             'timer_enabled'    => isset($_POST['qp_timer_enabled']),
             'timer_seconds'    => isset($_POST['qp_timer_seconds']) ? absint($_POST['qp_timer_seconds']) : 60
         ];
-        
+
         if ($practice_mode === 'normal' && empty($session_settings['subject_id'])) {
             wp_send_json_error(['message' => 'Please select a subject.']);
         }
@@ -1084,10 +1083,10 @@ function qp_start_practice_session_ajax()
                 // Apply the exclude filter to both queries
                 $new_questions = $wpdb->get_col($wpdb->prepare("SELECT q.question_id FROM {$q_table} q {$joins} WHERE {$base_where_sql} AND q.question_id NOT IN ($attempted_q_ids_sql) {$exclude_sql} ORDER BY q.custom_question_id ASC", $query_args));
                 $old_questions = $wpdb->get_col($wpdb->prepare("SELECT q.question_id FROM {$q_table} q {$joins} WHERE {$base_where_sql} AND q.question_id IN ($attempted_q_ids_sql) {$exclude_sql} ORDER BY RAND()", $query_args));
-                
+
                 $question_ids = [];
                 $new_q_index = 0;
-                while($new_q_index < count($new_questions)) {
+                while ($new_q_index < count($new_questions)) {
                     $question_ids = array_merge($question_ids, array_slice($new_questions, $new_q_index, 6));
                     $new_q_index += 6;
                     if (!empty($old_questions)) {
@@ -1111,7 +1110,7 @@ function qp_start_practice_session_ajax()
     if (empty($question_ids)) {
         wp_send_json_error(['html' => '<div class="qp-container"><p>No questions were found for the selected criteria. Please try different options.</p><button onclick="window.location.reload();" class="qp-button qp-button-secondary">Go Back</button></div>']);
     }
-    
+
     $options = get_option('qp_settings');
     $session_page_id = isset($options['session_page']) ? absint($options['session_page']) : 0;
     if (!$session_page_id) {
@@ -1193,9 +1192,10 @@ function qp_get_question_data_ajax()
 
     $question_data['direction_image_url'] = $question_data['direction_image_id'] ? wp_get_attachment_url($question_data['direction_image_id']) : null;
     $question_data['options'] = $wpdb->get_results($wpdb->prepare("SELECT option_id, option_text FROM {$o_table} WHERE question_id = %d ORDER BY option_id ASC", $question_id), ARRAY_A);
-    
+
     // --- State Checks ---
-    $attempt_count = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $a_table WHERE user_id = %d AND question_id = %d", $user_id, $question_id));
+    $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
+    $attempt_count = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $a_table WHERE user_id = %d AND question_id = %d AND session_id != %d", $user_id, $question_id, $session_id));
     $review_table = $wpdb->prefix . 'qp_review_later';
     $is_marked = (bool) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$review_table} WHERE user_id = %d AND question_id = %d", $user_id, $question_id));
 
@@ -2237,7 +2237,8 @@ function qp_terminate_session_ajax()
 add_action('wp_ajax_qp_terminate_session', 'qp_terminate_session_ajax');
 
 
-function qp_handle_log_settings_forms() {
+function qp_handle_log_settings_forms()
+{
     if (!isset($_GET['page']) || $_GET['page'] !== 'qp-logs-reports' || !isset($_GET['tab']) || $_GET['tab'] !== 'log_settings') {
         return;
     }
@@ -2269,7 +2270,8 @@ function qp_handle_log_settings_forms() {
 }
 add_action('admin_init', 'qp_handle_log_settings_forms');
 
-function qp_handle_report_actions() {
+function qp_handle_report_actions()
+{
     if (!isset($_GET['page']) || $_GET['page'] !== 'qp-logs-reports') {
         return;
     }
@@ -2295,7 +2297,8 @@ add_action('admin_init', 'qp_handle_report_actions');
 /**
  * Handles resolving all open reports for a group from the question editor page.
  */
-function qp_handle_resolve_from_editor() {
+function qp_handle_resolve_from_editor()
+{
     if (!isset($_GET['page']) || $_GET['page'] !== 'qp-edit-group' || !isset($_GET['action']) || $_GET['action'] !== 'resolve_group_reports') {
         return;
     }

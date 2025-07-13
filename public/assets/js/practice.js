@@ -588,100 +588,140 @@ jQuery(document).ready(function ($) {
     var previousState = answeredStates[questionID] || {}; // Use empty object as default
 
     // 1. Reset UI from a clean slate
-    $("#qp-revision-indicator, #qp-reported-indicator, .qp-direction, #qp-question-source").hide();
-    var optionsArea = $('.qp-options-area').empty().removeClass('disabled');
+    $(
+      "#qp-revision-indicator, #qp-reported-indicator, .qp-direction, #qp-question-source"
+    ).hide();
+    var optionsArea = $(".qp-options-area").empty().removeClass("disabled");
     $("#qp-skip-btn, #qp-report-btn").prop("disabled", false);
     $("#qp-next-btn").prop("disabled", true);
 
     // 2. Render all static content, including the meta that was disappearing
     if (data.is_revision) {
-        $('#qp-revision-indicator').show();
+      $("#qp-revision-indicator").show();
     }
-    $('#qp-mark-for-review-cb').prop('checked', data.is_marked_for_review);
+    $("#qp-mark-for-review-cb").prop("checked", data.is_marked_for_review);
 
-    var directionEl = $('.qp-direction').empty();
+    var directionEl = $(".qp-direction").empty();
     if (questionData.direction_text || questionData.direction_image_url) {
-        if (questionData.direction_text) directionEl.html($('<p>').html(questionData.direction_text));
-        if (questionData.direction_image_url) directionEl.append($('<img>').attr('src', questionData.direction_image_url).css('max-width', '100%'));
-        directionEl.show();
+      if (questionData.direction_text)
+        directionEl.html($("<p>").html(questionData.direction_text));
+      if (questionData.direction_image_url)
+        directionEl.append(
+          $("<img>")
+            .attr("src", questionData.direction_image_url)
+            .css("max-width", "100%")
+        );
+      directionEl.show();
     }
 
-    var subjectHtml = 'Subject: ' + questionData.subject_name;
-    if (questionData.topic_name) subjectHtml += ' / ' + questionData.topic_name;
-    $('#qp-question-subject').html(subjectHtml); // This was missing
-    $('#qp-question-id').text('Question ID: ' + questionData.custom_question_id); // This was missing
+    var subjectHtml = "Subject: " + questionData.subject_name;
+    if (questionData.topic_name) subjectHtml += " / " + questionData.topic_name;
+    $("#qp-question-subject").html(subjectHtml); // This was missing
+    $("#qp-question-id").text(
+      "Question ID: " + questionData.custom_question_id
+    ); // This was missing
 
-    var sourceDisplayArea = $('#qp-question-source').hide().empty();
-    if (data.is_admin && (questionData.source_name || questionData.section_name || questionData.question_number_in_section)) {
-        var sourceInfo = [];
-        if(questionData.source_name) sourceInfo.push('<strong>Source:</strong> ' + questionData.source_name);
-        if(questionData.section_name) sourceInfo.push('<strong>Section:</strong> ' + questionData.section_name);
-        if(questionData.question_number_in_section) sourceInfo.push('<strong>Q:</strong> ' + questionData.question_number_in_section);
-        if(sourceInfo.length > 0) sourceDisplayArea.html(sourceInfo.join(' | ')).show();
+    var sourceDisplayArea = $("#qp-question-source").hide().empty();
+    if (
+      data.is_admin &&
+      (questionData.source_name ||
+        questionData.section_name ||
+        questionData.question_number_in_section)
+    ) {
+      var sourceInfo = [];
+      if (questionData.source_name)
+        sourceInfo.push("<strong>Source:</strong> " + questionData.source_name);
+      if (questionData.section_name)
+        sourceInfo.push(
+          "<strong>Section:</strong> " + questionData.section_name
+        );
+      if (questionData.question_number_in_section)
+        sourceInfo.push(
+          "<strong>Q:</strong> " + questionData.question_number_in_section
+        );
+      if (sourceInfo.length > 0)
+        sourceDisplayArea.html(sourceInfo.join(" | ")).show();
     }
 
-    $('#qp-question-text-area').html(questionData.question_text);
+    $("#qp-question-text-area").html(questionData.question_text);
 
     $.each(questionData.options, function (index, option) {
-        optionsArea.append($('<label class="option"></label>').append($('<input type="radio" name="qp_option">').val(option.option_id)).append($('<span>').html(option.option_text)));
+      optionsArea.append(
+        $('<label class="option"></label>')
+          .append(
+            $('<input type="radio" name="qp_option">').val(option.option_id)
+          )
+          .append($("<span>").html(option.option_text))
+      );
     });
 
     // 3. Apply the correct UI state based on server and local data
     // 3. Apply State-Based UI
-if (previousState.reported) {
-    $("#qp-reported-indicator").show();
-    // --- THE FIX: Add the 'disabled' class to the individual option labels ---
-    optionsArea.find('.option').addClass('disabled'); 
-    optionsArea.find('input[type="radio"]').prop('disabled', true);
-    $("#qp-skip-btn, #qp-report-btn").prop("disabled", true);
-    $("#qp-next-btn").prop("disabled", false);
-} else if (previousState.type === "answered") {
-        $('input[value="' + previousState.selected_option_id + '"]').prop('checked', true).closest(".option").addClass(previousState.is_correct ? "correct" : "incorrect");
-        if (!previousState.is_correct) {
-            $('input[value="' + previousState.correct_option_id + '"]').closest(".option").addClass("correct");
-        }
-        optionsArea.addClass('disabled').find('input[type="radio"]').prop('disabled', true);
-        $("#qp-skip-btn, #qp-report-btn").prop("disabled", true);
-        $("#qp-next-btn").prop("disabled", false);
+    if (previousState.reported) {
+      $("#qp-reported-indicator").show();
+      // --- THE FIX: Add the 'disabled' class to the individual option labels ---
+      optionsArea.find(".option").addClass("disabled");
+      optionsArea.find('input[type="radio"]').prop("disabled", true);
+      $("#qp-skip-btn, #qp-report-btn").prop("disabled", true);
+      $("#qp-next-btn").prop("disabled", false);
+    } else if (previousState.type === "answered") {
+      $('input[value="' + previousState.selected_option_id + '"]')
+        .prop("checked", true)
+        .closest(".option")
+        .addClass(previousState.is_correct ? "correct" : "incorrect");
+      if (!previousState.is_correct) {
+        $('input[value="' + previousState.correct_option_id + '"]')
+          .closest(".option")
+          .addClass("correct");
+      }
+      optionsArea
+        .addClass("disabled")
+        .find('input[type="radio"]')
+        .prop("disabled", true);
+      $("#qp-skip-btn, #qp-report-btn").prop("disabled", true);
+      $("#qp-next-btn").prop("disabled", false);
     } else {
-        // Default state for a new question
-        if (sessionSettings.timer_enabled && (!previousState || previousState.type !== 'skipped')) {
-            startTimer(sessionSettings.timer_seconds);
-        }
-    }
-
-    $("#qp-prev-btn").prop("disabled", currentQuestionIndex === 0);
-
-    // 4. Render Math
-if (typeof renderMathInElement !== 'undefined') {
-    renderMathInElement(document.getElementById('qp-practice-app-wrapper'), {
-        delimiters: [
-            {left: '$$', right: '$$', display: true},
-            {left: '$', right: '$', display: false},
-            {left: '\\[', right: '\\]', display: true},
-            {left: '\\(', right: '\\)', display: false}
-        ],
-        throwOnError: false
-    });
-}
-
-  function loadQuestion(questionID, direction) {
-    var animatableArea = $(".qp-animatable-area");
-    function doRender(data) {
-      renderQuestion(data, questionID);
-      if (direction) {
-        var slideInClass = direction === "next" ? "slide-in-from-right" : "slide-in-from-left";
-        animatableArea.removeClass("slide-out-to-left slide-out-to-right").addClass(slideInClass);
+      // Default state for a new question
+      if (
+        sessionSettings.timer_enabled &&
+        (!previousState || previousState.type !== "skipped")
+      ) {
+        startTimer(sessionSettings.timer_seconds);
       }
     }
 
+    $("#qp-prev-btn").prop("disabled", currentQuestionIndex === 0);
+    // 4. Render Math
+    if (typeof renderMathInElement !== "undefined") {
+      renderMathInElement(document.getElementById("qp-practice-app-wrapper"), {
+        delimiters: [
+          { left: "$$", right: "$$", display: true },
+          { left: "$", right: "$", display: false },
+          { left: "\\[", right: "\\]", display: true },
+          { left: "\\(", right: "\\)", display: false },
+        ],
+        throwOnError: false,
+      });
+    }
+  }
+
+  function loadQuestion(questionID, direction) {
+    var animatableArea = $(".qp-animatable-area");
+
+    function doRender(data) {
+        renderQuestion(data, questionID);
+        if (direction) {
+            var slideInClass = direction === "next" ? "slide-in-from-right" : "slide-in-from-left";
+            animatableArea.removeClass("slide-out-to-left slide-out-to-right").addClass(slideInClass);
+        }
+    }
+
     if (direction) {
-      var slideOutClass = direction === "next" ? "slide-out-to-left" : "slide-out-to-right";
-      animatableArea.removeClass("slide-in-from-left slide-in-from-right").addClass(slideOutClass);
+        var slideOutClass = direction === "next" ? "slide-out-to-left" : "slide-out-to-right";
+        animatableArea.removeClass("slide-in-from-left slide-in-from-right").addClass(slideOutClass);
     }
 
     setTimeout(function () {
-        // Always fetch fresh data from server to ensure state is correct
         $.ajax({
             url: qp_ajax_object.ajax_url,
             type: "POST",
@@ -689,21 +729,12 @@ if (typeof renderMathInElement !== 'undefined') {
                 action: "get_question_data",
                 nonce: qp_ajax_object.nonce,
                 question_id: questionID,
+                session_id: sessionID, // Pass the session_id to get correct revision status
             },
             success: function (response) {
                 if (response.success) {
-                    // **THIS IS THE CRITICAL CHANGE**
-                    // Update the client-side state from the server's authoritative response
-                    if (typeof answeredStates[questionID] === 'undefined') {
-                        answeredStates[questionID] = {};
-                    }
-                    if (response.data.is_reported_by_user) {
-                        answeredStates[questionID].reported = true;
-                    }
-
-                    // Shuffle options and cache the data
+                    // Shuffle options before rendering
                     response.data.question.options = shuffleArray(response.data.question.options);
-                    questionCache[questionID] = response.data;
                     doRender(response.data);
                 }
             },
@@ -794,8 +825,8 @@ if (typeof renderMathInElement !== 'undefined') {
   // Handles clicking an answer option
   wrapper.on("click", ".qp-options-area .option", function () {
     // --- THE FIX: Check if this specific option is disabled before proceeding ---
-    if ($(this).hasClass('disabled')) {
-        return; // Do nothing if the option is disabled
+    if ($(this).hasClass("disabled")) {
+      return; // Do nothing if the option is disabled
     }
     var questionID = sessionQuestionIDs[currentQuestionIndex];
     if (
