@@ -42,16 +42,6 @@ class QP_Shortcodes
                             </label>
                         </div>
 
-                        <?php if ($question_order_setting === 'user_input'): ?>
-                            <div class="qp-order-selection">
-                                <label>Order of questions?</label>
-                                <div class="qp-order-buttons">
-                                    <button type="button" class="qp-order-btn" data-order="incrementing">Incrementing</button>
-                                    <button type="button" class="qp-order-btn" data-order="random">Random</button>
-                                </div>
-                            </div>
-                        <?php endif; ?>
-
                         <div class="qp-step-1-footer">
                             <button id="qp-step1-next-btn" class="qp-button qp-button-primary" disabled>Next</button>
                             <?php if ($dashboard_page_url) : ?>

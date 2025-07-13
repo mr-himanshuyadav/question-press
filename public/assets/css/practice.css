@@ -1018,9 +1018,7 @@ ul.qp-review-list li {
     box-shadow: 0 4px 15px rgba(34, 113, 177, 0.2);
 }
 
-.qp-order-selection {
-    text-align: center;
-}
+
 
 
 .qp-step-1-footer {
@@ -1045,41 +1043,6 @@ ul.qp-review-list li {
     display: block;
     text-align: left;
     padding: 0;
-}
-
-/* Question Order Selection */
-.qp-order-selection {
-    margin-top: 2rem;
-    padding-top: 1.5rem;
-    border-top: 1px solid var(--qp-border-color);
-}
-.qp-order-selection label {
-    font-weight: bold;
-    color: var(--qp-light-text);
-    margin-bottom: 1rem;
-    display: block;
-}
-
-.qp-order-buttons {
-    display: flex;
-    justify-content: center;
-    gap: 1rem; /* Creates space between buttons */
-}
-.qp-order-btn {
-    flex: none; /* Prevents buttons from stretching */
-    padding: 8px 20px;
-    font-size: 14px;
-    border: 1px solid var(--qp-border-color); /* Gives a border when not selected */
-    border-radius: 50px; /* Makes buttons pill-shaped */
-}
-
-.qp-order-btn.active {
-    background-color: var(--qp-primary-color);
-    color: #fff;
-    outline: none;
-}
-.qp-order-btn:not(.active):hover {
-    background-color: #f0f0f1;
 }
 
 /* Revision Mode Specific */

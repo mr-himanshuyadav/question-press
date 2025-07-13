@@ -144,10 +144,6 @@ class QP_Settings_Page {
                 <input type="radio" name="qp_settings[question_order]" value="in_order" <?php checked('in_order', $value); ?>>
                 <span>In Order (by Question ID)</span>
             </label>
-            <label>
-                <input type="radio" name="qp_settings[question_order]" value="user_input" <?php checked('user_input', $value); ?>>
-                <span>Let User Decide</span>
-            </label>
             <p class="description">Choose how questions are ordered when a user starts a practice session.</p>
         </fieldset>
         <?php

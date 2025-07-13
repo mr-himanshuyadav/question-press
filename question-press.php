@@ -220,8 +220,8 @@ function qp_activate_plugin()
     dbDelta($sql_sessions);
 
     // --- UPDATED: User Attempts table with selected_option_id ---
-$table_attempts = $wpdb->prefix . 'qp_user_attempts';
-$sql_attempts = "CREATE TABLE $table_attempts (
+    $table_attempts = $wpdb->prefix . 'qp_user_attempts';
+    $sql_attempts = "CREATE TABLE $table_attempts (
     attempt_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
     session_id BIGINT(20) UNSIGNED NOT NULL,
     user_id BIGINT(20) UNSIGNED NOT NULL,
@@ -237,7 +237,7 @@ $sql_attempts = "CREATE TABLE $table_attempts (
     KEY question_id (question_id),
     KEY status (status)
 ) $charset_collate;";
-dbDelta($sql_attempts);
+    dbDelta($sql_attempts);
 
     // Table: Logs
     $table_logs = $wpdb->prefix . 'qp_logs';
@@ -1038,22 +1038,20 @@ function qp_start_practice_session_ajax()
         $question_ids = array_unique($final_question_ids);
         shuffle($question_ids);
     } else {
-        // --- NORMAL MODE LOGIC ---
         $session_settings = [
             'practice_mode'    => 'normal',
-            'subject_id'       => isset($_POST['qp_subject']) ? $_POST['qp_subject'] : '',
+            'subject_id'       => isset($_POST['qp_subject']) ? $_POST['qp_subject'] : 'all',
             'topic_id'         => isset($_POST['qp_topic']) ? $_POST['qp_topic'] : 'all',
             'section_id'       => isset($_POST['qp_section']) ? $_POST['qp_section'] : 'all',
             'pyq_only'         => isset($_POST['qp_pyq_only']),
             'include_attempted' => isset($_POST['qp_include_attempted']),
-            'question_order'   => isset($_POST['question_order']) ? sanitize_key($_POST['question_order']) : 'random',
             'marks_correct'    => isset($_POST['qp_marks_correct']) ? floatval($_POST['qp_marks_correct']) : 4.0,
             'marks_incorrect'  => isset($_POST['qp_marks_incorrect']) ? -abs(floatval($_POST['qp_marks_incorrect'])) : -1.0,
             'timer_enabled'    => isset($_POST['qp_timer_enabled']),
             'timer_seconds'    => isset($_POST['qp_timer_seconds']) ? absint($_POST['qp_timer_seconds']) : 60
         ];
 
-        if ($practice_mode === 'normal' && empty($session_settings['subject_id'])) {
+        if ($practice_mode === 'normal' && $session_settings['subject_id'] === 'all') {
             wp_send_json_error(['message' => 'Please select a subject.']);
         }
 
@@ -1074,39 +1072,35 @@ function qp_start_practice_session_ajax()
             $where_clauses[] = "q.topic_id = %d";
             $query_args[] = absint($session_settings['topic_id']);
         }
+        if ($session_settings['section_id'] !== 'all' && is_numeric($session_settings['section_id'])) {
+            $where_clauses[] = "q.section_id = %d";
+            $query_args[] = absint($session_settings['section_id']);
+        }
         if ($session_settings['pyq_only']) {
             $where_clauses[] = "g.is_pyq = 1";
         }
 
         $base_where_sql = implode(' AND ', $where_clauses);
-        $attempted_q_ids_sql = $wpdb->prepare("SELECT DISTINCT question_id FROM $a_table WHERE user_id = %d", $user_id);
-
-        if ($session_settings['include_attempted']) {
-            if ($session_settings['question_order'] === 'incrementing') {
-                // Apply the exclude filter to both queries
-                $new_questions = $wpdb->get_col($wpdb->prepare("SELECT q.question_id FROM {$q_table} q {$joins} WHERE {$base_where_sql} AND q.question_id NOT IN ($attempted_q_ids_sql) {$exclude_sql} ORDER BY q.custom_question_id ASC", $query_args));
-                $old_questions = $wpdb->get_col($wpdb->prepare("SELECT q.question_id FROM {$q_table} q {$joins} WHERE {$base_where_sql} AND q.question_id IN ($attempted_q_ids_sql) {$exclude_sql} ORDER BY RAND()", $query_args));
-
-                $question_ids = [];
-                $new_q_index = 0;
-                while ($new_q_index < count($new_questions)) {
-                    $question_ids = array_merge($question_ids, array_slice($new_questions, $new_q_index, 6));
-                    $new_q_index += 6;
-                    if (!empty($old_questions)) {
-                        $question_ids[] = array_pop($old_questions);
-                    }
-                }
-            } else { // Random order
-                // Apply the exclude filter
-                $query = "SELECT q.question_id FROM {$q_table} q {$joins} WHERE {$base_where_sql} {$exclude_sql} ORDER BY RAND()";
-                $question_ids = $wpdb->get_col($wpdb->prepare($query, $query_args));
-            }
-        } else {
-            // Original logic: only new questions, with the exclude filter applied
-            $order_by_sql = ($session_settings['question_order'] === 'incrementing') ? 'ORDER BY q.custom_question_id ASC' : 'ORDER BY RAND()';
-            $query = "SELECT q.question_id FROM {$q_table} q {$joins} WHERE {$base_where_sql} AND q.question_id NOT IN ($attempted_q_ids_sql) {$exclude_sql} {$order_by_sql}";
-            $question_ids = $wpdb->get_col($wpdb->prepare($query, $query_args));
+        if (!$session_settings['include_attempted']) {
+            $attempted_q_ids_sql = $wpdb->prepare("SELECT DISTINCT question_id FROM $a_table WHERE user_id = %d", $user_id);
+            $base_where_sql .= " AND q.question_id NOT IN ($attempted_q_ids_sql)";
         }
+
+        // **THE FIX**: This is the new, corrected ordering logic.
+        $options = get_option('qp_settings');
+        $admin_order_setting = isset($options['question_order']) ? $options['question_order'] : 'random';
+        $order_by_sql = '';
+
+        if ($session_settings['section_id'] !== 'all' && is_numeric($session_settings['section_id'])) {
+            // Force numerical incrementing order if a specific section is chosen
+            $order_by_sql = 'ORDER BY CAST(q.question_number_in_section AS UNSIGNED) ASC, q.custom_question_id ASC';
+        } else {
+            // Otherwise, use the admin setting
+            $order_by_sql = ($admin_order_setting === 'in_order') ? 'ORDER BY q.custom_question_id ASC' : 'ORDER BY RAND()';
+        }
+
+        $query = "SELECT q.question_id FROM {$q_table} q {$joins} WHERE {$base_where_sql} {$exclude_sql} {$order_by_sql}";
+        $question_ids = $wpdb->get_col($wpdb->prepare($query, $query_args));
     }
 
     // --- COMMON SESSION CREATION LOGIC --- (No changes here)
@@ -1203,8 +1197,8 @@ function qp_get_question_data_ajax()
     $is_marked = (bool) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$review_table} WHERE user_id = %d AND question_id = %d", $user_id, $question_id));
 
     // **THIS IS THE CRITICAL ADDITION**
-$reports_table = $wpdb->prefix . 'qp_question_reports';
-$is_reported_by_user = (bool) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$reports_table} WHERE user_id = %d AND question_id = %d AND status = 'open'", $user_id, $question_id));
+    $reports_table = $wpdb->prefix . 'qp_question_reports';
+    $is_reported_by_user = (bool) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$reports_table} WHERE user_id = %d AND question_id = %d AND status = 'open'", $user_id, $question_id));
 
     // --- Send Final Response ---
     wp_send_json_success([
@@ -1311,7 +1305,7 @@ function qp_check_answer_ajax()
         'is_correct' => $is_correct ? 1 : 0,
         'status' => 'answered',
         'remaining_time' => isset($_POST['remaining_time']) ? absint($_POST['remaining_time']) : null
-]);
+    ]);
 
     wp_send_json_success(['is_correct' => $is_correct, 'correct_option_id' => $correct_option_id]);
 }
@@ -1320,7 +1314,8 @@ add_action('wp_ajax_check_answer', 'qp_check_answer_ajax');
 /**
  * AJAX handler to mark a question as 'expired' for a session.
  */
-function qp_expire_question_ajax() {
+function qp_expire_question_ajax()
+{
     check_ajax_referer('qp_practice_nonce', 'nonce');
     $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
     $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
@@ -1328,7 +1323,7 @@ function qp_expire_question_ajax() {
     if (!$session_id || !$question_id) {
         wp_send_json_error(['message' => 'Invalid data submitted.']);
     }
-    
+
     global $wpdb;
     $wpdb->insert("{$wpdb->prefix}qp_user_attempts", [
         'session_id' => $session_id,
@@ -1337,28 +1332,31 @@ function qp_expire_question_ajax() {
         'is_correct' => null,
         'status' => 'expired',
         'remaining_time' => 0 // Expired means 0 time left
-]);
-    
+    ]);
+
     wp_send_json_success();
 }
 add_action('wp_ajax_expire_question', 'qp_expire_question_ajax');
 
-function qp_skip_question_ajax() {
+function qp_skip_question_ajax()
+{
     check_ajax_referer('qp_practice_nonce', 'nonce');
     $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
     $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
-    if (!$session_id || !$question_id) { wp_send_json_error(['message' => 'Invalid data submitted.']); }
-    
+    if (!$session_id || !$question_id) {
+        wp_send_json_error(['message' => 'Invalid data submitted.']);
+    }
+
     global $wpdb;
     $wpdb->insert("{$wpdb->prefix}qp_user_attempts", [
         'session_id' => $session_id,
         'user_id' => get_current_user_id(),
         'question_id' => $question_id,
         'is_correct' => null,
-        'status' => 'skipped', 
+        'status' => 'skipped',
         'remaining_time' => isset($_POST['remaining_time']) ? absint($_POST['remaining_time']) : null
-]);
-    
+    ]);
+
     wp_send_json_success();
 }
 add_action('wp_ajax_skip_question', 'qp_skip_question_ajax');

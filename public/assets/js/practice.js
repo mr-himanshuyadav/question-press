@@ -5,39 +5,12 @@ jQuery(document).ready(function ($) {
   if ($(".qp-multi-step-container").length) {
     var multiStepContainer = $(".qp-multi-step-container");
 
-    function updateStep1NextButton() {
-      var modeSelected =
-        $('input[name="practice_mode_selection"]:checked').length > 0;
-      var orderSelectionVisible = $(".qp-order-selection").is(":visible");
-      var orderSelected = $(".qp-order-btn.active").length > 0;
-
-      if (modeSelected && (!orderSelectionVisible || orderSelected)) {
+    // Enable the next button as soon as a mode is selected
+    wrapper.on("change", 'input[name="practice_mode_selection"]', function () {
+      if ($(this).is(":checked")) {
         $("#qp-step1-next-btn").prop("disabled", false);
-      } else {
-        $("#qp-step1-next-btn").prop("disabled", true);
       }
-    }
-
-    // Call the update function whenever a selection is made
-    wrapper.on(
-      "change",
-      'input[name="practice_mode_selection"]',
-      updateStep1NextButton
-    );
-    wrapper.on("click", ".qp-order-btn", function () {
-      // First, handle the button's active state
-      $(".qp-order-btn").removeClass("active");
-      $(this).addClass("active");
-      $('#qp-start-practice-form input[name="question_order"]').val(
-        $(this).data("order")
-      );
-
-      // Then, check if the Next button can be enabled
-      updateStep1NextButton();
     });
-
-    // Initial check on page load
-    updateStep1NextButton();
 
     // Function to navigate between steps
     function navigateToStep(targetStepNumber) {
@@ -63,18 +36,6 @@ jQuery(document).ready(function ($) {
       var targetStep = $(this).data("target-step");
       navigateToStep(targetStep);
     });
-
-    // Logic for conditional Question Order display
-    if (
-      typeof qp_ajax_object.question_order_setting !== "undefined" &&
-      qp_ajax_object.question_order_setting !== "user_input"
-    ) {
-      $(".qp-order-selection").hide();
-      // Set the hidden input to the admin-defined value
-      $('#qp-start-practice-form input[name="question_order"]').val(
-        qp_ajax_object.question_order_setting
-      );
-    }
 
     // --- Revision Mode UI Logic ---
     wrapper.on("click", ".qp-revision-type-btn", function () {
