@@ -455,18 +455,23 @@ class QP_Shortcodes
                     </div>
 
                     <div class="qp-options-area"></div>
+                    <div class="qp-review-later" style="text-align:center;"><label class="qp-review-later-checkbox qp-button qp-button-secondary">
+                        <input type="checkbox" id="qp-mark-for-review-cb">
+                        <span>Mark for Review</span>
+                    </label></div>
+                    
                 </div>
             </div>
 
             <div class="qp-footer-nav">
-    <button id="qp-prev-btn" class="qp-button qp-button-secondary" disabled>
-        <span class="dashicons dashicons-arrow-left-alt2"></span>
-    </button>
-    <button id="qp-skip-btn" class="qp-button qp-button-secondary">Skip</button>
-    <button id="qp-next-btn" class="qp-button qp-button-primary">
-        <span class="dashicons dashicons-arrow-right-alt2"></span>
-    </button>
-</div>
+                <button id="qp-prev-btn" class="qp-button qp-button-secondary" disabled>
+                    <span class="dashicons dashicons-arrow-left-alt2"></span>
+                </button>
+                <button id="qp-skip-btn" class="qp-button qp-button-secondary">Skip</button>
+                <button id="qp-next-btn" class="qp-button qp-button-primary">
+                    <span class="dashicons dashicons-arrow-right-alt2"></span>
+                </button>
+            </div>
 
             <hr class="qp-footer-divider">
 
@@ -475,12 +480,7 @@ class QP_Shortcodes
                     <span class="dashicons dashicons-flag"></span> Report
                 </button>
 
-                <button id="qp-end-practice-btn" class="qp-button qp-button-danger">End Practice</button>
-
-                <label class="qp-review-later-checkbox qp-button qp-button-secondary">
-                    <input type="checkbox" id="qp-mark-for-review-cb">
-                    <span>Mark for Review</span>
-                </label>
+                <button id="qp-end-practice-btn" class="qp-button qp-button-danger">End Session</button>
             </div>
         </div>
         <div id="qp-report-modal-backdrop" style="display: none;">
