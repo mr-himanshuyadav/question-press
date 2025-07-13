@@ -294,6 +294,21 @@ function qp_activate_plugin()
     ) $charset_collate;";
     dbDelta($sql_question_reports);
 
+    // --- NEW: Table for Revision Mode Attempts ---
+    $table_revision_attempts = $wpdb->prefix . 'qp_revision_attempts';
+    $sql_revision_attempts = "CREATE TABLE $table_revision_attempts (
+    revision_attempt_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+    user_id BIGINT(20) UNSIGNED NOT NULL,
+    question_id BIGINT(20) UNSIGNED NOT NULL,
+    topic_id BIGINT(20) UNSIGNED NOT NULL,
+    attempt_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY  (revision_attempt_id),
+    UNIQUE KEY user_question_topic (user_id, question_id, topic_id),
+    KEY user_id (user_id),
+    KEY topic_id (topic_id)
+) $charset_collate;";
+    dbDelta($sql_revision_attempts);
+
     // Add some default report reasons if the table is empty
     if ($wpdb->get_var("SELECT COUNT(*) FROM $table_report_reasons") == 0) {
         $default_reasons = ['Wrong Answer', 'Typo in question', 'Options are incorrect', 'Image is not loading', 'Question is confusing'];
@@ -1127,7 +1142,8 @@ function qp_start_practice_session_ajax()
 
         $base_where_sql = implode(' AND ', $where_clauses);
         if (!$session_settings['include_attempted']) {
-            $attempted_q_ids_sql = $wpdb->prepare("SELECT DISTINCT question_id FROM $a_table WHERE user_id = %d", $user_id);
+            // **THE FIX**: Only exclude questions that were explicitly 'answered'.
+            $attempted_q_ids_sql = $wpdb->prepare("SELECT DISTINCT question_id FROM $a_table WHERE user_id = %d AND status = 'answered'", $user_id);
             $base_where_sql .= " AND q.question_id NOT IN ($attempted_q_ids_sql)";
         }
 
@@ -1237,7 +1253,7 @@ function qp_get_question_data_ajax()
 
     // --- State Checks ---
     $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
-    $attempt_count = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $a_table WHERE user_id = %d AND question_id = %d AND session_id != %d", $user_id, $question_id, $session_id));
+    $attempt_count = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $a_table WHERE user_id = %d AND question_id = %d AND status = 'answered'", $user_id, $question_id));
     $review_table = $wpdb->prefix . 'qp_review_later';
     $is_marked = (bool) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$review_table} WHERE user_id = %d AND question_id = %d", $user_id, $question_id));
 
@@ -1335,13 +1351,18 @@ function qp_check_answer_ajax()
     global $wpdb;
     $o_table = $wpdb->prefix . 'qp_options';
     $attempts_table = $wpdb->prefix . 'qp_user_attempts';
+    $sessions_table = $wpdb->prefix . 'qp_user_sessions';
 
-    $wpdb->update($wpdb->prefix . 'qp_user_sessions', ['last_activity' => current_time('mysql')], ['session_id' => $session_id]);
+    $wpdb->update($sessions_table, ['last_activity' => current_time('mysql')], ['session_id' => $session_id]);
 
     $is_correct = (bool) $wpdb->get_var($wpdb->prepare("SELECT is_correct FROM $o_table WHERE question_id = %d AND option_id = %d", $question_id, $option_id));
     $correct_option_id = $wpdb->get_var($wpdb->prepare("SELECT option_id FROM $o_table WHERE question_id = %d AND is_correct = 1", $question_id));
 
-    // --- UPDATED: Save the selected option ID along with the attempt ---
+    // --- **THE FIX**: This is the new logic ---
+    $session = $wpdb->get_row($wpdb->prepare("SELECT settings_snapshot FROM $sessions_table WHERE session_id = %d", $session_id));
+    $settings = json_decode($session->settings_snapshot, true);
+
+    // Always record in the main attempts table
     $wpdb->insert($attempts_table, [
         'session_id' => $session_id,
         'user_id' => get_current_user_id(),
@@ -1352,9 +1373,153 @@ function qp_check_answer_ajax()
         'remaining_time' => isset($_POST['remaining_time']) ? absint($_POST['remaining_time']) : null
     ]);
 
+    // If it's a revision session, also record in the revision table
+    if (isset($settings['practice_mode']) && $settings['practice_mode'] === 'revision') {
+        $topic_id = $wpdb->get_var($wpdb->prepare("SELECT topic_id FROM {$wpdb->prefix}qp_questions WHERE question_id = %d", $question_id));
+        if ($topic_id) {
+            $wpdb->query($wpdb->prepare(
+                "INSERT INTO {$wpdb->prefix}qp_revision_attempts (user_id, question_id, topic_id) VALUES (%d, %d, %d) ON DUPLICATE KEY UPDATE attempt_date = NOW()",
+                get_current_user_id(),
+                $question_id,
+                $topic_id
+            ));
+        }
+    }
+    // --- End of new logic ---
+
     wp_send_json_success(['is_correct' => $is_correct, 'correct_option_id' => $correct_option_id]);
 }
 add_action('wp_ajax_check_answer', 'qp_check_answer_ajax');
+
+/**
+ * AJAX handler to start a REVISION practice session.
+ */
+function qp_start_revision_session_ajax() {
+    check_ajax_referer('qp_practice_nonce', 'nonce');
+    global $wpdb;
+
+    // --- Gather settings from the new form ---
+    $user_id = get_current_user_id();
+    $subjects = isset($_POST['revision_subjects']) ? array_map('absint', $_POST['revision_subjects']) : [];
+    $topics = isset($_POST['revision_topics']) ? array_map('absint', $_POST['revision_topics']) : [];
+    $questions_per_topic = isset($_POST['qp_revision_questions_per_topic']) ? absint($_POST['qp_revision_questions_per_topic']) : 10;
+    $include_unattempted = isset($_POST['include_unattempted']);
+
+    $session_settings = [
+        'practice_mode'   => 'revision',
+        'subjects'        => $subjects,
+        'topics'          => $topics,
+        'questions_per'   => $questions_per_topic,
+        'include_unattempted' => $include_unattempted,
+        'marks_correct'   => isset($_POST['qp_marks_correct']) ? floatval($_POST['qp_marks_correct']) : 1.0,
+        'marks_incorrect' => isset($_POST['qp_marks_incorrect']) ? -abs(floatval($_POST['qp_marks_incorrect'])) : 0.0,
+        'timer_enabled'   => isset($_POST['qp_timer_enabled']),
+        'timer_seconds'   => isset($_POST['qp_timer_seconds']) ? absint($_POST['qp_timer_seconds']) : 60
+    ];
+
+    if (empty($topics) && empty($subjects)) {
+        wp_send_json_error(['html' => '<div class="qp-container"><p>Please select at least one subject or topic to revise.</p><button onclick="window.location.reload();" class="qp-button qp-button-secondary">Go Back</button></div>']);
+    }
+
+    // --- Determine the final list of topics to query ---
+    $topic_ids_to_query = [];
+    if (!empty($topics)) {
+        $topic_ids_to_query = $topics;
+    }
+    if (!empty($subjects)) {
+        $ids_placeholder = implode(',', $subjects);
+        $topics_in_subjects = $wpdb->get_col("SELECT topic_id FROM {$wpdb->prefix}qp_topics WHERE subject_id IN ($ids_placeholder)");
+        $topic_ids_to_query = array_unique(array_merge($topic_ids_to_query, $topics_in_subjects));
+    }
+
+    if (empty($topic_ids_to_query)) {
+        wp_send_json_error(['html' => '<div class="qp-container"><p>No topics found for the selected subjects.</p><button onclick="window.location.reload();" class="qp-button qp-button-secondary">Go Back</button></div>']);
+    }
+
+    // --- Main Question Selection Logic ---
+    $final_question_ids = [];
+    $attempts_table = $wpdb->prefix . 'qp_user_attempts';
+    $revision_table = $wpdb->prefix . 'qp_revision_attempts';
+    $questions_table = $wpdb->prefix . 'qp_questions';
+
+    foreach ($topic_ids_to_query as $topic_id) {
+        // 1. Get questions already attempted in revision mode for this topic
+        $revised_qids_for_topic = $wpdb->get_col($wpdb->prepare("SELECT question_id FROM $revision_table WHERE user_id = %d AND topic_id = %d", $user_id, $topic_id));
+        $exclude_revised_sql = !empty($revised_qids_for_topic) ? 'AND q.question_id NOT IN (' . implode(',', $revised_qids_for_topic) . ')' : '';
+
+        // 2. Get the base pool of questions (previously seen in any mode)
+        $base_pool_query = $wpdb->prepare(
+            "SELECT DISTINCT q.question_id 
+             FROM $questions_table q
+             JOIN $attempts_table a ON q.question_id = a.question_id
+             WHERE a.user_id = %d AND q.topic_id = %d $exclude_revised_sql",
+            $user_id, $topic_id
+        );
+        $base_pool_qids = $wpdb->get_col($base_pool_query);
+
+        // 3. If "Include Unattempted" is checked, add new questions to the pool
+        if ($include_unattempted) {
+            $all_attempted_qids = $wpdb->get_col($wpdb->prepare("SELECT DISTINCT question_id FROM $attempts_table WHERE user_id = %d", $user_id));
+            $exclude_all_attempted_sql = !empty($all_attempted_qids) ? 'AND q.question_id NOT IN (' . implode(',', $all_attempted_qids) . ')' : '';
+
+            $unattempted_qids = $wpdb->get_col($wpdb->prepare(
+                "SELECT question_id FROM $questions_table q WHERE q.topic_id = %d $exclude_all_attempted_sql",
+                $topic_id
+            ));
+            // Merge and ensure uniqueness
+            $base_pool_qids = array_unique(array_merge($base_pool_qids, $unattempted_qids));
+        }
+
+        // 4. If the pool is empty, all questions for this topic have been revised. Reset the cycle.
+        if (empty($base_pool_qids)) {
+            $wpdb->delete($revision_table, ['user_id' => $user_id, 'topic_id' => $topic_id]);
+            // Re-run the selection logic for this topic now that the history is clear
+            $base_pool_qids = $wpdb->get_col($wpdb->prepare("SELECT DISTINCT q.question_id FROM $questions_table q JOIN $attempts_table a ON q.question_id = a.question_id WHERE a.user_id = %d AND q.topic_id = %d", $user_id, $topic_id));
+        }
+        
+        // 5. Order the final pool and get the limited number of questions
+        if (!empty($base_pool_qids)) {
+            $ids_placeholder = implode(',', $base_pool_qids);
+            $q_ids = $wpdb->get_col($wpdb->prepare(
+                "SELECT q.question_id 
+                 FROM $questions_table q
+                 LEFT JOIN {$wpdb->prefix}qp_sources src ON q.source_id = src.source_id
+                 LEFT JOIN {$wpdb->prefix}qp_source_sections sec ON q.section_id = sec.section_id
+                 WHERE q.question_id IN ($ids_placeholder)
+                 ORDER BY src.source_name, sec.section_name, CAST(q.question_number_in_section AS UNSIGNED)
+                 LIMIT %d",
+                $questions_per_topic
+            ));
+            $final_question_ids = array_merge($final_question_ids, $q_ids);
+        }
+    }
+
+    // --- Create and Start the Session (This part is similar to the normal mode) ---
+    $question_ids = array_unique($final_question_ids);
+    if (empty($question_ids)) {
+        wp_send_json_error(['html' => '<div class="qp-container"><p>No questions were found for the selected criteria. Try different options or a Normal Practice session.</p><button onclick="window.location.reload();" class="qp-button qp-button-secondary">Go Back</button></div>']);
+    }
+    
+    $options = get_option('qp_settings');
+    $session_page_id = isset($options['session_page']) ? absint($options['session_page']) : 0;
+    if (!$session_page_id) {
+        wp_send_json_error(['message' => 'The administrator has not configured a session page.']);
+    }
+
+    $wpdb->insert($wpdb->prefix . 'qp_user_sessions', [
+        'user_id'                 => $user_id,
+        'status'                  => 'active',
+        'start_time'              => current_time('mysql'),
+        'last_activity'           => current_time('mysql'),
+        'settings_snapshot'       => wp_json_encode($session_settings),
+        'question_ids_snapshot'   => wp_json_encode($question_ids)
+    ]);
+    $session_id = $wpdb->insert_id;
+
+    $redirect_url = add_query_arg('session_id', $session_id, get_permalink($session_page_id));
+    wp_send_json_success(['redirect_url' => $redirect_url]);
+}
+add_action('wp_ajax_start_revision_session', 'qp_start_revision_session_ajax');
 
 /**
  * AJAX handler to mark a question as 'expired' for a session.

@@ -74,51 +74,69 @@ body {
 .qp-form-group-description p { margin: 0.5rem 0; font-size: 13px; line-height: 1.5; }
 .qp-marks-group { display: flex; flex-direction: column; gap: 1rem; }
 
-
-/* --- Custom Multi-Select Dropdown Styles --- */
+/* --- Final, Polished Multi-Select Dropdown Styles --- */
 .qp-multi-select-dropdown {
     position: relative;
 }
 
 .qp-multi-select-button {
     width: 100%;
-    padding: 12px;
+    padding: 12px 15px;
     border: 1px solid var(--qp-border-color);
     border-radius: 4px;
     background-color: #fff;
     text-align: left;
     font-size: 16px;
+    color: var(--qp-dark-text);
     cursor: pointer;
     display: flex;
     justify-content: space-between;
     align-items: center;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.qp-multi-select-button:hover {
+    border-color: #a7aaad;
+}
+
+.qp-multi-select-button[aria-expanded="true"] {
+    border-color: var(--qp-primary-color);
+    box-shadow: 0 0 0 1px var(--qp-primary-color);
+}
+
+.qp-multi-select-button[aria-expanded="true"]::after {
+    transform: rotate(180deg);
 }
 
 .qp-multi-select-button::after {
     content: '\25BC'; /* Downward-pointing triangle */
     font-size: 12px;
+    transition: transform 0.2s ease;
 }
 
 .qp-multi-select-list {
     display: none;
     position: absolute;
-    top: 100%;
+    top: calc(100% + 4px);
     left: 0;
     right: 0;
     background-color: #fff;
     border: 1px solid var(--qp-border-color);
-    border-top: none;
+    border-radius: 4px;
     max-height: 250px;
     overflow-y: auto;
     z-index: 10;
     padding: 0.5rem;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
 }
 
 .qp-multi-select-list label {
-    display: block;
-    padding: 0.5rem 0.75rem;
+    display: flex;
+    align-items: center;
+    padding: 0.6rem 0.75rem;
     cursor: pointer;
     border-radius: 4px;
+    font-size: 15px;
 }
 
 .qp-multi-select-list label:hover {
@@ -126,8 +144,15 @@ body {
 }
 
 .qp-multi-select-list input[type="checkbox"] {
-    margin-right: 10px;
+    margin-right: 12px;
     transform: scale(1.1);
+    flex-shrink: 0;
+}
+
+/* **THE FIX**: Remove the outline on focus */
+.qp-multi-select-list input[type="checkbox"]:focus {
+    outline: none;
+    box-shadow: none;
 }
 
 .qp-topic-group-header {
@@ -136,37 +161,8 @@ body {
     padding: 0.75rem;
     margin-top: 0.5rem;
     border-bottom: 1px solid var(--qp-border-color);
-    color: var(--qp-primary-color);
+    color: var(--qp-light-text);
 }
-
-/* --- Multi-Select Dropdown Polish --- */
-.qp-multi-select-button {
-    transition: border-color 0.2s ease, box-shadow 0.2s ease;
-}
-
-.qp-multi-select-button:hover {
-    border-color: #a7aaad;
-}
-
-/* Style when the dropdown is open/focused */
-.qp-multi-select-button:focus,
-.qp-multi-select-list:not(:empty) {
-    border-color: var(--qp-primary-color);
-    box-shadow: 0 0 0 1px var(--qp-primary-color);
-    outline: none;
-}
-
-.qp-multi-select-list {
-    border-radius: 0 0 4px 4px;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.05);
-}
-
-/* Style for selected items */
-.qp-multi-select-list label input:checked + span {
-    font-weight: bold;
-    color: var(--qp-primary-color);
-}
-
 
 .qp-action-buttons {
     display: flex;
