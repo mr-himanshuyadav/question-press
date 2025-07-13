@@ -235,12 +235,12 @@ class QP_Shortcodes
         ];
 
         $attempt_history = $wpdb->get_results($wpdb->prepare(
-    "SELECT a.question_id, a.selected_option_id, a.is_correct, a.status, o.option_id as correct_option_id
+            "SELECT a.question_id, a.selected_option_id, a.is_correct, a.status, a.remaining_time, o.option_id as correct_option_id
          FROM {$wpdb->prefix}qp_user_attempts a
          LEFT JOIN {$wpdb->prefix}qp_options o ON a.question_id = o.question_id AND o.is_correct = 1
          WHERE a.session_id = %d",
-    $session_id
-), OBJECT_K);
+            $session_id
+        ), OBJECT_K);
 
         $session_data['attempt_history'] = $attempt_history;
         self::$session_data_for_script = $session_data;
@@ -455,10 +455,6 @@ class QP_Shortcodes
                     </div>
 
                     <div class="qp-options-area"></div>
-                    <label class="qp-review-later-checkbox">
-                        <input type="checkbox" id="qp-mark-for-review-cb">
-                        <span>Mark for Review</span>
-                    </label>
                 </div>
             </div>
 
@@ -468,11 +464,19 @@ class QP_Shortcodes
                 <button id="qp-next-btn" class="qp-button qp-button-primary">Next &raquo;</button>
             </div>
 
+            <hr class="qp-footer-divider">
+
             <div class="qp-footer-controls">
                 <button id="qp-report-btn" class="qp-button qp-button-secondary">
-                    <span class="dashicons dashicons-warning"></span> Report
+                    <span class="dashicons dashicons-flag"></span> Report
                 </button>
+
                 <button id="qp-end-practice-btn" class="qp-button qp-button-danger">End Practice</button>
+
+                <label class="qp-review-later-checkbox qp-button qp-button-secondary">
+                    <input type="checkbox" id="qp-mark-for-review-cb">
+                    <span>Mark for Review</span>
+                </label>
             </div>
         </div>
         <div id="qp-report-modal-backdrop" style="display: none;">

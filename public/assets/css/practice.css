@@ -189,11 +189,13 @@ body {
 .qp-options-area .option.incorrect { border-color: var(--qp-incorrect-color) !important; background: var(--qp-incorrect-bg); color: var(--qp-incorrect-text); }
 .qp-footer-nav { margin-top: .6rem; display: flex; gap: 10px; }
 .qp-footer-nav button { padding: 10px; font-weight: 600; flex: 1; }
-.qp-footer-controls {margin-top: 20px;display: flex;justify-content: space-between;align-items: center;
+.qp-footer-controls {margin-bottom: 2rem;display: flex;justify-content: space-between;align-items: center; gap: 10px;
 }
 .qp-footer-nav button:disabled { background-color: #f0f0f1; border-color: #ffffff00; color: #a7aaad; cursor: not-allowed; }
 #qp-prev-btn { background-color: var(--qp-bg-light); color: var(--qp-dark-text); }/* Unique style for Previous button */
 #qp-prev-btn:disabled { background-color: #f0f0f1; border-color: #ffffff00; color: #a7aaad; cursor: not-allowed; }
+.qp-footer-divider{margin: 2rem 0px;}
+
 
 /* --- Summary Screen --- */
 .qp-summary-wrapper { text-align: center; }
@@ -218,6 +220,41 @@ body {
 .qp-report-color-warning { background-color: #ffb74d; }
 .qp-report-color-info { background-color: #64b5f6; }
 .qp-report-color-neutral { background-color: #90a4ae; }
+
+/* --- Final, Consolidated Footer Button Styles --- */
+
+/* Base style for all buttons in the footer for consistent sizing */
+.qp-footer-nav .qp-button,
+.qp-footer-controls .qp-button {
+    padding: 12px 24px;
+    font-size: 14px; /* Ensure consistent font size */
+    flex: 1; /* Make all buttons take up equal space */
+    justify-content: center; /* Center content within the button */
+}
+
+/* Specific styles for the checkbox-as-a-button */
+.qp-review-later-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    font-weight: 600;
+    transition: background-color 0.2s ease;
+}
+
+.qp-review-later-checkbox:hover {
+    background-color: #f0f0f1; /* Consistent hover effect */
+    border-color: var(--qp-border-color);
+}
+
+/* Style the text and icon when the checkbox is checked */
+.qp-review-later-checkbox input[type="checkbox"]:checked ~ span {
+    color: var(--qp-primary-color);
+}
+
+#qp-report-btn {
+    border-color: black;
+}
 
 /* --- Dashboard Screen --- */
 .qp-dashboard-wrapper h2 { font-size: 22px; text-align: center; margin: 0 auto 1.5rem auto; }
@@ -449,8 +486,6 @@ body {
     padding: 10px;
     border-radius: var(--qp-radius);
     transition: all 0.2s ease;
-    /* Add some margin for spacing */
-    margin: 10px 0;
     
     background-color: #f0f0f1;
 }

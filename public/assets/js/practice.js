@@ -380,47 +380,52 @@ jQuery(document).ready(function ($) {
     sessionSettings = qp_session_data.settings;
 
     if (qp_session_data.attempt_history) {
-    var lastAttemptedIndex = -1;
-    for (var i = 0; i < sessionQuestionIDs.length; i++) {
+      var lastAttemptedIndex = -1;
+      for (var i = 0; i < sessionQuestionIDs.length; i++) {
         var qid = sessionQuestionIDs[i];
         if (qp_session_data.attempt_history[qid]) {
-            var attempt = qp_session_data.attempt_history[qid];
-            lastAttemptedIndex = i;
+          var attempt = qp_session_data.attempt_history[qid];
+          lastAttemptedIndex = i;
 
-            // **THE FIX**: Check the status from the database
-            switch (attempt.status) {
-                case 'answered':
-                    var isCorrect = parseInt(attempt.is_correct, 10) === 1;
-                    answeredStates[qid] = {
-                        type: "answered",
-                        is_correct: isCorrect,
-                        selected_option_id: attempt.selected_option_id,
-                        correct_option_id: attempt.correct_option_id,
-                    };
-                    if (isCorrect) {
-                        correctCount++;
-                        score += parseFloat(sessionSettings.marks_correct);
-                    } else {
-                        incorrectCount++;
-                        score += parseFloat(sessionSettings.marks_incorrect);
-                    }
-                    break;
+          // **THE FIX**: Check the status from the database
+          switch (attempt.status) {
+            case "answered":
+              var isCorrect = parseInt(attempt.is_correct, 10) === 1;
+              answeredStates[qid] = {
+                type: "answered",
+                is_correct: isCorrect,
+                selected_option_id: attempt.selected_option_id,
+                correct_option_id: attempt.correct_option_id,
+                remainingTime: attempt.remaining_time, // <-- ADD THIS
+              };
+              if (isCorrect) {
+                correctCount++;
+                score += parseFloat(sessionSettings.marks_correct);
+              } else {
+                incorrectCount++;
+                score += parseFloat(sessionSettings.marks_incorrect);
+              }
+              break;
 
-                case 'skipped':
-                    answeredStates[qid] = { type: "skipped" };
-                    skippedCount++;
-                    break;
+            case "skipped":
+              answeredStates[qid] = {
+                type: "skipped",
+                remainingTime: attempt.remaining_time,
+              }; // <-- ADD THIS
+              skippedCount++;
+              break;
 
-                case 'expired':
-                    answeredStates[qid] = { type: "expired", remainingTime: 0 };
-                    // You can optionally add a new counter for expired questions if you want
-                    break;
-            }
+            case "expired":
+              answeredStates[qid] = { type: "expired", remainingTime: 0 };
+              // You can optionally add a new counter for expired questions if you want
+              break;
+          }
         }
+      }
+      currentQuestionIndex =
+        lastAttemptedIndex >= 0 ? lastAttemptedIndex + 1 : 0;
+      highestQuestionIndexReached = currentQuestionIndex;
     }
-    currentQuestionIndex = lastAttemptedIndex >= 0 ? lastAttemptedIndex + 1 : 0;
-    highestQuestionIndexReached = currentQuestionIndex;
-}
 
     if (
       qp_session_data.reported_ids &&
@@ -692,11 +697,12 @@ jQuery(document).ready(function ($) {
     });
 
     // 3. Apply State-Based UI
-    // 3. Apply State-Based UI
     var isReported = previousState.reported;
     var isAnswered = previousState.type === "answered";
     var isExpired = previousState.type === "expired";
     var indicatorBar = $(".qp-indicator-bar");
+    var isSkipped = previousState.type === "skipped";
+    var hasRemainingTime = typeof previousState.remainingTime !== "undefined";
 
     // First, display indicators based on state (this is purely visual)
     if (isReported) {
@@ -704,17 +710,13 @@ jQuery(document).ready(function ($) {
       indicatorBar.show();
     }
 
-    // Next, determine the interactive state of the controls.
-    // If the question has been answered OR reported, lock everything down.
+    // Determine the interactive state of the controls
     if (isAnswered || isReported || isExpired) {
-      optionsArea
-        .addClass("disabled")
-        .find('input[type="radio"]')
-        .prop("disabled", true);
+      // --- STATE: LOCKED (Answered, Reported, or Expired) ---
+      optionsArea.addClass("disabled");
       $("#qp-skip-btn, #qp-report-btn").prop("disabled", true);
       $("#qp-next-btn").prop("disabled", false);
 
-      // If it was answered, we also need to apply the correctness styling.
       if (isAnswered) {
         $('input[value="' + previousState.selected_option_id + '"]')
           .prop("checked", true)
@@ -725,22 +727,23 @@ jQuery(document).ready(function ($) {
             .closest(".option")
             .addClass("correct");
         }
-        // NEW: If it has expired, show the expired timer state
-        if (isExpired) {
-          $("#qp-timer-indicator")
-            .html("&#9201; Time Expired")
-            .addClass("expired")
-            .show();
-          $(".qp-indicator-bar").show();
-        }
+      }
+      if (isExpired) {
+        $("#qp-timer-indicator")
+          .html("&#9201; Time Expired")
+          .addClass("expired")
+          .show();
+        indicatorBar.show();
       }
     } else {
-      // This block only runs for a fresh question that is NOT answered and NOT reported.
-      if (
-        sessionSettings.timer_enabled &&
-        (!previousState || previousState.type !== "skipped")
-      ) {
-        startTimer(sessionSettings.timer_seconds);
+      // --- STATE: INTERACTIVE (New, Skipped, or In-Progress Timer) ---
+      if (sessionSettings.timer_enabled) {
+        var startTime = hasRemainingTime
+          ? previousState.remainingTime
+          : sessionSettings.timer_seconds;
+        $("#qp-timer-indicator").removeClass("expired").show();
+        indicatorBar.show();
+        startTimer(startTime);
       }
     }
 
@@ -833,17 +836,8 @@ jQuery(document).ready(function ($) {
   }
 
   function startTimer(seconds) {
-    $(".timer-stat").show();
-    $(".qp-indicator-bar").show();
-
-    var questionID = sessionQuestionIDs[currentQuestionIndex];
-    // Check if there's a saved time for this question, otherwise use the full duration.
-    var startTime =
-      answeredStates[questionID] && answeredStates[questionID].remainingTime
-        ? answeredStates[questionID].remainingTime
-        : seconds;
-
-    remainingTime = startTime; // Use the global variable
+    // This function now assumes it's always given the correct starting time.
+    remainingTime = seconds;
 
     function updateDisplay() {
       var minutes = Math.floor(remainingTime / 60);
@@ -858,35 +852,32 @@ jQuery(document).ready(function ($) {
       remainingTime--;
       updateDisplay();
       if (remainingTime <= 0) {
-    clearInterval(questionTimer);
-    var questionID = sessionQuestionIDs[currentQuestionIndex];
+        clearInterval(questionTimer);
 
-    // Update the local state
-    if (typeof answeredStates[questionID] === 'undefined') {
-        answeredStates[questionID] = {};
-    }
-    answeredStates[questionID].type = 'expired';
-    answeredStates[questionID].remainingTime = 0; // Explicitly set time to 0
+        var questionID = sessionQuestionIDs[currentQuestionIndex];
+        if (typeof answeredStates[questionID] === "undefined") {
+          answeredStates[questionID] = {};
+        }
+        answeredStates[questionID].type = "expired";
+        answeredStates[questionID].remainingTime = 0;
 
-    // **THE FIX**: Notify the server that the question has expired
-    $.ajax({
-        url: qp_ajax_object.ajax_url,
-        type: 'POST',
-        data: {
-            action: 'expire_question',
+        $.ajax({
+          url: qp_ajax_object.ajax_url,
+          type: "POST",
+          data: {
+            action: "expire_question",
             nonce: qp_ajax_object.nonce,
             session_id: sessionID,
             question_id: questionID,
-        },
-    });
+          },
+        });
 
-    // Update the UI to the "Time Expired" state
-    var timerIndicator = $('#qp-timer-indicator');
-    timerIndicator.html('&#9201; Time Expired').addClass('expired');
-    $('.qp-options-area').addClass('disabled');
-    $('#qp-skip-btn, #qp-report-btn').prop('disabled', true);
-    $('#qp-next-btn').prop('disabled', false);
-}
+        var timerIndicator = $("#qp-timer-indicator");
+        timerIndicator.html("&#9201; Time Expired").addClass("expired");
+        $(".qp-options-area").addClass("disabled");
+        $("#qp-skip-btn, #qp-report-btn").prop("disabled", true);
+        $("#qp-next-btn").prop("disabled", false);
+      }
     }, 1000);
   }
 
@@ -960,6 +951,7 @@ jQuery(document).ready(function ($) {
         session_id: sessionID,
         question_id: questionID,
         option_id: selectedOption.find('input[type="radio"]').val(),
+        remaining_time: remainingTime,
       },
       success: function (response) {
         if (response.success) {
@@ -1004,16 +996,17 @@ jQuery(document).ready(function ($) {
   });
 
   wrapper.on("click", "#qp-next-btn, #qp-prev-btn", function () {
-    clearInterval(questionTimer);
-    var direction = $(this).attr("id") === "qp-next-btn" ? "next" : "prev";
+    clearInterval(questionTimer); // Stop the timer immediately
     var questionID = sessionQuestionIDs[currentQuestionIndex];
+    var direction = $(this).attr("id") === "qp-next-btn" ? "next" : "prev";
 
-    // **THE FIX**: Ensure the state object exists, then save the timer's value.
+    // **THE FIX**: Always ensure the state object exists, then save the timer's value.
     if (typeof answeredStates[questionID] === "undefined") {
       answeredStates[questionID] = {};
     }
     answeredStates[questionID].remainingTime = remainingTime;
 
+    // Now, proceed with the AJAX call and navigation
     $.ajax({
       url: qp_ajax_object.ajax_url,
       type: "POST",
@@ -1049,7 +1042,20 @@ jQuery(document).ready(function ($) {
         skippedCount++;
       }
 
-      // **THE FIX**: Ensure the state object exists, then save state and time together.
+      // Send the skip event to the server with the remaining time
+      $.ajax({
+        url: qp_ajax_object.ajax_url,
+        type: "POST",
+        data: {
+          action: "skip_question",
+          nonce: qp_ajax_object.nonce,
+          session_id: sessionID,
+          question_id: questionID,
+          remaining_time: remainingTime,
+        },
+      });
+
+      // Update local state
       if (typeof answeredStates[questionID] === "undefined") {
         answeredStates[questionID] = {};
       }

@@ -229,6 +229,7 @@ $sql_attempts = "CREATE TABLE $table_attempts (
     selected_option_id BIGINT(20) UNSIGNED,
     is_correct BOOLEAN,
     status VARCHAR(20) NOT NULL DEFAULT 'answered',
+    remaining_time INT,
     attempt_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY  (attempt_id),
     KEY session_id (session_id),
@@ -1308,8 +1309,9 @@ function qp_check_answer_ajax()
         'question_id' => $question_id,
         'selected_option_id' => $option_id,
         'is_correct' => $is_correct ? 1 : 0,
-        'status' => 'answered'
-    ]);
+        'status' => 'answered',
+        'remaining_time' => isset($_POST['remaining_time']) ? absint($_POST['remaining_time']) : null
+]);
 
     wp_send_json_success(['is_correct' => $is_correct, 'correct_option_id' => $correct_option_id]);
 }
@@ -1333,8 +1335,9 @@ function qp_expire_question_ajax() {
         'user_id' => get_current_user_id(),
         'question_id' => $question_id,
         'is_correct' => null,
-        'status' => 'expired' // Set the status to expired
-    ]);
+        'status' => 'expired',
+        'remaining_time' => 0 // Expired means 0 time left
+]);
     
     wp_send_json_success();
 }
@@ -1352,8 +1355,9 @@ function qp_skip_question_ajax() {
         'user_id' => get_current_user_id(),
         'question_id' => $question_id,
         'is_correct' => null,
-        'status' => 'skipped' // Set the status to skipped
-    ]);
+        'status' => 'skipped', 
+        'remaining_time' => isset($_POST['remaining_time']) ? absint($_POST['remaining_time']) : null
+]);
     
     wp_send_json_success();
 }
