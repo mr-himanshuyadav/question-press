@@ -1190,6 +1190,8 @@ function qp_start_practice_session_ajax()
 }
 add_action('wp_ajax_start_practice_session', 'qp_start_practice_session_ajax');
 
+
+
 function qp_get_practice_form_html_ajax()
 {
     check_ajax_referer('qp_practice_nonce', 'nonce');
@@ -1394,27 +1396,27 @@ add_action('wp_ajax_check_answer', 'qp_check_answer_ajax');
 /**
  * AJAX handler to start a REVISION practice session.
  */
-function qp_start_revision_session_ajax() {
+function qp_start_revision_session_ajax()
+{
     check_ajax_referer('qp_practice_nonce', 'nonce');
     global $wpdb;
 
     // --- Gather settings from the new form ---
     $user_id = get_current_user_id();
-    $subjects = isset($_POST['revision_subjects']) ? array_map('absint', $_POST['revision_subjects']) : [];
-    $topics = isset($_POST['revision_topics']) ? array_map('absint', $_POST['revision_topics']) : [];
+    $subjects = isset($_POST['revision_subjects']) && is_array($_POST['revision_subjects']) ? array_map('absint', $_POST['revision_subjects']) : [];
+    $topics = isset($_POST['revision_topics']) && is_array($_POST['revision_topics']) ? array_map('absint', $_POST['revision_topics']) : [];
     $questions_per_topic = isset($_POST['qp_revision_questions_per_topic']) ? absint($_POST['qp_revision_questions_per_topic']) : 10;
-    $include_unattempted = isset($_POST['include_unattempted']);
+    $exclude_pyq = isset($_POST['exclude_pyq']);
 
     $session_settings = [
-        'practice_mode'   => 'revision',
-        'subjects'        => $subjects,
-        'topics'          => $topics,
-        'questions_per'   => $questions_per_topic,
-        'include_unattempted' => $include_unattempted,
-        'marks_correct'   => isset($_POST['qp_marks_correct']) ? floatval($_POST['qp_marks_correct']) : 1.0,
-        'marks_incorrect' => isset($_POST['qp_marks_incorrect']) ? -abs(floatval($_POST['qp_marks_incorrect'])) : 0.0,
-        'timer_enabled'   => isset($_POST['qp_timer_enabled']),
-        'timer_seconds'   => isset($_POST['qp_timer_seconds']) ? absint($_POST['qp_timer_seconds']) : 60
+        'practice_mode'       => 'revision',
+        'subjects'            => $subjects,
+        'topics'              => $topics,
+        'questions_per'       => $questions_per_topic,
+        'marks_correct'       => isset($_POST['qp_marks_correct']) ? floatval($_POST['qp_marks_correct']) : 1.0,
+        'marks_incorrect'     => isset($_POST['qp_marks_incorrect']) ? -abs(floatval($_POST['qp_marks_incorrect'])) : 0.0,
+        'timer_enabled'       => isset($_POST['qp_timer_enabled']),
+        'timer_seconds'       => isset($_POST['qp_timer_seconds']) ? absint($_POST['qp_timer_seconds']) : 60
     ];
 
     if (empty($topics) && empty($subjects)) {
@@ -1425,68 +1427,62 @@ function qp_start_revision_session_ajax() {
     $topic_ids_to_query = [];
     if (!empty($topics)) {
         $topic_ids_to_query = $topics;
-    }
-    if (!empty($subjects)) {
-        $ids_placeholder = implode(',', $subjects);
-        $topics_in_subjects = $wpdb->get_col("SELECT topic_id FROM {$wpdb->prefix}qp_topics WHERE subject_id IN ($ids_placeholder)");
-        $topic_ids_to_query = array_unique(array_merge($topic_ids_to_query, $topics_in_subjects));
+    } elseif (!empty($subjects)) {
+        $ids_placeholder = implode(',', array_fill(0, count($subjects), '%d'));
+        $topics_in_subjects = $wpdb->get_col($wpdb->prepare("SELECT topic_id FROM {$wpdb->prefix}qp_topics WHERE subject_id IN ($ids_placeholder)", $subjects));
+        $topic_ids_to_query = $topics_in_subjects;
     }
 
+    $topic_ids_to_query = array_unique($topic_ids_to_query);
+
     if (empty($topic_ids_to_query)) {
-        wp_send_json_error(['html' => '<div class="qp-container"><p>No topics found for the selected subjects.</p><button onclick="window.location.reload();" class="qp-button qp-button-secondary">Go Back</button></div>']);
+        wp_send_json_error(['html' => '<div class="qp-container"><p>No topics found for the selected criteria.</p><button onclick="window.location.reload();" class="qp-button qp-button-secondary">Go Back</button></div>']);
     }
 
     // --- Main Question Selection Logic ---
     $final_question_ids = [];
-    $attempts_table = $wpdb->prefix . 'qp_user_attempts';
     $revision_table = $wpdb->prefix . 'qp_revision_attempts';
     $questions_table = $wpdb->prefix . 'qp_questions';
 
     foreach ($topic_ids_to_query as $topic_id) {
-        // 1. Get questions already attempted in revision mode for this topic
+        // 1. Get ALL questions that belong to the topic. This is our master pool.
+        $pyq_filter_sql = '';
+        if ($exclude_pyq) {
+            $pyq_filter_sql = " AND g.is_pyq = 0";
+        }
+        $master_pool_qids = $wpdb->get_col($wpdb->prepare(
+            "SELECT q.question_id 
+     FROM {$wpdb->prefix}qp_questions q
+     JOIN {$wpdb->prefix}qp_question_groups g ON q.group_id = g.group_id
+     WHERE q.topic_id = %d" . $pyq_filter_sql,
+            $topic_id
+        ));
+
+
+        // 2. Get questions already attempted *in revision mode* for this topic.
         $revised_qids_for_topic = $wpdb->get_col($wpdb->prepare("SELECT question_id FROM $revision_table WHERE user_id = %d AND topic_id = %d", $user_id, $topic_id));
-        $exclude_revised_sql = !empty($revised_qids_for_topic) ? 'AND q.question_id NOT IN (' . implode(',', $revised_qids_for_topic) . ')' : '';
 
-        // 2. Get the base pool of questions (previously seen in any mode)
-        $base_pool_query = $wpdb->prepare(
-            "SELECT DISTINCT q.question_id 
-             FROM $questions_table q
-             JOIN $attempts_table a ON q.question_id = a.question_id
-             WHERE a.user_id = %d AND q.topic_id = %d $exclude_revised_sql",
-            $user_id, $topic_id
-        );
-        $base_pool_qids = $wpdb->get_col($base_pool_query);
+        // 3. Find the questions that are available for this revision cycle by excluding revised ones.
+        $available_qids = array_diff($master_pool_qids, $revised_qids_for_topic);
 
-        // 3. If "Include Unattempted" is checked, add new questions to the pool
-        if ($include_unattempted) {
-            $all_attempted_qids = $wpdb->get_col($wpdb->prepare("SELECT DISTINCT question_id FROM $attempts_table WHERE user_id = %d", $user_id));
-            $exclude_all_attempted_sql = !empty($all_attempted_qids) ? 'AND q.question_id NOT IN (' . implode(',', $all_attempted_qids) . ')' : '';
-
-            $unattempted_qids = $wpdb->get_col($wpdb->prepare(
-                "SELECT question_id FROM $questions_table q WHERE q.topic_id = %d $exclude_all_attempted_sql",
-                $topic_id
-            ));
-            // Merge and ensure uniqueness
-            $base_pool_qids = array_unique(array_merge($base_pool_qids, $unattempted_qids));
-        }
-
-        // 4. If the pool is empty, all questions for this topic have been revised. Reset the cycle.
-        if (empty($base_pool_qids)) {
+        // 4. If the available pool is empty (and the master pool is not), the cycle is complete. Reset it.
+        if (empty($available_qids) && !empty($master_pool_qids)) {
             $wpdb->delete($revision_table, ['user_id' => $user_id, 'topic_id' => $topic_id]);
-            // Re-run the selection logic for this topic now that the history is clear
-            $base_pool_qids = $wpdb->get_col($wpdb->prepare("SELECT DISTINCT q.question_id FROM $questions_table q JOIN $attempts_table a ON q.question_id = a.question_id WHERE a.user_id = %d AND q.topic_id = %d", $user_id, $topic_id));
+            // The available pool for this new cycle is now the entire master pool again.
+            $available_qids = $master_pool_qids;
         }
-        
-        // 5. Order the final pool and get the limited number of questions
-        if (!empty($base_pool_qids)) {
-            $ids_placeholder = implode(',', $base_pool_qids);
+
+        // 5. If we have questions available, fetch them in the correct order and apply the limit.
+        if (!empty($available_qids)) {
+            $ids_placeholder = implode(',', array_map('absint', $available_qids));
+            // THIS IS THE CRITICAL ORDERING LOGIC
             $q_ids = $wpdb->get_col($wpdb->prepare(
-                "SELECT q.question_id 
+                "SELECT q.question_id
                  FROM $questions_table q
                  LEFT JOIN {$wpdb->prefix}qp_sources src ON q.source_id = src.source_id
                  LEFT JOIN {$wpdb->prefix}qp_source_sections sec ON q.section_id = sec.section_id
                  WHERE q.question_id IN ($ids_placeholder)
-                 ORDER BY src.source_name, sec.section_name, CAST(q.question_number_in_section AS UNSIGNED)
+                 ORDER BY src.source_name ASC, sec.section_name ASC, CAST(q.question_number_in_section AS UNSIGNED) ASC, q.question_id ASC
                  LIMIT %d",
                 $questions_per_topic
             ));
@@ -1494,12 +1490,15 @@ function qp_start_revision_session_ajax() {
         }
     }
 
-    // --- Create and Start the Session (This part is similar to the normal mode) ---
+    // --- Create and Start the Session ---
     $question_ids = array_unique($final_question_ids);
     if (empty($question_ids)) {
         wp_send_json_error(['html' => '<div class="qp-container"><p>No questions were found for the selected criteria. Try different options or a Normal Practice session.</p><button onclick="window.location.reload();" class="qp-button qp-button-secondary">Go Back</button></div>']);
     }
-    
+
+    // Shuffle the final list ONLY after the strict ordering and selection is complete.
+    shuffle($question_ids);
+
     $options = get_option('qp_settings');
     $session_page_id = isset($options['session_page']) ? absint($options['session_page']) : 0;
     if (!$session_page_id) {

@@ -1,6 +1,62 @@
 jQuery(document).ready(function ($) {
   var wrapper = $("#qp-practice-app-wrapper");
 
+  // --- LOGIC FOR REVISION FORM DROPDOWNS ---
+// Logic to fetch topics when subjects change in the REVISION form
+$('#qp_subject_dropdown_revision').on('change', 'input[type="checkbox"]', function() {
+    var selectedSubjects = [];
+    $('#qp_subject_dropdown_revision input:checked').each(function() {
+        selectedSubjects.push($(this).val());
+    });
+
+    var $topicGroup = $('#qp-topic-group-revision');
+    var $topicListContainer = $('#qp_topic_list_container_revision');
+    var $topicButton = $('#qp_topic_dropdown_revision .qp-multi-select-button');
+
+    // Update the Subject button text
+    updateButtonText($('#qp_subject_dropdown_revision .qp-multi-select-button'), '-- Please select --', 'Subject');
+
+    if (selectedSubjects.length > 0) {
+        $.ajax({
+            url: qp_ajax_object.ajax_url,
+            type: 'POST',
+            data: {
+                action: 'get_topics_for_subject', // We can reuse the same AJAX action
+                nonce: qp_ajax_object.nonce,
+                subject_id: selectedSubjects,
+            },
+            beforeSend: function() {
+                $topicButton.text('Loading Topics...').prop('disabled', true);
+                $topicListContainer.empty();
+            },
+            success: function(response) {
+                $topicButton.prop('disabled', false);
+                if (response.success && Object.keys(response.data.topics).length > 0) {
+                    $.each(response.data.topics, function(subjectName, topics) {
+                        $topicListContainer.append('<div class="qp-topic-group-header">' + subjectName + '</div>');
+                        $.each(topics, function(i, topic) {
+                            $topicListContainer.append('<label><input type="checkbox" name="revision_topics[]" value="' + topic.topic_id + '"> ' + topic.topic_name + '</label>');
+                        });
+                    });
+                    updateButtonText($topicButton, '-- Select Topic(s) --', 'Topic');
+                    $topicGroup.slideDown();
+                } else {
+                    updateButtonText($topicButton, 'No Topics Found', 'Topic');
+                    $topicGroup.slideUp();
+                }
+            }
+        });
+    } else {
+        $topicGroup.slideUp();
+        updateButtonText($topicButton, '-- Select subject(s) first --', 'Topic');
+    }
+});
+
+// Update button text when a topic is selected in the revision form
+$('#qp_topic_dropdown_revision').on('change', 'input[type="checkbox"]', function() {
+    updateButtonText($('#qp_topic_dropdown_revision .qp-multi-select-button'), '-- Select Topic(s) --', 'Topic');
+});
+
 // Function to update the text on a multi-select button
 function updateButtonText($button, placeholder, singularLabel) {
     var $list = $button.next('.qp-multi-select-list');
@@ -441,9 +497,9 @@ $(document).on('click', function(e) {
       url: qp_ajax_object.ajax_url,
       type: "POST",
       data:
-        formData +
-        "&action=start_practice_session&nonce=" +
-        qp_ajax_object.nonce,
+    formData +
+    "&action=start_revision_session&nonce=" +
+    qp_ajax_object.nonce,
       beforeSend: function () {
         submitButton.val("Setting up session...").prop("disabled", true);
       },

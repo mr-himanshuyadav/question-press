@@ -77,32 +77,15 @@ class QP_Shortcodes
     {
         global $wpdb;
 
-        // Fetch subjects and topics that the user has actually attempted
-        $user_id = get_current_user_id();
-        $results = $wpdb->get_results($wpdb->prepare(
-            "SELECT DISTINCT s.subject_id, s.subject_name, t.topic_id, t.topic_name
-             FROM {$wpdb->prefix}qp_user_attempts a
-             JOIN {$wpdb->prefix}qp_questions q ON a.question_id = q.question_id
-             JOIN {$wpdb->prefix}qp_question_groups g ON q.group_id = g.group_id
-             JOIN {$wpdb->prefix}qp_subjects s ON g.subject_id = s.subject_id
-             LEFT JOIN {$wpdb->prefix}qp_topics t ON q.topic_id = t.topic_id
-             WHERE a.user_id = %d
-             ORDER BY s.subject_name, t.topic_name",
-            $user_id
-        ));
-
-        $revision_tree = [];
-        foreach ($results as $row) {
-            if (!isset($revision_tree[$row->subject_id])) {
-                $revision_tree[$row->subject_id] = [
-                    'name' => $row->subject_name,
-                    'topics' => []
-                ];
-            }
-            if ($row->topic_id && !isset($revision_tree[$row->subject_id]['topics'][$row->topic_id])) {
-                $revision_tree[$row->subject_id]['topics'][$row->topic_id] = $row->topic_name;
-            }
-        }
+        // Fetch all subjects that have at least one question associated with them
+        $subjects = $wpdb->get_results(
+            "SELECT DISTINCT s.subject_id, s.subject_name
+         FROM {$wpdb->prefix}qp_subjects s
+         JOIN {$wpdb->prefix}qp_question_groups g ON s.subject_id = g.subject_id
+         JOIN {$wpdb->prefix}qp_questions q ON g.group_id = q.group_id
+         WHERE s.subject_name != 'Uncategorized'
+         ORDER BY s.subject_name ASC"
+        );
 
         ob_start();
     ?>
@@ -111,43 +94,31 @@ class QP_Shortcodes
             <h2>Revision Mode</h2>
 
             <div class="qp-form-group">
-                <label>Select group of questions</label>
-                <div class="qp-revision-type-buttons">
-                    <button type="button" class="qp-revision-type-btn active" data-type="auto">Auto Select</button>
-                    <button type="button" class="qp-revision-type-btn" data-type="manual">Manual</button>
+                <label for="qp_subject_dropdown_revision">Select Subject(s):</label>
+                <div class="qp-multi-select-dropdown" id="qp_subject_dropdown_revision">
+                    <button type="button" class="qp-multi-select-button">-- Please select --</button>
+                    <div class="qp-multi-select-list">
+                        <?php foreach ($subjects as $subject) : ?>
+                            <label><input type="checkbox" name="revision_subjects[]" value="<?php echo esc_attr($subject->subject_id); ?>"> <?php echo esc_html($subject->subject_name); ?></label>
+                        <?php endforeach; ?>
+                    </div>
                 </div>
             </div>
 
-            <div id="qp-revision-manual-selection" class="qp-form-group" style="display: none;">
-                <label>Select Subjects / Topics</label>
-                <div class="qp-revision-tree">
-                    <?php if (empty($revision_tree)): ?>
-                        <p>You have no previously attempted questions to revise.</p>
-                    <?php else: ?>
-                        <ul>
-                            <?php foreach ($revision_tree as $subject_id => $subject_data): ?>
-                                <li>
-                                    <label>
-                                        <input type="checkbox" name="revision_subjects[]" value="<?php echo esc_attr($subject_id); ?>">
-                                        <?php echo esc_html($subject_data['name']); ?>
-                                    </label>
-                                    <?php if (!empty($subject_data['topics'])): ?>
-                                        <ul>
-                                            <?php foreach ($subject_data['topics'] as $topic_id => $topic_name): ?>
-                                                <li>
-                                                    <label>
-                                                        <input type="checkbox" name="revision_topics[]" value="<?php echo esc_attr($topic_id); ?>">
-                                                        <?php echo esc_html($topic_name); ?>
-                                                    </label>
-                                                </li>
-                                            <?php endforeach; ?>
-                                        </ul>
-                                    <?php endif; ?>
-                                </li>
-                            <?php endforeach; ?>
-                        </ul>
-                    <?php endif; ?>
+            <div class="qp-form-group" id="qp-topic-group-revision" style="display: none;">
+                <label for="qp_topic_dropdown_revision">Select Topic(s):</label>
+                <div class="qp-multi-select-dropdown" id="qp_topic_dropdown_revision">
+                    <button type="button" class="qp-multi-select-button">-- Select subject(s) first --</button>
+                    <div class="qp-multi-select-list" id="qp_topic_list_container_revision">
+                    </div>
                 </div>
+            </div>
+            <div class="qp-form-group">
+                <label class="qp-custom-checkbox">
+                    <input type="checkbox" name="exclude_pyq" value="1" checked>
+                    <span></span>
+                    Exclude PYQs
+                </label>
             </div>
 
             <div class="qp-form-group">
@@ -158,11 +129,11 @@ class QP_Shortcodes
             <div class="qp-form-group qp-marks-group">
                 <div>
                     <label for="qp_revision_marks_correct">Marks for Correct Answer:</label>
-                    <input type="number" name="qp_marks_correct" id="qp_revision_marks_correct" value="4" step="0.01" required>
+                    <input type="number" name="qp_marks_correct" id="qp_revision_marks_correct" value="1" step="0.01" required>
                 </div>
                 <div>
                     <label for="qp_revision_marks_incorrect">Penalty for Incorrect Answer:</label>
-                    <input type="number" name="qp_marks_incorrect" id="qp_revision_marks_incorrect" value="1" step="0.01" min="0" required>
+                    <input type="number" name="qp_marks_incorrect" id="qp_revision_marks_incorrect" value="0" step="0.01" min="0" required>
                 </div>
             </div>
 
@@ -330,26 +301,26 @@ class QP_Shortcodes
                 <input type="hidden" name="question_order" value="incrementing">
 
                 <div class="qp-form-group">
-    <label for="qp_subject_dropdown">Select Subject(s):</label>
-    <div class="qp-multi-select-dropdown" id="qp_subject_dropdown">
-        <button type="button" class="qp-multi-select-button">-- Please select --</button>
-        <div class="qp-multi-select-list">
-            <label><input type="checkbox" name="qp_subject[]" value="all"> All Subjects</label>
-            <?php foreach ($subjects as $subject) : ?>
-                <label><input type="checkbox" name="qp_subject[]" value="<?php echo esc_attr($subject->subject_id); ?>"> <?php echo esc_html($subject->subject_name); ?></label>
-            <?php endforeach; ?>
-        </div>
-    </div>
-</div>
+                    <label for="qp_subject_dropdown">Select Subject(s):</label>
+                    <div class="qp-multi-select-dropdown" id="qp_subject_dropdown">
+                        <button type="button" class="qp-multi-select-button">-- Please select --</button>
+                        <div class="qp-multi-select-list">
+                            <label><input type="checkbox" name="qp_subject[]" value="all"> All Subjects</label>
+                            <?php foreach ($subjects as $subject) : ?>
+                                <label><input type="checkbox" name="qp_subject[]" value="<?php echo esc_attr($subject->subject_id); ?>"> <?php echo esc_html($subject->subject_name); ?></label>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                </div>
 
-<div class="qp-form-group" id="qp-topic-group" style="display: none;">
-    <label for="qp_topic_dropdown">Select Topic(s):</label>
-    <div class="qp-multi-select-dropdown" id="qp_topic_dropdown">
-        <button type="button" class="qp-multi-select-button">-- Select subject(s) first --</button>
-        <div class="qp-multi-select-list" id="qp_topic_list_container">
-            </div>
-    </div>
-</div>
+                <div class="qp-form-group" id="qp-topic-group" style="display: none;">
+                    <label for="qp_topic_dropdown">Select Topic(s):</label>
+                    <div class="qp-multi-select-dropdown" id="qp_topic_dropdown">
+                        <button type="button" class="qp-multi-select-button">-- Select subject(s) first --</button>
+                        <div class="qp-multi-select-list" id="qp_topic_list_container">
+                        </div>
+                    </div>
+                </div>
 
                 <div class="qp-form-group" id="qp-section-group" style="display: none;">
                     <label for="qp_section">Select Section (Optional):</label>
@@ -513,40 +484,40 @@ class QP_Shortcodes
     }
 
     public static function render_review_page()
-{
-    if (!is_user_logged_in()) {
-        return '<p>You must be logged in to review a session. <a href="' . wp_login_url(get_permalink()) . '">Click here to log in.</a></p>';
-    }
+    {
+        if (!is_user_logged_in()) {
+            return '<p>You must be logged in to review a session. <a href="' . wp_login_url(get_permalink()) . '">Click here to log in.</a></p>';
+        }
 
-    if (!isset($_GET['session_id']) || !is_numeric($_GET['session_id'])) {
-        return '<div class="qp-container"><p>Error: No valid session ID was provided.</p></div>';
-    }
+        if (!isset($_GET['session_id']) || !is_numeric($_GET['session_id'])) {
+            return '<div class="qp-container"><p>Error: No valid session ID was provided.</p></div>';
+        }
 
-    $session_id = absint($_GET['session_id']);
-    $user_id = get_current_user_id();
+        $session_id = absint($_GET['session_id']);
+        $user_id = get_current_user_id();
 
-    global $wpdb;
-    $sessions_table = $wpdb->prefix . 'qp_user_sessions';
+        global $wpdb;
+        $sessions_table = $wpdb->prefix . 'qp_user_sessions';
 
-    $session = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$sessions_table} WHERE session_id = %d AND user_id = %d", $session_id, $user_id));
+        $session = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$sessions_table} WHERE session_id = %d AND user_id = %d", $session_id, $user_id));
 
-    if (!$session) {
-        return '<div class="qp-container"><p>Error: Session not found or you do not have permission to view it.</p></div>';
-    }
+        if (!$session) {
+            return '<div class="qp-container"><p>Error: Session not found or you do not have permission to view it.</p></div>';
+        }
 
-    // --- CORRECTED: This is the new logic ---
-    $options = get_option('qp_settings');
-    $dashboard_page_url = isset($options['dashboard_page']) ? get_permalink($options['dashboard_page']) : home_url('/');
+        // --- CORRECTED: This is the new logic ---
+        $options = get_option('qp_settings');
+        $dashboard_page_url = isset($options['dashboard_page']) ? get_permalink($options['dashboard_page']) : home_url('/');
 
-    // 1. Calculate the accuracy
-    $accuracy = 0;
-    if ($session->total_attempted > 0) {
-        $accuracy = ($session->correct_count / $session->total_attempted) * 100;
-    }
-    // --- End of new logic ---
+        // 1. Calculate the accuracy
+        $accuracy = 0;
+        if ($session->total_attempted > 0) {
+            $accuracy = ($session->correct_count / $session->total_attempted) * 100;
+        }
+        // --- End of new logic ---
 
-    $attempts = $wpdb->get_results($wpdb->prepare(
-        "SELECT q.question_text, g.direction_text, o.option_text AS selected_answer, o_correct.option_text AS correct_answer, a.is_correct
+        $attempts = $wpdb->get_results($wpdb->prepare(
+            "SELECT q.question_text, g.direction_text, o.option_text AS selected_answer, o_correct.option_text AS correct_answer, a.is_correct
          FROM {$wpdb->prefix}qp_user_attempts a
          JOIN {$wpdb->prefix}qp_questions q ON a.question_id = q.question_id
          LEFT JOIN {$wpdb->prefix}qp_question_groups g ON q.group_id = g.group_id
@@ -554,74 +525,74 @@ class QP_Shortcodes
          LEFT JOIN {$wpdb->prefix}qp_options o_correct ON q.question_id = o_correct.question_id AND o_correct.is_correct = 1
          WHERE a.session_id = %d
          ORDER BY a.attempt_id ASC",
-        $session_id
-    ));
+            $session_id
+        ));
 
-    ob_start();
-?>
-    <div class="qp-container qp-review-wrapper">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-            <h2>Session Review</h2>
-            <a href="<?php echo esc_url($dashboard_page_url); ?>" class="qp-button qp-button-secondary" style="text-decoration: none;">&laquo; Back to Dashboard</a>
-        </div>
+        ob_start();
+    ?>
+        <div class="qp-container qp-review-wrapper">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                <h2>Session Review</h2>
+                <a href="<?php echo esc_url($dashboard_page_url); ?>" class="qp-button qp-button-secondary" style="text-decoration: none;">&laquo; Back to Dashboard</a>
+            </div>
 
 
-        <div class="qp-summary-wrapper qp-review-summary">
-            <div class="qp-summary-stats">
-                <div class="stat">
-                    <div class="value"><?php echo number_format($session->marks_obtained, 2); ?></div>
-                    <div class="label">Final Score</div>
-                </div>
-                <div class="stat accuracy">
-                    <div class="value"><?php echo round($accuracy, 2); ?>%</div>
-                    <div class="label">Accuracy</div>
-                </div>
-                <div class="stat">
-                    <div class="value"><?php echo (int)$session->correct_count; ?></div>
-                    <div class="label">Correct</div>
-                </div>
-                <div class="stat">
-                    <div class="value"><?php echo (int)$session->incorrect_count; ?></div>
-                    <div class="label">Incorrect</div>
-                </div>
-                <div class="stat">
-                    <div class="value"><?php echo (int)$session->skipped_count; ?></div>
-                    <div class="label">Skipped</div>
+            <div class="qp-summary-wrapper qp-review-summary">
+                <div class="qp-summary-stats">
+                    <div class="stat">
+                        <div class="value"><?php echo number_format($session->marks_obtained, 2); ?></div>
+                        <div class="label">Final Score</div>
+                    </div>
+                    <div class="stat accuracy">
+                        <div class="value"><?php echo round($accuracy, 2); ?>%</div>
+                        <div class="label">Accuracy</div>
+                    </div>
+                    <div class="stat">
+                        <div class="value"><?php echo (int)$session->correct_count; ?></div>
+                        <div class="label">Correct</div>
+                    </div>
+                    <div class="stat">
+                        <div class="value"><?php echo (int)$session->incorrect_count; ?></div>
+                        <div class="label">Incorrect</div>
+                    </div>
+                    <div class="stat">
+                        <div class="value"><?php echo (int)$session->skipped_count; ?></div>
+                        <div class="label">Skipped</div>
+                    </div>
                 </div>
             </div>
-        </div>
 
-        <div class="qp-review-questions-list">
-            <h3 style="margin-top: 2rem;">Attempted Questions</h3>
-            <?php foreach ($attempts as $index => $attempt) : ?>
-                <div class="qp-review-question-item">
-                    <?php if (!empty($attempt->direction_text)): ?>
-                        <div class="qp-review-direction-text">
-                            <?php echo wp_kses_post($attempt->direction_text); ?>
+            <div class="qp-review-questions-list">
+                <h3 style="margin-top: 2rem;">Attempted Questions</h3>
+                <?php foreach ($attempts as $index => $attempt) : ?>
+                    <div class="qp-review-question-item">
+                        <?php if (!empty($attempt->direction_text)): ?>
+                            <div class="qp-review-direction-text">
+                                <?php echo wp_kses_post($attempt->direction_text); ?>
+                            </div>
+                        <?php endif; ?>
+                        <div class="qp-review-question-text">
+                            <strong>Q<?php echo $index + 1; ?>:</strong> <?php echo wp_kses_post($attempt->question_text); ?>
                         </div>
-                    <?php endif; ?>
-                    <div class="qp-review-question-text">
-                        <strong>Q<?php echo $index + 1; ?>:</strong> <?php echo wp_kses_post($attempt->question_text); ?>
-                    </div>
-                    <div class="qp-review-answer-row">
-                        <span class="qp-review-label">Your Answer:</span>
-                        <span class="qp-review-answer <?php echo $attempt->is_correct ? 'correct' : 'incorrect'; ?>">
-                            <?php echo esc_html($attempt->selected_answer ?: 'Skipped'); ?>
-                        </span>
-                    </div>
-                    <?php if (!$attempt->is_correct && $attempt->selected_answer) : ?>
                         <div class="qp-review-answer-row">
-                            <span class="qp-review-label">Correct Answer:</span>
-                            <span class="qp-review-answer correct">
-                                <?php echo esc_html($attempt->correct_answer); ?>
+                            <span class="qp-review-label">Your Answer:</span>
+                            <span class="qp-review-answer <?php echo $attempt->is_correct ? 'correct' : 'incorrect'; ?>">
+                                <?php echo esc_html($attempt->selected_answer ?: 'Skipped'); ?>
                             </span>
                         </div>
-                    <?php endif; ?>
-                </div>
-            <?php endforeach; ?>
+                        <?php if (!$attempt->is_correct && $attempt->selected_answer) : ?>
+                            <div class="qp-review-answer-row">
+                                <span class="qp-review-label">Correct Answer:</span>
+                                <span class="qp-review-answer correct">
+                                    <?php echo esc_html($attempt->correct_answer); ?>
+                                </span>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                <?php endforeach; ?>
+            </div>
         </div>
-    </div>
 <?php
-    return ob_get_clean();
-}
+        return ob_get_clean();
+    }
 }
