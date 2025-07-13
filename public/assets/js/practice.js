@@ -204,25 +204,33 @@ jQuery(document).ready(function ($) {
         submitButton.text("Submitting...").prop("disabled", true);
       },
       success: function (response) {
-        if (response.success) {
-          alert(
-            "Report submitted successfully. The question has been skipped."
-          );
-
-          // --- FIX: Manually update the question's state ---
-          var questionID = sessionQuestionIDs[currentQuestionIndex];
-          answeredStates[questionID] = answeredStates[questionID] || {}; // Ensure the object exists
-          answeredStates[questionID].reported = true; // Set the reported flag
-
-          $("#qp-report-modal-backdrop").fadeOut(200);
-          // Manually trigger the skip logic after a successful report
-          $("#qp-skip-btn").click();
-        } else {
-          alert(
-            "Error: " + (response.data.message || "Could not submit report.")
-          );
+    if (response.success) {
+        // 1. Update the local state for the current question
+        var questionID = sessionQuestionIDs[currentQuestionIndex];
+        if (typeof answeredStates[questionID] === 'undefined') {
+            answeredStates[questionID] = {};
         }
-      },
+        answeredStates[questionID].reported = true;
+
+        // 2. Manually update the UI to reflect the "reported" state
+        $('#qp-reported-indicator').show();
+        $('.qp-indicator-bar').show();
+        $('.qp-options-area').addClass('disabled').find('input[type="radio"]').prop('disabled', true);
+        $('#qp-skip-btn, #qp-report-btn').prop('disabled', true);
+        $('#qp-next-btn').prop('disabled', false);
+
+        // 3. Close the modal
+        $("#qp-report-modal-backdrop").fadeOut(200);
+
+        // 4. Automatically move to the next question after a short delay
+        setTimeout(function() {
+            loadNextQuestion();
+        }, 500); // 0.5 second delay before loading next question
+
+    } else {
+        alert("Error: " + (response.data.message || "Could not submit report."));
+    }
+},
       error: function () {
         alert("An unknown server error occurred.");
       },
@@ -400,6 +408,17 @@ jQuery(document).ready(function ($) {
       highestQuestionIndexReached =
         lastAttemptedIndex >= 0 ? lastAttemptedIndex + 1 : 0;
     }
+
+    if (qp_session_data.reported_ids && qp_session_data.reported_ids.length > 0) {
+    $.each(qp_session_data.reported_ids, function(index, qid) {
+        if (typeof answeredStates[qid] === 'undefined') {
+            answeredStates[qid] = {};
+        }
+        answeredStates[qid].reported = true;
+    });
+}
+
+
     updateHeaderStats();
 
     if (currentQuestionIndex >= sessionQuestionIDs.length) {
@@ -595,9 +614,11 @@ jQuery(document).ready(function ($) {
     $("#qp-skip-btn, #qp-report-btn").prop("disabled", false);
     $("#qp-next-btn").prop("disabled", true);
 
-    // 2. Render all static content, including the meta that was disappearing
+    // 2. Render all static content
+    var indicatorBar = $(".qp-indicator-bar").hide(); // Hide the bar by default
     if (data.is_revision) {
       $("#qp-revision-indicator").show();
+      indicatorBar.show();
     }
     $("#qp-mark-for-review-cb").prop("checked", data.is_marked_for_review);
 
@@ -655,40 +676,39 @@ jQuery(document).ready(function ($) {
       );
     });
 
-    // 3. Apply the correct UI state based on server and local data
     // 3. Apply State-Based UI
-    if (previousState.reported) {
-      $("#qp-reported-indicator").show();
-      // --- THE FIX: Add the 'disabled' class to the individual option labels ---
-      optionsArea.find(".option").addClass("disabled");
-      optionsArea.find('input[type="radio"]').prop("disabled", true);
-      $("#qp-skip-btn, #qp-report-btn").prop("disabled", true);
-      $("#qp-next-btn").prop("disabled", false);
-    } else if (previousState.type === "answered") {
-      $('input[value="' + previousState.selected_option_id + '"]')
-        .prop("checked", true)
-        .closest(".option")
-        .addClass(previousState.is_correct ? "correct" : "incorrect");
-      if (!previousState.is_correct) {
-        $('input[value="' + previousState.correct_option_id + '"]')
-          .closest(".option")
-          .addClass("correct");
-      }
-      optionsArea
-        .addClass("disabled")
-        .find('input[type="radio"]')
-        .prop("disabled", true);
-      $("#qp-skip-btn, #qp-report-btn").prop("disabled", true);
-      $("#qp-next-btn").prop("disabled", false);
-    } else {
-      // Default state for a new question
-      if (
-        sessionSettings.timer_enabled &&
-        (!previousState || previousState.type !== "skipped")
-      ) {
-        startTimer(sessionSettings.timer_seconds);
-      }
+    // 3. Apply State-Based UI
+var isReported = previousState.reported;
+var isAnswered = previousState.type === "answered";
+var indicatorBar = $('.qp-indicator-bar');
+
+// First, display indicators based on state (this is purely visual)
+if (isReported) {
+    $("#qp-reported-indicator").show();
+    indicatorBar.show();
+}
+
+// Next, determine the interactive state of the controls.
+// If the question has been answered OR reported, lock everything down.
+if (isAnswered || isReported) {
+    optionsArea.addClass('disabled').find('input[type="radio"]').prop('disabled', true);
+    $("#qp-skip-btn, #qp-report-btn").prop("disabled", true);
+    $("#qp-next-btn").prop("disabled", false);
+
+    // If it was answered, we also need to apply the correctness styling.
+    if (isAnswered) {
+        $('input[value="' + previousState.selected_option_id + '"]').prop('checked', true).closest(".option").addClass(previousState.is_correct ? "correct" : "incorrect");
+        if (!previousState.is_correct) {
+            $('input[value="' + previousState.correct_option_id + '"]').closest(".option").addClass("correct");
+        }
     }
+} else {
+    // This block only runs for a fresh question that is NOT answered and NOT reported.
+    if (sessionSettings.timer_enabled && (!previousState || previousState.type !== 'skipped')) {
+        startTimer(sessionSettings.timer_seconds);
+    }
+}
+  
 
     $("#qp-prev-btn").prop("disabled", currentQuestionIndex === 0);
     // 4. Render Math
@@ -709,38 +729,49 @@ jQuery(document).ready(function ($) {
     var animatableArea = $(".qp-animatable-area");
 
     function doRender(data) {
-        renderQuestion(data, questionID);
-        if (direction) {
-            var slideInClass = direction === "next" ? "slide-in-from-right" : "slide-in-from-left";
-            animatableArea.removeClass("slide-out-to-left slide-out-to-right").addClass(slideInClass);
-        }
+      renderQuestion(data, questionID);
+      if (direction) {
+        var slideInClass =
+          direction === "next" ? "slide-in-from-right" : "slide-in-from-left";
+        animatableArea
+          .removeClass("slide-out-to-left slide-out-to-right")
+          .addClass(slideInClass);
+      }
     }
 
     if (direction) {
-        var slideOutClass = direction === "next" ? "slide-out-to-left" : "slide-out-to-right";
-        animatableArea.removeClass("slide-in-from-left slide-in-from-right").addClass(slideOutClass);
+      var slideOutClass =
+        direction === "next" ? "slide-out-to-left" : "slide-out-to-right";
+      animatableArea
+        .removeClass("slide-in-from-left slide-in-from-right")
+        .addClass(slideOutClass);
     }
 
-    setTimeout(function () {
+    setTimeout(
+      function () {
         $.ajax({
-            url: qp_ajax_object.ajax_url,
-            type: "POST",
-            data: {
-                action: "get_question_data",
-                nonce: qp_ajax_object.nonce,
-                question_id: questionID,
-                session_id: sessionID, // Pass the session_id to get correct revision status
-            },
-            success: function (response) {
-                if (response.success) {
-                    // Shuffle options before rendering
-                    response.data.question.options = shuffleArray(response.data.question.options);
-                    doRender(response.data);
-                }
-            },
+          url: qp_ajax_object.ajax_url,
+          type: "POST",
+          data: {
+            action: "get_question_data",
+            nonce: qp_ajax_object.nonce,
+            question_id: questionID,
+            session_id: sessionID, // Pass the session_id to get correct revision status
+          },
+          success: function (response) {
+            if (response.success) {
+              // Shuffle options before rendering
+              response.data.question.options = shuffleArray(
+                response.data.question.options
+              );
+              doRender(response.data);
+            }
+          },
         });
-    }, direction ? 300 : 0);
-}
+      },
+      direction ? 300 : 0
+    );
+  }
 
   function loadNextQuestion() {
     currentQuestionIndex++;
@@ -823,11 +854,17 @@ jQuery(document).ready(function ($) {
   }
 
   // Handles clicking an answer option
-  wrapper.on("click", ".qp-options-area .option", function () {
-    // --- THE FIX: Check if this specific option is disabled before proceeding ---
-    if ($(this).hasClass("disabled")) {
-      return; // Do nothing if the option is disabled
+  // Handles clicking an answer option
+wrapper.on("click", ".qp-options-area .option", function () {
+    var optionsArea = $(this).closest('.qp-options-area');
+
+    // **IMMEDIATELY CHECK AND THEN DISABLE**
+    if (optionsArea.hasClass('disabled')) {
+        return; // Exit if already disabled
     }
+    optionsArea.addClass('disabled'); // Disable the container right away to prevent multiple clicks
+
+    // Now, proceed with the rest of the logic
     var questionID = sessionQuestionIDs[currentQuestionIndex];
     if (
       answeredStates[questionID] &&
@@ -837,8 +874,10 @@ jQuery(document).ready(function ($) {
     }
     clearInterval(questionTimer);
     var selectedOption = $(this);
-    $(".qp-options-area .option").addClass("disabled");
+
+    // Disable other buttons
     $("#qp-skip-btn").prop("disabled", true);
+    $("#qp-report-btn").prop("disabled", true);
     $("#qp-next-btn").prop("disabled", false);
 
     $.ajax({
@@ -860,7 +899,7 @@ jQuery(document).ready(function ($) {
             selected_option_id: selectedOption
               .find('input[type="radio"]')
               .val(),
-            reported_as: answeredStates[questionID]?.reported_as || [],
+            reported: answeredStates[questionID]?.reported || false,
           };
           if (response.data.is_correct) {
             selectedOption.addClass("correct");
@@ -875,10 +914,23 @@ jQuery(document).ready(function ($) {
             incorrectCount++;
           }
           updateHeaderStats();
+        } else {
+          // If AJAX fails for some reason, re-enable the options
+          optionsArea.removeClass('disabled');
+          $("#qp-skip-btn").prop("disabled", false);
+          $("#qp-report-btn").prop("disabled", false);
+          $("#qp-next-btn").prop("disabled", true);
         }
       },
+      error: function() {
+          // Also re-enable on server error
+          optionsArea.removeClass('disabled');
+          $("#qp-skip-btn").prop("disabled", false);
+          $("#qp-report-btn").prop("disabled", false);
+          $("#qp-next-btn").prop("disabled", true);
+      }
     });
-  });
+});
 
   wrapper.on("click", "#qp-next-btn, #qp-prev-btn", function () {
     clearInterval(questionTimer);

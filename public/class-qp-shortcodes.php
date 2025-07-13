@@ -245,6 +245,16 @@ class QP_Shortcodes
         $session_data['attempt_history'] = $attempt_history;
         self::$session_data_for_script = $session_data;
 
+        $reports_table = $wpdb->prefix . 'qp_question_reports';
+$reported_qids_for_user = $wpdb->get_col($wpdb->prepare(
+    "SELECT DISTINCT question_id FROM {$reports_table} WHERE user_id = %d",
+    $user_id
+));
+
+$session_data['reported_ids'] = $reported_qids_for_user; // Pass reported IDs to JS
+
+self::$session_data_for_script = $session_data;
+
         return '<div id="qp-practice-app-wrapper">' . self::render_practice_ui() . '</div>';
     }
 
@@ -435,15 +445,14 @@ class QP_Shortcodes
                     </div>
                     <div id="qp-question-source" style="font-size: 12px; color: #777; margin-bottom: 7px; display: none;"></div>
 
+                    <div class="qp-indicator-bar" style="display: none;">
+    <div id="qp-revision-indicator" style="display: none;">&#9851; Revision</div>
+    <div id="qp-reported-indicator" style="display: none;">&#9888; Reported</div>
+</div>
+
                     <div class="qp-direction" style="display: none;"></div>
 
                     <div class="qp-question-area">
-                        <div id="qp-revision-indicator" style="display: none; margin-bottom: 15px; background-color: #fffbe6; border: 1px solid #ffc107; padding: 10px; border-radius: 4px; font-weight: bold; color: #856404;">
-                            &#9851; This is a Revision Question
-                        </div>
-                        <div id="qp-reported-indicator" style="display: none; margin-bottom: 15px; background-color: #fff3cd; border: 1px solid #ffeeba; padding: 10px; border-radius: 4px; font-weight: bold; color: #856404;">
-                            &#9888; You have reported an issue with this question.
-                        </div>
                         <div class="question-text" id="qp-question-text-area">
                             <p>Loading question...</p>
                         </div>

@@ -116,6 +116,42 @@ body {
 .qp-header-stat.timer-stat .label { color: var(--qp-light-text); }
 .qp-header-stat.timer-stat .value { font-size: 20px; font-weight: 600; color: var(--qp-dark-text); }
 
+
+/* --- Indicator Bar Styles --- */
+.qp-indicator-bar {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 1rem;
+    align-items: center;
+}
+
+#qp-revision-indicator,
+#qp-reported-indicator {
+    padding: 4px 10px;
+    font-size: 12px;
+    font-weight: 700;
+    border-radius: 50px; /* Pill shape */
+    display: none; /* Hidden by default */
+    align-items: center;
+    gap: 5px; /* Adds space between icon and text */
+}
+
+#qp-revision-indicator {
+    background-color: #e8eaf6; /* Light Indigo */
+    color: #3f51b5; /* Indigo */
+}
+
+#qp-reported-indicator {
+    background-color: #fff3e0; /* Light Orange */
+    color: #ff9800; /* Orange */
+}
+
+#qp-practice-app-wrapper .katex{
+    font: normal 1em KaTeX_Main,Times New Roman,serif;
+}
+
+#qp-practice-app-wrapper .qp-direction{ font: normal 1.21em KaTeX_Main,Times New Roman,serif;}
+
 /* --- Practice Screen Content --- */
 .qp-question-area .question-text { font: normal 1.21em KaTeX_Main,Times New Roman,serif; line-height: 1.6; margin-bottom: 2rem; margin-top: 1rem}
 .qp-options-area .option { display: block; font: normal .95em KaTeX_Main,Times New Roman,serif;; padding: 1rem; margin-bottom: 0.75rem; border: 2px solid var(--qp-border-color); border-radius: var(--qp-radius); cursor: pointer; transition: all 0.2s ease-in-out; position: relative; }
@@ -655,6 +691,7 @@ ul.qp-review-list li {
     padding: 1rem;
     border-radius: var(--qp-radius);
     margin-bottom: 1rem;
+    font: normal 1.21em KaTeX_Main,Times New Roman,serif;
 }
 
 #qp-review-modal-content .option {
