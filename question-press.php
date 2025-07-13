@@ -910,7 +910,8 @@ add_action('wp_enqueue_scripts', 'qp_public_enqueue_scripts');
 /**
  * AJAX handler to get topics for a subject THAT HAVE QUESTIONS.
  */
-function qp_get_topics_for_subject_ajax() {
+function qp_get_topics_for_subject_ajax()
+{
     check_ajax_referer('qp_practice_nonce', 'nonce');
 
     $subject_ids_raw = isset($_POST['subject_id']) ? $_POST['subject_id'] : [];
@@ -924,13 +925,13 @@ function qp_get_topics_for_subject_ajax() {
     } else {
         $subject_ids = array_map('absint', $subject_ids_raw);
     }
-    
+
     global $wpdb;
     $topics_table = $wpdb->prefix . 'qp_topics';
     $subjects_table = $wpdb->prefix . 'qp_subjects';
     $questions_table = $wpdb->prefix . 'qp_questions';
     $groups_table = $wpdb->prefix . 'qp_question_groups';
-    
+
     // Base query to get topics linked to subjects that have questions
     $sql = "
         SELECT DISTINCT s.subject_name, t.topic_id, t.topic_name
@@ -947,9 +948,9 @@ function qp_get_topics_for_subject_ajax() {
     }
 
     $sql .= " ORDER BY s.subject_name, t.topic_name ASC";
-    
+
     $results = $wpdb->get_results($sql);
-    
+
     // Group the results by subject name for the frontend
     $grouped_topics = [];
     foreach ($results as $row) {
@@ -1070,10 +1071,18 @@ function qp_start_practice_session_ajax()
         $question_ids = array_unique($final_question_ids);
         shuffle($question_ids);
     } else {
+        // **THE FIX**: This logic now handles arrays of subjects and topics
+        $subjects_raw = isset($_POST['qp_subject']) && is_array($_POST['qp_subject']) ? $_POST['qp_subject'] : [];
+        $topics_raw = isset($_POST['qp_topic']) && is_array($_POST['qp_topic']) ? $_POST['qp_topic'] : [];
+
+        if ($practice_mode === 'normal' && empty($subjects_raw)) {
+            wp_send_json_error(['message' => 'Please select at least one subject.']);
+        }
+
         $session_settings = [
             'practice_mode'    => 'normal',
-            'subject_id'       => isset($_POST['qp_subject']) ? $_POST['qp_subject'] : 'all',
-            'topic_id'         => isset($_POST['qp_topic']) ? $_POST['qp_topic'] : 'all',
+            'subjects'         => $subjects_raw, // Store arrays now
+            'topics'           => $topics_raw,
             'section_id'       => isset($_POST['qp_section']) ? $_POST['qp_section'] : 'all',
             'pyq_only'         => isset($_POST['qp_pyq_only']),
             'include_attempted' => isset($_POST['qp_include_attempted']),
@@ -1083,9 +1092,6 @@ function qp_start_practice_session_ajax()
             'timer_seconds'    => isset($_POST['qp_timer_seconds']) ? absint($_POST['qp_timer_seconds']) : 60
         ];
 
-        if ($practice_mode === 'normal' && $session_settings['subject_id'] === '') {
-    wp_send_json_error(['message' => 'Please select a subject.']);
-}
 
         $user_id = get_current_user_id();
         $q_table = $wpdb->prefix . 'qp_questions';
@@ -1096,14 +1102,21 @@ function qp_start_practice_session_ajax()
         $query_args = [];
         $joins = "LEFT JOIN {$g_table} g ON q.group_id = g.group_id";
 
-        if ($session_settings['subject_id'] !== 'all') {
-            $where_clauses[] = "g.subject_id = %d";
-            $query_args[] = absint($session_settings['subject_id']);
+        // Handle Subject selection (single, multiple, or all)
+        if (!empty($subjects_raw) && !in_array('all', $subjects_raw)) {
+            $subject_ids = array_map('absint', $subjects_raw);
+            $ids_placeholder = implode(',', array_fill(0, count($subject_ids), '%d'));
+            $where_clauses[] = $wpdb->prepare("g.subject_id IN ($ids_placeholder)", $subject_ids);
         }
-        if ($session_settings['topic_id'] !== 'all' && is_numeric($session_settings['topic_id'])) {
-            $where_clauses[] = "q.topic_id = %d";
-            $query_args[] = absint($session_settings['topic_id']);
+
+        // Handle Topic selection
+        if (!empty($topics_raw)) {
+            $topic_ids = array_map('absint', $topics_raw);
+            $ids_placeholder = implode(',', array_fill(0, count($topic_ids), '%d'));
+            $where_clauses[] = $wpdb->prepare("q.topic_id IN ($ids_placeholder)", $topic_ids);
         }
+
+        // Handle Section selection (only if one subject and one topic were chosen)
         if ($session_settings['section_id'] !== 'all' && is_numeric($session_settings['section_id'])) {
             $where_clauses[] = "q.section_id = %d";
             $query_args[] = absint($session_settings['section_id']);
@@ -1453,10 +1466,11 @@ add_action('wp_ajax_end_practice_session', 'qp_end_practice_session_ajax');
 /**
  * AJAX handler to delete an empty/unterminated session record.
  */
-function qp_delete_empty_session_ajax() {
+function qp_delete_empty_session_ajax()
+{
     check_ajax_referer('qp_practice_nonce', 'nonce');
     $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
-    
+
     if (!$session_id) {
         wp_send_json_error(['message' => 'Invalid session ID.']);
     }

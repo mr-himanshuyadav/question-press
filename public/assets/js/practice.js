@@ -103,23 +103,60 @@ $('#qp_subject_dropdown').on('change', 'input[type="checkbox"]', function() {
     }
 });
 
-// Update topic button text and section visibility on topic selection
-$('#qp_topic_dropdown').on('change', 'input[type="checkbox"]', function() {
-    var $topicButton = $('#qp_topic_dropdown .qp-multi-select-button');
-    updateButtonText($topicButton, '-- Select Topic(s) --', 'Topic');
-    
-    // Check for section visibility
+// **THE FIX**: This single handler listens for changes on BOTH dropdowns.
+wrapper.on('change', '#qp_subject_dropdown input[type="checkbox"], #qp_topic_dropdown input[type="checkbox"]', function() {
+    // Update the button text for whichever dropdown was changed
+    var $dropdown = $(this).closest('.qp-multi-select-dropdown');
+    if ($dropdown.attr('id') === 'qp_subject_dropdown') {
+        updateButtonText($dropdown.find('.qp-multi-select-button'), '-- Please select --', 'Subject');
+    } else {
+        updateButtonText($dropdown.find('.qp-multi-select-button'), '-- Select Topic(s) --', 'Topic');
+    }
+
+    // Now, check the visibility logic for the Section dropdown
+    var $sectionGroup = $('#qp-section-group');
+    var $sectionSelect = $('#qp_section');
     var selectedSubjects = $('#qp_subject_dropdown input:checked').map((_, el) => $(el).val()).get();
     var selectedTopics = $('#qp_topic_list_container input:checked').map((_, el) => $(el).val()).get();
 
+    // Show Section select only if exactly ONE subject and ONE topic are selected
     if (selectedSubjects.length === 1 && selectedSubjects[0] !== 'all' && selectedTopics.length === 1) {
-        // We'll add the AJAX call to populate sections in the next step
-        $('#qp_section_group').slideDown();
+        
+        // **THE FIX**: Add the AJAX call to populate the sections
+        $.ajax({
+            url: qp_ajax_object.ajax_url,
+            type: 'POST',
+            data: {
+                action: 'get_sections_for_subject', // Reuse the existing AJAX handler
+                nonce: qp_ajax_object.nonce,
+                subject_id: selectedSubjects[0], // Pass the single selected subject ID
+                topic_id: selectedTopics[0],     // Pass the single selected topic ID
+            },
+            beforeSend: function() {
+                $sectionSelect.prop('disabled', true).html('<option>Loading sections...</option>');
+                $sectionGroup.slideDown(); // Show the group with the loading message
+            },
+            success: function(response) {
+                if (response.success && response.data.sections.length > 0) {
+                    $sectionSelect.prop('disabled', false).empty().append('<option value="all">All Sections</option>');
+                    $.each(response.data.sections, function(index, sec) {
+                        var optionText = sec.source_name + ' / ' + sec.section_name;
+                        $sectionSelect.append($('<option></option>').val(sec.section_id).text(optionText));
+                    });
+                } else {
+                    // If no sections are found, hide the dropdown again
+                    $sectionGroup.slideUp();
+                }
+            },
+            error: function() {
+                $sectionGroup.slideUp(); // Also hide on error
+            }
+        });
+
     } else {
-        $('#qp_section_group').slideUp();
+        $sectionGroup.slideUp();
     }
 });
-
 
 // Hide dropdowns when clicking outside
 $(document).on('click', function(e) {

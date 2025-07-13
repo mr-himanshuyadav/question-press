@@ -139,6 +139,34 @@ body {
     color: var(--qp-primary-color);
 }
 
+/* --- Multi-Select Dropdown Polish --- */
+.qp-multi-select-button {
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.qp-multi-select-button:hover {
+    border-color: #a7aaad;
+}
+
+/* Style when the dropdown is open/focused */
+.qp-multi-select-button:focus,
+.qp-multi-select-list:not(:empty) {
+    border-color: var(--qp-primary-color);
+    box-shadow: 0 0 0 1px var(--qp-primary-color);
+    outline: none;
+}
+
+.qp-multi-select-list {
+    border-radius: 0 0 4px 4px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+}
+
+/* Style for selected items */
+.qp-multi-select-list label input:checked + span {
+    font-weight: bold;
+    color: var(--qp-primary-color);
+}
+
 
 .qp-action-buttons {
     display: flex;
