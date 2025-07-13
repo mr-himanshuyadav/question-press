@@ -188,6 +188,13 @@ body {
 .qp-options-area .option.correct { border-color: var(--qp-correct-color) !important; background: var(--qp-correct-bg); color: var(--qp-correct-text); font-weight: 600; }
 .qp-options-area .option.incorrect { border-color: var(--qp-incorrect-color) !important; background: var(--qp-incorrect-bg); color: var(--qp-incorrect-text); }
 .qp-footer-nav { margin-top: .6rem; display: flex; gap: 10px; }
+
+/* --- Icon Button Styles --- */
+#qp-prev-btn .dashicons,
+#qp-next-btn .dashicons {
+    font-size: 20px; /* Adjust icon size as needed */
+    line-height: 1;  /* Ensure proper vertical alignment */
+}
 .qp-footer-nav button { padding: 10px; font-weight: 600; flex: 1; }
 .qp-footer-controls {margin-bottom: 2rem;display: flex;justify-content: space-between;align-items: center; gap: 10px;
 }

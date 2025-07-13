@@ -459,10 +459,14 @@ class QP_Shortcodes
             </div>
 
             <div class="qp-footer-nav">
-                <button id="qp-prev-btn" class="qp-button qp-button-secondary" disabled>&laquo; Previous</button>
-                <button id="qp-skip-btn" class="qp-button qp-button-secondary">Skip</button>
-                <button id="qp-next-btn" class="qp-button qp-button-primary">Next &raquo;</button>
-            </div>
+    <button id="qp-prev-btn" class="qp-button qp-button-secondary" disabled>
+        <span class="dashicons dashicons-arrow-left-alt2"></span>
+    </button>
+    <button id="qp-skip-btn" class="qp-button qp-button-secondary">Skip</button>
+    <button id="qp-next-btn" class="qp-button qp-button-primary">
+        <span class="dashicons dashicons-arrow-right-alt2"></span>
+    </button>
+</div>
 
             <hr class="qp-footer-divider">
 
