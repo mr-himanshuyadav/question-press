@@ -2,23 +2,28 @@ jQuery(document).ready(function ($) {
   var wrapper = $("#qp-practice-app-wrapper");
 
 // --- LOGIC FOR REVISION FORM DROPDOWNS ---
-// --- NEW: Add handler for the "All Subjects" checkbox in revision mode ---
-$('#qp_subject_dropdown_revision').on('change', 'input[value="all"]', function() {
+// --- CONSOLIDATED LOGIC FOR REVISION FORM SUBJECT DROPDOWN ---
+$('#qp_subject_dropdown_revision').on('change', 'input[type="checkbox"]', function() {
     var $this = $(this);
     var $list = $this.closest('.qp-multi-select-list');
-    if ($this.is(':checked')) {
-        // If "All Subjects" is checked, uncheck and disable all other subjects
-        $list.find('input[value!="all"]').prop('checked', false).prop('disabled', true);
+    
+    // Handle the "All Subjects" logic first
+    if ($this.val() === 'all') {
+        if ($this.is(':checked')) {
+            // If "All Subjects" is checked, uncheck and disable all others
+            $list.find('input[value!="all"]').prop('checked', false).prop('disabled', true);
+        } else {
+            // If "All Subjects" is unchecked, enable all others
+            $list.find('input[value!="all"]').prop('disabled', false);
+        }
     } else {
-        // If "All Subjects" is unchecked, enable all other subjects
-        $list.find('input[value!="all"]').prop('disabled', false);
+         // If any other checkbox is checked, uncheck "All Subjects"
+        if ($this.is(':checked')) {
+            $list.find('input[value="all"]').prop('checked', false);
+        }
     }
-    // Trigger the change event to update the topics list
-    $list.find('input[type="checkbox"]:first').trigger('change');
-});
 
-// Logic to fetch topics when subjects change in the REVISION form
-$('#qp_subject_dropdown_revision').on('change', 'input[type="checkbox"]', function() {
+    // Now, proceed with updating the topics dropdown based on the current selection
     var selectedSubjects = [];
     $('#qp_subject_dropdown_revision input:checked').each(function() {
         selectedSubjects.push($(this).val());
@@ -36,7 +41,7 @@ $('#qp_subject_dropdown_revision').on('change', 'input[type="checkbox"]', functi
             url: qp_ajax_object.ajax_url,
             type: 'POST',
             data: {
-                action: 'get_topics_for_subject', // We can reuse the same AJAX action
+                action: 'get_topics_for_subject',
                 nonce: qp_ajax_object.nonce,
                 subject_id: selectedSubjects,
             },
@@ -47,9 +52,7 @@ $('#qp_subject_dropdown_revision').on('change', 'input[type="checkbox"]', functi
             success: function(response) {
                 $topicButton.prop('disabled', false);
                 if (response.success && Object.keys(response.data.topics).length > 0) {
-                    // --- NEW: Add the "All Topics" checkbox first ---
                     $topicListContainer.append('<label><input type="checkbox" name="revision_topics[]" value="all"> All Topics</label>');
-                    
                     $.each(response.data.topics, function(subjectName, topics) {
                         $topicListContainer.append('<div class="qp-topic-group-header">' + subjectName + '</div>');
                         $.each(topics, function(i, topic) {
@@ -69,7 +72,6 @@ $('#qp_subject_dropdown_revision').on('change', 'input[type="checkbox"]', functi
         updateButtonText($topicButton, '-- Select subject(s) first --', 'Topic');
     }
 });
-
 // --- NEW: Add handler for the "All Topics" checkbox behavior ---
 $('#qp_topic_list_container_revision').on('change', 'input[value="all"]', function() {
     var $this = $(this);
