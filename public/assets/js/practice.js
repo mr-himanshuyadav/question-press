@@ -378,6 +378,9 @@ jQuery(document).ready(function ($) {
     sessionID = qp_session_data.session_id;
     sessionQuestionIDs = qp_session_data.question_ids;
     sessionSettings = qp_session_data.settings;
+    if (sessionSettings.practice_mode === 'revision') {
+    $('.qp-question-counter-box').show();
+}
 
     if (qp_session_data.attempt_history) {
       var lastAttemptedIndex = -1;
@@ -624,6 +627,11 @@ jQuery(document).ready(function ($) {
   function renderQuestion(data, questionID) {
     clearInterval(questionTimer);
     var questionData = data.question;
+    if (sessionSettings.practice_mode === 'revision') {
+        var currentQ = currentQuestionIndex + 1;
+        var totalQ = sessionQuestionIDs.length;
+        $('#qp-question-counter').text(currentQ + '/' + totalQ);
+    }
     var previousState = answeredStates[questionID] || {}; // Use empty object as default
 
     // 1. Reset UI from a clean slate

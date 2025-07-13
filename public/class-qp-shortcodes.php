@@ -434,8 +434,14 @@ class QP_Shortcodes
 
             <div class="qp-animatable-area-container">
                 <div class="qp-animatable-area">
-                    <div class="question-meta" style="font-size: 12px; color: #777; margin-bottom: 7px;">
-                        <span id="qp-question-subject"></span> | <span id="qp-question-id"></span>
+                    <div class="question-meta">
+                        <div class="qp-question-meta-left">
+                            <span id="qp-question-subject"></span> | <span id="qp-question-id"></span>
+                        </div>
+                        <div class="qp-question-counter-box" style="display: none;">
+                            <span class="qp-counter-label">Q. No.</span>
+                            <span class="qp-counter-value" id="qp-question-counter">--/--</span>
+                        </div>
                     </div>
                     <div id="qp-question-source" style="font-size: 12px; color: #777; margin-bottom: 7px; display: none;"></div>
 
@@ -456,10 +462,10 @@ class QP_Shortcodes
 
                     <div class="qp-options-area"></div>
                     <div class="qp-review-later" style="text-align:center;"><label class="qp-review-later-checkbox qp-button qp-button-secondary">
-                        <input type="checkbox" id="qp-mark-for-review-cb">
-                        <span>Mark for Review</span>
-                    </label></div>
-                    
+                            <input type="checkbox" id="qp-mark-for-review-cb">
+                            <span>Mark for Review</span>
+                        </label></div>
+
                 </div>
             </div>
 
