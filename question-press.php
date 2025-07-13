@@ -834,6 +834,12 @@ function qp_public_enqueue_scripts()
         $css_version = filemtime(QP_PLUGIN_DIR . 'public/assets/css/practice.css');
         $practice_js_version = filemtime(QP_PLUGIN_DIR . 'public/assets/js/practice.js');
         $dashboard_js_version = filemtime(QP_PLUGIN_DIR . 'public/assets/js/dashboard.js');
+        $user = wp_get_current_user();
+        $user_roles = (array) $user->roles;
+        $allowed_roles = isset($options['can_delete_history_roles']) ? $options['can_delete_history_roles'] : ['administrator'];
+
+        // Check if the user's roles intersect with the allowed roles
+        $can_delete = !empty(array_intersect($user_roles, $allowed_roles));
 
         wp_enqueue_style('qp-practice-styles', QP_PLUGIN_URL . 'public/assets/css/practice.css', [], $css_version);
 
@@ -843,7 +849,8 @@ function qp_public_enqueue_scripts()
             'nonce'              => wp_create_nonce('qp_practice_nonce'),
             'dashboard_page_url' => isset($options['dashboard_page']) ? get_permalink($options['dashboard_page']) : home_url('/'),
             'practice_page_url'  => isset($options['practice_page']) ? get_permalink($options['practice_page']) : home_url('/'),
-            'question_order_setting'   => isset($options['question_order']) ? $options['question_order'] : 'random'
+            'question_order_setting'   => isset($options['question_order']) ? $options['question_order'] : 'random',
+            'can_delete_history' => $can_delete
         ];
 
         // --- CORRECTED SCRIPT LOADING LOGIC ---
@@ -1423,6 +1430,14 @@ add_action('wp_ajax_end_practice_session', 'qp_end_practice_session_ajax');
 function qp_delete_user_session_ajax()
 {
     check_ajax_referer('qp_practice_nonce', 'nonce');
+    // **THE FIX**: Add server-side permission check
+    $options = get_option('qp_settings');
+    $user = wp_get_current_user();
+    $user_roles = (array) $user->roles;
+    $allowed_roles = isset($options['can_delete_history_roles']) ? $options['can_delete_history_roles'] : ['administrator'];
+    if (empty(array_intersect($user_roles, $allowed_roles))) {
+        wp_send_json_error(['message' => 'You do not have permission to perform this action.']);
+    }
     $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
 
     if (!$session_id) {
@@ -1456,7 +1471,14 @@ add_action('wp_ajax_delete_user_session', 'qp_delete_user_session_ajax');
 function qp_delete_revision_history_ajax()
 {
     check_ajax_referer('qp_practice_nonce', 'nonce');
-
+    // **THE FIX**: Add server-side permission check
+    $options = get_option('qp_settings');
+    $user = wp_get_current_user();
+    $user_roles = (array) $user->roles;
+    $allowed_roles = isset($options['can_delete_history_roles']) ? $options['can_delete_history_roles'] : ['administrator'];
+    if (empty(array_intersect($user_roles, $allowed_roles))) {
+        wp_send_json_error(['message' => 'You do not have permission to perform this action.']);
+    }
     $user_id = get_current_user_id();
     if (!$user_id) {
         wp_send_json_error(['message' => 'You must be logged in to do this.']);
