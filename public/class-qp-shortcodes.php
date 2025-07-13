@@ -99,6 +99,7 @@ class QP_Shortcodes
                     <button type="button" class="qp-multi-select-button">-- Please select --</button>
                     <div class="qp-multi-select-list">
                         <?php foreach ($subjects as $subject) : ?>
+                            <label><input type="checkbox" name="revision_subjects[]" value="all"> All Subjects</label>
                             <label><input type="checkbox" name="revision_subjects[]" value="<?php echo esc_attr($subject->subject_id); ?>"> <?php echo esc_html($subject->subject_name); ?></label>
                         <?php endforeach; ?>
                     </div>
