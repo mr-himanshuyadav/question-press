@@ -1,6 +1,117 @@
 jQuery(document).ready(function ($) {
   var wrapper = $("#qp-practice-app-wrapper");
 
+  // --- NEW: Multi-Select Dropdown Logic ---
+function setupMultiSelect(dropdownId) {
+    var $dropdown = $('#' + dropdownId);
+    var $button = $dropdown.find('.qp-multi-select-button');
+    var $list = $dropdown.find('.qp-multi-select-list');
+    var $checkboxes = $list.find('input[type="checkbox"]');
+
+    // Toggle dropdown visibility
+    $button.on('click', function(e) {
+        e.stopPropagation();
+        // Hide other dropdowns before showing this one
+        $('.qp-multi-select-list').not($list).hide();
+        $list.toggle();
+    });
+
+    // Handle "All Subjects" logic
+    if (dropdownId === 'qp_subject_dropdown') {
+        var $allSubjectsCheckbox = $list.find('input[value="all"]');
+        var $otherSubjectCheckboxes = $list.find('input[value!="all"]');
+
+        $allSubjectsCheckbox.on('change', function() {
+            if ($(this).is(':checked')) {
+                $otherSubjectCheckboxes.prop('checked', false).prop('disabled', true);
+            } else {
+                $otherSubjectCheckboxes.prop('disabled', false);
+            }
+        });
+    }
+}
+
+// Initialize the dropdowns
+setupMultiSelect('qp_subject_dropdown');
+setupMultiSelect('qp_topic_dropdown');
+
+// Hide dropdowns when clicking outside
+$(document).on('click', function() {
+    $('.qp-multi-select-list').hide();
+});
+
+// Stop clicks inside the dropdown from closing it
+wrapper.on('click', '.qp-multi-select-list', function(e) {
+    e.stopPropagation();
+});
+
+// --- NEW: Logic to Update Topics and Sections ---
+$('#qp_subject_dropdown').on('change', 'input[type="checkbox"]', function() {
+    var selectedSubjects = [];
+    $('#qp_subject_dropdown input:checked').each(function() {
+        selectedSubjects.push($(this).val());
+    });
+
+    var $topicGroup = $('#qp-topic-group');
+    var $topicListContainer = $('#qp_topic_list_container');
+    var $topicButton = $('#qp_topic_dropdown .qp-multi-select-button');
+    var $sectionGroup = $('#qp-section-group');
+
+    // Always hide the section group when subjects change
+    $sectionGroup.slideUp();
+
+    if (selectedSubjects.length > 0) {
+        $.ajax({
+            url: qp_ajax_object.ajax_url,
+            type: 'POST',
+            data: {
+                action: 'get_topics_for_subject', // We will reuse the existing AJAX handler
+                nonce: qp_ajax_object.nonce,
+                subject_id: selectedSubjects, // Send array of selected subjects
+            },
+            beforeSend: function() {
+                $topicButton.text('Loading Topics...');
+                $topicListContainer.empty();
+            },
+            success: function(response) {
+                if (response.success && response.data.topics.length > 0) {
+                    // The AJAX handler needs to be updated to return grouped topics
+                    // For now, we assume a structure like: { "Subject Name": [topics] }
+                    $.each(response.data.topics, function(subjectName, topics) {
+                        $topicListContainer.append('<div class="qp-topic-group-header">' + subjectName + '</div>');
+                        $.each(topics, function(i, topic) {
+                            $topicListContainer.append('<label><input type="checkbox" name="qp_topic[]" value="' + topic.topic_id + '"> ' + topic.topic_name + '</label>');
+                        });
+                    });
+                    $topicButton.text('Select Topic(s)');
+                    $topicGroup.slideDown();
+                } else {
+                    $topicButton.text('No Topics Found');
+                    $topicGroup.slideUp();
+                }
+            }
+        });
+    } else {
+        $topicButton.text('-- Select subject(s) first --');
+        $topicGroup.slideUp();
+    }
+});
+
+// Handle visibility of the Section dropdown
+wrapper.on('change', '#qp_subject_dropdown input, #qp_topic_list_container input', function() {
+    var $sectionGroup = $('#qp-section-group');
+    var selectedSubjects = $('#qp_subject_dropdown input:checked').map((_, el) => $(el).val()).get();
+    var selectedTopics = $('#qp_topic_list_container input:checked').map((_, el) => $(el).val()).get();
+
+    // Show Section select only if exactly ONE subject and ONE topic are selected
+    if (selectedSubjects.length === 1 && selectedSubjects[0] !== 'all' && selectedTopics.length === 1) {
+        // Here you would add the AJAX call to populate sections, which we'll do next
+        $sectionGroup.slideDown();
+    } else {
+        $sectionGroup.slideUp();
+    }
+});
+
   // --- MULTI-STEP FORM LOGIC ---
   if ($(".qp-multi-step-container").length) {
     var multiStepContainer = $(".qp-multi-step-container");

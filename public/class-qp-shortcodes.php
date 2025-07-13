@@ -330,22 +330,26 @@ class QP_Shortcodes
                 <input type="hidden" name="question_order" value="incrementing">
 
                 <div class="qp-form-group">
-                    <label for="qp_subject">Select Subject:</label>
-                    <select name="qp_subject" id="qp_subject" required>
-                        <option value="" disabled selected>-- Please select a subject --</option>
-                        <option value="all">All Subjects</option>
-                        <?php foreach ($subjects as $subject) : ?>
-                            <option value="<?php echo esc_attr($subject->subject_id); ?>"><?php echo esc_html($subject->subject_name); ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
+    <label for="qp_subject_dropdown">Select Subject(s):</label>
+    <div class="qp-multi-select-dropdown" id="qp_subject_dropdown">
+        <button type="button" class="qp-multi-select-button">-- Please select --</button>
+        <div class="qp-multi-select-list">
+            <label><input type="checkbox" name="qp_subject[]" value="all"> All Subjects</label>
+            <?php foreach ($subjects as $subject) : ?>
+                <label><input type="checkbox" name="qp_subject[]" value="<?php echo esc_attr($subject->subject_id); ?>"> <?php echo esc_html($subject->subject_name); ?></label>
+            <?php endforeach; ?>
+        </div>
+    </div>
+</div>
 
-                <div class="qp-form-group" id="qp-topic-group" style="display: none;">
-                    <label for="qp_topic">Select Topic:</label>
-                    <select name="qp_topic" id="qp_topic" disabled>
-                        <option value="">-- Select a subject first --</option>
-                    </select>
-                </div>
+<div class="qp-form-group" id="qp-topic-group" style="display: none;">
+    <label for="qp_topic_dropdown">Select Topic(s):</label>
+    <div class="qp-multi-select-dropdown" id="qp_topic_dropdown">
+        <button type="button" class="qp-multi-select-button">-- Select subject(s) first --</button>
+        <div class="qp-multi-select-list" id="qp_topic_list_container">
+            </div>
+    </div>
+</div>
 
                 <div class="qp-form-group" id="qp-section-group" style="display: none;">
                     <label for="qp_section">Select Section (Optional):</label>

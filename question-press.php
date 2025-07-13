@@ -910,34 +910,59 @@ add_action('wp_enqueue_scripts', 'qp_public_enqueue_scripts');
 /**
  * AJAX handler to get topics for a subject THAT HAVE QUESTIONS.
  */
-function qp_get_topics_for_subject_ajax()
-{
+function qp_get_topics_for_subject_ajax() {
     check_ajax_referer('qp_practice_nonce', 'nonce');
-    $subject_id = isset($_POST['subject_id']) ? absint($_POST['subject_id']) : 0;
 
-    if (!$subject_id) {
-        wp_send_json_error(['message' => 'Invalid subject ID.']);
+    $subject_ids_raw = isset($_POST['subject_id']) ? $_POST['subject_id'] : [];
+    if (empty($subject_ids_raw)) {
+        wp_send_json_error(['message' => 'No subjects provided.']);
     }
 
+    // Handle the "all" case
+    if (in_array('all', $subject_ids_raw)) {
+        $subject_ids = []; // An empty array will fetch all
+    } else {
+        $subject_ids = array_map('absint', $subject_ids_raw);
+    }
+    
     global $wpdb;
     $topics_table = $wpdb->prefix . 'qp_topics';
+    $subjects_table = $wpdb->prefix . 'qp_subjects';
     $questions_table = $wpdb->prefix . 'qp_questions';
     $groups_table = $wpdb->prefix . 'qp_question_groups';
+    
+    // Base query to get topics linked to subjects that have questions
+    $sql = "
+        SELECT DISTINCT s.subject_name, t.topic_id, t.topic_name
+        FROM {$topics_table} t
+        JOIN {$subjects_table} s ON t.subject_id = s.subject_id
+        JOIN {$questions_table} q ON t.topic_id = q.topic_id
+        JOIN {$groups_table} g ON q.group_id = g.group_id AND g.subject_id = s.subject_id
+    ";
 
-    // THIS IS THE NEW, SMARTER QUERY
-    // It finds topics by joining through the questions and groups tables
-    // to ensure there's at least one question in that topic for the selected subject.
-    $topics = $wpdb->get_results($wpdb->prepare(
-        "SELECT DISTINCT t.topic_id, t.topic_name
-         FROM {$topics_table} t
-         INNER JOIN {$questions_table} q ON t.topic_id = q.topic_id
-         INNER JOIN {$groups_table} g ON q.group_id = g.group_id
-         WHERE g.subject_id = %d
-         ORDER BY t.topic_name ASC",
-        $subject_id
-    ));
+    // Add WHERE clause only if specific subjects are selected
+    if (!empty($subject_ids)) {
+        $ids_placeholder = implode(',', array_fill(0, count($subject_ids), '%d'));
+        $sql .= $wpdb->prepare(" WHERE s.subject_id IN ($ids_placeholder)", $subject_ids);
+    }
 
-    wp_send_json_success(['topics' => $topics]);
+    $sql .= " ORDER BY s.subject_name, t.topic_name ASC";
+    
+    $results = $wpdb->get_results($sql);
+    
+    // Group the results by subject name for the frontend
+    $grouped_topics = [];
+    foreach ($results as $row) {
+        if (!isset($grouped_topics[$row->subject_name])) {
+            $grouped_topics[$row->subject_name] = [];
+        }
+        $grouped_topics[$row->subject_name][] = [
+            'topic_id' => $row->topic_id,
+            'topic_name' => $row->topic_name
+        ];
+    }
+
+    wp_send_json_success(['topics' => $grouped_topics]);
 }
 add_action('wp_ajax_get_topics_for_subject', 'qp_get_topics_for_subject_ajax');
 

@@ -74,6 +74,72 @@ body {
 .qp-form-group-description p { margin: 0.5rem 0; font-size: 13px; line-height: 1.5; }
 .qp-marks-group { display: flex; flex-direction: column; gap: 1rem; }
 
+
+/* --- Custom Multi-Select Dropdown Styles --- */
+.qp-multi-select-dropdown {
+    position: relative;
+}
+
+.qp-multi-select-button {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid var(--qp-border-color);
+    border-radius: 4px;
+    background-color: #fff;
+    text-align: left;
+    font-size: 16px;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.qp-multi-select-button::after {
+    content: '\25BC'; /* Downward-pointing triangle */
+    font-size: 12px;
+}
+
+.qp-multi-select-list {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background-color: #fff;
+    border: 1px solid var(--qp-border-color);
+    border-top: none;
+    max-height: 250px;
+    overflow-y: auto;
+    z-index: 10;
+    padding: 0.5rem;
+}
+
+.qp-multi-select-list label {
+    display: block;
+    padding: 0.5rem 0.75rem;
+    cursor: pointer;
+    border-radius: 4px;
+}
+
+.qp-multi-select-list label:hover {
+    background-color: var(--qp-bg-light);
+}
+
+.qp-multi-select-list input[type="checkbox"] {
+    margin-right: 10px;
+    transform: scale(1.1);
+}
+
+.qp-topic-group-header {
+    font-weight: bold;
+    font-size: 14px;
+    padding: 0.75rem;
+    margin-top: 0.5rem;
+    border-bottom: 1px solid var(--qp-border-color);
+    color: var(--qp-primary-color);
+}
+
+
 .qp-action-buttons {
     display: flex;
     flex-direction: column;
@@ -426,7 +492,7 @@ body {
 /* --- Dashboard History Header Actions --- */
 .qp-history-actions {
     display: flex;
-    gap: 10px; /* Sets the space between the buttons */
+    gap: 10px; /* Sets the space between the buttons */ 
 }
 
 .qp-history-actions .qp-button {
