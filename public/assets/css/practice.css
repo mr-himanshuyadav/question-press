@@ -656,7 +656,7 @@ body {
     to { transform: translateX(0); }
 }
 
-\/* --- Active Session Card Styles --- */
+/* --- Active Session Card Styles --- */
 .qp-active-sessions-list {
     display: grid;
     gap: 1rem;

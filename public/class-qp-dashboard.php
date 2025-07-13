@@ -125,9 +125,12 @@ class QP_Dashboard
     global $wpdb;
     $user_id = get_current_user_id();
     $sessions_table = $wpdb->prefix . 'qp_user_sessions';
+    $subjects_table = $wpdb->prefix . 'qp_subjects';
 
     $options = get_option('qp_settings');
+    $session_page_id = isset($options['session_page']) ? absint($options['session_page']) : 0;
     $review_page_id = isset($options['review_page']) ? absint($options['review_page']) : 0;
+    $session_page_url = $session_page_id ? get_permalink($session_page_id) : home_url('/');
     $review_page_url = $review_page_id ? get_permalink($review_page_id) : home_url('/');
 
     $user = wp_get_current_user();
@@ -135,11 +138,14 @@ class QP_Dashboard
     $allowed_roles = isset($options['can_delete_history_roles']) ? $options['can_delete_history_roles'] : ['administrator'];
     $can_delete = !empty(array_intersect($user_roles, $allowed_roles));
 
+    // --- RESTORED: Fetch Active Sessions ---
+    $active_sessions = $wpdb->get_results($wpdb->prepare("SELECT * FROM $sessions_table WHERE user_id = %d AND status = 'active' ORDER BY start_time DESC", $user_id));
     $session_history = $wpdb->get_results($wpdb->prepare("SELECT * FROM $sessions_table WHERE user_id = %d AND status IN ('completed', 'abandoned') ORDER BY start_time DESC", $user_id));
 
     // Pre-fetch all subjects for all questions in the user's history to optimize queries
     $all_session_qids = [];
-    foreach ($session_history as $session) {
+    $all_sessions_for_subjects = array_merge($active_sessions, $session_history); // Combine for one query
+    foreach ($all_sessions_for_subjects as $session) {
         $qids = json_decode($session->question_ids_snapshot, true);
         if (is_array($qids)) {
             $all_session_qids = array_merge($all_session_qids, $qids);
@@ -162,6 +168,37 @@ class QP_Dashboard
         }
     }
 
+    // --- RESTORED: Display Active Sessions Section ---
+    if (!empty($active_sessions)) {
+        echo '<div class="qp-active-sessions-header"><h3>Active Sessions</h3></div>';
+        echo '<div class="qp-active-sessions-list">';
+        foreach ($active_sessions as $session) {
+            $session_qids = json_decode($session->question_ids_snapshot, true);
+            $session_subjects = [];
+            if (is_array($session_qids)) {
+                foreach ($session_qids as $qid) {
+                    if (isset($subjects_by_question[$qid])) {
+                        $session_subjects[$subjects_by_question[$qid]] = true;
+                    }
+                }
+            }
+            $subject_display = !empty($session_subjects) ? implode(', ', array_keys($session_subjects)) : 'Mixed';
+
+            echo '<div class="qp-active-session-card">
+                <div class="qp-card-details">
+                    <span class="qp-card-subject">' . esc_html($subject_display) . '</span>
+                    <span class="qp-card-date">Started: ' . date_format(date_create($session->start_time), 'M j, Y, g:i a') . '</span>
+                </div>
+                <div class="qp-card-actions">
+                    <button class="qp-button qp-button-danger qp-terminate-session-btn" data-session-id="' . esc_attr($session->session_id) . '">Terminate</button>
+                    <a href="' . esc_url(add_query_arg('session_id', $session->session_id, $session_page_url)) . '" class="qp-button qp-button-secondary">Continue</a>
+                </div>
+              </div>';
+        }
+        echo '</div>';
+    }
+
+    // Session History
     $practice_page_url = isset($options['practice_page']) ? get_permalink($options['practice_page']) : home_url('/');
 
     echo '<div class="qp-history-header">
@@ -183,7 +220,6 @@ class QP_Dashboard
             $settings = json_decode($session->settings_snapshot, true);
             $session_qids = json_decode($session->question_ids_snapshot, true);
 
-            // Determine Mode
             $mode = 'Practice';
             if (isset($settings['practice_mode']) && $settings['practice_mode'] === 'revision') {
                 $mode = 'Revision';
@@ -191,7 +227,6 @@ class QP_Dashboard
                 $mode = 'Source Practice';
             }
 
-            // Determine Subjects
             $session_subjects = [];
             if (is_array($session_qids)) {
                 foreach ($session_qids as $qid) {
@@ -202,7 +237,6 @@ class QP_Dashboard
             }
             $subjects_display = !empty($session_subjects) ? implode(', ', array_keys($session_subjects)) : 'N/A';
 
-            // Calculate Accuracy
             $accuracy = ($session->total_attempted > 0) ? round(($session->correct_count / $session->total_attempted) * 100, 2) . '%' : 'N/A';
 
             echo '<tr>

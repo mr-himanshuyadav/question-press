@@ -43,11 +43,11 @@ class QP_Shortcodes
                         </div>
 
                         <div class="qp-step-1-footer">
-                            <button id="qp-step1-next-btn" class="qp-button qp-button-primary" disabled>Next</button>
-                            <?php if ($dashboard_page_url) : ?>
-                                <a href="<?php echo esc_url($dashboard_page_url); ?>" class="qp-dashboard-link-bottom">Go to Dashboard</a>
-                            <?php endif; ?>
-                        </div>
+    <button id="qp-step1-next-btn" class="qp-button qp-button-primary" disabled>Next</button>
+    <?php if ($dashboard_page_url) : ?>
+        <a href="<?php echo esc_url($dashboard_page_url); ?>" class="qp-button qp-button-secondary">Go to Dashboard</a>
+    <?php endif; ?>
+</div>
                     </div>
                 </div>
 
@@ -196,7 +196,7 @@ class QP_Shortcodes
                 'incorrect_count' => $session_data_from_db->incorrect_count,
                 'skipped_count' => $session_data_from_db->skipped_count,
             ];
-            return '<div id="qp-practice-app-wrapper">' . self::render_summary_ui($summary_data) . '</div>';
+            return '<div id="qp-practice-app-wrapper">' . self::render_summary_ui($summary_data, $session_id) . '</div>';
         }
 
         // --- If the session is active, proceed as normal ---
@@ -229,46 +229,54 @@ class QP_Shortcodes
         return '<div id="qp-practice-app-wrapper">' . self::render_practice_ui() . '</div>';
     }
 
-    public static function render_summary_ui($summaryData)
-    {
-        $options = get_option('qp_settings');
-        $dashboard_page_url = isset($options['dashboard_page']) ? get_permalink($options['dashboard_page']) : home_url('/');
-        $practice_page_url = isset($options['practice_page']) ? get_permalink($options['practice_page']) : home_url('/');
+    public static function render_summary_ui($summaryData, $session_id = 0)
+{
+    $options = get_option('qp_settings');
+    $dashboard_page_url = isset($options['dashboard_page']) ? get_permalink($options['dashboard_page']) : home_url('/');
+    $review_page_url = isset($options['review_page']) ? get_permalink($options['review_page']) : home_url('/');
+    $session_review_url = $review_page_url ? add_query_arg('session_id', $session_id, $review_page_url) : '#';
 
-        ob_start();
-    ?>
-        <div class="qp-summary-wrapper">
-            <h2>Session Summary</h2>
-            <div class="qp-summary-stats">
-                <div class="stat">
-                    <div class="value"><?php echo number_format($session->marks_obtained, 2); ?></div>
-                    <div class="label">Final Score</div>
-                </div>
-                <div class="stat accuracy">
-                    <div class="value"><?php echo round($accuracy, 2); ?>%</div>
-                    <div class="label">Accuracy</div>
-                </div>
-                <div class="stat">
-                    <div class="value"><?php echo (int)$session->correct_count; ?></div>
-                    <div class="label">Correct</div>
-                </div>
-                <div class="stat">
-                    <div class="value"><?php echo (int)$session->incorrect_count; ?></div>
-                    <div class="label">Incorrect</div>
-                </div>
-                <div class="stat">
-                    <div class="value"><?php echo (int)$session->skipped_count; ?></div>
-                    <div class="label">Skipped</div>
-                </div>
+    $accuracy = 0;
+    if (isset($summaryData['total_attempted']) && $summaryData['total_attempted'] > 0) {
+        $accuracy = ($summaryData['correct_count'] / $summaryData['total_attempted']) * 100;
+    }
+
+    ob_start();
+?>
+    <div class="qp-summary-wrapper">
+        <h2>Session Summary</h2>
+         <div class="qp-summary-stats">
+            <div class="stat">
+                <div class="value"><?php echo number_format($summaryData['final_score'], 2); ?></div>
+                <div class="label">Final Score</div>
             </div>
-            <div class="qp-summary-actions">
-                <a href="<?php echo esc_url($dashboard_page_url); ?>" class="qp-button qp-button-secondary">View Dashboard</a>
-                <a href="<?php echo esc_url($practice_page_url); ?>" class="qp-button qp-button-primary">Start Another Practice</a>
+            <div class="stat accuracy">
+                <div class="value"><?php echo round($accuracy, 2); ?>%</div>
+                <div class="label">Accuracy</div>
+            </div>
+            <div class="stat">
+                <div class="value"><?php echo (int)$summaryData['correct_count']; ?></div>
+                <div class="label">Correct</div>
+            </div>
+            <div class="stat">
+                <div class="value"><?php echo (int)$summaryData['incorrect_count']; ?></div>
+                <div class="label">Incorrect</div>
+            </div>
+            <div class="stat">
+                <div class="value"><?php echo (int)$summaryData['skipped_count']; ?></div>
+                <div class="label">Skipped</div>
             </div>
         </div>
-    <?php
-        return ob_get_clean();
-    }
+        <div class="qp-summary-actions">
+            <a href="<?php echo esc_url($dashboard_page_url); ?>" class="qp-button qp-button-secondary">View Dashboard</a>
+            <?php if ($session_id && $review_page_url !== '#'): ?>
+                <a href="<?php echo esc_url($session_review_url); ?>" class="qp-button qp-button-primary">Review Session</a>
+            <?php endif; ?>
+        </div>
+    </div>
+<?php
+    return ob_get_clean();
+}
 
     // Helper function to get the session data
     public static function get_session_data_for_script()
@@ -371,9 +379,6 @@ class QP_Shortcodes
 
                 <div class="qp-form-group qp-action-buttons">
                     <input type="submit" name="qp_start_practice" value="Start Practice" class="qp-button qp-button-primary">
-                    <?php if ($dashboard_page_url) : ?>
-                        <a href="<?php echo esc_url($dashboard_page_url); ?>" class="qp-button qp-button-secondary">Go to Dashboard</a>
-                    <?php endif; ?>
                 </div>
             </form>
         </div>
@@ -484,38 +489,38 @@ class QP_Shortcodes
     }
 
     public static function render_review_page()
-{
-    if (!is_user_logged_in()) {
-        return '<p>You must be logged in to review a session. <a href="' . wp_login_url(get_permalink()) . '">Click here to log in.</a></p>';
-    }
+    {
+        if (!is_user_logged_in()) {
+            return '<p>You must be logged in to review a session. <a href="' . wp_login_url(get_permalink()) . '">Click here to log in.</a></p>';
+        }
 
-    if (!isset($_GET['session_id']) || !is_numeric($_GET['session_id'])) {
-        return '<div class="qp-container"><p>Error: No valid session ID was provided.</p></div>';
-    }
+        if (!isset($_GET['session_id']) || !is_numeric($_GET['session_id'])) {
+            return '<div class="qp-container"><p>Error: No valid session ID was provided.</p></div>';
+        }
 
-    $session_id = absint($_GET['session_id']);
-    $user_id = get_current_user_id();
+        $session_id = absint($_GET['session_id']);
+        $user_id = get_current_user_id();
 
-    global $wpdb;
-    $sessions_table = $wpdb->prefix . 'qp_user_sessions';
-    $session = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$sessions_table} WHERE session_id = %d AND user_id = %d", $session_id, $user_id));
+        global $wpdb;
+        $sessions_table = $wpdb->prefix . 'qp_user_sessions';
+        $session = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$sessions_table} WHERE session_id = %d AND user_id = %d", $session_id, $user_id));
 
-    if (!$session) {
-        return '<div class="qp-container"><p>Error: Session not found or you do not have permission to view it.</p></div>';
-    }
+        if (!$session) {
+            return '<div class="qp-container"><p>Error: Session not found or you do not have permission to view it.</p></div>';
+        }
 
-    $options = get_option('qp_settings');
-    $dashboard_page_url = isset($options['dashboard_page']) ? get_permalink($options['dashboard_page']) : home_url('/');
+        $options = get_option('qp_settings');
+        $dashboard_page_url = isset($options['dashboard_page']) ? get_permalink($options['dashboard_page']) : home_url('/');
 
-    // --- NEW: Extract marking scheme from settings ---
-    $settings = json_decode($session->settings_snapshot, true);
-    $marks_correct = $settings['marks_correct'] ?? 1;
-    $marks_incorrect = $settings['marks_incorrect'] ?? 0;
+        // --- NEW: Extract marking scheme from settings ---
+        $settings = json_decode($session->settings_snapshot, true);
+        $marks_correct = $settings['marks_correct'] ?? 1;
+        $marks_incorrect = $settings['marks_incorrect'] ?? 0;
 
-    $accuracy = ($session->total_attempted > 0) ? ($session->correct_count / $session->total_attempted) * 100 : 0;
+        $accuracy = ($session->total_attempted > 0) ? ($session->correct_count / $session->total_attempted) * 100 : 0;
 
-    $attempts = $wpdb->get_results($wpdb->prepare(
-        "SELECT q.question_text, g.direction_text, o.option_text AS selected_answer, o_correct.option_text AS correct_answer, a.is_correct
+        $attempts = $wpdb->get_results($wpdb->prepare(
+            "SELECT q.question_text, g.direction_text, o.option_text AS selected_answer, o_correct.option_text AS correct_answer, a.is_correct
          FROM {$wpdb->prefix}qp_user_attempts a
          JOIN {$wpdb->prefix}qp_questions q ON a.question_id = q.question_id
          LEFT JOIN {$wpdb->prefix}qp_question_groups g ON q.group_id = g.group_id
@@ -523,73 +528,73 @@ class QP_Shortcodes
          LEFT JOIN {$wpdb->prefix}qp_options o_correct ON q.question_id = o_correct.question_id AND o_correct.is_correct = 1
          WHERE a.session_id = %d
          ORDER BY a.attempt_id ASC",
-        $session_id
-    ));
+            $session_id
+        ));
 
-    ob_start();
-?>
-    <div class="qp-container qp-review-wrapper">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-            <h2>Session Review</h2>
-            <a href="<?php echo esc_url($dashboard_page_url); ?>" class="qp-button qp-button-secondary" style="text-decoration: none;">&laquo; Back to Dashboard</a>
-        </div>
+        ob_start();
+    ?>
+        <div class="qp-container qp-review-wrapper">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                <h2>Session Review</h2>
+                <a href="<?php echo esc_url($dashboard_page_url); ?>" class="qp-button qp-button-secondary" style="text-decoration: none;">&laquo; Back to Dashboard</a>
+            </div>
 
-        <div class="qp-summary-wrapper qp-review-summary">
-            <div class="qp-summary-stats">
-                <div class="stat">
-                    <div class="value"><?php echo number_format($session->marks_obtained, 2); ?></div>
-                    <div class="label">Final Score</div>
-                </div>
-                <div class="stat accuracy">
-                    <div class="value"><?php echo round($accuracy, 2); ?>%</div>
-                    <div class="label">Accuracy</div>
-                </div>
-                <div class="stat">
-                    <div class="value"><?php echo (int)$session->correct_count; ?></div>
-                    <div class="label">Correct (+<?php echo esc_html($marks_correct); ?>/Q)</div>
-                </div>
-                <div class="stat">
-                    <div class="value"><?php echo (int)$session->incorrect_count; ?></div>
-                    <div class="label">Incorrect (<?php echo esc_html($marks_incorrect); ?>/Q)</div>
-                </div>
-                <div class="stat">
-                    <div class="value"><?php echo (int)$session->skipped_count; ?></div>
-                    <div class="label">Skipped</div>
+            <div class="qp-summary-wrapper qp-review-summary">
+                <div class="qp-summary-stats">
+                    <div class="stat">
+                        <div class="value"><?php echo number_format($session->marks_obtained, 2); ?></div>
+                        <div class="label">Final Score</div>
+                    </div>
+                    <div class="stat accuracy">
+                        <div class="value"><?php echo round($accuracy, 2); ?>%</div>
+                        <div class="label">Accuracy</div>
+                    </div>
+                    <div class="stat">
+                        <div class="value"><?php echo (int)$session->correct_count; ?></div>
+                        <div class="label">Correct (+<?php echo esc_html($marks_correct); ?>/Q)</div>
+                    </div>
+                    <div class="stat">
+                        <div class="value"><?php echo (int)$session->incorrect_count; ?></div>
+                        <div class="label">Incorrect (<?php echo esc_html($marks_incorrect); ?>/Q)</div>
+                    </div>
+                    <div class="stat">
+                        <div class="value"><?php echo (int)$session->skipped_count; ?></div>
+                        <div class="label">Skipped</div>
+                    </div>
                 </div>
             </div>
-        </div>
 
-        <div class="qp-review-questions-list">
-            <h3 style="margin-top: 2rem;">Attempted Questions</h3>
-            <?php foreach ($attempts as $index => $attempt) : ?>
-                <div class="qp-review-question-item">
-                    <?php if (!empty($attempt->direction_text)): ?>
-                        <div class="qp-review-direction-text">
-                            <?php echo wp_kses_post($attempt->direction_text); ?>
+            <div class="qp-review-questions-list">
+                <h3 style="margin-top: 2rem;">Attempted Questions</h3>
+                <?php foreach ($attempts as $index => $attempt) : ?>
+                    <div class="qp-review-question-item">
+                        <?php if (!empty($attempt->direction_text)): ?>
+                            <div class="qp-review-direction-text">
+                                <?php echo wp_kses_post($attempt->direction_text); ?>
+                            </div>
+                        <?php endif; ?>
+                        <div class="qp-review-question-text">
+                            <strong>Q<?php echo $index + 1; ?>:</strong> <?php echo wp_kses_post($attempt->question_text); ?>
                         </div>
-                    <?php endif; ?>
-                    <div class="qp-review-question-text">
-                        <strong>Q<?php echo $index + 1; ?>:</strong> <?php echo wp_kses_post($attempt->question_text); ?>
-                    </div>
-                    <div class="qp-review-answer-row">
-                        <span class="qp-review-label">Your Answer:</span>
-                        <span class="qp-review-answer <?php echo $attempt->is_correct ? 'correct' : 'incorrect'; ?>">
-                            <?php echo esc_html($attempt->selected_answer ?: 'Skipped'); ?>
-                        </span>
-                    </div>
-                    <?php if (!$attempt->is_correct && $attempt->selected_answer) : ?>
                         <div class="qp-review-answer-row">
-                            <span class="qp-review-label">Correct Answer:</span>
-                            <span class="qp-review-answer correct">
-                                <?php echo esc_html($attempt->correct_answer); ?>
+                            <span class="qp-review-label">Your Answer:</span>
+                            <span class="qp-review-answer <?php echo $attempt->is_correct ? 'correct' : 'incorrect'; ?>">
+                                <?php echo esc_html($attempt->selected_answer ?: 'Skipped'); ?>
                             </span>
                         </div>
-                    <?php endif; ?>
-                </div>
-            <?php endforeach; ?>
+                        <?php if (!$attempt->is_correct && $attempt->selected_answer) : ?>
+                            <div class="qp-review-answer-row">
+                                <span class="qp-review-label">Correct Answer:</span>
+                                <span class="qp-review-answer correct">
+                                    <?php echo esc_html($attempt->correct_answer); ?>
+                                </span>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                <?php endforeach; ?>
+            </div>
         </div>
-    </div>
 <?php
-    return ob_get_clean();
-}
+        return ob_get_clean();
+    }
 }
