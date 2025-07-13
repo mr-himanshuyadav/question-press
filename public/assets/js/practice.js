@@ -378,9 +378,9 @@ jQuery(document).ready(function ($) {
     sessionID = qp_session_data.session_id;
     sessionQuestionIDs = qp_session_data.question_ids;
     sessionSettings = qp_session_data.settings;
-    if (sessionSettings.practice_mode === 'revision') {
-    $('.qp-question-counter-box').show();
-}
+    if (sessionSettings.practice_mode === "revision") {
+      $(".qp-question-counter-box").show();
+    }
 
     if (qp_session_data.attempt_history) {
       var lastAttemptedIndex = -1;
@@ -627,10 +627,10 @@ jQuery(document).ready(function ($) {
   function renderQuestion(data, questionID) {
     clearInterval(questionTimer);
     var questionData = data.question;
-    if (sessionSettings.practice_mode === 'revision') {
-        var currentQ = currentQuestionIndex + 1;
-        var totalQ = sessionQuestionIDs.length;
-        $('#qp-question-counter').text(currentQ + '/' + totalQ);
+    if (sessionSettings.practice_mode === "revision") {
+      var currentQ = currentQuestionIndex + 1;
+      var totalQ = sessionQuestionIDs.length;
+      $("#qp-question-counter").text(currentQ + "/" + totalQ);
     }
     var previousState = answeredStates[questionID] || {}; // Use empty object as default
 
@@ -862,29 +862,19 @@ jQuery(document).ready(function ($) {
       if (remainingTime <= 0) {
         clearInterval(questionTimer);
 
-        var questionID = sessionQuestionIDs[currentQuestionIndex];
-        if (typeof answeredStates[questionID] === "undefined") {
-          answeredStates[questionID] = {};
-        }
-        answeredStates[questionID].type = "expired";
-        answeredStates[questionID].remainingTime = 0;
-
-        $.ajax({
-          url: qp_ajax_object.ajax_url,
-          type: "POST",
-          data: {
-            action: "expire_question",
-            nonce: qp_ajax_object.nonce,
-            session_id: sessionID,
-            question_id: questionID,
-          },
-        });
-
+        // Update the UI to show the "Time Expired" state
         var timerIndicator = $("#qp-timer-indicator");
         timerIndicator.html("&#9201; Time Expired").addClass("expired");
+
+        // Lock the options so the user cannot answer
         $(".qp-options-area").addClass("disabled");
-        $("#qp-skip-btn, #qp-report-btn").prop("disabled", true);
-        $("#qp-next-btn").prop("disabled", false);
+        $("#qp-report-btn").prop("disabled", true);
+        $("#qp-next-btn").prop("disabled", true);
+
+        // **THE FIX**: Enable the skip button and then programmatically click it.
+        // This reuses your existing skip logic to correctly log the attempt.
+        var skipButton = $("#qp-skip-btn");
+        skipButton.prop("disabled", false);
       }
     }, 1000);
   }
