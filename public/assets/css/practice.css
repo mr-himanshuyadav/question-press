@@ -123,10 +123,9 @@ body {
     border-radius: var(--qp-radius);
     padding: 0.75rem 1rem;
 }
+.qp-header-stat {width: auto;}
 .qp-header-stat.score .label { font-size: 14px; font-weight: 500; color: var(--qp-light-text); }
-.qp-header-stat.score .value {
-    color: var(--qp-score-color); /* This uses the variable defined at the top */
-}
+.qp-header-stat.score .value {    color: var(--qp-score-color);}
 .qp-header-stat .value { font-size: 18px; font-weight: 600; }
 .qp-header-stat .label { font-size: 12px; text-transform: uppercase; }
 .qp-header-stat.correct { color: var(--qp-correct-color); }
@@ -181,13 +180,26 @@ body {
     margin-bottom: 1rem;
     display: flex;
     justify-content: space-between;
-    align-items: center;
+    align-items: flex-start;
+    gap: 8px;
+}
+.qp-question-meta-left {
+    display: flex;
+    flex-direction: column;
+    gap: 5px; /* Adds space between the subject line and the source line */
+}
+
+/* Style for the new source line */
+#qp-question-source {
+    font-size: 11px; /* Slightly smaller for secondary info */
+    color: var(--qp-light-text);
 }
 
 .qp-question-counter-box {
+    Width: 40px;
     border: 1px solid var(--qp-border-color);
     border-radius: 4px;
-    padding: 2px 8px;
+    padding: 8px 12px;
     text-align: center;
     background-color: #f9f9f9;
 }

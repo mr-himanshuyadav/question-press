@@ -436,14 +436,14 @@ class QP_Shortcodes
                 <div class="qp-animatable-area">
                     <div class="question-meta">
                         <div class="qp-question-meta-left">
-                            <span id="qp-question-subject"></span> | <span id="qp-question-id"></span>
+                            <div id="qp-question-subject-line"><span id="qp-question-subject"></span> | <span id="qp-question-id"></span></div>
+                            <div id="qp-question-source" style="display: none;"></div>
                         </div>
                         <div class="qp-question-counter-box" style="display: none;">
                             <span class="qp-counter-label">Q. No.</span>
                             <span class="qp-counter-value" id="qp-question-counter">--/--</span>
                         </div>
                     </div>
-                    <div id="qp-question-source" style="font-size: 12px; color: #777; margin-bottom: 7px; display: none;"></div>
 
                     <div class="qp-indicator-bar" style="display: none;">
                         <div id="qp-timer-indicator" class="timer-stat" style="display: none;">--:--</div>
