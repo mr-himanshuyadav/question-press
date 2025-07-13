@@ -1,7 +1,7 @@
 jQuery(document).ready(function ($) {
   var wrapper = $("#qp-practice-app-wrapper");
 
-  // --- LOGIC FOR REVISION FORM DROPDOWNS ---
+// --- LOGIC FOR REVISION FORM DROPDOWNS ---
 // Logic to fetch topics when subjects change in the REVISION form
 $('#qp_subject_dropdown_revision').on('change', 'input[type="checkbox"]', function() {
     var selectedSubjects = [];
@@ -32,6 +32,9 @@ $('#qp_subject_dropdown_revision').on('change', 'input[type="checkbox"]', functi
             success: function(response) {
                 $topicButton.prop('disabled', false);
                 if (response.success && Object.keys(response.data.topics).length > 0) {
+                    // --- NEW: Add the "All Topics" checkbox first ---
+                    $topicListContainer.append('<label><input type="checkbox" name="revision_topics[]" value="all"> All Topics</label>');
+                    
                     $.each(response.data.topics, function(subjectName, topics) {
                         $topicListContainer.append('<div class="qp-topic-group-header">' + subjectName + '</div>');
                         $.each(topics, function(i, topic) {
@@ -52,6 +55,19 @@ $('#qp_subject_dropdown_revision').on('change', 'input[type="checkbox"]', functi
     }
 });
 
+// --- NEW: Add handler for the "All Topics" checkbox behavior ---
+$('#qp_topic_list_container_revision').on('change', 'input[value="all"]', function() {
+    var $this = $(this);
+    var $list = $this.closest('.qp-multi-select-list');
+    if ($this.is(':checked')) {
+        // If "All Topics" is checked, uncheck and disable all others
+        $list.find('input[value!="all"]').prop('checked', false).prop('disabled', true);
+    } else {
+        // If "All Topics" is unchecked, enable all others
+        $list.find('input[value!="all"]').prop('disabled', false);
+    }
+});
+  
 // Update button text when a topic is selected in the revision form
 $('#qp_topic_dropdown_revision').on('change', 'input[type="checkbox"]', function() {
     updateButtonText($('#qp_topic_dropdown_revision .qp-multi-select-button'), '-- Select Topic(s) --', 'Topic');
