@@ -711,6 +711,7 @@ jQuery(document).ready(function ($) {
     var indicatorBar = $(".qp-indicator-bar");
     var isSkipped = previousState.type === "skipped";
     var hasRemainingTime = typeof previousState.remainingTime !== "undefined";
+    $("#qp-report-btn").prop("disabled", isReported);
 
     // First, display indicators based on state (this is purely visual)
     if (isReported) {
@@ -719,12 +720,16 @@ jQuery(document).ready(function ($) {
     }
 
     // Determine the interactive state of the controls
-    if (isAnswered || isReported || isExpired) {
-      // --- STATE: LOCKED (Answered, Reported, or Expired) ---
-      optionsArea.addClass("disabled");
-      $("#qp-skip-btn, #qp-report-btn").prop("disabled", true);
+    // Now, handle the other controls based on other states.
+    if (isAnswered || isExpired || isReported) {
+      optionsArea
+        .addClass("disabled")
+        .find('input[type="radio"]')
+        .prop("disabled", true);
+      $("#qp-skip-btn").prop("disabled", true); // Keep skip disabled
       $("#qp-next-btn").prop("disabled", false);
 
+      // If it was answered, we also need to apply the correctness styling.
       if (isAnswered) {
         $('input[value="' + previousState.selected_option_id + '"]')
           .prop("checked", true)
@@ -736,15 +741,17 @@ jQuery(document).ready(function ($) {
             .addClass("correct");
         }
       }
+
+      // If it has expired, show the expired timer state
       if (isExpired) {
         $("#qp-timer-indicator")
           .html("&#9201; Time Expired")
           .addClass("expired")
           .show();
-        indicatorBar.show();
+        $(".qp-indicator-bar").show();
       }
     } else {
-      // --- STATE: INTERACTIVE (New, Skipped, or In-Progress Timer) ---
+      // This block only runs for a fresh question that is NOT answered and NOT reported.
       if (sessionSettings.timer_enabled) {
         var startTime = hasRemainingTime
           ? previousState.remainingTime
@@ -868,7 +875,6 @@ jQuery(document).ready(function ($) {
 
         // Lock the options so the user cannot answer
         $(".qp-options-area").addClass("disabled");
-        $("#qp-report-btn").prop("disabled", true);
         $("#qp-next-btn").prop("disabled", true);
 
         // **THE FIX**: Enable the skip button and then programmatically click it.
@@ -937,7 +943,6 @@ jQuery(document).ready(function ($) {
 
     // Disable other buttons
     $("#qp-skip-btn").prop("disabled", true);
-    $("#qp-report-btn").prop("disabled", true);
     $("#qp-next-btn").prop("disabled", false);
 
     $.ajax({

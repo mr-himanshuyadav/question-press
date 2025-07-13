@@ -210,12 +210,20 @@ class QP_Shortcodes
         $sessions_table = $wpdb->prefix . 'qp_user_sessions';
         $session_data_from_db = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$sessions_table} WHERE session_id = %d", $session_id));
 
+        // **THE FIX**: This is the new, simplified error handling logic.
         if (!$session_data_from_db || (int)$session_data_from_db->user_id !== $user_id) {
-            return '<div class="qp-container"><p>Error: You do not have permission to access this session or it is invalid.</p></div>';
+            $options = get_option('qp_settings');
+            $dashboard_page_url = isset($options['dashboard_page']) ? get_permalink($options['dashboard_page']) : home_url('/');
+
+            return '<div class="qp-container" style="text-align: center; padding: 40px 20px;">
+                    <h3 style="margin-top:0; font-size: 22px;">Session Not Found</h3>
+                    <p style="font-size: 16px; color: #555; margin-bottom: 25px;">This session is either invalid or was abandoned and has been removed.</p>
+                    <a href="' . esc_url($dashboard_page_url) . '" class="qp-button qp-button-primary" style="text-decoration: none;">View Dashboard</a>
+                </div>';
         }
 
-        // --- NEW: Check if the session is already finished ---
-        if (in_array($session_data_from_db->status, ['completed', 'abandoned'])) {
+        // --- Check if the session is already completed ---
+        if ($session_data_from_db->status === 'completed') {
             $summary_data = [
                 'final_score' => $session_data_from_db->marks_obtained,
                 'total_attempted' => $session_data_from_db->total_attempted,
@@ -223,7 +231,6 @@ class QP_Shortcodes
                 'incorrect_count' => $session_data_from_db->incorrect_count,
                 'skipped_count' => $session_data_from_db->skipped_count,
             ];
-            // We can reuse the summary UI generating function from the JS by wrapping it in a simple class
             return '<div id="qp-practice-app-wrapper">' . self::render_summary_ui($summary_data) . '</div>';
         }
 
@@ -243,7 +250,6 @@ class QP_Shortcodes
         ), OBJECT_K);
 
         $session_data['attempt_history'] = $attempt_history;
-        self::$session_data_for_script = $session_data;
 
         $reports_table = $wpdb->prefix . 'qp_question_reports';
         $reported_qids_for_user = $wpdb->get_col($wpdb->prepare(
@@ -251,7 +257,7 @@ class QP_Shortcodes
             $user_id
         ));
 
-        $session_data['reported_ids'] = $reported_qids_for_user; // Pass reported IDs to JS
+        $session_data['reported_ids'] = $reported_qids_for_user;
 
         self::$session_data_for_script = $session_data;
 
