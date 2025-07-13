@@ -653,9 +653,16 @@ if (previousState.reported) {
     $("#qp-prev-btn").prop("disabled", currentQuestionIndex === 0);
 
     // 4. Render Math
-    if (typeof renderMathInElement !== 'undefined') {
-        renderMathInElement(document.getElementById('qp-practice-app-wrapper'));
-    }
+if (typeof renderMathInElement !== 'undefined') {
+    renderMathInElement(document.getElementById('qp-practice-app-wrapper'), {
+        delimiters: [
+            {left: '$$', right: '$$', display: true},
+            {left: '$', right: '$', display: false},
+            {left: '\\[', right: '\\]', display: true},
+            {left: '\\(', right: '\\)', display: false}
+        ],
+        throwOnError: false
+    });
 }
 
   function loadQuestion(questionID, direction) {
