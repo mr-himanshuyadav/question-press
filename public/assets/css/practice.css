@@ -1351,3 +1351,24 @@ ul.qp-review-list li {
      background-color: #d2e7f7; /* Keep color on hover when disabled */
     border-color: #d2e7f7;
 }
+
+
+/* --- Mobile Optimizations for Dashboard Cards --- */
+@media (max-width: 500px) {
+    .qp-active-session-card {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+
+    .qp-card-actions {
+        width: 100%;
+        display: flex;
+        gap: 0.5rem;
+    }
+
+    .qp-card-actions .qp-button {
+        flex-grow: 1;
+        text-align: center;
+    }
+}

@@ -125,12 +125,9 @@ class QP_Dashboard
     global $wpdb;
     $user_id = get_current_user_id();
     $sessions_table = $wpdb->prefix . 'qp_user_sessions';
-    $subjects_table = $wpdb->prefix . 'qp_subjects';
 
     $options = get_option('qp_settings');
-    $session_page_id = isset($options['session_page']) ? absint($options['session_page']) : 0;
     $review_page_id = isset($options['review_page']) ? absint($options['review_page']) : 0;
-    $session_page_url = $session_page_id ? get_permalink($session_page_id) : home_url('/');
     $review_page_url = $review_page_id ? get_permalink($review_page_id) : home_url('/');
 
     $user = wp_get_current_user();
@@ -138,82 +135,87 @@ class QP_Dashboard
     $allowed_roles = isset($options['can_delete_history_roles']) ? $options['can_delete_history_roles'] : ['administrator'];
     $can_delete = !empty(array_intersect($user_roles, $allowed_roles));
 
-    $subjects_raw = $wpdb->get_results("SELECT subject_id, subject_name FROM $subjects_table");
-    $subjects_map = [];
-    foreach ($subjects_raw as $subject) {
-        $subjects_map[$subject->subject_id] = $subject->subject_name;
-    }
-
-    $active_sessions = $wpdb->get_results($wpdb->prepare("SELECT * FROM $sessions_table WHERE user_id = %d AND status = 'active' ORDER BY start_time DESC", $user_id));
     $session_history = $wpdb->get_results($wpdb->prepare("SELECT * FROM $sessions_table WHERE user_id = %d AND status IN ('completed', 'abandoned') ORDER BY start_time DESC", $user_id));
 
-    // Active Sessions
-    if (!empty($active_sessions)) {
-        echo '<div class="qp-active-sessions-header">
-        <h3>Active Sessions</h3>
-      </div>';
-        echo '<div class="qp-active-sessions-list">';
-        foreach ($active_sessions as $session) {
-            $settings = json_decode($session->settings_snapshot, true);
-            $subject_id = $settings['subject_id'] ?? 'all';
-            $subject_display = ($subject_id === 'all') ? 'All Subjects' : ($subjects_map[$subject_id] ?? 'N/A');
-            echo '<div class="qp-active-session-card">
-                <div class="qp-card-details">
-                    <span class="qp-card-subject">' . esc_html($subject_display) . '</span>
-                    <span class="qp-card-date">Started: ' . date_format(date_create($session->start_time), 'M j, Y, g:i a') . '</span>
-                </div>
-                <div class="qp-card-actions">
-                    <button class="qp-button qp-button-danger qp-terminate-session-btn" data-session-id="' . esc_attr($session->session_id) . '">Terminate</button>
-                    <a href="' . esc_url(add_query_arg('session_id', $session->session_id, $session_page_url)) . '" class="qp-button qp-button-secondary">Continue</a>
-                </div>
-              </div>';
+    // Pre-fetch all subjects for all questions in the user's history to optimize queries
+    $all_session_qids = [];
+    foreach ($session_history as $session) {
+        $qids = json_decode($session->question_ids_snapshot, true);
+        if (is_array($qids)) {
+            $all_session_qids = array_merge($all_session_qids, $qids);
         }
-        echo '</div>';
     }
 
-    // Session History
-    $options = get_option('qp_settings');
+    $subjects_by_question = [];
+    if (!empty($all_session_qids)) {
+        $unique_qids = array_unique(array_map('absint', $all_session_qids));
+        $ids_placeholder = implode(',', $unique_qids);
+        $subject_results = $wpdb->get_results(
+            "SELECT q.question_id, s.subject_name
+             FROM {$wpdb->prefix}qp_questions q
+             JOIN {$wpdb->prefix}qp_question_groups g ON q.group_id = g.group_id
+             JOIN {$wpdb->prefix}qp_subjects s ON g.subject_id = s.subject_id
+             WHERE q.question_id IN ($ids_placeholder)"
+        );
+        foreach ($subject_results as $res) {
+            $subjects_by_question[$res->question_id] = $res->subject_name;
+        }
+    }
+
     $practice_page_url = isset($options['practice_page']) ? get_permalink($options['practice_page']) : home_url('/');
 
     echo '<div class="qp-history-header">
-    <h3 style="margin:0;">Practice History</h3>
-    
-    <div class="qp-history-actions">
-        <a href="' . esc_url($practice_page_url) . '" class="qp-button qp-button-primary">Practice</a>';
+        <h3 style="margin:0;">Practice History</h3>
+        <div class="qp-history-actions">
+            <a href="' . esc_url($practice_page_url) . '" class="qp-button qp-button-primary">Practice</a>';
 
     if ($can_delete) {
         echo '<button id="qp-delete-history-btn" class="qp-button qp-button-danger">Clear History</button>';
     }
-    echo    '</div>
-  </div>';
-    // --- UPDATED: Changed table header from "Subject" to "Mode" ---
+    echo '</div></div>';
+
     echo '<table class="qp-dashboard-table">
-        <thead><tr><th>Date</th><th>Mode</th><th>Status</th><th>Score</th><th>Actions</th></tr></thead>
+        <thead><tr><th>Date</th><th>Mode</th><th>Subjects</th><th>Accuracy</th><th>Actions</th></tr></thead>
         <tbody>';
+
     if (!empty($session_history)) {
         foreach ($session_history as $session) {
             $settings = json_decode($session->settings_snapshot, true);
+            $session_qids = json_decode($session->question_ids_snapshot, true);
 
-            // --- NEW: Logic to determine the session mode ---
-            $mode = 'Practice Mode'; // Default
+            // Determine Mode
+            $mode = 'Practice';
             if (isset($settings['practice_mode']) && $settings['practice_mode'] === 'revision') {
-                $mode = 'Revision Mode';
+                $mode = 'Revision';
             } elseif (isset($settings['section_id']) && $settings['section_id'] !== 'all' && is_numeric($settings['section_id'])) {
                 $mode = 'Source Practice';
             }
 
+            // Determine Subjects
+            $session_subjects = [];
+            if (is_array($session_qids)) {
+                foreach ($session_qids as $qid) {
+                    if (isset($subjects_by_question[$qid])) {
+                        $session_subjects[$subjects_by_question[$qid]] = true;
+                    }
+                }
+            }
+            $subjects_display = !empty($session_subjects) ? implode(', ', array_keys($session_subjects)) : 'N/A';
+
+            // Calculate Accuracy
+            $accuracy = ($session->total_attempted > 0) ? round(($session->correct_count / $session->total_attempted) * 100, 2) . '%' : 'N/A';
+
             echo '<tr>
                 <td data-label="Date">' . date_format(date_create($session->start_time), 'M j, Y, g:i a') . '</td>
                 <td data-label="Mode">' . esc_html($mode) . '</td>
-                <td data-label="Status"><span class="qp-status-badge qp-status-' . esc_attr($session->status) . '">' . esc_html(ucfirst($session->status)) . '</span></td>
-                <td data-label="Score"><strong>' . number_format($session->marks_obtained, 2) . '</strong></td>
+                <td data-label="Subjects">' . esc_html($subjects_display) . '</td>
+                <td data-label="Accuracy"><strong>' . $accuracy . '</strong></td>
                 <td data-label="Actions">
                     <a href="' . esc_url(add_query_arg('session_id', $session->session_id, $review_page_url)) . '" class="qp-button qp-button-secondary" style="padding: 4px 8px; font-size: 12px; text-decoration: none;">Review</a>';
             if ($can_delete) {
                 echo '<button class="qp-delete-session-btn" data-session-id="' . esc_attr($session->session_id) . '">Delete</button>';
             }
-            echo '</td>
-              </tr>';
+            echo '</td></tr>';
         }
     } else {
         echo '<tr><td colspan="5" style="text-align: center;">You have no completed practice sessions yet.</td></tr>';
