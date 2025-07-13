@@ -104,6 +104,11 @@ body {
     text-align: center;
 }
 
+#qp-timer-indicator.expired {
+    background-color: #ffebee; /* Light Red */
+    color: #c62828; /* Dark Red */
+}
+
 /* Adjust the indicator bar to vertically align all items */
 .qp-indicator-bar {
     align-items: center; /* This is the key change */

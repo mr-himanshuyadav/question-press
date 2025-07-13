@@ -235,12 +235,12 @@ class QP_Shortcodes
         ];
 
         $attempt_history = $wpdb->get_results($wpdb->prepare(
-            "SELECT a.question_id, a.selected_option_id, a.is_correct, o.option_id as correct_option_id
+    "SELECT a.question_id, a.selected_option_id, a.is_correct, a.status, o.option_id as correct_option_id
          FROM {$wpdb->prefix}qp_user_attempts a
          LEFT JOIN {$wpdb->prefix}qp_options o ON a.question_id = o.question_id AND o.is_correct = 1
          WHERE a.session_id = %d",
-            $session_id
-        ), OBJECT_K);
+    $session_id
+), OBJECT_K);
 
         $session_data['attempt_history'] = $attempt_history;
         self::$session_data_for_script = $session_data;

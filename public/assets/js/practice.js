@@ -687,6 +687,7 @@ jQuery(document).ready(function ($) {
     // 3. Apply State-Based UI
     var isReported = previousState.reported;
     var isAnswered = previousState.type === "answered";
+    var isExpired = previousState.type === 'expired';
     var indicatorBar = $(".qp-indicator-bar");
 
     // First, display indicators based on state (this is purely visual)
@@ -697,13 +698,10 @@ jQuery(document).ready(function ($) {
 
     // Next, determine the interactive state of the controls.
     // If the question has been answered OR reported, lock everything down.
-    if (isAnswered || isReported) {
-      optionsArea
-        .addClass("disabled")
-        .find('input[type="radio"]')
-        .prop("disabled", true);
-      $("#qp-skip-btn, #qp-report-btn").prop("disabled", true);
-      $("#qp-next-btn").prop("disabled", false);
+    if (isAnswered || isReported || isExpired) {
+    optionsArea.addClass('disabled').find('input[type="radio"]').prop('disabled', true);
+    $("#qp-skip-btn, #qp-report-btn").prop("disabled", true);
+    $("#qp-next-btn").prop("disabled", false);
 
       // If it was answered, we also need to apply the correctness styling.
       if (isAnswered) {
@@ -716,6 +714,11 @@ jQuery(document).ready(function ($) {
             .closest(".option")
             .addClass("correct");
         }
+        // NEW: If it has expired, show the expired timer state
+    if (isExpired) {
+        $('#qp-timer-indicator').html('&#9201; Time Expired').addClass('expired').show();
+        $('.qp-indicator-bar').show();
+    }
       }
     } else {
       // This block only runs for a fresh question that is NOT answered and NOT reported.
@@ -841,9 +844,22 @@ jQuery(document).ready(function ($) {
       remainingTime--;
       updateDisplay();
       if (remainingTime <= 0) {
-        clearInterval(questionTimer);
-        $("#qp-skip-btn").click(); // Automatically skip when time runs out
-      }
+    clearInterval(questionTimer);
+
+    // Get the current question ID and update its state
+    var questionID = sessionQuestionIDs[currentQuestionIndex];
+    if (typeof answeredStates[questionID] === 'undefined') {
+        answeredStates[questionID] = {};
+    }
+    answeredStates[questionID].type = 'expired';
+
+    // Update the UI to the "Time Expired" state
+    var timerIndicator = $('#qp-timer-indicator');
+    timerIndicator.html('&#9201; Time Expired').addClass('expired');
+    $('.qp-options-area').addClass('disabled');
+    $('#qp-skip-btn, #qp-report-btn').prop('disabled', true);
+    $('#qp-next-btn').prop('disabled', false);
+}
     }, 1000);
   }
 

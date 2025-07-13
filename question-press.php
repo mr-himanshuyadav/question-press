@@ -220,21 +220,23 @@ function qp_activate_plugin()
     dbDelta($sql_sessions);
 
     // --- UPDATED: User Attempts table with selected_option_id ---
-    $table_attempts = $wpdb->prefix . 'qp_user_attempts';
-    $sql_attempts = "CREATE TABLE $table_attempts (
-        attempt_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
-        session_id BIGINT(20) UNSIGNED NOT NULL,
-        user_id BIGINT(20) UNSIGNED NOT NULL,
-        question_id BIGINT(20) UNSIGNED NOT NULL,
-        selected_option_id BIGINT(20) UNSIGNED,
-        is_correct BOOLEAN,
-        attempt_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        PRIMARY KEY (attempt_id),
-        KEY session_id (session_id),
-        KEY user_id (user_id),
-        KEY question_id (question_id)
-    ) $charset_collate;";
-    dbDelta($sql_attempts);
+$table_attempts = $wpdb->prefix . 'qp_user_attempts';
+$sql_attempts = "CREATE TABLE $table_attempts (
+    attempt_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+    session_id BIGINT(20) UNSIGNED NOT NULL,
+    user_id BIGINT(20) UNSIGNED NOT NULL,
+    question_id BIGINT(20) UNSIGNED NOT NULL,
+    selected_option_id BIGINT(20) UNSIGNED,
+    is_correct BOOLEAN,
+    status VARCHAR(20) NOT NULL DEFAULT 'answered',
+    attempt_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY  (attempt_id),
+    KEY session_id (session_id),
+    KEY user_id (user_id),
+    KEY question_id (question_id),
+    KEY status (status)
+) $charset_collate;";
+dbDelta($sql_attempts);
 
     // Table: Logs
     $table_logs = $wpdb->prefix . 'qp_logs';
@@ -1305,25 +1307,57 @@ function qp_check_answer_ajax()
         'user_id' => get_current_user_id(),
         'question_id' => $question_id,
         'selected_option_id' => $option_id,
-        'is_correct' => $is_correct ? 1 : 0
+        'is_correct' => $is_correct ? 1 : 0,
+        'status' => 'answered'
     ]);
 
     wp_send_json_success(['is_correct' => $is_correct, 'correct_option_id' => $correct_option_id]);
 }
 add_action('wp_ajax_check_answer', 'qp_check_answer_ajax');
 
-// function qp_skip_question_ajax() {
-//     check_ajax_referer('qp_practice_nonce', 'nonce');
-//     $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
-//     $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
-//     if (!$session_id || !$question_id) { wp_send_json_error(['message' => 'Invalid data submitted.']); }
-//     global $wpdb;
-//     $attempts_table = $wpdb->prefix . 'qp_user_attempts';
-//     $wpdb->insert($attempts_table, ['session_id' => $session_id, 'user_id' => get_current_user_id(), 'question_id' => $question_id, 'is_correct' => null]);
-//     wp_send_json_success();
-// }
-// add_action('wp_ajax_skip_question', 'qp_skip_question_ajax');
+/**
+ * AJAX handler to mark a question as 'expired' for a session.
+ */
+function qp_expire_question_ajax() {
+    check_ajax_referer('qp_practice_nonce', 'nonce');
+    $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
+    $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
 
+    if (!$session_id || !$question_id) {
+        wp_send_json_error(['message' => 'Invalid data submitted.']);
+    }
+    
+    global $wpdb;
+    $wpdb->insert("{$wpdb->prefix}qp_user_attempts", [
+        'session_id' => $session_id,
+        'user_id' => get_current_user_id(),
+        'question_id' => $question_id,
+        'is_correct' => null,
+        'status' => 'expired' // Set the status to expired
+    ]);
+    
+    wp_send_json_success();
+}
+add_action('wp_ajax_expire_question', 'qp_expire_question_ajax');
+
+function qp_skip_question_ajax() {
+    check_ajax_referer('qp_practice_nonce', 'nonce');
+    $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
+    $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
+    if (!$session_id || !$question_id) { wp_send_json_error(['message' => 'Invalid data submitted.']); }
+    
+    global $wpdb;
+    $wpdb->insert("{$wpdb->prefix}qp_user_attempts", [
+        'session_id' => $session_id,
+        'user_id' => get_current_user_id(),
+        'question_id' => $question_id,
+        'is_correct' => null,
+        'status' => 'skipped' // Set the status to skipped
+    ]);
+    
+    wp_send_json_success();
+}
+add_action('wp_ajax_skip_question', 'qp_skip_question_ajax');
 
 /**
  * AJAX handler for ending a practice session.
