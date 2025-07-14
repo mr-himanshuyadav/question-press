@@ -636,7 +636,7 @@ function qp_handle_save_question_group()
 
     // --- Save Group Data ---
     $group_data = [
-        'direction_text' => sanitize_textarea_field($direction_text),
+        'direction_text' => wp_kses_post($direction_text),
         'direction_image_id' => $direction_image_id,
         'subject_id' => $subject_id,
         'is_pyq' => $is_pyq,
@@ -673,7 +673,7 @@ function qp_handle_save_question_group()
             'source_id' => $source_id > 0 ? $source_id : null,
             'section_id' => $section_id > 0 ? $section_id : null,
             'question_number_in_section' => $question_num, // Save the individual number
-            'question_text' => sanitize_textarea_field($question_text),
+            'question_text' => wp_kses_post($question_text),
             'question_text_hash' => md5(strtolower(trim(preg_replace('/\s+/', '', $question_text)))),
         ];
 
@@ -1252,6 +1252,13 @@ function qp_get_question_data_ajax()
 
     $question_data['direction_image_url'] = $question_data['direction_image_id'] ? wp_get_attachment_url($question_data['direction_image_id']) : null;
     $question_data['options'] = $wpdb->get_results($wpdb->prepare("SELECT option_id, option_text FROM {$o_table} WHERE question_id = %d ORDER BY option_id ASC", $question_id), ARRAY_A);
+
+    if (!empty($question_data['question_text'])) {
+    $question_data['question_text'] = wp_kses_post(nl2br($question_data['question_text']));
+}
+if (!empty($question_data['direction_text'])) {
+    $question_data['direction_text'] = wp_kses_post(nl2br($question_data['direction_text']));
+}
 
     // --- State Checks ---
     $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;

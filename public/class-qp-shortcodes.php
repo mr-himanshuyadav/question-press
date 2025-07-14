@@ -494,12 +494,12 @@ class QP_Shortcodes
             </div>
         </div>
         <div id="qp-start-session-overlay">
-    <div class="qp-start-session-content">
-        <h3>Your session is ready.</h3>
-        <p>Click the button below to begin in an immersive, fullscreen environment.</p>
-        <button id="qp-fullscreen-start-btn" class="qp-button qp-button-primary">Start & Enter Fullscreen</button>
-    </div>
-</div>
+            <div class="qp-start-session-content">
+                <h3>Your session is ready.</h3>
+                <p>Click the button below to begin in an immersive, fullscreen environment.</p>
+                <button id="qp-fullscreen-start-btn" class="qp-button qp-button-primary">Start & Enter Fullscreen</button>
+            </div>
+        </div>
     <?php
         return ob_get_clean();
     }
@@ -586,11 +586,11 @@ class QP_Shortcodes
                     <div class="qp-review-question-item">
                         <?php if (!empty($attempt->direction_text)): ?>
                             <div class="qp-review-direction-text">
-                                <?php echo wp_kses_post($attempt->direction_text); ?>
+                                <?php echo wp_kses_post(nl2br($attempt->direction_text)); ?>
                             </div>
                         <?php endif; ?>
                         <div class="qp-review-question-text">
-                            <strong>Q<?php echo $index + 1; ?>:</strong> <?php echo wp_kses_post($attempt->question_text); ?>
+                            <strong>Q<?php echo $index + 1; ?>:</strong> <?php echo wp_kses_post(nl2br($attempt->question_text)); ?>
                         </div>
                         <div class="qp-review-answer-row">
                             <span class="qp-review-label">Your Answer:</span>

@@ -122,25 +122,25 @@ class QP_Question_Editor_Page
                 }
             ?>
                 <div class="notice notice-error" style="padding: 1rem; border-left-width: 4px;">
-    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-        <div>
-            <h3 style="margin: 0 0 0.5rem 0;">&#9888; Open Reports for this Group</h3>
-            <p style="margin-top: 0;">The following questions have open reports. Resolving them will remove them from the "Needs Review" queue.</p>
-            <ul style="list-style: disc; padding-left: 20px; margin-bottom: 0;">
-                <?php foreach($reports_by_question as $qid => $reasons): ?>
-                    <li><strong>Question #<?php echo esc_html(get_question_custom_id($qid)); ?>:</strong> <?php echo esc_html(implode(', ', array_unique($reasons))); ?></li>
-                <?php endforeach; ?>
-            </ul>
-        </div>
-        <div>
-            <?php
-            $resolve_nonce = wp_create_nonce('qp_resolve_group_reports_' . $group_id);
-            $resolve_url = esc_url(admin_url('admin.php?page=qp-edit-group&group_id=' . $group_id . '&action=resolve_group_reports&_wpnonce=' . $resolve_nonce));
-            ?>
-            <a href="<?php echo $resolve_url; ?>" class="button button-primary">Resolve All Reports</a>
-        </div>
-    </div>
-</div>
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                        <div>
+                            <h3 style="margin: 0 0 0.5rem 0;">&#9888; Open Reports for this Group</h3>
+                            <p style="margin-top: 0;">The following questions have open reports. Resolving them will remove them from the "Needs Review" queue.</p>
+                            <ul style="list-style: disc; padding-left: 20px; margin-bottom: 0;">
+                                <?php foreach ($reports_by_question as $qid => $reasons): ?>
+                                    <li><strong>Question #<?php echo esc_html(get_question_custom_id($qid)); ?>:</strong> <?php echo esc_html(implode(', ', array_unique($reasons))); ?></li>
+                                <?php endforeach; ?>
+                            </ul>
+                        </div>
+                        <div>
+                            <?php
+                            $resolve_nonce = wp_create_nonce('qp_resolve_group_reports_' . $group_id);
+                            $resolve_url = esc_url(admin_url('admin.php?page=qp-edit-group&group_id=' . $group_id . '&action=resolve_group_reports&_wpnonce=' . $resolve_nonce));
+                            ?>
+                            <a href="<?php echo $resolve_url; ?>" class="button button-primary">Resolve All Reports</a>
+                        </div>
+                    </div>
+                </div>
             <?php endif; ?>
             <h1 class="wp-heading-inline"><?php echo $is_editing ? 'Edit Question Group' : 'Add New Question Group'; ?></h1>
             <a href="<?php echo admin_url('admin.php?page=question-press'); ?>" class="page-title-action">Back to All Questions</a>
@@ -189,7 +189,18 @@ class QP_Question_Editor_Page
                             <div class="postbox">
                                 <h2 class="hndle"><span>Direction (Optional Passage)</span></h2>
                                 <div class="inside">
-                                    <textarea name="direction_text" style="width: 100%; height: 100px;"><?php echo esc_textarea($direction_text); ?></textarea>
+                                    <?php
+                                    wp_editor(
+                                        $direction_text, // The content
+                                        'direction_text_editor', // A unique ID
+                                        [
+                                            'textarea_name' => 'direction_text',
+                                            'textarea_rows' => 5,
+                                            'media_buttons' => false, // Optional: hide the "Add Media" button
+                                            'tinymce'       => ['toolbar1' => 'bold,italic,underline,link,unlink,bullist,numlist'],
+                                        ]
+                                    );
+                                    ?>
                                     <hr>
                                     <div>
                                         <input type="hidden" name="direction_image_id" id="direction-image-id" value="<?php echo esc_attr($direction_image_id); ?>">
@@ -223,7 +234,18 @@ class QP_Question_Editor_Page
                                                 <label for="question_number_in_section_<?php echo $q_index; ?>"><strong>Question Number in Source</strong></label>
                                                 <input type="text" name="questions[<?php echo $q_index; ?>][question_number_in_section]" id="question_number_in_section_<?php echo $q_index; ?>" value="<?php echo esc_attr($question->question_number_in_section); ?>" style="width: 50%;">
                                             </p>
-                                            <textarea name="questions[<?php echo $q_index; ?>][question_text]" class="question-text-area" style="width: 100%; height: 100px;" placeholder="Enter question text here..." required><?php echo esc_textarea($question->question_text); ?></textarea>
+                                            <?php
+                                            wp_editor(
+                                                $question->question_text, // The content
+                                                'question_text_editor_' . $q_index, // A unique ID for each editor
+                                                [
+                                                    'textarea_name' => 'questions[' . $q_index . '][question_text]',
+                                                    'textarea_rows' => 5,
+                                                    'media_buttons' => false,
+                                                    'tinymce'       => ['toolbar1' => 'bold,italic,underline,link,unlink,bullist,numlist'],
+                                                ]
+                                            );
+                                            ?>
                                             <hr>
                                             <p><strong>Options (Select the radio button for the correct answer)</strong></p>
                                             <?php for ($i = 0; $i < 5; $i++) :

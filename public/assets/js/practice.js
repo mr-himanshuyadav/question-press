@@ -1013,8 +1013,9 @@ jQuery(document).ready(function ($) {
 
     var directionEl = $(".qp-direction").empty();
     if (questionData.direction_text || questionData.direction_image_url) {
-      if (questionData.direction_text)
-        directionEl.html($("<p>").html(questionData.direction_text));
+      if (questionData.direction_text) {
+    directionEl.html($("<p>").html(questionData.direction_text));
+}
       if (questionData.direction_image_url)
         directionEl.append(
           $("<img>")
@@ -1056,14 +1057,12 @@ jQuery(document).ready(function ($) {
     $("#qp-question-text-area").html(questionData.question_text);
 
     $.each(questionData.options, function (index, option) {
-      optionsArea.append(
+    optionsArea.append(
         $('<label class="option"></label>')
-          .append(
-            $('<input type="radio" name="qp_option">').val(option.option_id)
-          )
-          .append($("<span>").html(option.option_text))
-      );
-    });
+            .append($('<input type="radio" name="qp_option">').val(option.option_id))
+            .append($("<span>").html(option.option_text)) // This is the line to check
+    );
+});
 
     // 3. Apply State-Based UI
     var isReported = previousState.reported;
