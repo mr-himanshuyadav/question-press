@@ -506,6 +506,15 @@ $(document).on('click', function(e) {
   // Handler for NORMAL Practice Form
   wrapper.on("submit", "#qp-start-practice-form", function (e) {
     e.preventDefault();
+
+    // Check if the topic dropdown is visible and if any topic is selected
+    if ($('#qp-topic-group').is(':visible')) {
+        var selectedTopics = $('#qp_topic_list_container input:checked').length;
+        if (selectedTopics === 0) {
+            alert('Please select at least one topic to start the practice session.');
+            return; // Stop the form submission
+        }
+    }
     var form = $(this);
     var submitButton = form.find('input[type="submit"]');
     var originalButtonText = submitButton.val();
@@ -546,6 +555,15 @@ $(document).on('click', function(e) {
   // Handler for REVISION Mode Form
   wrapper.on("submit", "#qp-start-revision-form", function (e) {
     e.preventDefault();
+
+    // Check if the topic dropdown is visible and if any topic is selected
+    if ($('#qp-topic-group-revision').is(':visible')) {
+        var selectedTopics = $('#qp_topic_list_container_revision input:checked').length;
+        if (selectedTopics === 0) {
+            alert('Please select at least one topic to start the revision session.');
+            return; // Stop the form submission
+        }
+    }
     var form = $(this);
     var submitButton = form.find('input[type="submit"]');
     var originalButtonText = submitButton.val();

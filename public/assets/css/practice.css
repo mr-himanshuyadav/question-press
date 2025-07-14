@@ -447,6 +447,29 @@ body {
     }
 }
 
+/* --- NEW: Two-Column Layout for Practice Screen --- */
+
+/* On mobile, columns stack by default (no extra CSS needed) */
+
+/* On desktop screens, create the side-by-side layout */
+@media (min-width: 960px) {
+    .qp-main-content-split {
+        display: flex;
+        gap: 2rem; /* Adds space between the columns */
+        align-items: flex-start; /* Aligns items to the top */
+    }
+
+    .qp-left-column {
+        flex: 1 1 55%; /* Takes up 55% of the space */
+        min-width: 0; /* Prevents overflow issues */
+    }
+
+    .qp-right-column {
+        flex: 1 1 45%; /* Takes up 45% of the space */
+        min-width: 0;
+    }
+}
+
 /* --- Dashboard Screen --- */
 .qp-dashboard-wrapper h2 { font-size: 22px; text-align: center; margin: 0 auto 1.5rem auto; }
 .qp-dashboard-actions { display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1.5rem; }
