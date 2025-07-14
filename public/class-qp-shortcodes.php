@@ -461,11 +461,11 @@ class QP_Shortcodes
 
             <div class="qp-footer-nav">
                 <button id="qp-prev-btn" class="qp-button qp-button-secondary" disabled>
-                    <span class="dashicons dashicons-arrow-left-alt2"></span>
+                    <span>&#9664;</span>
                 </button>
                 <button id="qp-skip-btn" class="qp-button qp-button-secondary">Skip</button>
                 <button id="qp-next-btn" class="qp-button qp-button-primary">
-                    <span class="dashicons dashicons-arrow-right-alt2"></span>
+                    <span>&#9654;</span>
                 </button>
             </div>
 
@@ -473,7 +473,7 @@ class QP_Shortcodes
 
             <div class="qp-footer-controls">
                 <button id="qp-report-btn" class="qp-button qp-button-secondary">
-                    <span class="dashicons dashicons-flag"></span> Report
+                    <span>&#9888;</span> Report
                 </button>
 
                 <button id="qp-end-practice-btn" class="qp-button qp-button-danger">End Session</button>
