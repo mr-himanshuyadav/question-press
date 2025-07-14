@@ -211,7 +211,7 @@ body {
     gap: 1.5rem;
     background-color: var(--qp-bg-light);
     border-radius: var(--qp-radius);
-    padding: 0.75rem 1rem;
+    padding: 0.75rem 3rem;
 }
 .qp-header-stat {width: auto;}
 .qp-header-stat.score .label { font-size: 14px; font-weight: 500; color: var(--qp-light-text); }
@@ -313,7 +313,7 @@ body {
 /* --- Practice Screen Content --- */
 .qp-question-area {margin-bottom: 1.2rem; margin-top: .5rem}
 .qp-question-area .question-text { font: normal 1.21em KaTeX_Main,Times New Roman,serif; line-height: 1.6; }
-.qp-options-area .option { display: block; font: normal .95em KaTeX_Main,Times New Roman,serif;; padding: 1rem; margin-bottom: 0.75rem; border: 2px solid var(--qp-border-color); border-radius: var(--qp-radius); cursor: pointer; transition: all 0.2s ease-in-out; position: relative; }
+.qp-options-area .option { display: block; font: normal 1.1em KaTeX_Main,Times New Roman,serif;; padding: 1rem; margin-bottom: 0.75rem; border: 2px solid var(--qp-border-color); border-radius: var(--qp-radius); cursor: pointer; transition: all 0.2s ease-in-out; position: relative; }
 .qp-options-area.disabled .option {
     cursor: not-allowed;
     background-color: #f8f9fa;
@@ -332,7 +332,7 @@ body {
     line-height: 1;  /* Ensure proper vertical alignment */
 }
 .qp-footer-nav button { padding: 10px; font-weight: 600; flex: 1; }
-.qp-footer-controls {margin-bottom: 2rem;display: flex;justify-content: space-between;align-items: center; gap: 10px;
+.qp-footer-controls {display: flex;justify-content: space-between;align-items: center; gap: 10px;
 }
 .qp-footer-nav button:disabled { background-color: #f0f0f1; border-color: #ffffff00; color: #a7aaad; cursor: not-allowed; }
 #qp-prev-btn { background-color: var(--qp-bg-light); color: var(--qp-dark-text); }/* Unique style for Previous button */
@@ -400,6 +400,51 @@ body {
 
 #qp-report-btn {
     border-color: black;
+}
+
+/* --- Fullscreen Start Overlay Styles --- */
+#qp-start-session-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(240, 242, 245, 0.95); /* Semi-transparent background */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000; /* Ensure it's on top */
+    text-align: center;
+}
+
+.qp-start-session-content {
+    background: #fff;
+    padding: 2rem 3rem;
+    border-radius: var(--qp-radius);
+    box-shadow: var(--qp-shadow);
+}
+
+.qp-start-session-content h3 {
+    font-size: 22px;
+    margin-top: 0;
+}
+
+/* Initially hide the main practice wrapper */
+.qp-practice-wrapper {
+    visibility: hidden;
+}
+
+/* --- NEW: Mobile-Specific Fullscreen Behavior --- */
+@media (max-width: 768px) {
+    /* Hide the fullscreen overlay completely on smaller screens */
+    #qp-start-session-overlay {
+        display: none;
+    }
+
+    /* Make the practice content visible by default on smaller screens */
+    .qp-practice-wrapper {
+        visibility: visible;
+    }
 }
 
 /* --- Dashboard Screen --- */
@@ -535,6 +580,9 @@ body {
 }
     .qp-history-actions .qp-button {
         width: 40%;
+}
+.qp-header-bottom-row {
+    padding: 0.75rem 1rem;
 }
 }
 

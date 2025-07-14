@@ -1,6 +1,32 @@
 jQuery(document).ready(function ($) {
   var wrapper = $("#qp-practice-app-wrapper");
 
+
+  function openFullscreen() {
+    var elem = document.documentElement; // Get the root element (the whole page)
+    if (elem.requestFullscreen) {
+        elem.requestFullscreen();
+    } else if (elem.mozRequestFullScreen) { /* Firefox */
+        elem.mozRequestFullScreen();
+    } else if (elem.webkitRequestFullscreen) { /* Chrome, Safari and Opera */
+        elem.webkitRequestFullscreen();
+    } else if (elem.msRequestFullscreen) { /* IE/Edge */
+        elem.msRequestFullscreen();
+    }
+}
+
+function closeFullscreen() {
+    if (document.exitFullscreen) {
+        document.exitFullscreen();
+    } else if (document.mozCancelFullScreen) { /* Firefox */
+        document.mozCancelFullScreen();
+    } else if (document.webkitExitFullscreen) { /* Chrome, Safari and Opera */
+        document.webkitExitFullscreen();
+    } else if (document.msExitFullscreen) { /* IE/Edge */
+        document.msExitFullscreen();
+    }
+}
+
 // --- LOGIC FOR REVISION FORM DROPDOWNS ---
 // --- CONSOLIDATED LOGIC FOR REVISION FORM SUBJECT DROPDOWN ---
 $('#qp_subject_dropdown_revision').on('change', 'input[type="checkbox"]', function() {
@@ -1100,6 +1126,7 @@ $(document).on('click', function(e) {
   }
 
   function displaySummary(summaryData) {
+    closeFullscreen();
     practiceInProgress = false;
     var summaryHtml = `
       <div class="qp-summary-wrapper">
@@ -1347,4 +1374,25 @@ $(document).on('click', function(e) {
       return "Are you sure you want to leave? Your practice session is in progress and will be lost.";
     }
   });
+
+  // --- NEW: Handler for the Fullscreen Start Button ---
+wrapper.on('click', '#qp-fullscreen-start-btn', function() {
+    // 1. Enter fullscreen
+    openFullscreen();
+    
+    // 2. Hide the overlay
+    $('#qp-start-session-overlay').fadeOut(200);
+
+    // 3. Show the now-prepared practice wrapper
+    $('.qp-practice-wrapper').css('visibility', 'visible');
+
+    // 4. Start the timer if it's enabled for the first question
+    if (sessionSettings.timer_enabled) {
+        var firstQuestionID = sessionQuestionIDs[0];
+        var firstQuestionState = answeredStates[firstQuestionID] || {};
+        if (!firstQuestionState.type) { // Only start timer if first question isn't already answered/skipped
+             startTimer(sessionSettings.timer_seconds);
+        }
+    }
+});
 });
