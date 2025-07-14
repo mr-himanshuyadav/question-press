@@ -43,11 +43,11 @@ class QP_Shortcodes
                         </div>
 
                         <div class="qp-step-1-footer">
-    <button id="qp-step1-next-btn" class="qp-button qp-button-primary" disabled>Next</button>
-    <?php if ($dashboard_page_url) : ?>
-        <a href="<?php echo esc_url($dashboard_page_url); ?>" class="qp-button qp-button-secondary">Go to Dashboard</a>
-    <?php endif; ?>
-</div>
+                            <button id="qp-step1-next-btn" class="qp-button qp-button-primary" disabled>Next</button>
+                            <?php if ($dashboard_page_url) : ?>
+                                <a href="<?php echo esc_url($dashboard_page_url); ?>" class="qp-button qp-button-secondary">Go to Dashboard</a>
+                            <?php endif; ?>
+                        </div>
                     </div>
                 </div>
 
@@ -121,20 +121,28 @@ class QP_Shortcodes
                     Exclude PYQs
                 </label>
             </div>
+            <div class="qp-form-group">
+                <label class="qp-custom-checkbox">
+                    <input type="checkbox" name="choose_random" value="0">
+                    <span></span>
+                    Choose Random Questions
+                </label>
+                <p class="description">Check this to get random questions from your selected topics, ignoring the default source order.</p>
+            </div>
 
             <div class="qp-form-group">
                 <label for="qp_revision_questions_per_topic">Number of Questions from each Topic</label>
-                <input type="number" name="qp_revision_questions_per_topic" id="qp_revision_questions_per_topic" value="10" min="1">
+                <input type="number" name="qp_revision_questions_per_topic" id="qp_revision_questions_per_topic" value="2" min="1">
             </div>
 
             <div class="qp-form-group qp-marks-group">
                 <div>
                     <label for="qp_revision_marks_correct">Marks for Correct Answer:</label>
-                    <input type="number" name="qp_marks_correct" id="qp_revision_marks_correct" value="1" step="0.01" required>
+                    <input type="number" name="qp_marks_correct" id="qp_revision_marks_correct" value="4" step="0.01" required>
                 </div>
                 <div>
                     <label for="qp_revision_marks_incorrect">Penalty for Incorrect Answer:</label>
-                    <input type="number" name="qp_marks_incorrect" id="qp_revision_marks_incorrect" value="0" step="0.01" min="0" required>
+                    <input type="number" name="qp_marks_incorrect" id="qp_revision_marks_incorrect" value="1" step="0.01" min="0" required>
                 </div>
             </div>
 
@@ -231,53 +239,53 @@ class QP_Shortcodes
     }
 
     public static function render_summary_ui($summaryData, $session_id = 0)
-{
-    $options = get_option('qp_settings');
-    $dashboard_page_url = isset($options['dashboard_page']) ? get_permalink($options['dashboard_page']) : home_url('/');
-    $review_page_url = isset($options['review_page']) ? get_permalink($options['review_page']) : home_url('/');
-    $session_review_url = $review_page_url ? add_query_arg('session_id', $session_id, $review_page_url) : '#';
+    {
+        $options = get_option('qp_settings');
+        $dashboard_page_url = isset($options['dashboard_page']) ? get_permalink($options['dashboard_page']) : home_url('/');
+        $review_page_url = isset($options['review_page']) ? get_permalink($options['review_page']) : home_url('/');
+        $session_review_url = $review_page_url ? add_query_arg('session_id', $session_id, $review_page_url) : '#';
 
-    $accuracy = 0;
-    if (isset($summaryData['total_attempted']) && $summaryData['total_attempted'] > 0) {
-        $accuracy = ($summaryData['correct_count'] / $summaryData['total_attempted']) * 100;
+        $accuracy = 0;
+        if (isset($summaryData['total_attempted']) && $summaryData['total_attempted'] > 0) {
+            $accuracy = ($summaryData['correct_count'] / $summaryData['total_attempted']) * 100;
+        }
+
+        ob_start();
+    ?>
+        <div class="qp-summary-wrapper">
+            <h2>Session Summary</h2>
+            <div class="qp-summary-stats">
+                <div class="stat">
+                    <div class="value"><?php echo number_format($summaryData['final_score'], 2); ?></div>
+                    <div class="label">Final Score</div>
+                </div>
+                <div class="stat accuracy">
+                    <div class="value"><?php echo round($accuracy, 2); ?>%</div>
+                    <div class="label">Accuracy</div>
+                </div>
+                <div class="stat">
+                    <div class="value"><?php echo (int)$summaryData['correct_count']; ?></div>
+                    <div class="label">Correct</div>
+                </div>
+                <div class="stat">
+                    <div class="value"><?php echo (int)$summaryData['incorrect_count']; ?></div>
+                    <div class="label">Incorrect</div>
+                </div>
+                <div class="stat">
+                    <div class="value"><?php echo (int)$summaryData['skipped_count']; ?></div>
+                    <div class="label">Skipped</div>
+                </div>
+            </div>
+            <div class="qp-summary-actions">
+                <a href="<?php echo esc_url($dashboard_page_url); ?>" class="qp-button qp-button-secondary">View Dashboard</a>
+                <?php if ($session_id && $review_page_url !== '#'): ?>
+                    <a href="<?php echo esc_url($session_review_url); ?>" class="qp-button qp-button-primary">Review Session</a>
+                <?php endif; ?>
+            </div>
+        </div>
+    <?php
+        return ob_get_clean();
     }
-
-    ob_start();
-?>
-    <div class="qp-summary-wrapper">
-        <h2>Session Summary</h2>
-         <div class="qp-summary-stats">
-            <div class="stat">
-                <div class="value"><?php echo number_format($summaryData['final_score'], 2); ?></div>
-                <div class="label">Final Score</div>
-            </div>
-            <div class="stat accuracy">
-                <div class="value"><?php echo round($accuracy, 2); ?>%</div>
-                <div class="label">Accuracy</div>
-            </div>
-            <div class="stat">
-                <div class="value"><?php echo (int)$summaryData['correct_count']; ?></div>
-                <div class="label">Correct</div>
-            </div>
-            <div class="stat">
-                <div class="value"><?php echo (int)$summaryData['incorrect_count']; ?></div>
-                <div class="label">Incorrect</div>
-            </div>
-            <div class="stat">
-                <div class="value"><?php echo (int)$summaryData['skipped_count']; ?></div>
-                <div class="label">Skipped</div>
-            </div>
-        </div>
-        <div class="qp-summary-actions">
-            <a href="<?php echo esc_url($dashboard_page_url); ?>" class="qp-button qp-button-secondary">View Dashboard</a>
-            <?php if ($session_id && $review_page_url !== '#'): ?>
-                <a href="<?php echo esc_url($session_review_url); ?>" class="qp-button qp-button-primary">Review Session</a>
-            <?php endif; ?>
-        </div>
-    </div>
-<?php
-    return ob_get_clean();
-}
 
     // Helper function to get the session data
     public static function get_session_data_for_script()

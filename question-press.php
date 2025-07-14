@@ -3,7 +3,7 @@
 /**
  * Plugin Name:       Question Press
  * Description:       A complete plugin for creating, managing, and practicing questions.
- * Version:           2.2.2
+ * Version:           2.2.3
  * Author:            Himanshu
  */
 
@@ -1396,7 +1396,8 @@ add_action('wp_ajax_check_answer', 'qp_check_answer_ajax');
 /**
  * AJAX handler to start a REVISION practice session.
  */
-function qp_start_revision_session_ajax() {
+function qp_start_revision_session_ajax()
+{
     check_ajax_referer('qp_practice_nonce', 'nonce');
     global $wpdb;
 
@@ -1406,6 +1407,7 @@ function qp_start_revision_session_ajax() {
     $topics = isset($_POST['revision_topics']) && is_array($_POST['revision_topics']) ? $_POST['revision_topics'] : [];
     $questions_per_topic = isset($_POST['qp_revision_questions_per_topic']) ? absint($_POST['qp_revision_questions_per_topic']) : 10;
     $exclude_pyq = isset($_POST['exclude_pyq']);
+    $choose_random = isset($_POST['choose_random']);
 
     $session_settings = [
         'practice_mode'       => 'revision',
@@ -1457,6 +1459,12 @@ function qp_start_revision_session_ajax() {
     $final_question_ids = [];
     $revision_table = $wpdb->prefix . 'qp_revision_attempts';
     $questions_table = $wpdb->prefix . 'qp_questions';
+    $reports_table = $wpdb->prefix . 'qp_question_reports';
+    $reported_question_ids = $wpdb->get_col("SELECT DISTINCT question_id FROM {$reports_table} WHERE status = 'open'");
+    $exclude_reported_sql = '';
+    if (!empty($reported_question_ids)) {
+        $exclude_reported_sql = ' AND q.question_id NOT IN (' . implode(',', array_map('absint', $reported_question_ids)) . ')';
+    }
 
     foreach ($topic_ids_to_query as $topic_id) {
         $pyq_filter_sql = '';
@@ -1466,9 +1474,9 @@ function qp_start_revision_session_ajax() {
 
         $master_pool_qids = $wpdb->get_col($wpdb->prepare(
             "SELECT q.question_id 
-             FROM {$wpdb->prefix}qp_questions q
-             JOIN {$wpdb->prefix}qp_question_groups g ON q.group_id = g.group_id
-             WHERE q.topic_id = %d" . $pyq_filter_sql,
+            FROM {$wpdb->prefix}qp_questions q
+            JOIN {$wpdb->prefix}qp_question_groups g ON q.group_id = g.group_id
+            WHERE q.topic_id = %d" . $pyq_filter_sql . $exclude_reported_sql,
             $topic_id
         ));
 
@@ -1483,17 +1491,23 @@ function qp_start_revision_session_ajax() {
             $wpdb->delete($revision_table, ['user_id' => $user_id, 'topic_id' => $topic_id]);
             $available_qids = $master_pool_qids;
         }
-        
+
         if (!empty($available_qids)) {
             $ids_placeholder = implode(',', array_map('absint', $available_qids));
+            // Set the ordering based on the user's choice
+            $order_by_sql = "ORDER BY src.source_name ASC, sec.section_name ASC, CAST(q.question_number_in_section AS UNSIGNED) ASC, q.question_id ASC";
+            if ($choose_random) {
+                $order_by_sql = "ORDER BY RAND()";
+            }
+
             $q_ids = $wpdb->get_col($wpdb->prepare(
                 "SELECT q.question_id
-                 FROM $questions_table q
-                 LEFT JOIN {$wpdb->prefix}qp_sources src ON q.source_id = src.source_id
-                 LEFT JOIN {$wpdb->prefix}qp_source_sections sec ON q.section_id = sec.section_id
-                 WHERE q.question_id IN ($ids_placeholder)
-                 ORDER BY src.source_name ASC, sec.section_name ASC, CAST(q.question_number_in_section AS UNSIGNED) ASC, q.question_id ASC
-                 LIMIT %d",
+                FROM $questions_table q
+                LEFT JOIN {$wpdb->prefix}qp_sources src ON q.source_id = src.source_id
+                LEFT JOIN {$wpdb->prefix}qp_source_sections sec ON q.section_id = sec.section_id
+                WHERE q.question_id IN ($ids_placeholder)
+                {$order_by_sql}
+                LIMIT %d",
                 $questions_per_topic
             ));
             $final_question_ids = array_merge($final_question_ids, $q_ids);
