@@ -29,7 +29,6 @@ class QP_Questions_List_Table extends WP_List_Table
             'subject_name'       => 'Subject',
             'source'             => 'Source',
             'is_pyq'             => 'PYQ',
-            'last_modified'      => 'Last Modified'
         ];
     }
 
@@ -38,7 +37,6 @@ class QP_Questions_List_Table extends WP_List_Table
         return [
             'custom_question_id' => ['custom_question_id', true],
             'subject_name'       => ['subject_name', false],
-            'last_modified'      => ['last_modified', true]
         ];
     }
 

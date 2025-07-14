@@ -1762,6 +1762,7 @@ add_action('wp_ajax_delete_revision_history', 'qp_delete_revision_history_ajax')
 
 function qp_get_quick_edit_form_ajax()
 {
+    // Nonce check remains the same
     check_ajax_referer('qp_get_quick_edit_form_nonce', 'nonce');
     $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
     if (!$question_id) {
@@ -1769,14 +1770,18 @@ function qp_get_quick_edit_form_ajax()
     }
 
     global $wpdb;
-    // ... (database queries and data preparation remain the same) ...
+
+    // --- FIX: Updated query to fetch all necessary data ---
+    // This now joins the groups table to get direction_text and the correct subject_id for the group.
     $question = $wpdb->get_row($wpdb->prepare(
-        "SELECT q.question_text, q.is_pyq, q.topic_id, g.subject_id 
+        "SELECT q.question_text, q.topic_id, g.subject_id, g.direction_text, g.is_pyq
          FROM {$wpdb->prefix}qp_questions q 
          LEFT JOIN {$wpdb->prefix}qp_question_groups g ON q.group_id = g.group_id 
          WHERE q.question_id = %d",
         $question_id
     ));
+
+    // Fetching other necessary data (this part is mostly unchanged)
     $all_subjects = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}qp_subjects ORDER BY subject_name ASC");
     $all_topics = $wpdb->get_results("SELECT topic_id, topic_name, subject_id FROM {$wpdb->prefix}qp_topics ORDER BY topic_name ASC");
     $all_labels = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}qp_labels ORDER BY label_name ASC");
@@ -1791,6 +1796,7 @@ function qp_get_quick_edit_form_ajax()
         $topics_by_subject[$topic->subject_id][] = ['id' => $topic->topic_id, 'name' => $topic->topic_name];
     }
 
+    // Start output buffering to capture the form HTML
     ob_start();
 ?>
     <script>
@@ -1798,14 +1804,27 @@ function qp_get_quick_edit_form_ajax()
         var qp_current_topic_id = <?php echo json_encode($question->topic_id); ?>;
     </script>
     <form class="quick-edit-form-wrapper">
-        <h4><span style="font-weight: 700;">Question:</span> <span class="title"><?php echo esc_html(wp_trim_words($question->question_text, 10, '...')); ?></span></h4>
+        
+        <div class="quick-edit-display-text">
+            <?php if (!empty($question->direction_text)) : ?>
+                <div class="display-group">
+                    <strong>Direction:</strong>
+                    <p><?php echo esc_html(wp_trim_words($question->direction_text, 50, '...')); ?></p>
+                </div>
+            <?php endif; ?>
+            <div class="display-group">
+                <strong>Question:</strong>
+                <p><?php echo esc_html(wp_trim_words($question->question_text, 50, '...')); ?></p>
+            </div>
+        </div>
+        
         <input type="hidden" name="question_id" value="<?php echo esc_attr($question_id); ?>">
 
         <div class="quick-edit-main-container">
             <div class="quick-edit-col-left">
                 <label><strong>Correct Answer</strong></label>
                 <div class="options-group">
-                    <?php foreach ($options as $index => $option): ?>
+                    <?php foreach ($options as $index => $option) : ?>
                         <label class="option-label">
                             <input type="radio" name="correct_option_id" value="<?php echo esc_attr($option->option_id); ?>" <?php checked($option->is_correct, 1); ?>>
                             <input type="text" readonly value="<?php echo esc_attr($option->option_text); ?>">
@@ -1831,7 +1850,7 @@ function qp_get_quick_edit_form_ajax()
                     </div>
                 </div>
                 <div class="form-row">
-                    <label class="inline-checkbox"><input type="checkbox" name="is_pyq" value="1" <?php checked($question->is_pyq, 1); ?>> Is PYQ?</label>
+                     <label class="inline-checkbox"><input type="checkbox" name="is_pyq" value="1" <?php checked($question->is_pyq, 1); ?>> Is PYQ?</label>
                 </div>
                 <div class="form-row">
                     <label><strong>Labels</strong></label>
@@ -1851,12 +1870,31 @@ function qp_get_quick_edit_form_ajax()
     </form>
 
     <style>
+        .quick-edit-display-text {
+            background-color: #f6f7f7;
+            border: 1px solid #e0e0e0;
+            padding: 10px 20px;
+            margin: 20px 20px 10px 20px;
+            border-radius: 4px;
+        }
+        .quick-edit-display-text .display-group {
+            margin-bottom: 10px;
+        }
+        .quick-edit-display-text .display-group:last-child {
+            margin-bottom: 0;
+        }
+        .quick-edit-display-text p {
+            margin: 5px 0 0 0;
+            padding-left: 10px;
+            border-left: 3px solid #ccc;
+            color: #555;
+            font-style: italic;
+        }
         .quick-edit-form-wrapper h4 {
             font-size: 16px;
-            /* Increased font size for visibility */
             margin-top: 20px;
             margin-bottom: 10px;
-            Padding: 10px 20px;
+            padding: 10px 20px;
         }
 
         .inline-edit-row .submit {
@@ -1865,7 +1903,6 @@ function qp_get_quick_edit_form_ajax()
 
         .quick-edit-form-wrapper .title {
             font-size: 15px;
-            /* Also increased */
             font-weight: 500;
             color: #555;
         }
@@ -1924,15 +1961,12 @@ function qp_get_quick_edit_form_ajax()
         .option-label {
             display: flex;
             align-items: center;
-            /* Vertically aligns the radio button and text */
             gap: .5rem;
             margin-bottom: .5rem;
         }
 
-        /* Crucial fix for radio button alignment */
         .option-label input[type="radio"] {
             margin-top: 0;
-            /* Resets default WordPress top margin on radio buttons */
             align-self: center;
         }
 
@@ -1967,7 +2001,7 @@ function qp_get_quick_edit_form_ajax()
             white-space: nowrap;
         }
     </style>
-    <?php
+<?php
     wp_send_json_success(['form' => ob_get_clean()]);
 }
 add_action('wp_ajax_get_quick_edit_form', 'qp_get_quick_edit_form_ajax');
