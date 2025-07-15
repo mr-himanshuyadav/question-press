@@ -1260,16 +1260,26 @@ jQuery(document).ready(function ($) {
 
     // --- Conditionally build the main score/accuracy display ---
     var mainDisplayHtml = '';
-    // Check if it's a scored session first
-    if (summaryData.settings && typeof summaryData.settings.marks_correct !== 'undefined') {
+    var isScoredSession = summaryData.settings && typeof summaryData.settings.marks_correct !== 'undefined';
+
+    if (isScoredSession) {
         mainDisplayHtml = `<div class="qp-summary-score"><div class="label">Final Score</div>${parseFloat(summaryData.final_score).toFixed(2)}</div>`;
     } else {
-        // If not scored, it's an accuracy-based mode
-        var accuracy = 0;
-        if (summaryData.total_attempted > 0) {
-            accuracy = (summaryData.correct_count / summaryData.total_attempted) * 100;
-        }
+        var accuracy = (summaryData.total_attempted > 0) ? (summaryData.correct_count / summaryData.total_attempted) * 100 : 0;
         mainDisplayHtml = `<div class="qp-summary-score"><div class="label">Accuracy</div>${accuracy.toFixed(2)}%</div>`;
+    }
+
+    // --- Build the action buttons ---
+    var actionButtonsHtml = `<a href="${qp_ajax_object.dashboard_page_url}" class="qp-button qp-button-secondary">View Dashboard</a>`;
+
+    // **THE FIX**: Only create the "View Summary" button if the URL exists
+    if (qp_ajax_object.review_page_url) {
+        var reviewUrl = new URL(qp_ajax_object.review_page_url);
+        reviewUrl.searchParams.set('session_id', sessionID);
+        actionButtonsHtml += `<a href="${reviewUrl.href}" class="qp-button qp-button-primary">Review Session</a>`;
+    } else {
+        // Fallback if the review page isn't set
+        actionButtonsHtml += `<a href="${qp_ajax_object.practice_page_url}" class="qp-button qp-button-primary">Start Another Practice</a>`;
     }
 
     // --- Build the final HTML ---
@@ -1284,14 +1294,12 @@ jQuery(document).ready(function ($) {
               <div class="stat"><div class="value">${summaryData.skipped_count}</div><div class="label">Skipped</div></div>
           </div>
           <div class="qp-summary-actions">
-              <a href="${qp_ajax_object.dashboard_page_url}" class="qp-button qp-button-secondary">View Dashboard</a>
-              <a href="${qp_ajax_object.practice_page_url}" class="qp-button qp-button-primary">Start Another Practice</a>
+              ${actionButtonsHtml}
           </div>
       </div>`;
       
     wrapper.html(summaryHtml);
   }
-
   // Handles clicking an answer option
   // Handles clicking an answer option
   wrapper.on("click", ".qp-options-area .option", function () {

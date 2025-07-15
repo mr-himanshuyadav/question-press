@@ -544,16 +544,37 @@ class QP_Shortcodes
 
         $accuracy = ($session->total_attempted > 0) ? ($session->correct_count / $session->total_attempted) * 100 : 0;
 
+                // NEW: Get all unique topics for this session's questions
+        $session_question_ids = json_decode($session->question_ids_snapshot);
+        $topics_in_session = [];
+        if (!empty($session_question_ids)) {
+            $ids_placeholder = implode(',', array_map('absint', $session_question_ids));
+            $topics_in_session = $wpdb->get_col("
+                SELECT DISTINCT t.topic_name 
+                FROM {$wpdb->prefix}qp_topics t
+                JOIN {$wpdb->prefix}qp_questions q ON t.topic_id = q.topic_id
+                WHERE q.question_id IN ($ids_placeholder)
+                ORDER BY t.topic_name ASC
+            ");
+        }
+
         $attempts = $wpdb->get_results($wpdb->prepare(
-            "SELECT q.question_text, q.custom_question_id, g.direction_text, s.subject_name, o.option_text AS selected_answer, o_correct.option_text AS correct_answer, a.is_correct
-         FROM {$wpdb->prefix}qp_user_attempts a
-         JOIN {$wpdb->prefix}qp_questions q ON a.question_id = q.question_id
-         LEFT JOIN {$wpdb->prefix}qp_question_groups g ON q.group_id = g.group_id
-         LEFT JOIN {$wpdb->prefix}qp_subjects s ON g.subject_id = s.subject_id
-         LEFT JOIN {$wpdb->prefix}qp_options o ON a.selected_option_id = o.option_id
-         LEFT JOIN {$wpdb->prefix}qp_options o_correct ON q.question_id = o_correct.question_id AND o_correct.is_correct = 1
-         WHERE a.session_id = %d
-         ORDER BY a.attempt_id ASC",
+            "SELECT q.question_text, q.custom_question_id, q.question_number_in_section,
+                    g.direction_text, s.subject_name,
+                    t.topic_name,
+                    src.source_name, sec.section_name,
+                    o.option_text AS selected_answer, o_correct.option_text AS correct_answer, a.is_correct
+             FROM {$wpdb->prefix}qp_user_attempts a
+             JOIN {$wpdb->prefix}qp_questions q ON a.question_id = q.question_id
+             LEFT JOIN {$wpdb->prefix}qp_question_groups g ON q.group_id = g.group_id
+             LEFT JOIN {$wpdb->prefix}qp_subjects s ON g.subject_id = s.subject_id
+             LEFT JOIN {$wpdb->prefix}qp_topics t ON q.topic_id = t.topic_id
+             LEFT JOIN {$wpdb->prefix}qp_sources src ON q.source_id = src.source_id
+             LEFT JOIN {$wpdb->prefix}qp_source_sections sec ON q.section_id = sec.section_id
+             LEFT JOIN {$wpdb->prefix}qp_options o ON a.selected_option_id = o.option_id
+             LEFT JOIN {$wpdb->prefix}qp_options o_correct ON q.question_id = o_correct.question_id AND o_correct.is_correct = 1
+             WHERE a.session_id = %d
+             ORDER BY a.attempt_id ASC",
             $session_id
         ));
 
@@ -565,11 +586,11 @@ class QP_Shortcodes
             $mode = 'Revision';
         } elseif ($settings['practice_mode'] === 'Incorrect Que. Practice') {
             $mode = 'Incorrect Attempt Practice';
+        } elseif ($settings['practice_mode'] === 'Section Wise Practice') {
+            $mode = 'Section Wise Practice';
         }
     } elseif (isset($settings['subject_id']) && $settings['subject_id'] === 'review') {
         $mode = 'Review';
-    } elseif (isset($settings['section_id']) && $settings['section_id'] !== 'all' && is_numeric($settings['section_id'])) {
-        $mode = 'Source Practice';
     }
     ?>
         <div class="qp-container qp-review-wrapper">
@@ -608,6 +629,11 @@ class QP_Shortcodes
                         <div class="label">Skipped</div>
                     </div>
                 </div>
+                <?php if (!empty($topics_in_session)): ?>
+                <div class="qp-review-topics-list">
+                    <strong>Topics in this session:</strong> <?php echo implode(', ', array_map('esc_html', $topics_in_session)); ?>
+                </div>
+                <?php endif; ?>
             </div>
 
             <div class="qp-review-questions-list">
@@ -617,9 +643,22 @@ class QP_Shortcodes
                 ?>
                     <div class="qp-review-question-item">
                         <div class="qp-review-question-meta">
-                            <span>ID: <?php echo esc_html($attempt->custom_question_id); ?></span>
-                            <span>Subject: <?php echo esc_html($attempt->subject_name); ?></span>
+                            <span><strong>ID: </strong><?php echo esc_html($attempt->custom_question_id); ?></span>
+                            <span><strong>Subject: </strong><?php echo esc_html($attempt->subject_name); ?></span>
                         </div>
+                        <?php 
+                        $user_can_view_source = !empty(array_intersect((array)wp_get_current_user()->roles, (array)($options['show_source_meta_roles'] ?? [])));
+                        if ($mode === 'Section Wise Practice' && $user_can_view_source): 
+                            $source_parts = [];
+                            if ($attempt->source_name) $source_parts[] = '' . esc_html($attempt->source_name);
+                            if ($attempt->topic_name) $source_parts[] = '' . esc_html($attempt->topic_name);
+                            if ($attempt->section_name) $source_parts[] = '' . esc_html($attempt->section_name);
+                            if ($attempt->question_number_in_section) $source_parts[] = 'Q. ' . esc_html($attempt->question_number_in_section);
+                        ?>
+                            <div class="qp-review-source-meta">
+                                <?php echo implode(' / ', $source_parts); ?>
+                            </div>
+                        <?php endif; ?>
                         <?php if (!empty($attempt->direction_text)): ?>
                             <div class="qp-review-direction-text">
                                 <?php echo wp_kses_post(nl2br($attempt->direction_text)); ?>

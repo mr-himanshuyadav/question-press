@@ -238,16 +238,14 @@ class QP_Dashboard
             $mode = 'Practice'; // Default
             if (isset($settings['practice_mode'])) {
                 if ($settings['practice_mode'] === 'revision') {
-                    $mode = 'Regular Revision';
+                    $mode = 'Revision';
                 } elseif ($settings['practice_mode'] === 'Incorrect Que. Practice') {
-                    $mode = 'Incorrect Attempts Revision';
+                    $mode = 'Incorrect Attempt Practice';
+                } elseif ($settings['practice_mode'] === 'Section Wise Practice') {
+                    $mode = 'Section Wise Practice';
                 }
-            } 
-            // This handles the two older session types
-            elseif (isset($settings['subject_id']) && $settings['subject_id'] === 'review') {
+            } elseif (isset($settings['subject_id']) && $settings['subject_id'] === 'review') {
                 $mode = 'Review';
-            } elseif (isset($settings['section_id']) && $settings['section_id'] !== 'all' && is_numeric($settings['section_id'])) {
-                $mode = 'Source Practice';
             }
 
             $session_subjects = [];

@@ -3,7 +3,7 @@
 /**
  * Plugin Name:       Question Press
  * Description:       A complete plugin for creating, managing, and practicing questions.
- * Version:           2.3.2
+ * Version:           2.3.3
  * Author:            Himanshu
  */
 
@@ -875,6 +875,7 @@ function qp_public_enqueue_scripts()
             'nonce'              => wp_create_nonce('qp_practice_nonce'),
             'dashboard_page_url' => isset($options['dashboard_page']) ? get_permalink($options['dashboard_page']) : home_url('/'),
             'practice_page_url'  => isset($options['practice_page']) ? get_permalink($options['practice_page']) : home_url('/'),
+            'review_page_url'    => isset($options['review_page']) ? get_permalink($options['review_page']) : home_url('/'),
             'question_order_setting'   => isset($options['question_order']) ? $options['question_order'] : 'random',
             'can_delete_history' => $can_delete
         ];
@@ -1105,11 +1106,17 @@ function qp_start_practice_session_ajax()
             wp_send_json_error(['message' => 'Please select at least one subject.']);
         }
 
+        $section_id = isset($_POST['qp_section']) ? $_POST['qp_section'] : 'all';
+        $practice_mode = 'normal';
+        if ($section_id !== 'all' && is_numeric($section_id)) {
+            $practice_mode = 'Section Wise Practice';
+        }
+
         $session_settings = [
-            'practice_mode'    => 'normal',
-            'subjects'         => $subjects_raw, // Store arrays now
+            'practice_mode'    => $practice_mode,
+            'subjects'         => $subjects_raw,
             'topics'           => $topics_raw,
-            'section_id'       => isset($_POST['qp_section']) ? $_POST['qp_section'] : 'all',
+            'section_id'       => $section_id,
             'pyq_only'         => isset($_POST['qp_pyq_only']),
             'include_attempted' => isset($_POST['qp_include_attempted']),
             'marks_correct'    => isset($_POST['qp_marks_correct']) ? floatval($_POST['qp_marks_correct']) : 4.0,

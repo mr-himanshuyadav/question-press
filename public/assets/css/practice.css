@@ -786,6 +786,23 @@ ul.qp-review-list li{
     margin: 0;
     gap: 0.5rem;
 }
+
+.qp-review-topics-list {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px dashed var(--qp-border-color);
+    font-size: 14px;
+    color: var(--qp-light-text);
+}
+
+
+.qp-review-source-meta {
+    font-size: 13px;
+    color: var(--qp-light-text);
+    margin-bottom: 0.75rem;
+    font-weight: 500;
+}
+
 .qp-review-questions-list {
     margin-top: 2rem;
 }
@@ -844,7 +861,7 @@ ul.qp-review-list li{
 .qp-review-question-meta {
     font-size: 12px;
     color: var(--qp-light-text);
-    margin-bottom: 0.75rem;
+    margin-bottom: 0.3rem;
     display: flex;
     gap: 1.5rem;
 }
