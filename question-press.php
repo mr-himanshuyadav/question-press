@@ -1910,14 +1910,16 @@ function qp_save_quick_edit_data_ajax()
     global $wpdb;
 
     $wpdb->update("{$wpdb->prefix}qp_questions", [
-        'is_pyq' => isset($data['is_pyq']) ? 1 : 0,
         'topic_id' => isset($data['topic_id']) && $data['topic_id'] > 0 ? absint($data['topic_id']) : null,
         'last_modified' => current_time('mysql')
     ], ['question_id' => $question_id]);
 
     $group_id = $wpdb->get_var($wpdb->prepare("SELECT group_id FROM {$wpdb->prefix}qp_questions WHERE question_id = %d", $question_id));
     if ($group_id) {
-        $wpdb->update("{$wpdb->prefix}qp_question_groups", ['subject_id' => absint($data['subject_id'])], ['group_id' => $group_id]);
+        $wpdb->update("{$wpdb->prefix}qp_question_groups", [
+            'subject_id' => absint($data['subject_id']),
+            'is_pyq' => isset($data['is_pyq']) ? 1 : 0
+        ], ['group_id' => $group_id]);
     }
 
     $correct_option_id = isset($data['correct_option_id']) ? absint($data['correct_option_id']) : 0;
