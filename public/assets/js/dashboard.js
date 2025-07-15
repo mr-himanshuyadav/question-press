@@ -71,15 +71,35 @@ jQuery(document).ready(function($) {
     });
 
 
-    // --- NEW: Tab Switching Logic ---
+    // --- NEW: Tab Switching Logic with URL Hash ---
+    function switchTab(tab_id) {
+        $('.qp-tab-link').removeClass('active');
+        $('.qp-tab-link[data-tab="' + tab_id + '"]').addClass('active');
+
+        $('.qp-tab-content').removeClass('active');
+        $("#" + tab_id).addClass('active');
+    }
+
+    // Handle tab clicks
     wrapper.on('click', '.qp-tab-link', function(e) {
         e.preventDefault();
         var tab_id = $(this).data('tab');
-        $('.qp-tab-link').removeClass('active');
-        $(this).addClass('active');
-        $('.qp-tab-content').removeClass('active');
-        $("#" + tab_id).addClass('active');
+        switchTab(tab_id);
+        // Update the URL hash without reloading the page
+        window.location.hash = tab_id;
     });
+
+    // On page load, check for a hash and switch to that tab
+    if (window.location.hash) {
+        // Remove the '#' from the hash to get the tab ID
+        var hash = window.location.hash.substring(1);
+        var targetTab = $('.qp-tab-link[data-tab="' + hash + '"]');
+        
+        // If a tab with that ID exists, switch to it
+        if (targetTab.length) {
+            switchTab(hash);
+        }
+    }
 
         // --- UPDATED: Handler for the "View" button to open the modal ---
     wrapper.on('click', '.qp-review-list-view-btn', function() {
@@ -263,4 +283,38 @@ jQuery(document).ready(function($) {
             });
         }
     });
+
+    // --- NEW: Handler for starting an incorrect questions practice session ---
+    wrapper.on('click', '#qp-start-incorrect-practice-btn', function(e) {
+        e.preventDefault();
+        var button = $(this);
+        var originalText = button.text();
+        var includeAllIncorrect = $('#qp-include-all-incorrect-cb').is(':checked');
+
+        $.ajax({
+            url: qp_ajax_object.ajax_url,
+            type: 'POST',
+            data: {
+                action: 'qp_start_incorrect_practice_session',
+                nonce: qp_ajax_object.nonce,
+                include_all_incorrect: includeAllIncorrect
+            },
+            beforeSend: function() {
+                button.text('Preparing Session...').prop('disabled', true);
+            },
+            success: function(response) {
+                if (response.success && response.data.redirect_url) {
+                    window.location.href = response.data.redirect_url;
+                } else {
+                    alert('Error: ' + (response.data.message || 'Could not start practice session. You may not have any incorrect questions to practice.'));
+                    button.text(originalText).prop('disabled', false);
+                }
+            },
+            error: function() {
+                alert('A server error occurred.');
+                button.text(originalText).prop('disabled', false);
+            }
+        });
+    });
+
 });

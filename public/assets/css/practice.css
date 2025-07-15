@@ -456,7 +456,7 @@ body {
 .qp-dashboard-table thead { display: none; }
 .qp-dashboard-table tr { display: block; border: 1px solid var(--qp-border-color); border-radius: var(--qp-radius); margin-bottom: 1rem; padding: 0.75rem 1rem; }
 .qp-dashboard-table td { display: flex; justify-content: space-between; align-items: center; padding: .6rem 0; text-align: right; border-bottom: 1px dashed #e7e7e7; font-size: 14px; }
-.qp-dashboard-table td:last-child { border-bottom: 0; }
+.qp-dashboard-table td:last-child { border-bottom: 0; display: flex; gap: 5px;}
 .qp-dashboard-table td::before { content: attr(data-label); font-weight: 600; text-align: left; color: var(--qp-dark-text); }
 .qp-delete-session-btn { background: none; border: 1px solid #d63638; color: #d63638; cursor: pointer; border-radius: 4px; padding: 4px 8px; font-size: 12px; transition: all 0.2s; }
 
@@ -586,6 +586,37 @@ body {
 .qp-header-bottom-row {
     padding: 0.75rem 1rem;
 }
+
+.qp-review-list-header button {
+    width: 100%;
+}
+
+/* --- Balanced Incorrect Practice Card --- */
+.qp-practice-card{
+    flex-wrap: wrap;
+}
+.qp-card-content h4{
+    font-size: 18px !important;
+    font-weight: 600;
+}
+.qp-practice-card .qp-card-action, .qp-practice-card .qp-card-action button {
+    width: 100%;
+}
+
+.qp-practice-card p {
+    font-size: 1rem !important;
+}
+
+ul.qp-review-list li{
+    flex-direction: column;
+}
+.qp-review-list-q-text{
+    padding-right: 0 !important;
+    padding-bottom: 1rem;
+    text-align: justify;
+}
+
+
 }
 
 /* =================================================================
@@ -767,6 +798,7 @@ body {
 .qp-review-question-text {
     font-size: 16px;
     line-height: 1.6;
+    font-weight: 500;
     margin-bottom: 1rem;
 }
 .qp-review-answer-row {
@@ -793,6 +825,31 @@ body {
 .qp-review-answer.incorrect {
     background-color: var(--qp-incorrect-bg);
     color: var(--qp-incorrect-color);
+}
+
+.qp-review-answer.skipped {
+    background-color: #fffab1; /* Light yellow */
+    color: #f87706; /* Amber */
+}
+
+.qp-review-question-meta {
+    font-size: 12px;
+    color: var(--qp-light-text);
+    margin-bottom: 0.75rem;
+    display: flex;
+    gap: 1.5rem;
+}
+
+.qp-review-question-meta span {
+    font-weight: 500;
+}
+
+.qp-review-question-text small {
+    display: block;
+    font-size: 13px;
+    color: var(--qp-light-text);
+    margin-top: 5px;
+    font-weight: 500;
 }
 
 /* --- Review Later Checkbox Styles (Updated) --- */
@@ -850,6 +907,53 @@ body {
     display: block;
 }
 
+/* --- Balanced Incorrect Practice Card --- */
+.qp-practice-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    background-color: var(--qp-bg-light);
+    border: 1px solid var(--qp-border-color);
+    border-radius: var(--qp-radius);
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+    flex-direction: row;
+}
+
+.qp-practice-card .qp-card-content {
+    flex: 1 1 auto; /* Allow content to grow */
+}
+
+.qp-practice-card .qp-card-action {
+    flex-shrink: 0; /* Prevent action area from shrinking */
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+}
+
+.qp-practice-card h4 {
+    margin: 0 0 0.25rem 0;
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.qp-practice-card p {
+    margin: 0;
+    color: var(--qp-light-text);
+    font-size: 1.2rem;
+}
+
+.qp-practice-card .qp-card-action button{
+    width: 100%;
+}
+
+.qp-practice-card .qp-custom-checkbox {
+    font-size: 13px;
+    color: var(--qp-light-text);
+}
+
 /* --- Review List Styles --- */
 .qp-review-list-header {
     display: flex;
@@ -875,6 +979,10 @@ ul.qp-review-list li {
     align-items: center;
     padding: 1rem 0;
     border-bottom: 1px solid var(--qp-border-color);
+}
+.qp-review-list-actions {
+    width: 30%;
+    text-align: right;
 }
 .qp-review-list-actions .qp-review-list-remove-btn {
     background: none;
@@ -1108,6 +1216,13 @@ ul.qp-review-list li {
     gap: 0.5rem;
 }
 
+hr.qp-divider {
+    border: 0;
+    height: 1px;
+    background-color: var(--qp-border-color);
+    margin: 2rem 0;
+}
+
 .qp-active-session-card .qp-button {
     padding: 8px 16px;
     font-size: 14px;
@@ -1177,9 +1292,9 @@ ul.qp-review-list li {
     /* Targets the actions on the Review List (View/Remove) */
     .qp-review-list-actions {
         display: flex;
-        flex-direction: column;
+        flex-direction: row;
         gap: 0.5rem;
-        width: 100px; /* Give the container a fixed width */
+        width: auto;
         flex-shrink: 0; /* Prevent it from shrinking */
     }
 

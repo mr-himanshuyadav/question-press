@@ -132,6 +132,7 @@ class QP_Questions_List_Table extends WP_List_Table
             }
             echo '</select>';
         }
+        
         // --- END CUSTOM DROPDOWN ---
 
         submit_button(__('Apply'), 'action', '', false, array('id' => 'doaction' . ('top' === $which ? '' : '2'), 'style' => 'margin-left: 5px;'));
@@ -216,14 +217,14 @@ class QP_Questions_List_Table extends WP_List_Table
             submit_button('Filter', 'button', 'filter_action', false, ['id' => 'post-query-submit']);
             echo '</div>';
 
-
             // --- ROW 2: Bulk Edit Controls ---
-            if (!empty($_REQUEST['filter_by_label'])) {
-                echo '<div class="alignleft actions" style="clear: both; margin-top: 10px; padding: 10px; border: 1px solid #cce7f6; background-color: #f6f7f7;">';
+            
+            echo '<div id="qp-bulk-edit-panel" class="alignleft actions" style="display: none; clear: both; margin-top: 10px; padding: 10px; border: 1px solid #cce7f6; background-color: #f6f7f7;">';
 
                 $all_exams = $wpdb->get_results("SELECT exam_id, exam_name FROM {$wpdb->prefix}qp_exams ORDER BY exam_name ASC");
                 $all_sources = $wpdb->get_results("SELECT source_id, source_name FROM {$wpdb->prefix}qp_sources ORDER BY source_name ASC");
                 $all_sections = $wpdb->get_results("SELECT section_id, section_name FROM {$wpdb->prefix}qp_source_sections ORDER BY section_name ASC");
+                $all_topics = $wpdb->get_results("SELECT topic_id, topic_name FROM {$wpdb->prefix}qp_topics ORDER BY topic_name ASC");
 
                 echo '<span style="font-weight: bold; margin-right: 5px;">Bulk Edit:</span>';
 
@@ -236,7 +237,7 @@ class QP_Questions_List_Table extends WP_List_Table
                 // Source Dropdown (Now first)
                 // Add the disabled attribute we just created
                 echo '<select name="bulk_edit_source" id="bulk_edit_source" style="margin-right: 5px;max-width: 18rem;"' . $source_disabled_attr . '>';
-                echo '<option value="">— Filter by Subject to Change Source —</option>';
+                echo '<option value="">— Change Source —</option>';
                 foreach ($all_sources as $source) {
                     printf('<option value="%s">%s</option>', esc_attr($source->source_id), esc_html($source->source_name));
                 }
@@ -251,22 +252,28 @@ class QP_Questions_List_Table extends WP_List_Table
                 }
                 echo '</select>';
 
-                // Uncomment to make the change exam dropdown appear.
+                // NEW: Topic Dropdown
+                echo '<select name="bulk_edit_topic" id="bulk_edit_topic" style="margin-right: 5px;" disabled="disabled">';
+                echo '<option value="">— Change Topic —</option>';
+                foreach ($all_topics as $topic) {
+                    printf('<option value="%s">%s</option>', esc_attr($topic->topic_id), esc_html($topic->topic_name));
+                }
+                echo '</select>';
 
 
                 // Exam Dropdown (Now last)
-                // echo '<select name="bulk_edit_exam" id="bulk_edit_exam" style="margin-right: 5px;">';
-                // echo '<option value="">— Change Exam —</option>';
-                // foreach ($all_exams as $exam) {
-                //     printf('<option value="%s">%s</option>', esc_attr($exam->exam_id), esc_html($exam->exam_name));
-                // }
-                // echo '</select>';
+                echo '<select name="bulk_edit_exam" id="bulk_edit_exam" style="margin-right: 5px; max-width: 20rem;" disabled="disabled">';
+                echo '<option value="">— Select Subject to edit exam —</option>';
+                foreach ($all_exams as $exam) {
+                    printf('<option value="%s">%s</option>', esc_attr($exam->exam_id), esc_html($exam->exam_name));
+                }
+                echo '</select>';
 
                 submit_button('Apply Changes', 'primary', 'bulk_edit_apply', false);
 
                 echo '</div>';
             }
-        }
+        
     }
 
     public function search_box($text, $input_id)
@@ -434,22 +441,22 @@ if ($current_status === 'trash') {
      */
     public function process_bulk_action()
     {
-        // Check for our new custom bulk edit action first.
-        if (isset($_POST['bulk_edit_apply'])) {
-            check_admin_referer('bulk-questions', '_wpnonce');
+        $action = $this->current_action();
 
-            $question_ids = isset($_POST['question_ids']) ? array_map('absint', $_POST['question_ids']) : [];
+        // --- Handle Custom Bulk Edit First ---
+        if (isset($_REQUEST['bulk_edit_apply'])) {
+            check_admin_referer('bulk-questions', '_wpnonce');
+            $question_ids = isset($_REQUEST['question_ids']) ? array_map('absint', $_REQUEST['question_ids']) : [];
 
             if (!empty($question_ids)) {
                 global $wpdb;
+                $q_table = $wpdb->prefix . 'qp_questions';
 
-                $exam_id    = !empty($_POST['bulk_edit_exam']) ? absint($_POST['bulk_edit_exam']) : null;
-                $source_id  = !empty($_POST['bulk_edit_source']) ? absint($_POST['bulk_edit_source']) : null;
-                $section_id = !empty($_POST['bulk_edit_section']) ? absint($_POST['bulk_edit_section']) : null;
+                $source_id  = !empty($_REQUEST['bulk_edit_source']) ? absint($_REQUEST['bulk_edit_source']) : null;
+                $section_id = !empty($_REQUEST['bulk_edit_section']) ? absint($_REQUEST['bulk_edit_section']) : null;
+                $topic_id   = !empty($_REQUEST['bulk_edit_topic']) ? absint($_REQUEST['bulk_edit_topic']) : null;
 
-                // --- Build the SET clauses for our queries ---
                 $question_set_clauses = [];
-                $group_set_clauses = [];
                 $query_params = [];
 
                 if ($source_id) {
@@ -460,84 +467,52 @@ if ($current_status === 'trash') {
                     $question_set_clauses[] = "section_id = %d";
                     $query_params[] = $section_id;
                 }
-                if ($exam_id) {
-                    $group_set_clauses[] = "exam_id = %d";
-                    $group_set_clauses[] = "is_pyq = 1"; // Also mark as PYQ
-                    // We'll add params for this query later
+
+                if ($topic_id) {
+                    $question_set_clauses[] = "topic_id = %d";
+                    $query_params[] = $topic_id;
                 }
 
-                // --- Execute the queries ---
-                $q_table = $wpdb->prefix . 'qp_questions';
-                $g_table = $wpdb->prefix . 'qp_question_groups';
-
-                // Update the questions table if there's anything to change
                 if (!empty($question_set_clauses)) {
                     $ids_placeholder = implode(',', $question_ids);
                     $query = "UPDATE {$q_table} SET " . implode(', ', $question_set_clauses) . " WHERE question_id IN ({$ids_placeholder})";
                     $wpdb->query($wpdb->prepare($query, $query_params));
                 }
-
-                // Update the question_groups table if there's anything to change
-                if (!empty($group_set_clauses)) {
-                    $group_ids = $wpdb->get_col("SELECT DISTINCT group_id FROM {$q_table} WHERE question_id IN (" . implode(',', $question_ids) . ")");
-                    $group_ids = array_filter(array_map('absint', $group_ids));
-                    if (!empty($group_ids)) {
-                        $group_ids_placeholder = implode(',', $group_ids);
-                        $group_query = "UPDATE {$g_table} SET " . implode(', ', $group_set_clauses) . " WHERE group_id IN ({$group_ids_placeholder})";
-                        // Only add the exam_id param if it's set
-                        $group_params = $exam_id ? [$exam_id] : [];
-                        $wpdb->query($wpdb->prepare($group_query, $group_params));
-                    }
-                }
-
-                // Add a success message and redirect
-                $redirect_to = add_query_arg('bulk_edit_message', '1', wp_get_referer());
-                wp_safe_redirect($redirect_to);
-                exit;
             }
         }
 
+        // --- Handle Standard Bulk Actions & Label Application ---
+        $labels_to_apply = isset($_REQUEST['labels_to_apply']) ? array_filter(array_map('absint', (array) $_REQUEST['labels_to_apply'])) : [];
 
-        // --- The rest of your original bulk action logic ---
-        $action = $this->current_action();
-        $labels_to_apply = isset($_POST['labels_to_apply']) ? array_filter(array_map('absint', $_POST['labels_to_apply'])) : [];
-
-        // Exit if there's no action to perform
-        if ((!$action || $action === -1) && empty($labels_to_apply)) {
+        if ((!$action || $action === -1) && empty($labels_to_apply) && !isset($_REQUEST['bulk_edit_apply'])) {
             return;
         }
 
-        // --- Smarter Nonce Verification ---
-        if (isset($_GET['question_id']) && isset($_GET['_wpnonce'])) {
-            $question_id = absint($_GET['question_id']);
-            $nonce_action = 'qp_' . $action . '_question_' . $question_id;
-            if (!wp_verify_nonce($_GET['_wpnonce'], $nonce_action)) {
-                wp_die('Security check failed for single item action.');
-            }
-        } elseif (isset($_POST['question_ids'])) {
-            if (!wp_verify_nonce($_POST['_wpnonce'], 'bulk-questions')) {
+        $nonce = $_REQUEST['_wpnonce'] ?? '';
+        if (!isset($_REQUEST['bulk_edit_apply'])) {
+             if (isset($_REQUEST['question_id']) && !isset($_REQUEST['question_ids'])) {
+                if (!wp_verify_nonce($nonce, 'qp_' . $action . '_question_' . absint($_REQUEST['question_id']))) {
+                    wp_die('Security check failed for single item action.');
+                }
+            } elseif (!wp_verify_nonce($nonce, 'bulk-' . $this->_args['plural'])) {
                 wp_die('Security check failed for bulk action.');
             }
-        } else {
-            return; // No items or valid nonce found
         }
-
-        $question_ids = isset($_REQUEST['question_ids']) ? array_map('absint', (array) $_REQUEST['question_ids']) : [absint($_GET['question_id'])];
-        if (empty($question_ids)) {
-            return;
+       
+        $question_ids = isset($_REQUEST['question_ids']) ? array_map('absint', (array) $_REQUEST['question_ids']) : (isset($_REQUEST['question_id']) ? [absint($_REQUEST['question_id'])] : []);
+        
+        if (empty(array_filter($question_ids))) {
+             wp_safe_redirect(remove_query_arg(['action', 'action2', '_wpnonce', 'question_ids', 'labels_to_apply', 'bulk_edit_apply', 'bulk_edit_source', 'bulk_edit_section'], wp_get_referer()));
+             exit;
         }
-
+        
         global $wpdb;
 
         if (!empty($labels_to_apply)) {
             $ql_table = $wpdb->prefix . 'qp_question_labels';
             foreach ($question_ids as $question_id) {
                 foreach ($labels_to_apply as $label_id) {
-                    $wpdb->query($wpdb->prepare(
-                        "INSERT IGNORE INTO {$ql_table} (question_id, label_id) VALUES (%d, %d)",
-                        $question_id,
-                        $label_id
-                    ));
+                    $wpdb->query($wpdb->prepare("INSERT IGNORE INTO {$ql_table} (question_id, label_id) VALUES (%d, %d)", $question_id, $label_id));
                 }
             }
         }
@@ -578,6 +553,10 @@ if ($current_status === 'trash') {
                 }
             }
         }
+        
+        // --- Redirect to preserve state ---
+        wp_safe_redirect(remove_query_arg(['action', 'action2', '_wpnonce', 'question_ids', 'labels_to_apply', 'bulk_edit_apply', 'bulk_edit_source', 'bulk_edit_section'], wp_get_referer()));
+        exit;
     }
 
 

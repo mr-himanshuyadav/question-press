@@ -462,10 +462,18 @@ function qp_admin_enqueue_scripts($hook_suffix)
         // Get all sections with their parent source_id
         $all_sections = $wpdb->get_results("SELECT section_id, section_name, source_id FROM {$wpdb->prefix}qp_source_sections ORDER BY section_name ASC");
 
-        // Localize BOTH sets of data for our script
+        // Get all exams and their links to subjects
+        $all_exams = $wpdb->get_results("SELECT exam_id, exam_name FROM {$wpdb->prefix}qp_exams ORDER BY exam_name ASC");
+        $exam_subject_links = $wpdb->get_results("SELECT exam_id, subject_id FROM {$wpdb->prefix}qp_exam_subjects");
+        $all_topics = $wpdb->get_results("SELECT topic_id, topic_name, subject_id FROM {$wpdb->prefix}qp_topics ORDER BY topic_name ASC");
+
+        // Localize ALL sets of data for our script
         wp_localize_script('qp-quick-edit-script', 'qp_bulk_edit_data', [
             'sources' => $all_sources,
-            'sections' => $all_sections
+            'sections' => $all_sections,
+            'exams' => $all_exams,
+            'exam_subject_links' => $exam_subject_links,
+            'topics' => $all_topics
         ]);
 
         wp_localize_script('qp-quick-edit-script', 'qp_quick_edit_object', [
@@ -565,12 +573,15 @@ function qp_all_questions_page_cb()
         ?>
         <hr class="wp-header-end">
         <?php $list_table->views(); ?>
-        <form method="post">
-            <?php wp_nonce_field('bulk-questions'); ?>
-            <?php $list_table->search_box('Search Questions', 'question');
-            $list_table->display(); ?>
+        <form method="get">
+            <input type="hidden" name="page" value="<?php echo esc_attr($_REQUEST['page']); ?>" />
+            <?php $list_table->search_box('Search Questions', 'question'); ?>
+            <?php $list_table->display(); ?>
         </form>
         <style type="text/css">
+            #post-query-submit{
+                margin-left: 8px;
+            }
             .wp-list-table .column-custom_question_id {
                 width: 5%;
             }
@@ -1190,7 +1201,87 @@ function qp_start_practice_session_ajax()
 }
 add_action('wp_ajax_start_practice_session', 'qp_start_practice_session_ajax');
 
+/**
+ * AJAX handler to start a special session with incorrectly answered questions.
+ */
+function qp_start_incorrect_practice_session_ajax() {
+    check_ajax_referer('qp_practice_nonce', 'nonce');
+    if (!is_user_logged_in()) {
+        wp_send_json_error(['message' => 'You must be logged in.']);
+    }
 
+    global $wpdb;
+    $user_id = get_current_user_id();
+    $attempts_table = $wpdb->prefix . 'qp_user_attempts';
+    $questions_table = $wpdb->prefix . 'qp_questions';
+
+    // Decide which set of questions to fetch based on the checkbox
+    $include_all_incorrect = isset($_POST['include_all_incorrect']) && $_POST['include_all_incorrect'] === 'true';
+
+    $question_ids = [];
+
+    if ($include_all_incorrect) {
+        // Mode 1: Get all questions the user has EVER answered incorrectly.
+        $question_ids = $wpdb->get_col($wpdb->prepare(
+            "SELECT DISTINCT question_id FROM {$attempts_table} WHERE user_id = %d AND is_correct = 0",
+            $user_id
+        ));
+    } else {
+        // Mode 2: Get questions the user has NEVER answered correctly.
+        // First, get all questions ever answered correctly by the user.
+        $correctly_answered_qids = $wpdb->get_col($wpdb->prepare(
+            "SELECT DISTINCT question_id FROM {$attempts_table} WHERE user_id = %d AND is_correct = 1",
+            $user_id
+        ));
+
+        // Then, get all questions ever attempted by the user.
+        $all_attempted_qids = $wpdb->get_col($wpdb->prepare(
+            "SELECT DISTINCT question_id FROM {$attempts_table} WHERE user_id = %d",
+            $user_id
+        ));
+        
+        // The questions to practice are those attempted but never answered correctly.
+        $question_ids = array_diff($all_attempted_qids, $correctly_answered_qids);
+    }
+    
+    if (empty($question_ids)) {
+        wp_send_json_error(['message' => 'No incorrect questions found to practice.']);
+    }
+    
+    // Randomize the order of questions
+    shuffle($question_ids);
+
+    // Get the Session Page URL from settings
+    $options = get_option('qp_settings');
+    $session_page_id = isset($options['session_page']) ? absint($options['session_page']) : 0;
+    if (!$session_page_id) {
+        wp_send_json_error(['message' => 'The administrator has not configured a session page.']);
+    }
+
+    // Create a special settings snapshot for this session
+    $session_settings = [
+        'practice_mode'   => 'Incorrect Que. Practice', // Our new mode name
+        'marks_correct'   => 1.0,
+        'marks_incorrect' => 0,
+        'timer_enabled'   => false,
+    ];
+
+    // Create the new session record
+    $wpdb->insert($wpdb->prefix . 'qp_user_sessions', [
+        'user_id'                 => $user_id,
+        'status'                  => 'active',
+        'start_time'              => current_time('mysql'),
+        'last_activity'           => current_time('mysql'),
+        'settings_snapshot'       => wp_json_encode($session_settings),
+        'question_ids_snapshot'   => wp_json_encode(array_values($question_ids)) // Re-index array
+    ]);
+    $session_id = $wpdb->insert_id;
+
+    // Build the redirect URL and send it back
+    $redirect_url = add_query_arg('session_id', $session_id, get_permalink($session_page_id));
+    wp_send_json_success(['redirect_url' => $redirect_url]);
+}
+add_action('wp_ajax_qp_start_incorrect_practice_session', 'qp_start_incorrect_practice_session_ajax');
 
 function qp_get_practice_form_html_ajax()
 {

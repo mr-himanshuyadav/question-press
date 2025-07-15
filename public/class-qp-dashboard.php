@@ -78,8 +78,8 @@ class QP_Dashboard
             </div>
 
             <div class="qp-dashboard-tabs">
-                <button class="qp-tab-link active" data-tab="sessions">Practice History</button>
-                <button class="qp-tab-link" data-tab="review">Review List (<?php echo count($review_questions); ?>)</button>
+                <button class="qp-tab-link active" data-tab="sessions">History</button>
+                <button class="qp-tab-link" data-tab="review">Review</button>
             </div>
 
             <div id="sessions" class="qp-tab-content active">
@@ -88,16 +88,31 @@ class QP_Dashboard
             </div>
 
             <div id="review" class="qp-tab-content">
+                <div class="qp-practice-card">
+                    <div class="qp-card-content">
+                        <h4>Practice Your Mistakes</h4>
+                        <p>Create a session from questions you have not yet answered correctly.</p>
+                    </div>
+                    <div class="qp-card-action">
+                        <button id="qp-start-incorrect-practice-btn" class="qp-button qp-button-primary">Start Practice</button>
+                        <label class="qp-custom-checkbox">
+                            <input type="checkbox" id="qp-include-all-incorrect-cb" name="include_all_incorrect" value="1">
+                            <span></span>
+                            Include all past mistakes
+                        </label>
+                    </div>
+                </div>
+                <hr class="qp-divider">
                 <?php if (!empty($review_questions)) : ?>
                     <div class="qp-review-list-header">
-                        <p>Questions you've marked for later review.</p>
+                        <p><strong>Marked for Review</strong> (<?php echo count($review_questions); ?>)</p>
                         <button id="qp-start-reviewing-btn" class="qp-button qp-button-primary">Start Reviewing All</button>
                     </div>
                     <ul class="qp-review-list">
-                        <?php foreach ($review_questions as $q) : ?>
+                        <?php foreach ($review_questions as $index => $q) : ?>
                             <li data-question-id="<?php echo esc_attr($q->question_id); ?>">
                                 <div class="qp-review-list-q-text">
-                                    <?php echo wp_trim_words(esc_html($q->question_text), 25, '...'); ?>
+                                    <strong>Q<?php echo $index + 1; ?>:</strong> <?php echo wp_trim_words(esc_html($q->question_text), 25, '...'); ?>
                                     <small>ID: <?php echo esc_html($q->custom_question_id); ?> | Subject: <?php echo esc_html($q->subject_name); ?></small>
                                 </div>
                                 <div class="qp-review-list-actions">
@@ -220,9 +235,17 @@ class QP_Dashboard
             $settings = json_decode($session->settings_snapshot, true);
             $session_qids = json_decode($session->question_ids_snapshot, true);
 
-            $mode = 'Practice';
-            if (isset($settings['practice_mode']) && $settings['practice_mode'] === 'revision') {
-                $mode = 'Revision';
+            $mode = 'Practice'; // Default
+            if (isset($settings['practice_mode'])) {
+                if ($settings['practice_mode'] === 'revision') {
+                    $mode = 'Regular Revision';
+                } elseif ($settings['practice_mode'] === 'Incorrect Que. Practice') {
+                    $mode = 'Incorrect Attempts Revision';
+                }
+            } 
+            // This handles the two older session types
+            elseif (isset($settings['subject_id']) && $settings['subject_id'] === 'review') {
+                $mode = 'Review';
             } elseif (isset($settings['section_id']) && $settings['section_id'] !== 'all' && is_numeric($settings['section_id'])) {
                 $mode = 'Source Practice';
             }

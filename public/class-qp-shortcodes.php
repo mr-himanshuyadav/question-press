@@ -536,10 +536,11 @@ class QP_Shortcodes
         $accuracy = ($session->total_attempted > 0) ? ($session->correct_count / $session->total_attempted) * 100 : 0;
 
         $attempts = $wpdb->get_results($wpdb->prepare(
-            "SELECT q.question_text, g.direction_text, o.option_text AS selected_answer, o_correct.option_text AS correct_answer, a.is_correct
+            "SELECT q.question_text, q.custom_question_id, g.direction_text, s.subject_name, o.option_text AS selected_answer, o_correct.option_text AS correct_answer, a.is_correct
          FROM {$wpdb->prefix}qp_user_attempts a
          JOIN {$wpdb->prefix}qp_questions q ON a.question_id = q.question_id
          LEFT JOIN {$wpdb->prefix}qp_question_groups g ON q.group_id = g.group_id
+         LEFT JOIN {$wpdb->prefix}qp_subjects s ON g.subject_id = s.subject_id
          LEFT JOIN {$wpdb->prefix}qp_options o ON a.selected_option_id = o.option_id
          LEFT JOIN {$wpdb->prefix}qp_options o_correct ON q.question_id = o_correct.question_id AND o_correct.is_correct = 1
          WHERE a.session_id = %d
@@ -581,24 +582,33 @@ class QP_Shortcodes
             </div>
 
             <div class="qp-review-questions-list">
-                <h3 style="margin-top: 2rem;">Attempted Questions</h3>
-                <?php foreach ($attempts as $index => $attempt) : ?>
+                <?php foreach ($attempts as $index => $attempt) :
+                    $is_skipped = !$attempt->selected_answer;
+                    $answer_class = $is_skipped ? 'skipped' : ($attempt->is_correct ? 'correct' : 'incorrect');
+                ?>
                     <div class="qp-review-question-item">
+                        <div class="qp-review-question-meta">
+                            <span>ID: <?php echo esc_html($attempt->custom_question_id); ?></span>
+                            <span>Subject: <?php echo esc_html($attempt->subject_name); ?></span>
+                        </div>
                         <?php if (!empty($attempt->direction_text)): ?>
                             <div class="qp-review-direction-text">
                                 <?php echo wp_kses_post(nl2br($attempt->direction_text)); ?>
                             </div>
                         <?php endif; ?>
+                        
                         <div class="qp-review-question-text">
                             <strong>Q<?php echo $index + 1; ?>:</strong> <?php echo wp_kses_post(nl2br($attempt->question_text)); ?>
                         </div>
+
                         <div class="qp-review-answer-row">
                             <span class="qp-review-label">Your Answer:</span>
-                            <span class="qp-review-answer <?php echo $attempt->is_correct ? 'correct' : 'incorrect'; ?>">
+                            <span class="qp-review-answer <?php echo $answer_class; ?>">
                                 <?php echo esc_html($attempt->selected_answer ?: 'Skipped'); ?>
                             </span>
                         </div>
-                        <?php if (!$attempt->is_correct && $attempt->selected_answer) : ?>
+
+                        <?php if ($is_skipped || !$attempt->is_correct) : ?>
                             <div class="qp-review-answer-row">
                                 <span class="qp-review-label">Correct Answer:</span>
                                 <span class="qp-review-answer correct">
