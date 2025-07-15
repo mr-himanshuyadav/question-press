@@ -1870,136 +1870,26 @@ function qp_get_quick_edit_form_ajax()
     </form>
 
     <style>
-        .quick-edit-display-text {
-            background-color: #f6f7f7;
-            border: 1px solid #e0e0e0;
-            padding: 10px 20px;
-            margin: 20px 20px 10px 20px;
-            border-radius: 4px;
-        }
-        .quick-edit-display-text .display-group {
-            margin-bottom: 10px;
-        }
-        .quick-edit-display-text .display-group:last-child {
-            margin-bottom: 0;
-        }
-        .quick-edit-display-text p {
-            margin: 5px 0 0 0;
-            padding-left: 10px;
-            border-left: 3px solid #ccc;
-            color: #555;
-            font-style: italic;
-        }
-        .quick-edit-form-wrapper h4 {
-            font-size: 16px;
-            margin-top: 20px;
-            margin-bottom: 10px;
-            padding: 10px 20px;
-        }
-
-        .inline-edit-row .submit {
-            padding: 20px;
-        }
-
-        .quick-edit-form-wrapper .title {
-            font-size: 15px;
-            font-weight: 500;
-            color: #555;
-        }
-
-        .quick-edit-form-wrapper .form-row,
-        .quick-edit-form-wrapper .form-row-flex {
-            margin-bottom: 1rem;
-        }
-
-        .quick-edit-form-wrapper .form-row:last-child {
-            margin-bottom: 0;
-        }
-
-        .quick-edit-form-wrapper strong,
-        .quick-edit-form-wrapper label {
-            font-weight: 600;
-            display: block;
-            margin-bottom: .5rem;
-        }
-
-        .quick-edit-form-wrapper select {
-            width: 100%;
-        }
-
-        .quick-edit-main-container {
-            display: flex;
-            gap: 20px;
-            margin-bottom: 1rem;
-            padding: 0px 20px;
-        }
-
-        .quick-edit-col-left {
-            flex: 0 0 40%;
-        }
-
-        .quick-edit-col-right {
-            flex: 1;
-        }
-
-        .options-group {
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            align-items: space-between;
-            padding: .5rem;
-            border: 1px solid #ddd;
-            background: #fff;
-            height: 100%;
-            box-sizing: border-box;
-        }
-
-        .options-group label:last-child {
-            margin-bottom: 0;
-        }
-
-        .option-label {
-            display: flex;
-            align-items: center;
-            gap: .5rem;
-            margin-bottom: .5rem;
-        }
-
-        .option-label input[type="radio"] {
-            margin-top: 0;
-            align-self: center;
-        }
-
-        .option-label input[type="text"] {
-            width: 90%;
-            background-color: #f0f0f1;
-        }
-
-        .form-row-flex {
-            display: flex;
-            gap: 1rem;
-        }
-
-        .form-group-half {
-            flex: 1;
-        }
-
-        .quick-edit-form-wrapper p.submit button.button-secondary {
-            margin-right: 10px;
-        }
-
-        .labels-group {
-            display: flex;
-            flex-wrap: wrap;
-            gap: .5rem 1rem;
-            padding: .5rem;
-            border: 1px solid #ddd;
-            background: #fff;
-        }
-
-        .inline-checkbox {
-            white-space: nowrap;
-        }
+		.quick-edit-display-text{background-color:#f6f7f7;border:1px solid #e0e0e0;padding:10px 20px;margin:20px 20px 10px;border-radius:4px}
+		.quick-edit-display-text .display-group{margin-bottom:10px}
+		.options-group label:last-child,.quick-edit-display-text .display-group:last-child,.quick-edit-form-wrapper .form-row:last-child{margin-bottom:0}
+		.quick-edit-display-text p{margin:5px 0 0;padding-left:10px;border-left:3px solid #ccc;color:#555;font-style:italic}
+		.quick-edit-form-wrapper h4{font-size:16px;margin-top:20px;margin-bottom:10px;padding:10px 20px}
+		.inline-edit-row .submit{padding:20px}.quick-edit-form-wrapper .title{font-size:15px;font-weight:500;color:#555}
+		.quick-edit-form-wrapper .form-row,.quick-edit-form-wrapper .form-row-flex{margin-bottom:1rem}
+		.quick-edit-form-wrapper label,.quick-edit-form-wrapper strong{font-weight:600;display:block;margin-bottom:.5rem}
+		.quick-edit-form-wrapper select{width:100%}.quick-edit-main-container{display:flex;gap:20px;margin-bottom:1rem;padding:0 20px}
+		.labels-group,.options-group{display:flex;padding:.5rem;border:1px solid #ddd;background:#fff}
+		.quick-edit-col-left{flex:0 0 40%}
+		.form-group-half,.quick-edit-col-right{flex:1}
+		.options-group{flex-direction:column;justify-content:space-between;align-items:space-between;height:100%;box-sizing:border-box}
+		.option-label{display:flex;align-items:center;gap:.5rem;margin-bottom:.5rem}
+		.option-label input[type=radio]{margin-top:0;align-self:center}
+		.option-label input[type=text]{width:90%;background-color:#f0f0f1}
+		.form-row-flex{display:flex;gap:1rem}
+		.quick-edit-form-wrapper p.submit button.button-secondary{margin-right:10px}
+		.labels-group{flex-wrap:wrap;gap:.5rem 1rem}
+		.inline-checkbox{white-space:nowrap}
     </style>
 <?php
     wp_send_json_success(['form' => ob_get_clean()]);
