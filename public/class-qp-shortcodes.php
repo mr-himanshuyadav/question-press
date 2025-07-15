@@ -546,17 +546,15 @@ class QP_Shortcodes
 
                 // NEW: Get all unique topics for this session's questions
         $session_question_ids = json_decode($session->question_ids_snapshot);
-        $topics_in_session = [];
-        if (!empty($session_question_ids)) {
-            $ids_placeholder = implode(',', array_map('absint', $session_question_ids));
-            $topics_in_session = $wpdb->get_col("
-                SELECT DISTINCT t.topic_name 
-                FROM {$wpdb->prefix}qp_topics t
-                JOIN {$wpdb->prefix}qp_questions q ON t.topic_id = q.topic_id
-                WHERE q.question_id IN ($ids_placeholder)
-                ORDER BY t.topic_name ASC
-            ");
-        }
+        // NEW: Get all unique topics for the questions ATTEMPTED in this session
+        $topics_in_session = $wpdb->get_col($wpdb->prepare("
+            SELECT DISTINCT t.topic_name
+            FROM {$wpdb->prefix}qp_topics t
+            JOIN {$wpdb->prefix}qp_questions q ON t.topic_id = q.topic_id
+            JOIN {$wpdb->prefix}qp_user_attempts a ON q.question_id = a.question_id
+            WHERE a.session_id = %d
+            ORDER BY t.topic_name ASC
+        ", $session_id));
 
         $attempts = $wpdb->get_results($wpdb->prepare(
             "SELECT q.question_text, q.custom_question_id, q.question_number_in_section,
