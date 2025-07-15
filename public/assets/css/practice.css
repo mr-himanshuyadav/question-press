@@ -34,6 +34,7 @@ body {
 }
 
 .qp-container {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     max-width: 800px;
     margin: 0 auto;
     background-color: var(--qp-bg-white);
@@ -981,7 +982,7 @@ ul.qp-review-list li {
     border-bottom: 1px solid var(--qp-border-color);
 }
 .qp-review-list-actions {
-    width: 30%;
+    width: 35%;
     text-align: right;
 }
 .qp-review-list-actions .qp-review-list-remove-btn {
