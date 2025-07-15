@@ -3,7 +3,7 @@
 /**
  * Plugin Name:       Question Press
  * Description:       A complete plugin for creating, managing, and practicing questions.
- * Version:           2.2.4
+ * Version:           2.2.6
  * Author:            Himanshu
  */
 
@@ -1774,15 +1774,18 @@ function qp_get_quick_edit_form_ajax()
     // --- FIX: Updated query to fetch all necessary data ---
     // This now joins the groups table to get direction_text and the correct subject_id for the group.
     $question = $wpdb->get_row($wpdb->prepare(
-        "SELECT q.question_text, q.topic_id, g.subject_id, g.direction_text, g.is_pyq
+        "SELECT q.question_text, q.topic_id, q.source_id, q.section_id, g.subject_id, g.direction_text, g.is_pyq, g.exam_id, g.pyq_year
          FROM {$wpdb->prefix}qp_questions q 
          LEFT JOIN {$wpdb->prefix}qp_question_groups g ON q.group_id = g.group_id 
          WHERE q.question_id = %d",
         $question_id
     ));
 
-    // Fetching other necessary data (this part is mostly unchanged)
+    // Fetching other necessary data
     $all_subjects = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}qp_subjects ORDER BY subject_name ASC");
+    $all_sources = $wpdb->get_results("SELECT source_id, source_name, subject_id FROM {$wpdb->prefix}qp_sources ORDER BY source_name ASC");
+    $all_sections = $wpdb->get_results("SELECT section_id, section_name, source_id FROM {$wpdb->prefix}qp_source_sections ORDER BY section_name ASC");
+    $all_exams = $wpdb->get_results("SELECT exam_id, exam_name FROM {$wpdb->prefix}qp_exams ORDER BY exam_name ASC");
     $all_topics = $wpdb->get_results("SELECT topic_id, topic_name, subject_id FROM {$wpdb->prefix}qp_topics ORDER BY topic_name ASC");
     $all_labels = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}qp_labels ORDER BY label_name ASC");
     $current_labels = $wpdb->get_col($wpdb->prepare("SELECT label_id FROM {$wpdb->prefix}qp_question_labels WHERE question_id = %d", $question_id));
@@ -1790,18 +1793,29 @@ function qp_get_quick_edit_form_ajax()
 
     $topics_by_subject = [];
     foreach ($all_topics as $topic) {
-        if (!isset($topics_by_subject[$topic->subject_id])) {
-            $topics_by_subject[$topic->subject_id] = [];
-        }
         $topics_by_subject[$topic->subject_id][] = ['id' => $topic->topic_id, 'name' => $topic->topic_name];
+    }
+    $sources_by_subject = [];
+    foreach ($all_sources as $source) {
+        $sources_by_subject[$source->subject_id][] = ['id' => $source->source_id, 'name' => $source->source_name];
+    }
+    $sections_by_source = [];
+    foreach ($all_sections as $section) {
+        $sections_by_source[$section->source_id][] = ['id' => $section->section_id, 'name' => $section->section_name];
     }
 
     // Start output buffering to capture the form HTML
     ob_start();
 ?>
     <script>
-        var qp_quick_edit_topics_data = <?php echo json_encode($topics_by_subject); ?>;
-        var qp_current_topic_id = <?php echo json_encode($question->topic_id); ?>;
+        var qp_quick_edit_data = {
+            topics_by_subject: <?php echo json_encode($topics_by_subject); ?>,
+            sources_by_subject: <?php echo json_encode($sources_by_subject); ?>,
+            sections_by_source: <?php echo json_encode($sections_by_source); ?>,
+            current_topic_id: <?php echo json_encode($question->topic_id); ?>,
+            current_source_id: <?php echo json_encode($question->source_id); ?>,
+            current_section_id: <?php echo json_encode($question->section_id); ?>
+        };
     </script>
     <form class="quick-edit-form-wrapper">
         
@@ -1834,7 +1848,7 @@ function qp_get_quick_edit_form_ajax()
             </div>
             <div class="quick-edit-col-right">
                 <div class="form-row-flex">
-                    <div class="form-group-half">
+                    <div class="form-group-half qe-right-dropdowns">
                         <label for="qe-subject-<?php echo esc_attr($question_id); ?>"><strong>Subject</strong></label>
                         <select name="subject_id" id="qe-subject-<?php echo esc_attr($question_id); ?>" class="qe-subject-select">
                             <?php foreach ($all_subjects as $subject) : ?>
@@ -1842,16 +1856,49 @@ function qp_get_quick_edit_form_ajax()
                             <?php endforeach; ?>
                         </select>
                     </div>
-                    <div class="form-group-half">
+                    <div class="form-group-half qe-right-dropdowns">
                         <label for="qe-topic-<?php echo esc_attr($question_id); ?>"><strong>Topic</strong></label>
                         <select name="topic_id" id="qe-topic-<?php echo esc_attr($question_id); ?>" class="qe-topic-select" disabled>
                             <option value="">— Select subject first —</option>
                         </select>
                     </div>
                 </div>
-                <div class="form-row">
-                     <label class="inline-checkbox"><input type="checkbox" name="is_pyq" value="1" <?php checked($question->is_pyq, 1); ?>> Is PYQ?</label>
+                <div class="form-row-flex">
+                    <div class="form-group-half qe-right-dropdowns">
+                        <label for="qe-source-<?php echo esc_attr($question_id); ?>"><strong>Source</strong></label>
+                        <select name="source_id" id="qe-source-<?php echo esc_attr($question_id); ?>" class="qe-source-select" disabled>
+                            <option value="">— Select Subject First —</option>
+                        </select>
+                    </div>
+                    <div class="form-group-half qe-right-dropdowns">
+                        <label for="qe-section-<?php echo esc_attr($question_id); ?>"><strong>Section</strong></label>
+                        <select name="section_id" id="qe-section-<?php echo esc_attr($question_id); ?>" class="qe-section-select" disabled>
+                            <option value="">— Select Source First —</option>
+                        </select>
+                    </div>
                 </div>
+
+                <div class="form-row-flex qe-pyq-fields-wrapper">
+                    <div class="form-group-shrink">
+                        <label class="inline-checkbox">
+                            <input type="checkbox" name="is_pyq" value="1" class="qe-is-pyq-checkbox" <?php checked($question->is_pyq, 1); ?>> Is PYQ?
+                        </label>
+                    </div>
+                    <div class="form-group-expand qe-pyq-fields" style="<?php echo $question->is_pyq ? '' : 'display: none;'; ?>">
+                             <div class="form-group-half">
+                                <select name="exam_id">
+                                    <option value="">— Select Exam —</option>
+                                    <?php foreach ($all_exams as $exam) : ?>
+                                        <option value="<?php echo esc_attr($exam->exam_id); ?>" <?php selected($exam->exam_id, $question->exam_id); ?>><?php echo esc_html($exam->exam_name); ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="form-group-half">
+                                <input type="number" name="pyq_year" value="<?php echo esc_attr($question->pyq_year); ?>" placeholder="Year (e.g., 2023)">
+                            </div>
+                    </div>
+                </div>
+
                 <div class="form-row">
                     <label><strong>Labels</strong></label>
                     <div class="labels-group">
@@ -1877,12 +1924,15 @@ function qp_get_quick_edit_form_ajax()
 		.quick-edit-form-wrapper h4{font-size:16px;margin-top:20px;margin-bottom:10px;padding:10px 20px}
 		.inline-edit-row .submit{padding:20px}.quick-edit-form-wrapper .title{font-size:15px;font-weight:500;color:#555}
 		.quick-edit-form-wrapper .form-row,.quick-edit-form-wrapper .form-row-flex{margin-bottom:1rem}
-		.quick-edit-form-wrapper label,.quick-edit-form-wrapper strong{font-weight:600;display:block;margin-bottom:.5rem}
+		.quick-edit-form-wrapper label,.quick-edit-form-wrapper strong{font-weight:600;display:block;margin-bottom:0rem}
 		.quick-edit-form-wrapper select{width:100%}.quick-edit-main-container{display:flex;gap:20px;margin-bottom:1rem;padding:0 20px}
+        .form-row-flex .qe-pyq-fields{display: flex;gap: 1rem;}
+        .form-row-flex .qe-right-dropdowns{display: flex; flex-direction: row;}
+        .form-row-flex .qe-right-dropdowns label{margin-right: 1rem;}
 		.labels-group,.options-group{display:flex;padding:.5rem;border:1px solid #ddd;background:#fff}
 		.quick-edit-col-left{flex:0 0 40%}
 		.form-group-half,.quick-edit-col-right{flex:1}
-		.options-group{flex-direction:column;justify-content:space-between;align-items:space-between;height:100%;box-sizing:border-box}
+		.options-group{flex-direction:column;justify-content:space-between;height:auto;box-sizing:border-box}
 		.option-label{display:flex;align-items:center;gap:.5rem;margin-bottom:.5rem}
 		.option-label input[type=radio]{margin-top:0;align-self:center}
 		.option-label input[type=text]{width:90%;background-color:#f0f0f1}

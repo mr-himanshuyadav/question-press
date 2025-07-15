@@ -283,4 +283,64 @@ function updateBulkEditDropdowns() {
         }
     }).trigger('change'); // Trigger on page load
 
+
+    // --- NEW LOGIC FOR ALL DYNAMIC DROPDOWNS IN QUICK EDIT ---
+
+    // Function to update a dropdown's options
+    function updateDropdown(selectElement, data, currentId, placeholder) {
+        selectElement.empty().prop('disabled', true);
+        if (data && data.length > 0) {
+            selectElement.prop('disabled', false);
+            selectElement.append($('<option></option>').val('').text(placeholder));
+            $.each(data, function(index, item) {
+                var option = $('<option></option>').val(item.id).text(item.name);
+                if (item.id == currentId) {
+                    option.prop('selected', true);
+                }
+                selectElement.append(option);
+            });
+        } else {
+            selectElement.append($('<option></option>').val('').text('— None available —'));
+        }
+    }
+
+    // Main event handler for subject changes
+    wrapper.on('change', '.qe-subject-select', function() {
+        var subjectId = $(this).val();
+        var $row = $(this).closest('.quick-edit-main-container');
+        var $topicSelect = $row.find('.qe-topic-select');
+        var $sourceSelect = $row.find('.qe-source-select');
+        var $sectionSelect = $row.find('.qe-section-select');
+
+        // Update Topics
+        updateDropdown($topicSelect, qp_quick_edit_data.topics_by_subject[subjectId], qp_quick_edit_data.current_topic_id, '— Select a Topic —');
+
+        // Update Sources
+        updateDropdown($sourceSelect, qp_quick_edit_data.sources_by_subject[subjectId], qp_quick_edit_data.current_source_id, '— Select a Source —');
+        $sourceSelect.trigger('change'); // Trigger change to update sections
+    });
+
+    // Event handler for source changes
+    wrapper.on('change', '.qe-source-select', function() {
+        var sourceId = $(this).val();
+        var $row = $(this).closest('.quick-edit-main-container');
+        var $sectionSelect = $row.find('.qe-section-select');
+
+        // Update Sections
+        updateDropdown($sectionSelect, qp_quick_edit_data.sections_by_source[sourceId], qp_quick_edit_data.current_section_id, '— Select a Section —');
+    });
+
+    // Event handler for the PYQ checkbox
+    wrapper.on('change', '.qe-is-pyq-checkbox', function() {
+        var $pyqFields = $(this).closest('.qe-pyq-fields-wrapper').find('.qe-pyq-fields');
+        if ($(this).is(':checked')) {
+            $pyqFields.slideDown();
+        } else {
+            $pyqFields.slideUp();
+        }
+    });
+
+    // Trigger the subject change on load to populate everything
+    $('.qe-subject-select').trigger('change');
+
 });

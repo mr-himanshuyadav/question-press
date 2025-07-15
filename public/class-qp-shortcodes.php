@@ -185,8 +185,8 @@ class QP_Shortcodes
             $options = get_option('qp_settings');
             $dashboard_page_url = isset($options['dashboard_page']) ? get_permalink($options['dashboard_page']) : home_url('/');
             $accuracy = 0;
-            if ($session->total_attempted > 0) {
-                $accuracy = ($session->correct_count / $session->total_attempted) * 100;
+            if ($session_data_from_db && $session_data_from_db->total_attempted > 0) {
+                $accuracy = ($session_data_from_db->correct_count / $session_data_from_db->total_attempted) * 100;
             }
 
             return '<div class="qp-container" style="text-align: center; padding: 40px 20px;">
