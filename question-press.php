@@ -3,7 +3,7 @@
 /**
  * Plugin Name:       Question Press
  * Description:       A complete plugin for creating, managing, and practicing questions.
- * Version:           2.3.1
+ * Version:           2.3.2
  * Author:            Himanshu
  */
 
@@ -1234,14 +1234,14 @@ function qp_start_incorrect_practice_session_ajax() {
             $user_id
         ));
 
-        // Then, get all questions ever attempted by the user.
-        $all_attempted_qids = $wpdb->get_col($wpdb->prepare(
-            "SELECT DISTINCT question_id FROM {$attempts_table} WHERE user_id = %d",
+        // Then, get all questions the user has explicitly ANSWERED (not skipped).
+        $all_answered_qids = $wpdb->get_col($wpdb->prepare(
+            "SELECT DISTINCT question_id FROM {$attempts_table} WHERE user_id = %d AND status = 'answered'",
             $user_id
         ));
         
-        // The questions to practice are those attempted but never answered correctly.
-        $question_ids = array_diff($all_attempted_qids, $correctly_answered_qids);
+        // The questions to practice are those answered but never answered correctly.
+        $question_ids = array_diff($all_answered_qids, $correctly_answered_qids);
     }
     
     if (empty($question_ids)) {
@@ -1261,8 +1261,6 @@ function qp_start_incorrect_practice_session_ajax() {
     // Create a special settings snapshot for this session
     $session_settings = [
         'practice_mode'   => 'Incorrect Que. Practice', // Our new mode name
-        'marks_correct'   => 1.0,
-        'marks_incorrect' => 0,
         'timer_enabled'   => false,
     ];
 
@@ -1744,6 +1742,7 @@ function qp_end_practice_session_ajax()
         'correct_count' => $correct_count,
         'incorrect_count' => $incorrect_count,
         'skipped_count' => $skipped_count,
+        'settings' => $settings,
     ]);
 }
 add_action('wp_ajax_end_practice_session', 'qp_end_practice_session_ajax');

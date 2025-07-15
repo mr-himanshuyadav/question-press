@@ -797,7 +797,7 @@ ul.qp-review-list li{
     border-bottom: none;
 }
 .qp-review-question-text {
-    font-size: 16px;
+    font: normal .95em KaTeX_Main,Times New Roman,serif;
     line-height: 1.6;
     font-weight: 500;
     margin-bottom: 1rem;
@@ -815,9 +815,17 @@ ul.qp-review-list li{
     flex-shrink: 0;
 }
 .qp-review-answer {
+    font: normal 1.1em KaTeX_Main,Times New Roman,serif;
     padding: 4px 8px;
     border-radius: 4px;
-    font-weight: 500;
+    font-weight: 600;
+}
+
+.qp-review-question-text .katex{
+    font: normal .95em KaTeX_Main,Times New Roman,serif;
+}
+.qp-review-answer .katex {
+    font: normal 1.1em KaTeX_Main,Times New Roman,serif;
 }
 .qp-review-answer.correct {
     background-color: var(--qp-correct-bg);

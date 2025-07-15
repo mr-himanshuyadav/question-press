@@ -738,6 +738,11 @@ jQuery(document).ready(function ($) {
     sessionID = qp_session_data.session_id;
     sessionQuestionIDs = qp_session_data.question_ids;
     sessionSettings = qp_session_data.settings;
+
+    // **THE FIX**: Conditionally hide the score element
+        if (sessionSettings.practice_mode === 'Incorrect Que. Practice') {
+            $('.qp-header-stat.score').hide();
+        }
     if (sessionSettings.practice_mode === "revision") {
       $(".qp-question-counter-box").show();
     }
@@ -1245,38 +1250,45 @@ jQuery(document).ready(function ($) {
     }, 1000);
   }
 
+  // In public/assets/js/practice.js
+
+  // In public/assets/js/practice.js
+
   function displaySummary(summaryData) {
     closeFullscreen();
     practiceInProgress = false;
+
+    // --- Conditionally build the main score/accuracy display ---
+    var mainDisplayHtml = '';
+    // Check if it's a scored session first
+    if (summaryData.settings && typeof summaryData.settings.marks_correct !== 'undefined') {
+        mainDisplayHtml = `<div class="qp-summary-score"><div class="label">Final Score</div>${parseFloat(summaryData.final_score).toFixed(2)}</div>`;
+    } else {
+        // If not scored, it's an accuracy-based mode
+        var accuracy = 0;
+        if (summaryData.total_attempted > 0) {
+            accuracy = (summaryData.correct_count / summaryData.total_attempted) * 100;
+        }
+        mainDisplayHtml = `<div class="qp-summary-score"><div class="label">Accuracy</div>${accuracy.toFixed(2)}%</div>`;
+    }
+
+    // --- Build the final HTML ---
     var summaryHtml = `
       <div class="qp-summary-wrapper">
           <h2>Session Summary</h2>
-          <div class="qp-summary-score"><div class="label">Final Score</div>${parseFloat(
-            summaryData.final_score
-          ).toFixed(2)}</div>
+          ${mainDisplayHtml}
           <div class="qp-summary-stats">
-              <div class="stat"><div class="value">${
-                summaryData.total_attempted
-              }</div><div class="label">Attempted</div></div>
-              <div class="stat"><div class="value">${
-                summaryData.correct_count
-              }</div><div class="label">Correct</div></div>
-              <div class="stat"><div class="value">${
-                summaryData.incorrect_count
-              }</div><div class="label">Incorrect</div></div>
-              <div class="stat"><div class="value">${
-                summaryData.skipped_count
-              }</div><div class="label">Skipped</div></div>
+              <div class="stat"><div class="value">${summaryData.total_attempted}</div><div class="label">Attempted</div></div>
+              <div class="stat"><div class="value">${summaryData.correct_count}</div><div class="label">Correct</div></div>
+              <div class="stat"><div class="value">${summaryData.incorrect_count}</div><div class="label">Incorrect</div></div>
+              <div class="stat"><div class="value">${summaryData.skipped_count}</div><div class="label">Skipped</div></div>
           </div>
           <div class="qp-summary-actions">
-              <a href="${
-                qp_ajax_object.dashboard_page_url
-              }" class="qp-button qp-button-secondary">View Dashboard</a>
-              <a href="${
-                qp_ajax_object.practice_page_url
-              }" class="qp-button qp-button-primary">Start Another Practice</a>
+              <a href="${qp_ajax_object.dashboard_page_url}" class="qp-button qp-button-secondary">View Dashboard</a>
+              <a href="${qp_ajax_object.practice_page_url}" class="qp-button qp-button-primary">Start Another Practice</a>
           </div>
       </div>`;
+      
     wrapper.html(summaryHtml);
   }
 

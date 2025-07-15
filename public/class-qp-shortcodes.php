@@ -205,7 +205,8 @@ class QP_Shortcodes
                 'incorrect_count' => $session_data_from_db->incorrect_count,
                 'skipped_count' => $session_data_from_db->skipped_count,
             ];
-            return '<div id="qp-practice-app-wrapper">' . self::render_summary_ui($summary_data, $session_id) . '</div>';
+            $session_settings = json_decode($session_data_from_db->settings_snapshot, true);
+            return '<div id="qp-practice-app-wrapper">' . self::render_summary_ui($summary_data, $session_id, $session_settings) . '</div>';
         }
 
         // --- If the session is active, proceed as normal ---
@@ -238,7 +239,9 @@ class QP_Shortcodes
         return '<div id="qp-practice-app-wrapper">' . self::render_practice_ui() . '</div>';
     }
 
-    public static function render_summary_ui($summaryData, $session_id = 0)
+    // In public/class-qp-shortcodes.php
+
+    public static function render_summary_ui($summaryData, $session_id = 0, $settings = [])
     {
         $options = get_option('qp_settings');
         $dashboard_page_url = isset($options['dashboard_page']) ? get_permalink($options['dashboard_page']) : home_url('/');
@@ -250,19 +253,21 @@ class QP_Shortcodes
             $accuracy = ($summaryData['correct_count'] / $summaryData['total_attempted']) * 100;
         }
 
+        // Determine if the session was scored
+        $is_scored_session = isset($settings['marks_correct']);
+
         ob_start();
     ?>
         <div class="qp-summary-wrapper">
             <h2>Session Summary</h2>
+
+            <?php if ($is_scored_session) : ?>
+                <div class="qp-summary-score"><div class="label">Final Score</div><?php echo number_format($summaryData['final_score'], 2); ?></div>
+            <?php else : ?>
+                <div class="qp-summary-score"><div class="label">Accuracy</div><?php echo round($accuracy, 2); ?>%</div>
+            <?php endif; ?>
+
             <div class="qp-summary-stats">
-                <div class="stat">
-                    <div class="value"><?php echo number_format($summaryData['final_score'], 2); ?></div>
-                    <div class="label">Final Score</div>
-                </div>
-                <div class="stat accuracy">
-                    <div class="value"><?php echo round($accuracy, 2); ?>%</div>
-                    <div class="label">Accuracy</div>
-                </div>
                 <div class="stat">
                     <div class="value"><?php echo (int)$summaryData['correct_count']; ?></div>
                     <div class="label">Correct</div>
@@ -274,6 +279,10 @@ class QP_Shortcodes
                 <div class="stat">
                     <div class="value"><?php echo (int)$summaryData['skipped_count']; ?></div>
                     <div class="label">Skipped</div>
+                </div>
+                 <div class="stat accuracy">
+                    <div class="value"><?php echo round($accuracy, 2); ?>%</div>
+                    <div class="label">Accuracy</div>
                 </div>
             </div>
             <div class="qp-summary-actions">
@@ -549,30 +558,50 @@ class QP_Shortcodes
         ));
 
         ob_start();
+    // --- Determine Session Mode ---
+    $mode = 'Practice'; // Default
+    if (isset($settings['practice_mode'])) {
+        if ($settings['practice_mode'] === 'revision') {
+            $mode = 'Revision';
+        } elseif ($settings['practice_mode'] === 'Incorrect Que. Practice') {
+            $mode = 'Incorrect Attempt Practice';
+        }
+    } elseif (isset($settings['subject_id']) && $settings['subject_id'] === 'review') {
+        $mode = 'Review';
+    } elseif (isset($settings['section_id']) && $settings['section_id'] !== 'all' && is_numeric($settings['section_id'])) {
+        $mode = 'Source Practice';
+    }
     ?>
         <div class="qp-container qp-review-wrapper">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-                <h2>Session Review</h2>
+                <div>
+                    <h2>Session Review</h2>
+                    <p style="margin: 0; color: #777; font-size: 14px;">
+                        <strong>Mode:</strong> <?php echo esc_html($mode); ?> | <strong>Session ID:</strong> <?php echo esc_html($session_id); ?>
+                    </p>
+                </div>
                 <a href="<?php echo esc_url($dashboard_page_url); ?>" class="qp-button qp-button-secondary" style="text-decoration: none;">&laquo; Back to Dashboard</a>
             </div>
 
             <div class="qp-summary-wrapper qp-review-summary">
                 <div class="qp-summary-stats">
+                    <?php if (isset($settings['marks_correct'])): // Check if it's a scored session ?>
                     <div class="stat">
                         <div class="value"><?php echo number_format($session->marks_obtained, 2); ?></div>
                         <div class="label">Final Score</div>
                     </div>
+                    <?php endif; ?>
                     <div class="stat accuracy">
                         <div class="value"><?php echo round($accuracy, 2); ?>%</div>
                         <div class="label">Accuracy</div>
                     </div>
                     <div class="stat">
                         <div class="value"><?php echo (int)$session->correct_count; ?></div>
-                        <div class="label">Correct (+<?php echo esc_html($marks_correct); ?>/Q)</div>
+                        <div class="label">Correct<?php if (isset($settings['marks_correct'])) echo ' (+' . esc_html($marks_correct) . '/Q)'; ?></div>
                     </div>
                     <div class="stat">
                         <div class="value"><?php echo (int)$session->incorrect_count; ?></div>
-                        <div class="label">Incorrect (<?php echo esc_html($marks_incorrect); ?>/Q)</div>
+                        <div class="label">Incorrect<?php if (isset($settings['marks_correct'])) echo ' (' . esc_html($marks_incorrect) . '/Q)'; ?></div>
                     </div>
                     <div class="stat">
                         <div class="value"><?php echo (int)$session->skipped_count; ?></div>
