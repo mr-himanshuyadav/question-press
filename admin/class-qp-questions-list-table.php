@@ -306,6 +306,7 @@ class QP_Questions_List_Table extends WP_List_Table
         $src_table = $wpdb->prefix . 'qp_sources';
         $sec_table = $wpdb->prefix . 'qp_source_sections';
         $t_table = $wpdb->prefix . 'qp_topics';
+        $e_table = $wpdb->prefix . 'qp_exams';
 
         $where_conditions = [];
         $id_query_from = "FROM {$q_table} q";
@@ -372,13 +373,15 @@ if ($current_status === 'trash') {
         } else {
             $ids_placeholder = implode(',', $matching_question_ids);
             $data_query = "SELECT q.*, s.subject_name, t.topic_name, g.group_id, g.direction_text, g.direction_image_id, g.is_pyq,
+                        g.pyq_year, e.exam_name,
                         src.source_name, sec.section_name
             FROM {$q_table} q
             LEFT JOIN {$g_table} g ON q.group_id = g.group_id
             LEFT JOIN {$s_table} s ON g.subject_id = s.subject_id
             LEFT JOIN {$src_table} src ON q.source_id = src.source_id
             LEFT JOIN {$sec_table} sec ON q.section_id = sec.section_id
-            LEFT JOIN {$t_table} t ON q.topic_id = t.topic_id -- ADD THIS LINE
+            LEFT JOIN {$t_table} t ON q.topic_id = t.topic_id
+            LEFT JOIN {$e_table} e ON g.exam_id = e.exam_id
             WHERE q.question_id IN ({$ids_placeholder})
             ORDER BY {$orderby} {$order}
             LIMIT {$per_page} OFFSET {$offset}";
@@ -721,7 +724,27 @@ if ($current_status === 'trash') {
 
     public function column_is_pyq($item)
     {
-        return $item['is_pyq'] ? 'Yes' : 'No';
+        if (empty($item['is_pyq'])) {
+            return 'No';
+        }
+
+        $output = '<strong>Exam:</strong> ';
+        if (!empty($item['exam_name'])) {
+            $output .= esc_html($item['exam_name']);
+        } else {
+            $output .= '<em>N/A</em>';
+        }
+
+        $output .= '<br>';
+
+        $output .= '<strong>Year:</strong> ';
+        if (!empty($item['pyq_year'])) {
+            $output .= esc_html($item['pyq_year']);
+        } else {
+            $output .= '<em>N/A</em>';
+        }
+
+        return $output;
     }
 
 

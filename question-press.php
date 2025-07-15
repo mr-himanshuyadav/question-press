@@ -572,7 +572,7 @@ function qp_all_questions_page_cb()
         </form>
         <style type="text/css">
             .wp-list-table .column-custom_question_id {
-                width: 10%;
+                width: 5%;
             }
 
             .wp-list-table .column-question_text {
@@ -1882,7 +1882,7 @@ function qp_get_quick_edit_form_ajax()
                     </div>
                 </div>
 
-                <div class="form-row-flex qe-pyq-fields-wrapper">
+                <div class="form-row-flex qe-pyq-fields-wrapper" style="align-items: center;">
                     <div class="form-group-shrink">
                         <label class="inline-checkbox">
                             <input type="checkbox" name="is_pyq" value="1" class="qe-is-pyq-checkbox" <?php checked($question->is_pyq, 1); ?>> Is PYQ?
@@ -1999,6 +1999,7 @@ function qp_get_quick_edit_form_ajax()
 
         .form-row-flex .qe-right-dropdowns label {
             margin-right: 1rem;
+            width: 15%;
         }
 
         .labels-group,
@@ -2022,7 +2023,8 @@ function qp_get_quick_edit_form_ajax()
             flex-direction: column;
             justify-content: space-between;
             height: auto;
-            box-sizing: border-box
+            box-sizing: border-box;
+            gap: 10px;
         }
 
         .option-label {
