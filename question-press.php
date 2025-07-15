@@ -1347,11 +1347,27 @@ function qp_get_question_data_ajax()
     }
 
     $question_data['direction_image_url'] = $question_data['direction_image_id'] ? wp_get_attachment_url($question_data['direction_image_id']) : null;
-    $question_data['options'] = $wpdb->get_results($wpdb->prepare("SELECT option_id, option_text FROM {$o_table} WHERE question_id = %d ORDER BY option_id ASC", $question_id), ARRAY_A);
+    
+    // **THE FIX**: Fetch the 'is_correct' status along with the options
+    $options_from_db = $wpdb->get_results($wpdb->prepare("SELECT option_id, option_text, is_correct FROM {$o_table} WHERE question_id = %d", $question_id), ARRAY_A);
 
-    if (!empty($question_data['question_text'])) {
-        $question_data['question_text'] = wp_kses_post(nl2br($question_data['question_text']));
+    $correct_option_id = null;
+    $options_for_frontend = [];
+    foreach ($options_from_db as $option) {
+        if ($option['is_correct']) {
+            $correct_option_id = (int) $option['option_id'];
+        }
+        // We only send the text and id to the frontend, not the answer status
+        $options_for_frontend[] = [
+            'option_id' => $option['option_id'],
+            'option_text' => $option['option_text']
+        ];
     }
+    $question_data['options'] = $options_for_frontend;
+    
+    if (!empty($question_data['question_text'])) {
+    $question_data['question_text'] = wp_kses_post(nl2br($question_data['question_text']));
+}
     if (!empty($question_data['direction_text'])) {
         $question_data['direction_text'] = wp_kses_post(nl2br($question_data['direction_text']));
     }
@@ -1369,6 +1385,7 @@ function qp_get_question_data_ajax()
     // --- Send Final Response ---
     wp_send_json_success([
         'question'             => $question_data,
+        'correct_option_id'    => $correct_option_id,
         'is_revision'          => ($attempt_count > 0),
         'is_admin'             => $user_can_view,
         'is_marked_for_review' => $is_marked,

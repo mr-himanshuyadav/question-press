@@ -1009,6 +1009,7 @@ jQuery(document).ready(function ($) {
 
     // 2. Render all static content
     var indicatorBar = $(".qp-indicator-bar").hide(); // Hide the bar by default
+    optionsArea.data('correct-option-id', data.correct_option_id); 
     // Only show the revision indicator if it's a revision question AND it hasn't been answered in this session yet
     if (data.is_revision && !previousState.answered_in_session) {
       $("#qp-revision-indicator").show();
@@ -1301,81 +1302,63 @@ jQuery(document).ready(function ($) {
     wrapper.html(summaryHtml);
   }
   // Handles clicking an answer option
-  // Handles clicking an answer option
+  // Handles clicking an answer option with INSTANT FEEDBACK
   wrapper.on("click", ".qp-options-area .option", function () {
-    var optionsArea = $(this).closest(".qp-options-area");
-
-    // **IMMEDIATELY CHECK AND THEN DISABLE**
-    if (optionsArea.hasClass("disabled")) {
-      return; // Exit if already disabled
-    }
-    optionsArea.addClass("disabled"); // Disable the container right away to prevent multiple clicks
-
-    // Now, proceed with the rest of the logic
-    var questionID = sessionQuestionIDs[currentQuestionIndex];
-    if (
-      answeredStates[questionID] &&
-      answeredStates[questionID].type === "skipped"
-    ) {
-      skippedCount--;
-    }
-    clearInterval(questionTimer);
     var selectedOption = $(this);
+    var optionsArea = selectedOption.closest(".qp-options-area");
 
-    // Disable other buttons
-    $("#qp-skip-btn").prop("disabled", true);
+    if (optionsArea.hasClass("disabled")) {
+      return; // Prevent multiple clicks
+    }
+    optionsArea.addClass("disabled");
+    
+    // --- INSTANT FEEDBACK LOGIC ---
+    clearInterval(questionTimer);
+    var questionID = sessionQuestionIDs[currentQuestionIndex];
+    var selectedOptionId = selectedOption.find('input[type="radio"]').val();
+    var correctOptionId = optionsArea.data('correct-option-id');
+    var isCorrect = selectedOptionId == correctOptionId;
+
+    // Instantly apply visual feedback
+    if (isCorrect) {
+      selectedOption.addClass("correct");
+      correctCount++;
+      score += parseFloat(sessionSettings.marks_correct);
+    } else {
+      selectedOption.addClass("incorrect");
+      optionsArea.find('input[value="' + correctOptionId + '"]').closest(".option").addClass("correct");
+      incorrectCount++;
+      score += parseFloat(sessionSettings.marks_incorrect);
+    }
+    
+    // Update local state and UI
+    if (answeredStates[questionID] && answeredStates[questionID].type === "skipped") {
+        skippedCount--;
+    }
+    answeredStates[questionID] = {
+      type: "answered",
+      is_correct: isCorrect,
+      correct_option_id: correctOptionId,
+      selected_option_id: selectedOptionId,
+      reported: answeredStates[questionID]?.reported || false,
+      answered_in_session: true,
+    };
+    updateHeaderStats();
+    $("#qp-skip-btn, #qp-report-btn").prop("disabled", true);
     $("#qp-next-btn").prop("disabled", false);
-
+    
+    // --- BACKGROUND SYNC ---
+    // Send the result to the server for logging, but don't wait for a response
     $.ajax({
       url: qp_ajax_object.ajax_url,
       type: "POST",
       data: {
-        action: "check_answer",
+        action: "check_answer", // This action now just logs the attempt
         nonce: qp_ajax_object.nonce,
         session_id: sessionID,
         question_id: questionID,
-        option_id: selectedOption.find('input[type="radio"]').val(),
+        option_id: selectedOptionId,
         remaining_time: remainingTime,
-      },
-      success: function (response) {
-        if (response.success) {
-          answeredStates[questionID] = {
-            type: "answered",
-            is_correct: response.data.is_correct,
-            correct_option_id: response.data.correct_option_id,
-            selected_option_id: selectedOption
-              .find('input[type="radio"]')
-              .val(),
-            reported: answeredStates[questionID]?.reported || false,
-            answered_in_session: true,
-          };
-          if (response.data.is_correct) {
-            selectedOption.addClass("correct");
-            score += parseFloat(sessionSettings.marks_correct);
-            correctCount++;
-          } else {
-            selectedOption.addClass("incorrect");
-            $('input[value="' + response.data.correct_option_id + '"]')
-              .closest(".option")
-              .addClass("correct");
-            score += parseFloat(sessionSettings.marks_incorrect);
-            incorrectCount++;
-          }
-          updateHeaderStats();
-        } else {
-          // If AJAX fails for some reason, re-enable the options
-          optionsArea.removeClass("disabled");
-          $("#qp-skip-btn").prop("disabled", false);
-          $("#qp-report-btn").prop("disabled", false);
-          $("#qp-next-btn").prop("disabled", true);
-        }
-      },
-      error: function () {
-        // Also re-enable on server error
-        optionsArea.removeClass("disabled");
-        $("#qp-skip-btn").prop("disabled", false);
-        $("#qp-report-btn").prop("disabled", false);
-        $("#qp-next-btn").prop("disabled", true);
       },
     });
   });
