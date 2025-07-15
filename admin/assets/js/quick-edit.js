@@ -307,26 +307,38 @@ function updateBulkEditDropdowns() {
     // Main event handler for subject changes
     wrapper.on('change', '.qe-subject-select', function() {
         var subjectId = $(this).val();
-        var $row = $(this).closest('.quick-edit-main-container');
-        var $topicSelect = $row.find('.qe-topic-select');
-        var $sourceSelect = $row.find('.qe-source-select');
-        var $sectionSelect = $row.find('.qe-section-select');
+        var $form = $(this).closest('.quick-edit-form-wrapper');
+        var $topicSelect = $form.find('.qe-topic-select');
+        var $sourceSelect = $form.find('.qe-source-select');
+        var $examSelect = $form.find('.qe-exam-select');
 
         // Update Topics
         updateDropdown($topicSelect, qp_quick_edit_data.topics_by_subject[subjectId], qp_quick_edit_data.current_topic_id, '— Select a Topic —');
 
-        // Update Sources
+        // Update Sources and trigger a change to update sections
         updateDropdown($sourceSelect, qp_quick_edit_data.sources_by_subject[subjectId], qp_quick_edit_data.current_source_id, '— Select a Source —');
-        $sourceSelect.trigger('change'); // Trigger change to update sections
+        $sourceSelect.trigger('change');
+
+        // **THE FIX IS HERE**: Filter exams and map properties to id/name for the updateDropdown function
+        var linkedExamIds = qp_quick_edit_data.exam_subject_links
+            .filter(function(link) { return link.subject_id == subjectId; })
+            .map(function(link) { return link.exam_id; });
+
+        var availableExams = qp_quick_edit_data.all_exams
+            .filter(function(exam) { return linkedExamIds.includes(exam.exam_id); })
+            .map(function(exam) {
+                // Remap properties to match what updateDropdown expects
+                return { id: exam.exam_id, name: exam.exam_name };
+            });
+
+        updateDropdown($examSelect, availableExams, qp_quick_edit_data.current_exam_id, '— Select an Exam —');
     });
 
     // Event handler for source changes
     wrapper.on('change', '.qe-source-select', function() {
         var sourceId = $(this).val();
-        var $row = $(this).closest('.quick-edit-main-container');
-        var $sectionSelect = $row.find('.qe-section-select');
-
-        // Update Sections
+        var $form = $(this).closest('.quick-edit-form-wrapper');
+        var $sectionSelect = $form.find('.qe-section-select');
         updateDropdown($sectionSelect, qp_quick_edit_data.sections_by_source[sourceId], qp_quick_edit_data.current_section_id, '— Select a Section —');
     });
 

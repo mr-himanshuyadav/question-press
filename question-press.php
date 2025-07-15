@@ -1254,11 +1254,11 @@ function qp_get_question_data_ajax()
     $question_data['options'] = $wpdb->get_results($wpdb->prepare("SELECT option_id, option_text FROM {$o_table} WHERE question_id = %d ORDER BY option_id ASC", $question_id), ARRAY_A);
 
     if (!empty($question_data['question_text'])) {
-    $question_data['question_text'] = wp_kses_post(nl2br($question_data['question_text']));
-}
-if (!empty($question_data['direction_text'])) {
-    $question_data['direction_text'] = wp_kses_post(nl2br($question_data['direction_text']));
-}
+        $question_data['question_text'] = wp_kses_post(nl2br($question_data['question_text']));
+    }
+    if (!empty($question_data['direction_text'])) {
+        $question_data['direction_text'] = wp_kses_post(nl2br($question_data['direction_text']));
+    }
 
     // --- State Checks ---
     $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
@@ -1786,6 +1786,7 @@ function qp_get_quick_edit_form_ajax()
     $all_sources = $wpdb->get_results("SELECT source_id, source_name, subject_id FROM {$wpdb->prefix}qp_sources ORDER BY source_name ASC");
     $all_sections = $wpdb->get_results("SELECT section_id, section_name, source_id FROM {$wpdb->prefix}qp_source_sections ORDER BY section_name ASC");
     $all_exams = $wpdb->get_results("SELECT exam_id, exam_name FROM {$wpdb->prefix}qp_exams ORDER BY exam_name ASC");
+    $exam_subject_links = $wpdb->get_results("SELECT exam_id, subject_id FROM {$wpdb->prefix}qp_exam_subjects");
     $all_topics = $wpdb->get_results("SELECT topic_id, topic_name, subject_id FROM {$wpdb->prefix}qp_topics ORDER BY topic_name ASC");
     $all_labels = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}qp_labels ORDER BY label_name ASC");
     $current_labels = $wpdb->get_col($wpdb->prepare("SELECT label_id FROM {$wpdb->prefix}qp_question_labels WHERE question_id = %d", $question_id));
@@ -1812,13 +1813,16 @@ function qp_get_quick_edit_form_ajax()
             topics_by_subject: <?php echo json_encode($topics_by_subject); ?>,
             sources_by_subject: <?php echo json_encode($sources_by_subject); ?>,
             sections_by_source: <?php echo json_encode($sections_by_source); ?>,
+            all_exams: <?php echo json_encode($all_exams); ?>,
+            exam_subject_links: <?php echo json_encode($exam_subject_links); ?>,
             current_topic_id: <?php echo json_encode($question->topic_id); ?>,
             current_source_id: <?php echo json_encode($question->source_id); ?>,
-            current_section_id: <?php echo json_encode($question->section_id); ?>
+            current_section_id: <?php echo json_encode($question->section_id); ?>,
+            current_exam_id: <?php echo json_encode($question->exam_id); ?>
         };
     </script>
     <form class="quick-edit-form-wrapper">
-        
+
         <div class="quick-edit-display-text">
             <?php if (!empty($question->direction_text)) : ?>
                 <div class="display-group">
@@ -1831,7 +1835,7 @@ function qp_get_quick_edit_form_ajax()
                 <p><?php echo esc_html(wp_trim_words($question->question_text, 50, '...')); ?></p>
             </div>
         </div>
-        
+
         <input type="hidden" name="question_id" value="<?php echo esc_attr($question_id); ?>">
 
         <div class="quick-edit-main-container">
@@ -1885,17 +1889,17 @@ function qp_get_quick_edit_form_ajax()
                         </label>
                     </div>
                     <div class="form-group-expand qe-pyq-fields" style="<?php echo $question->is_pyq ? '' : 'display: none;'; ?>">
-                             <div class="form-group-half">
-                                <select name="exam_id">
-                                    <option value="">— Select Exam —</option>
-                                    <?php foreach ($all_exams as $exam) : ?>
-                                        <option value="<?php echo esc_attr($exam->exam_id); ?>" <?php selected($exam->exam_id, $question->exam_id); ?>><?php echo esc_html($exam->exam_name); ?></option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </div>
-                            <div class="form-group-half">
-                                <input type="number" name="pyq_year" value="<?php echo esc_attr($question->pyq_year); ?>" placeholder="Year (e.g., 2023)">
-                            </div>
+                        <div class="form-group-half">
+                            <select name="exam_id" class="qe-exam-select">
+                                <option value="">— Select Exam —</option>
+                                <?php foreach ($all_exams as $exam) : ?>
+                                    <option value="<?php echo esc_attr($exam->exam_id); ?>" <?php selected($exam->exam_id, $question->exam_id); ?>><?php echo esc_html($exam->exam_name); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="form-group-half">
+                            <input type="number" name="pyq_year" value="<?php echo esc_attr($question->pyq_year); ?>" placeholder="Year (e.g., 2023)">
+                        </div>
                     </div>
                 </div>
 
@@ -1917,31 +1921,146 @@ function qp_get_quick_edit_form_ajax()
     </form>
 
     <style>
-		.quick-edit-display-text{background-color:#f6f7f7;border:1px solid #e0e0e0;padding:10px 20px;margin:20px 20px 10px;border-radius:4px}
-		.quick-edit-display-text .display-group{margin-bottom:10px}
-		.options-group label:last-child,.quick-edit-display-text .display-group:last-child,.quick-edit-form-wrapper .form-row:last-child{margin-bottom:0}
-		.quick-edit-display-text p{margin:5px 0 0;padding-left:10px;border-left:3px solid #ccc;color:#555;font-style:italic}
-		.quick-edit-form-wrapper h4{font-size:16px;margin-top:20px;margin-bottom:10px;padding:10px 20px}
-		.inline-edit-row .submit{padding:20px}.quick-edit-form-wrapper .title{font-size:15px;font-weight:500;color:#555}
-		.quick-edit-form-wrapper .form-row,.quick-edit-form-wrapper .form-row-flex{margin-bottom:1rem}
-		.quick-edit-form-wrapper label,.quick-edit-form-wrapper strong{font-weight:600;display:block;margin-bottom:0rem}
-		.quick-edit-form-wrapper select{width:100%}.quick-edit-main-container{display:flex;gap:20px;margin-bottom:1rem;padding:0 20px}
-        .form-row-flex .qe-pyq-fields{display: flex;gap: 1rem;}
-        .form-row-flex .qe-right-dropdowns{display: flex; flex-direction: row;}
-        .form-row-flex .qe-right-dropdowns label{margin-right: 1rem;}
-		.labels-group,.options-group{display:flex;padding:.5rem;border:1px solid #ddd;background:#fff}
-		.quick-edit-col-left{flex:0 0 40%}
-		.form-group-half,.quick-edit-col-right{flex:1}
-		.options-group{flex-direction:column;justify-content:space-between;height:auto;box-sizing:border-box}
-		.option-label{display:flex;align-items:center;gap:.5rem;margin-bottom:.5rem}
-		.option-label input[type=radio]{margin-top:0;align-self:center}
-		.option-label input[type=text]{width:90%;background-color:#f0f0f1}
-		.form-row-flex{display:flex;gap:1rem}
-		.quick-edit-form-wrapper p.submit button.button-secondary{margin-right:10px}
-		.labels-group{flex-wrap:wrap;gap:.5rem 1rem}
-		.inline-checkbox{white-space:nowrap}
+        .quick-edit-display-text {
+            background-color: #f6f7f7;
+            border: 1px solid #e0e0e0;
+            padding: 10px 20px;
+            margin: 20px 20px 10px;
+            border-radius: 4px
+        }
+
+        .quick-edit-display-text .display-group {
+            margin-bottom: 10px
+        }
+
+        .options-group label:last-child,
+        .quick-edit-display-text .display-group:last-child,
+        .quick-edit-form-wrapper .form-row:last-child {
+            margin-bottom: 0
+        }
+
+        .quick-edit-display-text p {
+            margin: 5px 0 0;
+            padding-left: 10px;
+            border-left: 3px solid #ccc;
+            color: #555;
+            font-style: italic
+        }
+
+        .quick-edit-form-wrapper h4 {
+            font-size: 16px;
+            margin-top: 20px;
+            margin-bottom: 10px;
+            padding: 10px 20px
+        }
+
+        .inline-edit-row .submit {
+            padding: 20px
+        }
+
+        .quick-edit-form-wrapper .title {
+            font-size: 15px;
+            font-weight: 500;
+            color: #555
+        }
+
+        .quick-edit-form-wrapper .form-row,
+        .quick-edit-form-wrapper .form-row-flex {
+            margin-bottom: 1rem
+        }
+
+        .quick-edit-form-wrapper label,
+        .quick-edit-form-wrapper strong {
+            font-weight: 600;
+            display: block;
+            margin-bottom: 0rem
+        }
+
+        .quick-edit-form-wrapper select {
+            width: 100%
+        }
+
+        .quick-edit-main-container {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 1rem;
+            padding: 0 20px
+        }
+
+        .form-row-flex .qe-pyq-fields {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .form-row-flex .qe-right-dropdowns {
+            display: flex;
+            flex-direction: row;
+        }
+
+        .form-row-flex .qe-right-dropdowns label {
+            margin-right: 1rem;
+        }
+
+        .labels-group,
+        .options-group {
+            display: flex;
+            padding: .5rem;
+            border: 1px solid #ddd;
+            background: #fff
+        }
+
+        .quick-edit-col-left {
+            flex: 0 0 40%
+        }
+
+        .form-group-half,
+        .quick-edit-col-right {
+            flex: 1
+        }
+
+        .options-group {
+            flex-direction: column;
+            justify-content: space-between;
+            height: auto;
+            box-sizing: border-box
+        }
+
+        .option-label {
+            display: flex;
+            align-items: center;
+            gap: .5rem;
+            margin-bottom: .5rem
+        }
+
+        .option-label input[type=radio] {
+            margin-top: 0;
+            align-self: center
+        }
+
+        .option-label input[type=text] {
+            width: 90%;
+            background-color: #f0f0f1
+        }
+
+        .form-row-flex {
+            display: flex;
+            gap: 1rem
+        }
+
+        .quick-edit-form-wrapper p.submit button.button-secondary {
+            margin-right: 10px
+        }
+
+        .labels-group {
+            flex-wrap: wrap;
+            gap: .5rem 1rem
+        }
+
+        .inline-checkbox {
+            white-space: nowrap
+        }
     </style>
-<?php
+    <?php
     wp_send_json_success(['form' => ob_get_clean()]);
 }
 add_action('wp_ajax_get_quick_edit_form', 'qp_get_quick_edit_form_ajax');
