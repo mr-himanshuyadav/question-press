@@ -444,7 +444,7 @@ class QP_Shortcodes
                     </label>
                 </div>
 
-                <div class="qp-marks-group" id="qp-marks-group-wrapper" style="display: none;">
+                <div class="qp-form-group qp-marks-group" id="qp-marks-group-wrapper" style="display: none;">
                     <div style="width: 48%">
                         <label for="qp_marks_correct">Correct Marks:</label>
                         <input type="number" name="qp_marks_correct" id="qp_marks_correct" value="4" step="0.01">
