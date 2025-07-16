@@ -206,6 +206,7 @@ function qp_activate_plugin()
         last_activity DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00',
         end_time DATETIME,
         status VARCHAR(20) NOT NULL DEFAULT 'active',
+        total_active_seconds INT UNSIGNED DEFAULT NULL,
         total_attempted INT,
         correct_count INT,
         incorrect_count INT,
@@ -218,6 +219,19 @@ function qp_activate_plugin()
         KEY status (status)
     ) $charset_collate;";
     dbDelta($sql_sessions);
+
+    // --- NEW: Table for Session Pauses ---
+    $table_session_pauses = $wpdb->prefix . 'qp_session_pauses';
+    $sql_session_pauses = "CREATE TABLE $table_session_pauses (
+        pause_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+        session_id BIGINT(20) UNSIGNED NOT NULL,
+        pause_time DATETIME NOT NULL,
+        resume_time DATETIME DEFAULT NULL,
+        PRIMARY KEY (pause_id),
+        KEY session_id (session_id)
+    ) $charset_collate;";
+    dbDelta($sql_session_pauses);
+
 
     // --- UPDATED: User Attempts table with selected_option_id ---
     $table_attempts = $wpdb->prefix . 'qp_user_attempts';
@@ -2409,6 +2423,27 @@ function qp_run_unified_data_migration()
     $subjects_table = $wpdb->prefix . 'qp_subjects';
     $sessions_table = $wpdb->prefix . 'qp_user_sessions';
     $exams_table = $wpdb->prefix . 'qp_exams';
+
+    // === NEW STEP: ADD PAUSE TRACKING SCHEMA ===
+    $sessions_columns = $wpdb->get_col("DESC $sessions_table", 0);
+    if (!in_array('total_active_seconds', $sessions_columns)) {
+        $wpdb->query("ALTER TABLE {$sessions_table} ADD COLUMN `total_active_seconds` INT UNSIGNED DEFAULT NULL AFTER `status`;");
+        $messages[] = "Step 0.1: Added `total_active_seconds` column to the sessions table.";
+    }
+    $table_session_pauses = $wpdb->prefix . 'qp_session_pauses';
+    if($wpdb->get_var("SHOW TABLES LIKE '$table_session_pauses'") != $table_session_pauses) {
+        $sql_session_pauses = "CREATE TABLE $table_session_pauses (
+            pause_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+            session_id BIGINT(20) UNSIGNED NOT NULL,
+            pause_time DATETIME NOT NULL,
+            resume_time DATETIME DEFAULT NULL,
+            PRIMARY KEY (pause_id),
+            KEY session_id (session_id)
+        ) $charset_collate;";
+        require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+        dbDelta($sql_session_pauses);
+        $messages[] = "Step 0.2: Created the `{$table_session_pauses}` table for tracking session pauses.";
+    }
 
     // === STEP 0: MIGRATE qp_user_sessions TABLE SCHEMA ===
     $sessions_columns = $wpdb->get_col("DESC $sessions_table", 0);
