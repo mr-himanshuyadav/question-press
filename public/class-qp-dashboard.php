@@ -62,17 +62,17 @@ class QP_Dashboard
                     <div class="stat-item">
                         <span class="stat-label">Attempted</span>
                         <span class="stat-value"><?php echo (int)$total_attempted; ?></span>
-                        
+
                     </div>
                     <div class="stat-item">
                         <span class="stat-label">Correct</span>
                         <span class="stat-value"><?php echo (int)$total_correct; ?></span>
-                        
+
                     </div>
                     <div class="stat-item">
                         <span class="stat-label">Incorrect</span>
                         <span class="stat-value"><?php echo (int)$total_incorrect; ?></span>
-                        
+
                     </div>
                 </div>
             </div>
@@ -136,70 +136,70 @@ class QP_Dashboard
 
 
     public static function render_sessions_tab_content()
-{
-    global $wpdb;
-    $user_id = get_current_user_id();
-    $sessions_table = $wpdb->prefix . 'qp_user_sessions';
-    $subjects_table = $wpdb->prefix . 'qp_subjects';
+    {
+        global $wpdb;
+        $user_id = get_current_user_id();
+        $sessions_table = $wpdb->prefix . 'qp_user_sessions';
+        $subjects_table = $wpdb->prefix . 'qp_subjects';
 
-    $options = get_option('qp_settings');
-    $session_page_id = isset($options['session_page']) ? absint($options['session_page']) : 0;
-    $review_page_id = isset($options['review_page']) ? absint($options['review_page']) : 0;
-    $session_page_url = $session_page_id ? get_permalink($session_page_id) : home_url('/');
-    $review_page_url = $review_page_id ? get_permalink($review_page_id) : home_url('/');
+        $options = get_option('qp_settings');
+        $session_page_id = isset($options['session_page']) ? absint($options['session_page']) : 0;
+        $review_page_id = isset($options['review_page']) ? absint($options['review_page']) : 0;
+        $session_page_url = $session_page_id ? get_permalink($session_page_id) : home_url('/');
+        $review_page_url = $review_page_id ? get_permalink($review_page_id) : home_url('/');
 
-    $user = wp_get_current_user();
-    $user_roles = (array) $user->roles;
-    $allowed_roles = isset($options['can_delete_history_roles']) ? $options['can_delete_history_roles'] : ['administrator'];
-    $can_delete = !empty(array_intersect($user_roles, $allowed_roles));
+        $user = wp_get_current_user();
+        $user_roles = (array) $user->roles;
+        $allowed_roles = isset($options['can_delete_history_roles']) ? $options['can_delete_history_roles'] : ['administrator'];
+        $can_delete = !empty(array_intersect($user_roles, $allowed_roles));
 
-    // --- RESTORED: Fetch Active Sessions ---
-    $active_sessions = $wpdb->get_results($wpdb->prepare("SELECT * FROM $sessions_table WHERE user_id = %d AND status = 'active' ORDER BY start_time DESC", $user_id));
-    $session_history = $wpdb->get_results($wpdb->prepare("SELECT * FROM $sessions_table WHERE user_id = %d AND status IN ('completed', 'abandoned', 'paused') ORDER BY start_time DESC", $user_id));
+        // --- RESTORED: Fetch Active Sessions ---
+        $active_sessions = $wpdb->get_results($wpdb->prepare("SELECT * FROM $sessions_table WHERE user_id = %d AND status = 'active' ORDER BY start_time DESC", $user_id));
+        $session_history = $wpdb->get_results($wpdb->prepare("SELECT * FROM $sessions_table WHERE user_id = %d AND status IN ('completed', 'abandoned') ORDER BY start_time DESC", $user_id));
 
-    // Pre-fetch all subjects for all questions in the user's history to optimize queries
-    $all_session_qids = [];
-    $all_sessions_for_subjects = array_merge($active_sessions, $session_history); // Combine for one query
-    foreach ($all_sessions_for_subjects as $session) {
-        $qids = json_decode($session->question_ids_snapshot, true);
-        if (is_array($qids)) {
-            $all_session_qids = array_merge($all_session_qids, $qids);
+        // Pre-fetch all subjects for all questions in the user's history to optimize queries
+        $all_session_qids = [];
+        $all_sessions_for_subjects = array_merge($active_sessions, $session_history); // Combine for one query
+        foreach ($all_sessions_for_subjects as $session) {
+            $qids = json_decode($session->question_ids_snapshot, true);
+            if (is_array($qids)) {
+                $all_session_qids = array_merge($all_session_qids, $qids);
+            }
         }
-    }
 
-    $subjects_by_question = [];
-    if (!empty($all_session_qids)) {
-        $unique_qids = array_unique(array_map('absint', $all_session_qids));
-        $ids_placeholder = implode(',', $unique_qids);
-        $subject_results = $wpdb->get_results(
-            "SELECT q.question_id, s.subject_name
+        $subjects_by_question = [];
+        if (!empty($all_session_qids)) {
+            $unique_qids = array_unique(array_map('absint', $all_session_qids));
+            $ids_placeholder = implode(',', $unique_qids);
+            $subject_results = $wpdb->get_results(
+                "SELECT q.question_id, s.subject_name
              FROM {$wpdb->prefix}qp_questions q
              JOIN {$wpdb->prefix}qp_question_groups g ON q.group_id = g.group_id
              JOIN {$wpdb->prefix}qp_subjects s ON g.subject_id = s.subject_id
              WHERE q.question_id IN ($ids_placeholder)"
-        );
-        foreach ($subject_results as $res) {
-            $subjects_by_question[$res->question_id] = $res->subject_name;
+            );
+            foreach ($subject_results as $res) {
+                $subjects_by_question[$res->question_id] = $res->subject_name;
+            }
         }
-    }
 
-    // --- RESTORED: Display Active Sessions Section ---
-    if (!empty($active_sessions)) {
-        echo '<div class="qp-active-sessions-header"><h3>Active Sessions</h3></div>';
-        echo '<div class="qp-active-sessions-list">';
-        foreach ($active_sessions as $session) {
-            $session_qids = json_decode($session->question_ids_snapshot, true);
-            $session_subjects = [];
-            if (is_array($session_qids)) {
-                foreach ($session_qids as $qid) {
-                    if (isset($subjects_by_question[$qid])) {
-                        $session_subjects[$subjects_by_question[$qid]] = true;
+        // --- RESTORED: Display Active Sessions Section ---
+        if (!empty($active_sessions)) {
+            echo '<div class="qp-active-sessions-header"><h3>Active Sessions</h3></div>';
+            echo '<div class="qp-active-sessions-list">';
+            foreach ($active_sessions as $session) {
+                $session_qids = json_decode($session->question_ids_snapshot, true);
+                $session_subjects = [];
+                if (is_array($session_qids)) {
+                    foreach ($session_qids as $qid) {
+                        if (isset($subjects_by_question[$qid])) {
+                            $session_subjects[$subjects_by_question[$qid]] = true;
+                        }
                     }
                 }
-            }
-            $subject_display = !empty($session_subjects) ? implode(', ', array_keys($session_subjects)) : 'Mixed';
+                $subject_display = !empty($session_subjects) ? implode(', ', array_keys($session_subjects)) : 'Mixed';
 
-            echo '<div class="qp-active-session-card">
+                echo '<div class="qp-active-session-card">
                 <div class="qp-card-details">
                     <span class="qp-card-subject">' . esc_html($subject_display) . '</span>
                     <span class="qp-card-date">Started: ' . date_format(date_create($session->start_time), 'M j, Y, g:i a') . '</span>
@@ -209,50 +209,47 @@ class QP_Dashboard
                     <a href="' . esc_url(add_query_arg('session_id', $session->session_id, $session_page_url)) . '" class="qp-button qp-button-secondary">Continue</a>
                 </div>
               </div>';
+            }
+            echo '</div>';
         }
-        echo '</div>';
-    }
 
-    // Session History
-    $practice_page_url = isset($options['practice_page']) ? get_permalink($options['practice_page']) : home_url('/');
+        // Session History
+        $practice_page_url = isset($options['practice_page']) ? get_permalink($options['practice_page']) : home_url('/');
 
-    echo '<div class="qp-history-header">
+        echo '<div class="qp-history-header">
         <h3 style="margin:0;">Practice History</h3>
         <div class="qp-history-actions">
             <a href="' . esc_url($practice_page_url) . '" class="qp-button qp-button-primary">Practice</a>';
 
-    if ($can_delete) {
-        echo '<button id="qp-delete-history-btn" class="qp-button qp-button-danger">Clear History</button>';
-    }
-    echo '</div></div>';
+        if ($can_delete) {
+            echo '<button id="qp-delete-history-btn" class="qp-button qp-button-danger">Clear History</button>';
+        }
+        echo '</div></div>';
 
-    echo '<table class="qp-dashboard-table">
+        echo '<table class="qp-dashboard-table">
         <thead><tr><th>Date</th><th>Mode</th><th>Subjects</th><th>Accuracy</th><th>Actions</th></tr></thead>
         <tbody>';
 
-    if (!empty($session_history)) {
-        foreach ($session_history as $session) {
-            $settings = json_decode($session->settings_snapshot, true);
-            $session_qids = json_decode($session->question_ids_snapshot, true);
+        if (!empty($session_history)) {
+            foreach ($session_history as $session) {
+                $settings = json_decode($session->settings_snapshot, true);
+                $session_qids = json_decode($session->question_ids_snapshot, true);
 
-            // Determine the mode, adding a case for our new 'paused' status.
-            $mode = 'Practice'; // Default
-            if ($session->status === 'paused') {
-                $mode = 'Paused';
-            } elseif (isset($settings['practice_mode'])) {
-                if ($settings['practice_mode'] === 'revision') {
-                    $mode = 'Revision';
-                } elseif ($settings['practice_mode'] === 'Incorrect Que. Practice') {
-                    $mode = 'Incorrect Attempt Practice';
-                } elseif ($settings['practice_mode'] === 'Section Wise Practice') {
-                    $mode = 'Section Wise Practice';
+                // Determine the mode, adding a case for our new 'paused' status.
+                $mode = 'Practice'; // Default
+                if (isset($settings['practice_mode'])) {
+                    if ($settings['practice_mode'] === 'revision') {
+                        $mode = 'Revision';
+                    } elseif ($settings['practice_mode'] === 'Incorrect Que. Practice') {
+                        $mode = 'Incorrect Attempt Practice';
+                    } elseif ($settings['practice_mode'] === 'Section Wise Practice') {
+                        $mode = 'Section Wise Practice';
+                    }
+                } elseif (isset($settings['subject_id']) && $settings['subject_id'] === 'review') {
+                    $mode = 'Review';
                 }
-            } elseif (isset($settings['subject_id']) && $settings['subject_id'] === 'review') {
-                $mode = 'Review';
-            }
 
-            // ** MODIFICATION START **
-            $subjects_display = 'N/A';
+                $subjects_display = 'N/A';
             if (isset($settings['practice_mode']) && $settings['practice_mode'] === 'Section Wise Practice' && !empty($settings['section_id'])) {
                 // For Section Wise Practice, build the specific "Source / Topic / Section" string
                 $section_id = absint($settings['section_id']);
@@ -293,30 +290,23 @@ class QP_Dashboard
                 }
             }
 
-            $accuracy = ($session->total_attempted > 0) ? round(($session->correct_count / $session->total_attempted) * 100, 2) . '%' : 'N/A';
+                $accuracy = ($session->total_attempted > 0) ? round(($session->correct_count / $session->total_attempted) * 100, 2) . '%' : 'N/A';
 
-            echo '<tr>
+                echo '<tr>
                 <td data-label="Date">' . date_format(date_create($session->start_time), 'M j, Y, g:i a') . '</td>
                 <td data-label="Mode">' . esc_html($mode) . '</td>
                 <td data-label="Subjects">' . $subjects_display . '</td>
                 <td data-label="Accuracy"><strong>' . $accuracy . '</strong></td>
-                <td data-label="Actions">';
-                    // Conditionally show "Resume" or "Review" button based on the status.
-            if ($session->status === 'paused') {
-                // For paused sessions, the primary action is to Resume. It links to the session page.
-                echo '<a href="' . esc_url(add_query_arg('session_id', $session->session_id, $session_page_url)) . '" class="qp-button qp-button-primary" style="padding: 4px 8px; font-size: 12px; text-decoration: none;">Resume</a>';
-            } else {
-                // For completed/abandoned sessions, the action is to Review.
-                echo '<a href="' . esc_url(add_query_arg('session_id', $session->session_id, $review_page_url)) . '" class="qp-button qp-button-secondary" style="padding: 4px 8px; font-size: 12px; text-decoration: none;">Review</a>';
+                <td data-label="Actions">
+                    <a href="' . esc_url(add_query_arg('session_id', $session->session_id, $review_page_url)) . '" class="qp-button qp-button-secondary" style="padding: 4px 8px; font-size: 12px; text-decoration: none;">Review</a>';
+                if ($can_delete) {
+                    echo '<button class="qp-delete-session-btn" data-session-id="' . esc_attr($session->session_id) . '">Delete</button>';
+                }
+                echo '</td></tr>';
             }
-            if ($can_delete) {
-                echo '<button class="qp-delete-session-btn" data-session-id="' . esc_attr($session->session_id) . '">Delete</button>';
-            }
-            echo '</td></tr>';
+        } else {
+            echo '<tr><td colspan="5" style="text-align: center;">You have no completed practice sessions yet.</td></tr>';
         }
-    } else {
-        echo '<tr><td colspan="5" style="text-align: center;">You have no completed practice sessions yet.</td></tr>';
+        echo '</tbody></table>';
     }
-    echo '</tbody></table>';
-}
 }

@@ -55,7 +55,7 @@ body {
 }
 .qp-button-primary { background-color: var(--qp-primary-color); color: var(--qp-bg-white); border-color: var(--qp-primary-color); }
 .qp-button-secondary { background-color: var(--qp-bg-white); color: var(--qp-dark-text); border-color: var(--qp-border-color); }
-.qp-button:hover { transform: translateY(-1px); box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+.qp-button:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
 .qp-button-danger { background-color: #d63638; color: #fff; border-color: #d63638; }
 .qp-button-danger:hover { background-color: #b02a2a; border-color: #b02a2a; }
 
@@ -181,11 +181,6 @@ body {
     margin-bottom: 1rem;
     padding-bottom: 1rem;
     border-bottom: 1px solid var(--qp-border-color);
-    /* NEW: Make the header a flex container */
-    display: flex;
-    flex-direction: column; /* Stacks stopwatch on top of stats on mobile */
-    align-items: center;
-    gap: 1rem; /* Creates space between stopwatch and stats block */
 }
 
 /* --- New Timer and Indicator Styles --- */
@@ -211,22 +206,15 @@ body {
 }
 
 .qp-header-bottom-row {
-    display: grid; /* Use grid for a clean 2x2 layout */
-    grid-template-columns: 1fr 1fr; /* Two equal columns */
-    width: 100%; /* Take full width of the container */
+    display: flex;
+    width: auto;
+    justify-content: space-between;
     gap: 1rem;
     background-color: var(--qp-bg-light);
     border-radius: var(--qp-radius);
-    padding: 1rem;
+    padding: 0.75rem 3rem;
 }
-.qp-header-stat.timer-stat .value {
-    padding-bottom: 0;
-    font-size: 20px;
-    font-weight: 600;
-    color: var(--qp-dark-text);
-    letter-spacing: 1px;
-}
-.qp-header-stat {width: auto; text-align: center;}
+.qp-header-stat {width: auto;}
 .qp-header-stat.score .label { font-size: 14px; font-weight: 500; color: var(--qp-light-text); }
 .qp-header-stat.score .value {    color: var(--qp-score-color);}
 .qp-header-stat .value { font-size: 18px; font-weight: 600; }
@@ -234,6 +222,9 @@ body {
 .qp-header-stat.correct { color: var(--qp-correct-color); }
 .qp-header-stat.incorrect { color: var(--qp-incorrect-color); }
 .qp-header-stat.skipped { color: var(--qp-skipped-color); }
+.qp-header-stat.timer-stat { display: none; text-align: right; }
+.qp-header-stat.timer-stat .label { color: var(--qp-light-text); }
+.qp-header-stat.timer-stat .value { font-size: 20px; font-weight: 600; color: var(--qp-dark-text); }
 
 
 /* --- Indicator Bar Styles --- */
@@ -288,6 +279,12 @@ body {
     flex-direction: column;
     gap: 5px; /* Adds space between the subject line and the source line */
 }
+.qp-question-meta-right{
+    width: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
 
 /* Style for the new source line */
 #qp-question-source {
@@ -296,7 +293,7 @@ body {
 }
 
 .qp-question-counter-box {
-    Width: 40px;
+    Width: auto;
     border: 1px solid var(--qp-border-color);
     border-radius: 4px;
     padding: 8px 12px;
@@ -343,14 +340,14 @@ body {
 }
 .qp-footer-nav button { padding: 10px; font-weight: 600; flex: 1; }
 .qp-footer-controls {display: flex;justify-content: space-between;align-items: center; gap: 10px;flex-direction: column;}
-/* New ordering for mobile */
-#qp-report-btn { order: 3; }
 #qp-pause-btn { order: 2; }
 #qp-end-practice-btn { order: 1; }
 .qp-footer-nav button:disabled { background-color: #f0f0f1; border-color: #ffffff00; color: #a7aaad; cursor: not-allowed; }
-#qp-prev-btn { background-color: var(--qp-bg-light); color: var(--qp-dark-text); }/* Unique style for Previous button */
-#qp-prev-btn:disabled { background-color: #f0f0f1; border-color: #ffffff00; color: #a7aaad; cursor: not-allowed; }
+#qp-prev-btn { background-color: var(--qp-bg-light); color: var(--qp-dark-text); outline: none;}/* Unique style for Previous button */
+#qp-prev-btn:disabled { background-color: #f0f0f1; border-color: #ffffff00; color: #7c7d7d; cursor: not-allowed; }
 .qp-footer-divider{margin: 2rem 0px;}
+
+#qp-pause-btn {outline: none;}
 
 
 /* --- Summary Screen --- */
@@ -372,13 +369,7 @@ body {
 .qp-admin-report-area, .qp-user-report-area { margin-top: 30px; padding-top: 20px; border-top: 1px dashed var(--qp-border-color); text-align: center; }
 .qp-admin-report-area h4, .qp-user-report-area h4 { margin-top: 0; margin-bottom: 15px; color: var(--qp-light-text); font-size: 16px; }
 .qp-admin-report-area .button-group, .qp-user-report-area .button-group { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
-.qp-report-button { border: none; color: #fff; cursor: pointer; border-radius: 4px; padding: 8px 14px; font-size: 13px; font-weight: 500; transition: all 0.2s ease; }
-.qp-report-button:hover:not(:disabled) { opacity: 0.85; transform: translateY(-1px); }
-.qp-report-button:disabled { opacity: 0.5; cursor: not-allowed; }
-.qp-report-color-error { background-color: #e57373; }
-.qp-report-color-warning { background-color: #ffb74d; }
-.qp-report-color-info { background-color: #64b5f6; }
-.qp-report-color-neutral { background-color: #90a4ae; }
+
 
 /* --- Final, Consolidated Footer Button Styles --- */
 
@@ -389,6 +380,7 @@ body {
     font-size: 14px; /* Ensure consistent font size */
     flex: 1; /* Make all buttons take up equal space */
     justify-content: center; /* Center content within the button */
+    width: 100%;
 }
 
 /* Specific styles for the checkbox-as-a-button */
@@ -412,8 +404,20 @@ body {
 }
 
 #qp-report-btn {
-    border-color: black;
+    border: none;
+    min-width: 90px;
+    background-color: #bc0d0d;
+    color: #e9e9e9;
+    padding: 7px 10px;
 }
+
+.qp-report-button { border: none; color: #e9e9e9; cursor: pointer; border-radius: 4px; padding: 5px 10px; font-weight: 600; transition: all 0.2s ease; background-color: #bc0d0d; }
+.qp-report-button:hover:not(:disabled) { opacity: 0.85; transform: translateY(-1px); }
+.qp-report-button:disabled { font-weight: 500; opacity: 0.5; cursor: not-allowed;}
+.qp-report-color-error { background-color: #e57373; }
+.qp-report-color-warning { background-color: #ffb74d; }
+.qp-report-color-info { background-color: #64b5f6; }
+.qp-report-color-neutral { background-color: #90a4ae; }
 
 /* --- Fullscreen Start Overlay Styles --- */
 #qp-start-session-overlay {
@@ -645,23 +649,17 @@ ul.qp-review-list li{
         width: auto;
         flex-grow: 1;
     }
-    .qp-header {
-        flex-direction: row; /* Side-by-side on desktop */
-        justify-content: space-between;
-    }
 
-    .qp-header-bottom-row {
-        display: flex; /* Back to flexbox for desktop */
-        width: auto;
-        padding: 0.75rem 1.5rem;
-        gap: 2rem;
-    }
+    .qp-question-meta-right {
+    flex-direction: row;
+    gap: 5px;
+}
+
     .qp-footer-controls {
         flex-direction: row; /* Back to a row on desktop */
     }
 
     /* Reset order for desktop so it follows HTML source */
-    #qp-report-btn,
     #qp-pause-btn,
     #qp-end-practice-btn {
         order: 0;
@@ -681,7 +679,7 @@ ul.qp-review-list li{
 .qp-header-stat.skipped { color: var(--qp-skipped-color); }
 .qp-header-stat.timer-stat { display: none; text-align: right; }
 .qp-header-stat.timer-stat .label { color: var(--qp-light-text); }
-.qp-header-stat.timer-stat .value { font-size: 32px;  font-weight: 600; color: var(--qp-dark-text); }
+.qp-header-stat.timer-stat .value { font-size: 20px; font-weight: 600; color: var(--qp-dark-text); }
     
 
     .qp-summary-stats { display: flex; }
@@ -721,16 +719,6 @@ ul.qp-review-list li{
 .slide-in-from-left {
     transform: translateX(0);
     animation: slideInFromLeft 0.25s ease-in-out;
-}
-
-@keyframes slideInFromRight {
-    from { transform: translateX(100%); }
-    to { transform: translateX(0); }
-}
-
-@keyframes slideInFromLeft {
-    from { transform: translateX(-100%); }
-    to { transform: translateX(0); }
 }
 
 /* --- Animation and Progress Indicator Styles --- */
@@ -818,29 +806,6 @@ ul.qp-review-list li{
 .qp-review-summary .qp-summary-stats {
     margin: 0;
     gap: 0.5rem;
-}
-
-/* Make the main session stopwatch visible */
-.qp-header-stat.timer-stat {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    min-width: 115px;
-}
-.qp-header-stat.timer-stat .label {
-    color: var(--qp-light-text);
-}
-.qp-header-stat.timer-stat .value {
-    font-size: 24px; /* Make it prominent */
-    font-weight: 600;
-    color: var(--qp-dark-text);
-    letter-spacing: 1px;
-}
-
-/* On the review page, give the new stat a unique color */
-.qp-review-summary .qp-summary-stats .stat:nth-child(2) .value {
-    color: #3f51b5; /* Indigo color for time */
 }
 
 .qp-review-topics-list {

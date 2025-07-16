@@ -205,8 +205,6 @@ class QP_Shortcodes
                 </div>';
         }
 
-
-
         // --- Handle Resuming a Paused Session ---
         if ($session_data_from_db->status === 'paused') {
             // Find the last open pause record for this session
@@ -273,7 +271,7 @@ class QP_Shortcodes
             'session_id'    => $session_id,
             'question_ids'  => json_decode($session_data_from_db->question_ids_snapshot, true),
             'settings'      => json_decode($session_data_from_db->settings_snapshot, true),
-            'initial_elapsed_seconds' => $initial_elapsed_time, // Pass to JS
+            'initial_elapsed_seconds' => $initial_elapsed_time,
         ];
 
         $attempt_history = $wpdb->get_results($wpdb->prepare(
@@ -447,11 +445,11 @@ class QP_Shortcodes
                 <div class="qp-form-group qp-marks-group" id="qp-marks-group-wrapper" style="display: none;">
                     <div style="width: 48%">
                         <label for="qp_marks_correct">Correct Marks:</label>
-                        <input type="number" name="qp_marks_correct" id="qp_marks_correct" value="4" step="0.01">
+                        <input type="number" name="qp_marks_correct" id="qp_marks_correct" value="4" step="0.01" required>
                     </div>
                     <div style="width: 48%">
                         <label for="qp_marks_incorrect">Negative Marks:</label>
-                        <input type="number" name="qp_marks_incorrect" id="qp_marks_incorrect" value="1" step="0.01" min="0">
+                        <input type="number" name="qp_marks_incorrect" id="qp_marks_incorrect" value="1" step="0.01" min="0" required>
                     </div>
                 </div>
 
@@ -483,10 +481,6 @@ class QP_Shortcodes
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <div class="qp-container qp-practice-wrapper">
             <div class="qp-header">
-                <div class="qp-header-stat timer-stat" id="qp-session-stopwatch">
-                    <span class="value">00:00:00</span>
-                </div>
-
                 <div class="qp-header-bottom-row">
                     <div class="qp-header-stat score">
                         <span class="value" id="qp-score">0.00</span>
@@ -514,10 +508,16 @@ class QP_Shortcodes
                             <div id="qp-question-subject-line"><span id="qp-question-subject"></span> | <span id="qp-question-id"></span></div>
                             <div id="qp-question-source" style="display: none;"></div>
                         </div>
-                        <div class="qp-question-counter-box" style="display: none;">
-                            <span class="qp-counter-label">Q. No.</span>
-                            <span class="qp-counter-value" id="qp-question-counter">--/--</span>
+                        <div class="qp-question-meta-right">
+                            <div class="qp-question-counter-box" style="display: none;">
+                                <span class="qp-counter-label">Q. No.</span>
+                                <span class="qp-counter-value" id="qp-question-counter">--/--</span>
+                            </div>
+                            <button id="qp-report-btn" class="qp-report-button qp-button-secondary">
+                                <span>&#9888;</span> Report
+                            </button>
                         </div>
+
                     </div>
 
                     <div class="qp-indicator-bar" style="display: none;">
@@ -536,16 +536,18 @@ class QP_Shortcodes
                     </div>
 
                     <div class="qp-options-area"></div>
-                    <div class="qp-review-later" style="text-align:center;"><label class="qp-review-later-checkbox qp-button qp-button-secondary">
+                    <div class="qp-review-later" style="text-align:center;margin-bottom: 5px;"><label class="qp-review-later-checkbox qp-button qp-button-secondary">
                             <input type="checkbox" id="qp-mark-for-review-cb">
                             <span>Mark for Review</span>
-                        </label></div>
+                        </label>
+
+                    </div>
 
                 </div>
             </div>
 
             <div class="qp-footer-nav">
-                <button id="qp-prev-btn" class="qp-button qp-button-secondary" disabled>
+                <button id="qp-prev-btn" class="qp-button qp-button-primary" disabled>
                     <span>&#9664;</span>
                 </button>
                 <button id="qp-skip-btn" class="qp-button qp-button-secondary">Skip</button>
@@ -557,9 +559,6 @@ class QP_Shortcodes
             <hr class="qp-footer-divider">
 
             <div class="qp-footer-controls">
-                <button id="qp-report-btn" class="qp-button qp-button-secondary">
-                    <span>&#9888;</span> Report
-                </button>
 
                 <button id="qp-pause-btn" class="qp-button qp-button-secondary">Pause & Save</button>
 
@@ -621,6 +620,7 @@ class QP_Shortcodes
         $marks_incorrect = $settings['marks_incorrect'] ?? 0;
 
         $accuracy = ($session->total_attempted > 0) ? ($session->correct_count / $session->total_attempted) * 100 : 0;
+
         // --- Calculate Average Time Per Question ---
         $avg_time_per_question = 'N/A';
         if ($session->total_attempted > 0 && isset($session->total_active_seconds)) {

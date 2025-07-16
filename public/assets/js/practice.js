@@ -719,16 +719,11 @@ jQuery(document).ready(function ($) {
   var correctCount = 0;
   var incorrectCount = 0;
   var skippedCount = 0;
-  var masterTimer;
-  var sessionTimeCounter = 0; // NEW: Global state for the main stopwatch
-  var questionTimeLeft = null; // NEW: Global state for the question countdown
+  var questionTimer;
   var answeredStates = {};
   var practiceInProgress = false;
   var questionCache = {};
   var remainingTime = 0;
-
-
-
 
   // --- NEW: SWIPE GESTURE HANDLING ---
   // Check if we are on the actual practice screen
@@ -745,22 +740,17 @@ jQuery(document).ready(function ($) {
     });
   }
 
-
   // Session Initialization
   if (typeof qp_session_data !== "undefined") {
     practiceInProgress = true;
     sessionID = qp_session_data.session_id;
     sessionQuestionIDs = qp_session_data.question_ids;
     sessionSettings = qp_session_data.settings;
-    
+
     // Conditionally hide the score element if the session is unscored
     if (sessionSettings.marks_correct === null) {
         $('.qp-header-stat.score').hide();
     }
-    // Set the initial state for the session stopwatch
-    sessionTimeCounter = qp_session_data.initial_elapsed_seconds || 0;
-    // Start the one and only master timer
-    initializeMasterTimer();
 
     // **THE FIX**: Conditionally hide the score element
         if (sessionSettings.practice_mode === 'Incorrect Que. Practice') {
@@ -835,11 +825,11 @@ jQuery(document).ready(function ($) {
     if (currentQuestionIndex >= sessionQuestionIDs.length) {
       $("#qp-end-practice-btn").click();
     } else {
-     loadQuestion(sessionQuestionIDs[currentQuestionIndex]);
+      loadQuestion(sessionQuestionIDs[currentQuestionIndex]);
     }
   }
 
-  // --- Optional Scoring UI Toggle ---
+   // --- Optional Scoring UI Toggle ---
 wrapper.on('change', '#qp_scoring_enabled_cb, #qp_revision_scoring_enabled_cb', function() {
     var isChecked = $(this).is(':checked');
     // Find the wrapper for the marks inputs within the same form
@@ -1032,6 +1022,7 @@ wrapper.on('change', '#qp_scoring_enabled_cb, #qp_revision_scoring_enabled_cb', 
   }
 
   function renderQuestion(data, questionID) {
+    clearInterval(questionTimer);
     var questionData = data.question;
     if (sessionSettings.practice_mode === "revision") {
       var currentQ = currentQuestionIndex + 1;
@@ -1129,7 +1120,6 @@ wrapper.on('change', '#qp_scoring_enabled_cb, #qp_revision_scoring_enabled_cb', 
     // Determine the interactive state of the controls
     // Now, handle the other controls based on other states.
     if (isAnswered || isExpired || isReported) {
-      questionTimeLeft = null;
       optionsArea
         .addClass("disabled")
         .find('input[type="radio"]')
@@ -1158,17 +1148,16 @@ wrapper.on('change', '#qp_scoring_enabled_cb, #qp_revision_scoring_enabled_cb', 
           .show();
         $(".qp-indicator-bar").show();
       }
-      startUnifiedTimer(qp_session_data.initial_elapsed_seconds || 0, null);
     } else {
-        // This block runs for a fresh, unanswered question
-        if (sessionSettings.timer_enabled) {
-            // Simply set the starting value for the question timer. The master interval will pick it up.
-            questionTimeLeft = hasRemainingTime ? previousState.remainingTime : sessionSettings.timer_seconds;
-            $("#qp-timer-indicator").removeClass("expired").show();
-            $(".qp-indicator-bar").show();
-        } else {
-            questionTimeLeft = null; // Ensure no countdown runs
-        }
+      // This block only runs for a fresh question that is NOT answered and NOT reported.
+      if (sessionSettings.timer_enabled) {
+        var startTime = hasRemainingTime
+          ? previousState.remainingTime
+          : sessionSettings.timer_seconds;
+        $("#qp-timer-indicator").removeClass("expired").show();
+        indicatorBar.show();
+        startTimer(startTime);
+      }
     }
 
     $("#qp-prev-btn").prop("disabled", currentQuestionIndex === 0);
@@ -1238,7 +1227,7 @@ wrapper.on('change', '#qp_scoring_enabled_cb, #qp_revision_scoring_enabled_cb', 
     currentQuestionIndex++;
     if (currentQuestionIndex >= sessionQuestionIDs.length) {
       practiceInProgress = false;
-      clearInterval(masterTimer);
+      clearInterval(questionTimer);
       currentQuestionIndex--;
       if (
         confirm(
@@ -1259,43 +1248,44 @@ wrapper.on('change', '#qp_scoring_enabled_cb, #qp_revision_scoring_enabled_cb', 
     $("#qp-skipped-count").text(skippedCount);
   }
 
-// REPLACE it with this new, simpler timer logic.
-function initializeMasterTimer() {
-    clearInterval(masterTimer); // Clear any residual timers
+  function startTimer(seconds) {
+    // This function now assumes it's always given the correct starting time.
+    remainingTime = seconds;
 
-    masterTimer = setInterval(function() {
-        // 1. Always increment the main session stopwatch
-        sessionTimeCounter++;
-        var hours = Math.floor(sessionTimeCounter / 3600);
-        var minutes = Math.floor((sessionTimeCounter % 3600) / 60);
-        var seconds = sessionTimeCounter % 60;
-        $('#qp-session-stopwatch .value').text(
-            String(hours).padStart(2, '0') + ':' +
-            String(minutes).padStart(2, '0') + ':' +
-            String(seconds).padStart(2, '0')
-        );
+    function updateDisplay() {
+      var minutes = Math.floor(remainingTime / 60);
+      var secs = remainingTime % 60;
+      $("#qp-timer-indicator").text(
+        String(minutes).padStart(2, "0") + ":" + String(secs).padStart(2, "0")
+      );
+    }
+    updateDisplay(); // Call it once immediately to show the initial time
 
-        // 2. If a question countdown is active, handle it
-        if (questionTimeLeft !== null && questionTimeLeft > 0) {
-            questionTimeLeft--;
-            remainingTime = questionTimeLeft; // Keep this global variable updated
+    questionTimer = setInterval(function () {
+      remainingTime--;
+      updateDisplay();
+      if (remainingTime <= 0) {
+        clearInterval(questionTimer);
 
-            var q_minutes = Math.floor(questionTimeLeft / 60);
-            var q_secs = questionTimeLeft % 60;
-            $("#qp-timer-indicator").text(
-                String(q_minutes).padStart(2, '0') + ":" + String(q_secs).padStart(2, '0')
-            );
+        // Update the UI to show the "Time Expired" state
+        var timerIndicator = $("#qp-timer-indicator");
+        timerIndicator.html("&#9201; Time Expired").addClass("expired");
 
-            if (questionTimeLeft <= 0) {
-                questionTimeLeft = null; // Stop the countdown
-                $("#qp-timer-indicator").html("&#9201; Time Expired").addClass("expired");
-                $(".qp-options-area").addClass("disabled");
-                $("#qp-skip-btn").prop("disabled", false); // Allow skipping after timeout
-            }
-        }
+        // Lock the options so the user cannot answer
+        $(".qp-options-area").addClass("disabled");
+        $("#qp-next-btn").prop("disabled", true);
+
+        // **THE FIX**: Enable the skip button and then programmatically click it.
+        // This reuses your existing skip logic to correctly log the attempt.
+        var skipButton = $("#qp-skip-btn");
+        skipButton.prop("disabled", false);
+      }
     }, 1000);
-}
+  }
 
+  // In public/assets/js/practice.js
+
+  // In public/assets/js/practice.js
 
   function displaySummary(summaryData) {
     closeFullscreen();
@@ -1352,10 +1342,10 @@ function initializeMasterTimer() {
     if (optionsArea.hasClass("disabled")) {
       return; // Prevent multiple clicks
     }
-    questionTimeLeft = null; // Stop the per-qu
     optionsArea.addClass("disabled");
     
     // --- INSTANT FEEDBACK LOGIC ---
+    clearInterval(questionTimer);
     var questionID = sessionQuestionIDs[currentQuestionIndex];
     var selectedOptionId = selectedOption.find('input[type="radio"]').val();
     var correctOptionId = optionsArea.data('correct-option-id');
@@ -1406,6 +1396,7 @@ function initializeMasterTimer() {
   });
 
   wrapper.on("click", "#qp-next-btn, #qp-prev-btn", function () {
+    clearInterval(questionTimer); // Stop the timer immediately
     var questionID = sessionQuestionIDs[currentQuestionIndex];
     var direction = $(this).attr("id") === "qp-next-btn" ? "next" : "prev";
 
@@ -1437,6 +1428,7 @@ function initializeMasterTimer() {
   });
 
   wrapper.on("click", "#qp-skip-btn", function () {
+    clearInterval(questionTimer);
     var questionID = sessionQuestionIDs[currentQuestionIndex];
 
     if (
@@ -1476,6 +1468,7 @@ function initializeMasterTimer() {
   });
 
   wrapper.on("click", "#qp-end-practice-btn", function () {
+    clearInterval(questionTimer);
 
     // Check if any questions have been answered.
     if (correctCount === 0 && incorrectCount === 0) {
@@ -1539,7 +1532,6 @@ function initializeMasterTimer() {
 
   wrapper.on('click', '#qp-pause-btn', function() {
         if (confirm('Are you sure you want to pause this session? You can resume it later from your dashboard.')) {
-            clearInterval(masterTimer);
             practiceInProgress = false; // Prevent the "are you sure?" popup on redirect
 
             $.ajax({
