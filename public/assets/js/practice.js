@@ -1498,6 +1498,43 @@ jQuery(document).ready(function ($) {
     }
   });
 
+  wrapper.on('click', '#qp-pause-btn', function() {
+        if (confirm('Are you sure you want to pause this session? You can resume it later from your dashboard.')) {
+            practiceInProgress = false; // Prevent the "are you sure?" popup on redirect
+
+            $.ajax({
+                url: qp_ajax_object.ajax_url,
+                type: 'POST',
+                data: {
+                    action: 'qp_pause_session',
+                    nonce: qp_ajax_object.nonce,
+                    session_id: sessionID,
+                },
+                beforeSend: function() {
+                    // Disable all footer buttons to prevent double-clicks
+                    $('.qp-footer-controls .qp-button').prop('disabled', true).text('Pausing...');
+                },
+                success: function(response) {
+                    if (response.success) {
+                        // Redirect to the dashboard page on success
+                        window.location.href = qp_ajax_object.dashboard_page_url;
+                    } else {
+                        alert('Error: ' + (response.data.message || 'Could not pause the session.'));
+                        // Re-enable buttons if it fails
+                        $('.qp-footer-controls .qp-button').prop('disabled', false);
+                        $('#qp-pause-btn').text('Pause & Save'); // Restore text
+                    }
+                },
+                error: function() {
+                    alert('An unknown server error occurred.');
+                    $('.qp-footer-controls .qp-button').prop('disabled', false);
+                    $('#qp-pause-btn').text('Pause & Save');
+                }
+            });
+        }
+    });
+
+
   $(window).on("beforeunload", function () {
     if (practiceInProgress) {
       return "Are you sure you want to leave? Your practice session is in progress and will be lost.";
