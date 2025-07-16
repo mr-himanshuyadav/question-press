@@ -827,6 +827,18 @@ jQuery(document).ready(function ($) {
     }
   }
 
+  // --- NEW: Optional Scoring UI Toggle ---
+    wrapper.on('change', '#qp_scoring_enabled_cb, #qp_revision_scoring_enabled_cb', function() {
+        var isChecked = $(this).is(':checked');
+        var marksWrapperId = '#' + $(this).closest('form').find('.qp-marks-group').attr('id');
+
+        if (isChecked) {
+            $(marksWrapperId).slideDown();
+        } else {
+            $(marksWrapperId).slideUp();
+        }
+    });
+
   // Logic for the timer checkbox on the settings form
   wrapper.on("change", "#qp_timer_enabled_cb", function () {
     if ($(this).is(":checked")) {
