@@ -633,14 +633,22 @@ jQuery(document).ready(function ($) {
         if (response.success && response.data.redirect_url) {
           window.location.href = response.data.redirect_url;
         } else {
-          // It's better to show the error inside the form step for context
-          var errorMessage =
-            '<p class="qp-error-message" style="color: red; text-align: center; margin-top: 1rem;">' +
-            (response.data.message || "An unknown error occurred.") +
-            "</p>";
-          form.find(".qp-error-message").remove(); // Remove old errors
-          form.append(errorMessage);
-          submitButton.val(originalButtonText).prop("disabled", false);
+          // ** MODIFICATION START **
+          // Check if the specific HTML block was sent in the response data.
+          if (response.data && response.data.html) {
+            // If so, replace the entire wrapper content with our friendly error page.
+            wrapper.html(response.data.html);
+          } else {
+            // Otherwise, show a generic error message within the form.
+            var errorMessage =
+              '<p class="qp-error-message" style="color: red; text-align: center; margin-top: 1rem;">' +
+              (response.data.message || "An unknown error occurred.") +
+              "</p>";
+            form.find(".qp-error-message").remove(); // Remove old errors
+            form.append(errorMessage);
+            submitButton.val(originalButtonText).prop("disabled", false);
+          }
+          // ** MODIFICATION END **
         }
       },
       error: function () {
