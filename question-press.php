@@ -2820,6 +2820,7 @@ function qp_pause_session_ajax() {
 
     global $wpdb;
     $sessions_table = $wpdb->prefix . 'qp_user_sessions';
+    $pauses_table = $wpdb->prefix . 'qp_session_pauses';
 
     // Security check: ensure the session belongs to the current user
     $session_owner = $wpdb->get_var($wpdb->prepare("SELECT user_id FROM $sessions_table WHERE session_id = %d", $session_id));
@@ -2835,6 +2836,15 @@ function qp_pause_session_ajax() {
             'last_activity' => current_time('mysql')
         ],
         ['session_id' => $session_id]
+    );
+
+    // Log this pause event in the new table
+    $wpdb->insert(
+        $pauses_table,
+        [
+            'session_id' => $session_id,
+            'pause_time' => current_time('mysql', 1) // Use GMT time for consistency
+        ]
     );
 
     wp_send_json_success(['message' => 'Session paused successfully.']);

@@ -178,6 +178,7 @@ class QP_Shortcodes
 
         global $wpdb;
         $sessions_table = $wpdb->prefix . 'qp_user_sessions';
+        $pauses_table = $wpdb->prefix . 'qp_session_pauses';
         $session_data_from_db = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$sessions_table} WHERE session_id = %d", $session_id));
 
         // **THE FIX**: This is the new, simplified error handling logic.
@@ -194,6 +195,37 @@ class QP_Shortcodes
                     <p style="font-size: 16px; color: #555; margin-bottom: 25px;">This session is either invalid or was abandoned and has been removed.</p>
                     <a href="' . esc_url($dashboard_page_url) . '" class="qp-button qp-button-primary" style="text-decoration: none;">View Dashboard</a>
                 </div>';
+        }
+
+        // --- Handle Resuming a Paused Session ---
+        if ($session_data_from_db->status === 'paused') {
+            // Find the last open pause record for this session
+            $last_pause_id = $wpdb->get_var($wpdb->prepare(
+                "SELECT pause_id FROM {$pauses_table} WHERE session_id = %d AND resume_time IS NULL ORDER BY pause_time DESC LIMIT 1",
+                $session_id
+            ));
+
+            // If an open pause record is found, update it with the current time
+            if ($last_pause_id) {
+                $wpdb->update(
+                    $pauses_table,
+                    ['resume_time' => current_time('mysql', 1)], // Use GMT time
+                    ['pause_id' => $last_pause_id]
+                );
+            }
+
+            // Set the main session status back to 'active'
+            $wpdb->update(
+                $sessions_table,
+                [
+                    'status' => 'active',
+                    'last_activity' => current_time('mysql')
+                ],
+                ['session_id' => $session_id]
+            );
+
+            // Re-fetch the session data to reflect the 'active' status
+            $session_data_from_db->status = 'active';
         }
 
         // --- Check if the session is already completed ---
