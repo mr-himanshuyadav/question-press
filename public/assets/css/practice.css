@@ -208,11 +208,18 @@ body {
 .qp-header-bottom-row {
     display: flex;
     width: auto;
-    justify-content: space-between;
-    gap: 1rem;
+    justify-content: center;
+    gap: 1.5rem;
     background-color: var(--qp-bg-light);
     border-radius: var(--qp-radius);
     padding: 0.75rem 1rem;
+    flex-wrap: wrap;
+}
+.qp-header-stat.timer-stat .value {
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--qp-dark-text);
+    letter-spacing: 1px;
 }
 .qp-header-stat {width: auto;}
 .qp-header-stat.score .label { font-size: 14px; font-weight: 500; color: var(--qp-light-text); }
@@ -632,6 +639,12 @@ ul.qp-review-list li{
     .qp-action-buttons .qp-button, .qp-action-buttons input.qp-button {
         width: auto;
         flex-grow: 1;
+    }
+
+    .qp-header-bottom-row {
+        justify-content: space-between; /* Go back to space-between on desktop */
+        flex-wrap: nowrap; /* Prevent wrapping on desktop */
+        padding: 0.75rem 3rem;
     }
 
     .qp-footer-controls {
