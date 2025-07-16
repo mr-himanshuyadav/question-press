@@ -1528,6 +1528,59 @@ function qp_check_answer_ajax()
 add_action('wp_ajax_check_answer', 'qp_check_answer_ajax');
 
 /**
+ * AJAX handler to save the remaining time for the current question.
+ */
+function qp_save_remaining_time_ajax() {
+    check_ajax_referer('qp_practice_nonce', 'nonce');
+
+    if (!is_user_logged_in()) {
+        wp_send_json_error();
+    }
+
+    $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
+    $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
+    $remaining_time = isset($_POST['remaining_time']) ? absint($_POST['remaining_time']) : 0;
+    $user_id = get_current_user_id();
+
+    if (!$session_id || !$question_id) {
+        wp_send_json_error();
+    }
+
+    global $wpdb;
+    $attempts_table = $wpdb->prefix . 'qp_user_attempts';
+
+    // Check if an attempt for this question in this session already exists
+    $existing_attempt_id = $wpdb->get_var($wpdb->prepare(
+        "SELECT attempt_id FROM {$attempts_table} WHERE session_id = %d AND question_id = %d",
+        $session_id,
+        $question_id
+    ));
+
+    if ($existing_attempt_id) {
+        // If it exists (e.g., was skipped), just update the time
+        $wpdb->update(
+            $attempts_table,
+            ['remaining_time' => $remaining_time],
+            ['attempt_id' => $existing_attempt_id]
+        );
+    } else {
+        // If it doesn't exist, create a new record with a 'pending' status
+        $wpdb->insert(
+            $attempts_table,
+            [
+                'session_id' => $session_id,
+                'user_id' => $user_id,
+                'question_id' => $question_id,
+                'status' => 'pending', // A temporary status
+                'remaining_time' => $remaining_time
+            ]
+        );
+    }
+    wp_send_json_success();
+}
+add_action('wp_ajax_qp_save_remaining_time', 'qp_save_remaining_time_ajax');
+
+/**
  * AJAX handler to start a REVISION practice session.
  */
 function qp_start_revision_session_ajax()

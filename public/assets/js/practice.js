@@ -1325,7 +1325,6 @@ function initializeMasterTimer() {
     optionsArea.addClass("disabled");
     
     // --- INSTANT FEEDBACK LOGIC ---
-    clearInterval(masterTimer);
     var questionID = sessionQuestionIDs[currentQuestionIndex];
     var selectedOptionId = selectedOption.find('input[type="radio"]').val();
     var correctOptionId = optionsArea.data('correct-option-id');
@@ -1376,7 +1375,6 @@ function initializeMasterTimer() {
   });
 
   wrapper.on("click", "#qp-next-btn, #qp-prev-btn", function () {
-    clearInterval(masterTimer); // Stop the timer immediately
     var questionID = sessionQuestionIDs[currentQuestionIndex];
     var direction = $(this).attr("id") === "qp-next-btn" ? "next" : "prev";
 
@@ -1408,7 +1406,6 @@ function initializeMasterTimer() {
   });
 
   wrapper.on("click", "#qp-skip-btn", function () {
-    clearInterval(masterTimer);
     var questionID = sessionQuestionIDs[currentQuestionIndex];
 
     if (
@@ -1448,7 +1445,6 @@ function initializeMasterTimer() {
   });
 
   wrapper.on("click", "#qp-end-practice-btn", function () {
-    clearInterval(masterTimer);
 
     // Check if any questions have been answered.
     if (correctCount === 0 && incorrectCount === 0) {
