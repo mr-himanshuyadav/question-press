@@ -1760,7 +1760,7 @@ function qp_end_practice_session_ajax()
     $final_score = ($correct_count * $marks_correct) + ($incorrect_count * $marks_incorrect);
 
     // --- Calculate Total Active Time ---
-    $end_time = current_time('mysql', 1); // Use GMT time for calculation
+    $end_time = current_time('mysql'); // Use GMT time for calculation
     $start_time = $session->start_time;
 
     // Get all pause records for this session
@@ -2867,7 +2867,7 @@ function qp_pause_session_ajax() {
         $pauses_table,
         [
             'session_id' => $session_id,
-            'pause_time' => current_time('mysql', 1) // Use GMT time for consistency
+            'pause_time' => current_time('mysql') // Use GMT time for consistency
         ]
     );
 

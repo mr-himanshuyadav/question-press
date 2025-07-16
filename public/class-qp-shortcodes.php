@@ -209,7 +209,7 @@ class QP_Shortcodes
             if ($last_pause_id) {
                 $wpdb->update(
                     $pauses_table,
-                    ['resume_time' => current_time('mysql', 1)], // Use GMT time
+                    ['resume_time' => current_time('mysql')], // Use GMT time
                     ['pause_id' => $last_pause_id]
                 );
             }
