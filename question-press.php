@@ -1074,8 +1074,8 @@ function qp_start_practice_session_ajax()
             'subjects'        => isset($_POST['revision_subjects']) ? array_map('absint', $_POST['revision_subjects']) : [],
             'topics'          => isset($_POST['revision_topics']) ? array_map('absint', $_POST['revision_topics']) : [],
             'questions_per'   => isset($_POST['qp_revision_questions_per_topic']) ? absint($_POST['qp_revision_questions_per_topic']) : 10,
-            'marks_correct'   => isset($_POST['qp_marks_correct']) ? floatval($_POST['qp_marks_correct']) : 1.0,
-            'marks_incorrect' => isset($_POST['qp_marks_incorrect']) ? -abs(floatval($_POST['qp_marks_incorrect'])) : 0.0,
+            'marks_correct'    => isset($_POST['scoring_enabled']) ? floatval($_POST['qp_marks_correct']) : null,
+            'marks_incorrect'  => isset($_POST['scoring_enabled']) ? -abs(floatval($_POST['qp_marks_incorrect'])) : null,
             'timer_enabled'   => isset($_POST['qp_timer_enabled']),
             'timer_seconds'   => isset($_POST['qp_timer_seconds']) ? absint($_POST['qp_timer_seconds']) : 60
         ];
@@ -1602,8 +1602,8 @@ function qp_start_revision_session_ajax()
         'topics'              => $topics,
         'questions_per'       => $questions_per_topic,
         'exclude_pyq'         => $exclude_pyq,
-        'marks_correct'       => isset($_POST['qp_marks_correct']) ? floatval($_POST['qp_marks_correct']) : 1.0,
-        'marks_incorrect'     => isset($_POST['qp_marks_incorrect']) ? -abs(floatval($_POST['qp_marks_incorrect'])) : 0.0,
+        'marks_correct'       => isset($_POST['scoring_enabled']) ? floatval($_POST['qp_marks_correct']) : null,
+        'marks_incorrect'     => isset($_POST['scoring_enabled']) ? -abs(floatval($_POST['qp_marks_incorrect'])) : null,
         'timer_enabled'       => isset($_POST['qp_timer_enabled']),
         'timer_seconds'       => isset($_POST['qp_timer_seconds']) ? absint($_POST['qp_timer_seconds']) : 60
     ];
