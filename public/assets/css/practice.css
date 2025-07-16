@@ -181,6 +181,11 @@ body {
     margin-bottom: 1rem;
     padding-bottom: 1rem;
     border-bottom: 1px solid var(--qp-border-color);
+    /* NEW: Make the header a flex container */
+    display: flex;
+    flex-direction: column; /* Stacks stopwatch on top of stats on mobile */
+    align-items: center;
+    gap: 1rem; /* Creates space between stopwatch and stats block */
 }
 
 /* --- New Timer and Indicator Styles --- */
@@ -206,22 +211,22 @@ body {
 }
 
 .qp-header-bottom-row {
-    display: flex;
-    width: auto;
-    justify-content: center;
-    gap: 1.5rem;
+    display: grid; /* Use grid for a clean 2x2 layout */
+    grid-template-columns: 1fr 1fr; /* Two equal columns */
+    width: 100%; /* Take full width of the container */
+    gap: 1rem;
     background-color: var(--qp-bg-light);
     border-radius: var(--qp-radius);
-    padding: 0.75rem 1rem;
-    flex-wrap: wrap;
+    padding: 1rem;
 }
 .qp-header-stat.timer-stat .value {
+    padding-bottom: 0;
     font-size: 20px;
     font-weight: 600;
     color: var(--qp-dark-text);
     letter-spacing: 1px;
 }
-.qp-header-stat {width: auto;}
+.qp-header-stat {width: auto; text-align: center;}
 .qp-header-stat.score .label { font-size: 14px; font-weight: 500; color: var(--qp-light-text); }
 .qp-header-stat.score .value {    color: var(--qp-score-color);}
 .qp-header-stat .value { font-size: 18px; font-weight: 600; }
@@ -640,13 +645,17 @@ ul.qp-review-list li{
         width: auto;
         flex-grow: 1;
     }
-
-    .qp-header-bottom-row {
-        justify-content: space-between; /* Go back to space-between on desktop */
-        flex-wrap: nowrap; /* Prevent wrapping on desktop */
-        padding: 0.75rem 3rem;
+    .qp-header {
+        flex-direction: row; /* Side-by-side on desktop */
+        justify-content: space-between;
     }
 
+    .qp-header-bottom-row {
+        display: flex; /* Back to flexbox for desktop */
+        width: auto;
+        padding: 0.75rem 1.5rem;
+        gap: 2rem;
+    }
     .qp-footer-controls {
         flex-direction: row; /* Back to a row on desktop */
     }
@@ -672,7 +681,7 @@ ul.qp-review-list li{
 .qp-header-stat.skipped { color: var(--qp-skipped-color); }
 .qp-header-stat.timer-stat { display: none; text-align: right; }
 .qp-header-stat.timer-stat .label { color: var(--qp-light-text); }
-.qp-header-stat.timer-stat .value { font-size: 20px; font-weight: 600; color: var(--qp-dark-text); }
+.qp-header-stat.timer-stat .value { font-size: 32px;  font-weight: 600; color: var(--qp-dark-text); }
     
 
     .qp-summary-stats { display: flex; }

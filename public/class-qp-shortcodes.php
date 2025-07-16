@@ -467,10 +467,11 @@ class QP_Shortcodes
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <div class="qp-container qp-practice-wrapper">
             <div class="qp-header">
+                <div class="qp-header-stat timer-stat" id="qp-session-stopwatch">
+                    <span class="value">00:00:00</span>
+                </div>
+
                 <div class="qp-header-bottom-row">
-                    <div class="qp-header-stat timer-stat" id="qp-session-stopwatch">
-                        <span class="value">00:00:00</span>
-                    </div>
                     <div class="qp-header-stat score">
                         <span class="value" id="qp-score">0.00</span>
                         <span class="label">Score</span>
