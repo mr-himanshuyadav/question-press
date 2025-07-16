@@ -754,15 +754,23 @@ class QP_Shortcodes
                     <div class="qp-review-question-item">
                         <div class="qp-review-question-meta">
                             <span><strong>ID: </strong><?php echo esc_html($attempt->custom_question_id); ?></span>
-                            <span><strong>Subject: </strong><?php echo esc_html($attempt->subject_name); ?></span>
+
+                            <!-- CHANGE #2: Modified Subject/Topic Display -->
+                            <span>
+                                <strong>Topic: </strong>
+                                <?php
+                                $topic_display = esc_html($attempt->subject_name);
+                                if (!empty($attempt->topic_name)) {
+                                    $topic_display .= ' / ' . esc_html($attempt->topic_name);
+                                } echo $topic_display;?></span>
                         </div>
                         <?php
                         $user_can_view_source = !empty(array_intersect((array)wp_get_current_user()->roles, (array)($options['show_source_meta_roles'] ?? [])));
                         if ($mode === 'Section Wise Practice' && $user_can_view_source):
                             $source_parts = [];
-                            if ($attempt->source_name) $source_parts[] = '' . esc_html($attempt->source_name);
-                            if ($attempt->topic_name) $source_parts[] = '' . esc_html($attempt->topic_name);
-                            if ($attempt->section_name) $source_parts[] = '' . esc_html($attempt->section_name);
+                            if ($attempt->source_name) $source_parts[] = esc_html($attempt->source_name);
+                            // CHANGE #1: The line for topic_name has been removed from here.
+                            if ($attempt->section_name) $source_parts[] = esc_html($attempt->section_name);
                             if ($attempt->question_number_in_section) $source_parts[] = 'Q. ' . esc_html($attempt->question_number_in_section);
                         ?>
                             <div class="qp-review-source-meta">
