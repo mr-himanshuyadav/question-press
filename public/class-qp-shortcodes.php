@@ -264,7 +264,7 @@ class QP_Shortcodes
                 $total_paused_duration += strtotime($pause->resume_time) - strtotime($pause->pause_time);
             }
         }
-        
+
         $initial_elapsed_time = (strtotime(current_time('mysql')) - strtotime($session_data_from_db->start_time)) - $total_paused_duration;
         $initial_elapsed_time = max(0, $initial_elapsed_time);
 

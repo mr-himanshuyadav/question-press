@@ -745,6 +745,10 @@ jQuery(document).ready(function ($) {
     sessionQuestionIDs = qp_session_data.question_ids;
     sessionSettings = qp_session_data.settings;
     
+    // Conditionally hide the score element if the session is unscored
+    if (sessionSettings.marks_correct === null) {
+        $('.qp-header-stat.score').hide();
+    }
     // Set the initial state for the session stopwatch
     sessionTimeCounter = qp_session_data.initial_elapsed_seconds || 0;
     // Start the one and only master timer
