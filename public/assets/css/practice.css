@@ -333,8 +333,11 @@ body {
     line-height: 1;  /* Ensure proper vertical alignment */
 }
 .qp-footer-nav button { padding: 10px; font-weight: 600; flex: 1; }
-.qp-footer-controls {display: flex;justify-content: space-between;align-items: center; gap: 10px;
-}
+.qp-footer-controls {display: flex;justify-content: space-between;align-items: center; gap: 10px;flex-direction: column;}
+/* New ordering for mobile */
+#qp-report-btn { order: 3; }
+#qp-pause-btn { order: 2; }
+#qp-end-practice-btn { order: 1; }
 .qp-footer-nav button:disabled { background-color: #f0f0f1; border-color: #ffffff00; color: #a7aaad; cursor: not-allowed; }
 #qp-prev-btn { background-color: var(--qp-bg-light); color: var(--qp-dark-text); }/* Unique style for Previous button */
 #qp-prev-btn:disabled { background-color: #f0f0f1; border-color: #ffffff00; color: #a7aaad; cursor: not-allowed; }
@@ -632,6 +635,17 @@ ul.qp-review-list li{
     .qp-action-buttons .qp-button, .qp-action-buttons input.qp-button {
         width: auto;
         flex-grow: 1;
+    }
+
+    .qp-footer-controls {
+        flex-direction: row; /* Back to a row on desktop */
+    }
+
+    /* Reset order for desktop so it follows HTML source */
+    #qp-report-btn,
+    #qp-pause-btn,
+    #qp-end-practice-btn {
+        order: 0;
     }
 
     /* Restore Desktop Header */

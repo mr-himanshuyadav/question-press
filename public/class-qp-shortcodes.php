@@ -485,6 +485,8 @@ class QP_Shortcodes
                     <span>&#9888;</span> Report
                 </button>
 
+                <button id="qp-pause-btn" class="qp-button qp-button-secondary">Pause & Save</button>
+
                 <button id="qp-end-practice-btn" class="qp-button qp-button-danger">End Session</button>
             </div>
         </div>
