@@ -212,7 +212,7 @@ body {
     gap: 1rem;
     background-color: var(--qp-bg-light);
     border-radius: var(--qp-radius);
-    padding: 0.75rem 3rem;
+    padding: 0.75rem 1rem;
 }
 .qp-header-stat {width: auto;}
 .qp-header-stat.score .label { font-size: 14px; font-weight: 500; color: var(--qp-light-text); }
@@ -222,9 +222,6 @@ body {
 .qp-header-stat.correct { color: var(--qp-correct-color); }
 .qp-header-stat.incorrect { color: var(--qp-incorrect-color); }
 .qp-header-stat.skipped { color: var(--qp-skipped-color); }
-.qp-header-stat.timer-stat { display: none; text-align: right; }
-.qp-header-stat.timer-stat .label { color: var(--qp-light-text); }
-.qp-header-stat.timer-stat .value { font-size: 20px; font-weight: 600; color: var(--qp-dark-text); }
 
 
 /* --- Indicator Bar Styles --- */
@@ -799,6 +796,29 @@ ul.qp-review-list li{
 .qp-review-summary .qp-summary-stats {
     margin: 0;
     gap: 0.5rem;
+}
+
+/* Make the main session stopwatch visible */
+.qp-header-stat.timer-stat {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    min-width: 115px;
+}
+.qp-header-stat.timer-stat .label {
+    color: var(--qp-light-text);
+}
+.qp-header-stat.timer-stat .value {
+    font-size: 24px; /* Make it prominent */
+    font-weight: 600;
+    color: var(--qp-dark-text);
+    letter-spacing: 1px;
+}
+
+/* On the review page, give the new stat a unique color */
+.qp-review-summary .qp-summary-stats .stat:nth-child(2) .value {
+    color: #3f51b5; /* Indigo color for time */
 }
 
 .qp-review-topics-list {

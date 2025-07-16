@@ -712,10 +712,14 @@ jQuery(document).ready(function ($) {
   var incorrectCount = 0;
   var skippedCount = 0;
   var questionTimer;
+  var sessionStopwatch;
   var answeredStates = {};
   var practiceInProgress = false;
   var questionCache = {};
   var remainingTime = 0;
+
+
+
 
   // --- NEW: SWIPE GESTURE HANDLING ---
   // Check if we are on the actual practice screen
@@ -732,12 +736,39 @@ jQuery(document).ready(function ($) {
     });
   }
 
+  // Add this new helper function somewhere in the file
+function startSessionStopwatch(initialSeconds) {
+    var totalSeconds = initialSeconds;
+    var stopwatchEl = $('#qp-session-stopwatch .value');
+
+    // Clear any previous interval to be safe
+    clearInterval(sessionStopwatch);
+
+    function updateStopwatch() {
+        totalSeconds++;
+        var hours = Math.floor(totalSeconds / 3600);
+        var minutes = Math.floor((totalSeconds % 3600) / 60);
+        var seconds = totalSeconds % 60;
+        
+        stopwatchEl.text(
+            String(hours).padStart(2, '0') + ':' +
+            String(minutes).padStart(2, '0') + ':' +
+            String(seconds).padStart(2, '0')
+        );
+    }
+    
+    updateStopwatch(); // Display initial time immediately
+    sessionStopwatch = setInterval(updateStopwatch, 1000);
+}
+
+
   // Session Initialization
   if (typeof qp_session_data !== "undefined") {
     practiceInProgress = true;
     sessionID = qp_session_data.session_id;
     sessionQuestionIDs = qp_session_data.question_ids;
     sessionSettings = qp_session_data.settings;
+    startSessionStopwatch(qp_session_data.initial_elapsed_seconds || 0);
 
     // **THE FIX**: Conditionally hide the score element
         if (sessionSettings.practice_mode === 'Incorrect Que. Practice') {
@@ -1437,6 +1468,7 @@ jQuery(document).ready(function ($) {
 
   wrapper.on("click", "#qp-end-practice-btn", function () {
     clearInterval(questionTimer);
+    clearInterval(sessionStopwatch);
 
     // Check if any questions have been answered.
     if (correctCount === 0 && incorrectCount === 0) {
@@ -1500,6 +1532,7 @@ jQuery(document).ready(function ($) {
 
   wrapper.on('click', '#qp-pause-btn', function() {
         if (confirm('Are you sure you want to pause this session? You can resume it later from your dashboard.')) {
+            clearInterval(sessionStopwatch);
             practiceInProgress = false; // Prevent the "are you sure?" popup on redirect
 
             $.ajax({

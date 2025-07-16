@@ -197,6 +197,8 @@ class QP_Shortcodes
                 </div>';
         }
 
+
+
         // --- Handle Resuming a Paused Session ---
         if ($session_data_from_db->status === 'paused') {
             // Find the last open pause record for this session
@@ -241,11 +243,29 @@ class QP_Shortcodes
             return '<div id="qp-practice-app-wrapper">' . self::render_summary_ui($summary_data, $session_id, $session_settings) . '</div>';
         }
 
+        // --- Calculate Initial Elapsed Active Time for the Stopwatch ---
+        $pauses = $wpdb->get_results($wpdb->prepare(
+            "SELECT pause_time, resume_time FROM {$pauses_table} WHERE session_id = %d",
+            $session_id
+        ));
+
+        $total_paused_duration = 0;
+        foreach ($pauses as $pause) {
+            // Only count completed pause intervals
+            if ($pause->resume_time) {
+                $total_paused_duration += strtotime($pause->resume_time) - strtotime($pause->pause_time);
+            }
+        }
+        
+        $initial_elapsed_time = (strtotime(current_time('mysql')) - strtotime($session_data_from_db->start_time)) - $total_paused_duration;
+        $initial_elapsed_time = max(0, $initial_elapsed_time);
+
         // --- If the session is active, proceed as normal ---
         $session_data = [
             'session_id'    => $session_id,
             'question_ids'  => json_decode($session_data_from_db->question_ids_snapshot, true),
-            'settings'      => json_decode($session_data_from_db->settings_snapshot, true)
+            'settings'      => json_decode($session_data_from_db->settings_snapshot, true),
+            'initial_elapsed_seconds' => $initial_elapsed_time, // Pass to JS
         ];
 
         $attempt_history = $wpdb->get_results($wpdb->prepare(
@@ -294,9 +314,13 @@ class QP_Shortcodes
             <h2>Session Summary</h2>
 
             <?php if ($is_scored_session) : ?>
-                <div class="qp-summary-score"><div class="label">Final Score</div><?php echo number_format($summaryData['final_score'], 2); ?></div>
+                <div class="qp-summary-score">
+                    <div class="label">Final Score</div><?php echo number_format($summaryData['final_score'], 2); ?>
+                </div>
             <?php else : ?>
-                <div class="qp-summary-score"><div class="label">Accuracy</div><?php echo round($accuracy, 2); ?>%</div>
+                <div class="qp-summary-score">
+                    <div class="label">Accuracy</div><?php echo round($accuracy, 2); ?>%
+                </div>
             <?php endif; ?>
 
             <div class="qp-summary-stats">
@@ -312,7 +336,7 @@ class QP_Shortcodes
                     <div class="value"><?php echo (int)$summaryData['skipped_count']; ?></div>
                     <div class="label">Skipped</div>
                 </div>
-                 <div class="stat accuracy">
+                <div class="stat accuracy">
                     <div class="value"><?php echo round($accuracy, 2); ?>%</div>
                     <div class="label">Accuracy</div>
                 </div>
@@ -444,6 +468,9 @@ class QP_Shortcodes
         <div class="qp-container qp-practice-wrapper">
             <div class="qp-header">
                 <div class="qp-header-bottom-row">
+                    <div class="qp-header-stat timer-stat" id="qp-session-stopwatch">
+                        <span class="value">00:00:00</span>
+                    </div>
                     <div class="qp-header-stat score">
                         <span class="value" id="qp-score">0.00</span>
                         <span class="label">Score</span>
@@ -577,8 +604,15 @@ class QP_Shortcodes
         $marks_incorrect = $settings['marks_incorrect'] ?? 0;
 
         $accuracy = ($session->total_attempted > 0) ? ($session->correct_count / $session->total_attempted) * 100 : 0;
+        // --- Calculate Average Time Per Question ---
+        $avg_time_per_question = 'N/A';
+        if ($session->total_attempted > 0 && isset($session->total_active_seconds)) {
+            $avg_seconds = round($session->total_active_seconds / $session->total_attempted);
+            // Format seconds into H:i:s
+            $avg_time_per_question = sprintf('%02d:%02d', floor($avg_seconds / 60), $avg_seconds % 60);
+        }
 
-                // NEW: Get all unique topics for this session's questions
+        // NEW: Get all unique topics for this session's questions
         $session_question_ids = json_decode($session->question_ids_snapshot);
         // NEW: Get all unique topics for the questions ATTEMPTED in this session
         $topics_in_session = $wpdb->get_col($wpdb->prepare("
@@ -611,19 +645,19 @@ class QP_Shortcodes
         ));
 
         ob_start();
-    // --- Determine Session Mode ---
-    $mode = 'Practice'; // Default
-    if (isset($settings['practice_mode'])) {
-        if ($settings['practice_mode'] === 'revision') {
-            $mode = 'Revision';
-        } elseif ($settings['practice_mode'] === 'Incorrect Que. Practice') {
-            $mode = 'Incorrect Attempt Practice';
-        } elseif ($settings['practice_mode'] === 'Section Wise Practice') {
-            $mode = 'Section Wise Practice';
+        // --- Determine Session Mode ---
+        $mode = 'Practice'; // Default
+        if (isset($settings['practice_mode'])) {
+            if ($settings['practice_mode'] === 'revision') {
+                $mode = 'Revision';
+            } elseif ($settings['practice_mode'] === 'Incorrect Que. Practice') {
+                $mode = 'Incorrect Attempt Practice';
+            } elseif ($settings['practice_mode'] === 'Section Wise Practice') {
+                $mode = 'Section Wise Practice';
+            }
+        } elseif (isset($settings['subject_id']) && $settings['subject_id'] === 'review') {
+            $mode = 'Review';
         }
-    } elseif (isset($settings['subject_id']) && $settings['subject_id'] === 'review') {
-        $mode = 'Review';
-    }
     ?>
         <div class="qp-container qp-review-wrapper">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
@@ -638,12 +672,17 @@ class QP_Shortcodes
 
             <div class="qp-summary-wrapper qp-review-summary">
                 <div class="qp-summary-stats">
-                    <?php if (isset($settings['marks_correct'])): // Check if it's a scored session ?>
-                    <div class="stat">
-                        <div class="value"><?php echo number_format($session->marks_obtained, 2); ?></div>
-                        <div class="label">Final Score</div>
-                    </div>
+                    <?php if (isset($settings['marks_correct'])): // Check if it's a scored session 
+                    ?>
+                        <div class="stat">
+                            <div class="value"><?php echo number_format($session->marks_obtained, 2); ?></div>
+                            <div class="label">Final Score</div>
+                        </div>
                     <?php endif; ?>
+                    <div class="stat">
+                        <div class="value"><?php echo esc_html($avg_time_per_question); ?></div>
+                        <div class="label">Avg. Time / Q</div>
+                    </div>
                     <div class="stat accuracy">
                         <div class="value"><?php echo round($accuracy, 2); ?>%</div>
                         <div class="label">Accuracy</div>
@@ -662,9 +701,9 @@ class QP_Shortcodes
                     </div>
                 </div>
                 <?php if (!empty($topics_in_session)): ?>
-                <div class="qp-review-topics-list">
-                    <strong>Topics in this session:</strong> <?php echo implode(', ', array_map('esc_html', $topics_in_session)); ?>
-                </div>
+                    <div class="qp-review-topics-list">
+                        <strong>Topics in this session:</strong> <?php echo implode(', ', array_map('esc_html', $topics_in_session)); ?>
+                    </div>
                 <?php endif; ?>
             </div>
 
@@ -678,9 +717,9 @@ class QP_Shortcodes
                             <span><strong>ID: </strong><?php echo esc_html($attempt->custom_question_id); ?></span>
                             <span><strong>Subject: </strong><?php echo esc_html($attempt->subject_name); ?></span>
                         </div>
-                        <?php 
+                        <?php
                         $user_can_view_source = !empty(array_intersect((array)wp_get_current_user()->roles, (array)($options['show_source_meta_roles'] ?? [])));
-                        if ($mode === 'Section Wise Practice' && $user_can_view_source): 
+                        if ($mode === 'Section Wise Practice' && $user_can_view_source):
                             $source_parts = [];
                             if ($attempt->source_name) $source_parts[] = '' . esc_html($attempt->source_name);
                             if ($attempt->topic_name) $source_parts[] = '' . esc_html($attempt->topic_name);
@@ -696,7 +735,7 @@ class QP_Shortcodes
                                 <?php echo wp_kses_post(nl2br($attempt->direction_text)); ?>
                             </div>
                         <?php endif; ?>
-                        
+
                         <div class="qp-review-question-text">
                             <strong>Q<?php echo $index + 1; ?>:</strong> <?php echo wp_kses_post(nl2br($attempt->question_text)); ?>
                         </div>
