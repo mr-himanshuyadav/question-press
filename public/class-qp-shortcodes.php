@@ -135,14 +135,22 @@ class QP_Shortcodes
                 <input type="number" name="qp_revision_questions_per_topic" id="qp_revision_questions_per_topic" value="2" min="1">
             </div>
 
-            <div class="qp-form-group qp-marks-group">
+            <div class="qp-form-group">
+                <label class="qp-custom-checkbox">
+                    <input type="checkbox" name="scoring_enabled" id="qp_revision_scoring_enabled_cb">
+                    <span></span>
+                    Enable Scoring
+                </label>
+            </div>
+
+            <div class="qp-form-group qp-marks-group" id="qp-revision-marks-group-wrapper" style="display: none;">
                 <div>
                     <label for="qp_revision_marks_correct">Marks for Correct Answer:</label>
-                    <input type="number" name="qp_marks_correct" id="qp_revision_marks_correct" value="4" step="0.01" required>
+                    <input type="number" name="qp_marks_correct" id="qp_revision_marks_correct" value="4" step="0.01">
                 </div>
                 <div>
                     <label for="qp_revision_marks_incorrect">Penalty for Incorrect Answer:</label>
-                    <input type="number" name="qp_marks_incorrect" id="qp_revision_marks_incorrect" value="1" step="0.01" min="0" required>
+                    <input type="number" name="qp_marks_incorrect" id="qp_revision_marks_incorrect" value="1" step="0.01" min="0">
                 </div>
             </div>
 
@@ -428,14 +436,22 @@ class QP_Shortcodes
                     <p><strong>Revision Mode:</strong> Previously answered questions will reappear in your session.</p>
                 </div>
 
-                <div class="qp-form-group qp-marks-group" style="display: flex; flex-direction: row; justify-content: space-between;">
+                <div class="qp-form-group">
+                    <label class="qp-custom-checkbox">
+                        <input type="checkbox" name="scoring_enabled" id="qp_scoring_enabled_cb">
+                        <span></span>
+                        Enable Scoring
+                    </label>
+                </div>
+
+                <div class="qp-marks-group" id="qp-marks-group-wrapper" style="display: none;">
                     <div style="width: 48%">
                         <label for="qp_marks_correct">Correct Marks:</label>
-                        <input type="number" name="qp_marks_correct" id="qp_marks_correct" value="4" step="0.01" required>
+                        <input type="number" name="qp_marks_correct" id="qp_marks_correct" value="4" step="0.01">
                     </div>
                     <div style="width: 48%">
                         <label for="qp_marks_incorrect">Negative Marks:</label>
-                        <input type="number" name="qp_marks_incorrect" id="qp_marks_incorrect" value="1" step="0.01" min="0" required>
+                        <input type="number" name="qp_marks_incorrect" id="qp_marks_incorrect" value="1" step="0.01" min="0">
                     </div>
                 </div>
 
