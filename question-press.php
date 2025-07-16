@@ -1742,6 +1742,7 @@ function qp_end_practice_session_ajax()
     global $wpdb;
     $sessions_table = $wpdb->prefix . 'qp_user_sessions';
     $attempts_table = $wpdb->prefix . 'qp_user_attempts';
+    $pauses_table = $wpdb->prefix . 'qp_session_pauses';
 
     // Get session settings to calculate score
     $session = $wpdb->get_row($wpdb->prepare("SELECT * FROM $sessions_table WHERE session_id = %d", $session_id));
@@ -1758,12 +1759,35 @@ function qp_end_practice_session_ajax()
     // Calculate final score
     $final_score = ($correct_count * $marks_correct) + ($incorrect_count * $marks_incorrect);
 
+    // --- Calculate Total Active Time ---
+    $end_time = current_time('mysql', 1); // Use GMT time for calculation
+    $start_time = $session->start_time;
+
+    // Get all pause records for this session
+    $pause_records = $wpdb->get_results($wpdb->prepare(
+        "SELECT pause_time, resume_time FROM {$pauses_table} WHERE session_id = %d",
+        $session_id
+    ));
+
+    $total_pause_duration = 0;
+    foreach ($pause_records as $pause) {
+        // If a pause record is not yet resumed (e.g., user ended session while paused), treat 'now' as resume time
+        $resume_time = $pause->resume_time ?? $end_time;
+        $total_pause_duration += strtotime($resume_time) - strtotime($pause->pause_time);
+    }
+
+    $total_session_duration = strtotime($end_time) - strtotime($start_time);
+    $total_active_seconds = $total_session_duration - $total_pause_duration;
+    // Ensure active time is not negative
+    $total_active_seconds = max(0, $total_active_seconds);
+
     // Update the session in the database with the final stats
     $wpdb->update(
         $sessions_table,
         [
             'end_time' => current_time('mysql'),
             'status' => 'completed',
+            'total_active_seconds' => $total_active_seconds,
             'total_attempted' => $total_attempted,
             'correct_count' => $correct_count,
             'incorrect_count' => $incorrect_count,
