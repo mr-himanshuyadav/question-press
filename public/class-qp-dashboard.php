@@ -251,22 +251,54 @@ class QP_Dashboard
                 $mode = 'Review';
             }
 
-            $session_subjects = [];
-            if (is_array($session_qids)) {
-                foreach ($session_qids as $qid) {
-                    if (isset($subjects_by_question[$qid])) {
-                        $session_subjects[$subjects_by_question[$qid]] = true;
+            // ** MODIFICATION START **
+            $subjects_display = 'N/A';
+            if (isset($settings['practice_mode']) && $settings['practice_mode'] === 'Section Wise Practice' && !empty($settings['section_id'])) {
+                // For Section Wise Practice, build the specific "Source / Topic / Section" string
+                $section_id = absint($settings['section_id']);
+                $topic_id = !empty($settings['topics']) ? absint($settings['topics'][0]) : 0;
+
+                // Fetch the names from the database
+                $section_info = $wpdb->get_row($wpdb->prepare(
+                    "SELECT sec.section_name, src.source_name
+                     FROM {$wpdb->prefix}qp_source_sections sec
+                     JOIN {$wpdb->prefix}qp_sources src ON sec.source_id = src.source_id
+                     WHERE sec.section_id = %d",
+                    $section_id
+                ));
+
+                $topic_name = $wpdb->get_var($wpdb->prepare("SELECT topic_name FROM {$wpdb->prefix}qp_topics WHERE topic_id = %d", $topic_id));
+
+                $display_parts = [];
+                if ($section_info && $section_info->source_name) $display_parts[] = esc_html($section_info->source_name);
+                if ($topic_name) $display_parts[] = esc_html($topic_name);
+                if ($section_info && $section_info->section_name) $display_parts[] = esc_html($section_info->section_name);
+
+                if (!empty($display_parts)) {
+                    $subjects_display = implode(' / ', $display_parts);
+                }
+
+            } else {
+                // Original logic for all other modes
+                $session_subjects = [];
+                if (is_array($session_qids)) {
+                    foreach ($session_qids as $qid) {
+                        if (isset($subjects_by_question[$qid])) {
+                            $session_subjects[$subjects_by_question[$qid]] = true;
+                        }
                     }
                 }
+                if (!empty($session_subjects)) {
+                    $subjects_display = implode(', ', array_keys($session_subjects));
+                }
             }
-            $subjects_display = !empty($session_subjects) ? implode(', ', array_keys($session_subjects)) : 'N/A';
 
             $accuracy = ($session->total_attempted > 0) ? round(($session->correct_count / $session->total_attempted) * 100, 2) . '%' : 'N/A';
 
             echo '<tr>
                 <td data-label="Date">' . date_format(date_create($session->start_time), 'M j, Y, g:i a') . '</td>
                 <td data-label="Mode">' . esc_html($mode) . '</td>
-                <td data-label="Subjects">' . esc_html($subjects_display) . '</td>
+                <td data-label="Subjects">' . $subjects_display . '</td>
                 <td data-label="Accuracy"><strong>' . $accuracy . '</strong></td>
                 <td data-label="Actions">';
                     // Conditionally show "Resume" or "Review" button based on the status.
