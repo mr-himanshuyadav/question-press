@@ -1133,8 +1133,8 @@ function qp_start_practice_session_ajax()
             'section_id'       => $section_id,
             'pyq_only'         => isset($_POST['qp_pyq_only']),
             'include_attempted' => isset($_POST['qp_include_attempted']),
-            'marks_correct'    => isset($_POST['qp_marks_correct']) ? floatval($_POST['qp_marks_correct']) : 4.0,
-            'marks_incorrect'  => isset($_POST['qp_marks_incorrect']) ? -abs(floatval($_POST['qp_marks_incorrect'])) : -1.0,
+            'marks_correct'    => isset($_POST['scoring_enabled']) ? floatval($_POST['qp_marks_correct']) : null,
+            'marks_incorrect'  => isset($_POST['scoring_enabled']) ? -abs(floatval($_POST['qp_marks_incorrect'])) : null,
             'timer_enabled'    => isset($_POST['qp_timer_enabled']),
             'timer_seconds'    => isset($_POST['qp_timer_seconds']) ? absint($_POST['qp_timer_seconds']) : 60
         ];

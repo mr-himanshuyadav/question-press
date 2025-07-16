@@ -827,17 +827,24 @@ jQuery(document).ready(function ($) {
     }
   }
 
-  // --- NEW: Optional Scoring UI Toggle ---
-    wrapper.on('change', '#qp_scoring_enabled_cb, #qp_revision_scoring_enabled_cb', function() {
-        var isChecked = $(this).is(':checked');
-        var marksWrapperId = '#' + $(this).closest('form').find('.qp-marks-group').attr('id');
+  // --- Optional Scoring UI Toggle ---
+wrapper.on('change', '#qp_scoring_enabled_cb, #qp_revision_scoring_enabled_cb', function() {
+    var isChecked = $(this).is(':checked');
+    // Find the wrapper for the marks inputs within the same form
+    var marksWrapper = $(this).closest('form').find('.qp-marks-group');
 
-        if (isChecked) {
-            $(marksWrapperId).slideDown();
-        } else {
-            $(marksWrapperId).slideUp();
-        }
-    });
+    if (isChecked) {
+        marksWrapper.slideDown();
+        // **MODIFICATION START**: Re-enable the inputs when shown
+        marksWrapper.find('input').prop('disabled', false);
+        // **MODIFICATION END**
+    } else {
+        marksWrapper.slideUp();
+        // **MODIFICATION START**: Disable the inputs when hidden
+        marksWrapper.find('input').prop('disabled', true);
+        // **MODIFICATION END**
+    }
+});
 
   // Logic for the timer checkbox on the settings form
   wrapper.on("change", "#qp_timer_enabled_cb", function () {
