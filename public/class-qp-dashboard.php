@@ -155,7 +155,7 @@ class QP_Dashboard
 
     // --- RESTORED: Fetch Active Sessions ---
     $active_sessions = $wpdb->get_results($wpdb->prepare("SELECT * FROM $sessions_table WHERE user_id = %d AND status = 'active' ORDER BY start_time DESC", $user_id));
-    $session_history = $wpdb->get_results($wpdb->prepare("SELECT * FROM $sessions_table WHERE user_id = %d AND status IN ('completed', 'abandoned') ORDER BY start_time DESC", $user_id));
+    $session_history = $wpdb->get_results($wpdb->prepare("SELECT * FROM $sessions_table WHERE user_id = %d AND status IN ('completed', 'abandoned', 'paused') ORDER BY start_time DESC", $user_id));
 
     // Pre-fetch all subjects for all questions in the user's history to optimize queries
     $all_session_qids = [];
@@ -235,8 +235,11 @@ class QP_Dashboard
             $settings = json_decode($session->settings_snapshot, true);
             $session_qids = json_decode($session->question_ids_snapshot, true);
 
+            // Determine the mode, adding a case for our new 'paused' status.
             $mode = 'Practice'; // Default
-            if (isset($settings['practice_mode'])) {
+            if ($session->status === 'paused') {
+                $mode = 'Paused';
+            } elseif (isset($settings['practice_mode'])) {
                 if ($settings['practice_mode'] === 'revision') {
                     $mode = 'Revision';
                 } elseif ($settings['practice_mode'] === 'Incorrect Que. Practice') {
@@ -265,8 +268,15 @@ class QP_Dashboard
                 <td data-label="Mode">' . esc_html($mode) . '</td>
                 <td data-label="Subjects">' . esc_html($subjects_display) . '</td>
                 <td data-label="Accuracy"><strong>' . $accuracy . '</strong></td>
-                <td data-label="Actions">
-                    <a href="' . esc_url(add_query_arg('session_id', $session->session_id, $review_page_url)) . '" class="qp-button qp-button-secondary" style="padding: 4px 8px; font-size: 12px; text-decoration: none;">Review</a>';
+                <td data-label="Actions">';
+                    // Conditionally show "Resume" or "Review" button based on the status.
+            if ($session->status === 'paused') {
+                // For paused sessions, the primary action is to Resume. It links to the session page.
+                echo '<a href="' . esc_url(add_query_arg('session_id', $session->session_id, $session_page_url)) . '" class="qp-button qp-button-primary" style="padding: 4px 8px; font-size: 12px; text-decoration: none;">Resume</a>';
+            } else {
+                // For completed/abandoned sessions, the action is to Review.
+                echo '<a href="' . esc_url(add_query_arg('session_id', $session->session_id, $review_page_url)) . '" class="qp-button qp-button-secondary" style="padding: 4px 8px; font-size: 12px; text-decoration: none;">Review</a>';
+            }
             if ($can_delete) {
                 echo '<button class="qp-delete-session-btn" data-session-id="' . esc_attr($session->session_id) . '">Delete</button>';
             }
