@@ -2766,6 +2766,46 @@ function qp_terminate_session_ajax()
 }
 add_action('wp_ajax_qp_terminate_session', 'qp_terminate_session_ajax');
 
+/**
+ * AJAX handler to pause a session.
+ */
+function qp_pause_session_ajax() {
+    check_ajax_referer('qp_practice_nonce', 'nonce');
+
+    if (!is_user_logged_in()) {
+        wp_send_json_error(['message' => 'You must be logged in.']);
+    }
+
+    $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
+    $user_id = get_current_user_id();
+
+    if (!$session_id) {
+        wp_send_json_error(['message' => 'Invalid session ID.']);
+    }
+
+    global $wpdb;
+    $sessions_table = $wpdb->prefix . 'qp_user_sessions';
+
+    // Security check: ensure the session belongs to the current user
+    $session_owner = $wpdb->get_var($wpdb->prepare("SELECT user_id FROM $sessions_table WHERE session_id = %d", $session_id));
+    if ((int)$session_owner !== $user_id) {
+        wp_send_json_error(['message' => 'Permission denied.']);
+    }
+
+    // Update the session status to 'paused' and update the activity time
+    $wpdb->update(
+        $sessions_table,
+        [
+            'status' => 'paused',
+            'last_activity' => current_time('mysql')
+        ],
+        ['session_id' => $session_id]
+    );
+
+    wp_send_json_success(['message' => 'Session paused successfully.']);
+}
+add_action('wp_ajax_qp_pause_session', 'qp_pause_session_ajax');
+
 
 function qp_handle_log_settings_forms()
 {
