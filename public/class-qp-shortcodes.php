@@ -191,6 +191,28 @@ class QP_Shortcodes
 
         // **THE FIX**: This is the new, simplified error handling logic.
         if (!$session_data_from_db || (int)$session_data_from_db->user_id !== $user_id) {
+            // --- NEW: Handle sessions that are paused after the last question is answered ---
+            $question_ids = json_decode($session_data_from_db->question_ids_snapshot, true);
+            $attempts_table = $wpdb->prefix . 'qp_user_attempts';
+            $attempt_count = $wpdb->get_var($wpdb->prepare(
+                "SELECT COUNT(DISTINCT question_id) FROM {$attempts_table} WHERE session_id = %d",
+                $session_id
+            ));
+
+            if ($session_data_from_db->status !== 'completed' && count($question_ids) > 0 && $attempt_count >= count($question_ids)) {
+                // If all questions have been attempted but the session isn't marked as 'completed',
+                // it means the user paused on the very last question. Treat it as completed.
+                $summary_data = [
+                    'final_score' => $session_data_from_db->marks_obtained,
+                    'total_attempted' => $session_data_from_db->total_attempted,
+                    'correct_count' => $session_data_from_db->correct_count,
+                    'incorrect_count' => $session_data_from_db->incorrect_count,
+                    'skipped_count' => $session_data_from_db->skipped_count,
+                ];
+                $session_settings = json_decode($session_data_from_db->settings_snapshot, true);
+                // Force the summary UI to render, preventing the user from getting stuck.
+                return '<div id="qp-practice-app-wrapper">' . self::render_summary_ui($summary_data, $session_id, $session_settings) . '</div>';
+            }
             $options = get_option('qp_settings');
             $dashboard_page_url = isset($options['dashboard_page']) ? get_permalink($options['dashboard_page']) : home_url('/');
             $accuracy = 0;
@@ -540,7 +562,7 @@ class QP_Shortcodes
                             <input type="checkbox" id="qp-mark-for-review-cb">
                             <span>Mark for Review</span>
                         </label>
-
+                        <button id="qp-check-answer-btn" class="qp-button qp-button-primary" disabled>Check Answer</button>
                     </div>
 
                 </div>

@@ -749,13 +749,13 @@ jQuery(document).ready(function ($) {
 
     // Conditionally hide the score element if the session is unscored
     if (sessionSettings.marks_correct === null) {
-        $('.qp-header-stat.score').hide();
+      $(".qp-header-stat.score").hide();
     }
 
     // **THE FIX**: Conditionally hide the score element
-        if (sessionSettings.practice_mode === 'Incorrect Que. Practice') {
-            $('.qp-header-stat.score').hide();
-        }
+    if (sessionSettings.practice_mode === "Incorrect Que. Practice") {
+      $(".qp-header-stat.score").hide();
+    }
     if (sessionSettings.practice_mode === "revision") {
       $(".qp-question-counter-box").show();
     }
@@ -803,9 +803,11 @@ jQuery(document).ready(function ($) {
           }
         }
       }
-      currentQuestionIndex =
-        lastAttemptedIndex >= 0 ? lastAttemptedIndex + 1 : 0;
-      highestQuestionIndexReached = currentQuestionIndex;
+      var potentialIndex = lastAttemptedIndex >= 0 ? lastAttemptedIndex + 1 : 0;
+      currentQuestionIndex = Math.min(
+        potentialIndex,
+        sessionQuestionIDs.length - 1
+      );
     }
 
     if (
@@ -829,24 +831,28 @@ jQuery(document).ready(function ($) {
     }
   }
 
-   // --- Optional Scoring UI Toggle ---
-wrapper.on('change', '#qp_scoring_enabled_cb, #qp_revision_scoring_enabled_cb', function() {
-    var isChecked = $(this).is(':checked');
-    // Find the wrapper for the marks inputs within the same form
-    var marksWrapper = $(this).closest('form').find('.qp-marks-group');
+  // --- Optional Scoring UI Toggle ---
+  wrapper.on(
+    "change",
+    "#qp_scoring_enabled_cb, #qp_revision_scoring_enabled_cb",
+    function () {
+      var isChecked = $(this).is(":checked");
+      // Find the wrapper for the marks inputs within the same form
+      var marksWrapper = $(this).closest("form").find(".qp-marks-group");
 
-    if (isChecked) {
+      if (isChecked) {
         marksWrapper.slideDown();
         // **MODIFICATION START**: Re-enable the inputs when shown
-        marksWrapper.find('input').prop('disabled', false);
+        marksWrapper.find("input").prop("disabled", false);
         // **MODIFICATION END**
-    } else {
+      } else {
         marksWrapper.slideUp();
         // **MODIFICATION START**: Disable the inputs when hidden
-        marksWrapper.find('input').prop('disabled', true);
+        marksWrapper.find("input").prop("disabled", true);
         // **MODIFICATION END**
+      }
     }
-});
+  );
 
   // Logic for the timer checkbox on the settings form
   wrapper.on("change", "#qp_timer_enabled_cb", function () {
@@ -1038,10 +1044,11 @@ wrapper.on('change', '#qp_scoring_enabled_cb, #qp_revision_scoring_enabled_cb', 
     var optionsArea = $(".qp-options-area").empty().removeClass("disabled");
     $("#qp-skip-btn, #qp-report-btn").prop("disabled", false);
     $("#qp-next-btn").prop("disabled", true);
+    $("#qp-check-answer-btn").prop("disabled", true);
 
     // 2. Render all static content
     var indicatorBar = $(".qp-indicator-bar").hide(); // Hide the bar by default
-    optionsArea.data('correct-option-id', data.correct_option_id); 
+    optionsArea.data("correct-option-id", data.correct_option_id);
     // Only show the revision indicator if it's a revision question AND it hasn't been answered in this session yet
     if (data.is_revision && !previousState.answered_in_session) {
       $("#qp-revision-indicator").show();
@@ -1052,8 +1059,8 @@ wrapper.on('change', '#qp_scoring_enabled_cb, #qp_revision_scoring_enabled_cb', 
     var directionEl = $(".qp-direction").empty();
     if (questionData.direction_text || questionData.direction_image_url) {
       if (questionData.direction_text) {
-    directionEl.html($("<p>").html(questionData.direction_text));
-}
+        directionEl.html($("<p>").html(questionData.direction_text));
+      }
       if (questionData.direction_image_url)
         directionEl.append(
           $("<img>")
@@ -1095,12 +1102,14 @@ wrapper.on('change', '#qp_scoring_enabled_cb, #qp_revision_scoring_enabled_cb', 
     $("#qp-question-text-area").html(questionData.question_text);
 
     $.each(questionData.options, function (index, option) {
-    optionsArea.append(
+      optionsArea.append(
         $('<label class="option"></label>')
-            .append($('<input type="radio" name="qp_option">').val(option.option_id))
-            .append($("<span>").html(option.option_text)) // This is the line to check
-    );
-});
+          .append(
+            $('<input type="radio" name="qp_option">').val(option.option_id)
+          )
+          .append($("<span>").html(option.option_text)) // This is the line to check
+      );
+    });
 
     // 3. Apply State-Based UI
     var isReported = previousState.reported;
@@ -1224,20 +1233,24 @@ wrapper.on('change', '#qp_scoring_enabled_cb, #qp_revision_scoring_enabled_cb', 
   }
 
   function loadNextQuestion() {
-    currentQuestionIndex++;
-    if (currentQuestionIndex >= sessionQuestionIDs.length) {
-      practiceInProgress = false;
+    // First, check if we are ALREADY on the last question.
+    if (currentQuestionIndex >= sessionQuestionIDs.length - 1) {
       clearInterval(questionTimer);
-      currentQuestionIndex--;
+      // If so, ask the user if they want to finish.
       if (
         confirm(
           "Congratulations, you've completed all available questions! Click OK to end this session and see your summary."
         )
       ) {
+        practiceInProgress = false; // It's now safe to allow the page to be left
         $("#qp-end-practice-btn").click();
       }
+      // If the user clicks "Cancel", we simply do nothing. They remain on the last question, and the UI is still responsive.
       return;
     }
+
+    // If we are not on the last question, it's safe to increment the index and load the next question.
+    currentQuestionIndex++;
     loadQuestion(sessionQuestionIDs[currentQuestionIndex], "next");
   }
 
@@ -1292,14 +1305,22 @@ wrapper.on('change', '#qp_scoring_enabled_cb, #qp_revision_scoring_enabled_cb', 
     practiceInProgress = false;
 
     // --- Conditionally build the main score/accuracy display ---
-    var mainDisplayHtml = '';
-    var isScoredSession = summaryData.settings && typeof summaryData.settings.marks_correct !== 'undefined';
+    var mainDisplayHtml = "";
+    var isScoredSession =
+      summaryData.settings && summaryData.settings.marks_correct !== null;
 
     if (isScoredSession) {
-        mainDisplayHtml = `<div class="qp-summary-score"><div class="label">Final Score</div>${parseFloat(summaryData.final_score).toFixed(2)}</div>`;
+      mainDisplayHtml = `<div class="qp-summary-score"><div class="label">Final Score</div>${parseFloat(
+        summaryData.final_score
+      ).toFixed(2)}</div>`;
     } else {
-        var accuracy = (summaryData.total_attempted > 0) ? (summaryData.correct_count / summaryData.total_attempted) * 100 : 0;
-        mainDisplayHtml = `<div class="qp-summary-score"><div class="label">Accuracy</div>${accuracy.toFixed(2)}%</div>`;
+      var accuracy =
+        summaryData.total_attempted > 0
+          ? (summaryData.correct_count / summaryData.total_attempted) * 100
+          : 0;
+      mainDisplayHtml = `<div class="qp-summary-score"><div class="label">Accuracy</div>${accuracy.toFixed(
+        2
+      )}%</div>`;
     }
 
     // --- Build the action buttons ---
@@ -1307,12 +1328,12 @@ wrapper.on('change', '#qp_scoring_enabled_cb, #qp_revision_scoring_enabled_cb', 
 
     // **THE FIX**: Only create the "View Summary" button if the URL exists
     if (qp_ajax_object.review_page_url) {
-        var reviewUrl = new URL(qp_ajax_object.review_page_url);
-        reviewUrl.searchParams.set('session_id', sessionID);
-        actionButtonsHtml += `<a href="${reviewUrl.href}" class="qp-button qp-button-primary">Review Session</a>`;
+      var reviewUrl = new URL(qp_ajax_object.review_page_url);
+      reviewUrl.searchParams.set("session_id", sessionID);
+      actionButtonsHtml += `<a href="${reviewUrl.href}" class="qp-button qp-button-primary">Review Session</a>`;
     } else {
-        // Fallback if the review page isn't set
-        actionButtonsHtml += `<a href="${qp_ajax_object.practice_page_url}" class="qp-button qp-button-primary">Start Another Practice</a>`;
+      // Fallback if the review page isn't set
+      actionButtonsHtml += `<a href="${qp_ajax_object.practice_page_url}" class="qp-button qp-button-primary">Start Another Practice</a>`;
     }
 
     // --- Build the final HTML ---
@@ -1330,70 +1351,101 @@ wrapper.on('change', '#qp_scoring_enabled_cb, #qp_revision_scoring_enabled_cb', 
               ${actionButtonsHtml}
           </div>
       </div>`;
-      
+
     wrapper.html(summaryHtml);
   }
-  // Handles clicking an answer option
-  // Handles clicking an answer option with INSTANT FEEDBACK
-  wrapper.on("click", ".qp-options-area .option", function () {
+  
+  
+  // Handles clicking an answer option to select it
+wrapper.on("click", ".qp-options-area .option", function () {
     var selectedOption = $(this);
     var optionsArea = selectedOption.closest(".qp-options-area");
 
+    // Do nothing if the question has already been answered
     if (optionsArea.hasClass("disabled")) {
-      return; // Prevent multiple clicks
+        return;
     }
+
+    // Update visual selection
+    optionsArea.find('.option').removeClass('selected');
+    selectedOption.addClass('selected');
+    selectedOption.find('input[type="radio"]').prop('checked', true);
+
+    // Enable the "Check Answer" button now that an option is selected
+    $('#qp-check-answer-btn').prop('disabled', false);
+});
+
+// Handles the "Check Answer" button click
+wrapper.on('click', '#qp-check-answer-btn', function() {
+    var checkButton = $(this);
+    var optionsArea = $('.qp-options-area');
+    var selectedOption = optionsArea.find('.option.selected');
+
+    // Do nothing if no option is selected or if it's already answered
+    if (!selectedOption.length || optionsArea.hasClass('disabled')) {
+        return;
+    }
+
+    // --- This is the logic moved from the old instant-feedback handler ---
+
+    // Lock the UI
     optionsArea.addClass("disabled");
-    
-    // --- INSTANT FEEDBACK LOGIC ---
+    checkButton.prop('disabled', true);
+    $("#qp-skip-btn").prop('disabled', true);
+
+    // Stop the timer
     clearInterval(questionTimer);
+
+    // Get all necessary data
     var questionID = sessionQuestionIDs[currentQuestionIndex];
     var selectedOptionId = selectedOption.find('input[type="radio"]').val();
     var correctOptionId = optionsArea.data('correct-option-id');
     var isCorrect = selectedOptionId == correctOptionId;
 
-    // Instantly apply visual feedback
+    // Remove temporary selection style and apply final feedback style
+    selectedOption.removeClass('selected');
     if (isCorrect) {
-      selectedOption.addClass("correct");
-      correctCount++;
-      score += parseFloat(sessionSettings.marks_correct);
+        selectedOption.addClass("correct");
+        correctCount++;
+        score += parseFloat(sessionSettings.marks_correct);
     } else {
-      selectedOption.addClass("incorrect");
-      optionsArea.find('input[value="' + correctOptionId + '"]').closest(".option").addClass("correct");
-      incorrectCount++;
-      score += parseFloat(sessionSettings.marks_incorrect);
+        selectedOption.addClass("incorrect");
+        optionsArea.find('input[value="' + correctOptionId + '"]').closest(".option").addClass("correct");
+        incorrectCount++;
+        score += parseFloat(sessionSettings.marks_incorrect);
     }
-    
-    // Update local state and UI
+
+    // Update session state
     if (answeredStates[questionID] && answeredStates[questionID].type === "skipped") {
         skippedCount--;
     }
     answeredStates[questionID] = {
-      type: "answered",
-      is_correct: isCorrect,
-      correct_option_id: correctOptionId,
-      selected_option_id: selectedOptionId,
-      reported: answeredStates[questionID]?.reported || false,
-      answered_in_session: true,
+        type: "answered",
+        is_correct: isCorrect,
+        correct_option_id: correctOptionId,
+        selected_option_id: selectedOptionId,
+        reported: answeredStates[questionID]?.reported || false,
+        answered_in_session: true,
     };
+
+    // Update UI
     updateHeaderStats();
-    $("#qp-skip-btn, #qp-report-btn").prop("disabled", true);
     $("#qp-next-btn").prop("disabled", false);
-    
-    // --- BACKGROUND SYNC ---
-    // Send the result to the server for logging, but don't wait for a response
+
+    // Sync attempt with the server in the background
     $.ajax({
-      url: qp_ajax_object.ajax_url,
-      type: "POST",
-      data: {
-        action: "check_answer", // This action now just logs the attempt
-        nonce: qp_ajax_object.nonce,
-        session_id: sessionID,
-        question_id: questionID,
-        option_id: selectedOptionId,
-        remaining_time: remainingTime,
-      },
+        url: qp_ajax_object.ajax_url,
+        type: "POST",
+        data: {
+            action: "check_answer",
+            nonce: qp_ajax_object.nonce,
+            session_id: sessionID,
+            question_id: questionID,
+            option_id: selectedOptionId,
+            remaining_time: remainingTime,
+        },
     });
-  });
+});
 
   wrapper.on("click", "#qp-next-btn, #qp-prev-btn", function () {
     clearInterval(questionTimer); // Stop the timer immediately
@@ -1530,42 +1582,50 @@ wrapper.on('change', '#qp_scoring_enabled_cb, #qp_revision_scoring_enabled_cb', 
     }
   });
 
-  wrapper.on('click', '#qp-pause-btn', function() {
-        if (confirm('Are you sure you want to pause this session? You can resume it later from your dashboard.')) {
-            practiceInProgress = false; // Prevent the "are you sure?" popup on redirect
+  wrapper.on("click", "#qp-pause-btn", function () {
+    if (
+      confirm(
+        "Are you sure you want to pause this session? You can resume it later from your dashboard."
+      )
+    ) {
+      practiceInProgress = false; // Prevent the "are you sure?" popup on redirect
 
-            $.ajax({
-                url: qp_ajax_object.ajax_url,
-                type: 'POST',
-                data: {
-                    action: 'qp_pause_session',
-                    nonce: qp_ajax_object.nonce,
-                    session_id: sessionID,
-                },
-                beforeSend: function() {
-                    // Disable all footer buttons to prevent double-clicks
-                    $('.qp-footer-controls .qp-button').prop('disabled', true).text('Pausing...');
-                },
-                success: function(response) {
-                    if (response.success) {
-                        // Redirect to the dashboard page on success
-                        window.location.href = qp_ajax_object.dashboard_page_url;
-                    } else {
-                        alert('Error: ' + (response.data.message || 'Could not pause the session.'));
-                        // Re-enable buttons if it fails
-                        $('.qp-footer-controls .qp-button').prop('disabled', false);
-                        $('#qp-pause-btn').text('Pause & Save'); // Restore text
-                    }
-                },
-                error: function() {
-                    alert('An unknown server error occurred.');
-                    $('.qp-footer-controls .qp-button').prop('disabled', false);
-                    $('#qp-pause-btn').text('Pause & Save');
-                }
-            });
-        }
-    });
-
+      $.ajax({
+        url: qp_ajax_object.ajax_url,
+        type: "POST",
+        data: {
+          action: "qp_pause_session",
+          nonce: qp_ajax_object.nonce,
+          session_id: sessionID,
+        },
+        beforeSend: function () {
+          // Disable all footer buttons to prevent double-clicks
+          $(".qp-footer-controls .qp-button")
+            .prop("disabled", true)
+            .text("Pausing...");
+        },
+        success: function (response) {
+          if (response.success) {
+            // Redirect to the dashboard page on success
+            window.location.href = qp_ajax_object.dashboard_page_url;
+          } else {
+            alert(
+              "Error: " +
+                (response.data.message || "Could not pause the session.")
+            );
+            // Re-enable buttons if it fails
+            $(".qp-footer-controls .qp-button").prop("disabled", false);
+            $("#qp-pause-btn").text("Pause & Save"); // Restore text
+          }
+        },
+        error: function () {
+          alert("An unknown server error occurred.");
+          $(".qp-footer-controls .qp-button").prop("disabled", false);
+          $("#qp-pause-btn").text("Pause & Save");
+        },
+      });
+    }
+  });
 
   $(window).on("beforeunload", function () {
     if (practiceInProgress) {

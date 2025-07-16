@@ -403,6 +403,27 @@ body {
     color: var(--qp-primary-color);
 }
 
+.qp-action-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    margin: 1.25rem 0; /* Adds space above and below */
+}
+
+.qp-action-bar > * {
+    flex: 1; /* Makes both buttons take up equal space */
+    text-align: center;
+}
+
+/* --- Style for a selected, but not yet checked, option --- */
+.qp-options-area .option.selected {
+    border-color: var(--qp-primary-color);
+    box-shadow: 0 0 3px 1px rgba(34, 113, 177, 0.4);
+}
+
+#qp-check-answer-btn:disabled{opacity: 0.5; cursor: not-allowed;}
+
 #qp-report-btn {
     border: none;
     min-width: 90px;

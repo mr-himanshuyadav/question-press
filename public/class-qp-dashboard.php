@@ -155,7 +155,7 @@ class QP_Dashboard
 
         // --- RESTORED: Fetch Active Sessions ---
         $active_sessions = $wpdb->get_results($wpdb->prepare("SELECT * FROM $sessions_table WHERE user_id = %d AND status = 'active' ORDER BY start_time DESC", $user_id));
-        $session_history = $wpdb->get_results($wpdb->prepare("SELECT * FROM $sessions_table WHERE user_id = %d AND status IN ('completed', 'abandoned') ORDER BY start_time DESC", $user_id));
+        $session_history = $wpdb->get_results($wpdb->prepare("SELECT * FROM $sessions_table WHERE user_id = %d AND status IN ('completed', 'abandoned', 'paused') ORDER BY start_time DESC", $user_id));
 
         // Pre-fetch all subjects for all questions in the user's history to optimize queries
         $all_session_qids = [];
@@ -237,7 +237,9 @@ class QP_Dashboard
 
                 // Determine the mode, adding a case for our new 'paused' status.
                 $mode = 'Practice'; // Default
-                if (isset($settings['practice_mode'])) {
+                if ($session->status === 'paused') {
+                    $mode = 'Paused';
+                } elseif (isset($settings['practice_mode'])) {
                     if ($settings['practice_mode'] === 'revision') {
                         $mode = 'Revision';
                     } elseif ($settings['practice_mode'] === 'Incorrect Que. Practice') {
@@ -250,45 +252,44 @@ class QP_Dashboard
                 }
 
                 $subjects_display = 'N/A';
-            if (isset($settings['practice_mode']) && $settings['practice_mode'] === 'Section Wise Practice' && !empty($settings['section_id'])) {
-                // For Section Wise Practice, build the specific "Source / Topic / Section" string
-                $section_id = absint($settings['section_id']);
-                $topic_id = !empty($settings['topics']) ? absint($settings['topics'][0]) : 0;
+                if (isset($settings['practice_mode']) && $settings['practice_mode'] === 'Section Wise Practice' && !empty($settings['section_id'])) {
+                    // For Section Wise Practice, build the specific "Source / Topic / Section" string
+                    $section_id = absint($settings['section_id']);
+                    $topic_id = !empty($settings['topics']) ? absint($settings['topics'][0]) : 0;
 
-                // Fetch the names from the database
-                $section_info = $wpdb->get_row($wpdb->prepare(
-                    "SELECT sec.section_name, src.source_name
+                    // Fetch the names from the database
+                    $section_info = $wpdb->get_row($wpdb->prepare(
+                        "SELECT sec.section_name, src.source_name
                      FROM {$wpdb->prefix}qp_source_sections sec
                      JOIN {$wpdb->prefix}qp_sources src ON sec.source_id = src.source_id
                      WHERE sec.section_id = %d",
-                    $section_id
-                ));
+                        $section_id
+                    ));
 
-                $topic_name = $wpdb->get_var($wpdb->prepare("SELECT topic_name FROM {$wpdb->prefix}qp_topics WHERE topic_id = %d", $topic_id));
+                    $topic_name = $wpdb->get_var($wpdb->prepare("SELECT topic_name FROM {$wpdb->prefix}qp_topics WHERE topic_id = %d", $topic_id));
 
-                $display_parts = [];
-                if ($section_info && $section_info->source_name) $display_parts[] = esc_html($section_info->source_name);
-                if ($topic_name) $display_parts[] = esc_html($topic_name);
-                if ($section_info && $section_info->section_name) $display_parts[] = esc_html($section_info->section_name);
+                    $display_parts = [];
+                    if ($section_info && $section_info->source_name) $display_parts[] = esc_html($section_info->source_name);
+                    if ($topic_name) $display_parts[] = esc_html($topic_name);
+                    if ($section_info && $section_info->section_name) $display_parts[] = esc_html($section_info->section_name);
 
-                if (!empty($display_parts)) {
-                    $subjects_display = implode(' / ', $display_parts);
-                }
-
-            } else {
-                // Original logic for all other modes
-                $session_subjects = [];
-                if (is_array($session_qids)) {
-                    foreach ($session_qids as $qid) {
-                        if (isset($subjects_by_question[$qid])) {
-                            $session_subjects[$subjects_by_question[$qid]] = true;
+                    if (!empty($display_parts)) {
+                        $subjects_display = implode(' / ', $display_parts);
+                    }
+                } else {
+                    // Original logic for all other modes
+                    $session_subjects = [];
+                    if (is_array($session_qids)) {
+                        foreach ($session_qids as $qid) {
+                            if (isset($subjects_by_question[$qid])) {
+                                $session_subjects[$subjects_by_question[$qid]] = true;
+                            }
                         }
                     }
+                    if (!empty($session_subjects)) {
+                        $subjects_display = implode(', ', array_keys($session_subjects));
+                    }
                 }
-                if (!empty($session_subjects)) {
-                    $subjects_display = implode(', ', array_keys($session_subjects));
-                }
-            }
 
                 $accuracy = ($session->total_attempted > 0) ? round(($session->correct_count / $session->total_attempted) * 100, 2) . '%' : 'N/A';
 
@@ -297,8 +298,15 @@ class QP_Dashboard
                 <td data-label="Mode">' . esc_html($mode) . '</td>
                 <td data-label="Subjects">' . $subjects_display . '</td>
                 <td data-label="Accuracy"><strong>' . $accuracy . '</strong></td>
-                <td data-label="Actions">
-                    <a href="' . esc_url(add_query_arg('session_id', $session->session_id, $review_page_url)) . '" class="qp-button qp-button-secondary" style="padding: 4px 8px; font-size: 12px; text-decoration: none;">Review</a>';
+                <td data-label="Actions">';
+                // Conditionally show "Resume" or "Review" button based on the status.
+                if ($session->status === 'paused') {
+                    // For paused sessions, the primary action is to Resume. It links to the session page.
+                    echo '<a href="' . esc_url(add_query_arg('session_id', $session->session_id, $session_page_url)) . '" class="qp-button qp-button-primary" style="padding: 4px 8px; font-size: 12px; text-decoration: none;">Resume</a>';
+                } else {
+                    // For completed/abandoned sessions, the action is to Review.
+                    echo '<a href="' . esc_url(add_query_arg('session_id', $session->session_id, $review_page_url)) . '" class="qp-button qp-button-secondary" style="padding: 4px 8px; font-size: 12px; text-decoration: none;">Review</a>';
+                }
                 if ($can_delete) {
                     echo '<button class="qp-delete-session-btn" data-session-id="' . esc_attr($session->session_id) . '">Delete</button>';
                 }
