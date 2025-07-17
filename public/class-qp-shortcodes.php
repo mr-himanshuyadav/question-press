@@ -74,13 +74,9 @@ class QP_Shortcodes
                 <div id="qp-step-4" class="qp-form-step">
                     <div class="qp-step-content">
                         <button class="qp-back-btn" data-target-step="1">&larr; Back to Mode Selection</button>
-                        <?php // We will add the form here in the next step 
-                        ?>
-                        <h2>Mock Test Settings</h2>
-                        <p>This feature is under construction.</p>
+                        <?php echo self::render_mock_test_form(); ?>
                     </div>
                 </div>
-
             </div>
         </div>
     <?php
@@ -182,6 +178,91 @@ class QP_Shortcodes
 
             <div class="qp-form-group qp-action-buttons">
                 <input type="submit" name="qp_start_revision" value="Start Revision" class="qp-button qp-button-primary">
+            </div>
+        </form>
+    <?php
+        return ob_get_clean();
+    }
+
+    public static function render_mock_test_form()
+    {
+        global $wpdb;
+
+        // Fetch all subjects that have at least one question associated with them
+        $subjects = $wpdb->get_results(
+            "SELECT DISTINCT s.subject_id, s.subject_name
+     FROM {$wpdb->prefix}qp_subjects s
+     JOIN {$wpdb->prefix}qp_question_groups g ON s.subject_id = g.subject_id
+     JOIN {$wpdb->prefix}qp_questions q ON g.group_id = q.group_id
+     WHERE s.subject_name != 'Uncategorized'
+     ORDER BY s.subject_name ASC"
+        );
+
+        ob_start();
+    ?>
+        <form id="qp-start-mock-test-form" method="post" action="">
+            <input type="hidden" name="practice_mode" value="mock_test">
+            <h2>Mock Test</h2>
+
+            <div class="qp-form-group">
+                <label for="qp_subject_dropdown_mock">Select Subject(s):</label>
+                <div class="qp-multi-select-dropdown" id="qp_subject_dropdown_mock">
+                    <button type="button" class="qp-multi-select-button">-- Please select --</button>
+                    <div class="qp-multi-select-list">
+                        <label><input type="checkbox" name="mock_subjects[]" value="all"> All Subjects</label>
+                        <?php foreach ($subjects as $subject) : ?>
+                            <label><input type="checkbox" name="mock_subjects[]" value="<?php echo esc_attr($subject->subject_id); ?>"> <?php echo esc_html($subject->subject_name); ?></label>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+            </div>
+
+            <div class="qp-form-group" id="qp-topic-group-mock" style="display: none;">
+                <label for="qp_topic_dropdown_mock">Select Topic(s):</label>
+                <div class="qp-multi-select-dropdown" id="qp_topic_dropdown_mock">
+                    <button type="button" class="qp-multi-select-button">-- Select subject(s) first --</button>
+                    <div class="qp-multi-select-list" id="qp_topic_list_container_mock">
+                    </div>
+                </div>
+            </div>
+
+            <div class="qp-form-group">
+                <label for="qp_mock_num_questions">Number of Questions</label>
+                <input type="number" name="qp_mock_num_questions" id="qp_mock_num_questions" value="20" min="5">
+            </div>
+
+            <div class="qp-form-group">
+                <label>Question Distribution</label>
+                <div class="qp-mode-selection-group" style="flex-direction: row; gap: 1rem;">
+                    <label class="qp-mode-radio-label" style="flex: 1;">
+                        <input type="radio" name="question_distribution" value="random" checked>
+                        <span class="qp-mode-radio-button" style="font-size: 14px; padding: 10px;">Random</span>
+                    </label>
+                    <label class="qp-mode-radio-label" style="flex: 1;">
+                        <input type="radio" name="question_distribution" value="equal">
+                        <span class="qp-mode-radio-button" style="font-size: 14px; padding: 10px;">Equal per Topic</span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="qp-form-group">
+                <label for="qp_mock_timer_minutes">Total Time (in minutes)</label>
+                <input type="number" name="qp_mock_timer_minutes" id="qp_mock_timer_minutes" value="30" min="5">
+            </div>
+
+            <div class="qp-form-group qp-marks-group">
+                <div>
+                    <label for="qp_mock_marks_correct">Marks for Correct Answer:</label>
+                    <input type="number" name="qp_marks_correct" id="qp_mock_marks_correct" value="4" step="0.01">
+                </div>
+                <div>
+                    <label for="qp_mock_marks_incorrect">Penalty for Incorrect Answer:</label>
+                    <input type="number" name="qp_marks_incorrect" id="qp_mock_marks_incorrect" value="1" step="0.01" min="0">
+                </div>
+            </div>
+
+            <div class="qp-form-group qp-action-buttons">
+                <input type="submit" name="qp_start_mock_test" value="Start Mock Test" class="qp-button qp-button-primary">
             </div>
         </form>
     <?php
