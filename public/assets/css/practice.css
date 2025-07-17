@@ -547,9 +547,54 @@ body.palette-overlay-open #qp-palette-sliding {
 
 /* Current Question */
 .qp-palette-btn.current {
-    border-width: 3px;
-    border-color: var(--qp-primary-color);
-    color: var(--qp-primary-color);
+border: 1px solid #000;
+border-radius: 50%;
+transform: scale(1.15);
+box-shadow: 0 5px 15px rgba(0, 0, 0, 0.25);
+z-index: 2;
+}
+
+/* --- NEW: State-Aware Borders for the CURRENT Question Indicator --- */
+
+/* --- For Mock Tests --- */
+
+/* Current + Answered */
+.qp-palette-btn.status-answered.current {
+    border: 4px solid var(--qp-correct-color);
+}
+/* Current + Not Answered */
+.qp-palette-btn.status-viewed.current {
+    border: 3px solid #ffc107; /* Amber */
+}
+/* Current + Marked for Review */
+.qp-palette-btn.status-marked_for_review.current {
+    border: 4px solid #1976d2; /* Vibrant Blue */
+}
+/* Current + Answered AND Marked for Review (Double Border Effect) */
+.qp-palette-btn.status-answered_and_marked_for_review.current {
+    /* The box-shadow creates the outer "review" border */
+    box-shadow: 0 0 0 4px #1976d2, 0 5px 15px rgba(0, 0, 0, 0.25);
+    border: 4px solid var(--qp-correct-color); /* The inner "answered" border */
+}
+
+/* --- For Normal/Revision Practice --- */
+
+/* Current + Correct */
+.qp-palette-btn.status-correct.current {
+    border: 3px solid var(--qp-correct-color);
+}
+/* Current + Incorrect */
+.qp-palette-btn.status-incorrect.current {
+    border: 3px solid var(--qp-incorrect-color);
+}
+/* Current + Skipped */
+.qp-palette-btn.status-skipped.current {
+    border: 3px solid #ffca28; /* Amber */
+}
+
+/* --- For Not Visited/Attempted (Both Modes) --- */
+.qp-palette-btn.status-not_viewed.current {
+    border: 3px dashed #616161; /* A thin dashed border for unvisited */
 }
 
 /* Not Viewed (Default) */
