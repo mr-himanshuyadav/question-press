@@ -1976,45 +1976,52 @@ function qp_end_practice_session_ajax()
     $is_mock_test = isset($settings['practice_mode']) && $settings['practice_mode'] === 'mock_test';
 
     // --- NEW: Special handling for Mock Test answer evaluation ---
-    if ($is_mock_test) {
-        // Get all answered (but not yet graded) attempts for this mock test
-        $answered_attempts = $wpdb->get_results($wpdb->prepare(
-            "SELECT attempt_id, question_id, selected_option_id FROM {$attempts_table} WHERE session_id = %d AND status = 'answered'",
-            $session_id
+if ($is_mock_test) {
+    // Grade any answered questions
+    $answered_attempts = $wpdb->get_results($wpdb->prepare(
+        "SELECT attempt_id, question_id, selected_option_id FROM {$attempts_table} WHERE session_id = %d AND mock_status IN ('answered', 'answered_and_marked_for_review')",
+        $session_id
+    ));
+
+    $options_table = $wpdb->prefix . 'qp_options';
+    foreach ($answered_attempts as $attempt) {
+        $is_correct = (bool) $wpdb->get_var($wpdb->prepare(
+            "SELECT is_correct FROM {$options_table} WHERE option_id = %d AND question_id = %d",
+            $attempt->selected_option_id,
+            $attempt->question_id
         ));
-
-        $options_table = $wpdb->prefix . 'qp_options';
-        foreach ($answered_attempts as $attempt) {
-            // For each attempt, check if the selected option was correct
-            $is_correct = (bool) $wpdb->get_var($wpdb->prepare(
-                "SELECT is_correct FROM {$options_table} WHERE option_id = %d AND question_id = %d",
-                $attempt->selected_option_id,
-                $attempt->question_id
-            ));
-            // Now, update the attempt row with the correct grade
-            $wpdb->update(
-                $attempts_table,
-                ['is_correct' => $is_correct ? 1 : 0],
-                ['attempt_id' => $attempt->attempt_id]
-            );
-        }
-
-        // Add any un-attempted questions as 'skipped'
-        $all_question_ids = json_decode($session->question_ids_snapshot, true);
-        $attempted_question_ids = array_map('intval', wp_list_pluck($answered_attempts, 'question_id'));
-        $skipped_question_ids = array_diff($all_question_ids, $attempted_question_ids);
-
-        foreach($skipped_question_ids as $question_id) {
-             $wpdb->insert($attempts_table, [
-                'session_id' => $session_id,
-                'user_id' => get_current_user_id(),
-                'question_id' => $question_id,
-                'is_correct' => null, // Skipped questions are not correct or incorrect
-                'status' => 'skipped'
-            ]);
-        }
+        $wpdb->update($attempts_table, ['is_correct' => $is_correct ? 1 : 0], ['attempt_id' => $attempt->attempt_id]);
     }
-    // --- End of Mock Test specific logic ---
+
+    // --- FIX: Accurately identify and record 'not_viewed' questions ---
+    $all_question_ids_in_session = json_decode($session->question_ids_snapshot, true);
+
+    // Get IDs of all questions that have ANY kind of attempt record for this session
+    $interacted_question_ids = $wpdb->get_col($wpdb->prepare(
+        "SELECT DISTINCT question_id FROM {$attempts_table} WHERE session_id = %d",
+        $session_id
+    ));
+
+    // Find the questions that were never touched at all
+    $not_viewed_ids = array_diff($all_question_ids_in_session, $interacted_question_ids);
+
+    // Create a record for each "not_viewed" question
+    foreach ($not_viewed_ids as $question_id) {
+        $wpdb->insert($attempts_table, [
+            'session_id' => $session_id,
+            'user_id' => get_current_user_id(),
+            'question_id' => $question_id,
+            'status' => 'skipped', // For stats compatibility
+            'mock_status' => 'not_viewed' // The specific status we need
+        ]);
+    }
+
+    // Any question that was just 'viewed' or 'marked_for_review' is now considered 'skipped' for final stats
+     $wpdb->query($wpdb->prepare(
+        "UPDATE {$attempts_table} SET status = 'skipped' WHERE session_id = %d AND mock_status IN ('viewed', 'marked_for_review')",
+        $session_id
+    ));
+}
 
     // Calculate final stats from the now-updated attempts table
     $correct_count = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $attempts_table WHERE session_id = %d AND is_correct = 1", $session_id));
