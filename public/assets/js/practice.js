@@ -2048,4 +2048,24 @@ wrapper.on('change', '#qp_mock_scoring_enabled_cb', function() {
         marksWrapper.find('input').prop('disabled', true);
     }
 });
+
+
+    // --- NEW: Question Palette Activation Logic ---
+if (typeof qp_session_data !== "undefined") {
+    var wrapper = $('.qp-practice-wrapper');
+    var isMockTest = qp_session_data.settings.practice_mode === 'mock_test';
+    var isSectionWise = qp_session_data.settings.practice_mode === 'Section Wise Practice';
+
+    // If the palette is mandatory for the current mode, show it on page load.
+    if (isMockTest || isSectionWise) {
+        wrapper.addClass('palette-visible');
+    }
+
+    // Handle clicks on the toggle button (for non-mandatory modes)
+    $('#qp-palette-toggle-btn').on('click', function() {
+        wrapper.toggleClass('palette-visible');
+    });
+}
+
+
 });
