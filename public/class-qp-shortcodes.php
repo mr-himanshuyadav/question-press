@@ -563,6 +563,11 @@ class QP_Shortcodes
                             <span>Mark for Review</span>
                         </label>
                         <button id="qp-check-answer-btn" class="qp-button qp-button-primary" disabled>Check Answer</button>
+                        <label class="qp-custom-checkbox" style="margin-left: 15px;">
+                            <input type="checkbox" id="qp-auto-check-cb">
+                            <span></span>
+                            Auto Check
+                        </label>
                     </div>
 
                 </div>
@@ -762,7 +767,8 @@ class QP_Shortcodes
                                 $topic_display = esc_html($attempt->subject_name);
                                 if (!empty($attempt->topic_name)) {
                                     $topic_display .= ' / ' . esc_html($attempt->topic_name);
-                                } echo $topic_display;?></span>
+                                }
+                                echo $topic_display; ?></span>
                         </div>
                         <?php
                         $user_can_view_source = !empty(array_intersect((array)wp_get_current_user()->roles, (array)($options['show_source_meta_roles'] ?? [])));
