@@ -1644,6 +1644,38 @@ function qp_check_answer_ajax()
 add_action('wp_ajax_check_answer', 'qp_check_answer_ajax');
 
 /**
+ * AJAX handler to save a user's selected answer during a mock test without checking it.
+ */
+function qp_save_mock_attempt_ajax() {
+    check_ajax_referer('qp_practice_nonce', 'nonce');
+    $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
+    $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
+    $option_id = isset($_POST['option_id']) ? absint($_POST['option_id']) : 0;
+
+    if (!$session_id || !$question_id || !$option_id) {
+        wp_send_json_error(['message' => 'Invalid data submitted.']);
+    }
+
+    global $wpdb;
+    $attempts_table = $wpdb->prefix . 'qp_user_attempts';
+    $user_id = get_current_user_id();
+
+    // is_correct is intentionally left NULL. It will be calculated upon submission.
+    $wpdb->query($wpdb->prepare(
+        "INSERT INTO {$attempts_table} (session_id, user_id, question_id, selected_option_id, status)
+         VALUES (%d, %d, %d, %d, 'answered')
+         ON DUPLICATE KEY UPDATE selected_option_id = %d, attempt_time = NOW()",
+        $session_id, $user_id, $question_id, $option_id, $option_id
+    ));
+    
+    // Also update the session's last activity to keep it from timing out
+    $wpdb->update($wpdb->prefix . 'qp_user_sessions', ['last_activity' => current_time('mysql')], ['session_id' => $session_id]);
+
+    wp_send_json_success(['message' => 'Answer saved.']);
+}
+add_action('wp_ajax_qp_save_mock_attempt', 'qp_save_mock_attempt_ajax');
+
+/**
  * AJAX handler to start a REVISION practice session.
  */
 function qp_start_revision_session_ajax()
