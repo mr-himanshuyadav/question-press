@@ -1895,41 +1895,80 @@ function qp_end_practice_session_ajax()
     // Get session settings to calculate score
     $session = $wpdb->get_row($wpdb->prepare("SELECT * FROM $sessions_table WHERE session_id = %d", $session_id));
     $settings = json_decode($session->settings_snapshot, true);
-    $marks_correct = isset($settings['marks_correct']) ? floatval($settings['marks_correct']) : 0;
-    $marks_incorrect = isset($settings['marks_incorrect']) ? floatval($settings['marks_incorrect']) : 0;
+    $marks_correct = $settings['marks_correct'] ?? 0;
+    $marks_incorrect = $settings['marks_incorrect'] ?? 0;
+    $is_mock_test = isset($settings['practice_mode']) && $settings['practice_mode'] === 'mock_test';
 
-    // Calculate stats from attempts
+    // --- NEW: Special handling for Mock Test answer evaluation ---
+    if ($is_mock_test) {
+        // Get all answered (but not yet graded) attempts for this mock test
+        $answered_attempts = $wpdb->get_results($wpdb->prepare(
+            "SELECT attempt_id, question_id, selected_option_id FROM {$attempts_table} WHERE session_id = %d AND status = 'answered'",
+            $session_id
+        ));
+
+        $options_table = $wpdb->prefix . 'qp_options';
+        foreach ($answered_attempts as $attempt) {
+            // For each attempt, check if the selected option was correct
+            $is_correct = (bool) $wpdb->get_var($wpdb->prepare(
+                "SELECT is_correct FROM {$options_table} WHERE option_id = %d AND question_id = %d",
+                $attempt->selected_option_id,
+                $attempt->question_id
+            ));
+            // Now, update the attempt row with the correct grade
+            $wpdb->update(
+                $attempts_table,
+                ['is_correct' => $is_correct ? 1 : 0],
+                ['attempt_id' => $attempt->attempt_id]
+            );
+        }
+
+        // Add any un-attempted questions as 'skipped'
+        $all_question_ids = json_decode($session->question_ids_snapshot, true);
+        $attempted_question_ids = wp_list_pluck($answered_attempts, 'question_id');
+        $skipped_question_ids = array_diff($all_question_ids, $attempted_question_ids);
+
+        foreach($skipped_question_ids as $question_id) {
+             $wpdb->insert($attempts_table, [
+                'session_id' => $session_id,
+                'user_id' => get_current_user_id(),
+                'question_id' => $question_id,
+                'is_correct' => null, // Skipped questions are not correct or incorrect
+                'status' => 'skipped'
+            ]);
+        }
+    }
+    // --- End of Mock Test specific logic ---
+
+    // Calculate final stats from the now-updated attempts table
     $correct_count = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $attempts_table WHERE session_id = %d AND is_correct = 1", $session_id));
     $incorrect_count = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $attempts_table WHERE session_id = %d AND is_correct = 0", $session_id));
-    $skipped_count = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $attempts_table WHERE session_id = %d AND is_correct IS NULL", $session_id));
+    $skipped_count = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $attempts_table WHERE session_id = %d AND status = 'skipped'", $session_id));
     $total_attempted = $correct_count + $incorrect_count;
 
     // Calculate final score
     $final_score = ($correct_count * $marks_correct) + ($incorrect_count * $marks_incorrect);
 
-    // --- Calculate Total Active Time ---
-    $end_time = current_time('mysql'); // Use GMT time for calculation
-    $start_time = $session->start_time;
+    // --- Calculate Total Active Time (timezone-aware) ---
+    $end_time_gmt = current_time('mysql', 1);
+    $start_time_gmt = get_gmt_from_date($session->start_time);
+    
+    $total_session_duration = strtotime($end_time_gmt) - strtotime($start_time_gmt);
+    $total_active_seconds = max(0, $total_session_duration); // For mock tests, there are no pauses
 
-    // Get all pause records for this session
-    $pause_records = $wpdb->get_results($wpdb->prepare(
-        "SELECT pause_time, resume_time FROM {$pauses_table} WHERE session_id = %d",
-        $session_id
-    ));
-
-    $total_pause_duration = 0;
-    foreach ($pause_records as $pause) {
-        // If a pause record is not yet resumed (e.g., user ended session while paused), treat 'now' as resume time
-        $resume_time = $pause->resume_time ?? $end_time;
-        $total_pause_duration += strtotime($resume_time) - strtotime($pause->pause_time);
+    // For non-mock tests, we still need to subtract pause duration
+    if (!$is_mock_test) {
+        $pause_records = $wpdb->get_results($wpdb->prepare( "SELECT pause_time, resume_time FROM {$pauses_table} WHERE session_id = %d", $session_id ));
+        $total_pause_duration = 0;
+        foreach ($pause_records as $pause) {
+            $resume_time_gmt = $pause->resume_time ? get_gmt_from_date($pause->resume_time) : $end_time_gmt;
+            $pause_time_gmt = get_gmt_from_date($pause->pause_time);
+            $total_pause_duration += strtotime($resume_time_gmt) - strtotime($pause_time_gmt);
+        }
+        $total_active_seconds = max(0, $total_session_duration - $total_pause_duration);
     }
-
-    $total_session_duration = strtotime($end_time) - strtotime($start_time);
-    $total_active_seconds = $total_session_duration - $total_pause_duration;
-    // Ensure active time is not negative
-    $total_active_seconds = max(0, $total_active_seconds);
-
-    // Update the session in the database with the final stats
+    
+    // Update the session in the database with the final, correct stats
     $wpdb->update(
         $sessions_table,
         [
