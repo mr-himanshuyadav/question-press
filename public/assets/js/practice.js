@@ -36,34 +36,36 @@ jQuery(document).ready(function ($) {
   }
 
   // --- MOCK TEST TIMER ---
-function startMockTestTimer(endTimeUTC) {
-    var timerEl = $('#qp-mock-test-timer');
-    mockTestTimer = setInterval(function() {
-        // Get the current time in seconds since epoch, synced with UTC
-        var nowUTC = Math.floor(new Date().getTime() / 1000);
-        var secondsRemaining = endTimeUTC - nowUTC;
+  function startMockTestTimer(endTimeUTC) {
+    var timerEl = $("#qp-mock-test-timer");
+    mockTestTimer = setInterval(function () {
+      // Get the current time in seconds since epoch, synced with UTC
+      var nowUTC = Math.floor(new Date().getTime() / 1000);
+      var secondsRemaining = endTimeUTC - nowUTC;
 
-        if (secondsRemaining <= 0) {
-            clearInterval(mockTestTimer);
-            timerEl.text("00:00:00");
-            alert("Time's up! Your test will be submitted automatically.");
-            endSession(true); // Automatically end the session
-            return;
-        }
-        var hours = Math.floor(secondsRemaining / 3600);
-        var minutes = Math.floor((secondsRemaining % 3600) / 60);
-        var seconds = secondsRemaining % 60;
-        timerEl.text(
-            String(hours).padStart(2, '0') + ":" +
-            String(minutes).padStart(2, '0') + ":" +
-            String(seconds).padStart(2, '0')
-        );
+      if (secondsRemaining <= 0) {
+        clearInterval(mockTestTimer);
+        timerEl.text("00:00:00");
+        alert("Time's up! Your test will be submitted automatically.");
+        endSession(true); // Automatically end the session
+        return;
+      }
+      var hours = Math.floor(secondsRemaining / 3600);
+      var minutes = Math.floor((secondsRemaining % 3600) / 60);
+      var seconds = secondsRemaining % 60;
+      timerEl.text(
+        String(hours).padStart(2, "0") +
+          ":" +
+          String(minutes).padStart(2, "0") +
+          ":" +
+          String(seconds).padStart(2, "0")
+      );
     }, 1000);
-}
+  }
 
   // --- LOGIC FOR REVISION FORM DROPDOWNS ---
   // --- LOGIC FOR MOCK TEST FORM DROPDOWNS ---
-$("#qp_subject_dropdown_mock").on(
+  $("#qp_subject_dropdown_mock").on(
     "change",
     'input[type="checkbox"]',
     function () {
@@ -73,7 +75,10 @@ $("#qp_subject_dropdown_mock").on(
       // Handle "All Subjects" logic
       if ($this.val() === "all") {
         if ($this.is(":checked")) {
-          $list.find('input[value!="all"]').prop("checked", false).prop("disabled", true);
+          $list
+            .find('input[value!="all"]')
+            .prop("checked", false)
+            .prop("disabled", true);
         } else {
           $list.find('input[value!="all"]').prop("disabled", false);
         }
@@ -93,7 +98,11 @@ $("#qp_subject_dropdown_mock").on(
       var $topicButton = $("#qp_topic_dropdown_mock .qp-multi-select-button");
 
       // Update the Subject button text
-      updateButtonText($("#qp_subject_dropdown_mock .qp-multi-select-button"), "-- Please select --", "Subject");
+      updateButtonText(
+        $("#qp_subject_dropdown_mock .qp-multi-select-button"),
+        "-- Please select --",
+        "Subject"
+      );
 
       if (selectedSubjects.length > 0) {
         $.ajax({
@@ -110,12 +119,25 @@ $("#qp_subject_dropdown_mock").on(
           },
           success: function (response) {
             $topicButton.prop("disabled", false);
-            if (response.success && Object.keys(response.data.topics).length > 0) {
-              $topicListContainer.append('<label><input type="checkbox" name="mock_topics[]" value="all"> All Topics</label>');
+            if (
+              response.success &&
+              Object.keys(response.data.topics).length > 0
+            ) {
+              $topicListContainer.append(
+                '<label><input type="checkbox" name="mock_topics[]" value="all"> All Topics</label>'
+              );
               $.each(response.data.topics, function (subjectName, topics) {
-                $topicListContainer.append('<div class="qp-topic-group-header">' + subjectName + "</div>");
+                $topicListContainer.append(
+                  '<div class="qp-topic-group-header">' + subjectName + "</div>"
+                );
                 $.each(topics, function (i, topic) {
-                  $topicListContainer.append('<label><input type="checkbox" name="mock_topics[]" value="' + topic.topic_id +'"> ' + topic.topic_name + "</label>");
+                  $topicListContainer.append(
+                    '<label><input type="checkbox" name="mock_topics[]" value="' +
+                      topic.topic_id +
+                      '"> ' +
+                      topic.topic_name +
+                      "</label>"
+                  );
                 });
               });
               updateButtonText($topicButton, "-- Select Topic(s) --", "Topic");
@@ -128,26 +150,45 @@ $("#qp_subject_dropdown_mock").on(
         });
       } else {
         $topicGroup.slideUp();
-        updateButtonText($topicButton, "-- Select subject(s) first --", "Topic");
+        updateButtonText(
+          $topicButton,
+          "-- Select subject(s) first --",
+          "Topic"
+        );
       }
     }
   );
 
   // Handle the "All Topics" checkbox for the mock test form
-  $("#qp_topic_list_container_mock").on("change", 'input[value="all"]', function () {
-    var $this = $(this);
-    var $list = $this.closest(".qp-multi-select-list");
-    if ($this.is(":checked")) {
-      $list.find('input[value!="all"]').prop("checked", false).prop("disabled", true);
-    } else {
-      $list.find('input[value!="all"]').prop("disabled", false);
+  $("#qp_topic_list_container_mock").on(
+    "change",
+    'input[value="all"]',
+    function () {
+      var $this = $(this);
+      var $list = $this.closest(".qp-multi-select-list");
+      if ($this.is(":checked")) {
+        $list
+          .find('input[value!="all"]')
+          .prop("checked", false)
+          .prop("disabled", true);
+      } else {
+        $list.find('input[value!="all"]').prop("disabled", false);
+      }
     }
-  });
+  );
 
   // Update button text when a topic is selected in the mock test form
-  $("#qp_topic_dropdown_mock").on("change", 'input[type="checkbox"]', function () {
-    updateButtonText($("#qp_topic_dropdown_mock .qp-multi-select-button"), "-- Select Topic(s) --", "Topic");
-  });
+  $("#qp_topic_dropdown_mock").on(
+    "change",
+    'input[type="checkbox"]',
+    function () {
+      updateButtonText(
+        $("#qp_topic_dropdown_mock .qp-multi-select-button"),
+        "-- Select Topic(s) --",
+        "Topic"
+      );
+    }
+  );
   // --- CONSOLIDATED LOGIC FOR REVISION FORM SUBJECT DROPDOWN ---
   $("#qp_subject_dropdown_revision").on(
     "change",
@@ -825,14 +866,14 @@ $("#qp_subject_dropdown_mock").on(
   });
 
   // Handler for MOCK TEST Mode Form
-wrapper.on("submit", "#qp-start-mock-test-form", function (e) {
+  wrapper.on("submit", "#qp-start-mock-test-form", function (e) {
     e.preventDefault();
 
     // Basic validation
     var selectedSubjects = $("#qp_subject_dropdown_mock input:checked").length;
     if (selectedSubjects === 0) {
-        alert("Please select at least one subject to start the mock test.");
-        return;
+      alert("Please select at least one subject to start the mock test.");
+      return;
     }
 
     var form = $(this);
@@ -841,58 +882,65 @@ wrapper.on("submit", "#qp-start-mock-test-form", function (e) {
     var formData = form.serialize();
 
     $.ajax({
-        url: qp_ajax_object.ajax_url,
-        type: "POST",
-        // Add the new action and nonce to the form data
-        data: formData + "&action=qp_start_mock_test_session&nonce=" + qp_ajax_object.nonce,
-        beforeSend: function () {
-            submitButton.val("Building your test...").prop("disabled", true);
-        },
-        success: function (response) {
-            if (response.success && response.data.redirect_url) {
-                // If successful, redirect to the session page
-                window.location.href = response.data.redirect_url;
-            } else {
-                // If there's an error, display it
-                var errorMessage = response.data.html ?
-                    response.data.html :
-                    "<p>" + (response.data.message || "An unknown error occurred.") + "</p>";
-                wrapper.html(errorMessage);
-            }
-        },
-        error: function () {
-            alert("A server error occurred. Please try again later.");
-            submitButton.val(originalButtonText).prop("disabled", false);
-        },
-    });
-});
-
-// --- MOCK TEST TIMER ---
-function startMockTestTimer(endTimeUTC) {
-    var timerEl = $('#qp-mock-test-timer');
-    mockTestTimer = setInterval(function() {
-        // Get the current time in UTC seconds every interval to avoid clock drift
-        var nowUTC = Math.floor(new Date().getTime() / 1000);
-        var secondsRemaining = endTimeUTC - nowUTC;
-
-        if (secondsRemaining <= 0) {
-            clearInterval(mockTestTimer);
-            timerEl.text("00:00:00");
-            alert("Time's up! Your test will be submitted automatically.");
-            endSession(true); // Automatically end the session
-            return;
+      url: qp_ajax_object.ajax_url,
+      type: "POST",
+      // Add the new action and nonce to the form data
+      data:
+        formData +
+        "&action=qp_start_mock_test_session&nonce=" +
+        qp_ajax_object.nonce,
+      beforeSend: function () {
+        submitButton.val("Building your test...").prop("disabled", true);
+      },
+      success: function (response) {
+        if (response.success && response.data.redirect_url) {
+          // If successful, redirect to the session page
+          window.location.href = response.data.redirect_url;
+        } else {
+          // If there's an error, display it
+          var errorMessage = response.data.html
+            ? response.data.html
+            : "<p>" +
+              (response.data.message || "An unknown error occurred.") +
+              "</p>";
+          wrapper.html(errorMessage);
         }
-        // Format the remaining time into HH:MM:SS
-        var hours = Math.floor(secondsRemaining / 3600);
-        var minutes = Math.floor((secondsRemaining % 3600) / 60);
-        var seconds = secondsRemaining % 60;
-        timerEl.text(
-            String(hours).padStart(2, '0') + ":" +
-            String(minutes).padStart(2, '0') + ":" +
-            String(seconds).padStart(2, '0')
-        );
+      },
+      error: function () {
+        alert("A server error occurred. Please try again later.");
+        submitButton.val(originalButtonText).prop("disabled", false);
+      },
+    });
+  });
+
+  // --- MOCK TEST TIMER ---
+  function startMockTestTimer(endTimeUTC) {
+    var timerEl = $("#qp-mock-test-timer");
+    mockTestTimer = setInterval(function () {
+      // Get the current time in UTC seconds every interval to avoid clock drift
+      var nowUTC = Math.floor(new Date().getTime() / 1000);
+      var secondsRemaining = endTimeUTC - nowUTC;
+
+      if (secondsRemaining <= 0) {
+        clearInterval(mockTestTimer);
+        timerEl.text("00:00:00");
+        alert("Time's up! Your test will be submitted automatically.");
+        endSession(true); // Automatically end the session
+        return;
+      }
+      // Format the remaining time into HH:MM:SS
+      var hours = Math.floor(secondsRemaining / 3600);
+      var minutes = Math.floor((secondsRemaining % 3600) / 60);
+      var seconds = secondsRemaining % 60;
+      timerEl.text(
+        String(hours).padStart(2, "0") +
+          ":" +
+          String(minutes).padStart(2, "0") +
+          ":" +
+          String(seconds).padStart(2, "0")
+      );
     }, 1000);
-}
+  }
 
   // Session state variables
   var sessionID = 0;
@@ -927,95 +975,102 @@ function startMockTestTimer(endTimeUTC) {
 
   // Session Initialization
   // Session Initialization
-if (typeof qp_session_data !== "undefined") {
+  if (typeof qp_session_data !== "undefined") {
     practiceInProgress = true;
     sessionID = qp_session_data.session_id;
     sessionQuestionIDs = qp_session_data.question_ids;
     sessionSettings = qp_session_data.settings;
-    isMockTest = sessionSettings.practice_mode === 'mock_test'; // Set our global flag
+    isMockTest = sessionSettings.practice_mode === "mock_test"; // Set our global flag
 
     // Mode-specific UI setup
     if (isMockTest) {
-        // For mock tests, start the master timer
-        if (qp_session_data.test_end_timestamp) {
-            startMockTestTimer(qp_session_data.test_end_timestamp);
-        }
-        // Set the question counter
-        $('#qp-question-counter').text((currentQuestionIndex + 1) + "/" + sessionQuestionIDs.length);
+      // For mock tests, start the master timer
+      if (qp_session_data.test_end_timestamp) {
+        startMockTestTimer(qp_session_data.test_end_timestamp);
+      }
+      // Set the question counter
+      $("#qp-question-counter").text(
+        currentQuestionIndex + 1 + "/" + sessionQuestionIDs.length
+      );
     } else {
-        // For other modes, set up scoring and auto-check
-        var savedAutoCheckState = sessionStorage.getItem("qpAutoCheckEnabled");
-        if (savedAutoCheckState !== null) {
-            isAutoCheckEnabled = savedAutoCheckState === "true";
-            $("#qp-auto-check-cb").prop("checked", isAutoCheckEnabled);
-        }
-        if (sessionSettings.marks_correct === null) {
-            $(".qp-header-stat.score").hide();
-        }
-        if (sessionSettings.practice_mode === "revision") {
-            $(".qp-question-counter-box").show();
-        }
+      // For other modes, set up scoring and auto-check
+      var savedAutoCheckState = sessionStorage.getItem("qpAutoCheckEnabled");
+      if (savedAutoCheckState !== null) {
+        isAutoCheckEnabled = savedAutoCheckState === "true";
+        $("#qp-auto-check-cb").prop("checked", isAutoCheckEnabled);
+      }
+      if (sessionSettings.marks_correct === null) {
+        $(".qp-header-stat.score").hide();
+      }
+      if (sessionSettings.practice_mode === "revision") {
+        $(".qp-question-counter-box").show();
+      }
     }
-
 
     // Restore user's previous answers from the database
     if (qp_session_data.attempt_history) {
-        var lastAttemptedIndex = -1;
-        for (var i = 0; i < sessionQuestionIDs.length; i++) {
-            var qid = sessionQuestionIDs[i];
-            if (qp_session_data.attempt_history[qid]) {
-                var attempt = qp_session_data.attempt_history[qid];
-                lastAttemptedIndex = i;
+      var lastAttemptedIndex = -1;
+      for (var i = 0; i < sessionQuestionIDs.length; i++) {
+        var qid = sessionQuestionIDs[i];
+        if (qp_session_data.attempt_history[qid]) {
+          var attempt = qp_session_data.attempt_history[qid];
+          lastAttemptedIndex = i;
 
-                // Store the raw attempt data. We will use it differently depending on the mode.
-                answeredStates[qid] = {
-                    type: attempt.status,
-                    is_correct: parseInt(attempt.is_correct, 10) === 1,
-                    selected_option_id: attempt.selected_option_id,
-                    correct_option_id: attempt.correct_option_id,
-                    remainingTime: attempt.remaining_time,
-                };
+          // Store the raw attempt data. We will use it differently depending on the mode.
+          answeredStates[qid] = {
+            type: attempt.status,
+            is_correct: parseInt(attempt.is_correct, 10) === 1,
+            selected_option_id: attempt.selected_option_id,
+            correct_option_id: attempt.correct_option_id,
+            remainingTime: attempt.remaining_time,
+          };
 
-                // For non-mock tests, calculate the score as we load
-                if (attempt.status === 'answered' && !isMockTest) {
-                    if (answeredStates[qid].is_correct) {
-                        correctCount++;
-                        score += parseFloat(sessionSettings.marks_correct);
-                    } else {
-                        incorrectCount++;
-                        score += parseFloat(sessionSettings.marks_incorrect);
-                    }
-                } else if (attempt.status === 'skipped') {
-                    skippedCount++;
-                }
+          // For non-mock tests, calculate the score as we load
+          if (attempt.status === "answered" && !isMockTest) {
+            if (answeredStates[qid].is_correct) {
+              correctCount++;
+              score += parseFloat(sessionSettings.marks_correct);
+            } else {
+              incorrectCount++;
+              score += parseFloat(sessionSettings.marks_incorrect);
             }
+          } else if (attempt.status === "skipped") {
+            skippedCount++;
+          }
         }
-        var potentialIndex = lastAttemptedIndex >= 0 ? lastAttemptedIndex + 1 : 0;
-        currentQuestionIndex = Math.min(potentialIndex, sessionQuestionIDs.length - 1);
+      }
+      var potentialIndex = lastAttemptedIndex >= 0 ? lastAttemptedIndex + 1 : 0;
+      currentQuestionIndex = Math.min(
+        potentialIndex,
+        sessionQuestionIDs.length - 1
+      );
     }
 
     // Restore reported questions state
-    if (qp_session_data.reported_ids && qp_session_data.reported_ids.length > 0) {
-        $.each(qp_session_data.reported_ids, function(index, qid) {
-            if (typeof answeredStates[qid] === "undefined") {
-                answeredStates[qid] = {};
-            }
-            answeredStates[qid].reported = true;
-        });
+    if (
+      qp_session_data.reported_ids &&
+      qp_session_data.reported_ids.length > 0
+    ) {
+      $.each(qp_session_data.reported_ids, function (index, qid) {
+        if (typeof answeredStates[qid] === "undefined") {
+          answeredStates[qid] = {};
+        }
+        answeredStates[qid].reported = true;
+      });
     }
 
     // Update the header stats only for non-mock tests
     if (!isMockTest) {
-        updateHeaderStats();
+      updateHeaderStats();
     }
 
     // Load the first (or current) question
     if (currentQuestionIndex >= sessionQuestionIDs.length) {
-        endSession(false);
+      endSession(false);
     } else {
-        loadQuestion(sessionQuestionIDs[currentQuestionIndex]);
+      loadQuestion(sessionQuestionIDs[currentQuestionIndex]);
     }
-}
+  }
 
   // --- Optional Scoring UI Toggle ---
   wrapper.on(
@@ -1215,7 +1270,7 @@ if (typeof qp_session_data !== "undefined") {
 
   function renderQuestion(data, questionID) {
     if (!isMockTest) {
-        clearInterval(questionTimer);
+      clearInterval(questionTimer);
     }
 
     var questionData = data.question;
@@ -1225,82 +1280,145 @@ if (typeof qp_session_data !== "undefined") {
     // Common UI rendering for all modes
     var directionEl = $(".qp-direction").empty();
     if (questionData.direction_text || questionData.direction_image_url) {
-        if (questionData.direction_text) directionEl.html($("<p>").html(questionData.direction_text));
-        if (questionData.direction_image_url) directionEl.append($("<img>").attr("src", questionData.direction_image_url).css("max-width", "100%"));
-        directionEl.show();
+      if (questionData.direction_text)
+        directionEl.html($("<p>").html(questionData.direction_text));
+      if (questionData.direction_image_url)
+        directionEl.append(
+          $("<img>")
+            .attr("src", questionData.direction_image_url)
+            .css("max-width", "100%")
+        );
+      directionEl.show();
     }
-    $("#qp-question-subject").html("Subject: " + questionData.subject_name + (questionData.topic_name ? " / " + questionData.topic_name : ""));
-    $("#qp-question-id").text("Question ID: " + questionData.custom_question_id);
+    $("#qp-question-subject").html(
+      "Subject: " +
+        questionData.subject_name +
+        (questionData.topic_name ? " / " + questionData.topic_name : "")
+    );
+    $("#qp-question-id").text(
+      "Question ID: " + questionData.custom_question_id
+    );
+    // --- RESTORED: Source Metadata Display ---
+    var sourceDisplayArea = $("#qp-question-source").hide().empty();
+    if (
+      data.is_admin &&
+      (questionData.source_name ||
+        questionData.section_name ||
+        questionData.question_number_in_section)
+    ) {
+      var sourceInfo = [];
+      if (questionData.source_name)
+        sourceInfo.push("<strong>Source:</strong> " + questionData.source_name);
+      if (questionData.section_name)
+        sourceInfo.push(
+          "<strong>Section:</strong> " + questionData.section_name
+        );
+      if (questionData.question_number_in_section)
+        sourceInfo.push(
+          "<strong>Q:</strong> " + questionData.question_number_in_section
+        );
+      if (sourceInfo.length > 0) {
+        sourceDisplayArea.html(sourceInfo.join(" | ")).show();
+      }
+    }
     $("#qp-question-text-area").html(questionData.question_text);
     $("#qp-report-btn").prop("disabled", previousState.reported);
 
-    $.each(questionData.options, function(index, option) {
-        optionsArea.append($('<label class="option"></label>').append($('<input type="radio" name="qp_option">').val(option.option_id)).append($("<span>").html(option.option_text)));
+    $.each(questionData.options, function (index, option) {
+      optionsArea.append(
+        $('<label class="option"></label>')
+          .append(
+            $('<input type="radio" name="qp_option">').val(option.option_id)
+          )
+          .append($("<span>").html(option.option_text))
+      );
     });
 
     // Mode-specific logic
     if (isMockTest) {
-        // In a mock test, just restore the user's previously selected answer if it exists
-        if (previousState.selected_option_id) {
-            $('input[value="' + previousState.selected_option_id + '"]').prop("checked", true).closest(".option").addClass("selected");
-        }
+      // In a mock test, just restore the user's previously selected answer if it exists
+      if (previousState.selected_option_id) {
+        $('input[value="' + previousState.selected_option_id + '"]')
+          .prop("checked", true)
+          .closest(".option")
+          .addClass("selected");
+      }
     } else {
-        // Logic for Normal/Revision modes
-        $("#qp-revision-indicator, #qp-question-source").hide();
-        $("#qp-skip-btn").prop("disabled", false);
-        $("#qp-next-btn").prop("disabled", true);
-        if (isAutoCheckEnabled) {
-            $("#qp-check-answer-btn").hide();
-        } else {
-            $("#qp-check-answer-btn").show().prop("disabled", true);
-        }
-        optionsArea.data("correct-option-id", data.correct_option_id);
-        if (data.is_revision && !previousState.answered_in_session) {
-            $("#qp-revision-indicator").show();
-            $(".qp-indicator-bar").show();
-        }
-        $("#qp-mark-for-review-cb").prop("checked", data.is_marked_for_review);
+      // Logic for Normal/Revision modes
+      $("#qp-revision-indicator, #qp-question-source").hide();
+      $("#qp-skip-btn").prop("disabled", false);
+      $("#qp-next-btn").prop("disabled", true);
+      if (isAutoCheckEnabled) {
+        $("#qp-check-answer-btn").hide();
+      } else {
+        $("#qp-check-answer-btn").show().prop("disabled", true);
+      }
+      optionsArea.data("correct-option-id", data.correct_option_id);
+      if (data.is_revision && !previousState.answered_in_session) {
+        $("#qp-revision-indicator").show();
+        $(".qp-indicator-bar").show();
+      }
+      $("#qp-mark-for-review-cb").prop("checked", data.is_marked_for_review);
 
-        var isReported = previousState.reported;
-        var isAnswered = previousState.type === "answered";
-        var isExpired = previousState.type === "expired";
-        var indicatorBar = $(".qp-indicator-bar").hide();
-        if (isReported) {
-            $("#qp-reported-indicator").show();
-            indicatorBar.show();
+      var isReported = previousState.reported;
+      var isAnswered = previousState.type === "answered";
+      var isExpired = previousState.type === "expired";
+      var indicatorBar = $(".qp-indicator-bar").hide();
+      if (isReported) {
+        $("#qp-reported-indicator").show();
+        indicatorBar.show();
+      }
+      if (isAnswered || isExpired || isReported) {
+        optionsArea
+          .addClass("disabled")
+          .find('input[type="radio"]')
+          .prop("disabled", true);
+        $("#qp-skip-btn").prop("disabled", true);
+        $("#qp-next-btn").prop("disabled", false);
+        if (isAnswered) {
+          $('input[value="' + previousState.selected_option_id + '"]')
+            .prop("checked", true)
+            .closest(".option")
+            .addClass(previousState.is_correct ? "correct" : "incorrect");
+          if (!previousState.is_correct) {
+            $('input[value="' + previousState.correct_option_id + '"]')
+              .closest(".option")
+              .addClass("correct");
+          }
         }
-        if (isAnswered || isExpired || isReported) {
-            optionsArea.addClass("disabled").find('input[type="radio"]').prop("disabled", true);
-            $("#qp-skip-btn").prop("disabled", true);
-            $("#qp-next-btn").prop("disabled", false);
-            if (isAnswered) {
-                $('input[value="' + previousState.selected_option_id + '"]').prop("checked", true).closest(".option").addClass(previousState.is_correct ? "correct" : "incorrect");
-                if (!previousState.is_correct) {
-                    $('input[value="' + previousState.correct_option_id + '"]').closest(".option").addClass("correct");
-                }
-            }
-            if (isExpired) {
-                $("#qp-timer-indicator").html("&#9201; Time Expired").addClass("expired").show();
-                indicatorBar.show();
-            }
-        } else {
-            if (sessionSettings.timer_enabled) {
-                var startTime = (typeof previousState.remainingTime !== "undefined") ? previousState.remainingTime : sessionSettings.timer_seconds;
-                $("#qp-timer-indicator").removeClass("expired").show();
-                indicatorBar.show();
-                startTimer(startTime);
-            }
+        if (isExpired) {
+          $("#qp-timer-indicator")
+            .html("&#9201; Time Expired")
+            .addClass("expired")
+            .show();
+          indicatorBar.show();
         }
+      } else {
+        if (sessionSettings.timer_enabled) {
+          var startTime =
+            typeof previousState.remainingTime !== "undefined"
+              ? previousState.remainingTime
+              : sessionSettings.timer_seconds;
+          $("#qp-timer-indicator").removeClass("expired").show();
+          indicatorBar.show();
+          startTimer(startTime);
+        }
+      }
     }
 
     $("#qp-prev-btn").prop("disabled", currentQuestionIndex === 0);
     if (typeof renderMathInElement !== "undefined") {
-        renderMathInElement(document.getElementById("qp-practice-app-wrapper"), {
-            delimiters: [{ left: "$$", right: "$$", display: true }, { left: "$", right: "$", display: false }, { left: "\\[", right: "\\]", display: true }, { left: "\\(", right: "\\)", display: false }, ],
-            throwOnError: false,
-        });
+      renderMathInElement(document.getElementById("qp-practice-app-wrapper"), {
+        delimiters: [
+          { left: "$$", right: "$$", display: true },
+          { left: "$", right: "$", display: false },
+          { left: "\\[", right: "\\]", display: true },
+          { left: "\\(", right: "\\)", display: false },
+        ],
+        throwOnError: false,
+      });
     }
-}
+  }
 
   function loadQuestion(questionID, direction) {
     var animatableArea = $(".qp-animatable-area");
@@ -1474,7 +1592,7 @@ if (typeof qp_session_data !== "undefined") {
   }
 
   // Handles clicking an answer option to select it
-  wrapper.on("click", ".qp-options-area .option", function() {
+  wrapper.on("click", ".qp-options-area .option", function () {
     var selectedOption = $(this);
     var optionsArea = selectedOption.closest(".qp-options-area");
     if (optionsArea.hasClass("disabled")) return;
@@ -1484,34 +1602,34 @@ if (typeof qp_session_data !== "undefined") {
     selectedOption.find('input[type="radio"]').prop("checked", true);
 
     if (isMockTest) {
-        // For mock tests, just save the attempt without checking it
-        var questionID = sessionQuestionIDs[currentQuestionIndex];
-        var selectedOptionId = selectedOption.find('input[type="radio"]').val();
+      // For mock tests, just save the attempt without checking it
+      var questionID = sessionQuestionIDs[currentQuestionIndex];
+      var selectedOptionId = selectedOption.find('input[type="radio"]').val();
 
-        // Update local state first for immediate UI restoration on navigation
-        if (!answeredStates[questionID]) answeredStates[questionID] = {};
-        answeredStates[questionID].selected_option_id = selectedOptionId;
+      // Update local state first for immediate UI restoration on navigation
+      if (!answeredStates[questionID]) answeredStates[questionID] = {};
+      answeredStates[questionID].selected_option_id = selectedOptionId;
 
-        // Send to backend to save
-        $.ajax({
-            url: qp_ajax_object.ajax_url,
-            type: "POST",
-            data: {
-                action: "qp_save_mock_attempt",
-                nonce: qp_ajax_object.nonce,
-                session_id: sessionID,
-                question_id: questionID,
-                option_id: selectedOptionId,
-            },
-        });
+      // Send to backend to save
+      $.ajax({
+        url: qp_ajax_object.ajax_url,
+        type: "POST",
+        data: {
+          action: "qp_save_mock_attempt",
+          nonce: qp_ajax_object.nonce,
+          session_id: sessionID,
+          question_id: questionID,
+          option_id: selectedOptionId,
+        },
+      });
     } else if (isAutoCheckEnabled) {
-        // For other modes with auto-check on
-        checkSelectedAnswer();
+      // For other modes with auto-check on
+      checkSelectedAnswer();
     } else {
-        // For other modes with auto-check off
-        $("#qp-check-answer-btn").prop("disabled", false);
+      // For other modes with auto-check off
+      $("#qp-check-answer-btn").prop("disabled", false);
     }
-});
+  });
   // --- NEW: Reusable function to check the selected answer ---
   function checkSelectedAnswer() {
     var optionsArea = $(".qp-options-area");
@@ -1524,7 +1642,7 @@ if (typeof qp_session_data !== "undefined") {
 
     // Lock the UI
     optionsArea.addClass("disabled");
-    $('#qp-check-answer-btn').hide();
+    $("#qp-check-answer-btn").hide();
     $("#qp-skip-btn").prop("disabled", true);
 
     // Stop the timer
@@ -1592,26 +1710,26 @@ if (typeof qp_session_data !== "undefined") {
     checkSelectedAnswer();
   });
 
-  wrapper.on('change', '#qp-auto-check-cb', function() {
-    isAutoCheckEnabled = $(this).is(':checked');
-    sessionStorage.setItem('qpAutoCheckEnabled', isAutoCheckEnabled);
+  wrapper.on("change", "#qp-auto-check-cb", function () {
+    isAutoCheckEnabled = $(this).is(":checked");
+    sessionStorage.setItem("qpAutoCheckEnabled", isAutoCheckEnabled);
 
-    var checkButton = $('#qp-check-answer-btn');
-    var optionsArea = $('.qp-options-area');
-    var isAnswerSelected = optionsArea.find('.option.selected').length > 0;
+    var checkButton = $("#qp-check-answer-btn");
+    var optionsArea = $(".qp-options-area");
+    var isAnswerSelected = optionsArea.find(".option.selected").length > 0;
 
     if (isAutoCheckEnabled) {
-        checkButton.hide();
-        // If an answer is already selected when the user enables auto-check, check it immediately.
-        if (isAnswerSelected) {
-            checkSelectedAnswer();
-        }
+      checkButton.hide();
+      // If an answer is already selected when the user enables auto-check, check it immediately.
+      if (isAnswerSelected) {
+        checkSelectedAnswer();
+      }
     } else {
-        // If auto-check is disabled, show the button.
-        // It should be enabled only if an answer has been selected.
-        checkButton.show().prop('disabled', !isAnswerSelected);
+      // If auto-check is disabled, show the button.
+      // It should be enabled only if an answer has been selected.
+      checkButton.show().prop("disabled", !isAnswerSelected);
     }
-});
+  });
 
   wrapper.on("click", "#qp-next-btn, #qp-prev-btn", function () {
     clearInterval(questionTimer); // Stop the timer immediately
@@ -1688,52 +1806,55 @@ if (typeof qp_session_data !== "undefined") {
   function endSession(isAutoSubmit = false) {
     practiceInProgress = false; // Allow user to leave the page
     if (isMockTest) {
-        clearInterval(mockTestTimer);
+      clearInterval(mockTestTimer);
     }
-    
-    $.ajax({
-        url: qp_ajax_object.ajax_url,
-        type: "POST",
-        data: {
-            action: "end_practice_session",
-            nonce: qp_ajax_object.nonce,
-            session_id: sessionID,
-        },
-        beforeSend: function() {
-            var message = "Generating your results...";
-            if (isMockTest && isAutoSubmit) {
-                message = "Time's up! Submitting your test...";
-            } else if (isMockTest) {
-                message = "Submitting your test...";
-            }
-            wrapper.html(`<p style="text-align:center; padding: 50px;">${message}</p>`);
-        },
-        success: function(response) {
-            if (response.success) {
-                displaySummary(response.data);
-            }
-        },
-        error: function() {
-            alert('An error occurred while submitting the session.');
-        }
-    });
-}
 
-// A single handler for all session-ending buttons
-wrapper.on("click", "#qp-end-practice-btn, #qp-submit-test-btn", function() {
-    var confirmMsg = isMockTest ? "Are you sure you want to submit your test? You cannot make any more changes." : "Are you sure you want to end this practice session?";
+    $.ajax({
+      url: qp_ajax_object.ajax_url,
+      type: "POST",
+      data: {
+        action: "end_practice_session",
+        nonce: qp_ajax_object.nonce,
+        session_id: sessionID,
+      },
+      beforeSend: function () {
+        var message = "Generating your results...";
+        if (isMockTest && isAutoSubmit) {
+          message = "Time's up! Submitting your test...";
+        } else if (isMockTest) {
+          message = "Submitting your test...";
+        }
+        wrapper.html(
+          `<p style="text-align:center; padding: 50px;">${message}</p>`
+        );
+      },
+      success: function (response) {
+        if (response.success) {
+          displaySummary(response.data);
+        }
+      },
+      error: function () {
+        alert("An error occurred while submitting the session.");
+      },
+    });
+  }
+
+  // A single handler for all session-ending buttons
+  wrapper.on("click", "#qp-end-practice-btn, #qp-submit-test-btn", function () {
+    var confirmMsg = isMockTest
+      ? "Are you sure you want to submit your test? You cannot make any more changes."
+      : "Are you sure you want to end this practice session?";
 
     if (confirm(confirmMsg)) {
-        endSession(false);
+      endSession(false);
     }
-});
+  });
 
-
-$(window).on("beforeunload", function() {
+  $(window).on("beforeunload", function () {
     if (practiceInProgress) {
-        return "Are you sure you want to leave? Your practice session is in progress.";
+      return "Are you sure you want to leave? Your practice session is in progress.";
     }
-});
+  });
 
   wrapper.on("click", "#qp-pause-btn", function () {
     if (
