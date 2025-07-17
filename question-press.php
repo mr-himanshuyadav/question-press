@@ -1699,6 +1699,59 @@ function qp_save_mock_attempt_ajax() {
 add_action('wp_ajax_qp_save_mock_attempt', 'qp_save_mock_attempt_ajax');
 
 /**
+ * AJAX handler to update the status of a mock test question.
+ * Handles statuses like viewed, marked_for_review, etc.
+ */
+function qp_update_mock_status_ajax() {
+    check_ajax_referer('qp_practice_nonce', 'nonce');
+    $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
+    $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
+    $new_status = isset($_POST['status']) ? sanitize_key($_POST['status']) : '';
+
+    if (!$session_id || !$question_id || empty($new_status)) {
+        wp_send_json_error(['message' => 'Invalid data provided for status update.']);
+    }
+
+    // A whitelist of allowed statuses to prevent arbitrary data injection.
+    $allowed_statuses = ['viewed', 'answered', 'marked_for_review', 'answered_and_marked_for_review', 'not_viewed'];
+    if (!in_array($new_status, $allowed_statuses)) {
+        wp_send_json_error(['message' => 'Invalid status provided.']);
+    }
+
+    global $wpdb;
+    $attempts_table = $wpdb->prefix . 'qp_user_attempts';
+    $user_id = get_current_user_id();
+
+    // Find the existing attempt for this question in this session.
+    $existing_attempt_id = $wpdb->get_var($wpdb->prepare(
+        "SELECT attempt_id FROM {$attempts_table} WHERE session_id = %d AND question_id = %d",
+        $session_id, $question_id
+    ));
+
+    $data_to_update = ['mock_status' => $new_status];
+
+    // If the user is clearing their response, we should also nullify their selected option.
+    if ($new_status === 'viewed') {
+        $data_to_update['selected_option_id'] = null;
+    }
+
+    if ($existing_attempt_id) {
+        // If an attempt record exists, update its mock_status.
+        $wpdb->update($attempts_table, $data_to_update, ['attempt_id' => $existing_attempt_id]);
+    } else {
+        // If no record exists yet (e.g., the user just viewed it), create one.
+        $data_to_update['session_id'] = $session_id;
+        $data_to_update['user_id'] = $user_id;
+        $data_to_update['question_id'] = $question_id;
+        $data_to_update['status'] = 'viewed'; // The main status remains 'viewed' until answered.
+        $wpdb->insert($attempts_table, $data_to_update);
+    }
+
+    wp_send_json_success(['message' => 'Status updated.']);
+}
+add_action('wp_ajax_qp_update_mock_status', 'qp_update_mock_status_ajax');
+
+/**
  * AJAX handler to start a REVISION practice session.
  */
 function qp_start_revision_session_ajax()
