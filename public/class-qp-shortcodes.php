@@ -40,6 +40,10 @@ class QP_Shortcodes
                                 <input type="radio" name="practice_mode_selection" value="3">
                                 <span class="qp-mode-radio-button">Revision Mode</span>
                             </label>
+                            <label class="qp-mode-radio-label">
+                                <input type="radio" name="practice_mode_selection" value="4">
+                                <span class="qp-mode-radio-button">Mock Test</span>
+                            </label>
                         </div>
 
                         <div class="qp-step-1-footer">
@@ -64,6 +68,16 @@ class QP_Shortcodes
                         <button class="qp-back-btn" data-target-step="1">&larr; Back to Mode Selection</button>
                         <?php echo self::render_revision_mode_form(); // New function for the revision form 
                         ?>
+                    </div>
+                </div>
+
+                <div id="qp-step-4" class="qp-form-step">
+                    <div class="qp-step-content">
+                        <button class="qp-back-btn" data-target-step="1">&larr; Back to Mode Selection</button>
+                        <?php // We will add the form here in the next step 
+                        ?>
+                        <h2>Mock Test Settings</h2>
+                        <p>This feature is under construction.</p>
                     </div>
                 </div>
 
