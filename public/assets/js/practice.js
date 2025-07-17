@@ -3,6 +3,7 @@ jQuery(document).ready(function ($) {
   var isAutoCheckEnabled = false;
   var mockTestTimer; // Specific timer for mock tests
   var isMockTest = false;
+  var paletteGrids = $('#qp-palette-docked .qp-palette-grid, #qp-palette-sliding .qp-palette-grid');
 
   function openFullscreen() {
     var elem = document.documentElement; // Get the root element (the whole page)
@@ -85,8 +86,37 @@ jQuery(document).ready(function ($) {
         status: newStatus,
       },
     });
+    renderPalette();
   }
-  // --- LOGIC FOR REVISION FORM DROPDOWNS ---
+  
+  // --- NEW: Renders and updates the question palette ---
+function renderPalette() {
+    // Clear any existing buttons from both palettes
+    paletteGrids.empty();
+
+    // Loop through every question in the session
+    sessionQuestionIDs.forEach(function(questionID, index) {
+        const questionState = answeredStates[questionID] || {};
+        const status = questionState.mock_status || 'not_viewed';
+
+        // Create the button element
+        const paletteBtn = $('<button></button>')
+            .addClass('qp-palette-btn')
+            .attr('data-question-index', index)
+            .text(index + 1);
+
+        // Add the status class for color-coding
+        paletteBtn.addClass('status-' + status);
+
+        // Add the 'current' class if it's the active question
+        if (index === currentQuestionIndex) {
+            paletteBtn.addClass('current');
+        }
+
+        // Add the button to both palette grids
+        paletteGrids.append(paletteBtn);
+    });
+}
   // --- LOGIC FOR MOCK TEST FORM DROPDOWNS ---
   $("#qp_subject_dropdown_mock").on(
     "change",
@@ -1092,6 +1122,7 @@ jQuery(document).ready(function ($) {
       endSession(false);
     } else {
       loadQuestion(sessionQuestionIDs[currentQuestionIndex]);
+      renderPalette();
     }
   }
 
@@ -1809,6 +1840,7 @@ jQuery(document).ready(function ($) {
       if (currentQuestionIndex > 0) {
         currentQuestionIndex--;
         loadQuestion(sessionQuestionIDs[currentQuestionIndex], "prev");
+        renderPalette(); 
       }
     }
   });
@@ -2067,5 +2099,23 @@ if (typeof qp_session_data !== "undefined") {
     });
 }
 
+  // --- NEW: Palette Button Click Handler ---
+// Use event delegation on the document in case palettes are not visible on load
+$(document).on('click', '.qp-palette-btn', function() {
+    var newIndex = parseInt($(this).data('question-index'), 10);
+    if (newIndex === currentQuestionIndex) {
+        return; // Do nothing if clicking the current question
+    }
+
+    var direction = newIndex > currentQuestionIndex ? 'next' : 'prev';
+    currentQuestionIndex = newIndex;
+
+    if (isMockTest) {
+        $('#qp-question-counter').text((currentQuestionIndex + 1) + "/" + sessionQuestionIDs.length);
+    }
+
+    loadQuestion(sessionQuestionIDs[currentQuestionIndex], direction);
+    renderPalette(); // Re-render to update the 'current' highlight
+});
 
 });

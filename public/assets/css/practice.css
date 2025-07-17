@@ -342,95 +342,151 @@ body {
     margin-bottom: 1.2rem;
 }
 
-/* --- NEW: Question Palette Layout & Styles --- */
 
-/* On Desktop: Two-column layout using Flexbox */
+/* --- 1. Main Wrapper & Content Area --- */
+#qp-practice-app-wrapper {
+    width: 100%;
+}
+
+.qp-practice-wrapper {
+    max-width: 840px; /* Default narrow width for optional modes */
+    margin: 0 auto;
+}
+
+#qp-main-content {
+    width: 100%; /* Ensure content area takes full width by default */
+}
+
+
+/* =================================================================
+   Question Palette System
+================================================================= */
+
+/* --- 1. Main Layout Containers --- */
+
+/* The main wrapper's default state is narrow and centered */
+.qp-practice-wrapper {
+    max-width: 840px;
+    margin: 0 auto;
+}
+
+/* This is the content area that sits next to the docked palette */
+#qp-main-content {
+    width: 100%;
+}
+
+
+/* --- 2. Docked Palette Layout (Mandatory Modes on Desktop) --- */
 @media (min-width: 960px) {
-    .qp-container.qp-practice-wrapper {
-        display: flex;
+    /* When this class is on the body, activate the two-column grid */
+    body.palette-mandatory .qp-practice-wrapper {
+        display: grid;
+        grid-template-columns: 320px 1fr; /* Fixed left column, flexible right */
         gap: 1.5rem;
-        max-width: 1400px; /* Allow the container to be wider */
-        align-items: flex-start; /* Align items to the top */
+        max-width: 1400px;
     }
 
-    #qp-question-palette {
-        flex: 0 0 320px; /* Palette has a fixed width */
-        position: sticky;
-        top: 2rem; /* Sticks to the top while scrolling */
+    /* Show the docked palette and hide the sliding one */
+    body.palette-mandatory #qp-palette-docked {
+        display: flex; /* Makes it visible */
+    }
+    body.palette-mandatory #qp-palette-sliding {
+        display: none;
     }
 
-    #qp-main-content {
-        flex: 1; /* Main content takes the remaining space */
-    }
+    /* The main content area automatically fits in the second grid column */
 }
 
-/* Base styles for the palette */
-#qp-question-palette {
-    background-color: var(--qp-bg-white);
+/* --- 3. Sliding Overlay Palette (Optional & Mobile) --- */
+
+/* Base styles for BOTH palette containers */
+#qp-palette-docked,
+#qp-palette-sliding {
+    display: none; /* Both are hidden by default */
+    flex-direction: column;
+    background-color: #f6f7f7;
+    border: 1px solid var(--qp-border-color);
     border-radius: var(--qp-radius);
-    padding: 1rem;
-    box-shadow: var(--qp-shadow);
-    display: none; /* Hidden by default, shown by a class */
+    height: 85vh; /* Prevents it from being too tall on large monitors */
 }
 
-/* A class to make the palette visible */
-.palette-visible #qp-question-palette {
-    display: block;
+/* The SLIDING palette is a fixed overlay */
+#qp-palette-sliding {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 320px;
+    height: 100%;
+    z-index: 1100;
+    border-radius: 0;
+    border-width: 0 1px 0 0;
+    transform: translateX(-100%);
+    transition: transform 0.35s ease;
 }
 
+/* This class on the BODY triggers the slide-in animation */
+body.palette-overlay-open #qp-palette-sliding {
+    display: flex; /* Make it visible */
+    transform: translateX(0);
+    box-shadow: 0 0 25px rgba(0,0,0,0.15);
+}
+
+
+/* --- 4. Mobile Layout Override --- */
+@media (max-width: 959px) {
+    /* Always hide the docked version on mobile */
+    #qp-palette-docked {
+        display: none !important;
+    }
+
+    /* The sliding palette comes from the bottom on mobile */
+    #qp-palette-sliding {
+        width: 100%;
+        height: 75vh;
+        top: auto;
+        bottom: 0;
+        border-width: 1px 0 0 0;
+        transform: translateY(100%);
+    }
+
+    /* The class triggers the slide-up animation on mobile */
+    body.palette-overlay-open #qp-palette-sliding {
+        transform: translateY(0);
+    }
+}
+
+
+/* --- 5. Palette Header, Grid, and Buttons --- */
 .qp-palette-header {
-    text-align: center;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
     border-bottom: 1px solid var(--qp-border-color);
-    padding-bottom: 1rem;
-    margin-bottom: 1rem;
+    background-color: #fff;
+    flex-shrink: 0;
 }
-
 .qp-palette-header h4 {
-    margin: 0 0 0.75rem 0;
-    font-size: 1.2rem;
+    margin: 0;
+    font-size: 1.1rem;
+}
+#qp-palette-close-btn {
+    background: none;
+    border: none;
+    font-size: 28px;
+    cursor: pointer;
+    color: var(--qp-light-text);
+    padding: 0 10px;
 }
 
-/* This is the grid where the number buttons will go */
 .qp-palette-grid {
+    padding: 1rem;
+    overflow-y: auto;
+    flex-grow: 1;
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(45px, 1fr));
-    gap: 10px;
-    max-height: 60vh;
-    overflow-y: auto;
-    padding-right: 5px; /* For scrollbar spacing */
+    gap: 12px;
 }
-
-/* --- Toggle Button --- */
-.qp-palette-toggle-wrapper {
-    margin-top: 1.5rem;
-    text-align: center;
-}
-
-#qp-palette-toggle-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-}
-
-/* On Mobile: Stack layout and control element order */
-@media (max-width: 959px) {
-    .qp-practice-wrapper {
-        flex-direction: column;
-    }
-
-    /* Move the palette to the end of the flex container */
-    .palette-visible #qp-question-palette {
-        order: 10;
-        margin-top: 1.5rem;
-    }
-
-    /* The toggle button is now correctly positioned before the footer nav */
-    .qp-palette-toggle-wrapper {
-        margin-bottom: 1.5rem;
-    }
-}
-
-/* --- NEW: Palette Button Styles --- */
 
 /* Base style for all palette buttons */
 .qp-palette-btn {
@@ -455,14 +511,14 @@ body {
     box-shadow: 0 4px 8px rgba(0,0,0,0.08);
 }
 
-/* Style for the currently active question */
+/* --- 6. Palette Button Status Styles --- */
+
+/* Current Question */
 .qp-palette-btn.current {
     border-width: 3px;
     border-color: var(--qp-primary-color);
     color: var(--qp-primary-color);
 }
-
-/* --- Status-Specific Colors --- */
 
 /* Not Viewed (Default) */
 .qp-palette-btn.status-not_viewed {
@@ -472,31 +528,30 @@ body {
 
 /* Viewed (but not answered) */
 .qp-palette-btn.status-viewed {
-    background-color: #fff8e1; /* Light Yellow */
-    border-color: #ffc107;
+    background-color: #ffc107; /* Amber */
+    color: #fff;
+    border-color: #c79100;
 }
 
 /* Answered */
 .qp-palette-btn.status-answered {
-    background-color: var(--qp-correct-bg);
-    border-color: var(--qp-correct-color);
-    color: var(--qp-correct-color);
+    background-color: var(--qp-correct-color);
+    border-color: #1b5e20;
+    color: #fff;
 }
 
 /* Marked for Review (and not answered) */
 .qp-palette-btn.status-marked_for_review {
-    background-color: #e8eaf6; /* Light Indigo */
-    border-color: #5d3d9b;
-    color: #5d3d9b;
+    background-color: #5d3d9b; /* Purple */
+    border-color: #311b92;
+    color: #fff;
 }
 
 /* Answered AND Marked for Review */
 .qp-palette-btn.status-answered_and_marked_for_review {
-    background-color: var(--qp-correct-bg);
-    border-color: var(--qp-correct-color);
-    color: var(--qp-correct-color);
-    /* Add a small dot to indicate review status */
-    position: relative;
+    background-color: var(--qp-correct-color);
+    border-color: #1b5e20;
+    color: #fff;
 }
 
 .qp-palette-btn.status-answered_and_marked_for_review::after {
@@ -512,108 +567,7 @@ body {
 }
 
 
-/* --- FINAL: Question Palette Styles (v3) --- */
-
-/* --- Base Wrapper and Content Styles --- */
-#qp-practice-app-wrapper {
-    width: 100%;
-}
-.qp-practice-wrapper {
-    max-width: 840px; /* Default narrow width */
-    margin: 0 auto;
-}
-
-/* --- State 1: MANDATORY Two-Column Layout (Desktop) --- */
-@media (min-width: 960px) {
-    /* When body has this class, activate the two-column layout */
-    body.palette-mandatory .qp-practice-wrapper {
-        display: flex;
-        gap: 1.5rem;
-        max-width: 1400px; /* Use the wider layout */
-        align-items: flex-start;
-    }
-
-    /* Make the palette visible and define its size */
-    body.palette-mandatory #qp-question-palette {
-        display: flex; /* Use flexbox for the palette itself */
-        flex-direction: column;
-        flex: 0 0 320px; /* Fixed width for the left column */
-    }
-
-    /* The main content takes the remaining space */
-    body.palette-mandatory #qp-main-content {
-        flex: 1;
-    }
-
-    /* Hide the toggle button when the palette is mandatory */
-    body.palette-mandatory #qp-palette-toggle-btn {
-        display: none;
-    }
-}
-
-/* --- State 2: OPTIONAL Slide-In Overlay (Desktop) --- */
-#qp-question-palette {
-    display: none; /* Hidden by default for optional modes */
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 320px;
-    height: 100%;
-    background-color: #f6f7f7;
-    border-right: 1px solid var(--qp-border-color);
-    z-index: 1100;
-    transform: translateX(-100%);
-    transition: transform 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-    flex-direction: column;
-}
-
-/* This class toggles the slide-in overlay for optional modes */
-body.palette-overlay-open #qp-question-palette {
-    display: flex;
-    transform: translateX(0);
-    box-shadow: 0 0 25px rgba(0,0,0,0.15);
-}
-
-/* --- State 3: MOBILE Slide-Up Overlay (All Modes) --- */
-@media (max-width: 959px) {
-    #qp-question-palette {
-        width: 100%;
-        height: 75vh;
-        top: auto;
-        bottom: 0;
-        border-right: none;
-        border-top: 1px solid var(--qp-border-color);
-        transform: translateY(100%);
-    }
-
-    body.palette-overlay-open #qp-question-palette {
-        transform: translateY(0);
-    }
-}
-
-
-/* --- Common Palette & Button Styles --- */
-.qp-palette-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 1rem;
-    border-bottom: 1px solid var(--qp-border-color);
-    background-color: #fff;
-    flex-shrink: 0;
-}
-.qp-palette-header h4 { margin: 0; font-size: 1.1rem; }
-#qp-palette-close-btn { background: none; border: none; font-size: 28px; cursor: pointer; color: var(--qp-light-text); padding: 0 10px; }
-
-.qp-palette-grid {
-    padding: 1rem;
-    overflow-y: auto;
-    flex-grow: 1;
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(45px, 1fr));
-    gap: 12px;
-}
-
+/* --- 7. Header Toggle Button --- */
 .qp-header-top-row {
     display: flex;
     justify-content: space-between;
@@ -633,8 +587,21 @@ body.palette-overlay-open #qp-question-palette {
     align-items: center;
     transition: all 0.2s ease;
 }
-#qp-palette-toggle-btn:hover { background-color: var(--qp-bg-light); border-color: #a7aaad; }
-#qp-palette-toggle-btn .dashicons { font-size: 22px; color: var(--qp-light-text); }
+
+#qp-palette-toggle-btn:hover {
+    background-color: var(--qp-bg-light);
+    border-color: #a7aaad;
+}
+
+#qp-palette-toggle-btn .dashicons {
+    font-size: 22px;
+    color: var(--qp-light-text);
+}
+
+/* Hide toggle button in mandatory modes */
+body.palette-mandatory #qp-palette-toggle-btn {
+    display: none;
+}
 
 /* --- NEW: Mock Test Action Buttons --- */
 .qp-mock-test-actions {
