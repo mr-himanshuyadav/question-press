@@ -760,9 +760,11 @@ z-index: 2;
     color: var(--qp-light-text);
 }
 
-/* Hide toggle button in mandatory modes */
-body.palette-mandatory #qp-palette-toggle-btn {
-    display: none;
+/* This new version only hides the button on desktop */
+@media (min-width: 960px) {
+    body.palette-mandatory #qp-palette-toggle-btn {
+        display: none;
+    }
 }
 
 /* --- NEW: Mock Test Action Buttons --- */
