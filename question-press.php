@@ -1407,7 +1407,7 @@ function qp_start_mock_test_session_ajax() {
 
     $wpdb->insert($wpdb->prefix . 'qp_user_sessions', [
         'user_id'                 => get_current_user_id(),
-        'status'                  => 'active',
+        'status'                  => 'mock_test',
         'start_time'              => current_time('mysql'),
         'last_activity'           => current_time('mysql'),
         'settings_snapshot'       => wp_json_encode($session_settings),
@@ -1427,8 +1427,6 @@ function qp_get_practice_form_html_ajax()
     wp_send_json_success(['form_html' => QP_Shortcodes::render_practice_form()]);
 }
 add_action('wp_ajax_get_practice_form_html', 'qp_get_practice_form_html_ajax');
-
-// In question-press.php, REPLACE this function
 
 function qp_get_question_data_ajax()
 {

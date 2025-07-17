@@ -285,7 +285,19 @@ class QP_Shortcodes
         $session_data_from_db = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$sessions_table} WHERE session_id = %d", $session_id));
 
         // **THE FIX**: This is the new, simplified error handling logic.
-        if (!$session_data_from_db || (int)$session_data_from_db->user_id !== $user_id) {
+        // **THE FIX**: This is the new, simplified error handling logic.
+        if (!$session_data_from_db) {
+            // Session does not exist at all.
+            $options = get_option('qp_settings');
+            $dashboard_page_url = isset($options['dashboard_page']) ? get_permalink($options['dashboard_page']) : home_url('/');
+            return '<div class="qp-container" style="text-align: center; padding: 40px 20px;">
+            <h3 style="margin-top:0; font-size: 22px;">Session Not Found</h3>
+            <p style="font-size: 16px; color: #555; margin-bottom: 25px;">This session is either invalid, has been completed, or was abandoned and has been removed.</p>
+            <a href="' . esc_url($dashboard_page_url) . '" class="qp-button qp-button-primary" style="text-decoration: none;">View Dashboard</a>
+        </div>';
+        }
+
+        if ((int)$session_data_from_db->user_id !== $user_id) {
             // --- NEW: Handle sessions that are paused after the last question is answered ---
             $question_ids = json_decode($session_data_from_db->question_ids_snapshot, true);
             $attempts_table = $wpdb->prefix . 'qp_user_attempts';
@@ -293,6 +305,8 @@ class QP_Shortcodes
                 "SELECT COUNT(DISTINCT question_id) FROM {$attempts_table} WHERE session_id = %d",
                 $session_id
             ));
+
+
 
             if ($session_data_from_db->status !== 'completed' && count($question_ids) > 0 && $attempt_count >= count($question_ids)) {
                 // If all questions have been attempted but the session isn't marked as 'completed',
@@ -384,12 +398,21 @@ class QP_Shortcodes
         $initial_elapsed_time = max(0, $initial_elapsed_time);
 
         // --- If the session is active, proceed as normal ---
+        $session_settings = json_decode($session_data_from_db->settings_snapshot, true);
         $session_data = [
             'session_id'    => $session_id,
             'question_ids'  => json_decode($session_data_from_db->question_ids_snapshot, true),
-            'settings'      => json_decode($session_data_from_db->settings_snapshot, true),
+            'settings'      => $session_settings,
             'initial_elapsed_seconds' => $initial_elapsed_time,
         ];
+
+        // If it's a mock test, calculate the absolute end time based on start time and duration
+        if (isset($session_settings['practice_mode']) && $session_settings['practice_mode'] === 'mock_test') {
+            $start_time = strtotime($session_data_from_db->start_time);
+            $duration_seconds = $session_settings['timer_seconds'];
+            // The end time is passed as a UTC timestamp (seconds since epoch) for JavaScript
+            $session_data['test_end_timestamp'] = $start_time + $duration_seconds;
+        }
 
         $attempt_history = $wpdb->get_results($wpdb->prepare(
             "SELECT a.question_id, a.selected_option_id, a.is_correct, a.status, a.remaining_time, o.option_id as correct_option_id
@@ -593,29 +616,48 @@ class QP_Shortcodes
 
     public static function render_practice_ui()
     {
+        // Get the settings for the current session to determine the mode
+        $session_settings = self::$session_data_for_script['settings'] ?? [];
+        $is_mock_test = isset($session_settings['practice_mode']) && $session_settings['practice_mode'] === 'mock_test';
+
         ob_start();
     ?>
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <div class="qp-container qp-practice-wrapper">
             <div class="qp-header">
-                <div class="qp-header-bottom-row">
-                    <div class="qp-header-stat score">
-                        <span class="value" id="qp-score">0.00</span>
-                        <span class="label">Score</span>
+
+                <?php if ($is_mock_test) : ?>
+                    <div class="qp-header-bottom-row">
+                        <div class="qp-header-stat">
+                            <span class="value" id="qp-mock-test-timer">--:--</span>
+                            <span class="label">Time Remaining</span>
+                        </div>
+                        <div class="qp-header-stat">
+                            <span class="value" id="qp-question-counter">--/--</span>
+                            <span class="label">Questions</span>
+                        </div>
                     </div>
-                    <div class="qp-header-stat correct">
-                        <span class="value" id="qp-correct-count">0</span>
-                        <span class="label">Correct</span>
+                <?php else : ?>
+                    <div class="qp-header-bottom-row">
+                        <div class="qp-header-stat score">
+                            <span class="value" id="qp-score">0.00</span>
+                            <span class="label">Score</span>
+                        </div>
+                        <div class="qp-header-stat correct">
+                            <span class="value" id="qp-correct-count">0</span>
+                            <span class="label">Correct</span>
+                        </div>
+                        <div class="qp-header-stat incorrect">
+                            <span class="value" id="qp-incorrect-count">0</span>
+                            <span class="label">Incorrect</span>
+                        </div>
+                        <div class="qp-header-stat skipped">
+                            <span class="value" id="qp-skipped-count">0</span>
+                            <span class="label">Skipped</span>
+                        </div>
                     </div>
-                    <div class="qp-header-stat incorrect">
-                        <span class="value" id="qp-incorrect-count">0</span>
-                        <span class="label">Incorrect</span>
-                    </div>
-                    <div class="qp-header-stat skipped">
-                        <span class="value" id="qp-skipped-count">0</span>
-                        <span class="label">Skipped</span>
-                    </div>
-                </div>
+                <?php endif; ?>
+
             </div>
 
             <div class="qp-animatable-area-container">
@@ -626,24 +668,25 @@ class QP_Shortcodes
                             <div id="qp-question-source" style="display: none;"></div>
                         </div>
                         <div class="qp-question-meta-right">
-                            <div class="qp-question-counter-box" style="display: none;">
-                                <span class="qp-counter-label">Q. No.</span>
-                                <span class="qp-counter-value" id="qp-question-counter">--/--</span>
-                            </div>
+                            <?php if (!$is_mock_test) : ?>
+                                <div class="qp-question-counter-box" style="display: none;">
+                                    <span class="qp-counter-label">Q. No.</span>
+                                    <span class="qp-counter-value" id="qp-question-counter">--/--</span>
+                                </div>
+                            <?php endif; ?>
                             <button id="qp-report-btn" class="qp-report-button qp-button-secondary">
                                 <span>&#9888;</span> Report
                             </button>
                         </div>
-
                     </div>
 
-                    <div class="qp-indicator-bar" style="display: none;">
-                        <div id="qp-timer-indicator" class="timer-stat" style="display: none;">--:--</div>
-                        <div id="qp-revision-indicator" style="display: none;">&#9851; Revision</div>
-                        <div id="qp-reported-indicator" style="display: none;">&#9888; Reported</div>
-                    </div>
-
-
+                    <?php if (!$is_mock_test) : ?>
+                        <div class="qp-indicator-bar" style="display: none;">
+                            <div id="qp-timer-indicator" class="timer-stat" style="display: none;">--:--</div>
+                            <div id="qp-revision-indicator" style="display: none;">&#9851; Revision</div>
+                            <div id="qp-reported-indicator" style="display: none;">&#9888; Reported</div>
+                        </div>
+                    <?php endif; ?>
 
                     <div class="qp-question-area">
                         <div class="qp-direction" style="display: none;"></div>
@@ -653,18 +696,20 @@ class QP_Shortcodes
                     </div>
 
                     <div class="qp-options-area"></div>
-                    <div class="qp-review-later" style="text-align:center;margin-bottom: 5px;"><label class="qp-review-later-checkbox qp-button qp-button-secondary">
-                            <input type="checkbox" id="qp-mark-for-review-cb">
-                            <span>Mark for Review</span>
-                        </label>
-                        <button id="qp-check-answer-btn" class="qp-button qp-button-primary" disabled>Check Answer</button>
-                        <label class="qp-custom-checkbox" style="margin-left: 15px;">
-                            <input type="checkbox" id="qp-auto-check-cb">
-                            <span></span>
-                            Auto Check
-                        </label>
-                    </div>
 
+                    <?php if (!$is_mock_test) : ?>
+                        <div class="qp-review-later" style="text-align:center;margin-bottom: 5px;"><label class="qp-review-later-checkbox qp-button qp-button-secondary">
+                                <input type="checkbox" id="qp-mark-for-review-cb">
+                                <span>Mark for Review</span>
+                            </label>
+                            <button id="qp-check-answer-btn" class="qp-button qp-button-primary" disabled>Check Answer</button>
+                            <label class="qp-custom-checkbox" style="margin-left: 15px;">
+                                <input type="checkbox" id="qp-auto-check-cb">
+                                <span></span>
+                                Auto Check
+                            </label>
+                        </div>
+                    <?php endif; ?>
                 </div>
             </div>
 
@@ -672,7 +717,11 @@ class QP_Shortcodes
                 <button id="qp-prev-btn" class="qp-button qp-button-primary" disabled>
                     <span>&#9664;</span>
                 </button>
-                <button id="qp-skip-btn" class="qp-button qp-button-secondary">Skip</button>
+
+                <?php if (!$is_mock_test) : ?>
+                    <button id="qp-skip-btn" class="qp-button qp-button-secondary">Skip</button>
+                <?php endif; ?>
+
                 <button id="qp-next-btn" class="qp-button qp-button-primary">
                     <span>&#9654;</span>
                 </button>
@@ -681,10 +730,12 @@ class QP_Shortcodes
             <hr class="qp-footer-divider">
 
             <div class="qp-footer-controls">
-
-                <button id="qp-pause-btn" class="qp-button qp-button-secondary">Pause & Save</button>
-
-                <button id="qp-end-practice-btn" class="qp-button qp-button-danger">End Session</button>
+                <?php if ($is_mock_test) : ?>
+                    <button id="qp-submit-test-btn" class="qp-button qp-button-danger">Submit Test</button>
+                <?php else : ?>
+                    <button id="qp-pause-btn" class="qp-button qp-button-secondary">Pause & Save</button>
+                    <button id="qp-end-practice-btn" class="qp-button qp-button-danger">End Session</button>
+                <?php endif; ?>
             </div>
         </div>
         <div id="qp-report-modal-backdrop" style="display: none;">
