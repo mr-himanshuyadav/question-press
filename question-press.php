@@ -1660,13 +1660,34 @@ function qp_save_mock_attempt_ajax() {
     $attempts_table = $wpdb->prefix . 'qp_user_attempts';
     $user_id = get_current_user_id();
 
-    // is_correct is intentionally left NULL. It will be calculated upon submission.
-    $wpdb->query($wpdb->prepare(
-        "INSERT INTO {$attempts_table} (session_id, user_id, question_id, selected_option_id, status)
-         VALUES (%d, %d, %d, %d, 'answered')
-         ON DUPLICATE KEY UPDATE selected_option_id = %d, attempt_time = NOW()",
-        $session_id, $user_id, $question_id, $option_id, $option_id
+    // --- FIX: Explicitly check for an existing attempt before inserting/updating ---
+    $existing_attempt_id = $wpdb->get_var($wpdb->prepare(
+        "SELECT attempt_id FROM {$attempts_table} WHERE session_id = %d AND question_id = %d",
+        $session_id, $question_id
     ));
+
+    if ($existing_attempt_id) {
+        // If an attempt already exists, UPDATE it with the new option
+        $wpdb->update(
+            $attempts_table,
+            [
+                'selected_option_id' => $option_id,
+                'attempt_time' => current_time('mysql'),
+                'status' => 'answered' // Ensure status is 'answered'
+            ],
+            ['attempt_id' => $existing_attempt_id]
+        );
+    } else {
+        // If no attempt exists, INSERT a new one
+        $wpdb->insert($attempts_table, [
+            'session_id' => $session_id,
+            'user_id' => $user_id,
+            'question_id' => $question_id,
+            'selected_option_id' => $option_id,
+            'is_correct' => null, // Graded at the end
+            'status' => 'answered'
+        ]);
+    }
     
     // Also update the session's last activity to keep it from timing out
     $wpdb->update($wpdb->prefix . 'qp_user_sessions', ['last_activity' => current_time('mysql')], ['session_id' => $session_id]);
@@ -1925,7 +1946,7 @@ function qp_end_practice_session_ajax()
 
         // Add any un-attempted questions as 'skipped'
         $all_question_ids = json_decode($session->question_ids_snapshot, true);
-        $attempted_question_ids = wp_list_pluck($answered_attempts, 'question_id');
+        $attempted_question_ids = array_map('intval', wp_list_pluck($answered_attempts, 'question_id'));
         $skipped_question_ids = array_diff($all_question_ids, $attempted_question_ids);
 
         foreach($skipped_question_ids as $question_id) {
