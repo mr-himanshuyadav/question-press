@@ -814,17 +814,17 @@ class QP_Shortcodes
             </div>
                     </div>
             <?php
-        // --- NEW: Palette Toggle Button ---
-        // The palette is always on for mock tests and section practice
-        $is_palette_mandatory = $is_mock_test || (isset($session_settings['practice_mode']) && $session_settings['practice_mode'] === 'Section Wise Practice');
-        if (!$is_palette_mandatory) :
-    ?>
-        <div class="qp-palette-toggle-wrapper">
-            <button id="qp-palette-toggle-btn" class="qp-button qp-button-secondary">
-                <span>&#9776;</span> Question Palette
-            </button>
-        </div>
+            // --- NEW: Palette Toggle Button ---
+            // The palette is always on for mock tests and section practice
+            $is_palette_mandatory = $is_mock_test || (isset($session_settings['practice_mode']) && $session_settings['practice_mode'] === 'Section Wise Practice'); if (!$is_palette_mandatory) :?>
+            
+            <div class="qp-palette-toggle-wrapper">
+                <button id="qp-palette-toggle-btn" class="qp-button qp-button-secondary">
+                    <span>&#9776;</span> Question Palette
+                </button>
+            </div>
     <?php endif; ?>
+    
             <div id="qp-start-session-overlay">
                 <div class="qp-start-session-content">
                     <h3>Your session is ready.</h3>

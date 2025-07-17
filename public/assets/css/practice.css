@@ -340,6 +340,83 @@ body {
     margin-bottom: 1.2rem;
 }
 
+/* --- NEW: Question Palette Layout & Styles --- */
+
+/* On Desktop: Two-column layout using Flexbox */
+@media (min-width: 960px) {
+    .qp-container.qp-practice-wrapper {
+        display: flex;
+        gap: 1.5rem;
+        max-width: 1400px; /* Allow the container to be wider */
+        align-items: flex-start; /* Align items to the top */
+    }
+
+    #qp-question-palette {
+        flex: 0 0 320px; /* Palette has a fixed width */
+        position: sticky;
+        top: 2rem; /* Sticks to the top while scrolling */
+    }
+
+    #qp-main-content {
+        flex: 1; /* Main content takes the remaining space */
+    }
+}
+
+/* Base styles for the palette */
+#qp-question-palette {
+    background-color: var(--qp-bg-white);
+    border-radius: var(--qp-radius);
+    padding: 1rem;
+    box-shadow: var(--qp-shadow);
+    display: none; /* Hidden by default, shown by a class */
+}
+
+/* A class to make the palette visible */
+.palette-visible #qp-question-palette {
+    display: block;
+}
+
+.qp-palette-header {
+    text-align: center;
+    border-bottom: 1px solid var(--qp-border-color);
+    padding-bottom: 1rem;
+    margin-bottom: 1rem;
+}
+
+.qp-palette-header h4 {
+    margin: 0 0 0.75rem 0;
+    font-size: 1.2rem;
+}
+
+/* This is the grid where the number buttons will go */
+.qp-palette-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(45px, 1fr));
+    gap: 10px;
+    max-height: 60vh;
+    overflow-y: auto;
+    padding-right: 5px; /* For scrollbar spacing */
+}
+
+/* --- Toggle Button --- */
+.qp-palette-toggle-wrapper {
+    margin-top: 1.5rem;
+    text-align: center;
+}
+
+#qp-palette-toggle-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* On Mobile: When palette is visible, it stacks vertically */
+@media (max-width: 959px) {
+    .palette-visible #qp-question-palette {
+        margin-bottom: 1.5rem;
+    }
+}
+
 /* --- NEW: Mock Test Action Buttons --- */
 .qp-mock-test-actions {
     display: flex;
