@@ -748,10 +748,10 @@ jQuery(document).ready(function ($) {
     sessionQuestionIDs = qp_session_data.question_ids;
     sessionSettings = qp_session_data.settings;
     // --- NEW: Restore Auto Check state from sessionStorage ---
-    var savedAutoCheckState = sessionStorage.getItem('qpAutoCheckEnabled');
+    var savedAutoCheckState = sessionStorage.getItem("qpAutoCheckEnabled");
     if (savedAutoCheckState !== null) {
-        isAutoCheckEnabled = (savedAutoCheckState === 'true');
-        $('#qp-auto-check-cb').prop('checked', isAutoCheckEnabled);
+      isAutoCheckEnabled = savedAutoCheckState === "true";
+      $("#qp-auto-check-cb").prop("checked", isAutoCheckEnabled);
     }
 
     // Conditionally hide the score element if the session is unscored
@@ -1051,7 +1051,11 @@ jQuery(document).ready(function ($) {
     var optionsArea = $(".qp-options-area").empty().removeClass("disabled");
     $("#qp-skip-btn, #qp-report-btn").prop("disabled", false);
     $("#qp-next-btn").prop("disabled", true);
-    $("#qp-check-answer-btn").prop("disabled", true);
+    if (isAutoCheckEnabled) {
+      $("#qp-check-answer-btn").hide();
+    } else {
+      $("#qp-check-answer-btn").show().prop("disabled", true);
+    }
 
     // 2. Render all static content
     var indicatorBar = $(".qp-indicator-bar").hide(); // Hide the bar by default
@@ -1361,45 +1365,44 @@ jQuery(document).ready(function ($) {
 
     wrapper.html(summaryHtml);
   }
-  
-  
-// Handles clicking an answer option to select it
-wrapper.on("click", ".qp-options-area .option", function () {
+
+  // Handles clicking an answer option to select it
+  wrapper.on("click", ".qp-options-area .option", function () {
     var selectedOption = $(this);
     var optionsArea = selectedOption.closest(".qp-options-area");
 
     // Do nothing if the question has already been answered
     if (optionsArea.hasClass("disabled")) {
-        return;
+      return;
     }
 
     // Update visual selection
-    optionsArea.find('.option').removeClass('selected');
-    selectedOption.addClass('selected');
-    selectedOption.find('input[type="radio"]').prop('checked', true);
+    optionsArea.find(".option").removeClass("selected");
+    selectedOption.addClass("selected");
+    selectedOption.find('input[type="radio"]').prop("checked", true);
 
     // If auto-check is on, check the answer immediately. Otherwise, just enable the button.
     if (isAutoCheckEnabled) {
-        checkSelectedAnswer(); // Directly call our new function
+      checkSelectedAnswer(); // Directly call our new function
     } else {
-        $('#qp-check-answer-btn').prop('disabled', false);
+      $("#qp-check-answer-btn").prop("disabled", false);
     }
-});
+  });
 
-// --- NEW: Reusable function to check the selected answer ---
-function checkSelectedAnswer() {
-    var optionsArea = $('.qp-options-area');
-    var selectedOption = optionsArea.find('.option.selected');
+  // --- NEW: Reusable function to check the selected answer ---
+  function checkSelectedAnswer() {
+    var optionsArea = $(".qp-options-area");
+    var selectedOption = optionsArea.find(".option.selected");
 
     // Do nothing if no option is selected or if it's already answered
-    if (!selectedOption.length || optionsArea.hasClass('disabled')) {
-        return;
+    if (!selectedOption.length || optionsArea.hasClass("disabled")) {
+      return;
     }
 
     // Lock the UI
     optionsArea.addClass("disabled");
-    $('#qp-check-answer-btn').prop('disabled', true);
-    $("#qp-skip-btn").prop('disabled', true);
+    $('#qp-check-answer-btn').hide();
+    $("#qp-skip-btn").prop("disabled", true);
 
     // Stop the timer
     clearInterval(questionTimer);
@@ -1407,33 +1410,39 @@ function checkSelectedAnswer() {
     // Get all necessary data
     var questionID = sessionQuestionIDs[currentQuestionIndex];
     var selectedOptionId = selectedOption.find('input[type="radio"]').val();
-    var correctOptionId = optionsArea.data('correct-option-id');
+    var correctOptionId = optionsArea.data("correct-option-id");
     var isCorrect = selectedOptionId == correctOptionId;
 
     // Remove temporary selection style and apply final feedback style
-    selectedOption.removeClass('selected');
+    selectedOption.removeClass("selected");
     if (isCorrect) {
-        selectedOption.addClass("correct");
-        correctCount++;
-        score += parseFloat(sessionSettings.marks_correct);
+      selectedOption.addClass("correct");
+      correctCount++;
+      score += parseFloat(sessionSettings.marks_correct);
     } else {
-        selectedOption.addClass("incorrect");
-        optionsArea.find('input[value="' + correctOptionId + '"]').closest(".option").addClass("correct");
-        incorrectCount++;
-        score += parseFloat(sessionSettings.marks_incorrect);
+      selectedOption.addClass("incorrect");
+      optionsArea
+        .find('input[value="' + correctOptionId + '"]')
+        .closest(".option")
+        .addClass("correct");
+      incorrectCount++;
+      score += parseFloat(sessionSettings.marks_incorrect);
     }
 
     // Update session state
-    if (answeredStates[questionID] && answeredStates[questionID].type === "skipped") {
-        skippedCount--;
+    if (
+      answeredStates[questionID] &&
+      answeredStates[questionID].type === "skipped"
+    ) {
+      skippedCount--;
     }
     answeredStates[questionID] = {
-        type: "answered",
-        is_correct: isCorrect,
-        correct_option_id: correctOptionId,
-        selected_option_id: selectedOptionId,
-        reported: answeredStates[questionID]?.reported || false,
-        answered_in_session: true,
+      type: "answered",
+      is_correct: isCorrect,
+      correct_option_id: correctOptionId,
+      selected_option_id: selectedOptionId,
+      reported: answeredStates[questionID]?.reported || false,
+      answered_in_session: true,
     };
 
     // Update UI
@@ -1442,38 +1451,44 @@ function checkSelectedAnswer() {
 
     // Sync attempt with the server in the background
     $.ajax({
-        url: qp_ajax_object.ajax_url,
-        type: "POST",
-        data: {
-            action: "check_answer",
-            nonce: qp_ajax_object.nonce,
-            session_id: sessionID,
-            question_id: questionID,
-            option_id: selectedOptionId,
-            remaining_time: remainingTime,
-        },
+      url: qp_ajax_object.ajax_url,
+      type: "POST",
+      data: {
+        action: "check_answer",
+        nonce: qp_ajax_object.nonce,
+        session_id: sessionID,
+        question_id: questionID,
+        option_id: selectedOptionId,
+        remaining_time: remainingTime,
+      },
     });
-}
+  }
 
-// --- UPDATED: Simplified click handler ---
-wrapper.on('click', '#qp-check-answer-btn', function() {
+  // --- UPDATED: Simplified click handler ---
+  wrapper.on("click", "#qp-check-answer-btn", function () {
     checkSelectedAnswer();
-});
+  });
 
-wrapper.on('change', '#qp-auto-check-cb', function() {
+  wrapper.on('change', '#qp-auto-check-cb', function() {
     isAutoCheckEnabled = $(this).is(':checked');
-
-    // Save the new state to sessionStorage for this session
     sessionStorage.setItem('qpAutoCheckEnabled', isAutoCheckEnabled);
 
+    var checkButton = $('#qp-check-answer-btn');
     var optionsArea = $('.qp-options-area');
-    // If auto-check is now enabled and an answer is already selected, check it.
-    if (isAutoCheckEnabled && optionsArea.find('.option.selected').length > 0) {
-        checkSelectedAnswer(); // Call the correct function
+    var isAnswerSelected = optionsArea.find('.option.selected').length > 0;
+
+    if (isAutoCheckEnabled) {
+        checkButton.hide();
+        // If an answer is already selected when the user enables auto-check, check it immediately.
+        if (isAnswerSelected) {
+            checkSelectedAnswer();
+        }
+    } else {
+        // If auto-check is disabled, show the button.
+        // It should be enabled only if an answer has been selected.
+        checkButton.show().prop('disabled', !isAnswerSelected);
     }
 });
-
-
 
   wrapper.on("click", "#qp-next-btn, #qp-prev-btn", function () {
     clearInterval(questionTimer); // Stop the timer immediately
