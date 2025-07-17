@@ -663,151 +663,176 @@ class QP_Shortcodes
         }
         ?>
         <div class="qp-container qp-practice-wrapper <?php echo $mode_class; ?>">
-            <div class="qp-header">
-                <div class="qp-session-mode-indicator"><?php echo $mode_name; ?></div>
 
-                <?php if ($is_mock_test) : ?>
-                    <div class="qp-header-bottom-row">
-                        <div class="qp-header-stat">
-                            <span class="value" id="qp-mock-test-timer">--:--</span>
-                            <span class="label">Time Remaining</span>
-                        </div>
-                        <div class="qp-header-stat">
-                            <span class="value" id="qp-question-counter">--/--</span>
-                            <span class="label">Questions</span>
-                        </div>
-                    </div>
-                <?php else : ?>
-                    <div class="qp-header-bottom-row">
-                        <div class="qp-header-stat score">
-                            <span class="value" id="qp-score">0.00</span>
-                            <span class="label">Score</span>
-                        </div>
-                        <div class="qp-header-stat correct">
-                            <span class="value" id="qp-correct-count">0</span>
-                            <span class="label">Correct</span>
-                        </div>
-                        <div class="qp-header-stat incorrect">
-                            <span class="value" id="qp-incorrect-count">0</span>
-                            <span class="label">Incorrect</span>
-                        </div>
-                        <div class="qp-header-stat skipped">
-                            <span class="value" id="qp-skipped-count">0</span>
-                            <span class="label">Skipped</span>
-                        </div>
-                    </div>
-                <?php endif; ?>
-
-            </div>
-
-            <div class="qp-animatable-area-container">
-                <div class="qp-animatable-area">
-                    <div class="question-meta">
-                        <div class="qp-question-meta-left">
-                            <div id="qp-question-subject-line"><span id="qp-question-subject"></span> | <span id="qp-question-id"></span></div>
-                            <div id="qp-question-source" style="display: none;"></div>
-                        </div>
-                        <div class="qp-question-meta-right">
-                            <?php if (!$is_mock_test) : ?>
-                                <div class="qp-question-counter-box" style="display: none;">
-                                    <span class="qp-counter-label">Q. No.</span>
-                                    <span class="qp-counter-value" id="qp-question-counter">--/--</span>
-                                </div>
-                            <?php endif; ?>
-                            <button id="qp-report-btn" class="qp-report-button qp-button-secondary">
-                                <span>&#9888;</span> Report
-                            </button>
-                        </div>
-                    </div>
-
-                    <?php if (!$is_mock_test) : ?>
-                        <div class="qp-indicator-bar" style="display: none;">
-                            <div id="qp-timer-indicator" class="timer-stat" style="display: none;">--:--</div>
-                            <div id="qp-revision-indicator" style="display: none;">&#9851; Revision</div>
-                            <div id="qp-reported-indicator" style="display: none;">&#9888; Reported</div>
-                        </div>
-                    <?php endif; ?>
-
-                    <div class="qp-question-area">
-                        <div class="qp-direction" style="display: none;"></div>
-                        <div class="question-text" id="qp-question-text-area">
-                            <p>Loading question...</p>
-                        </div>
-                    </div>
-
-                    <div class="qp-options-area"></div>
-                    <?php if ($is_mock_test) : ?>
-                        <div class="qp-mock-test-actions">
-                            <button type="button" id="qp-clear-response-btn" class="qp-button qp-button-secondary">Clear Response</button>
-                            <label class="qp-button qp-button-secondary qp-review-later-checkbox">
-                                <input type="checkbox" id="qp-mock-mark-review-cb">
-                                <span>Mark for Review</span>
-                            </label>
-                        </div>
-                    <?php endif; ?>
-
-                    <?php if (!$is_mock_test) : ?>
-                        <div class="qp-review-later" style="text-align:center;margin-bottom: 5px;"><label class="qp-review-later-checkbox qp-button qp-button-secondary">
-                                <input type="checkbox" id="qp-mark-for-review-cb">
-                                <span>Mark for Review</span>
-                            </label>
-                            <button id="qp-check-answer-btn" class="qp-button qp-button-primary" disabled>Check Answer</button>
-                            <label class="qp-custom-checkbox" style="margin-left: 15px;">
-                                <input type="checkbox" id="qp-auto-check-cb">
-                                <span></span>
-                                Auto Check
-                            </label>
-                        </div>
-                    <?php endif; ?>
+            <div id="qp-question-palette">
+                <div class="qp-palette-header">
+                    <h4>Question Palette</h4>
+                    <div class="qp-session-mode-indicator"><?php echo $mode_name; ?></div>
+                </div>
+                <div class="qp-palette-grid">
                 </div>
             </div>
 
-            <div class="qp-footer-nav">
-                <button id="qp-prev-btn" class="qp-button qp-button-primary" disabled>
-                    <span>&#9664;</span>
-                </button>
+            <div id="qp-main-content">
+                <div class="qp-header">
+                    <div class="qp-session-mode-indicator"><?php echo $mode_name; ?></div>
 
-                <?php if (!$is_mock_test) : ?>
-                    <button id="qp-skip-btn" class="qp-button qp-button-secondary">Skip</button>
-                <?php endif; ?>
+                    <?php if ($is_mock_test) : ?>
+                        <div class="qp-header-bottom-row">
+                            <div class="qp-header-stat">
+                                <span class="value" id="qp-mock-test-timer">--:--</span>
+                                <span class="label">Time Remaining</span>
+                            </div>
+                            <div class="qp-header-stat">
+                                <span class="value" id="qp-question-counter">--/--</span>
+                                <span class="label">Questions</span>
+                            </div>
+                        </div>
+                    <?php else : ?>
+                        <div class="qp-header-bottom-row">
+                            <div class="qp-header-stat score">
+                                <span class="value" id="qp-score">0.00</span>
+                                <span class="label">Score</span>
+                            </div>
+                            <div class="qp-header-stat correct">
+                                <span class="value" id="qp-correct-count">0</span>
+                                <span class="label">Correct</span>
+                            </div>
+                            <div class="qp-header-stat incorrect">
+                                <span class="value" id="qp-incorrect-count">0</span>
+                                <span class="label">Incorrect</span>
+                            </div>
+                            <div class="qp-header-stat skipped">
+                                <span class="value" id="qp-skipped-count">0</span>
+                                <span class="label">Skipped</span>
+                            </div>
+                        </div>
+                    <?php endif; ?>
 
-                <button id="qp-next-btn" class="qp-button qp-button-primary">
-                    <span>&#9654;</span>
-                </button>
-            </div>
+                </div>
 
-            <hr class="qp-footer-divider">
+                <div class="qp-animatable-area-container">
+                    <div class="qp-animatable-area">
+                        <div class="question-meta">
+                            <div class="qp-question-meta-left">
+                                <div id="qp-question-subject-line"><span id="qp-question-subject"></span> | <span id="qp-question-id"></span></div>
+                                <div id="qp-question-source" style="display: none;"></div>
+                            </div>
+                            <div class="qp-question-meta-right">
+                                <?php if (!$is_mock_test) : ?>
+                                    <div class="qp-question-counter-box" style="display: none;">
+                                        <span class="qp-counter-label">Q. No.</span>
+                                        <span class="qp-counter-value" id="qp-question-counter">--/--</span>
+                                    </div>
+                                <?php endif; ?>
+                                <button id="qp-report-btn" class="qp-report-button qp-button-secondary">
+                                    <span>&#9888;</span> Report
+                                </button>
+                            </div>
+                        </div>
 
-            <div class="qp-footer-controls">
-                <?php if ($is_mock_test) : ?>
-                    <button id="qp-submit-test-btn" class="qp-button qp-button-danger">Submit Test</button>
-                <?php else : ?>
-                    <button id="qp-pause-btn" class="qp-button qp-button-secondary">Pause & Save</button>
-                    <button id="qp-end-practice-btn" class="qp-button qp-button-danger">End Session</button>
-                <?php endif; ?>
-            </div>
-        </div>
-        <div id="qp-report-modal-backdrop" style="display: none;">
-            <div id="qp-report-modal-content">
-                <button class="qp-modal-close-btn">&times;</button>
-                <h3>Report an Issue</h3>
-                <p>Please select all issues that apply to the current question.</p>
-                <form id="qp-report-form">
-                    <div id="qp-report-options-container">
+                        <?php if (!$is_mock_test) : ?>
+                            <div class="qp-indicator-bar" style="display: none;">
+                                <div id="qp-timer-indicator" class="timer-stat" style="display: none;">--:--</div>
+                                <div id="qp-revision-indicator" style="display: none;">&#9851; Revision</div>
+                                <div id="qp-reported-indicator" style="display: none;">&#9888; Reported</div>
+                            </div>
+                        <?php endif; ?>
+
+                        <div class="qp-question-area">
+                            <div class="qp-direction" style="display: none;"></div>
+                            <div class="question-text" id="qp-question-text-area">
+                                <p>Loading question...</p>
+                            </div>
+                        </div>
+
+                        <div class="qp-options-area"></div>
+                        <?php if ($is_mock_test) : ?>
+                            <div class="qp-mock-test-actions">
+                                <button type="button" id="qp-clear-response-btn" class="qp-button qp-button-secondary">Clear Response</button>
+                                <label class="qp-button qp-button-secondary qp-review-later-checkbox">
+                                    <input type="checkbox" id="qp-mock-mark-review-cb">
+                                    <span>Mark for Review</span>
+                                </label>
+                            </div>
+                        <?php endif; ?>
+
+                        <?php if (!$is_mock_test) : ?>
+                            <div class="qp-review-later" style="text-align:center;margin-bottom: 5px;"><label class="qp-review-later-checkbox qp-button qp-button-secondary">
+                                    <input type="checkbox" id="qp-mark-for-review-cb">
+                                    <span>Mark for Review</span>
+                                </label>
+                                <button id="qp-check-answer-btn" class="qp-button qp-button-primary" disabled>Check Answer</button>
+                                <label class="qp-custom-checkbox" style="margin-left: 15px;">
+                                    <input type="checkbox" id="qp-auto-check-cb">
+                                    <span></span>
+                                    Auto Check
+                                </label>
+                            </div>
+                        <?php endif; ?>
                     </div>
-                    <div class="qp-modal-footer">
-                        <button type="submit" class="qp-button qp-button-primary">Submit Report</button>
+                </div>
+
+                <div class="qp-footer-nav">
+                    <button id="qp-prev-btn" class="qp-button qp-button-primary" disabled>
+                        <span>&#9664;</span>
+                    </button>
+
+                    <?php if (!$is_mock_test) : ?>
+                        <button id="qp-skip-btn" class="qp-button qp-button-secondary">Skip</button>
+                    <?php endif; ?>
+
+                    <button id="qp-next-btn" class="qp-button qp-button-primary">
+                        <span>&#9654;</span>
+                    </button>
+                </div>
+
+                <hr class="qp-footer-divider">
+
+                <div class="qp-footer-controls">
+                    <?php if ($is_mock_test) : ?>
+                        <button id="qp-submit-test-btn" class="qp-button qp-button-danger">Submit Test</button>
+                    <?php else : ?>
+                        <button id="qp-pause-btn" class="qp-button qp-button-secondary">Pause & Save</button>
+                        <button id="qp-end-practice-btn" class="qp-button qp-button-danger">End Session</button>
+                    <?php endif; ?>
+                </div>
+            </div>
+            <div id="qp-report-modal-backdrop" style="display: none;">
+                <div id="qp-report-modal-content">
+                    <button class="qp-modal-close-btn">&times;</button>
+                    <h3>Report an Issue</h3>
+                    <p>Please select all issues that apply to the current question.</p>
+                    <form id="qp-report-form">
+                        <div id="qp-report-options-container">
+                        </div>
+                        <div class="qp-modal-footer">
+                            <button type="submit" class="qp-button qp-button-primary">Submit Report</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
                     </div>
-                </form>
-            </div>
+            <?php
+        // --- NEW: Palette Toggle Button ---
+        // The palette is always on for mock tests and section practice
+        $is_palette_mandatory = $is_mock_test || (isset($session_settings['practice_mode']) && $session_settings['practice_mode'] === 'Section Wise Practice');
+        if (!$is_palette_mandatory) :
+    ?>
+        <div class="qp-palette-toggle-wrapper">
+            <button id="qp-palette-toggle-btn" class="qp-button qp-button-secondary">
+                <span>&#9776;</span> Question Palette
+            </button>
         </div>
-        <div id="qp-start-session-overlay">
-            <div class="qp-start-session-content">
-                <h3>Your session is ready.</h3>
-                <p>Click the button below to begin in an immersive, fullscreen environment.</p>
-                <button id="qp-fullscreen-start-btn" class="qp-button qp-button-primary">Start & Enter Fullscreen</button>
+    <?php endif; ?>
+            <div id="qp-start-session-overlay">
+                <div class="qp-start-session-content">
+                    <h3>Your session is ready.</h3>
+                    <p>Click the button below to begin in an immersive, fullscreen environment.</p>
+                    <button id="qp-fullscreen-start-btn" class="qp-button qp-button-primary">Start & Enter Fullscreen</button>
+                </div>
             </div>
-        </div>
+        
     <?php
         return ob_get_clean();
     }
@@ -961,15 +986,15 @@ class QP_Shortcodes
             <div class="qp-review-questions-list">
                 <?php foreach ($attempts as $index => $attempt) :
                     $is_skipped = !$attempt->selected_answer;
-$answer_display_text = 'Skipped';
-$answer_class = $is_skipped ? 'skipped' : ($attempt->is_correct ? 'correct' : 'incorrect');
+                    $answer_display_text = 'Skipped';
+                    $answer_class = $is_skipped ? 'skipped' : ($attempt->is_correct ? 'correct' : 'incorrect');
 
-if (isset($settings['practice_mode']) && $settings['practice_mode'] === 'mock_test') {
-    if ($attempt->mock_status === 'not_viewed' || $attempt->mock_status === 'viewed' || $attempt->mock_status === 'marked_for_review') {
-        $answer_display_text = 'Unattempted';
-        $answer_class = 'unattempted'; // Apply our new CSS class
-    }
-}
+                    if (isset($settings['practice_mode']) && $settings['practice_mode'] === 'mock_test') {
+                        if ($attempt->mock_status === 'not_viewed' || $attempt->mock_status === 'viewed' || $attempt->mock_status === 'marked_for_review') {
+                            $answer_display_text = 'Unattempted';
+                            $answer_class = 'unattempted'; // Apply our new CSS class
+                        }
+                    }
                 ?>
                     <div class="qp-review-question-item">
                         <div class="qp-review-question-meta">
