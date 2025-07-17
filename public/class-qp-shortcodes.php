@@ -961,13 +961,15 @@ class QP_Shortcodes
             <div class="qp-review-questions-list">
                 <?php foreach ($attempts as $index => $attempt) :
                     $is_skipped = !$attempt->selected_answer;
-                    $answer_display_text = 'Skipped';
-                    if (isset($settings['practice_mode']) && $settings['practice_mode'] === 'mock_test') {
-                        if ($attempt->mock_status === 'not_viewed' || $attempt->mock_status === 'viewed' || $attempt->mock_status === 'marked_for_review') {
-                            $answer_display_text = 'Unattempted';
-                        }
-                    }
-                    $answer_class = $is_skipped ? 'skipped' : ($attempt->is_correct ? 'correct' : 'incorrect');
+$answer_display_text = 'Skipped';
+$answer_class = $is_skipped ? 'skipped' : ($attempt->is_correct ? 'correct' : 'incorrect');
+
+if (isset($settings['practice_mode']) && $settings['practice_mode'] === 'mock_test') {
+    if ($attempt->mock_status === 'not_viewed' || $attempt->mock_status === 'viewed' || $attempt->mock_status === 'marked_for_review') {
+        $answer_display_text = 'Unattempted';
+        $answer_class = 'unattempted'; // Apply our new CSS class
+    }
+}
                 ?>
                     <div class="qp-review-question-item">
                         <div class="qp-review-question-meta">
@@ -1009,8 +1011,8 @@ class QP_Shortcodes
                         <div class="qp-review-answer-row">
                             <span class="qp-review-label">Your Answer:</span>
                             <span class="qp-review-answer <?php echo $answer_class; ?>">
-    <?php echo esc_html($attempt->selected_answer ?: $answer_display_text); ?>
-</span>
+                                <?php echo esc_html($attempt->selected_answer ?: $answer_display_text); ?>
+                            </span>
                         </div>
 
                         <?php if ($is_skipped || !$attempt->is_correct) : ?>

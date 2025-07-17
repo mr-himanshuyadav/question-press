@@ -1000,6 +1000,13 @@ ul.qp-review-list li{
     font-weight: 600;
 }
 
+/* --- NEW: Style for Unattempted Questions on Review Page --- */
+.qp-review-answer.unattempted {
+    background-color: #f0f0f1; /* Light Gray */
+    color: #50575e; /* Dark Gray Text */
+    font-style: italic;
+}
+
 .qp-review-question-text .katex{
     font: normal .95em KaTeX_Main,Times New Roman,serif;
 }
