@@ -628,8 +628,20 @@ class QP_Shortcodes
         ob_start();
     ?>
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <div class="qp-container qp-practice-wrapper">
+        <?php
+        $mode_class = 'mode-normal';
+        $mode_name = 'Normal Practice';
+        if ($is_mock_test) {
+            $mode_class = 'mode-mock-test';
+            $mode_name = 'Mock Test';
+        } elseif (isset($session_settings['practice_mode']) && $session_settings['practice_mode'] === 'revision') {
+            $mode_class = 'mode-revision';
+            $mode_name = 'Revision Mode';
+        }
+        ?>
+        <div class="qp-container qp-practice-wrapper <?php echo $mode_class; ?>">
             <div class="qp-header">
+                <div class="qp-session-mode-indicator"><?php echo $mode_name; ?></div>
 
                 <?php if ($is_mock_test) : ?>
                     <div class="qp-header-bottom-row">

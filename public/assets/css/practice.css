@@ -317,6 +317,57 @@ body {
     line-height: 1.2;
 }
 
+
+/* --- NEW: Mode-Specific UI Styles --- */
+
+/* Style for the mode indicator tag */
+.qp-session-mode-indicator {
+    text-align: center;
+    font-weight: 700;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 8px 16px;
+    border-radius: var(--qp-radius);
+    margin: -1rem -1rem 1.5rem -1rem; /* Pull it into the header padding */
+    color: #fff;
+}
+
+/* Base style for the wrapper border */
+.qp-practice-wrapper {
+    border: 3px solid transparent;
+    transition: all 0.3s ease;
+}
+
+/* --- Color Themes per Mode --- */
+
+/* Normal Practice Mode (Blue) */
+.mode-normal .qp-session-mode-indicator {
+    background-color: #2271b1; /* Primary Blue */
+}
+.mode-normal.qp-practice-wrapper {
+    border-color: #2271b1;
+    box-shadow: 0 0 15px rgba(34, 113, 177, 0.2);
+}
+
+/* Revision Mode (Purple) */
+.mode-revision .qp-session-mode-indicator {
+    background-color: #5d3d9b; /* Purple */
+}
+.mode-revision.qp-practice-wrapper {
+    border-color: #5d3d9b;
+    box-shadow: 0 0 15px rgba(93, 61, 155, 0.2);
+}
+
+/* Mock Test Mode (Red) */
+.mode-mock-test .qp-session-mode-indicator {
+    background-color: #d63638; /* Danger Red */
+}
+.mode-mock-test.qp-practice-wrapper {
+    border-color: #d63638;
+    box-shadow: 0 0 15px rgba(214, 54, 56, 0.2);
+}
+
 /* --- Practice Screen Content --- */
 .qp-question-area {margin-bottom: 1.2rem; margin-top: .5rem}
 .qp-question-area .question-text { font: normal 1.21em KaTeX_Main,Times New Roman,serif; line-height: 1.6; }
