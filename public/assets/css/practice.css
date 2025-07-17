@@ -935,6 +935,13 @@ ul.qp-review-list li{
     
     background-color: #f0f0f1;
 }
+.qp-review-later {
+    display: flex;
+    justify-content: center;
+    align-items: center; /* This is the key for vertical alignment */
+    gap: 15px; /* This creates space between the items */
+    margin-bottom: 5px;
+}
 .qp-review-later-checkbox:hover {
     background-color: #f0f0f1;
 }

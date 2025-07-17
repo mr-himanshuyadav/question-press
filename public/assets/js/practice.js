@@ -1,5 +1,6 @@
 jQuery(document).ready(function ($) {
   var wrapper = $("#qp-practice-app-wrapper");
+  var isAutoCheckEnabled = false;
 
   function openFullscreen() {
     var elem = document.documentElement; // Get the root element (the whole page)
@@ -1356,7 +1357,7 @@ jQuery(document).ready(function ($) {
   }
   
   
-  // Handles clicking an answer option to select it
+// Handles clicking an answer option to select it
 wrapper.on("click", ".qp-options-area .option", function () {
     var selectedOption = $(this);
     var optionsArea = selectedOption.closest(".qp-options-area");
@@ -1371,13 +1372,16 @@ wrapper.on("click", ".qp-options-area .option", function () {
     selectedOption.addClass('selected');
     selectedOption.find('input[type="radio"]').prop('checked', true);
 
-    // Enable the "Check Answer" button now that an option is selected
-    $('#qp-check-answer-btn').prop('disabled', false);
+    // If auto-check is on, check the answer immediately. Otherwise, just enable the button.
+    if (isAutoCheckEnabled) {
+        checkSelectedAnswer(); // Directly call our new function
+    } else {
+        $('#qp-check-answer-btn').prop('disabled', false);
+    }
 });
 
-// Handles the "Check Answer" button click
-wrapper.on('click', '#qp-check-answer-btn', function() {
-    var checkButton = $(this);
+// --- NEW: Reusable function to check the selected answer ---
+function checkSelectedAnswer() {
     var optionsArea = $('.qp-options-area');
     var selectedOption = optionsArea.find('.option.selected');
 
@@ -1386,11 +1390,9 @@ wrapper.on('click', '#qp-check-answer-btn', function() {
         return;
     }
 
-    // --- This is the logic moved from the old instant-feedback handler ---
-
     // Lock the UI
     optionsArea.addClass("disabled");
-    checkButton.prop('disabled', true);
+    $('#qp-check-answer-btn').prop('disabled', true);
     $("#qp-skip-btn").prop('disabled', true);
 
     // Stop the timer
@@ -1445,6 +1447,21 @@ wrapper.on('click', '#qp-check-answer-btn', function() {
             remaining_time: remainingTime,
         },
     });
+}
+
+// --- UPDATED: Simplified click handler ---
+wrapper.on('click', '#qp-check-answer-btn', function() {
+    checkSelectedAnswer();
+});
+
+wrapper.on('change', '#qp-auto-check-cb', function() {
+    isAutoCheckEnabled = $(this).is(':checked');
+    var optionsArea = $('.qp-options-area');
+
+    // If auto-check is enabled and an answer is already selected, trigger the check.
+    if (isAutoCheckEnabled && optionsArea.find('.option.selected').length > 0) {
+        $('#qp-check-answer-btn').trigger('click');
+    }
 });
 
   wrapper.on("click", "#qp-next-btn, #qp-prev-btn", function () {
