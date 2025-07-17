@@ -233,9 +233,9 @@ function qp_activate_plugin()
     dbDelta($sql_session_pauses);
 
 
-    // --- UPDATED: User Attempts table with selected_option_id ---
-    $table_attempts = $wpdb->prefix . 'qp_user_attempts';
-    $sql_attempts = "CREATE TABLE $table_attempts (
+    // --- UPDATED: User Attempts table with selected_option_id and mock_status ---
+$table_attempts = $wpdb->prefix . 'qp_user_attempts';
+$sql_attempts = "CREATE TABLE $table_attempts (
     attempt_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
     session_id BIGINT(20) UNSIGNED NOT NULL,
     user_id BIGINT(20) UNSIGNED NOT NULL,
@@ -243,15 +243,17 @@ function qp_activate_plugin()
     selected_option_id BIGINT(20) UNSIGNED,
     is_correct BOOLEAN,
     status VARCHAR(20) NOT NULL DEFAULT 'answered',
+    mock_status VARCHAR(50) DEFAULT NULL,
     remaining_time INT,
     attempt_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY  (attempt_id),
-    KEY session_id (session_id),
+    UNIQUE KEY session_question (session_id, question_id),
     KEY user_id (user_id),
     KEY question_id (question_id),
-    KEY status (status)
+    KEY status (status),
+    KEY mock_status (mock_status)
 ) $charset_collate;";
-    dbDelta($sql_attempts);
+dbDelta($sql_attempts);
 
     // Table: Logs
     $table_logs = $wpdb->prefix . 'qp_logs';
