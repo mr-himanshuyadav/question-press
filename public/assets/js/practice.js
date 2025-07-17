@@ -796,6 +796,49 @@ $("#qp_subject_dropdown_mock").on(
     });
   });
 
+  // Handler for MOCK TEST Mode Form
+wrapper.on("submit", "#qp-start-mock-test-form", function (e) {
+    e.preventDefault();
+
+    // Basic validation
+    var selectedSubjects = $("#qp_subject_dropdown_mock input:checked").length;
+    if (selectedSubjects === 0) {
+        alert("Please select at least one subject to start the mock test.");
+        return;
+    }
+
+    var form = $(this);
+    var submitButton = form.find('input[type="submit"]');
+    var originalButtonText = submitButton.val();
+    var formData = form.serialize();
+
+    $.ajax({
+        url: qp_ajax_object.ajax_url,
+        type: "POST",
+        // Add the new action and nonce to the form data
+        data: formData + "&action=qp_start_mock_test_session&nonce=" + qp_ajax_object.nonce,
+        beforeSend: function () {
+            submitButton.val("Building your test...").prop("disabled", true);
+        },
+        success: function (response) {
+            if (response.success && response.data.redirect_url) {
+                // If successful, redirect to the session page
+                window.location.href = response.data.redirect_url;
+            } else {
+                // If there's an error, display it
+                var errorMessage = response.data.html ?
+                    response.data.html :
+                    "<p>" + (response.data.message || "An unknown error occurred.") + "</p>";
+                wrapper.html(errorMessage);
+            }
+        },
+        error: function () {
+            alert("A server error occurred. Please try again later.");
+            submitButton.val(originalButtonText).prop("disabled", false);
+        },
+    });
+});
+
   // Session state variables
   var sessionID = 0;
   var sessionQuestionIDs = [];
