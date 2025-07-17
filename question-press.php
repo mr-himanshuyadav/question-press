@@ -234,8 +234,8 @@ function qp_activate_plugin()
 
 
     // --- UPDATED: User Attempts table with selected_option_id and mock_status ---
-$table_attempts = $wpdb->prefix . 'qp_user_attempts';
-$sql_attempts = "CREATE TABLE $table_attempts (
+    $table_attempts = $wpdb->prefix . 'qp_user_attempts';
+    $sql_attempts = "CREATE TABLE $table_attempts (
     attempt_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
     session_id BIGINT(20) UNSIGNED NOT NULL,
     user_id BIGINT(20) UNSIGNED NOT NULL,
@@ -253,7 +253,7 @@ $sql_attempts = "CREATE TABLE $table_attempts (
     KEY status (status),
     KEY mock_status (mock_status)
 ) $charset_collate;";
-dbDelta($sql_attempts);
+    dbDelta($sql_attempts);
 
     // Table: Logs
     $table_logs = $wpdb->prefix . 'qp_logs';
@@ -595,9 +595,10 @@ function qp_all_questions_page_cb()
             <?php $list_table->display(); ?>
         </form>
         <style type="text/css">
-            #post-query-submit{
+            #post-query-submit {
                 margin-left: 8px;
             }
+
             .wp-list-table .column-custom_question_id {
                 width: 5%;
             }
@@ -1227,7 +1228,8 @@ add_action('wp_ajax_start_practice_session', 'qp_start_practice_session_ajax');
 /**
  * AJAX handler to start a special session with incorrectly answered questions.
  */
-function qp_start_incorrect_practice_session_ajax() {
+function qp_start_incorrect_practice_session_ajax()
+{
     check_ajax_referer('qp_practice_nonce', 'nonce');
     if (!is_user_logged_in()) {
         wp_send_json_error(['message' => 'You must be logged in.']);
@@ -1262,15 +1264,15 @@ function qp_start_incorrect_practice_session_ajax() {
             "SELECT DISTINCT question_id FROM {$attempts_table} WHERE user_id = %d AND status = 'answered'",
             $user_id
         ));
-        
+
         // The questions to practice are those answered but never answered correctly.
         $question_ids = array_diff($all_answered_qids, $correctly_answered_qids);
     }
-    
+
     if (empty($question_ids)) {
         wp_send_json_error(['message' => 'No incorrect questions found to practice.']);
     }
-    
+
     // Randomize the order of questions
     shuffle($question_ids);
 
@@ -1308,7 +1310,8 @@ add_action('wp_ajax_qp_start_incorrect_practice_session', 'qp_start_incorrect_pr
 /**
  * AJAX handler to start a MOCK TEST session.
  */
-function qp_start_mock_test_session_ajax() {
+function qp_start_mock_test_session_ajax()
+{
     check_ajax_referer('qp_practice_nonce', 'nonce');
     if (!is_user_logged_in()) {
         wp_send_json_error(['message' => 'You must be logged in.']);
@@ -1328,8 +1331,8 @@ function qp_start_mock_test_session_ajax() {
         'topics'              => $topics,
         'num_questions'       => $num_questions,
         'distribution'        => $distribution,
-        'marks_correct'       => isset($_POST['qp_marks_correct']) ? floatval($_POST['qp_marks_correct']) : 4,
-        'marks_incorrect'     => isset($_POST['qp_marks_incorrect']) ? -abs(floatval($_POST['qp_marks_incorrect'])) : -1,
+        'marks_correct'       => isset($_POST['scoring_enabled']) ? floatval($_POST['qp_marks_correct']) : null,
+        'marks_incorrect'     => isset($_POST['scoring_enabled']) ? -abs(floatval($_POST['qp_marks_incorrect'])) : null,
         'timer_enabled'       => true, // Timer is always enabled for mock tests
         'timer_seconds'       => (isset($_POST['qp_mock_timer_minutes']) ? absint($_POST['qp_mock_timer_minutes']) : 30) * 60,
     ];
@@ -1388,16 +1391,15 @@ function qp_start_mock_test_session_ajax() {
             }
             $final_question_ids = array_merge($final_question_ids, array_slice($q_ids, 0, $num_to_take));
         }
-
     } else { // Default to 'random'
         shuffle($question_pool);
         $final_question_ids = array_slice(wp_list_pluck($question_pool, 'question_id'), 0, $num_questions);
     }
 
     if (empty($final_question_ids)) {
-         wp_send_json_error(['html' => '<div class="qp-container"><p>Could not gather enough unique questions for the test. Please select more topics or reduce the number of questions.</p><button onclick="window.location.reload();" class="qp-button qp-button-secondary">Go Back</button></div>']);
+        wp_send_json_error(['html' => '<div class="qp-container"><p>Could not gather enough unique questions for the test. Please select more topics or reduce the number of questions.</p><button onclick="window.location.reload();" class="qp-button qp-button-secondary">Go Back</button></div>']);
     }
-    
+
     shuffle($final_question_ids); // Final shuffle for randomness
 
     // --- Create the session ---
@@ -1479,7 +1481,7 @@ function qp_get_question_data_ajax()
     }
 
     $question_data['direction_image_url'] = $question_data['direction_image_id'] ? wp_get_attachment_url($question_data['direction_image_id']) : null;
-    
+
     // **THE FIX**: Fetch the 'is_correct' status along with the options
     $options_from_db = $wpdb->get_results($wpdb->prepare("SELECT option_id, option_text, is_correct FROM {$o_table} WHERE question_id = %d", $question_id), ARRAY_A);
 
@@ -1496,10 +1498,10 @@ function qp_get_question_data_ajax()
         ];
     }
     $question_data['options'] = $options_for_frontend;
-    
+
     if (!empty($question_data['question_text'])) {
-    $question_data['question_text'] = wp_kses_post(nl2br($question_data['question_text']));
-}
+        $question_data['question_text'] = wp_kses_post(nl2br($question_data['question_text']));
+    }
     if (!empty($question_data['direction_text'])) {
         $question_data['direction_text'] = wp_kses_post(nl2br($question_data['direction_text']));
     }
@@ -1648,7 +1650,8 @@ add_action('wp_ajax_check_answer', 'qp_check_answer_ajax');
 /**
  * AJAX handler to save a user's selected answer during a mock test without checking it.
  */
-function qp_save_mock_attempt_ajax() {
+function qp_save_mock_attempt_ajax()
+{
     check_ajax_referer('qp_practice_nonce', 'nonce');
     $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
     $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
@@ -1665,7 +1668,8 @@ function qp_save_mock_attempt_ajax() {
     // --- FIX: Explicitly check for an existing attempt before inserting/updating ---
     $existing_attempt_id = $wpdb->get_var($wpdb->prepare(
         "SELECT attempt_id FROM {$attempts_table} WHERE session_id = %d AND question_id = %d",
-        $session_id, $question_id
+        $session_id,
+        $question_id
     ));
 
     if ($existing_attempt_id) {
@@ -1690,7 +1694,7 @@ function qp_save_mock_attempt_ajax() {
             'status' => 'answered'
         ]);
     }
-    
+
     // Also update the session's last activity to keep it from timing out
     $wpdb->update($wpdb->prefix . 'qp_user_sessions', ['last_activity' => current_time('mysql')], ['session_id' => $session_id]);
 
@@ -1702,7 +1706,8 @@ add_action('wp_ajax_qp_save_mock_attempt', 'qp_save_mock_attempt_ajax');
  * AJAX handler to update the status of a mock test question.
  * Handles statuses like viewed, marked_for_review, etc.
  */
-function qp_update_mock_status_ajax() {
+function qp_update_mock_status_ajax()
+{
     check_ajax_referer('qp_practice_nonce', 'nonce');
     $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
     $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
@@ -1725,7 +1730,8 @@ function qp_update_mock_status_ajax() {
     // Find the existing attempt for this question in this session.
     $existing_attempt_id = $wpdb->get_var($wpdb->prepare(
         "SELECT attempt_id FROM {$attempts_table} WHERE session_id = %d AND question_id = %d",
-        $session_id, $question_id
+        $session_id,
+        $question_id
     ));
 
     $data_to_update = ['mock_status' => $new_status];
@@ -1976,52 +1982,52 @@ function qp_end_practice_session_ajax()
     $is_mock_test = isset($settings['practice_mode']) && $settings['practice_mode'] === 'mock_test';
 
     // --- NEW: Special handling for Mock Test answer evaluation ---
-if ($is_mock_test) {
-    // Grade any answered questions
-    $answered_attempts = $wpdb->get_results($wpdb->prepare(
-        "SELECT attempt_id, question_id, selected_option_id FROM {$attempts_table} WHERE session_id = %d AND mock_status IN ('answered', 'answered_and_marked_for_review')",
-        $session_id
-    ));
-
-    $options_table = $wpdb->prefix . 'qp_options';
-    foreach ($answered_attempts as $attempt) {
-        $is_correct = (bool) $wpdb->get_var($wpdb->prepare(
-            "SELECT is_correct FROM {$options_table} WHERE option_id = %d AND question_id = %d",
-            $attempt->selected_option_id,
-            $attempt->question_id
+    if ($is_mock_test) {
+        // Grade any answered questions
+        $answered_attempts = $wpdb->get_results($wpdb->prepare(
+            "SELECT attempt_id, question_id, selected_option_id FROM {$attempts_table} WHERE session_id = %d AND mock_status IN ('answered', 'answered_and_marked_for_review')",
+            $session_id
         ));
-        $wpdb->update($attempts_table, ['is_correct' => $is_correct ? 1 : 0], ['attempt_id' => $attempt->attempt_id]);
+
+        $options_table = $wpdb->prefix . 'qp_options';
+        foreach ($answered_attempts as $attempt) {
+            $is_correct = (bool) $wpdb->get_var($wpdb->prepare(
+                "SELECT is_correct FROM {$options_table} WHERE option_id = %d AND question_id = %d",
+                $attempt->selected_option_id,
+                $attempt->question_id
+            ));
+            $wpdb->update($attempts_table, ['is_correct' => $is_correct ? 1 : 0], ['attempt_id' => $attempt->attempt_id]);
+        }
+
+        // --- FIX: Accurately identify and record 'not_viewed' questions ---
+        $all_question_ids_in_session = json_decode($session->question_ids_snapshot, true);
+
+        // Get IDs of all questions that have ANY kind of attempt record for this session
+        $interacted_question_ids = $wpdb->get_col($wpdb->prepare(
+            "SELECT DISTINCT question_id FROM {$attempts_table} WHERE session_id = %d",
+            $session_id
+        ));
+
+        // Find the questions that were never touched at all
+        $not_viewed_ids = array_diff($all_question_ids_in_session, $interacted_question_ids);
+
+        // Create a record for each "not_viewed" question
+        foreach ($not_viewed_ids as $question_id) {
+            $wpdb->insert($attempts_table, [
+                'session_id' => $session_id,
+                'user_id' => get_current_user_id(),
+                'question_id' => $question_id,
+                'status' => 'skipped', // For stats compatibility
+                'mock_status' => 'not_viewed' // The specific status we need
+            ]);
+        }
+
+        // Any question that was just 'viewed' or 'marked_for_review' is now considered 'skipped' for final stats
+        $wpdb->query($wpdb->prepare(
+            "UPDATE {$attempts_table} SET status = 'skipped' WHERE session_id = %d AND mock_status IN ('viewed', 'marked_for_review')",
+            $session_id
+        ));
     }
-
-    // --- FIX: Accurately identify and record 'not_viewed' questions ---
-    $all_question_ids_in_session = json_decode($session->question_ids_snapshot, true);
-
-    // Get IDs of all questions that have ANY kind of attempt record for this session
-    $interacted_question_ids = $wpdb->get_col($wpdb->prepare(
-        "SELECT DISTINCT question_id FROM {$attempts_table} WHERE session_id = %d",
-        $session_id
-    ));
-
-    // Find the questions that were never touched at all
-    $not_viewed_ids = array_diff($all_question_ids_in_session, $interacted_question_ids);
-
-    // Create a record for each "not_viewed" question
-    foreach ($not_viewed_ids as $question_id) {
-        $wpdb->insert($attempts_table, [
-            'session_id' => $session_id,
-            'user_id' => get_current_user_id(),
-            'question_id' => $question_id,
-            'status' => 'skipped', // For stats compatibility
-            'mock_status' => 'not_viewed' // The specific status we need
-        ]);
-    }
-
-    // Any question that was just 'viewed' or 'marked_for_review' is now considered 'skipped' for final stats
-     $wpdb->query($wpdb->prepare(
-        "UPDATE {$attempts_table} SET status = 'skipped' WHERE session_id = %d AND mock_status IN ('viewed', 'marked_for_review')",
-        $session_id
-    ));
-}
 
     // Calculate final stats from the now-updated attempts table
     $correct_count = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $attempts_table WHERE session_id = %d AND is_correct = 1", $session_id));
@@ -2035,13 +2041,13 @@ if ($is_mock_test) {
     // --- Calculate Total Active Time (timezone-aware) ---
     $end_time_gmt = current_time('mysql', 1);
     $start_time_gmt = get_gmt_from_date($session->start_time);
-    
+
     $total_session_duration = strtotime($end_time_gmt) - strtotime($start_time_gmt);
     $total_active_seconds = max(0, $total_session_duration); // For mock tests, there are no pauses
 
     // For non-mock tests, we still need to subtract pause duration
     if (!$is_mock_test) {
-        $pause_records = $wpdb->get_results($wpdb->prepare( "SELECT pause_time, resume_time FROM {$pauses_table} WHERE session_id = %d", $session_id ));
+        $pause_records = $wpdb->get_results($wpdb->prepare("SELECT pause_time, resume_time FROM {$pauses_table} WHERE session_id = %d", $session_id));
         $total_pause_duration = 0;
         foreach ($pause_records as $pause) {
             $resume_time_gmt = $pause->resume_time ? get_gmt_from_date($pause->resume_time) : $end_time_gmt;
@@ -2050,7 +2056,7 @@ if ($is_mock_test) {
         }
         $total_active_seconds = max(0, $total_session_duration - $total_pause_duration);
     }
-    
+
     // Update the session in the database with the final, correct stats
     $wpdb->update(
         $sessions_table,
@@ -2725,7 +2731,7 @@ function qp_run_unified_data_migration()
         $messages[] = "Step 0.1: Added `total_active_seconds` column to the sessions table.";
     }
     $table_session_pauses = $wpdb->prefix . 'qp_session_pauses';
-    if($wpdb->get_var("SHOW TABLES LIKE '$table_session_pauses'") != $table_session_pauses) {
+    if ($wpdb->get_var("SHOW TABLES LIKE '$table_session_pauses'") != $table_session_pauses) {
         $sql_session_pauses = "CREATE TABLE $table_session_pauses (
             pause_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
             session_id BIGINT(20) UNSIGNED NOT NULL,
@@ -3098,7 +3104,8 @@ add_action('wp_ajax_qp_terminate_session', 'qp_terminate_session_ajax');
 /**
  * AJAX handler to pause a session.
  */
-function qp_pause_session_ajax() {
+function qp_pause_session_ajax()
+{
     check_ajax_referer('qp_practice_nonce', 'nonce');
 
     if (!is_user_logged_in()) {

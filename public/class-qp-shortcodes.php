@@ -250,16 +250,24 @@ class QP_Shortcodes
                 <input type="number" name="qp_mock_timer_minutes" id="qp_mock_timer_minutes" value="30" min="1">
             </div>
 
-            <div class="qp-form-group qp-marks-group">
-                <div>
-                    <label for="qp_mock_marks_correct">Marks for Correct Answer:</label>
-                    <input type="number" name="qp_marks_correct" id="qp_mock_marks_correct" value="4" step="0.01">
-                </div>
-                <div>
-                    <label for="qp_mock_marks_incorrect">Penalty for Incorrect Answer:</label>
-                    <input type="number" name="qp_marks_incorrect" id="qp_mock_marks_incorrect" value="1" step="0.01" min="0">
-                </div>
-            </div>
+            <div class="qp-form-group">
+    <label class="qp-custom-checkbox">
+        <input type="checkbox" name="scoring_enabled" id="qp_mock_scoring_enabled_cb">
+        <span></span>
+        Enable Scoring
+    </label>
+</div>
+
+<div class="qp-form-group qp-marks-group" id="qp-mock-marks-group-wrapper" style="display: none;">
+    <div>
+        <label for="qp_mock_marks_correct">Marks for Correct Answer:</label>
+        <input type="number" name="qp_marks_correct" id="qp_mock_marks_correct" value="4" step="0.01" disabled>
+    </div>
+    <div>
+        <label for="qp_mock_marks_incorrect">Penalty for Incorrect Answer:</label>
+        <input type="number" name="qp_marks_incorrect" id="qp_mock_marks_incorrect" value="1" step="0.01" min="0" disabled>
+    </div>
+</div>
 
             <div class="qp-form-group qp-action-buttons">
                 <input type="submit" name="qp_start_mock_test" value="Start Mock Test" class="qp-button qp-button-primary">

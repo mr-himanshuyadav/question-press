@@ -1971,52 +1971,78 @@ jQuery(document).ready(function ($) {
   });
 
   // --- NEW: Mock Test Specific Event Handlers ---
-if (typeof qp_session_data !== "undefined" && qp_session_data.settings.practice_mode === 'mock_test') {
-
+  if (
+    typeof qp_session_data !== "undefined" &&
+    qp_session_data.settings.practice_mode === "mock_test"
+  ) {
     // Handler for the "Clear Response" button
-    wrapper.on('click', '#qp-clear-response-btn', function() {
-        var questionID = sessionQuestionIDs[currentQuestionIndex];
+    wrapper.on("click", "#qp-clear-response-btn", function () {
+      var questionID = sessionQuestionIDs[currentQuestionIndex];
 
-        // Clear the radio button selection in the UI
-        $('.qp-options-area .option').removeClass('selected');
-        $('input[name="qp_option"]').prop('checked', false);
+      // Clear the radio button selection in the UI
+      $(".qp-options-area .option").removeClass("selected");
+      $('input[name="qp_option"]').prop("checked", false);
 
-        // Update the status based on whether "Mark for Review" is currently checked
-        const isMarked = $('#qp-mock-mark-review-cb').is(':checked');
-        const newStatus = isMarked ? 'marked_for_review' : 'viewed';
-        
-        // This AJAX call will set selected_option_id to NULL in the database
-        // because its status is 'viewed', which our backend handler for clearing is looking for.
-        updateMockStatus(questionID, 'viewed');
+      // Update the status based on whether "Mark for Review" is currently checked
+      const isMarked = $("#qp-mock-mark-review-cb").is(":checked");
+      const newStatus = isMarked ? "marked_for_review" : "viewed";
 
-        // If it was marked for review, we need to send a second update to keep that status
-        if (isMarked) {
-            setTimeout(function() {
-                updateMockStatus(questionID, 'marked_for_review');
-            }, 100); // Small delay to ensure requests don't collide
-        }
+      // This AJAX call will set selected_option_id to NULL in the database
+      // because its status is 'viewed', which our backend handler for clearing is looking for.
+      updateMockStatus(questionID, "viewed");
+
+      // If it was marked for review, we need to send a second update to keep that status
+      if (isMarked) {
+        setTimeout(function () {
+          updateMockStatus(questionID, "marked_for_review");
+        }, 100); // Small delay to ensure requests don't collide
+      }
     });
 
     // Handler for the "Mark for Review" checkbox
-    wrapper.on('change', '#qp-mock-mark-review-cb', function() {
-        var questionID = sessionQuestionIDs[currentQuestionIndex];
-        const isChecked = $(this).is(':checked');
-        const currentState = (answeredStates[questionID] && answeredStates[questionID].mock_status) || 'viewed';
-        let newStatus = '';
+    wrapper.on("change", "#qp-mock-mark-review-cb", function () {
+      var questionID = sessionQuestionIDs[currentQuestionIndex];
+      const isChecked = $(this).is(":checked");
+      const currentState =
+        (answeredStates[questionID] &&
+          answeredStates[questionID].mock_status) ||
+        "viewed";
+      let newStatus = "";
 
-        if (isChecked) {
-            // When checking the box
-            newStatus = (currentState === 'answered' || currentState === 'answered_and_marked_for_review') ? 'answered_and_marked_for_review' : 'marked_for_review';
-        } else {
-            // When unchecking the box
-            newStatus = (currentState === 'answered_and_marked_for_review' || currentState === 'answered') ? 'answered' : 'viewed';
-        }
+      if (isChecked) {
+        // When checking the box
+        newStatus =
+          currentState === "answered" ||
+          currentState === "answered_and_marked_for_review"
+            ? "answered_and_marked_for_review"
+            : "marked_for_review";
+      } else {
+        // When unchecking the box
+        newStatus =
+          currentState === "answered_and_marked_for_review" ||
+          currentState === "answered"
+            ? "answered"
+            : "viewed";
+      }
 
-        // Visually update the button style immediately
-        $(this).closest('label').toggleClass('checked', isChecked);
-        
-        updateMockStatus(questionID, newStatus);
+      // Visually update the button style immediately
+      $(this).closest("label").toggleClass("checked", isChecked);
+
+      updateMockStatus(questionID, newStatus);
     });
-}
+  }
 
+
+  // --- NEW: Mock Test Scoring Checkbox UI Toggle ---
+wrapper.on('change', '#qp_mock_scoring_enabled_cb', function() {
+    var isChecked = $(this).is(':checked');
+    var marksWrapper = $('#qp-mock-marks-group-wrapper');
+    if (isChecked) {
+        marksWrapper.slideDown();
+        marksWrapper.find('input').prop('disabled', false);
+    } else {
+        marksWrapper.slideUp();
+        marksWrapper.find('input').prop('disabled', true);
+    }
+});
 });
