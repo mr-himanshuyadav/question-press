@@ -211,6 +211,7 @@ function qp_activate_plugin()
         correct_count INT,
         incorrect_count INT,
         skipped_count INT,
+        not_viewed_count INT,
         marks_obtained DECIMAL(10, 2),
         settings_snapshot TEXT,
         question_ids_snapshot LONGTEXT,
@@ -2030,10 +2031,24 @@ function qp_end_practice_session_ajax()
     }
 
     // Calculate final stats from the now-updated attempts table
-    $correct_count = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $attempts_table WHERE session_id = %d AND is_correct = 1", $session_id));
-    $incorrect_count = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $attempts_table WHERE session_id = %d AND is_correct = 0", $session_id));
-    $skipped_count = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $attempts_table WHERE session_id = %d AND status = 'skipped'", $session_id));
-    $total_attempted = $correct_count + $incorrect_count;
+$correct_count = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $attempts_table WHERE session_id = %d AND is_correct = 1", $session_id));
+$incorrect_count = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $attempts_table WHERE session_id = %d AND is_correct = 0", $session_id));
+$total_attempted = $correct_count + $incorrect_count;
+
+// --- NEW: Calculate Unattempted and Not Viewed counts for Mock Tests ---
+$unattempted_count = 0;
+$not_viewed_count = 0;
+if ($is_mock_test) {
+    // "Unattempted" is the total number of questions minus those answered correctly or incorrectly.
+    $unattempted_count = count(json_decode($session->question_ids_snapshot, true)) - $total_attempted;
+    // "Not Viewed" is specifically the count of questions with that status.
+    $not_viewed_count = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $attempts_table WHERE session_id = %d AND mock_status = 'not_viewed'", $session_id));
+} else {
+    // For other modes, the "skipped" count is the traditional value.
+    $unattempted_count = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $attempts_table WHERE session_id = %d AND status = 'skipped'", $session_id));
+}
+// For consistency, we'll use a single variable name from now on.
+$skipped_count = $unattempted_count;
 
     // Calculate final score
     $final_score = ($correct_count * $marks_correct) + ($incorrect_count * $marks_incorrect);
@@ -2058,30 +2073,32 @@ function qp_end_practice_session_ajax()
     }
 
     // Update the session in the database with the final, correct stats
-    $wpdb->update(
-        $sessions_table,
-        [
-            'end_time' => current_time('mysql'),
-            'status' => 'completed',
-            'total_active_seconds' => $total_active_seconds,
-            'total_attempted' => $total_attempted,
-            'correct_count' => $correct_count,
-            'incorrect_count' => $incorrect_count,
-            'skipped_count' => $skipped_count,
-            'marks_obtained' => $final_score
-        ],
-        ['session_id' => $session_id]
-    );
-
-    // Send the final stats back to the frontend
-    wp_send_json_success([
-        'final_score' => $final_score,
+$wpdb->update(
+    $sessions_table,
+    [
+        'end_time' => current_time('mysql'),
+        'status' => 'completed',
+        'total_active_seconds' => $total_active_seconds,
         'total_attempted' => $total_attempted,
         'correct_count' => $correct_count,
         'incorrect_count' => $incorrect_count,
-        'skipped_count' => $skipped_count,
-        'settings' => $settings,
-    ]);
+        'skipped_count' => $skipped_count, // This now holds the 'unattempted' count
+        'not_viewed_count' => $not_viewed_count, // Add the new field
+        'marks_obtained' => $final_score
+    ],
+    ['session_id' => $session_id]
+);
+
+    // Send the final stats back to the frontend
+wp_send_json_success([
+    'final_score' => $final_score,
+    'total_attempted' => $total_attempted,
+    'correct_count' => $correct_count,
+    'incorrect_count' => $incorrect_count,
+    'skipped_count' => $skipped_count, // This is our 'unattempted' count
+    'not_viewed_count' => $not_viewed_count, // Add the new count here
+    'settings' => $settings,
+]);
 }
 add_action('wp_ajax_end_practice_session', 'qp_end_practice_session_ajax');
 
