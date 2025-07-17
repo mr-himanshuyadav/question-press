@@ -728,6 +728,15 @@ class QP_Shortcodes
                     </div>
 
                     <div class="qp-options-area"></div>
+                    <?php if ($is_mock_test) : ?>
+                        <div class="qp-mock-test-actions">
+                            <button type="button" id="qp-clear-response-btn" class="qp-button qp-button-secondary">Clear Response</button>
+                            <label class="qp-button qp-button-secondary qp-review-later-checkbox">
+                                <input type="checkbox" id="qp-mock-mark-review-cb">
+                                <span>Mark for Review</span>
+                            </label>
+                        </div>
+                    <?php endif; ?>
 
                     <?php if (!$is_mock_test) : ?>
                         <div class="qp-review-later" style="text-align:center;margin-bottom: 5px;"><label class="qp-review-later-checkbox qp-button qp-button-secondary">

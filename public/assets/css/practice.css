@@ -337,9 +337,49 @@ body {
 .qp-practice-wrapper {
     border: 3px solid transparent;
     transition: all 0.3s ease;
+    margin-bottom: 1.2rem;
 }
 
-/* --- Color Themes per Mode --- */
+/* --- NEW: Mock Test Action Buttons --- */
+.qp-mock-test-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px dashed var(--qp-border-color);
+}
+
+.qp-mock-test-actions .qp-button {
+    flex-grow: 1;
+    outline: none;
+}
+
+/* Style for the Mark for Review checkbox to look like a button */
+.qp-mock-test-actions .qp-review-later-checkbox {
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 24px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    user-select: none;
+}
+
+.qp-mock-test-actions .qp-review-later-checkbox input {
+    display: none; /* Hide the actual checkbox */
+}
+
+/* Add a visual indicator for when the review button is active/checked */
+.qp-mock-test-actions .qp-review-later-checkbox.checked {
+    background-color: #e8eaf6; /* Light Indigo */
+    border-color: #5d3d9b;
+    color: #5d3d9b;
+}
+
 
 /* Normal Practice Mode (Blue) */
 .mode-normal .qp-session-mode-indicator {
