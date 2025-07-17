@@ -747,6 +747,12 @@ jQuery(document).ready(function ($) {
     sessionID = qp_session_data.session_id;
     sessionQuestionIDs = qp_session_data.question_ids;
     sessionSettings = qp_session_data.settings;
+    // --- NEW: Restore Auto Check state from sessionStorage ---
+    var savedAutoCheckState = sessionStorage.getItem('qpAutoCheckEnabled');
+    if (savedAutoCheckState !== null) {
+        isAutoCheckEnabled = (savedAutoCheckState === 'true');
+        $('#qp-auto-check-cb').prop('checked', isAutoCheckEnabled);
+    }
 
     // Conditionally hide the score element if the session is unscored
     if (sessionSettings.marks_correct === null) {
@@ -1456,13 +1462,18 @@ wrapper.on('click', '#qp-check-answer-btn', function() {
 
 wrapper.on('change', '#qp-auto-check-cb', function() {
     isAutoCheckEnabled = $(this).is(':checked');
-    var optionsArea = $('.qp-options-area');
 
-    // If auto-check is enabled and an answer is already selected, trigger the check.
+    // Save the new state to sessionStorage for this session
+    sessionStorage.setItem('qpAutoCheckEnabled', isAutoCheckEnabled);
+
+    var optionsArea = $('.qp-options-area');
+    // If auto-check is now enabled and an answer is already selected, check it.
     if (isAutoCheckEnabled && optionsArea.find('.option.selected').length > 0) {
-        $('#qp-check-answer-btn').trigger('click');
+        checkSelectedAnswer(); // Call the correct function
     }
 });
+
+
 
   wrapper.on("click", "#qp-next-btn, #qp-prev-btn", function () {
     clearInterval(questionTimer); // Stop the timer immediately
