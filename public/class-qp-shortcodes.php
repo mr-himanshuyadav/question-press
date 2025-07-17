@@ -247,7 +247,7 @@ class QP_Shortcodes
 
             <div class="qp-form-group">
                 <label for="qp_mock_timer_minutes">Total Time (in minutes)</label>
-                <input type="number" name="qp_mock_timer_minutes" id="qp_mock_timer_minutes" value="30" min="5">
+                <input type="number" name="qp_mock_timer_minutes" id="qp_mock_timer_minutes" value="30" min="1">
             </div>
 
             <div class="qp-form-group qp-marks-group">
@@ -348,7 +348,7 @@ class QP_Shortcodes
             if ($last_pause_id) {
                 $wpdb->update(
                     $pauses_table,
-                    ['resume_time' => current_time('mysql')], // Use GMT time
+                    ['resume_time' => current_time('mysql')],
                     ['pause_id' => $last_pause_id]
                 );
             }
@@ -408,10 +408,15 @@ class QP_Shortcodes
 
         // If it's a mock test, calculate the absolute end time based on start time and duration
         if (isset($session_settings['practice_mode']) && $session_settings['practice_mode'] === 'mock_test') {
-            $start_time = strtotime($session_data_from_db->start_time);
+            // Get the start time (which was saved in WP's timezone) and convert it to a proper UTC timestamp.
+            // This is the correct way to handle timezones in WordPress.
+            $start_time_gmt_string = get_gmt_from_date($session_data_from_db->start_time);
+            $start_time_timestamp = strtotime($start_time_gmt_string);
+
             $duration_seconds = $session_settings['timer_seconds'];
+
             // The end time is passed as a UTC timestamp (seconds since epoch) for JavaScript
-            $session_data['test_end_timestamp'] = $start_time + $duration_seconds;
+            $session_data['test_end_timestamp'] = $start_time_timestamp + $duration_seconds;
         }
 
         $attempt_history = $wpdb->get_results($wpdb->prepare(
