@@ -1738,9 +1738,9 @@ function qp_update_mock_status_ajax()
     $data_to_update = ['mock_status' => $new_status];
 
     // If the user is clearing their response, we should also nullify their selected option.
-    if ($new_status === 'viewed') {
-        $data_to_update['selected_option_id'] = null;
-    }
+    if ($new_status === 'viewed' || $new_status === 'marked_for_review') {
+    $data_to_update['selected_option_id'] = null;
+}
 
     if ($existing_attempt_id) {
         // If an attempt record exists, update its mock_status.

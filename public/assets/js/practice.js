@@ -1154,6 +1154,9 @@ function updateCurrentPaletteButton(newIndex, oldIndex) {
         currentQuestionIndex = lastAttemptedIndex >= 0 ? lastAttemptedIndex + 1 : 0;
     }
     currentQuestionIndex = Math.min(currentQuestionIndex, sessionQuestionIDs.length - 1);
+    if (isMockTest) {
+    $('#qp-question-counter').text((currentQuestionIndex + 1) + "/" + sessionQuestionIDs.length);
+}
     }
 
     // Restore reported questions state
@@ -1409,29 +1412,21 @@ function updateCurrentPaletteButton(newIndex, oldIndex) {
     $("#qp-question-id").text(
       "Question ID: " + questionData.custom_question_id
     );
-    // --- RESTORED: Source Metadata Display ---
-    var sourceDisplayArea = $("#qp-question-source").hide().empty();
-    if (
-      data.is_admin &&
-      (questionData.source_name ||
-        questionData.section_name ||
-        questionData.question_number_in_section)
-    ) {
-      var sourceInfo = [];
-      if (questionData.source_name)
+    // --- Source Metadata Display ---
+var sourceDisplayArea = $("#qp-question-source");
+// Only try to populate the div if it actually exists in the HTML
+if (sourceDisplayArea.length) {
+    var sourceInfo = [];
+    if (questionData.source_name)
         sourceInfo.push("<strong>Source:</strong> " + questionData.source_name);
-      if (questionData.section_name)
-        sourceInfo.push(
-          "<strong>Section:</strong> " + questionData.section_name
-        );
-      if (questionData.question_number_in_section)
-        sourceInfo.push(
-          "<strong>Q:</strong> " + questionData.question_number_in_section
-        );
-      if (sourceInfo.length > 0) {
-        sourceDisplayArea.html(sourceInfo.join(" | ")).show();
-      }
-    }
+    if (questionData.section_name)
+        sourceInfo.push("<strong>Section:</strong> " + questionData.section_name);
+    if (questionData.question_number_in_section)
+        sourceInfo.push("<strong>Q:</strong> " + questionData.question_number_in_section);
+    
+    // Set the HTML content of the existing div
+    sourceDisplayArea.html(sourceInfo.join(" | "));
+}
     $("#qp-question-text-area").html(questionData.question_text);
     $("#qp-report-btn").prop("disabled", previousState.reported);
 
@@ -1470,7 +1465,7 @@ function updateCurrentPaletteButton(newIndex, oldIndex) {
       }
     } else {
       // Logic for Normal/Revision modes
-      $("#qp-revision-indicator, #qp-question-source").hide();
+      $("#qp-revision-indicator").hide();
       $("#qp-skip-btn").prop("disabled", false);
       $("#qp-next-btn").prop("disabled", true);
       if (isAutoCheckEnabled) {
@@ -1613,6 +1608,9 @@ function updateCurrentPaletteButton(newIndex, oldIndex) {
 
     // If we are not on the last question, it's safe to increment the index and load the next question.
     currentQuestionIndex++;
+    if (isMockTest) {
+        $('#qp-question-counter').text((currentQuestionIndex + 1) + "/" + sessionQuestionIDs.length);
+    }
     loadQuestion(sessionQuestionIDs[currentQuestionIndex], "next");
     renderPalette();
   }
@@ -1899,6 +1897,9 @@ function updateCurrentPaletteButton(newIndex, oldIndex) {
     } else {
       if (currentQuestionIndex > 0) {
         currentQuestionIndex--;
+        if (isMockTest) {
+                $('#qp-question-counter').text((currentQuestionIndex + 1) + "/" + sessionQuestionIDs.length);
+            }
         loadQuestion(sessionQuestionIDs[currentQuestionIndex], "prev");
         renderPalette(); 
       }
@@ -2073,27 +2074,19 @@ function updateCurrentPaletteButton(newIndex, oldIndex) {
   ) {
     // Handler for the "Clear Response" button
     wrapper.on("click", "#qp-clear-response-btn", function () {
-      var questionID = sessionQuestionIDs[currentQuestionIndex];
+    var questionID = sessionQuestionIDs[currentQuestionIndex];
 
-      // Clear the radio button selection in the UI
-      $(".qp-options-area .option").removeClass("selected");
-      $('input[name="qp_option"]').prop("checked", false);
+    // Clear the radio button selection in the UI first
+    $(".qp-options-area .option").removeClass("selected");
+    $('input[name="qp_option"]').prop("checked", false);
 
-      // Update the status based on whether "Mark for Review" is currently checked
-      const isMarked = $("#qp-mock-mark-review-cb").is(":checked");
-      const newStatus = isMarked ? "marked_for_review" : "viewed";
+    // Determine the correct final status
+    const isMarkedForReview = $("#qp-mock-mark-review-cb").is(":checked");
+    const newStatus = isMarkedForReview ? "marked_for_review" : "viewed";
 
-      // This AJAX call will set selected_option_id to NULL in the database
-      // because its status is 'viewed', which our backend handler for clearing is looking for.
-      updateMockStatus(questionID, "viewed");
-
-      // If it was marked for review, we need to send a second update to keep that status
-      if (isMarked) {
-        setTimeout(function () {
-          updateMockStatus(questionID, "marked_for_review");
-        }, 100); // Small delay to ensure requests don't collide
-      }
-    });
+    // Send a single, definitive update to the backend
+    updateMockStatus(questionID, newStatus);
+});
 
     // Handler for the "Mark for Review" checkbox
     wrapper.on("change", "#qp-mock-mark-review-cb", function () {

@@ -574,8 +574,8 @@ body.palette-overlay-open #qp-palette-sliding {
 
 /* Marked for Review (and not answered) */
 .qp-palette-btn.status-marked_for_review {
-    background-color: #5d3d9b; /* Purple */
-    border-color: #311b92;
+    background-color: #1976d2; /* New Vibrant Blue */
+    border-color: #0d47a1;     /* Darker Blue Border */
     color: #fff;
 }
 
@@ -593,7 +593,7 @@ body.palette-overlay-open #qp-palette-sliding {
     right: 5px;
     width: 10px;
     height: 10px;
-    background-color: #5d3d9b; /* Purple dot */
+    background-color: #ffeb3b; /* New High-Contrast Yellow */
     border-radius: 50%;
     border: 1px solid #fff;
 }
@@ -632,7 +632,7 @@ body.palette-overlay-open #qp-palette-sliding {
 .swatch.status-answered { background-color: var(--qp-correct-color); }
 .swatch.status-viewed { background-color: #ffc107; } /* Amber */
 .swatch.status-not_viewed { background-color: #e0e0e0; }
-.swatch.status-marked_for_review { background-color: #5d3d9b; } /* Purple */
+.swatch.status-marked_for_review { background-color: #1976d2; } /* Purple */
 .swatch.status-answered_and_marked_for_review {
     background-color: var(--qp-correct-color);
 }
@@ -644,7 +644,7 @@ body.palette-overlay-open #qp-palette-sliding {
     transform: translate(-50%, -50%);
     width: 6px;
     height: 6px;
-    background-color: #5d3d9b; /* Purple dot */
+    background-color: #ffeb3b; /* Purple dot */
     border-radius: 50%;
 }
 

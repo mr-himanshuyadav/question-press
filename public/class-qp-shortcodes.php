@@ -637,6 +637,10 @@ class QP_Shortcodes
         // --- THIS IS THE CORRECTED/RESTORED LOGIC ---
         $mode_class = 'mode-normal';
         $mode_name = 'Practice Session'; // A generic default
+        $options = get_option('qp_settings');
+        $user = wp_get_current_user();
+        $allowed_roles = isset($options['show_source_meta_roles']) ? $options['show_source_meta_roles'] : [];
+        $user_can_view_source = !empty(array_intersect((array)$user->roles, (array)$allowed_roles));
 
         if ($is_mock_test) {
             $mode_class = 'mode-mock-test';
@@ -672,18 +676,18 @@ class QP_Shortcodes
                 </div>
                 <div class="qp-palette-grid"></div>
                 <div class="qp-palette-legend">
-                <?php if ($is_mock_test) : ?>
-                    <div class="legend-item"><span class="swatch status-answered"></span> Answered</div>
-                    <div class="legend-item"><span class="swatch status-viewed"></span> Not Answered</div>
-                    <div class="legend-item"><span class="swatch status-not_viewed"></span> Not Visited</div>
-                    <div class="legend-item"><span class="swatch status-marked_for_review"></span> Marked for Review</div>
-                    <div class="legend-item"><span class="swatch status-answered_and_marked_for_review"></span> Answered &amp; Marked</div>
-                <?php else : ?>
-                    <div class="legend-item"><span class="swatch status-correct"></span> Correct</div>
-                    <div class="legend-item"><span class="swatch status-incorrect"></span> Incorrect</div>
-                    <div class="legend-item"><span class="swatch status-skipped"></span> Skipped</div>
-                    <div class="legend-item"><span class="swatch status-not_viewed"></span> Not Attempted</div>
-                <?php endif; ?>
+                    <?php if ($is_mock_test) : ?>
+                        <div class="legend-item"><span class="swatch status-answered"></span> Answered</div>
+                        <div class="legend-item"><span class="swatch status-marked_for_review"></span> Marked for Review</div>
+                        <div class="legend-item"><span class="swatch status-answered_and_marked_for_review"></span> Answered &amp; Marked</div>
+                        <div class="legend-item"><span class="swatch status-viewed"></span> Not Answered</div>
+                        <div class="legend-item"><span class="swatch status-not_viewed"></span> Not Visited</div>
+                    <?php else : ?>
+                        <div class="legend-item"><span class="swatch status-correct"></span> Correct</div>
+                        <div class="legend-item"><span class="swatch status-incorrect"></span> Incorrect</div>
+                        <div class="legend-item"><span class="swatch status-skipped"></span> Skipped</div>
+                        <div class="legend-item"><span class="swatch status-not_viewed"></span> Not Attempted</div>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
@@ -695,18 +699,18 @@ class QP_Shortcodes
                 </div>
                 <div class="qp-palette-grid"></div>
                 <div class="qp-palette-legend">
-                <?php if ($is_mock_test) : ?>
-                    <div class="legend-item"><span class="swatch status-answered"></span> Answered</div>
-                    <div class="legend-item"><span class="swatch status-viewed"></span> Not Answered</div>
-                    <div class="legend-item"><span class="swatch status-not_viewed"></span> Not Visited</div>
-                    <div class="legend-item"><span class="swatch status-marked_for_review"></span> Marked for Review</div>
-                    <div class="legend-item"><span class="swatch status-answered_and_marked_for_review"></span> Answered &amp; Marked</div>
-                <?php else : ?>
-                    <div class="legend-item"><span class="swatch status-correct"></span> Correct</div>
-                    <div class="legend-item"><span class="swatch status-incorrect"></span> Incorrect</div>
-                    <div class="legend-item"><span class="swatch status-skipped"></span> Skipped</div>
-                    <div class="legend-item"><span class="swatch status-not_viewed"></span> Not Attempted</div>
-                <?php endif; ?>
+                    <?php if ($is_mock_test) : ?>
+                        <div class="legend-item"><span class="swatch status-answered"></span> Answered</div>
+                        <div class="legend-item"><span class="swatch status-marked_for_review"></span> Marked for Review</div>
+                        <div class="legend-item"><span class="swatch status-answered_and_marked_for_review"></span> Answered &amp; Marked</div>
+                        <div class="legend-item"><span class="swatch status-viewed"></span> Not Answered</div>
+                        <div class="legend-item"><span class="swatch status-not_viewed"></span> Not Visited</div>
+                    <?php else : ?>
+                        <div class="legend-item"><span class="swatch status-correct"></span> Correct</div>
+                        <div class="legend-item"><span class="swatch status-incorrect"></span> Incorrect</div>
+                        <div class="legend-item"><span class="swatch status-skipped"></span> Skipped</div>
+                        <div class="legend-item"><span class="swatch status-not_viewed"></span> Not Attempted</div>
+                    <?php endif; ?>
                 </div>
 
             </div>
@@ -746,7 +750,9 @@ class QP_Shortcodes
                         <div class="question-meta">
                             <div class="qp-question-meta-left">
                                 <div id="qp-question-subject-line"><span id="qp-question-subject"></span> | <span id="qp-question-id"></span></div>
-                                <div id="qp-question-source" style="display: none;"></div>
+                                <?php if ($user_can_view_source): ?>
+                                <div id="qp-question-source"></div>
+                            <?php endif; ?>
                             </div>
                             <div class="qp-question-meta-right">
                                 <button id="qp-report-btn" class="qp-report-button qp-button-secondary"><span>&#9888;</span> Report</button>
