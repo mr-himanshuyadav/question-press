@@ -2050,20 +2050,20 @@ wrapper.on('change', '#qp_mock_scoring_enabled_cb', function() {
 });
 
 
-    // --- NEW: Question Palette Activation Logic ---
+  // --- NEW: Advanced Palette Activation Logic ---
 if (typeof qp_session_data !== "undefined") {
-    var wrapper = $('.qp-practice-wrapper');
     var isMockTest = qp_session_data.settings.practice_mode === 'mock_test';
     var isSectionWise = qp_session_data.settings.practice_mode === 'Section Wise Practice';
+    var isPaletteMandatory = isMockTest || isSectionWise;
 
-    // If the palette is mandatory for the current mode, show it on page load.
-    if (isMockTest || isSectionWise) {
-        wrapper.addClass('palette-visible');
+    // For mandatory modes, add the permanent layout class.
+    if (isPaletteMandatory) {
+        $('body').addClass('palette-mandatory');
     }
 
-    // Handle clicks on the toggle button (for non-mandatory modes)
-    $('#qp-palette-toggle-btn').on('click', function() {
-        wrapper.toggleClass('palette-visible');
+    // Handlers to open and close the palette by toggling the overlay class.
+    $('#qp-palette-toggle-btn, #qp-palette-close-btn').on('click', function() {
+        $('body').toggleClass('palette-overlay-open');
     });
 }
 

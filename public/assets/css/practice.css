@@ -28,6 +28,7 @@ body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     background-color: transparent; 
     padding: 0;
+    max-width: 100%;
     box-sizing: border-box;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -262,7 +263,8 @@ body {
     font: normal 1em KaTeX_Main,Times New Roman,serif;
 }
 
-#qp-practice-app-wrapper .qp-direction{ font: normal 1.21em KaTeX_Main,Times New Roman,serif;}
+#qp-practice-app-wrapper .qp-direction{ display: flex; flex-direction: column;font: normal 1.21em KaTeX_Main,Times New Roman,serif;}
+#qp-practice-app-wrapper .qp-direction img{max-width: 80%;}
 
 /* --- Question Meta & Counter Styles --- */
 .question-meta {
@@ -410,12 +412,229 @@ body {
     gap: 8px;
 }
 
-/* On Mobile: When palette is visible, it stacks vertically */
+/* On Mobile: Stack layout and control element order */
 @media (max-width: 959px) {
+    .qp-practice-wrapper {
+        flex-direction: column;
+    }
+
+    /* Move the palette to the end of the flex container */
     .palette-visible #qp-question-palette {
+        order: 10;
+        margin-top: 1.5rem;
+    }
+
+    /* The toggle button is now correctly positioned before the footer nav */
+    .qp-palette-toggle-wrapper {
         margin-bottom: 1.5rem;
     }
 }
+
+/* --- NEW: Palette Button Styles --- */
+
+/* Base style for all palette buttons */
+.qp-palette-btn {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    height: 50px;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--qp-dark-text);
+    background-color: #fff;
+    border: 1px solid var(--qp-border-color);
+    border-radius: var(--qp-radius);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+}
+
+.qp-palette-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.08);
+}
+
+/* Style for the currently active question */
+.qp-palette-btn.current {
+    border-width: 3px;
+    border-color: var(--qp-primary-color);
+    color: var(--qp-primary-color);
+}
+
+/* --- Status-Specific Colors --- */
+
+/* Not Viewed (Default) */
+.qp-palette-btn.status-not_viewed {
+    background-color: #e0e0e0;
+    color: #757575;
+}
+
+/* Viewed (but not answered) */
+.qp-palette-btn.status-viewed {
+    background-color: #fff8e1; /* Light Yellow */
+    border-color: #ffc107;
+}
+
+/* Answered */
+.qp-palette-btn.status-answered {
+    background-color: var(--qp-correct-bg);
+    border-color: var(--qp-correct-color);
+    color: var(--qp-correct-color);
+}
+
+/* Marked for Review (and not answered) */
+.qp-palette-btn.status-marked_for_review {
+    background-color: #e8eaf6; /* Light Indigo */
+    border-color: #5d3d9b;
+    color: #5d3d9b;
+}
+
+/* Answered AND Marked for Review */
+.qp-palette-btn.status-answered_and_marked_for_review {
+    background-color: var(--qp-correct-bg);
+    border-color: var(--qp-correct-color);
+    color: var(--qp-correct-color);
+    /* Add a small dot to indicate review status */
+    position: relative;
+}
+
+.qp-palette-btn.status-answered_and_marked_for_review::after {
+    content: '';
+    position: absolute;
+    bottom: 5px;
+    right: 5px;
+    width: 10px;
+    height: 10px;
+    background-color: #5d3d9b; /* Purple dot */
+    border-radius: 50%;
+    border: 1px solid #fff;
+}
+
+
+/* --- FINAL: Question Palette Styles (v3) --- */
+
+/* --- Base Wrapper and Content Styles --- */
+#qp-practice-app-wrapper {
+    width: 100%;
+}
+.qp-practice-wrapper {
+    max-width: 840px; /* Default narrow width */
+    margin: 0 auto;
+}
+
+/* --- State 1: MANDATORY Two-Column Layout (Desktop) --- */
+@media (min-width: 960px) {
+    /* When body has this class, activate the two-column layout */
+    body.palette-mandatory .qp-practice-wrapper {
+        display: flex;
+        gap: 1.5rem;
+        max-width: 1400px; /* Use the wider layout */
+        align-items: flex-start;
+    }
+
+    /* Make the palette visible and define its size */
+    body.palette-mandatory #qp-question-palette {
+        display: flex; /* Use flexbox for the palette itself */
+        flex-direction: column;
+        flex: 0 0 320px; /* Fixed width for the left column */
+    }
+
+    /* The main content takes the remaining space */
+    body.palette-mandatory #qp-main-content {
+        flex: 1;
+    }
+
+    /* Hide the toggle button when the palette is mandatory */
+    body.palette-mandatory #qp-palette-toggle-btn {
+        display: none;
+    }
+}
+
+/* --- State 2: OPTIONAL Slide-In Overlay (Desktop) --- */
+#qp-question-palette {
+    display: none; /* Hidden by default for optional modes */
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 320px;
+    height: 100%;
+    background-color: #f6f7f7;
+    border-right: 1px solid var(--qp-border-color);
+    z-index: 1100;
+    transform: translateX(-100%);
+    transition: transform 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    flex-direction: column;
+}
+
+/* This class toggles the slide-in overlay for optional modes */
+body.palette-overlay-open #qp-question-palette {
+    display: flex;
+    transform: translateX(0);
+    box-shadow: 0 0 25px rgba(0,0,0,0.15);
+}
+
+/* --- State 3: MOBILE Slide-Up Overlay (All Modes) --- */
+@media (max-width: 959px) {
+    #qp-question-palette {
+        width: 100%;
+        height: 75vh;
+        top: auto;
+        bottom: 0;
+        border-right: none;
+        border-top: 1px solid var(--qp-border-color);
+        transform: translateY(100%);
+    }
+
+    body.palette-overlay-open #qp-question-palette {
+        transform: translateY(0);
+    }
+}
+
+
+/* --- Common Palette & Button Styles --- */
+.qp-palette-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
+    border-bottom: 1px solid var(--qp-border-color);
+    background-color: #fff;
+    flex-shrink: 0;
+}
+.qp-palette-header h4 { margin: 0; font-size: 1.1rem; }
+#qp-palette-close-btn { background: none; border: none; font-size: 28px; cursor: pointer; color: var(--qp-light-text); padding: 0 10px; }
+
+.qp-palette-grid {
+    padding: 1rem;
+    overflow-y: auto;
+    flex-grow: 1;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(45px, 1fr));
+    gap: 12px;
+}
+
+.qp-header-top-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+#qp-palette-toggle-btn {
+    background: none;
+    border: 1px solid var(--qp-border-color);
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    transition: all 0.2s ease;
+}
+#qp-palette-toggle-btn:hover { background-color: var(--qp-bg-light); border-color: #a7aaad; }
+#qp-palette-toggle-btn .dashicons { font-size: 22px; color: var(--qp-light-text); }
 
 /* --- NEW: Mock Test Action Buttons --- */
 .qp-mock-test-actions {
