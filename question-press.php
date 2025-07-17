@@ -1302,6 +1302,124 @@ function qp_start_incorrect_practice_session_ajax() {
 }
 add_action('wp_ajax_qp_start_incorrect_practice_session', 'qp_start_incorrect_practice_session_ajax');
 
+
+/**
+ * AJAX handler to start a MOCK TEST session.
+ */
+function qp_start_mock_test_session_ajax() {
+    check_ajax_referer('qp_practice_nonce', 'nonce');
+    if (!is_user_logged_in()) {
+        wp_send_json_error(['message' => 'You must be logged in.']);
+    }
+
+    global $wpdb;
+
+    // --- Gather settings from the new form ---
+    $subjects = isset($_POST['mock_subjects']) && is_array($_POST['mock_subjects']) ? $_POST['mock_subjects'] : [];
+    $topics = isset($_POST['mock_topics']) && is_array($_POST['mock_topics']) ? $_POST['mock_topics'] : [];
+    $num_questions = isset($_POST['qp_mock_num_questions']) ? absint($_POST['qp_mock_num_questions']) : 20;
+    $distribution = isset($_POST['question_distribution']) ? sanitize_key($_POST['question_distribution']) : 'random';
+
+    $session_settings = [
+        'practice_mode'       => 'mock_test',
+        'subjects'            => $subjects,
+        'topics'              => $topics,
+        'num_questions'       => $num_questions,
+        'distribution'        => $distribution,
+        'marks_correct'       => isset($_POST['qp_marks_correct']) ? floatval($_POST['qp_marks_correct']) : 4,
+        'marks_incorrect'     => isset($_POST['qp_marks_incorrect']) ? -abs(floatval($_POST['qp_marks_incorrect'])) : -1,
+        'timer_enabled'       => true, // Timer is always enabled for mock tests
+        'timer_seconds'       => (isset($_POST['qp_mock_timer_minutes']) ? absint($_POST['qp_mock_timer_minutes']) : 30) * 60,
+    ];
+
+    // --- Build the initial query to get a pool of eligible questions ---
+    $q_table = $wpdb->prefix . 'qp_questions';
+    $g_table = $wpdb->prefix . 'qp_question_groups';
+    $t_table = $wpdb->prefix . 'qp_topics';
+
+    $where_clauses = ["q.status = 'publish'"];
+    $query_params = [];
+    $joins = "LEFT JOIN {$g_table} g ON q.group_id = g.group_id";
+
+    // Handle Subject selection
+    if (!empty($subjects) && !in_array('all', $subjects)) {
+        $subject_ids = array_map('absint', $subjects);
+        $ids_placeholder = implode(',', array_fill(0, count($subject_ids), '%d'));
+        $where_clauses[] = $wpdb->prepare("g.subject_id IN ($ids_placeholder)", $subject_ids);
+    }
+
+    // Handle Topic selection
+    if (!empty($topics) && !in_array('all', $topics)) {
+        $topic_ids = array_map('absint', $topics);
+        $ids_placeholder = implode(',', array_fill(0, count($topic_ids), '%d'));
+        $where_clauses[] = $wpdb->prepare("q.topic_id IN ($ids_placeholder)", $topic_ids);
+    }
+
+    $base_where_sql = implode(' AND ', $where_clauses);
+    $query = "SELECT q.question_id, q.topic_id FROM {$q_table} q {$joins} WHERE {$base_where_sql}";
+
+    $question_pool = $wpdb->get_results($wpdb->prepare($query, $query_params));
+
+    if (empty($question_pool)) {
+        wp_send_json_error(['html' => '<div class="qp-container"><p>No questions were found for the selected criteria. Please try different options.</p><button onclick="window.location.reload();" class="qp-button qp-button-secondary">Go Back</button></div>']);
+    }
+
+    // --- Apply distribution logic ---
+    $final_question_ids = [];
+
+    if ($distribution === 'equal' && !empty($topics) && !in_array('all', $topics)) {
+        $questions_by_topic = [];
+        foreach ($question_pool as $q) {
+            $questions_by_topic[$q->topic_id][] = $q->question_id;
+        }
+
+        $num_topics = count($questions_by_topic);
+        $questions_per_topic = $num_topics > 0 ? floor($num_questions / $num_topics) : 0;
+        $remainder = $num_topics > 0 ? $num_questions % $num_topics : 0;
+
+        foreach ($questions_by_topic as $topic_id => $q_ids) {
+            shuffle($q_ids);
+            $num_to_take = $questions_per_topic;
+            if ($remainder > 0) {
+                $num_to_take++;
+                $remainder--;
+            }
+            $final_question_ids = array_merge($final_question_ids, array_slice($q_ids, 0, $num_to_take));
+        }
+
+    } else { // Default to 'random'
+        shuffle($question_pool);
+        $final_question_ids = array_slice(wp_list_pluck($question_pool, 'question_id'), 0, $num_questions);
+    }
+
+    if (empty($final_question_ids)) {
+         wp_send_json_error(['html' => '<div class="qp-container"><p>Could not gather enough unique questions for the test. Please select more topics or reduce the number of questions.</p><button onclick="window.location.reload();" class="qp-button qp-button-secondary">Go Back</button></div>']);
+    }
+    
+    shuffle($final_question_ids); // Final shuffle for randomness
+
+    // --- Create the session ---
+    $options = get_option('qp_settings');
+    $session_page_id = isset($options['session_page']) ? absint($options['session_page']) : 0;
+    if (!$session_page_id) {
+        wp_send_json_error(['message' => 'The administrator has not configured a session page.']);
+    }
+
+    $wpdb->insert($wpdb->prefix . 'qp_user_sessions', [
+        'user_id'                 => get_current_user_id(),
+        'status'                  => 'active',
+        'start_time'              => current_time('mysql'),
+        'last_activity'           => current_time('mysql'),
+        'settings_snapshot'       => wp_json_encode($session_settings),
+        'question_ids_snapshot'   => wp_json_encode($final_question_ids)
+    ]);
+    $session_id = $wpdb->insert_id;
+
+    $redirect_url = add_query_arg('session_id', $session_id, get_permalink($session_page_id));
+    wp_send_json_success(['redirect_url' => $redirect_url]);
+}
+add_action('wp_ajax_qp_start_mock_test_session', 'qp_start_mock_test_session_ajax');
+
 function qp_get_practice_form_html_ajax()
 {
     check_ajax_referer('qp_practice_nonce', 'nonce');
