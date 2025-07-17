@@ -65,57 +65,107 @@ jQuery(document).ready(function ($) {
   }
 
   // --- NEW: Helper function to update mock test question status ---
-  function updateMockStatus(questionID, newStatus) {
+function updateMockStatus(questionID, newStatus) {
     if (!isMockTest) return;
 
-    // Update local state immediately for instant UI feedback
-    if (!answeredStates[questionID]) {
-      answeredStates[questionID] = {};
-    }
-    answeredStates[questionID].mock_status = newStatus;
+    // --- MODIFICATION START ---
+    // Disable the palette buttons for this question to prevent rapid clicks
+    var paletteBtn = $('.qp-palette-btn[data-question-index="' + sessionQuestionIDs.indexOf(questionID) + '"]');
+    paletteBtn.css('pointer-events', 'none').css('opacity', '0.7');
 
     // Send the update to the backend
     $.ajax({
-      url: qp_ajax_object.ajax_url,
-      type: "POST",
-      data: {
-        action: "qp_update_mock_status",
-        nonce: qp_ajax_object.nonce,
-        session_id: sessionID,
-        question_id: questionID,
-        status: newStatus,
-      },
+        url: qp_ajax_object.ajax_url,
+        type: "POST",
+        data: {
+            action: "qp_update_mock_status",
+            nonce: qp_ajax_object.nonce,
+            session_id: sessionID,
+            question_id: questionID,
+            status: newStatus,
+        },
+        success: function(response) {
+            if (response.success) {
+                // Update local state and re-render the palette ONLY on success
+                if (!answeredStates[questionID]) {
+                    answeredStates[questionID] = {};
+                }
+                answeredStates[questionID].mock_status = newStatus;
+                renderPalette();
+            } else {
+                // If the server returns an error, alert the user
+                alert("Could not save your progress. Please check your connection and try again.");
+            }
+        },
+        error: function() {
+            // If the AJAX call itself fails, alert the user
+            alert("A network error occurred. Could not save progress.");
+        },
+        complete: function() {
+            // Re-enable the button regardless of success or failure
+            paletteBtn.css('pointer-events', 'auto').css('opacity', '1');
+        }
     });
-    renderPalette();
-  }
+    // --- MODIFICATION END ---
+}
   
-  // --- NEW: Renders and updates the question palette ---
+// REPLACE the entire old renderPalette function with this new one.
 function renderPalette() {
-    // Clear any existing buttons from both palettes
     paletteGrids.empty();
 
-    // Loop through every question in the session
     sessionQuestionIDs.forEach(function(questionID, index) {
         const questionState = answeredStates[questionID] || {};
-        const status = questionState.mock_status || 'not_viewed';
+        let statusClass = 'status-not_viewed'; // Default status
 
-        // Create the button element
+        if (isMockTest) {
+            // --- MOCK TEST LOGIC (uses mock_status) ---
+            if (questionState.mock_status) {
+                statusClass = 'status-' + questionState.mock_status;
+            }
+        } else {
+            // --- NORMAL/REVISION MODE LOGIC (uses type and is_correct) ---
+            if (questionState.type === 'answered') {
+                statusClass = questionState.is_correct ? 'status-correct' : 'status-incorrect';
+            } else if (questionState.type === 'skipped') {
+                statusClass = 'status-skipped';
+            }
+        }
+
         const paletteBtn = $('<button></button>')
             .addClass('qp-palette-btn')
             .attr('data-question-index', index)
             .text(index + 1);
 
-        // Add the status class for color-coding
-        paletteBtn.addClass('status-' + status);
+        paletteBtn.addClass(statusClass);
 
-        // Add the 'current' class if it's the active question
         if (index === currentQuestionIndex) {
             paletteBtn.addClass('current');
         }
-
-        // Add the button to both palette grids
+        
         paletteGrids.append(paletteBtn);
     });
+}
+
+// --- NEW: Function to update a single palette button ---
+function updatePaletteButton(questionID, newStatus) {
+    // Find the buttons corresponding to this question ID
+    const paletteBtns = $('.qp-palette-btn[data-question-id="' + questionID + '"]');
+
+    // Remove all old status classes
+    paletteBtns.removeClass (function (index, className) {
+        return (className.match (/(^|\s)status-\S+/g) || []).join(' ');
+    });
+
+    // Add the new status class
+    paletteBtns.addClass('status-' + newStatus);
+}
+
+// --- NEW: Function to update the highlighted button ---
+function updateCurrentPaletteButton(newIndex, oldIndex) {
+    if (oldIndex !== null) {
+        $('.qp-palette-btn[data-question-index="' + oldIndex + '"]').removeClass('current');
+    }
+    $('.qp-palette-btn[data-question-index="' + newIndex + '"]').addClass('current');
 }
   // --- LOGIC FOR MOCK TEST FORM DROPDOWNS ---
   $("#qp_subject_dropdown_mock").on(
@@ -1060,22 +1110,19 @@ function renderPalette() {
       }
     }
 
-    // Restore user's previous answers from the database
     if (qp_session_data.attempt_history) {
-      var lastAttemptedIndex = -1;
-      for (var i = 0; i < sessionQuestionIDs.length; i++) {
+    // Restore answered states from DB (this part remains the same)
+    for (var i = 0; i < sessionQuestionIDs.length; i++) {
         var qid = sessionQuestionIDs[i];
         if (qp_session_data.attempt_history[qid]) {
-          var attempt = qp_session_data.attempt_history[qid];
-          lastAttemptedIndex = i;
-
-          // Store the raw attempt data. We will use it differently depending on the mode.
-          answeredStates[qid] = {
-            type: attempt.status,
-            is_correct: parseInt(attempt.is_correct, 10) === 1,
-            selected_option_id: attempt.selected_option_id,
-            correct_option_id: attempt.correct_option_id,
-            remainingTime: attempt.remaining_time,
+            var attempt = qp_session_data.attempt_history[qid];
+            answeredStates[qid] = {
+                type: attempt.status,
+                is_correct: parseInt(attempt.is_correct, 10) === 1,
+                selected_option_id: attempt.selected_option_id,
+                correct_option_id: attempt.correct_option_id,
+                remainingTime: attempt.remaining_time,
+                mock_status: attempt.mock_status,
           };
 
           // For non-mock tests, calculate the score as we load
@@ -1092,11 +1139,21 @@ function renderPalette() {
           }
         }
       }
-      var potentialIndex = lastAttemptedIndex >= 0 ? lastAttemptedIndex + 1 : 0;
-      currentQuestionIndex = Math.min(
-        potentialIndex,
-        sessionQuestionIDs.length - 1
-      );
+      // Try to restore the exact index from sessionStorage
+    var savedIndex = sessionStorage.getItem('qp_session_' + sessionID + '_index');
+    if (savedIndex !== null && !isNaN(savedIndex)) {
+        currentQuestionIndex = parseInt(savedIndex, 10);
+    } else {
+        // Fallback for the very first load (or if sessionStorage is cleared)
+        var lastAttemptedIndex = -1;
+        for (var i = 0; i < sessionQuestionIDs.length; i++) {
+            if (answeredStates[sessionQuestionIDs[i]]) {
+                lastAttemptedIndex = i;
+            }
+        }
+        currentQuestionIndex = lastAttemptedIndex >= 0 ? lastAttemptedIndex + 1 : 0;
+    }
+    currentQuestionIndex = Math.min(currentQuestionIndex, sessionQuestionIDs.length - 1);
     }
 
     // Restore reported questions state
@@ -1493,6 +1550,7 @@ function renderPalette() {
 
     function doRender(data) {
       renderQuestion(data, questionID);
+      sessionStorage.setItem('qp_session_' + sessionID + '_index', currentQuestionIndex);
       if (direction) {
         var slideInClass =
           direction === "next" ? "slide-in-from-right" : "slide-in-from-left";
@@ -1556,6 +1614,7 @@ function renderPalette() {
     // If we are not on the last question, it's safe to increment the index and load the next question.
     currentQuestionIndex++;
     loadQuestion(sessionQuestionIDs[currentQuestionIndex], "next");
+    renderPalette();
   }
 
   function updateHeaderStats() {
@@ -1769,6 +1828,7 @@ function renderPalette() {
 
     // Update UI
     updateHeaderStats();
+    renderPalette();
     $("#qp-next-btn").prop("disabled", false);
 
     // Sync attempt with the server in the background
@@ -1881,6 +1941,7 @@ function renderPalette() {
       answeredStates[questionID].remainingTime = remainingTime;
 
       updateHeaderStats();
+      renderPalette();
       loadNextQuestion();
     }
   });

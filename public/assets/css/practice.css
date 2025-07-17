@@ -335,27 +335,12 @@ body {
     color: #fff;
 }
 
-/* Base style for the wrapper border */
-.qp-practice-wrapper {
-    border: 3px solid transparent;
-    transition: all 0.3s ease;
-    margin-bottom: 1.2rem;
-}
-
 
 /* --- 1. Main Wrapper & Content Area --- */
 #qp-practice-app-wrapper {
     width: 100%;
 }
 
-.qp-practice-wrapper {
-    max-width: 840px; /* Default narrow width for optional modes */
-    margin: 0 auto;
-}
-
-#qp-main-content {
-    width: 100%; /* Ensure content area takes full width by default */
-}
 
 
 /* =================================================================
@@ -368,6 +353,9 @@ body {
 .qp-practice-wrapper {
     max-width: 840px;
     margin: 0 auto;
+    border: 3px solid transparent;
+    transition: transform 0.35s cubic-bezier(0.25, 1, 0.5, 1), all 0.3s ease;
+    margin-bottom: 1.2rem;
 }
 
 /* This is the content area that sits next to the docked palette */
@@ -385,6 +373,12 @@ body {
         gap: 1.5rem;
         max-width: 1400px;
     }
+
+    .qp-practice-wrapper {
+    transition: transform 0.35s cubic-bezier(0.25, 1, 0.5, 1), all 0.3s ease;}
+    body.palette-overlay-open .qp-practice-wrapper {
+    transform: translateX(40px);
+}
 
     /* Show the docked palette and hide the sliding one */
     body.palette-mandatory #qp-palette-docked {
@@ -410,25 +404,48 @@ body {
     height: 85vh; /* Prevents it from being too tall on large monitors */
 }
 
-/* The SLIDING palette is a fixed overlay */
-#qp-palette-sliding {
+/* --- Add this entire new block of CSS --- */
+
+/* The new full-screen backdrop/overlay */
+#qp-palette-overlay {
     position: fixed;
     top: 0;
     left: 0;
-    width: 320px;
+    width: 100%;
     height: 100%;
-    z-index: 1100;
-    border-radius: 0;
-    border-width: 0 1px 0 0;
-    transform: translateX(-100%);
-    transition: transform 0.35s ease;
+    background-color: rgba(0, 0, 0, 0.4); /* Semi-transparent black */
+    z-index: 1099;
+    display: none; /* Hidden by default */
+    opacity: 0;
+    transition: opacity 0.3s ease-in-out;
 }
 
-/* This class on the BODY triggers the slide-in animation */
+/* The palette itself, now styled as a floating box */
+#qp-palette-sliding {
+    position: absolute; /* Positioned within the overlay */
+    top: 20px;          /* Spacing from the top */
+    left: 20px;           /* Spacing from the left */
+    width: 340px;
+    height: calc(100% - 40px); /* Full height with top/bottom spacing */
+    z-index: 1100;
+    border-radius: 12px; /* Softer, more modern corners */
+    box-shadow: 0 8px 30px rgba(0,0,0,0.2);
+    transform: translateX(-400px); /* Start off-screen */
+    transition: transform 0.35s cubic-bezier(0.25, 1, 0.5, 1);
+    display: flex; /* This replaces the old display:none */
+}
+
+/* --- State when the palette is OPEN --- */
+
+/* Show the overlay */
+body.palette-overlay-open #qp-palette-overlay {
+    display: block;
+    opacity: 1;
+}
+
+/* Slide the palette into view */
 body.palette-overlay-open #qp-palette-sliding {
-    display: flex; /* Make it visible */
     transform: translateX(0);
-    box-shadow: 0 0 25px rgba(0,0,0,0.15);
 }
 
 
@@ -439,19 +456,34 @@ body.palette-overlay-open #qp-palette-sliding {
         display: none !important;
     }
 
-    /* The sliding palette comes from the bottom on mobile */
+   /* Override the desktop sliding palette styles */
     #qp-palette-sliding {
-        width: 100%;
-        height: 75vh;
+        /* Position it at the bottom */
         top: auto;
         bottom: 0;
-        border-width: 1px 0 0 0;
+        left: 0;
+        width: 100%;
+        height: 80vh; /* 75% of the viewport height */
+
+        /* Round only the top corners */
+        border-radius: 16px 16px 0 0;
+
+        /* Start it off-screen at the bottom */
         transform: translateY(100%);
+
+        /* Add the shadow to the top edge */
+        box-shadow: 0 -5px 25px rgba(0,0,0,0.15);
+
+    transition: transform 0.35s cubic-bezier(0.25, 1, 0.5, 1);
     }
 
     /* The class triggers the slide-up animation on mobile */
     body.palette-overlay-open #qp-palette-sliding {
         transform: translateY(0);
+    }
+
+    body.palette-overlay-open #qp-main-content {
+        transform: none; /* Prevents the horizontal slide on mobile */
     }
 }
 
@@ -485,7 +517,7 @@ body.palette-overlay-open #qp-palette-sliding {
     flex-grow: 1;
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(45px, 1fr));
-    gap: 12px;
+    gap: 14px;
 }
 
 /* Base style for all palette buttons */
@@ -494,7 +526,7 @@ body.palette-overlay-open #qp-palette-sliding {
     justify-content: center;
     align-items: center;
     width: 100%;
-    height: 50px;
+    height: 52px;
     font-size: 1rem;
     font-weight: 700;
     color: var(--qp-dark-text);
@@ -564,6 +596,91 @@ body.palette-overlay-open #qp-palette-sliding {
     background-color: #5d3d9b; /* Purple dot */
     border-radius: 50%;
     border: 1px solid #fff;
+}
+
+
+/* And simply adjust the padding property like this */
+.qp-palette-legend {
+    padding: 1rem 1.25rem; /* This adds 1.25rem (about 20px) of space on the left and right */
+    border-top: 1px solid var(--qp-border-color);
+    background-color: #fff;
+    font-size: 12px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+    flex-shrink: 0;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.swatch {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    border: 1px solid rgba(0,0,0,0.1);
+    position: relative;
+}
+
+
+
+/* Re-use status colors from the buttons */
+.swatch.status-answered { background-color: var(--qp-correct-color); }
+.swatch.status-viewed { background-color: #ffc107; } /* Amber */
+.swatch.status-not_viewed { background-color: #e0e0e0; }
+.swatch.status-marked_for_review { background-color: #5d3d9b; } /* Purple */
+.swatch.status-answered_and_marked_for_review {
+    background-color: var(--qp-correct-color);
+}
+.swatch.status-answered_and_marked_for_review::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 6px;
+    height: 6px;
+    background-color: #5d3d9b; /* Purple dot */
+    border-radius: 50%;
+}
+
+/* --- NEWLY ADDED/CORRECTED RULES --- */
+/* Normal/Revision Mode Swatches */
+.swatch.status-correct {
+    background-color: var(--qp-correct-color);
+}
+.swatch.status-incorrect {
+    background-color: var(--qp-incorrect-color);
+}
+.swatch.status-skipped {
+    background-color: #ffca28; /* Amber, matching the button border */
+}
+
+/* --- Add these new styles for Normal/Revision Modes --- */
+
+/* Correctly Answered */
+.qp-palette-btn.status-correct {
+    background-color: var(--qp-correct-bg);      /* Light green background */
+    color: var(--qp-correct-color);              /* Dark green text */
+    border: 2px solid var(--qp-correct-color);   /* Thick green border */
+}
+
+/* Incorrectly Answered */
+.qp-palette-btn.status-incorrect {
+    background-color: var(--qp-incorrect-bg);    /* Light red background */
+    color: var(--qp-incorrect-color);            /* Dark red text */
+    border: 2px solid var(--qp-incorrect-color); /* Thick red border */
+}
+
+/* Skipped */
+.qp-palette-btn.status-skipped {
+    background-color: #fffde7;  /* Light yellow background */
+    color: #f57f17;             /* Amber text */
+    border: 2px solid #ffca28;  /* Amber border */
 }
 
 
