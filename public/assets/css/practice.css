@@ -329,7 +329,7 @@ body {
     letter-spacing: 0.5px;
     padding: 8px 16px;
     border-radius: var(--qp-radius);
-    margin: -1rem -1rem 1.5rem -1rem; /* Pull it into the header padding */
+    margin-bottom: 1.5rem; /* Pull it into the header padding */
     color: #fff;
 }
 
@@ -366,6 +366,35 @@ body {
 .mode-mock-test.qp-practice-wrapper {
     border-color: #d63638;
     box-shadow: 0 0 15px rgba(214, 54, 56, 0.2);
+}
+
+/* --- Additional Mode Color Themes --- */
+
+/* Incorrect Practice Mode (Orange) */
+.mode-incorrect .qp-session-mode-indicator {
+    background-color: #f57c00; /* Orange */
+}
+.mode-incorrect.qp-practice-wrapper {
+    border-color: #f57c00;
+    box-shadow: 0 0 15px rgba(245, 124, 0, 0.2);
+}
+
+/* Section Wise Practice Mode (Teal) */
+.mode-section-wise .qp-session-mode-indicator {
+    background-color: #00897b; /* Teal */
+}
+.mode-section-wise.qp-practice-wrapper {
+    border-color: #00897b;
+    box-shadow: 0 0 15px rgba(0, 137, 123, 0.2);
+}
+
+/* Review Mode (Indigo) */
+.mode-review .qp-session-mode-indicator {
+    background-color: #3949ab; /* Indigo */
+}
+.mode-review.qp-practice-wrapper {
+    border-color: #3949ab;
+    box-shadow: 0 0 15px rgba(57, 73, 171, 0.2);
 }
 
 /* --- Practice Screen Content --- */

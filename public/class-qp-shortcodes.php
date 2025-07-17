@@ -634,9 +634,24 @@ class QP_Shortcodes
         if ($is_mock_test) {
             $mode_class = 'mode-mock-test';
             $mode_name = 'Mock Test';
-        } elseif (isset($session_settings['practice_mode']) && $session_settings['practice_mode'] === 'revision') {
-            $mode_class = 'mode-revision';
-            $mode_name = 'Revision Mode';
+        } elseif (isset($session_settings['practice_mode'])) {
+            switch ($session_settings['practice_mode']) {
+                case 'revision':
+                    $mode_class = 'mode-revision';
+                    $mode_name = 'Revision Mode';
+                    break;
+                case 'Incorrect Que. Practice':
+                    $mode_class = 'mode-incorrect';
+                    $mode_name = 'Incorrect Practice';
+                    break;
+                case 'Section Wise Practice':
+                    $mode_class = 'mode-section-wise';
+                    $mode_name = 'Section Practice';
+                    break;
+            }
+        } elseif (isset($session_settings['subject_id']) && $session_settings['subject_id'] === 'review') {
+            $mode_class = 'mode-review';
+            $mode_name = 'Review Mode';
         }
         ?>
         <div class="qp-container qp-practice-wrapper <?php echo $mode_class; ?>">
