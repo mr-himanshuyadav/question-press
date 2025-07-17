@@ -251,23 +251,23 @@ class QP_Shortcodes
             </div>
 
             <div class="qp-form-group">
-    <label class="qp-custom-checkbox">
-        <input type="checkbox" name="scoring_enabled" id="qp_mock_scoring_enabled_cb">
-        <span></span>
-        Enable Scoring
-    </label>
-</div>
+                <label class="qp-custom-checkbox">
+                    <input type="checkbox" name="scoring_enabled" id="qp_mock_scoring_enabled_cb">
+                    <span></span>
+                    Enable Scoring
+                </label>
+            </div>
 
-<div class="qp-form-group qp-marks-group" id="qp-mock-marks-group-wrapper" style="display: none;">
-    <div>
-        <label for="qp_mock_marks_correct">Marks for Correct Answer:</label>
-        <input type="number" name="qp_marks_correct" id="qp_mock_marks_correct" value="4" step="0.01" disabled>
-    </div>
-    <div>
-        <label for="qp_mock_marks_incorrect">Penalty for Incorrect Answer:</label>
-        <input type="number" name="qp_marks_incorrect" id="qp_mock_marks_incorrect" value="1" step="0.01" min="0" disabled>
-    </div>
-</div>
+            <div class="qp-form-group qp-marks-group" id="qp-mock-marks-group-wrapper" style="display: none;">
+                <div>
+                    <label for="qp_mock_marks_correct">Marks for Correct Answer:</label>
+                    <input type="number" name="qp_marks_correct" id="qp_mock_marks_correct" value="4" step="0.01" disabled>
+                </div>
+                <div>
+                    <label for="qp_mock_marks_incorrect">Penalty for Incorrect Answer:</label>
+                    <input type="number" name="qp_marks_incorrect" id="qp_mock_marks_incorrect" value="1" step="0.01" min="0" disabled>
+                </div>
+            </div>
 
             <div class="qp-form-group qp-action-buttons">
                 <input type="submit" name="qp_start_mock_test" value="Start Mock Test" class="qp-button qp-button-primary">
@@ -865,21 +865,21 @@ class QP_Shortcodes
 
         $attempts = $wpdb->get_results($wpdb->prepare(
             "SELECT q.question_text, q.custom_question_id, q.question_number_in_section,
-                    g.direction_text, s.subject_name,
-                    t.topic_name,
-                    src.source_name, sec.section_name,
-                    o.option_text AS selected_answer, o_correct.option_text AS correct_answer, a.is_correct
-             FROM {$wpdb->prefix}qp_user_attempts a
-             JOIN {$wpdb->prefix}qp_questions q ON a.question_id = q.question_id
-             LEFT JOIN {$wpdb->prefix}qp_question_groups g ON q.group_id = g.group_id
-             LEFT JOIN {$wpdb->prefix}qp_subjects s ON g.subject_id = s.subject_id
-             LEFT JOIN {$wpdb->prefix}qp_topics t ON q.topic_id = t.topic_id
-             LEFT JOIN {$wpdb->prefix}qp_sources src ON q.source_id = src.source_id
-             LEFT JOIN {$wpdb->prefix}qp_source_sections sec ON q.section_id = sec.section_id
-             LEFT JOIN {$wpdb->prefix}qp_options o ON a.selected_option_id = o.option_id
-             LEFT JOIN {$wpdb->prefix}qp_options o_correct ON q.question_id = o_correct.question_id AND o_correct.is_correct = 1
-             WHERE a.session_id = %d
-             ORDER BY a.attempt_id ASC",
+            g.direction_text, s.subject_name,
+            t.topic_name,
+            src.source_name, sec.section_name,
+            o.option_text AS selected_answer, o_correct.option_text AS correct_answer, a.is_correct, a.mock_status
+     FROM {$wpdb->prefix}qp_user_attempts a
+     JOIN {$wpdb->prefix}qp_questions q ON a.question_id = q.question_id
+     LEFT JOIN {$wpdb->prefix}qp_question_groups g ON q.group_id = g.group_id
+     LEFT JOIN {$wpdb->prefix}qp_subjects s ON g.subject_id = s.subject_id
+     LEFT JOIN {$wpdb->prefix}qp_topics t ON q.topic_id = t.topic_id
+     LEFT JOIN {$wpdb->prefix}qp_sources src ON q.source_id = src.source_id
+     LEFT JOIN {$wpdb->prefix}qp_source_sections sec ON q.section_id = sec.section_id
+     LEFT JOIN {$wpdb->prefix}qp_options o ON a.selected_option_id = o.option_id
+     LEFT JOIN {$wpdb->prefix}qp_options o_correct ON q.question_id = o_correct.question_id AND o_correct.is_correct = 1
+     WHERE a.session_id = %d
+     ORDER BY a.attempt_id ASC",
             $session_id
         ));
 
@@ -911,8 +911,7 @@ class QP_Shortcodes
 
             <div class="qp-summary-wrapper qp-review-summary">
                 <div class="qp-summary-stats">
-                    <?php if (isset($settings['marks_correct'])): // Check if it's a scored session 
-                    ?>
+                    <?php if (isset($settings['marks_correct'])): ?>
                         <div class="stat">
                             <div class="value"><?php echo number_format($session->marks_obtained, 2); ?></div>
                             <div class="label">Final Score</div>
@@ -934,10 +933,23 @@ class QP_Shortcodes
                         <div class="value"><?php echo (int)$session->incorrect_count; ?></div>
                         <div class="label">Incorrect<?php if (isset($settings['marks_correct'])) echo ' (' . esc_html($marks_incorrect) . '/Q)'; ?></div>
                     </div>
-                    <div class="stat">
-                        <div class="value"><?php echo (int)$session->skipped_count; ?></div>
-                        <div class="label">Skipped</div>
-                    </div>
+
+                    <?php // --- NEW: Conditional Stat Display ---
+                    if (isset($settings['practice_mode']) && $settings['practice_mode'] === 'mock_test') : ?>
+                        <div class="stat">
+                            <div class="value"><?php echo (int)$session->skipped_count; ?></div>
+                            <div class="label">Unattempted</div>
+                        </div>
+                        <div class="stat">
+                            <div class="value"><?php echo (int)$session->not_viewed_count; ?></div>
+                            <div class="label">Not Viewed</div>
+                        </div>
+                    <?php else : ?>
+                        <div class="stat">
+                            <div class="value"><?php echo (int)$session->skipped_count; ?></div>
+                            <div class="label">Skipped</div>
+                        </div>
+                    <?php endif; ?>
                 </div>
                 <?php if (!empty($topics_in_session)): ?>
                     <div class="qp-review-topics-list">
@@ -949,6 +961,12 @@ class QP_Shortcodes
             <div class="qp-review-questions-list">
                 <?php foreach ($attempts as $index => $attempt) :
                     $is_skipped = !$attempt->selected_answer;
+                    $answer_display_text = 'Skipped';
+                    if (isset($settings['practice_mode']) && $settings['practice_mode'] === 'mock_test') {
+                        if ($attempt->mock_status === 'not_viewed' || $attempt->mock_status === 'viewed' || $attempt->mock_status === 'marked_for_review') {
+                            $answer_display_text = 'Unattempted';
+                        }
+                    }
                     $answer_class = $is_skipped ? 'skipped' : ($attempt->is_correct ? 'correct' : 'incorrect');
                 ?>
                     <div class="qp-review-question-item">
@@ -991,8 +1009,8 @@ class QP_Shortcodes
                         <div class="qp-review-answer-row">
                             <span class="qp-review-label">Your Answer:</span>
                             <span class="qp-review-answer <?php echo $answer_class; ?>">
-                                <?php echo esc_html($attempt->selected_answer ?: 'Skipped'); ?>
-                            </span>
+    <?php echo esc_html($attempt->selected_answer ?: $answer_display_text); ?>
+</span>
                         </div>
 
                         <?php if ($is_skipped || !$attempt->is_correct) : ?>

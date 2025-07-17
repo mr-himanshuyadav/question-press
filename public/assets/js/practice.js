@@ -1569,56 +1569,59 @@ jQuery(document).ready(function ($) {
     }, 1000);
   }
 
-  // In public/assets/js/practice.js
-
-  // In public/assets/js/practice.js
-
   function displaySummary(summaryData) {
     closeFullscreen();
     practiceInProgress = false;
 
-    // --- Conditionally build the main score/accuracy display ---
+    // Determine if the session was a mock test and if it was scored
+    var settings = summaryData.settings || {};
+    var isMockTest = settings.practice_mode === 'mock_test';
+    var isScoredSession = settings.marks_correct !== null;
+
     var mainDisplayHtml = "";
-    var isScoredSession =
-      summaryData.settings && summaryData.settings.marks_correct !== null;
-
     if (isScoredSession) {
-      mainDisplayHtml = `<div class="qp-summary-score"><div class="label">Final Score</div>${parseFloat(
-        summaryData.final_score
-      ).toFixed(2)}</div>`;
+        mainDisplayHtml = `<div class="qp-summary-score"><div class="label">Final Score</div>${parseFloat(summaryData.final_score).toFixed(2)}</div>`;
     } else {
-      var accuracy =
-        summaryData.total_attempted > 0
-          ? (summaryData.correct_count / summaryData.total_attempted) * 100
-          : 0;
-      mainDisplayHtml = `<div class="qp-summary-score"><div class="label">Accuracy</div>${accuracy.toFixed(
-        2
-      )}%</div>`;
+        var accuracy = summaryData.total_attempted > 0 ? (summaryData.correct_count / summaryData.total_attempted) * 100 : 0;
+        mainDisplayHtml = `<div class="qp-summary-score"><div class="label">Accuracy</div>${accuracy.toFixed(2)}%</div>`;
     }
 
-    // --- Build the action buttons ---
+    // --- NEW: Build the stats display based on the mode ---
+    var statsHtml = '';
+    if (isMockTest) {
+        // For mock tests, show the new detailed stats
+        statsHtml = `
+            <div class="stat"><div class="value">${summaryData.correct_count}</div><div class="label">Correct</div></div>
+            <div class="stat"><div class="value">${summaryData.incorrect_count}</div><div class="label">Incorrect</div></div>
+            <div class="stat"><div class="value">${summaryData.skipped_count}</div><div class="label">Unattempted</div></div>
+            <div class="stat"><div class="value">${summaryData.not_viewed_count}</div><div class="label">Not Viewed</div></div>
+        `;
+    } else {
+        // For other modes, show the original stats
+        statsHtml = `
+            <div class="stat"><div class="value">${summaryData.total_attempted}</div><div class="label">Attempted</div></div>
+            <div class="stat"><div class="value">${summaryData.correct_count}</div><div class="label">Correct</div></div>
+            <div class="stat"><div class="value">${summaryData.incorrect_count}</div><div class="label">Incorrect</div></div>
+            <div class="stat"><div class="value">${summaryData.skipped_count}</div><div class="label">Skipped</div></div>
+        `;
+    }
+
+
     var actionButtonsHtml = `<a href="${qp_ajax_object.dashboard_page_url}" class="qp-button qp-button-secondary">View Dashboard</a>`;
-
-    // **THE FIX**: Only create the "View Summary" button if the URL exists
     if (qp_ajax_object.review_page_url) {
-      var reviewUrl = new URL(qp_ajax_object.review_page_url);
-      reviewUrl.searchParams.set("session_id", sessionID);
-      actionButtonsHtml += `<a href="${reviewUrl.href}" class="qp-button qp-button-primary">Review Session</a>`;
+        var reviewUrl = new URL(qp_ajax_object.review_page_url);
+        reviewUrl.searchParams.set("session_id", sessionID);
+        actionButtonsHtml += `<a href="${reviewUrl.href}" class="qp-button qp-button-primary">Review Session</a>`;
     } else {
-      // Fallback if the review page isn't set
-      actionButtonsHtml += `<a href="${qp_ajax_object.practice_page_url}" class="qp-button qp-button-primary">Start Another Practice</a>`;
+        actionButtonsHtml += `<a href="${qp_ajax_object.practice_page_url}" class="qp-button qp-button-primary">Start Another Practice</a>`;
     }
 
-    // --- Build the final HTML ---
     var summaryHtml = `
       <div class="qp-summary-wrapper">
           <h2>Session Summary</h2>
           ${mainDisplayHtml}
           <div class="qp-summary-stats">
-              <div class="stat"><div class="value">${summaryData.total_attempted}</div><div class="label">Attempted</div></div>
-              <div class="stat"><div class="value">${summaryData.correct_count}</div><div class="label">Correct</div></div>
-              <div class="stat"><div class="value">${summaryData.incorrect_count}</div><div class="label">Incorrect</div></div>
-              <div class="stat"><div class="value">${summaryData.skipped_count}</div><div class="label">Skipped</div></div>
+              ${statsHtml}
           </div>
           <div class="qp-summary-actions">
               ${actionButtonsHtml}
@@ -1626,7 +1629,7 @@ jQuery(document).ready(function ($) {
       </div>`;
 
     wrapper.html(summaryHtml);
-  }
+}
 
   // Handles clicking an answer option to select it
   wrapper.on("click", ".qp-options-area .option", function () {
