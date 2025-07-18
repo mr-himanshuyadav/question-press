@@ -1216,8 +1216,8 @@ function qp_start_practice_session_ajax()
 
     // --- COMMON SESSION CREATION LOGIC --- (No changes here)
     if (empty($question_ids)) {
-        wp_send_json_error(['html' => '<div class="qp-container"><p>No questions were found for the selected criteria. Please try different options.</p><button onclick="window.location.reload();" class="qp-button qp-button-secondary">Go Back</button></div>']);
-    }
+    wp_send_json_error(['message' => 'No questions were found for the selected criteria. Please try different options.']);
+}
 
     $options = get_option('qp_settings');
     $session_page_id = isset($options['session_page']) ? absint($options['session_page']) : 0;
@@ -1389,8 +1389,8 @@ function qp_start_mock_test_session_ajax()
     $question_pool = $wpdb->get_results($wpdb->prepare($query, $query_params));
 
     if (empty($question_pool)) {
-        wp_send_json_error(['html' => '<div class="qp-container"><p>No questions were found for the selected criteria. Please try different options.</p><button onclick="window.location.reload();" class="qp-button qp-button-secondary">Go Back</button></div>']);
-    }
+    wp_send_json_error(['message' => 'No questions were found for the selected criteria. Please try different options.']);
+}
 
     // --- Apply distribution logic ---
     $final_question_ids = [];
@@ -1847,8 +1847,8 @@ function qp_start_revision_session_ajax()
     $topic_ids_to_query = array_unique($topic_ids_to_query);
 
     if (empty($topic_ids_to_query)) {
-        wp_send_json_error(['html' => '<div class="qp-container"><p>No topics found for the selected criteria.</p><button onclick="window.location.reload();" class="qp-button qp-button-secondary">Go Back</button></div>']);
-    }
+    wp_send_json_error(['message' => 'No previously attempted questions found for the selected criteria. Try different options or a Normal Practice session.']);
+}
 
     // --- Main Question Selection Logic ---
     $final_question_ids = [];
@@ -1912,8 +1912,8 @@ function qp_start_revision_session_ajax()
     // --- Create and Start the Session ---
     $question_ids = array_unique($final_question_ids);
     if (empty($question_ids)) {
-        wp_send_json_error(['html' => '<div class="qp-container"><p>No questions were found for the selected criteria. Try different options or a Normal Practice session.</p><button onclick="window.location.reload();" class="qp-button qp-button-secondary">Go Back</button></div>']);
-    }
+    wp_send_json_error(['message' => 'No questions were found for the selected criteria. Try different options or a Normal Practice session.']);
+}
 
     shuffle($question_ids);
 

@@ -894,8 +894,12 @@ jQuery(document).ready(function ($) {
       .get();
 
     if (selectedReasons.length === 0) {
-        Swal.fire('No Reason Selected', 'Please select at least one reason for the report.', 'warning');
-        return;
+      Swal.fire(
+        "No Reason Selected",
+        "Please select at least one reason for the report.",
+        "warning"
+      );
+      return;
     }
 
     $.ajax({
@@ -913,39 +917,43 @@ jQuery(document).ready(function ($) {
       },
       success: function (response) {
         if (response.success) {
-            $("#qp-report-modal-backdrop").fadeOut(200);
-            Swal.fire({
-                title: 'Report Submitted!',
-                text: 'Thank you for your feedback. The question has been flagged for review.',
-                icon: 'success',
-                timer: 2000,
-                showConfirmButton: false
-            }).then(() => {
-                var questionID = sessionQuestionIDs[currentQuestionIndex];
-                if (typeof answeredStates[questionID] === "undefined") {
-                    answeredStates[questionID] = {};
-                }
-                answeredStates[questionID].reported = true;
+          $("#qp-report-modal-backdrop").fadeOut(200);
+          Swal.fire({
+            title: "Report Submitted!",
+            text: "Thank you for your feedback. The question has been flagged for review.",
+            icon: "success",
+            timer: 2000,
+            showConfirmButton: false,
+          }).then(() => {
+            var questionID = sessionQuestionIDs[currentQuestionIndex];
+            if (typeof answeredStates[questionID] === "undefined") {
+              answeredStates[questionID] = {};
+            }
+            answeredStates[questionID].reported = true;
 
-                $("#qp-reported-indicator").show();
-                $(".qp-indicator-bar").show();
-                $(".qp-options-area")
-                    .addClass("disabled")
-                    .find('input[type="radio"]')
-                    .prop("disabled", true);
-                $("#qp-skip-btn, #qp-report-btn").prop("disabled", true);
-                $("#qp-next-btn").prop("disabled", false);
+            $("#qp-reported-indicator").show();
+            $(".qp-indicator-bar").show();
+            $(".qp-options-area")
+              .addClass("disabled")
+              .find('input[type="radio"]')
+              .prop("disabled", true);
+            $("#qp-skip-btn, #qp-report-btn").prop("disabled", true);
+            $("#qp-next-btn").prop("disabled", false);
 
-                renderPalette();
-                updateLegendCounts();
-                loadNextQuestion();
-            });
+            renderPalette();
+            updateLegendCounts();
+            loadNextQuestion();
+          });
         } else {
-          Swal.fire('Error!', response.data.message || 'Could not submit the report.', 'error');
+          Swal.fire(
+            "Error!",
+            response.data.message || "Could not submit the report.",
+            "error"
+          );
         }
       },
       error: function () {
-        Swal.fire('Error!', 'An unknown server error occurred.', 'error');
+        Swal.fire("Error!", "An unknown server error occurred.", "error");
       },
       complete: function () {
         submitButton.text(originalButtonText).prop("disabled", false);
@@ -981,10 +989,10 @@ jQuery(document).ready(function ($) {
       var selectedTopics = $("#qp_topic_list_container input:checked").length;
       if (selectedTopics === 0) {
         Swal.fire({
-            title: 'No Topics Selected',
-            text: 'Please select at least one topic to start the practice session.',
-            icon: 'warning',
-            confirmButtonText: 'OK'
+          title: "No Topics Selected",
+          text: "Please select at least one topic to start the practice session.",
+          icon: "warning",
+          confirmButtonText: "OK",
         });
         return; // Stop the form submission
       }
@@ -1009,22 +1017,15 @@ jQuery(document).ready(function ($) {
         if (response.success && response.data.redirect_url) {
           window.location.href = response.data.redirect_url;
         } else {
-          // ** MODIFICATION START **
-          // Check if the specific HTML block was sent in the response data.
-          if (response.data && response.data.html) {
-            // If so, replace the entire wrapper content with our friendly error page.
-            wrapper.html(response.data.html);
-          } else {
-            // Otherwise, show a generic error message within the form.
-            var errorMessage =
-              '<p class="qp-error-message" style="color: red; text-align: center; margin-top: 1rem;">' +
-              (response.data.message || "An unknown error occurred.") +
-              "</p>";
-            form.find(".qp-error-message").remove(); // Remove old errors
-            form.append(errorMessage);
-            submitButton.val(originalButtonText).prop("disabled", false);
-          }
-          // ** MODIFICATION END **
+          Swal.fire({
+            title: "Could Not Start Session",
+            text:
+              response.data.message ||
+              "An unknown error occurred. Please try different options.",
+            icon: "warning",
+            confirmButtonText: "OK",
+          });
+          submitButton.val(originalButtonText).prop("disabled", false);
         }
       },
       error: function () {
@@ -1043,7 +1044,11 @@ jQuery(document).ready(function ($) {
         "#qp_topic_list_container_revision input:checked"
       ).length;
       if (selectedTopics === 0) {
-        Swal.fire('No Topics Selected', 'Please select at least one topic to start the revision session.', 'warning');
+        Swal.fire(
+          "No Topics Selected",
+          "Please select at least one topic to start the revision session.",
+          "warning"
+        );
         return;
       }
     }
@@ -1063,19 +1068,24 @@ jQuery(document).ready(function ($) {
         submitButton.val("Setting up session...").prop("disabled", true);
       },
       success: function (response) {
-        if (response.success && response.data.redirect_url) {
-          window.location.href = response.data.redirect_url;
-        } else {
-          var errorMessage = response.data.html
-            ? response.data.html
-            : "<p>" +
-              (response.data.message || "An unknown error occurred.") +
-              "</p>";
-          wrapper.html(errorMessage);
-        }
-      },
+    if (response.success && response.data.redirect_url) {
+      window.location.href = response.data.redirect_url;
+    } else {
+        Swal.fire({
+          title: 'Could Not Start Session',
+          text: response.data.message || 'An unknown error occurred. Please try adjusting your selections.',
+          icon: 'warning',
+          confirmButtonText: 'OK'
+        });
+        submitButton.val(originalButtonText).prop("disabled", false);
+    }
+  },
       error: function () {
-        Swal.fire('Error!', 'A server error occurred. Please try again later.', 'error');
+        Swal.fire(
+          "Error!",
+          "A server error occurred. Please try again later.",
+          "error"
+        );
         submitButton.val(originalButtonText).prop("disabled", false);
       },
     });
@@ -1087,7 +1097,11 @@ jQuery(document).ready(function ($) {
 
     var selectedSubjects = $("#qp_subject_dropdown_mock input:checked").length;
     if (selectedSubjects === 0) {
-      Swal.fire('No Subject Selected', 'Please select at least one subject to start the mock test.', 'warning');
+      Swal.fire(
+        "No Subject Selected",
+        "Please select at least one subject to start the mock test.",
+        "warning"
+      );
       return;
     }
 
@@ -1119,7 +1133,11 @@ jQuery(document).ready(function ($) {
         }
       },
       error: function () {
-        Swal.fire('Error!', 'A server error occurred. Please try again later.', 'error');
+        Swal.fire(
+          "Error!",
+          "A server error occurred. Please try again later.",
+          "error"
+        );
         submitButton.val(originalButtonText).prop("disabled", false);
       },
     });
@@ -2172,29 +2190,29 @@ jQuery(document).ready(function ($) {
     }
 
     if (!isAutoSubmit && totalAttempts === 0) {
-        practiceInProgress = false; // Allow redirect without warning
-        Swal.fire({
-            title: 'Session Not Saved',
-            text: "You haven't answered any questions, so this session will not be saved in your history.",
-            icon: 'info',
-            confirmButtonText: 'OK, Go to Dashboard'
-        }).then(() => {
-            // Call the AJAX action to delete the empty session in the background
-            $.ajax({
-                url: qp_ajax_object.ajax_url,
-                type: 'POST',
-                data: {
-                    action: 'delete_empty_session',
-                    nonce: qp_ajax_object.nonce,
-                    session_id: sessionID
-                },
-                complete: function() {
-                    // Redirect after the alert is closed and AJAX is complete
-                    window.location.href = qp_ajax_object.dashboard_page_url;
-                }
-            });
+      practiceInProgress = false; // Allow redirect without warning
+      Swal.fire({
+        title: "Session Not Saved",
+        text: "You haven't answered any questions, so this session will not be saved in your history.",
+        icon: "info",
+        confirmButtonText: "OK, Go to Dashboard",
+      }).then(() => {
+        // Call the AJAX action to delete the empty session in the background
+        $.ajax({
+          url: qp_ajax_object.ajax_url,
+          type: "POST",
+          data: {
+            action: "delete_empty_session",
+            nonce: qp_ajax_object.nonce,
+            session_id: sessionID,
+          },
+          complete: function () {
+            // Redirect after the alert is closed and AJAX is complete
+            window.location.href = qp_ajax_object.dashboard_page_url;
+          },
         });
-        return; // Stop the function here
+      });
+      return; // Stop the function here
     }
     // --- NEW LOGIC END ---
 
@@ -2240,18 +2258,20 @@ jQuery(document).ready(function ($) {
       : "Are you sure you want to end this practice session?";
 
     Swal.fire({
-    title: 'Are you sure?',
-    text: confirmMsg,
-    icon: 'question',
-    showCancelButton: true,
-    confirmButtonColor: '#2271b1',
-    cancelButtonColor: '#d33',
-    confirmButtonText: isMockTest ? 'Yes, submit the test!' : 'Yes, end session!'
-}).then((result) => {
-    if (result.isConfirmed) {
+      title: "Are you sure?",
+      text: confirmMsg,
+      icon: "question",
+      showCancelButton: true,
+      confirmButtonColor: "#2271b1",
+      cancelButtonColor: "#d33",
+      confirmButtonText: isMockTest
+        ? "Yes, submit the test!"
+        : "Yes, end session!",
+    }).then((result) => {
+      if (result.isConfirmed) {
         endSession(false);
-    }
-});
+      }
+    });
   });
 
   $(window).on("beforeunload", function () {
@@ -2262,51 +2282,55 @@ jQuery(document).ready(function ($) {
 
   wrapper.on("click", "#qp-pause-btn", function () {
     Swal.fire({
-        title: 'Pause Session?',
-        text: "You can resume this session later from your dashboard.",
-        icon: 'question',
-        showCancelButton: true,
-        confirmButtonText: 'Yes, pause it!',
-        cancelButtonText: 'Cancel'
+      title: "Pause Session?",
+      text: "You can resume this session later from your dashboard.",
+      icon: "question",
+      showCancelButton: true,
+      confirmButtonText: "Yes, pause it!",
+      cancelButtonText: "Cancel",
     }).then((result) => {
-        if (result.isConfirmed) {
-            practiceInProgress = false; // Prevent the "are you sure?" popup on redirect
-            $.ajax({
-                url: qp_ajax_object.ajax_url,
-                type: 'POST',
-                data: {
-                    action: 'qp_pause_session',
-                    nonce: qp_ajax_object.nonce,
-                    session_id: sessionID
-                },
-                beforeSend: function () {
-                    $(".qp-footer-controls .qp-button").prop('disabled', true);
-                    $("#qp-pause-btn").text("Pausing...");
-                    Swal.fire({
-                        title: 'Pausing...',
-                        text: 'Your session is being saved.',
-                        allowOutsideClick: false,
-                        didOpen: () => {
-                            Swal.showLoading()
-                        }
-                    });
-                },
-                success: function (response) {
-                    if (response.success) {
-                        window.location.href = qp_ajax_object.dashboard_page_url;
-                    } else {
-                        Swal.fire('Error!', response.data.message || 'Could not pause the session.', 'error');
-                        $(".qp-footer-controls .qp-button").prop('disabled', false);
-                        $("#qp-pause-btn").text("Pause & Save");
-                    }
-                },
-                error: function () {
-                    Swal.fire('Error!', 'An unknown server error occurred.', 'error');
-                    $(".qp-footer-controls .qp-button").prop('disabled', false);
-                    $("#qp-pause-btn").text("Pause & Save");
-                }
+      if (result.isConfirmed) {
+        practiceInProgress = false; // Prevent the "are you sure?" popup on redirect
+        $.ajax({
+          url: qp_ajax_object.ajax_url,
+          type: "POST",
+          data: {
+            action: "qp_pause_session",
+            nonce: qp_ajax_object.nonce,
+            session_id: sessionID,
+          },
+          beforeSend: function () {
+            $(".qp-footer-controls .qp-button").prop("disabled", true);
+            $("#qp-pause-btn").text("Pausing...");
+            Swal.fire({
+              title: "Pausing...",
+              text: "Your session is being saved.",
+              allowOutsideClick: false,
+              didOpen: () => {
+                Swal.showLoading();
+              },
             });
-        }
+          },
+          success: function (response) {
+            if (response.success) {
+              window.location.href = qp_ajax_object.dashboard_page_url;
+            } else {
+              Swal.fire(
+                "Error!",
+                response.data.message || "Could not pause the session.",
+                "error"
+              );
+              $(".qp-footer-controls .qp-button").prop("disabled", false);
+              $("#qp-pause-btn").text("Pause & Save");
+            }
+          },
+          error: function () {
+            Swal.fire("Error!", "An unknown server error occurred.", "error");
+            $(".qp-footer-controls .qp-button").prop("disabled", false);
+            $("#qp-pause-btn").text("Pause & Save");
+          },
+        });
+      }
     });
   });
 
