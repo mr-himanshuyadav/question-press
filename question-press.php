@@ -2046,6 +2046,20 @@ function qp_end_practice_session_ajax()
     $attempts_table = $wpdb->prefix . 'qp_user_attempts';
     $pauses_table = $wpdb->prefix . 'qp_session_pauses';
 
+    // Check for any answered attempts before proceeding
+    $total_answered_attempts = (int) $wpdb->get_var($wpdb->prepare(
+        "SELECT COUNT(*) FROM {$attempts_table} WHERE session_id = %d AND status = 'answered'",
+        $session_id
+    ));
+
+    if ($total_answered_attempts === 0) {
+        // If no questions were answered, delete the session record entirely.
+        $wpdb->delete($sessions_table, ['session_id' => $session_id]);
+        // Send a specific status back to the frontend so it knows what to do.
+        wp_send_json_success(['status' => 'no_attempts', 'message' => 'Session deleted as no questions were attempted.']);
+        return; // Stop execution here
+    }
+
     // Get session settings to calculate score
     $session = $wpdb->get_row($wpdb->prepare("SELECT * FROM $sessions_table WHERE session_id = %d", $session_id));
     $settings = json_decode($session->settings_snapshot, true);

@@ -1068,18 +1068,20 @@ jQuery(document).ready(function ($) {
         submitButton.val("Setting up session...").prop("disabled", true);
       },
       success: function (response) {
-    if (response.success && response.data.redirect_url) {
-      window.location.href = response.data.redirect_url;
-    } else {
-        Swal.fire({
-          title: 'Could Not Start Session',
-          text: response.data.message || 'An unknown error occurred. Please try adjusting your selections.',
-          icon: 'warning',
-          confirmButtonText: 'OK'
-        });
-        submitButton.val(originalButtonText).prop("disabled", false);
-    }
-  },
+        if (response.success && response.data.redirect_url) {
+          window.location.href = response.data.redirect_url;
+        } else {
+          Swal.fire({
+            title: "Could Not Start Session",
+            text:
+              response.data.message ||
+              "An unknown error occurred. Please try adjusting your selections.",
+            icon: "warning",
+            confirmButtonText: "OK",
+          });
+          submitButton.val(originalButtonText).prop("disabled", false);
+        }
+      },
       error: function () {
         Swal.fire(
           "Error!",
@@ -2242,6 +2244,14 @@ jQuery(document).ready(function ($) {
       },
       success: function (response) {
         if (response.success) {
+          // START: New code to add
+          // Check if the backend deleted the session because it was empty
+          if (response.data.status && response.data.status === "no_attempts") {
+            // Redirect to the dashboard without showing a summary.
+            window.location.href = qp_ajax_object.dashboard_page_url;
+            return;
+          }
+          // END: New code to add
           displaySummary(response.data);
         }
       },
