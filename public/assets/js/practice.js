@@ -39,48 +39,55 @@ jQuery(document).ready(function ($) {
     }
   }
 
-  // Find and REPLACE the entire startMockTestTimer function
-function startMockTestTimer(endTimeUTC) {
+  function startMockTestTimer(endTimeUTC) {
     var timerEl = $("#qp-mock-test-timer");
-    mockTestTimer = setInterval(function () {
-      var nowUTC = Math.floor(new Date().getTime() / 1000);
-      var secondsRemaining = endTimeUTC - nowUTC;
+    var warningMessage = $("#qp-timer-warning-message"); // Get the warning message element
 
-      if (secondsRemaining <= 0) {
+    // Clear any previous timer to prevent duplicates
+    if (mockTestTimer) {
         clearInterval(mockTestTimer);
-        timerEl.text("00:00");
-        alert("Time's up! Your test will be submitted automatically.");
-        endSession(true);
-        return;
-      }
+    }
 
-      // --- THIS IS THE NEW LOGIC ---
+    mockTestTimer = setInterval(function () {
+        var nowUTC = Math.floor(new Date().getTime() / 1000);
+        var secondsRemaining = endTimeUTC - nowUTC;
 
-      // 1. Add/remove the warning class
-      if (secondsRemaining < 300) { // 5 minutes = 300 seconds
-        timerEl.addClass('timer-warning');
-      } else {
-        timerEl.removeClass('timer-warning');
-      }
+        if (secondsRemaining < 0) {
+            secondsRemaining = 0; // Prevent negative display
+        }
 
-      // 2. Format the time conditionally
-      var hours = Math.floor(secondsRemaining / 3600);
-      var minutes = Math.floor((secondsRemaining % 3600) / 60);
-      var seconds = secondsRemaining % 60;
-      var timeString = "";
+        // *** THIS IS THE FIX ***
+        // Show/hide the warning message and apply the warning class to the timer
+        if (secondsRemaining <= 300) { // 5 minutes = 300 seconds
+            timerEl.addClass('timer-warning');
+            warningMessage.show(); // This line makes the message appear
+        } else {
+            timerEl.removeClass('timer-warning');
+            warningMessage.hide(); // This line hides it when there's more than 5 mins left
+        }
 
-      if (hours > 0) {
-        timeString += String(hours).padStart(2, "0") + ":";
-      }
-      
-      timeString += String(minutes).padStart(2, "0") + ":" + String(seconds).padStart(2, "0");
+        // Format the time conditionally
+        var hours = Math.floor(secondsRemaining / 3600);
+        var minutes = Math.floor((secondsRemaining % 3600) / 60);
+        var seconds = secondsRemaining % 60;
+        var timeString = "";
 
-      timerEl.text(timeString);
-      
-      // --- END OF NEW LOGIC ---
+        if (hours > 0) {
+            timeString += String(hours).padStart(2, "0") + ":";
+        }
+        
+        timeString += String(minutes).padStart(2, "0") + ":" + String(seconds).padStart(2, "0");
 
+        timerEl.text(timeString);
+
+        // Stop the timer and auto-submit when time is up
+        if (secondsRemaining === 0) {
+            clearInterval(mockTestTimer);
+            alert("Time's up! Your test will be submitted automatically.");
+            endSession(true);
+        }
     }, 1000);
-  }
+}
 
   // --- NEW: Helper function to update mock test question status ---
   function updateMockStatus(questionID, newStatus) {
@@ -1111,53 +1118,6 @@ function startMockTestTimer(endTimeUTC) {
     });
   });
 
-  // --- MOCK TEST TIMER ---
-function startMockTestTimer(endTimeUTC) {
-    var timerEl = $("#qp-mock-test-timer");
-    
-    // Clear any previous timer to prevent duplicates
-    if (mockTestTimer) {
-        clearInterval(mockTestTimer);
-    }
-
-    mockTestTimer = setInterval(function () {
-        var nowUTC = Math.floor(new Date().getTime() / 1000);
-        var secondsRemaining = endTimeUTC - nowUTC;
-
-        if (secondsRemaining < 0) {
-            secondsRemaining = 0; // Prevent negative display
-        }
-
-        // Add or remove the warning class
-        if (secondsRemaining <= 300) { // 5 minutes = 300 seconds
-            timerEl.addClass('timer-warning');
-        } else {
-            timerEl.removeClass('timer-warning');
-        }
-
-        // Format the time conditionally
-        var hours = Math.floor(secondsRemaining / 3600);
-        var minutes = Math.floor((secondsRemaining % 3600) / 60);
-        var seconds = secondsRemaining % 60;
-        var timeString = "";
-
-        if (hours > 0) {
-            // Only show hours if there is at least one hour
-            timeString += String(hours).padStart(2, "0") + ":";
-        }
-        
-        timeString += String(minutes).padStart(2, "0") + ":" + String(seconds).padStart(2, "0");
-
-        timerEl.text(timeString);
-
-        // Stop the timer and auto-submit when time is up
-        if (secondsRemaining === 0) {
-            clearInterval(mockTestTimer);
-            alert("Time's up! Your test will be submitted automatically.");
-            endSession(true);
-        }
-    }, 1000);
-}
 
   // Session state variables
   var sessionID = 0;
@@ -2168,6 +2128,42 @@ if (data.is_revision) {
   });
 
   function endSession(isAutoSubmit = false) {
+    // --- NEW LOGIC START ---
+    var totalAttempts = correctCount + incorrectCount;
+
+    // Check for mock test answers specifically
+    if (isMockTest) {
+        totalAttempts = Object.values(answeredStates).filter(function(state) {
+            return state.selected_option_id;
+        }).length;
+    }
+
+    if (!isAutoSubmit && totalAttempts === 0) {
+      alert("You haven't answered any questions. This session will not be saved.");
+      practiceInProgress = false; // Allow redirect without warning
+
+      // Call a new, separate AJAX action to just delete the empty session
+      $.ajax({
+          url: qp_ajax_object.ajax_url,
+          type: 'POST',
+          data: {
+              action: 'delete_empty_session',
+              nonce: qp_ajax_object.nonce,
+              session_id: sessionID
+          },
+          success: function(response) {
+              // Redirect to the dashboard regardless of success, as the session is empty
+              window.location.href = qp_ajax_object.dashboard_page_url;
+          },
+          error: function() {
+              // Still redirect even if the AJAX call fails
+              window.location.href = qp_ajax_object.dashboard_page_url;
+          }
+      });
+      return; // Stop the function here
+    }
+    // --- NEW LOGIC END ---
+
     practiceInProgress = false; // Allow user to leave the page
     if (isMockTest) {
       clearInterval(mockTestTimer);

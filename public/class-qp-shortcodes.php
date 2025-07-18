@@ -751,17 +751,20 @@ class QP_Shortcodes
                     </div>
 
                     <?php if ($is_mock_test) : ?>
-                        <div class="qp-header-bottom-row">
-                            <div class="qp-header-stat">
-                                <span class="value" id="qp-mock-test-timer">--:--</span>
-                                <span class="label">Time Remaining</span>
-                            </div>
-                            <div class="qp-header-stat">
-                                <span class="value" id="qp-question-counter">--/--</span>
-                                <span class="label">Questions</span>
-                            </div>
+                    <div class="qp-header-bottom-row">
+                        <div class="qp-header-stat">
+                            <span class="value" id="qp-mock-test-timer">--:--</span>
+                            <span class="label">Time Remaining</span>
                         </div>
-                    <?php endif; ?>
+                        <div class="qp-header-stat">
+                            <span class="value" id="qp-question-counter">--/--</span>
+                            <span class="label">Questions</span>
+                        </div>
+                    </div>
+                    <p id="qp-timer-warning-message" style="color: #c62828; font-size: 0.8em;text-align: center; font-weight: 500; margin: 0; display: none;">
+                        The test will be submitted automatically when the time expires.
+                    </p>
+                <?php endif; ?>
                 </div>
 
                 <div class="qp-animatable-area-container">
