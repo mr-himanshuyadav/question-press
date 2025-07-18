@@ -87,18 +87,41 @@ jQuery(document).ready(function ($) {
       // Stop the timer and auto-submit when time is up
       if (secondsRemaining === 0) {
         clearInterval(mockTestTimer);
-        Swal.fire({
-          title: "Time's Up!",
-          text: "Your test will be submitted automatically.",
-          icon: "warning",
-          timer: 10000,
-          timerProgressBar: true,
-          allowOutsideClick: false,
-          allowEscapeKey: false,
-          showConfirmButton: false,
-        }).then(() => {
-          endSession(true);
-        });
+
+        // Check if any questions have been answered in this mock test
+        var totalAttempts = Object.values(answeredStates).filter(function (state) {
+          return state.selected_option_id;
+        }).length;
+
+        if (totalAttempts === 0) {
+          // If no attempts, show the "not saved" message
+          Swal.fire({
+            title: "Time's Up!",
+            text: "You didn't attempt any questions, so this session will not be saved.",
+            icon: "info",
+            timer: 5000,
+            timerProgressBar: true,
+            allowOutsideClick: false,
+            allowEscapeKey: false,
+            showConfirmButton: false,
+          }).then(() => {
+            endSession(true); // This will trigger the backend to delete the session
+          });
+        } else {
+          // If there are attempts, show the standard submission message
+          Swal.fire({
+            title: "Time's Up!",
+            text: "Your test will be submitted automatically.",
+            icon: "warning",
+            timer: 10000,
+            timerProgressBar: true,
+            allowOutsideClick: false,
+            allowEscapeKey: false,
+            showConfirmButton: false,
+          }).then(() => {
+            endSession(true);
+          });
+        }
       }
     }, 1000);
   }
