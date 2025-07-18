@@ -2179,30 +2179,29 @@ jQuery(document).ready(function ($) {
     }
 
     if (!isAutoSubmit && totalAttempts === 0) {
-      alert(
-        "You haven't answered any questions. This session will not be saved."
-      );
-      practiceInProgress = false; // Allow redirect without warning
-
-      // Call a new, separate AJAX action to just delete the empty session
-      $.ajax({
-        url: qp_ajax_object.ajax_url,
-        type: "POST",
-        data: {
-          action: "delete_empty_session",
-          nonce: qp_ajax_object.nonce,
-          session_id: sessionID,
-        },
-        success: function (response) {
-          // Redirect to the dashboard regardless of success, as the session is empty
-          window.location.href = qp_ajax_object.dashboard_page_url;
-        },
-        error: function () {
-          // Still redirect even if the AJAX call fails
-          window.location.href = qp_ajax_object.dashboard_page_url;
-        },
-      });
-      return; // Stop the function here
+        practiceInProgress = false; // Allow redirect without warning
+        Swal.fire({
+            title: 'Session Not Saved',
+            text: "You haven't answered any questions, so this session will not be saved in your history.",
+            icon: 'info',
+            confirmButtonText: 'OK, Go to Dashboard'
+        }).then(() => {
+            // Call the AJAX action to delete the empty session in the background
+            $.ajax({
+                url: qp_ajax_object.ajax_url,
+                type: 'POST',
+                data: {
+                    action: 'delete_empty_session',
+                    nonce: qp_ajax_object.nonce,
+                    session_id: sessionID
+                },
+                complete: function() {
+                    // Redirect after the alert is closed and AJAX is complete
+                    window.location.href = qp_ajax_object.dashboard_page_url;
+                }
+            });
+        });
+        return; // Stop the function here
     }
     // --- NEW LOGIC END ---
 

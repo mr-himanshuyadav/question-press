@@ -233,22 +233,44 @@ jQuery(document).ready(function($) {
         e.preventDefault();
         var button = $(this);
         var sessionID = button.data('session-id');
-        if (confirm('Are you sure you want to permanently delete this session history? This cannot be undone.')) {
-            $.ajax({
-                url: qp_ajax_object.ajax_url, type: 'POST',
-                data: { action: 'delete_user_session', nonce: qp_ajax_object.nonce, session_id: sessionID },
-                beforeSend: function() { button.text('Deleting...').prop('disabled', true); },
-                success: function(response) {
-                    if (response.success) {
-                        button.closest('tr').fadeOut(500, function() { $(this).remove(); });
-                    } else {
-                        alert('Error: ' + response.data.message);
+
+        Swal.fire({
+            title: 'Delete Session?',
+            text: "This session history will be permanently deleted. This action cannot be undone.",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            confirmButtonText: 'Yes, delete it!'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                $.ajax({
+                    url: qp_ajax_object.ajax_url,
+                    type: 'POST',
+                    data: {
+                        action: 'delete_user_session',
+                        nonce: qp_ajax_object.nonce,
+                        session_id: sessionID
+                    },
+                    beforeSend: function() {
+                        button.text('Deleting...').prop('disabled', true);
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            button.closest('tr').fadeOut(500, function() {
+                                $(this).remove();
+                            });
+                        } else {
+                            Swal.fire('Error!', response.data.message || 'Could not delete the session.', 'error');
+                            button.text('Delete').prop('disabled', false);
+                        }
+                    },
+                    error: function() {
+                        Swal.fire('Error!', 'An unknown server error occurred.', 'error');
                         button.text('Delete').prop('disabled', false);
                     }
-                },
-                error: function() { alert('An unknown error occurred.'); button.text('Delete').prop('disabled', false); }
-            });
-        }
+                });
+            }
+        });
     });
 
     // Handler for deleting all revision history
