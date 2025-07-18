@@ -1607,8 +1607,29 @@ jQuery(document).ready(function ($) {
         }
       }
     }
-
+    
     $("#qp-prev-btn").prop("disabled", currentQuestionIndex === 0);
+    // --- NEW LOGIC TO HANDLE REPORTED QUESTIONS IN MOCK TESTS ---
+    if (isMockTest && data.is_reported_by_user) {
+        // 1. Show the indicator
+        $("#qp-reported-indicator").show();
+        $(".qp-indicator-bar").show(); // Ensure the parent bar is visible
+
+        // 2. Disable all interactive elements for this question
+        optionsArea.addClass("disabled").find('input[type="radio"]').prop("disabled", true);
+        $("#qp-report-btn").prop("disabled", true);
+        $("#qp-clear-response-btn, #qp-mock-mark-review-cb").prop("disabled", true);
+        
+        // 3. If an answer was previously selected, clear it now
+        if (previousState.selected_option_id) {
+            clearMockTestAnswer(questionID);
+        }
+    } else if (isMockTest) {
+        // Explicitly re-enable buttons for non-reported questions
+        $("#qp-report-btn").prop("disabled", false);
+        $("#qp-clear-response-btn, #qp-mock-mark-review-cb").prop("disabled", false);
+    }
+    // --- END OF NEW LOGIC ---
     if (typeof renderMathInElement !== "undefined") {
       renderMathInElement(document.getElementById("qp-practice-app-wrapper"), {
         delimiters: [
@@ -2173,6 +2194,7 @@ jQuery(document).ready(function ($) {
     // Handler for the "Clear Response" button
     wrapper.on("click", "#qp-clear-response-btn", function () {
       var questionID = sessionQuestionIDs[currentQuestionIndex];
+      clearMockTestAnswer(questionID);
 
       // Clear the radio button selection in the UI first
       $(".qp-options-area .option").removeClass("selected");
@@ -2218,6 +2240,20 @@ jQuery(document).ready(function ($) {
       updateMockStatus(questionID, newStatus);
     });
   }
+
+  // ADD THIS NEW, REUSABLE FUNCTION anywhere in the main scope of the script
+function clearMockTestAnswer(questionID) {
+    // Clear the radio button selection in the UI
+    $(".qp-options-area .option").removeClass("selected");
+    $('input[name="qp_option"]').prop("checked", false);
+
+    // Determine the correct final status based on the review checkbox
+    const isMarkedForReview = $("#qp-mock-mark-review-cb").is(":checked");
+    const newStatus = isMarkedForReview ? "marked_for_review" : "viewed";
+
+    // Send a single, definitive update to the backend
+    updateMockStatus(questionID, newStatus);
+}
 
   // --- NEW: Mock Test Scoring Checkbox UI Toggle ---
   wrapper.on("change", "#qp_mock_scoring_enabled_cb", function () {

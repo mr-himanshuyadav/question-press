@@ -774,13 +774,12 @@ class QP_Shortcodes
                             </div>
                         </div>
 
-                        <?php if (!$is_mock_test) : ?>
+                        
                             <div class="qp-indicator-bar" style="display: none;">
-                                <div id="qp-timer-indicator" class="timer-stat" style="display: none;">--:--</div>
+                                <?php if (!$is_mock_test) : ?><div id="qp-timer-indicator" class="timer-stat" style="display: none;">--:--</div><?php endif; ?>
                                 <div id="qp-revision-indicator" style="display: none;">&#9851; Revision</div>
                                 <div id="qp-reported-indicator" style="display: none;">&#9888; Reported</div>
                             </div>
-                        <?php endif; ?>
 
                         <div class="qp-question-area">
                             <div class="qp-direction" style="display: none;"></div>
