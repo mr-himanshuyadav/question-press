@@ -2030,122 +2030,80 @@ function qp_skip_question_ajax()
 add_action('wp_ajax_skip_question', 'qp_skip_question_ajax');
 
 /**
- * AJAX handler for ending a practice session.
+ * Helper function to calculate final stats and update a session record.
+ *
+ * @param int    $session_id The ID of the session to finalize.
+ * @param string $new_status The status to set for the session (e.g., 'completed', 'abandoned').
+ * @return array|null An array of summary data, or null if the session was empty.
  */
-function qp_end_practice_session_ajax()
-{
-    check_ajax_referer('qp_practice_nonce', 'nonce');
-    $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
-
-    if (!$session_id) {
-        wp_send_json_error(['message' => 'Invalid session.']);
-    }
-
+function qp_finalize_and_end_session($session_id, $new_status = 'completed') {
     global $wpdb;
     $sessions_table = $wpdb->prefix . 'qp_user_sessions';
     $attempts_table = $wpdb->prefix . 'qp_user_attempts';
     $pauses_table = $wpdb->prefix . 'qp_session_pauses';
 
-    // Check for any answered attempts before proceeding
+    // Check if there are any answered attempts before proceeding
     $total_answered_attempts = (int) $wpdb->get_var($wpdb->prepare(
         "SELECT COUNT(*) FROM {$attempts_table} WHERE session_id = %d AND status = 'answered'",
         $session_id
     ));
 
-    if ($total_answered_attempts === 0) {
-        // If no questions were answered, delete the session record entirely.
+    if ($total_answered_attempts === 0 && $new_status !== 'abandoned') {
         $wpdb->delete($sessions_table, ['session_id' => $session_id]);
-        // Send a specific status back to the frontend so it knows what to do.
-        wp_send_json_success(['status' => 'no_attempts', 'message' => 'Session deleted as no questions were attempted.']);
-        return; // Stop execution here
+        return null; // Indicate that the session was empty and deleted
     }
 
-    // Get session settings to calculate score
     $session = $wpdb->get_row($wpdb->prepare("SELECT * FROM $sessions_table WHERE session_id = %d", $session_id));
+    if (!$session) {
+        return null;
+    }
+
     $settings = json_decode($session->settings_snapshot, true);
     $marks_correct = $settings['marks_correct'] ?? 0;
     $marks_incorrect = $settings['marks_incorrect'] ?? 0;
     $is_mock_test = isset($settings['practice_mode']) && $settings['practice_mode'] === 'mock_test';
 
-    // --- NEW: Special handling for Mock Test answer evaluation ---
     if ($is_mock_test) {
-        // Grade any answered questions
         $answered_attempts = $wpdb->get_results($wpdb->prepare(
             "SELECT attempt_id, question_id, selected_option_id FROM {$attempts_table} WHERE session_id = %d AND mock_status IN ('answered', 'answered_and_marked_for_review')",
             $session_id
         ));
-
         $options_table = $wpdb->prefix . 'qp_options';
         foreach ($answered_attempts as $attempt) {
             $is_correct = (bool) $wpdb->get_var($wpdb->prepare(
                 "SELECT is_correct FROM {$options_table} WHERE option_id = %d AND question_id = %d",
-                $attempt->selected_option_id,
-                $attempt->question_id
+                $attempt->selected_option_id, $attempt->question_id
             ));
             $wpdb->update($attempts_table, ['is_correct' => $is_correct ? 1 : 0], ['attempt_id' => $attempt->attempt_id]);
         }
-
-        // --- FIX: Accurately identify and record 'not_viewed' questions ---
         $all_question_ids_in_session = json_decode($session->question_ids_snapshot, true);
-
-        // Get IDs of all questions that have ANY kind of attempt record for this session
-        $interacted_question_ids = $wpdb->get_col($wpdb->prepare(
-            "SELECT DISTINCT question_id FROM {$attempts_table} WHERE session_id = %d",
-            $session_id
-        ));
-
-        // Find the questions that were never touched at all
+        $interacted_question_ids = $wpdb->get_col($wpdb->prepare("SELECT DISTINCT question_id FROM {$attempts_table} WHERE session_id = %d", $session_id));
         $not_viewed_ids = array_diff($all_question_ids_in_session, $interacted_question_ids);
-
-        // Create a record for each "not_viewed" question
         foreach ($not_viewed_ids as $question_id) {
             $wpdb->insert($attempts_table, [
-                'session_id' => $session_id,
-                'user_id' => get_current_user_id(),
-                'question_id' => $question_id,
-                'status' => 'skipped', // For stats compatibility
-                'mock_status' => 'not_viewed' // The specific status we need
+                'session_id' => $session_id, 'user_id' => $session->user_id, 'question_id' => $question_id,
+                'status' => 'skipped', 'mock_status' => 'not_viewed'
             ]);
         }
-
-        // Any question that was just 'viewed' or 'marked_for_review' is now considered 'skipped' for final stats
-        $wpdb->query($wpdb->prepare(
-            "UPDATE {$attempts_table} SET status = 'skipped' WHERE session_id = %d AND mock_status IN ('viewed', 'marked_for_review')",
-            $session_id
-        ));
+        $wpdb->query($wpdb->prepare("UPDATE {$attempts_table} SET status = 'skipped' WHERE session_id = %d AND mock_status IN ('viewed', 'marked_for_review')", $session_id));
     }
 
-    // Calculate final stats from the now-updated attempts table
     $correct_count = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $attempts_table WHERE session_id = %d AND is_correct = 1", $session_id));
     $incorrect_count = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $attempts_table WHERE session_id = %d AND is_correct = 0", $session_id));
     $total_attempted = $correct_count + $incorrect_count;
-
-    // --- NEW: Calculate Unattempted and Not Viewed counts for Mock Tests ---
-    $unattempted_count = 0;
     $not_viewed_count = 0;
     if ($is_mock_test) {
-        // "Unattempted" is the total number of questions minus those answered correctly or incorrectly.
         $unattempted_count = count(json_decode($session->question_ids_snapshot, true)) - $total_attempted;
-        // "Not Viewed" is specifically the count of questions with that status.
         $not_viewed_count = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $attempts_table WHERE session_id = %d AND mock_status = 'not_viewed'", $session_id));
     } else {
-        // For other modes, the "skipped" count is the traditional value.
         $unattempted_count = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $attempts_table WHERE session_id = %d AND status = 'skipped'", $session_id));
     }
-    // For consistency, we'll use a single variable name from now on.
     $skipped_count = $unattempted_count;
-
-    // Calculate final score
     $final_score = ($correct_count * $marks_correct) + ($incorrect_count * $marks_incorrect);
-
-    // --- Calculate Total Active Time (timezone-aware) ---
     $end_time_gmt = current_time('mysql', 1);
     $start_time_gmt = get_gmt_from_date($session->start_time);
-
     $total_session_duration = strtotime($end_time_gmt) - strtotime($start_time_gmt);
-    $total_active_seconds = max(0, $total_session_duration); // For mock tests, there are no pauses
-
-    // For non-mock tests, we still need to subtract pause duration
+    $total_active_seconds = max(0, $total_session_duration);
     if (!$is_mock_test) {
         $pause_records = $wpdb->get_results($wpdb->prepare("SELECT pause_time, resume_time FROM {$pauses_table} WHERE session_id = %d", $session_id));
         $total_pause_duration = 0;
@@ -2157,33 +2115,42 @@ function qp_end_practice_session_ajax()
         $total_active_seconds = max(0, $total_session_duration - $total_pause_duration);
     }
 
-    // Update the session in the database with the final, correct stats
-    $wpdb->update(
-        $sessions_table,
-        [
-            'end_time' => current_time('mysql'),
-            'status' => 'completed',
-            'total_active_seconds' => $total_active_seconds,
-            'total_attempted' => $total_attempted,
-            'correct_count' => $correct_count,
-            'incorrect_count' => $incorrect_count,
-            'skipped_count' => $skipped_count, // This now holds the 'unattempted' count
-            'not_viewed_count' => $not_viewed_count, // Add the new field
-            'marks_obtained' => $final_score
-        ],
-        ['session_id' => $session_id]
-    );
+    $wpdb->update($sessions_table, [
+        'end_time' => current_time('mysql'), 'status' => $new_status, 'total_active_seconds' => $total_active_seconds,
+        'total_attempted' => $total_attempted, 'correct_count' => $correct_count, 'incorrect_count' => $incorrect_count,
+        'skipped_count' => $skipped_count, 'not_viewed_count' => $not_viewed_count, 'marks_obtained' => $final_score
+    ], ['session_id' => $session_id]);
 
-    // Send the final stats back to the frontend
-    wp_send_json_success([
-        'final_score' => $final_score,
-        'total_attempted' => $total_attempted,
-        'correct_count' => $correct_count,
-        'incorrect_count' => $incorrect_count,
-        'skipped_count' => $skipped_count, // This is our 'unattempted' count
-        'not_viewed_count' => $not_viewed_count, // Add the new count here
+    return [
+        'final_score' => $final_score, 'total_attempted' => $total_attempted, 'correct_count' => $correct_count,
+        'incorrect_count' => $incorrect_count, 'skipped_count' => $skipped_count, 'not_viewed_count' => $not_viewed_count,
         'settings' => $settings,
-    ]);
+    ];
+}
+
+/**
+ * AJAX handler for ending a practice session.
+ */
+/**
+ * AJAX handler for ending a practice session.
+ */
+function qp_end_practice_session_ajax() {
+    check_ajax_referer('qp_practice_nonce', 'nonce');
+    $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
+    if (!$session_id) {
+        wp_send_json_error(['message' => 'Invalid session.']);
+    }
+
+    // Call our new centralized function to do all the work
+    $summary_data = qp_finalize_and_end_session($session_id, 'completed');
+
+    if (is_null($summary_data)) {
+        // The function deleted the session because it was empty.
+        wp_send_json_success(['status' => 'no_attempts', 'message' => 'Session deleted as no questions were attempted.']);
+    } else {
+        // Send the final stats back to the frontend
+        wp_send_json_success($summary_data);
+    }
 }
 add_action('wp_ajax_end_practice_session', 'qp_end_practice_session_ajax');
 
@@ -2771,8 +2738,7 @@ add_action('wp', 'qp_schedule_session_cleanup');
 /**
  * The function that runs on the scheduled cron event to clean up old sessions.
  */
-function qp_cleanup_abandoned_sessions()
-{
+function qp_cleanup_abandoned_sessions() {
     global $wpdb;
     $options = get_option('qp_settings');
     $timeout_minutes = isset($options['session_timeout']) ? absint($options['session_timeout']) : 20;
@@ -2782,12 +2748,11 @@ function qp_cleanup_abandoned_sessions()
     }
 
     $sessions_table = $wpdb->prefix . 'qp_user_sessions';
-    $attempts_table = $wpdb->prefix . 'qp_user_attempts';
 
     // Get the IDs of all sessions that are active but have timed out
     $abandoned_session_ids = $wpdb->get_col($wpdb->prepare(
         "SELECT session_id FROM {$sessions_table}
-         WHERE status = 'active' AND last_activity < NOW() - INTERVAL %d MINUTE",
+         WHERE status IN ('active', 'mock_test', 'paused') AND last_activity < NOW() - INTERVAL %d MINUTE",
         $timeout_minutes
     ));
 
@@ -2795,10 +2760,10 @@ function qp_cleanup_abandoned_sessions()
         return; // No sessions to clean up.
     }
 
-    // --- THE FIX: Delete the sessions and their attempts in bulk ---
-    $ids_placeholder = implode(',', $abandoned_session_ids);
-    $wpdb->query("DELETE FROM {$attempts_table} WHERE session_id IN ({$ids_placeholder})");
-    $wpdb->query("DELETE FROM {$sessions_table} WHERE session_id IN ({$ids_placeholder})");
+    // Loop through each abandoned session and finalize it with 'abandoned' status
+    foreach ($abandoned_session_ids as $session_id) {
+        qp_finalize_and_end_session($session_id, 'abandoned');
+    }
 }
 add_action('qp_cleanup_abandoned_sessions_event', 'qp_cleanup_abandoned_sessions');
 
