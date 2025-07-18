@@ -8,35 +8,51 @@ jQuery(document).ready(function($) {
         var listItem = button.closest('li');
         var questionID = listItem.data('question-id');
 
-        if (confirm('Are you sure you want to remove this question from your review list?')) {
-            $.ajax({
-                url: qp_ajax_object.ajax_url,
-                type: 'POST',
-                data: {
-                    action: 'qp_toggle_review_later',
-                    nonce: qp_ajax_object.nonce,
-                    question_id: questionID,
-                    is_marked: 'false' // Send 'false' to remove it
-                },
-                beforeSend: function() {
-                    button.text('Removing...').prop('disabled', true);
-                },
-                success: function(response) {
-                    if (response.success) {
-                        listItem.fadeOut(400, function() {
-                            $(this).remove();
-                            // Update the count in the tab
-                            var reviewTab = $('.qp-tab-link[data-tab="review"]');
-                            var currentCount = parseInt(reviewTab.text().match(/\d+/)[0], 10);
-                            reviewTab.text('Review List (' + (currentCount - 1) + ')');
-                        });
-                    } else {
-                        alert('Could not remove the item. Please try again.');
-                        button.text('Remove').prop('disabled', false);
+        Swal.fire({
+            title: 'Remove from Review?',
+            text: "This question will be removed from your review list.",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            confirmButtonText: 'Yes, remove it!'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                $.ajax({
+                    url: qp_ajax_object.ajax_url,
+                    type: 'POST',
+                    data: {
+                        action: 'qp_toggle_review_later',
+                        nonce: qp_ajax_object.nonce,
+                        question_id: questionID,
+                        is_marked: 'false' // Send 'false' to remove it
+                    },
+                    beforeSend: function() {
+                        button.text('Removing...').prop('disabled', true);
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            listItem.fadeOut(400, function() {
+                                $(this).remove();
+                                var reviewTab = $('.qp-tab-link[data-tab="review"]');
+                                var currentCountText = reviewTab.text();
+                                var currentCountMatch = currentCountText.match(/\d+/);
+                                if (currentCountMatch) {
+                                    var currentCount = parseInt(currentCountMatch[0], 10);
+                                    reviewTab.text('Review List (' + (currentCount - 1) + ')');
+                                }
+                            });
+                        } else {
+                            Swal.fire('Error!', 'Could not remove the item. Please try again.', 'error');
+                            button.text('Remove').prop('disabled', false);
+                        }
+                    },
+                    error: function() {
+                         Swal.fire('Error!', 'A network error occurred. Please try again.', 'error');
+                         button.text('Remove').prop('disabled', false);
                     }
-                }
-            });
-        }
+                });
+            }
+        });
     });
 
     // --- NEW: Handler for starting a review session ---

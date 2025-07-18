@@ -982,9 +982,12 @@ jQuery(document).ready(function ($) {
     if ($("#qp-topic-group").is(":visible")) {
       var selectedTopics = $("#qp_topic_list_container input:checked").length;
       if (selectedTopics === 0) {
-        alert(
-          "Please select at least one topic to start the practice session."
-        );
+        Swal.fire({
+            title: 'No Topics Selected',
+            text: 'Please select at least one topic to start the practice session.',
+            icon: 'warning',
+            confirmButtonText: 'OK'
+        });
         return; // Stop the form submission
       }
     }
