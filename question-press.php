@@ -213,6 +213,7 @@ function qp_activate_plugin()
         skipped_count INT,
         not_viewed_count INT,
         marks_obtained DECIMAL(10, 2),
+        end_reason VARCHAR(50) DEFAULT NULL,
         settings_snapshot TEXT,
         question_ids_snapshot LONGTEXT,
         PRIMARY KEY (session_id),
@@ -2034,9 +2035,10 @@ add_action('wp_ajax_skip_question', 'qp_skip_question_ajax');
  *
  * @param int    $session_id The ID of the session to finalize.
  * @param string $new_status The status to set for the session (e.g., 'completed', 'abandoned').
+ * @param string|null $end_reason The reason the session ended.
  * @return array|null An array of summary data, or null if the session was empty.
  */
-function qp_finalize_and_end_session($session_id, $new_status = 'completed') {
+function qp_finalize_and_end_session($session_id, $new_status = 'completed', $end_reason = null) {
     global $wpdb;
     $sessions_table = $wpdb->prefix . 'qp_user_sessions';
     $attempts_table = $wpdb->prefix . 'qp_user_attempts';
@@ -2100,7 +2102,8 @@ function qp_finalize_and_end_session($session_id, $new_status = 'completed') {
     }
     $skipped_count = $unattempted_count;
     $final_score = ($correct_count * $marks_correct) + ($incorrect_count * $marks_incorrect);
-    $end_time_gmt = current_time('mysql', 1);
+    $end_time_for_calc = $new_status === 'abandoned' ? $session->last_activity : current_time('mysql');
+    $end_time_gmt = get_gmt_from_date($end_time_for_calc);
     $start_time_gmt = get_gmt_from_date($session->start_time);
     $total_session_duration = strtotime($end_time_gmt) - strtotime($start_time_gmt);
     $total_active_seconds = max(0, $total_session_duration);
@@ -2116,8 +2119,9 @@ function qp_finalize_and_end_session($session_id, $new_status = 'completed') {
     }
 
     $wpdb->update($sessions_table, [
-        'end_time' => current_time('mysql'), 'status' => $new_status, 'total_active_seconds' => $total_active_seconds,
-        'total_attempted' => $total_attempted, 'correct_count' => $correct_count, 'incorrect_count' => $incorrect_count,
+        'end_time' => $end_time_for_calc, 'status' => $new_status, 'end_reason' => $end_reason,
+        'total_active_seconds' => $total_active_seconds, 'total_attempted' => $total_attempted,
+        'correct_count' => $correct_count, 'incorrect_count' => $incorrect_count,
         'skipped_count' => $skipped_count, 'not_viewed_count' => $not_viewed_count, 'marks_obtained' => $final_score
     ], ['session_id' => $session_id]);
 
@@ -2131,9 +2135,6 @@ function qp_finalize_and_end_session($session_id, $new_status = 'completed') {
 /**
  * AJAX handler for ending a practice session.
  */
-/**
- * AJAX handler for ending a practice session.
- */
 function qp_end_practice_session_ajax() {
     check_ajax_referer('qp_practice_nonce', 'nonce');
     $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
@@ -2141,14 +2142,15 @@ function qp_end_practice_session_ajax() {
         wp_send_json_error(['message' => 'Invalid session.']);
     }
 
-    // Call our new centralized function to do all the work
-    $summary_data = qp_finalize_and_end_session($session_id, 'completed');
+    // Determine the reason based on whether it was a timer-based auto-submission
+    $is_auto_submit = isset($_POST['is_auto_submit']) && $_POST['is_auto_submit'] === 'true';
+    $end_reason = $is_auto_submit ? 'autosubmitted_timer' : 'user_submitted';
+
+    $summary_data = qp_finalize_and_end_session($session_id, 'completed', $end_reason);
 
     if (is_null($summary_data)) {
-        // The function deleted the session because it was empty.
         wp_send_json_success(['status' => 'no_attempts', 'message' => 'Session deleted as no questions were attempted.']);
     } else {
-        // Send the final stats back to the frontend
         wp_send_json_success($summary_data);
     }
 }
@@ -2749,10 +2751,10 @@ function qp_cleanup_abandoned_sessions() {
 
     $sessions_table = $wpdb->prefix . 'qp_user_sessions';
 
-    // Get the IDs of all sessions that are active but have timed out
+    // Get the IDs of all sessions that are active/paused/mock_test but have timed out
     $abandoned_session_ids = $wpdb->get_col($wpdb->prepare(
         "SELECT session_id FROM {$sessions_table}
-         WHERE status IN ('active', 'mock_test', 'paused') AND last_activity < NOW() - INTERVAL %d MINUTE",
+         WHERE status IN ('active', 'paused', 'mock_test') AND last_activity < NOW() - INTERVAL %d MINUTE", // <-- THE FIX IS HERE
         $timeout_minutes
     ));
 
@@ -2762,7 +2764,7 @@ function qp_cleanup_abandoned_sessions() {
 
     // Loop through each abandoned session and finalize it with 'abandoned' status
     foreach ($abandoned_session_ids as $session_id) {
-        qp_finalize_and_end_session($session_id, 'abandoned');
+        qp_finalize_and_end_session($session_id, 'abandoned', 'abandoned_system');
     }
 }
 add_action('qp_cleanup_abandoned_sessions_event', 'qp_cleanup_abandoned_sessions');
@@ -2810,6 +2812,13 @@ function qp_run_unified_data_migration()
         require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
         dbDelta($sql_session_pauses);
         $messages[] = "Step 0.2: Created the `{$table_session_pauses}` table for tracking session pauses.";
+    }
+
+    // === NEW STEP: ADD end_reason COLUMN FOR SESSION STATUS ===
+    $sessions_columns = $wpdb->get_col("DESC $sessions_table", 0);
+    if (!in_array('end_reason', $sessions_columns)) {
+        $wpdb->query("ALTER TABLE {$sessions_table} ADD COLUMN `end_reason` VARCHAR(50) DEFAULT NULL AFTER `marks_obtained`;");
+        $messages[] = "Step 0.3: Added `end_reason` column to the sessions table for detailed status.";
     }
 
     // === STEP 0: MIGRATE qp_user_sessions TABLE SCHEMA ===

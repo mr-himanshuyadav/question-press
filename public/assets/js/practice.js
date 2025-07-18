@@ -2230,6 +2230,7 @@ jQuery(document).ready(function ($) {
             action: "delete_empty_session",
             nonce: qp_ajax_object.nonce,
             session_id: sessionID,
+            is_auto_submit: isAutoSubmit
           },
           complete: function () {
             // Redirect after the alert is closed and AJAX is complete

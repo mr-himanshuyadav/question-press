@@ -235,8 +235,8 @@ class QP_Dashboard
         echo '</div></div>';
 
         echo '<table class="qp-dashboard-table">
-        <thead><tr><th>Date</th><th>Mode</th><th>Subjects</th><th>Accuracy</th><th>Actions</th></tr></thead>
-        <tbody>';
+    <thead><tr><th>Date</th><th>Mode</th><th>Subjects</th><th>Accuracy</th><th>Status</th><th>Actions</th></tr></thead>
+    <tbody>';
 
         if (!empty($session_history)) {
             foreach ($session_history as $session) {
@@ -303,11 +303,21 @@ class QP_Dashboard
 
                 $accuracy = ($session->total_attempted > 0) ? round(($session->correct_count / $session->total_attempted) * 100, 2) . '%' : 'N/A';
 
+                $status_display = 'Completed'; // Default
+                if ($session->end_reason === 'autosubmitted_timer') {
+                    $status_display = 'Auto-Submitted';
+                } elseif ($session->status === 'abandoned' || $session->end_reason === 'abandoned_system') {
+                    $status_display = 'Abandoned';
+                }
+
+                
+
                 echo '<tr>
                 <td data-label="Date">' . date_format(date_create($session->start_time), 'M j, Y, g:i a') . '</td>
                 <td data-label="Mode">' . esc_html($mode) . '</td>
                 <td data-label="Subjects">' . $subjects_display . '</td>
                 <td data-label="Accuracy"><strong>' . $accuracy . '</strong></td>
+                <td data-label="Status">' . esc_html($status_display) . '</td>
                 <td data-label="Actions">';
                 // Conditionally show "Resume" or "Review" button based on the status.
                 if ($session->status === 'paused') {
