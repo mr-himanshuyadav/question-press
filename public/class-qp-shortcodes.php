@@ -1110,17 +1110,21 @@ class QP_Shortcodes
                             </div>
                         <?php endif; ?>
 
-                        <div class="qp-review-all-options-wrapper" style="margin-top: 1rem; border-top: 1px dashed #e0e0e0; padding-top: 1rem;">
-                        <h5 style="margin: 0 0 0.5rem 0; font-size: 13px; color: #50575e;">All Options:</h5>
-                        <ul style="margin: 0; padding-left: 20px; list-style-type: upper-alpha;">
-                            <?php foreach ($attempt->options as $option): ?>
-                                <li style="<?php echo $option->is_correct ? 'font-weight: bold; color: #2e7d32;' : ''; ?>">
-                                    <?php echo esc_html($option->option_text); ?>
-                                </li>
-                            <?php endforeach; ?>
-                        </ul>
-                    </div>
-                    </div>
+                        <div class="qp-review-all-options-wrapper" style="margin-top: 0.5rem; padding-top: 0.5rem;">
+                            <details>
+                                <summary style="cursor: pointer; font-weight: bold; color: #2271b1; font-size: 13px; list-style-position: inside; outline: none;">
+                                    Show All Options
+                                </summary>
+                                <ul style="margin: 10px 0 0 0; padding-left: 20px; list-style-type: upper-alpha;">
+                                    <?php foreach ($attempt->options as $option): ?>
+                                        <li style="padding: 2px 0; <?php echo $option->is_correct ? 'font-weight: bold; color: #2e7d32;' : ''; ?>">
+                                            <?php echo esc_html($option->option_text); ?>
+                                        </li>
+                                    <?php endforeach; ?>
+                                </ul>
+                            </details>
+                        </div>
+                        </div>
                 <?php endforeach; ?>
             </div>
         </div>
