@@ -121,71 +121,82 @@ jQuery(document).ready(function ($) {
 
   // REPLACE the entire old renderPalette function with this new one.
   // Find and REPLACE the renderPalette function
-function renderPalette() {
+  function renderPalette() {
     paletteGrids.empty();
-    sessionQuestionIDs.forEach(function(questionID, index) {
-        const questionState = answeredStates[questionID] || {};
-        let statusClass = 'status-not_viewed';
+    sessionQuestionIDs.forEach(function (questionID, index) {
+      const questionState = answeredStates[questionID] || {};
+      let statusClass = "status-not_viewed";
 
-        if (questionState.reported) {
-            statusClass = 'status-reported';
-        } else if (isMockTest && questionState.mock_status) {
-            statusClass = 'status-' + questionState.mock_status;
-        } else if (!isMockTest && questionState.type) {
-            if (questionState.type === 'answered') {
-                statusClass = questionState.is_correct ? 'status-correct' : 'status-incorrect';
-            } else if (questionState.type === 'skipped') {
-                statusClass = 'status-skipped';
-            }
+      if (questionState.reported) {
+        statusClass = "status-reported";
+      } else if (isMockTest && questionState.mock_status) {
+        statusClass = "status-" + questionState.mock_status;
+      } else if (!isMockTest && questionState.type) {
+        if (questionState.type === "answered") {
+          statusClass = questionState.is_correct
+            ? "status-correct"
+            : "status-incorrect";
+        } else if (questionState.type === "skipped") {
+          statusClass = "status-skipped";
         }
-        
-        const paletteBtn = $('<button></button>')
-            .addClass('qp-palette-btn')
-            .attr('data-question-index', index)
-            .text(index + 1)
-            .addClass(statusClass);
+      }
 
-        if (index === currentQuestionIndex) {
-            paletteBtn.addClass('current');
-        }
-        paletteGrids.append(paletteBtn);
+      const paletteBtn = $("<button></button>")
+        .addClass("qp-palette-btn")
+        .attr("data-question-index", index)
+        .text(index + 1)
+        .addClass(statusClass);
+
+      if (index === currentQuestionIndex) {
+        paletteBtn.addClass("current");
+      }
+      paletteGrids.append(paletteBtn);
     });
-}
+  }
   // Find and REPLACE the updateLegendCounts function
-function updateLegendCounts() {
+  function updateLegendCounts() {
     var counts = {
-        answered: 0, viewed: 0, not_viewed: 0, marked_for_review: 0,
-        answered_and_marked_for_review: 0, correct: 0, incorrect: 0, skipped: 0,
-        not_attempted: 0, reported: 0 // Initialize reported count to 0
+      answered: 0,
+      viewed: 0,
+      not_viewed: 0,
+      marked_for_review: 0,
+      answered_and_marked_for_review: 0,
+      correct: 0,
+      incorrect: 0,
+      skipped: 0,
+      not_attempted: 0,
+      reported: 0, // Initialize reported count to 0
     };
 
-    sessionQuestionIDs.forEach(function(qid) {
-        var state = answeredStates[qid];
-        if (!state) {
-            counts.not_viewed++;
-            counts.not_attempted++;
-        } else {
-            if (state.reported) {
-                counts.reported++;
-            } else if (isMockTest && state.mock_status) {
-                counts[state.mock_status]++;
-            } else if (!isMockTest && state.type) {
-                if (state.type === 'answered') {
-                    if (state.is_correct) counts.correct++; else counts.incorrect++;
-                } else if (state.type === 'skipped') {
-                    counts.skipped++;
-                }
-            }
+    sessionQuestionIDs.forEach(function (qid) {
+      var state = answeredStates[qid];
+      if (!state) {
+        counts.not_viewed++;
+        counts.not_attempted++;
+      } else {
+        if (state.reported) {
+          counts.reported++;
+        } else if (isMockTest && state.mock_status) {
+          counts[state.mock_status]++;
+        } else if (!isMockTest && state.type) {
+          if (state.type === "answered") {
+            if (state.is_correct) counts.correct++;
+            else counts.incorrect++;
+          } else if (state.type === "skipped") {
+            counts.skipped++;
+          }
         }
+      }
     });
-    
+
     for (var status in counts) {
-        if (counts.hasOwnProperty(status)) {
-            $('.qp-palette-legend .legend-item[data-status="' + status + '"]')
-                .find('.legend-count').text('(' + counts[status] + ')');
-        }
+      if (counts.hasOwnProperty(status)) {
+        $('.qp-palette-legend .legend-item[data-status="' + status + '"]')
+          .find(".legend-count")
+          .text("(" + counts[status] + ")");
+      }
     }
-}
+  }
 
   // --- NEW: Function to update a single palette button ---
   function updatePaletteButton(questionID, newStatus) {
@@ -865,7 +876,7 @@ function updateLegendCounts() {
           $("#qp-next-btn").prop("disabled", false);
 
           renderPalette();
-        updateLegendCounts();
+          updateLegendCounts();
 
           // 3. Close the modal
           $("#qp-report-modal-backdrop").fadeOut(200);
@@ -1519,6 +1530,15 @@ function updateLegendCounts() {
       const isMarked =
         previousState.mock_status === "marked_for_review" ||
         previousState.mock_status === "answered_and_marked_for_review";
+
+      var reviewButtonLabel = $(this).closest('label').find('span');
+
+// And REPLACE the if/else block that follows it with this new logic:
+if (isChecked) {
+    reviewButtonLabel.html('<span class="review-icon">🔖</span> Marked for Review');
+} else {
+    reviewButtonLabel.html('Mark for Review');
+}
       $("#qp-mock-mark-review-cb")
         .prop("checked", isMarked)
         .closest("label")
@@ -1590,29 +1610,41 @@ function updateLegendCounts() {
         }
       }
     }
-    
+
     $("#qp-prev-btn").prop("disabled", currentQuestionIndex === 0);
     // --- NEW LOGIC TO HANDLE REPORTED QUESTIONS IN MOCK TESTS ---
     if (isMockTest && data.is_reported_by_user) {
-        // 1. Show the indicator
-        $("#qp-reported-indicator").show();
-        $(".qp-indicator-bar").show(); // Ensure the parent bar is visible
+      // 1. Show the indicator
+      $("#qp-reported-indicator").show();
+      $(".qp-indicator-bar").show(); // Ensure the parent bar is visible
 
-        // 2. Disable all interactive elements for this question
-        optionsArea.addClass("disabled").find('input[type="radio"]').prop("disabled", true);
-        $("#qp-report-btn").prop("disabled", true);
-        $("#qp-clear-response-btn, #qp-mock-mark-review-cb").prop("disabled", true);
-        
-        // 3. If an answer was previously selected, clear it now
-        if (previousState.selected_option_id) {
-            clearMockTestAnswer(questionID);
-        }
+      // 2. Disable all interactive elements for this question
+      optionsArea
+        .addClass("disabled")
+        .find('input[type="radio"]')
+        .prop("disabled", true);
+      $("#qp-report-btn").prop("disabled", true);
+      $("#qp-clear-response-btn, #qp-mock-mark-review-cb").prop(
+        "disabled",
+        true
+      );
+
+      // 3. If an answer was previously selected, clear it now
+      if (previousState.selected_option_id) {
+        clearMockTestAnswer(questionID);
+      }
     } else if (isMockTest) {
-        // Explicitly re-enable buttons for non-reported questions
-         $("#qp-reported-indicator").hide(); 
-        optionsArea.removeClass("disabled").find('input[type="radio"]').prop("disabled", false);
-        $("#qp-report-btn").prop("disabled", false);
-        $("#qp-clear-response-btn, #qp-mock-mark-review-cb").prop("disabled", false);
+      // Explicitly re-enable buttons for non-reported questions
+      $("#qp-reported-indicator").hide();
+      optionsArea
+        .removeClass("disabled")
+        .find('input[type="radio"]')
+        .prop("disabled", false);
+      $("#qp-report-btn").prop("disabled", false);
+      $("#qp-clear-response-btn, #qp-mock-mark-review-cb").prop(
+        "disabled",
+        false
+      );
     }
     // --- END OF NEW LOGIC ---
     if (typeof renderMathInElement !== "undefined") {
@@ -2222,12 +2254,19 @@ function updateLegendCounts() {
       // Visually update the button style immediately
       $(this).closest("label").toggleClass("checked", isChecked);
 
+      var reviewButtonLabel = $(this).closest("label").find("span");
+      if (isChecked) {
+        reviewButton - Label.text("Marked for Review");
+      } else {
+        reviewButtonLabel.text("Mark for Review");
+      }
+
       updateMockStatus(questionID, newStatus);
     });
   }
 
   // ADD THIS NEW, REUSABLE FUNCTION anywhere in the main scope of the script
-function clearMockTestAnswer(questionID) {
+  function clearMockTestAnswer(questionID) {
     // Clear the radio button selection in the UI
     $(".qp-options-area .option").removeClass("selected");
     $('input[name="qp_option"]').prop("checked", false);
@@ -2238,7 +2277,7 @@ function clearMockTestAnswer(questionID) {
 
     // Send a single, definitive update to the backend
     updateMockStatus(questionID, newStatus);
-}
+  }
 
   // --- NEW: Mock Test Scoring Checkbox UI Toggle ---
   wrapper.on("change", "#qp_mock_scoring_enabled_cb", function () {

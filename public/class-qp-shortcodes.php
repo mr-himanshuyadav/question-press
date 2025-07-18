@@ -798,7 +798,7 @@ class QP_Shortcodes
                                 <label class="qp-button qp-button-secondary qp-review-later-checkbox"><input type="checkbox" id="qp-mock-mark-review-cb"><span>Mark for Review</span></label>
                             </div>
                         <?php else : ?>
-                            <div class="qp-review-later" style="text-align:center;margin-bottom: 5px;"><label class="qp-review-later-checkbox qp-button qp-button-secondary"><input type="checkbox" id="qp-mark-for-review-cb"><span>Mark for Review</span></label><button id="qp-check-answer-btn" class="qp-button qp-button-primary" disabled>Check Answer</button><label class="qp-custom-checkbox" style="margin-left: 15px;"><input type="checkbox" id="qp-auto-check-cb"><span></span>Auto Check</label></div>
+                            <div class="qp-review-later" style="text-align:center;margin-bottom: 5px;"><label class="qp-review-later-checkbox qp-button qp-button-secondary"><input type="checkbox" id="qp-mark-for-review-cb"><span>Add to Review List</span></label><button id="qp-check-answer-btn" class="qp-button qp-button-primary" disabled>Check Answer</button><label class="qp-custom-checkbox" style="margin-left: 15px;"><input type="checkbox" id="qp-auto-check-cb"><span></span>Auto Check</label></div>
                         <?php endif; ?>
                     </div>
                 </div>
