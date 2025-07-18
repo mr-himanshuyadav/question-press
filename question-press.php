@@ -463,6 +463,10 @@ function qp_admin_enqueue_scripts($hook_suffix)
     if ($hook_suffix === 'question-press_page_qp-settings') {
         wp_enqueue_script('qp-settings-script', QP_PLUGIN_URL . 'admin/assets/js/settings-page.js', ['jquery'], '1.0.0', true);
     }
+    // Enqueue SweetAlert2 for admin pages that use it
+    if ($hook_suffix === 'question-press_page_qp-settings' || $hook_suffix === 'toplevel_page_question-press') {
+        wp_enqueue_script('sweetalert2', 'https://cdn.jsdelivr.net/npm/sweetalert2@11', [], null, true);
+    }
 
     if ($hook_suffix === 'toplevel_page_question-press') {
         wp_enqueue_script('qp-quick-edit-script', QP_PLUGIN_URL . 'admin/assets/js/quick-edit.js', ['jquery'], '1.0.2', true); // Version bump
