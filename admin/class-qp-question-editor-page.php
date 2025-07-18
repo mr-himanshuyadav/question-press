@@ -187,7 +187,14 @@ class QP_Question_Editor_Page
                                 </div>
                             </div>
                             <div class="postbox">
-                                <h2 class="hndle"><span>Direction (Optional Passage)</span></h2>
+                                <h2 class="hndle">
+                                    <span>
+                                        Direction (Optional Passage)
+                                        <?php if ($is_editing) : ?>
+                                            <small style="font-weight: normal; font-size: 12px; color: #777;"> | Group ID: <?php echo esc_html($group_id); ?></small>
+                                        <?php endif; ?>
+                                    </span>
+                                </h2>
                                 <div class="inside">
                                     <?php
                                     wp_editor(
@@ -222,7 +229,12 @@ class QP_Question_Editor_Page
                                     <div class="postbox qp-question-block">
                                         <div class="postbox-header">
                                             <h2 class="hndle">
-                                                <span>Question (ID: <?php echo esc_html($question->custom_question_id); ?>)</span>
+                                                <span>
+                                                    Question (ID: <?php echo esc_html($question->custom_question_id); ?>)
+                                                    <?php if ($question->question_id > 0) : ?>
+                                                        <small style="font-weight: normal; font-size: 12px; color: #777;"> | DB ID: <?php echo esc_html($question->question_id); ?></small>
+                                                    <?php endif; ?>
+                                                </span>
                                             </h2>
                                             <div class="handle-actions">
                                                 <button type="button" class="button-link remove-question-block">Remove</button>
@@ -254,10 +266,13 @@ class QP_Question_Editor_Page
                                                 $option_id_value = $option ? esc_attr($option->option_id) : 'new_' . $i;
                                                 $is_correct = $option ? $option->is_correct : ($i == 0 && !$is_editing);
                                             ?>
-                                                <div class="qp-option-row" style="display: flex; align-items: center; margin-bottom: 5px;">
+                                                <div class="qp-option-row" style="display: flex; align-items: center; margin-bottom: 5px; gap: 5px;">
                                                     <input type="radio" name="questions[<?php echo $q_index; ?>][correct_option_id]" value="<?php echo $option_id_value; ?>" <?php checked($is_correct); ?>>
                                                     <input type="hidden" name="questions[<?php echo $q_index; ?>][option_ids][]" value="<?php echo $option ? esc_attr($option->option_id) : '0'; ?>">
-                                                    <input type="text" name="questions[<?php echo $q_index; ?>][options][]" class="option-text-input" value="<?php echo $option ? esc_attr($option->option_text) : ''; ?>" style="flex-grow: 1; margin: 0 5px;" placeholder="Option <?php echo $i + 1; ?>">
+                                                    <input type="text" name="questions[<?php echo $q_index; ?>][options][]" class="option-text-input" value="<?php echo $option ? esc_attr($option->option_text) : ''; ?>" style="flex-grow: 1;" placeholder="Option <?php echo $i + 1; ?>">
+                                                    <?php if ($option && $option->option_id): ?>
+                                                        <small style="color: #777; white-space: nowrap;">ID: <?php echo esc_html($option->option_id); ?></small>
+                                                    <?php endif; ?>
                                                 </div>
                                             <?php endfor; ?>
                                             <hr>
