@@ -686,6 +686,15 @@ z-index: 2;
     gap: 8px;
 }
 
+.legend-text {
+    flex-grow: 1; /* Pushes the count to the very right edge */
+}
+
+.legend-count {
+    font-weight: 700;
+    color: var(--qp-dark-text);
+}
+
 .swatch {
     display: inline-block;
     width: 14px;
@@ -716,8 +725,6 @@ z-index: 2;
     background-color: #ffeb3b; /* Purple dot */
     border-radius: 50%;
 }
-
-
 
 /* --- NEWLY ADDED/CORRECTED RULES --- */
 /* Normal/Revision Mode Swatches */

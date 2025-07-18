@@ -685,19 +685,19 @@ class QP_Shortcodes
                 <div class="qp-palette-grid"></div>
                 <div class="qp-palette-legend">
                     <div class="qp-palette-legend">
-                        <?php if ($is_mock_test) : ?>
-                            <div class="legend-item" data-status="answered"><span class="swatch status-answered"></span> Answered</div>
-                            <div class="legend-item" data-status="viewed"><span class="swatch status-viewed"></span> Not Answered</div>
-                            <div class="legend-item" data-status="not_viewed"><span class="swatch status-not_viewed"></span> Not Visited</div>
-                            <div class="legend-item" data-status="marked_for_review"><span class="swatch status-marked_for_review"></span> Marked for Review</div>
-                            <div class="legend-item" data-status="answered_and_marked_for_review"><span class="swatch status-answered_and_marked_for_review"></span> Answered &amp; Marked</div>
-                        <?php else : ?>
-                            <div class="legend-item" data-status="correct"><span class="swatch status-correct"></span> Correct</div>
-                            <div class="legend-item" data-status="incorrect"><span class="swatch status-incorrect"></span> Incorrect</div>
-                            <div class="legend-item" data-status="skipped"><span class="swatch status-skipped"></span> Skipped</div>
-                            <div class="legend-item" data-status="not_attempted"><span class="swatch status-not_viewed"></span> Not Attempted</div>
-                        <?php endif; ?>
-                    </div>
+    <?php if ($is_mock_test) : ?>
+        <div class="legend-item" data-status="answered"><span class="swatch status-answered"></span><span class="legend-text">Answered</span><span class="legend-count">(0)</span></div>
+        <div class="legend-item" data-status="viewed"><span class="swatch status-viewed"></span><span class="legend-text">Not Answered</span><span class="legend-count">(0)</span></div>
+        <div class="legend-item" data-status="not_viewed"><span class="swatch status-not_viewed"></span><span class="legend-text">Not Visited</span><span class="legend-count">(0)</span></div>
+        <div class="legend-item" data-status="marked_for_review"><span class="swatch status-marked_for_review"></span><span class="legend-text">Marked for Review</span><span class="legend-count">(0)</span></div>
+        <div class="legend-item" data-status="answered_and_marked_for_review"><span class="swatch status-answered_and_marked_for_review"></span><span class="legend-text">Answered & Marked</span><span class="legend-count">(0)</span></div>
+    <?php else : ?>
+        <div class="legend-item" data-status="correct"><span class="swatch status-correct"></span><span class="legend-text">Correct</span><span class="legend-count">(0)</span></div>
+        <div class="legend-item" data-status="incorrect"><span class="swatch status-incorrect"></span><span class="legend-text">Incorrect</span><span class="legend-count">(0)</span></div>
+        <div class="legend-item" data-status="skipped"><span class="swatch status-skipped"></span><span class="legend-text">Skipped</span><span class="legend-count">(0)</span></div>
+        <div class="legend-item" data-status="not_attempted"><span class="swatch status-not_viewed"></span><span class="legend-text">Not Attempted</span><span class="legend-count">(0)</span></div>
+    <?php endif; ?>
+</div>
                 </div>
             </div>
         </div>
@@ -717,19 +717,19 @@ class QP_Shortcodes
                 <?php endif; ?>
                 <div class="qp-palette-grid"></div>
                 <div class="qp-palette-legend">
-                    <?php if ($is_mock_test) : ?>
-                        <div class="legend-item" data-status="answered"><span class="swatch status-answered"></span> Answered</div>
-                        <div class="legend-item" data-status="viewed"><span class="swatch status-viewed"></span> Not Answered</div>
-                        <div class="legend-item" data-status="not_viewed"><span class="swatch status-not_viewed"></span> Not Visited</div>
-                        <div class="legend-item" data-status="marked_for_review"><span class="swatch status-marked_for_review"></span> Marked for Review</div>
-                        <div class="legend-item" data-status="answered_and_marked_for_review"><span class="swatch status-answered_and_marked_for_review"></span> Answered &amp; Marked</div>
-                    <?php else : ?>
-                        <div class="legend-item" data-status="correct"><span class="swatch status-correct"></span> Correct</div>
-                        <div class="legend-item" data-status="incorrect"><span class="swatch status-incorrect"></span> Incorrect</div>
-                        <div class="legend-item" data-status="skipped"><span class="swatch status-skipped"></span> Skipped</div>
-                        <div class="legend-item" data-status="not_attempted"><span class="swatch status-not_viewed"></span> Not Attempted</div>
-                    <?php endif; ?>
-                </div>
+    <?php if ($is_mock_test) : ?>
+        <div class="legend-item" data-status="answered"><span class="swatch status-answered"></span><span class="legend-text">Answered</span><span class="legend-count">(0)</span></div>
+        <div class="legend-item" data-status="viewed"><span class="swatch status-viewed"></span><span class="legend-text">Not Answered</span><span class="legend-count">(0)</span></div>
+        <div class="legend-item" data-status="not_viewed"><span class="swatch status-not_viewed"></span><span class="legend-text">Not Visited</span><span class="legend-count">(0)</span></div>
+        <div class="legend-item" data-status="marked_for_review"><span class="swatch status-marked_for_review"></span><span class="legend-text">Marked for Review</span><span class="legend-count">(0)</span></div>
+        <div class="legend-item" data-status="answered_and_marked_for_review"><span class="swatch status-answered_and_marked_for_review"></span><span class="legend-text">Answered & Marked</span><span class="legend-count">(0)</span></div>
+    <?php else : ?>
+        <div class="legend-item" data-status="correct"><span class="swatch status-correct"></span><span class="legend-text">Correct</span><span class="legend-count">(0)</span></div>
+        <div class="legend-item" data-status="incorrect"><span class="swatch status-incorrect"></span><span class="legend-text">Incorrect</span><span class="legend-count">(0)</span></div>
+        <div class="legend-item" data-status="skipped"><span class="swatch status-skipped"></span><span class="legend-text">Skipped</span><span class="legend-count">(0)</span></div>
+        <div class="legend-item" data-status="not_attempted"><span class="swatch status-not_viewed"></span><span class="legend-text">Not Attempted</span><span class="legend-count">(0)</span></div>
+    <?php endif; ?>
+</div>
 
             </div>
 

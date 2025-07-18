@@ -4,7 +4,9 @@ jQuery(document).ready(function ($) {
   var mockTestTimer; // Specific timer for mock tests
   var isMockTest = false;
   var isRevisionMode = false;
-  var paletteGrids = $('#qp-palette-docked .qp-palette-grid, #qp-palette-sliding .qp-palette-grid');
+  var paletteGrids = $(
+    "#qp-palette-docked .qp-palette-grid, #qp-palette-sliding .qp-palette-grid"
+  );
 
   function openFullscreen() {
     var elem = document.documentElement; // Get the root element (the whole page)
@@ -66,162 +68,172 @@ jQuery(document).ready(function ($) {
   }
 
   // --- NEW: Helper function to update mock test question status ---
-function updateMockStatus(questionID, newStatus) {
+  function updateMockStatus(questionID, newStatus) {
     if (!isMockTest) return;
 
     // --- MODIFICATION START ---
     // Disable the palette buttons for this question to prevent rapid clicks
-    var paletteBtn = $('.qp-palette-btn[data-question-index="' + sessionQuestionIDs.indexOf(questionID) + '"]');
-    paletteBtn.css('pointer-events', 'none').css('opacity', '0.7');
+    var paletteBtn = $(
+      '.qp-palette-btn[data-question-index="' +
+        sessionQuestionIDs.indexOf(questionID) +
+        '"]'
+    );
+    paletteBtn.css("pointer-events", "none").css("opacity", "0.7");
 
     // Send the update to the backend
     $.ajax({
-        url: qp_ajax_object.ajax_url,
-        type: "POST",
-        data: {
-            action: "qp_update_mock_status",
-            nonce: qp_ajax_object.nonce,
-            session_id: sessionID,
-            question_id: questionID,
-            status: newStatus,
-        },
-        success: function(response) {
-            if (response.success) {
-                // Update local state and re-render the palette ONLY on success
-                if (!answeredStates[questionID]) {
-                    answeredStates[questionID] = {};
-                }
-                answeredStates[questionID].mock_status = newStatus;
-                renderPalette();
-            } else {
-                // If the server returns an error, alert the user
-                alert("Could not save your progress. Please check your connection and try again.");
-            }
-        },
-        error: function() {
-            // If the AJAX call itself fails, alert the user
-            alert("A network error occurred. Could not save progress.");
-        },
-        complete: function() {
-            // Re-enable the button regardless of success or failure
-            paletteBtn.css('pointer-events', 'auto').css('opacity', '1');
+      url: qp_ajax_object.ajax_url,
+      type: "POST",
+      data: {
+        action: "qp_update_mock_status",
+        nonce: qp_ajax_object.nonce,
+        session_id: sessionID,
+        question_id: questionID,
+        status: newStatus,
+      },
+      success: function (response) {
+        if (response.success) {
+          // Update local state and re-render the palette ONLY on success
+          if (!answeredStates[questionID]) {
+            answeredStates[questionID] = {};
+          }
+          answeredStates[questionID].mock_status = newStatus;
+          renderPalette();
+          updateLegendCounts();
+        } else {
+          // If the server returns an error, alert the user
+          alert(
+            "Could not save your progress. Please check your connection and try again."
+          );
         }
+      },
+      error: function () {
+        // If the AJAX call itself fails, alert the user
+        alert("A network error occurred. Could not save progress.");
+      },
+      complete: function () {
+        // Re-enable the button regardless of success or failure
+        paletteBtn.css("pointer-events", "auto").css("opacity", "1");
+      },
     });
     // --- MODIFICATION END ---
-}
-  
-// REPLACE the entire old renderPalette function with this new one.
-function renderPalette() {
+  }
+
+  // REPLACE the entire old renderPalette function with this new one.
+  function renderPalette() {
     paletteGrids.empty();
 
-    sessionQuestionIDs.forEach(function(questionID, index) {
-        const questionState = answeredStates[questionID] || {};
-        let statusClass = 'status-not_viewed'; // Default status
+    sessionQuestionIDs.forEach(function (questionID, index) {
+      const questionState = answeredStates[questionID] || {};
+      let statusClass = "status-not_viewed"; // Default status
 
-        if (isMockTest) {
-            // --- MOCK TEST LOGIC (uses mock_status) ---
-            if (questionState.mock_status) {
-                statusClass = 'status-' + questionState.mock_status;
-            }
-        } else {
-            // --- NORMAL/REVISION MODE LOGIC (uses type and is_correct) ---
-            if (questionState.type === 'answered') {
-                statusClass = questionState.is_correct ? 'status-correct' : 'status-incorrect';
-            } else if (questionState.type === 'skipped') {
-                statusClass = 'status-skipped';
-            }
+      if (isMockTest) {
+        // --- MOCK TEST LOGIC (uses mock_status) ---
+        if (questionState.mock_status) {
+          statusClass = "status-" + questionState.mock_status;
         }
-
-        const paletteBtn = $('<button></button>')
-            .addClass('qp-palette-btn')
-            .attr('data-question-index', index)
-            .text(index + 1);
-
-        paletteBtn.addClass(statusClass);
-
-        if (index === currentQuestionIndex) {
-            paletteBtn.addClass('current');
+      } else {
+        // --- NORMAL/REVISION MODE LOGIC (uses type and is_correct) ---
+        if (questionState.type === "answered") {
+          statusClass = questionState.is_correct
+            ? "status-correct"
+            : "status-incorrect";
+        } else if (questionState.type === "skipped") {
+          statusClass = "status-skipped";
         }
-        
-        paletteGrids.append(paletteBtn);
+      }
+
+      const paletteBtn = $("<button></button>")
+        .addClass("qp-palette-btn")
+        .attr("data-question-index", index)
+        .text(index + 1);
+
+      paletteBtn.addClass(statusClass);
+
+      if (index === currentQuestionIndex) {
+        paletteBtn.addClass("current");
+      }
+
+      paletteGrids.append(paletteBtn);
     });
-}
+  }
 
-// --- NEW: Function to update the counts in the palette legend ---
-function updateLegendCounts() {
+  // --- NEW: Bulletproof Legend Counting Function ---
+  function updateLegendCounts() {
+    // 1. Initialize all possible status counts to zero.
     var counts = {
-        // Mock Test statuses
-        answered: 0,
-        viewed: 0,
-        not_viewed: 0,
-        marked_for_review: 0,
-        answered_and_marked_for_review: 0,
-        // Normal/Revision statuses
-        correct: 0,
-        incorrect: 0,
-        skipped: 0
+      answered: 0,
+      viewed: 0,
+      not_viewed: 0,
+      marked_for_review: 0,
+      answered_and_marked_for_review: 0,
+      correct: 0,
+      incorrect: 0,
+      skipped: 0,
+      not_attempted: 0,
     };
 
-    // Calculate the counts from the answeredStates object
-    for (var qid in answeredStates) {
-        if (answeredStates.hasOwnProperty(qid)) {
-            var state = answeredStates[qid];
-            if (isMockTest) {
-                if (state.mock_status) counts[state.mock_status]++;
-            } else {
-                if (state.type === 'answered') {
-                    if (state.is_correct) counts.correct++;
-                    else counts.incorrect++;
-                } else if (state.type === 'skipped') {
-                    counts.skipped++;
-                }
-            }
-        }
-    }
-    
-    // Calculate the not_viewed/not_attempted count
-    var totalAttempted = Object.keys(answeredStates).length;
-    counts.not_viewed = sessionQuestionIDs.length - totalAttempted;
+    // 2. Loop through every single question in the session.
+    sessionQuestionIDs.forEach(function (qid) {
+      var state = answeredStates[qid];
 
-    // Update the HTML for each legend item
-    $('.qp-palette-legend .legend-item').each(function() {
-        var $item = $(this);
-        var status = $item.data('status');
-        var baseText = $item.text().split('(')[0].trim();
-        var count = 0;
-
-        if (status === 'not_attempted') {
-            count = counts.not_viewed;
-        } else if (counts.hasOwnProperty(status)) {
-            count = counts[status];
+      if (!state) {
+        // If there's no state, it's not visited/attempted.
+        counts.not_viewed++;
+        counts.not_attempted++;
+      } else {
+        // Otherwise, increment the specific counter.
+        if (isMockTest && state.mock_status) {
+          counts[state.mock_status]++;
+        } else if (!isMockTest && state.type) {
+          if (state.type === "answered") {
+            if (state.is_correct) counts.correct++;
+            else counts.incorrect++;
+          } else if (state.type === "skipped") {
+            counts.skipped++;
+          }
         }
-        
-        // Add the count in parentheses
-        $item.html('<span class="swatch ' + 'status-' + status + '"></span> ' + baseText + ' <span class="legend-count">(' + count + ')</span>');
+      }
     });
-}
 
-// --- NEW: Function to update a single palette button ---
-function updatePaletteButton(questionID, newStatus) {
+    // 3. Update the text in the DOM.
+    for (var status in counts) {
+      if (counts.hasOwnProperty(status)) {
+        // Find the legend item with the matching data-status and update its count span.
+        $('.qp-palette-legend .legend-item[data-status="' + status + '"]')
+          .find(".legend-count")
+          .text("(" + counts[status] + ")");
+      }
+    }
+  }
+
+  // --- NEW: Function to update a single palette button ---
+  function updatePaletteButton(questionID, newStatus) {
     // Find the buttons corresponding to this question ID
-    const paletteBtns = $('.qp-palette-btn[data-question-id="' + questionID + '"]');
+    const paletteBtns = $(
+      '.qp-palette-btn[data-question-id="' + questionID + '"]'
+    );
 
     // Remove all old status classes
-    paletteBtns.removeClass (function (index, className) {
-        return (className.match (/(^|\s)status-\S+/g) || []).join(' ');
+    paletteBtns.removeClass(function (index, className) {
+      return (className.match(/(^|\s)status-\S+/g) || []).join(" ");
     });
 
     // Add the new status class
-    paletteBtns.addClass('status-' + newStatus);
-}
+    paletteBtns.addClass("status-" + newStatus);
+  }
 
-// --- NEW: Function to update the highlighted button ---
-function updateCurrentPaletteButton(newIndex, oldIndex) {
+  // --- NEW: Function to update the highlighted button ---
+  function updateCurrentPaletteButton(newIndex, oldIndex) {
     if (oldIndex !== null) {
-        $('.qp-palette-btn[data-question-index="' + oldIndex + '"]').removeClass('current');
+      $('.qp-palette-btn[data-question-index="' + oldIndex + '"]').removeClass(
+        "current"
+      );
     }
-    $('.qp-palette-btn[data-question-index="' + newIndex + '"]').addClass('current');
-}
+    $('.qp-palette-btn[data-question-index="' + newIndex + '"]').addClass(
+      "current"
+    );
+  }
   // --- LOGIC FOR MOCK TEST FORM DROPDOWNS ---
   $("#qp_subject_dropdown_mock").on(
     "change",
@@ -1141,7 +1153,6 @@ function updateCurrentPaletteButton(newIndex, oldIndex) {
     isMockTest = sessionSettings.practice_mode === "mock_test"; // Set our global flag
     isRevisionMode = sessionSettings.practice_mode === "revision";
 
-
     // Mode-specific UI setup
     if (isMockTest) {
       // For mock tests, start the master timer
@@ -1168,18 +1179,18 @@ function updateCurrentPaletteButton(newIndex, oldIndex) {
     }
 
     if (qp_session_data.attempt_history) {
-    // Restore answered states from DB (this part remains the same)
-    for (var i = 0; i < sessionQuestionIDs.length; i++) {
+      // Restore answered states from DB (this part remains the same)
+      for (var i = 0; i < sessionQuestionIDs.length; i++) {
         var qid = sessionQuestionIDs[i];
         if (qp_session_data.attempt_history[qid]) {
-            var attempt = qp_session_data.attempt_history[qid];
-            answeredStates[qid] = {
-                type: attempt.status,
-                is_correct: parseInt(attempt.is_correct, 10) === 1,
-                selected_option_id: attempt.selected_option_id,
-                correct_option_id: attempt.correct_option_id,
-                remainingTime: attempt.remaining_time,
-                mock_status: attempt.mock_status,
+          var attempt = qp_session_data.attempt_history[qid];
+          answeredStates[qid] = {
+            type: attempt.status,
+            is_correct: parseInt(attempt.is_correct, 10) === 1,
+            selected_option_id: attempt.selected_option_id,
+            correct_option_id: attempt.correct_option_id,
+            remainingTime: attempt.remaining_time,
+            mock_status: attempt.mock_status,
           };
 
           // For non-mock tests, calculate the score as we load
@@ -1197,23 +1208,31 @@ function updateCurrentPaletteButton(newIndex, oldIndex) {
         }
       }
       // Try to restore the exact index from sessionStorage
-    var savedIndex = sessionStorage.getItem('qp_session_' + sessionID + '_index');
-    if (savedIndex !== null && !isNaN(savedIndex)) {
+      var savedIndex = sessionStorage.getItem(
+        "qp_session_" + sessionID + "_index"
+      );
+      if (savedIndex !== null && !isNaN(savedIndex)) {
         currentQuestionIndex = parseInt(savedIndex, 10);
-    } else {
+      } else {
         // Fallback for the very first load (or if sessionStorage is cleared)
         var lastAttemptedIndex = -1;
         for (var i = 0; i < sessionQuestionIDs.length; i++) {
-            if (answeredStates[sessionQuestionIDs[i]]) {
-                lastAttemptedIndex = i;
-            }
+          if (answeredStates[sessionQuestionIDs[i]]) {
+            lastAttemptedIndex = i;
+          }
         }
-        currentQuestionIndex = lastAttemptedIndex >= 0 ? lastAttemptedIndex + 1 : 0;
-    }
-    currentQuestionIndex = Math.min(currentQuestionIndex, sessionQuestionIDs.length - 1);
-    if (isMockTest || isRevisionMode) {
-    $('#qp-question-counter').text((currentQuestionIndex + 1) + "/" + sessionQuestionIDs.length);
-}
+        currentQuestionIndex =
+          lastAttemptedIndex >= 0 ? lastAttemptedIndex + 1 : 0;
+      }
+      currentQuestionIndex = Math.min(
+        currentQuestionIndex,
+        sessionQuestionIDs.length - 1
+      );
+      if (isMockTest || isRevisionMode) {
+        $("#qp-question-counter").text(
+          currentQuestionIndex + 1 + "/" + sessionQuestionIDs.length
+        );
+      }
     }
 
     // Restore reported questions state
@@ -1241,6 +1260,8 @@ function updateCurrentPaletteButton(newIndex, oldIndex) {
       loadQuestion(sessionQuestionIDs[currentQuestionIndex]);
       renderPalette();
     }
+
+    updateLegendCounts();
   }
 
   // --- Optional Scoring UI Toggle ---
@@ -1470,20 +1491,24 @@ function updateCurrentPaletteButton(newIndex, oldIndex) {
       "Question ID: " + questionData.custom_question_id
     );
     // --- Source Metadata Display ---
-var sourceDisplayArea = $("#qp-question-source");
-// Only try to populate the div if it actually exists in the HTML
-if (sourceDisplayArea.length) {
-    var sourceInfo = [];
-    if (questionData.source_name)
+    var sourceDisplayArea = $("#qp-question-source");
+    // Only try to populate the div if it actually exists in the HTML
+    if (sourceDisplayArea.length) {
+      var sourceInfo = [];
+      if (questionData.source_name)
         sourceInfo.push("<strong>Source:</strong> " + questionData.source_name);
-    if (questionData.section_name)
-        sourceInfo.push("<strong>Section:</strong> " + questionData.section_name);
-    if (questionData.question_number_in_section)
-        sourceInfo.push("<strong>Q:</strong> " + questionData.question_number_in_section);
-    
-    // Set the HTML content of the existing div
-    sourceDisplayArea.html(sourceInfo.join(" | "));
-}
+      if (questionData.section_name)
+        sourceInfo.push(
+          "<strong>Section:</strong> " + questionData.section_name
+        );
+      if (questionData.question_number_in_section)
+        sourceInfo.push(
+          "<strong>Q:</strong> " + questionData.question_number_in_section
+        );
+
+      // Set the HTML content of the existing div
+      sourceDisplayArea.html(sourceInfo.join(" | "));
+    }
     $("#qp-question-text-area").html(questionData.question_text);
     $("#qp-report-btn").prop("disabled", previousState.reported);
 
@@ -1602,7 +1627,10 @@ if (sourceDisplayArea.length) {
 
     function doRender(data) {
       renderQuestion(data, questionID);
-      sessionStorage.setItem('qp_session_' + sessionID + '_index', currentQuestionIndex);
+      sessionStorage.setItem(
+        "qp_session_" + sessionID + "_index",
+        currentQuestionIndex
+      );
       if (direction) {
         var slideInClass =
           direction === "next" ? "slide-in-from-right" : "slide-in-from-left";
@@ -1666,7 +1694,9 @@ if (sourceDisplayArea.length) {
     // If we are not on the last question, it's safe to increment the index and load the next question.
     currentQuestionIndex++;
     if (isMockTest || isRevisionMode) {
-        $('#qp-question-counter').text((currentQuestionIndex + 1) + "/" + sessionQuestionIDs.length);
+      $("#qp-question-counter").text(
+        currentQuestionIndex + 1 + "/" + sessionQuestionIDs.length
+      );
     }
     loadQuestion(sessionQuestionIDs[currentQuestionIndex], "next");
     renderPalette();
@@ -1720,30 +1750,37 @@ if (sourceDisplayArea.length) {
 
     // Determine if the session was a mock test and if it was scored
     var settings = summaryData.settings || {};
-    var isMockTest = settings.practice_mode === 'mock_test';
+    var isMockTest = settings.practice_mode === "mock_test";
     var isScoredSession = settings.marks_correct !== null;
 
     var mainDisplayHtml = "";
     if (isScoredSession) {
-        mainDisplayHtml = `<div class="qp-summary-score"><div class="label">Final Score</div>${parseFloat(summaryData.final_score).toFixed(2)}</div>`;
+      mainDisplayHtml = `<div class="qp-summary-score"><div class="label">Final Score</div>${parseFloat(
+        summaryData.final_score
+      ).toFixed(2)}</div>`;
     } else {
-        var accuracy = summaryData.total_attempted > 0 ? (summaryData.correct_count / summaryData.total_attempted) * 100 : 0;
-        mainDisplayHtml = `<div class="qp-summary-score"><div class="label">Accuracy</div>${accuracy.toFixed(2)}%</div>`;
+      var accuracy =
+        summaryData.total_attempted > 0
+          ? (summaryData.correct_count / summaryData.total_attempted) * 100
+          : 0;
+      mainDisplayHtml = `<div class="qp-summary-score"><div class="label">Accuracy</div>${accuracy.toFixed(
+        2
+      )}%</div>`;
     }
 
     // --- NEW: Build the stats display based on the mode ---
-    var statsHtml = '';
+    var statsHtml = "";
     if (isMockTest) {
-        // For mock tests, show the new detailed stats
-        statsHtml = `
+      // For mock tests, show the new detailed stats
+      statsHtml = `
             <div class="stat"><div class="value">${summaryData.correct_count}</div><div class="label">Correct</div></div>
             <div class="stat"><div class="value">${summaryData.incorrect_count}</div><div class="label">Incorrect</div></div>
             <div class="stat"><div class="value">${summaryData.skipped_count}</div><div class="label">Unattempted</div></div>
             <div class="stat"><div class="value">${summaryData.not_viewed_count}</div><div class="label">Not Viewed</div></div>
         `;
     } else {
-        // For other modes, show the original stats
-        statsHtml = `
+      // For other modes, show the original stats
+      statsHtml = `
             <div class="stat"><div class="value">${summaryData.total_attempted}</div><div class="label">Attempted</div></div>
             <div class="stat"><div class="value">${summaryData.correct_count}</div><div class="label">Correct</div></div>
             <div class="stat"><div class="value">${summaryData.incorrect_count}</div><div class="label">Incorrect</div></div>
@@ -1751,14 +1788,13 @@ if (sourceDisplayArea.length) {
         `;
     }
 
-
     var actionButtonsHtml = `<a href="${qp_ajax_object.dashboard_page_url}" class="qp-button qp-button-secondary">View Dashboard</a>`;
     if (qp_ajax_object.review_page_url) {
-        var reviewUrl = new URL(qp_ajax_object.review_page_url);
-        reviewUrl.searchParams.set("session_id", sessionID);
-        actionButtonsHtml += `<a href="${reviewUrl.href}" class="qp-button qp-button-primary">Review Session</a>`;
+      var reviewUrl = new URL(qp_ajax_object.review_page_url);
+      reviewUrl.searchParams.set("session_id", sessionID);
+      actionButtonsHtml += `<a href="${reviewUrl.href}" class="qp-button qp-button-primary">Review Session</a>`;
     } else {
-        actionButtonsHtml += `<a href="${qp_ajax_object.practice_page_url}" class="qp-button qp-button-primary">Start Another Practice</a>`;
+      actionButtonsHtml += `<a href="${qp_ajax_object.practice_page_url}" class="qp-button qp-button-primary">Start Another Practice</a>`;
     }
 
     var summaryHtml = `
@@ -1774,7 +1810,7 @@ if (sourceDisplayArea.length) {
       </div>`;
 
     wrapper.html(summaryHtml);
-}
+  }
 
   // Handles clicking an answer option to select it
   wrapper.on("click", ".qp-options-area .option", function () {
@@ -1899,6 +1935,8 @@ if (sourceDisplayArea.length) {
         remaining_time: remainingTime,
       },
     });
+
+    updateLegendCounts();
   }
 
   // --- UPDATED: Simplified click handler ---
@@ -1955,10 +1993,12 @@ if (sourceDisplayArea.length) {
       if (currentQuestionIndex > 0) {
         currentQuestionIndex--;
         if (isMockTest || isRevisionMode) {
-                $('#qp-question-counter').text((currentQuestionIndex + 1) + "/" + sessionQuestionIDs.length);
-            }
+          $("#qp-question-counter").text(
+            currentQuestionIndex + 1 + "/" + sessionQuestionIDs.length
+          );
+        }
         loadQuestion(sessionQuestionIDs[currentQuestionIndex], "prev");
-        renderPalette(); 
+        renderPalette();
       }
     }
   });
@@ -2001,6 +2041,7 @@ if (sourceDisplayArea.length) {
       updateHeaderStats();
       renderPalette();
       loadNextQuestion();
+      updateLegendCounts();
     }
   });
 
@@ -2131,19 +2172,19 @@ if (sourceDisplayArea.length) {
   ) {
     // Handler for the "Clear Response" button
     wrapper.on("click", "#qp-clear-response-btn", function () {
-    var questionID = sessionQuestionIDs[currentQuestionIndex];
+      var questionID = sessionQuestionIDs[currentQuestionIndex];
 
-    // Clear the radio button selection in the UI first
-    $(".qp-options-area .option").removeClass("selected");
-    $('input[name="qp_option"]').prop("checked", false);
+      // Clear the radio button selection in the UI first
+      $(".qp-options-area .option").removeClass("selected");
+      $('input[name="qp_option"]').prop("checked", false);
 
-    // Determine the correct final status
-    const isMarkedForReview = $("#qp-mock-mark-review-cb").is(":checked");
-    const newStatus = isMarkedForReview ? "marked_for_review" : "viewed";
+      // Determine the correct final status
+      const isMarkedForReview = $("#qp-mock-mark-review-cb").is(":checked");
+      const newStatus = isMarkedForReview ? "marked_for_review" : "viewed";
 
-    // Send a single, definitive update to the backend
-    updateMockStatus(questionID, newStatus);
-});
+      // Send a single, definitive update to the backend
+      updateMockStatus(questionID, newStatus);
+    });
 
     // Handler for the "Mark for Review" checkbox
     wrapper.on("change", "#qp-mock-mark-review-cb", function () {
@@ -2178,55 +2219,55 @@ if (sourceDisplayArea.length) {
     });
   }
 
-
   // --- NEW: Mock Test Scoring Checkbox UI Toggle ---
-wrapper.on('change', '#qp_mock_scoring_enabled_cb', function() {
-    var isChecked = $(this).is(':checked');
-    var marksWrapper = $('#qp-mock-marks-group-wrapper');
+  wrapper.on("change", "#qp_mock_scoring_enabled_cb", function () {
+    var isChecked = $(this).is(":checked");
+    var marksWrapper = $("#qp-mock-marks-group-wrapper");
     if (isChecked) {
-        marksWrapper.slideDown();
-        marksWrapper.find('input').prop('disabled', false);
+      marksWrapper.slideDown();
+      marksWrapper.find("input").prop("disabled", false);
     } else {
-        marksWrapper.slideUp();
-        marksWrapper.find('input').prop('disabled', true);
+      marksWrapper.slideUp();
+      marksWrapper.find("input").prop("disabled", true);
     }
-});
-
+  });
 
   // --- NEW: Advanced Palette Activation Logic ---
-if (typeof qp_session_data !== "undefined") {
-    var isMockTest = qp_session_data.settings.practice_mode === 'mock_test';
-    var isSectionWise = qp_session_data.settings.practice_mode === 'Section Wise Practice';
+  if (typeof qp_session_data !== "undefined") {
+    var isMockTest = qp_session_data.settings.practice_mode === "mock_test";
+    var isSectionWise =
+      qp_session_data.settings.practice_mode === "Section Wise Practice";
     var isPaletteMandatory = isMockTest || isSectionWise;
 
     // For mandatory modes, add the permanent layout class.
     if (isPaletteMandatory) {
-        $('body').addClass('palette-mandatory');
+      $("body").addClass("palette-mandatory");
     }
 
     // Handlers to open and close the palette by toggling the overlay class.
-    $('#qp-palette-toggle-btn, #qp-palette-close-btn').on('click', function() {
-        $('body').toggleClass('palette-overlay-open');
+    $("#qp-palette-toggle-btn, #qp-palette-close-btn").on("click", function () {
+      $("body").toggleClass("palette-overlay-open");
     });
-}
+  }
 
   // --- NEW: Palette Button Click Handler ---
-// Use event delegation on the document in case palettes are not visible on load
-$(document).on('click', '.qp-palette-btn', function() {
-    var newIndex = parseInt($(this).data('question-index'), 10);
+  // Use event delegation on the document in case palettes are not visible on load
+  $(document).on("click", ".qp-palette-btn", function () {
+    var newIndex = parseInt($(this).data("question-index"), 10);
     if (newIndex === currentQuestionIndex) {
-        return; // Do nothing if clicking the current question
+      return; // Do nothing if clicking the current question
     }
 
-    var direction = newIndex > currentQuestionIndex ? 'next' : 'prev';
+    var direction = newIndex > currentQuestionIndex ? "next" : "prev";
     currentQuestionIndex = newIndex;
 
     if (isMockTest || isRevisionMode) {
-        $('#qp-question-counter').text((currentQuestionIndex + 1) + "/" + sessionQuestionIDs.length);
+      $("#qp-question-counter").text(
+        currentQuestionIndex + 1 + "/" + sessionQuestionIDs.length
+      );
     }
 
     loadQuestion(sessionQuestionIDs[currentQuestionIndex], direction);
     renderPalette(); // Re-render to update the 'current' highlight
-});
-
+  });
 });
