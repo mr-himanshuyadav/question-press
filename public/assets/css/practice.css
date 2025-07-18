@@ -533,6 +533,12 @@ body.palette-overlay-open #qp-palette-sliding {
     cursor: pointer;
     color: var(--qp-light-text);
     padding: 0 10px;
+    outline: none;
+    border-radius: 5px;
+}
+
+#qp-palette-close-btn:active{
+    background-color: var(--qp-bg-light);
 }
 
 .qp-palette-grid {
@@ -808,6 +814,10 @@ z-index: 2;
     justify-content: center;
     align-items: center;
     transition: all 0.2s ease;
+    outline: none;
+}
+#qp-palette-toggle-btn:active{
+    background-color: var(--qp-bg-light);
 }
 
 #qp-palette-toggle-btn:hover {
