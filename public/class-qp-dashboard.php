@@ -303,12 +303,26 @@ class QP_Dashboard
 
                 $accuracy = ($session->total_attempted > 0) ? round(($session->correct_count / $session->total_attempted) * 100, 2) . '%' : 'N/A';
 
-                $status_display = 'Completed'; // Default
-                if ($session->end_reason === 'autosubmitted_timer') {
-                    $status_display = 'Auto-Submitted';
-                } elseif ($session->status === 'abandoned' || $session->end_reason === 'abandoned_system') {
+                // START: Replace this block
+                $status_display = 'Completed'; // Default status
+                // First, check if the end_reason property exists and has a value
+                if (!empty($session->end_reason)) {
+                    switch ($session->end_reason) {
+                        case 'user_submitted':
+                            $status_display = 'Completed';
+                            break;
+                        case 'autosubmitted_timer':
+                            $status_display = 'Auto-Submitted';
+                            break;
+                        case 'abandoned_system':
+                            $status_display = 'Abandoned';
+                            break;
+                    }
+                } elseif ($session->status === 'abandoned') {
+                    // Fallback for older sessions that were marked abandoned before the end_reason column existed
                     $status_display = 'Abandoned';
                 }
+                // END: Replacement block
 
                 
 
