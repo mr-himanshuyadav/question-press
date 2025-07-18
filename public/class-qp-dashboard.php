@@ -154,8 +154,8 @@ class QP_Dashboard
         $can_delete = !empty(array_intersect($user_roles, $allowed_roles));
 
         // --- RESTORED: Fetch Active Sessions ---
-        $active_sessions = $wpdb->get_results($wpdb->prepare("SELECT * FROM $sessions_table WHERE user_id = %d AND status = 'active' ORDER BY start_time DESC", $user_id));
-        $session_history = $wpdb->get_results($wpdb->prepare("SELECT * FROM $sessions_table WHERE user_id = %d AND status IN ('completed', 'abandoned', 'paused') ORDER BY start_time DESC", $user_id));
+        $active_sessions = $wpdb->get_results($wpdb->prepare("SELECT * FROM $sessions_table WHERE user_id = %d AND status IN ('active', 'mock_test') ORDER BY start_time DESC", $user_id));
+        $session_history = $wpdb->get_results($wpdb->prepare("SELECT * FROM $sessions_table WHERE user_id = %d AND status IN ('completed', 'abandoned', 'paused', 'mock_test') ORDER BY start_time DESC", $user_id));
 
         // Pre-fetch all subjects for all questions in the user's history to optimize queries
         $all_session_qids = [];
