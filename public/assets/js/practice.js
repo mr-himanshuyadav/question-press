@@ -119,11 +119,22 @@ jQuery(document).ready(function ($) {
     // --- MODIFICATION END ---
   }
 
-  // REPLACE the entire old renderPalette function with this new one.
-  // Find and REPLACE the renderPalette function
+// --- NEW: Mode-Aware Palette Rendering Function ---
 function renderPalette() {
     paletteGrids.empty();
-    sessionQuestionIDs.forEach(function(questionID, index) {
+
+    // Determine the upper limit for the loop.
+    let loopLimit = sessionQuestionIDs.length; // Default to all questions
+    const isSectionWise = sessionSettings.practice_mode === 'Section Wise Practice';
+
+    // For Normal or Revision mode (but NOT section-wise), only show questions up to the furthest point reached.
+    if (!isMockTest && !isSectionWise) {
+        loopLimit = highestQuestionIndexReached + 1;
+    }
+
+    // Loop up to the determined limit.
+    for (let index = 0; index < loopLimit; index++) {
+        const questionID = sessionQuestionIDs[index];
         const questionState = answeredStates[questionID] || {};
         let statusClass = 'status-not_viewed';
 
@@ -149,8 +160,10 @@ function renderPalette() {
             paletteBtn.addClass('current');
         }
         paletteGrids.append(paletteBtn);
-    });
+    }
 }
+
+
   // Find and REPLACE the updateLegendCounts function
 function updateLegendCounts() {
     var counts = {
@@ -1211,6 +1224,7 @@ function updateLegendCounts() {
         currentQuestionIndex,
         sessionQuestionIDs.length - 1
       );
+highestQuestionIndexReached = Math.max(highestQuestionIndexReached, currentQuestionIndex);
       if (isMockTest || isRevisionMode) {
         $("#qp-question-counter").text(
           currentQuestionIndex + 1 + "/" + sessionQuestionIDs.length
