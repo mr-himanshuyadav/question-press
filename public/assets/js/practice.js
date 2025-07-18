@@ -1,6 +1,12 @@
 jQuery(document).ready(function ($) {
   var wrapper = $("#qp-practice-app-wrapper");
   var isAutoCheckEnabled = false;
+  var mockTestTimer; // Specific timer for mock tests
+  var isMockTest = false;
+  var isRevisionMode = false;
+  var paletteGrids = $(
+    "#qp-palette-docked .qp-palette-grid, #qp-palette-sliding .qp-palette-grid"
+  );
 
   function openFullscreen() {
     var elem = document.documentElement; // Get the root element (the whole page)
@@ -33,7 +39,372 @@ jQuery(document).ready(function ($) {
     }
   }
 
-  // --- LOGIC FOR REVISION FORM DROPDOWNS ---
+  function startMockTestTimer(endTimeUTC) {
+    var timerEl = $("#qp-mock-test-timer");
+    var warningMessage = $("#qp-timer-warning-message"); // Get the warning message element
+
+    // Clear any previous timer to prevent duplicates
+    if (mockTestTimer) {
+      clearInterval(mockTestTimer);
+    }
+
+    mockTestTimer = setInterval(function () {
+      var nowUTC = Math.floor(new Date().getTime() / 1000);
+      var secondsRemaining = endTimeUTC - nowUTC;
+
+      if (secondsRemaining < 0) {
+        secondsRemaining = 0; // Prevent negative display
+      }
+
+      // *** THIS IS THE FIX ***
+      // Show/hide the warning message and apply the warning class to the timer
+      if (secondsRemaining <= 300) {
+        // 5 minutes = 300 seconds
+        timerEl.addClass("timer-warning");
+        warningMessage.show(); // This line makes the message appear
+      } else {
+        timerEl.removeClass("timer-warning");
+        warningMessage.hide(); // This line hides it when there's more than 5 mins left
+      }
+
+      // Format the time conditionally
+      var hours = Math.floor(secondsRemaining / 3600);
+      var minutes = Math.floor((secondsRemaining % 3600) / 60);
+      var seconds = secondsRemaining % 60;
+      var timeString = "";
+
+      if (hours > 0) {
+        timeString += String(hours).padStart(2, "0") + ":";
+      }
+
+      timeString +=
+        String(minutes).padStart(2, "0") +
+        ":" +
+        String(seconds).padStart(2, "0");
+
+      timerEl.text(timeString);
+
+      // Stop the timer and auto-submit when time is up
+      if (secondsRemaining === 0) {
+        clearInterval(mockTestTimer);
+        Swal.fire({
+          title: "Time's Up!",
+          text: "Your test will be submitted automatically.",
+          icon: "warning",
+          timer: 10000,
+          timerProgressBar: true,
+          allowOutsideClick: false,
+          allowEscapeKey: false,
+          showConfirmButton: false,
+        }).then(() => {
+          endSession(true);
+        });
+      }
+    }, 1000);
+  }
+
+  // --- NEW: Helper function to update mock test question status ---
+  function updateMockStatus(questionID, newStatus) {
+    if (!isMockTest) return;
+
+    // --- MODIFICATION START ---
+    // Disable the palette buttons for this question to prevent rapid clicks
+    var paletteBtn = $(
+      '.qp-palette-btn[data-question-index="' +
+        sessionQuestionIDs.indexOf(questionID) +
+        '"]'
+    );
+    paletteBtn.css("pointer-events", "none").css("opacity", "0.7");
+
+    // Send the update to the backend
+    $.ajax({
+      url: qp_ajax_object.ajax_url,
+      type: "POST",
+      data: {
+        action: "qp_update_mock_status",
+        nonce: qp_ajax_object.nonce,
+        session_id: sessionID,
+        question_id: questionID,
+        status: newStatus,
+      },
+      success: function (response) {
+        if (response.success) {
+          // Update local state and re-render the palette ONLY on success
+          if (!answeredStates[questionID]) {
+            answeredStates[questionID] = {};
+          }
+          answeredStates[questionID].mock_status = newStatus;
+          renderPalette();
+          updateLegendCounts();
+        } else {
+          // If the server returns an error, alert the user
+          alert(
+            "Could not save your progress. Please check your connection and try again."
+          );
+        }
+      },
+      error: function () {
+        // If the AJAX call itself fails, alert the user
+        alert("A network error occurred. Could not save progress.");
+      },
+      complete: function () {
+        // Re-enable the button regardless of success or failure
+        paletteBtn.css("pointer-events", "auto").css("opacity", "1");
+      },
+    });
+    // --- MODIFICATION END ---
+  }
+
+  // --- NEW: Mode-Aware Palette Rendering Function ---
+  function renderPalette() {
+    paletteGrids.empty();
+
+    // Determine the upper limit for the loop.
+    let loopLimit = sessionQuestionIDs.length; // Default to all questions
+    const isSectionWise =
+      sessionSettings.practice_mode === "Section Wise Practice";
+
+    // For Normal or Revision mode (but NOT section-wise), only show questions up to the furthest point reached.
+    if (!isMockTest && !isSectionWise) {
+      loopLimit = highestQuestionIndexReached + 1;
+    }
+
+    // Loop up to the determined limit.
+    for (let index = 0; index < loopLimit; index++) {
+      const questionID = sessionQuestionIDs[index];
+      const questionState = answeredStates[questionID] || {};
+      let statusClass = "status-not_viewed";
+
+      if (questionState.reported) {
+        statusClass = "status-reported";
+      } else if (isMockTest && questionState.mock_status) {
+        statusClass = "status-" + questionState.mock_status;
+      } else if (!isMockTest && questionState.type) {
+        if (questionState.type === "answered") {
+          statusClass = questionState.is_correct
+            ? "status-correct"
+            : "status-incorrect";
+        } else if (questionState.type === "skipped") {
+          statusClass = "status-skipped";
+        }
+      }
+
+      const paletteBtn = $("<button></button>")
+        .addClass("qp-palette-btn")
+        .attr("data-question-index", index)
+        .text(
+          sessionSettings.practice_mode === "Section Wise Practice" &&
+            sessionSettings.question_numbers &&
+            sessionSettings.question_numbers[questionID]
+            ? sessionSettings.question_numbers[questionID]
+            : index + 1
+        )
+        .addClass(statusClass);
+
+      if (index === currentQuestionIndex) {
+        paletteBtn.addClass("current");
+      }
+      paletteGrids.append(paletteBtn);
+    }
+  }
+
+  // Find and REPLACE the updateLegendCounts function
+  function updateLegendCounts() {
+    var counts = {
+      answered: 0,
+      viewed: 0,
+      not_viewed: 0,
+      marked_for_review: 0,
+      answered_and_marked_for_review: 0,
+      correct: 0,
+      incorrect: 0,
+      skipped: 0,
+      not_attempted: 0,
+      reported: 0, // Initialize reported count to 0
+    };
+
+    sessionQuestionIDs.forEach(function (qid) {
+      var state = answeredStates[qid];
+      if (!state) {
+        counts.not_viewed++;
+        counts.not_attempted++;
+      } else {
+        if (state.reported) {
+          counts.reported++;
+        } else if (isMockTest && state.mock_status) {
+          counts[state.mock_status]++;
+        } else if (!isMockTest && state.type) {
+          if (state.type === "answered") {
+            if (state.is_correct) counts.correct++;
+            else counts.incorrect++;
+          } else if (state.type === "skipped") {
+            counts.skipped++;
+          }
+        }
+      }
+    });
+
+    for (var status in counts) {
+      if (counts.hasOwnProperty(status)) {
+        $('.qp-palette-legend .legend-item[data-status="' + status + '"]')
+          .find(".legend-count")
+          .text("(" + counts[status] + ")");
+      }
+    }
+  }
+
+  // --- NEW: Function to update a single palette button ---
+  function updatePaletteButton(questionID, newStatus) {
+    // Find the buttons corresponding to this question ID
+    const paletteBtns = $(
+      '.qp-palette-btn[data-question-id="' + questionID + '"]'
+    );
+
+    // Remove all old status classes
+    paletteBtns.removeClass(function (index, className) {
+      return (className.match(/(^|\s)status-\S+/g) || []).join(" ");
+    });
+
+    // Add the new status class
+    paletteBtns.addClass("status-" + newStatus);
+  }
+
+  // --- NEW: Function to update the highlighted button ---
+  function updateCurrentPaletteButton(newIndex, oldIndex) {
+    if (oldIndex !== null) {
+      $('.qp-palette-btn[data-question-index="' + oldIndex + '"]').removeClass(
+        "current"
+      );
+    }
+    $('.qp-palette-btn[data-question-index="' + newIndex + '"]').addClass(
+      "current"
+    );
+  }
+  // --- LOGIC FOR MOCK TEST FORM DROPDOWNS ---
+  $("#qp_subject_dropdown_mock").on(
+    "change",
+    'input[type="checkbox"]',
+    function () {
+      var $this = $(this);
+      var $list = $this.closest(".qp-multi-select-list");
+
+      // Handle "All Subjects" logic
+      if ($this.val() === "all") {
+        if ($this.is(":checked")) {
+          $list
+            .find('input[value!="all"]')
+            .prop("checked", false)
+            .prop("disabled", true);
+        } else {
+          $list.find('input[value!="all"]').prop("disabled", false);
+        }
+      } else {
+        if ($this.is(":checked")) {
+          $list.find('input[value="all"]').prop("checked", false);
+        }
+      }
+
+      var selectedSubjects = [];
+      $("#qp_subject_dropdown_mock input:checked").each(function () {
+        selectedSubjects.push($(this).val());
+      });
+
+      var $topicGroup = $("#qp-topic-group-mock");
+      var $topicListContainer = $("#qp_topic_list_container_mock");
+      var $topicButton = $("#qp_topic_dropdown_mock .qp-multi-select-button");
+
+      // Update the Subject button text
+      updateButtonText(
+        $("#qp_subject_dropdown_mock .qp-multi-select-button"),
+        "-- Please select --",
+        "Subject"
+      );
+
+      if (selectedSubjects.length > 0) {
+        $.ajax({
+          url: qp_ajax_object.ajax_url,
+          type: "POST",
+          data: {
+            action: "get_topics_for_subject",
+            nonce: qp_ajax_object.nonce,
+            subject_id: selectedSubjects,
+          },
+          beforeSend: function () {
+            $topicButton.text("Loading Topics...").prop("disabled", true);
+            $topicListContainer.empty();
+          },
+          success: function (response) {
+            $topicButton.prop("disabled", false);
+            if (
+              response.success &&
+              Object.keys(response.data.topics).length > 0
+            ) {
+              $topicListContainer.append(
+                '<label><input type="checkbox" name="mock_topics[]" value="all"> All Topics</label>'
+              );
+              $.each(response.data.topics, function (subjectName, topics) {
+                $topicListContainer.append(
+                  '<div class="qp-topic-group-header">' + subjectName + "</div>"
+                );
+                $.each(topics, function (i, topic) {
+                  $topicListContainer.append(
+                    '<label><input type="checkbox" name="mock_topics[]" value="' +
+                      topic.topic_id +
+                      '"> ' +
+                      topic.topic_name +
+                      "</label>"
+                  );
+                });
+              });
+              updateButtonText($topicButton, "-- Select Topic(s) --", "Topic");
+              $topicGroup.slideDown();
+            } else {
+              updateButtonText($topicButton, "No Topics Found", "Topic");
+              $topicGroup.slideUp();
+            }
+          },
+        });
+      } else {
+        $topicGroup.slideUp();
+        updateButtonText(
+          $topicButton,
+          "-- Select subject(s) first --",
+          "Topic"
+        );
+      }
+    }
+  );
+
+  // Handle the "All Topics" checkbox for the mock test form
+  $("#qp_topic_list_container_mock").on(
+    "change",
+    'input[value="all"]',
+    function () {
+      var $this = $(this);
+      var $list = $this.closest(".qp-multi-select-list");
+      if ($this.is(":checked")) {
+        $list
+          .find('input[value!="all"]')
+          .prop("checked", false)
+          .prop("disabled", true);
+      } else {
+        $list.find('input[value!="all"]').prop("disabled", false);
+      }
+    }
+  );
+
+  // Update button text when a topic is selected in the mock test form
+  $("#qp_topic_dropdown_mock").on(
+    "change",
+    'input[type="checkbox"]',
+    function () {
+      updateButtonText(
+        $("#qp_topic_dropdown_mock .qp-multi-select-button"),
+        "-- Select Topic(s) --",
+        "Topic"
+      );
+    }
+  );
   // --- CONSOLIDATED LOGIC FOR REVISION FORM SUBJECT DROPDOWN ---
   $("#qp_subject_dropdown_revision").on(
     "change",
@@ -523,7 +894,11 @@ jQuery(document).ready(function ($) {
       .get();
 
     if (selectedReasons.length === 0) {
-      alert("Please select at least one reason for the report.");
+      Swal.fire(
+        "No Reason Selected",
+        "Please select at least one reason for the report.",
+        "warning"
+      );
       return;
     }
 
@@ -542,38 +917,43 @@ jQuery(document).ready(function ($) {
       },
       success: function (response) {
         if (response.success) {
-          // 1. Update the local state for the current question
-          var questionID = sessionQuestionIDs[currentQuestionIndex];
-          if (typeof answeredStates[questionID] === "undefined") {
-            answeredStates[questionID] = {};
-          }
-          answeredStates[questionID].reported = true;
-
-          // 2. Manually update the UI to reflect the "reported" state
-          $("#qp-reported-indicator").show();
-          $(".qp-indicator-bar").show();
-          $(".qp-options-area")
-            .addClass("disabled")
-            .find('input[type="radio"]')
-            .prop("disabled", true);
-          $("#qp-skip-btn, #qp-report-btn").prop("disabled", true);
-          $("#qp-next-btn").prop("disabled", false);
-
-          // 3. Close the modal
           $("#qp-report-modal-backdrop").fadeOut(200);
+          Swal.fire({
+            title: "Report Submitted!",
+            text: "Thank you for your feedback. The question has been flagged for review.",
+            icon: "success",
+            timer: 2000,
+            showConfirmButton: false,
+          }).then(() => {
+            var questionID = sessionQuestionIDs[currentQuestionIndex];
+            if (typeof answeredStates[questionID] === "undefined") {
+              answeredStates[questionID] = {};
+            }
+            answeredStates[questionID].reported = true;
 
-          // 4. Automatically move to the next question after a short delay
-          setTimeout(function () {
+            $("#qp-reported-indicator").show();
+            $(".qp-indicator-bar").show();
+            $(".qp-options-area")
+              .addClass("disabled")
+              .find('input[type="radio"]')
+              .prop("disabled", true);
+            $("#qp-skip-btn, #qp-report-btn").prop("disabled", true);
+            $("#qp-next-btn").prop("disabled", false);
+
+            renderPalette();
+            updateLegendCounts();
             loadNextQuestion();
-          }, 500); // 0.5 second delay before loading next question
+          });
         } else {
-          alert(
-            "Error: " + (response.data.message || "Could not submit report.")
+          Swal.fire(
+            "Error!",
+            response.data.message || "Could not submit the report.",
+            "error"
           );
         }
       },
       error: function () {
-        alert("An unknown server error occurred.");
+        Swal.fire("Error!", "An unknown server error occurred.", "error");
       },
       complete: function () {
         submitButton.text(originalButtonText).prop("disabled", false);
@@ -608,9 +988,12 @@ jQuery(document).ready(function ($) {
     if ($("#qp-topic-group").is(":visible")) {
       var selectedTopics = $("#qp_topic_list_container input:checked").length;
       if (selectedTopics === 0) {
-        alert(
-          "Please select at least one topic to start the practice session."
-        );
+        Swal.fire({
+          title: "No Topics Selected",
+          text: "Please select at least one topic to start the practice session.",
+          icon: "warning",
+          confirmButtonText: "OK",
+        });
         return; // Stop the form submission
       }
     }
@@ -634,22 +1017,15 @@ jQuery(document).ready(function ($) {
         if (response.success && response.data.redirect_url) {
           window.location.href = response.data.redirect_url;
         } else {
-          // ** MODIFICATION START **
-          // Check if the specific HTML block was sent in the response data.
-          if (response.data && response.data.html) {
-            // If so, replace the entire wrapper content with our friendly error page.
-            wrapper.html(response.data.html);
-          } else {
-            // Otherwise, show a generic error message within the form.
-            var errorMessage =
-              '<p class="qp-error-message" style="color: red; text-align: center; margin-top: 1rem;">' +
-              (response.data.message || "An unknown error occurred.") +
-              "</p>";
-            form.find(".qp-error-message").remove(); // Remove old errors
-            form.append(errorMessage);
-            submitButton.val(originalButtonText).prop("disabled", false);
-          }
-          // ** MODIFICATION END **
+          Swal.fire({
+            title: "Could Not Start Session",
+            text:
+              response.data.message ||
+              "An unknown error occurred. Please try different options.",
+            icon: "warning",
+            confirmButtonText: "OK",
+          });
+          submitButton.val(originalButtonText).prop("disabled", false);
         }
       },
       error: function () {
@@ -663,23 +1039,23 @@ jQuery(document).ready(function ($) {
   wrapper.on("submit", "#qp-start-revision-form", function (e) {
     e.preventDefault();
 
-    // Check if the topic dropdown is visible and if any topic is selected
     if ($("#qp-topic-group-revision").is(":visible")) {
       var selectedTopics = $(
         "#qp_topic_list_container_revision input:checked"
       ).length;
       if (selectedTopics === 0) {
-        alert(
-          "Please select at least one topic to start the revision session."
+        Swal.fire(
+          "No Topics Selected",
+          "Please select at least one topic to start the revision session.",
+          "warning"
         );
-        return; // Stop the form submission
+        return;
       }
     }
     var form = $(this);
     var submitButton = form.find('input[type="submit"]');
     var originalButtonText = submitButton.val();
-
-    var formData = $("#qp-start-revision-form").serialize(); // This will now correctly get all inputs from this specific form
+    var formData = form.serialize();
 
     $.ajax({
       url: qp_ajax_object.ajax_url,
@@ -692,6 +1068,59 @@ jQuery(document).ready(function ($) {
         submitButton.val("Setting up session...").prop("disabled", true);
       },
       success: function (response) {
+    if (response.success && response.data.redirect_url) {
+      window.location.href = response.data.redirect_url;
+    } else {
+        Swal.fire({
+          title: 'Could Not Start Session',
+          text: response.data.message || 'An unknown error occurred. Please try adjusting your selections.',
+          icon: 'warning',
+          confirmButtonText: 'OK'
+        });
+        submitButton.val(originalButtonText).prop("disabled", false);
+    }
+  },
+      error: function () {
+        Swal.fire(
+          "Error!",
+          "A server error occurred. Please try again later.",
+          "error"
+        );
+        submitButton.val(originalButtonText).prop("disabled", false);
+      },
+    });
+  });
+
+  // Handler for MOCK TEST Mode Form
+  wrapper.on("submit", "#qp-start-mock-test-form", function (e) {
+    e.preventDefault();
+
+    var selectedSubjects = $("#qp_subject_dropdown_mock input:checked").length;
+    if (selectedSubjects === 0) {
+      Swal.fire(
+        "No Subject Selected",
+        "Please select at least one subject to start the mock test.",
+        "warning"
+      );
+      return;
+    }
+
+    var form = $(this);
+    var submitButton = form.find('input[type="submit"]');
+    var originalButtonText = submitButton.val();
+    var formData = form.serialize();
+
+    $.ajax({
+      url: qp_ajax_object.ajax_url,
+      type: "POST",
+      data:
+        formData +
+        "&action=qp_start_mock_test_session&nonce=" +
+        qp_ajax_object.nonce,
+      beforeSend: function () {
+        submitButton.val("Building your test...").prop("disabled", true);
+      },
+      success: function (response) {
         if (response.success && response.data.redirect_url) {
           window.location.href = response.data.redirect_url;
         } else {
@@ -700,11 +1129,15 @@ jQuery(document).ready(function ($) {
             : "<p>" +
               (response.data.message || "An unknown error occurred.") +
               "</p>";
-          wrapper.html(errorMessage); // This mode has a different error display
+          wrapper.html(errorMessage);
         }
       },
       error: function () {
-        alert("A server error occurred. Please try again later.");
+        Swal.fire(
+          "Error!",
+          "A server error occurred. Please try again later.",
+          "error"
+        );
         submitButton.val(originalButtonText).prop("disabled", false);
       },
     });
@@ -742,81 +1175,102 @@ jQuery(document).ready(function ($) {
   }
 
   // Session Initialization
+  // Session Initialization
   if (typeof qp_session_data !== "undefined") {
     practiceInProgress = true;
     sessionID = qp_session_data.session_id;
     sessionQuestionIDs = qp_session_data.question_ids;
     sessionSettings = qp_session_data.settings;
-    // --- NEW: Restore Auto Check state from sessionStorage ---
-    var savedAutoCheckState = sessionStorage.getItem("qpAutoCheckEnabled");
-    if (savedAutoCheckState !== null) {
-      isAutoCheckEnabled = savedAutoCheckState === "true";
-      $("#qp-auto-check-cb").prop("checked", isAutoCheckEnabled);
-    }
+    isMockTest = sessionSettings.practice_mode === "mock_test"; // Set our global flag
+    isRevisionMode = sessionSettings.practice_mode === "revision";
 
-    // Conditionally hide the score element if the session is unscored
-    if (sessionSettings.marks_correct === null) {
-      $(".qp-header-stat.score").hide();
-    }
-
-    // **THE FIX**: Conditionally hide the score element
-    if (sessionSettings.practice_mode === "Incorrect Que. Practice") {
-      $(".qp-header-stat.score").hide();
-    }
-    if (sessionSettings.practice_mode === "revision") {
-      $(".qp-question-counter-box").show();
+    // Mode-specific UI setup
+    if (isMockTest) {
+      // For mock tests, start the master timer
+      if (qp_session_data.test_end_timestamp) {
+        startMockTestTimer(qp_session_data.test_end_timestamp);
+      }
+      // Set the question counter
+      $("#qp-question-counter").text(
+        currentQuestionIndex + 1 + "/" + sessionQuestionIDs.length
+      );
+    } else {
+      // For other modes, set up scoring and auto-check
+      var savedAutoCheckState = sessionStorage.getItem("qpAutoCheckEnabled");
+      if (savedAutoCheckState !== null) {
+        isAutoCheckEnabled = savedAutoCheckState === "true";
+        $("#qp-auto-check-cb").prop("checked", isAutoCheckEnabled);
+      }
+      if (sessionSettings.marks_correct === null) {
+        $(".qp-header-stat.score").hide();
+      }
+      if (sessionSettings.practice_mode === "revision") {
+        $(".qp-question-counter-box").show();
+      }
     }
 
     if (qp_session_data.attempt_history) {
-      var lastAttemptedIndex = -1;
+      // Restore answered states from DB (this part remains the same)
       for (var i = 0; i < sessionQuestionIDs.length; i++) {
         var qid = sessionQuestionIDs[i];
         if (qp_session_data.attempt_history[qid]) {
           var attempt = qp_session_data.attempt_history[qid];
-          lastAttemptedIndex = i;
+          answeredStates[qid] = {
+            type: attempt.status,
+            is_correct: parseInt(attempt.is_correct, 10) === 1,
+            selected_option_id: attempt.selected_option_id,
+            correct_option_id: attempt.correct_option_id,
+            remainingTime: attempt.remaining_time,
+            mock_status: attempt.mock_status,
+          };
 
-          // **THE FIX**: Check the status from the database
-          switch (attempt.status) {
-            case "answered":
-              var isCorrect = parseInt(attempt.is_correct, 10) === 1;
-              answeredStates[qid] = {
-                type: "answered",
-                is_correct: isCorrect,
-                selected_option_id: attempt.selected_option_id,
-                correct_option_id: attempt.correct_option_id,
-                remainingTime: attempt.remaining_time, // <-- ADD THIS
-              };
-              if (isCorrect) {
-                correctCount++;
-                score += parseFloat(sessionSettings.marks_correct);
-              } else {
-                incorrectCount++;
-                score += parseFloat(sessionSettings.marks_incorrect);
-              }
-              break;
-
-            case "skipped":
-              answeredStates[qid] = {
-                type: "skipped",
-                remainingTime: attempt.remaining_time,
-              }; // <-- ADD THIS
-              skippedCount++;
-              break;
-
-            case "expired":
-              answeredStates[qid] = { type: "expired", remainingTime: 0 };
-              // You can optionally add a new counter for expired questions if you want
-              break;
+          // For non-mock tests, calculate the score as we load
+          if (attempt.status === "answered" && !isMockTest) {
+            if (answeredStates[qid].is_correct) {
+              correctCount++;
+              score += parseFloat(sessionSettings.marks_correct);
+            } else {
+              incorrectCount++;
+              score += parseFloat(sessionSettings.marks_incorrect);
+            }
+          } else if (attempt.status === "skipped") {
+            skippedCount++;
           }
         }
       }
-      var potentialIndex = lastAttemptedIndex >= 0 ? lastAttemptedIndex + 1 : 0;
+      // Try to restore the exact index from sessionStorage
+      var savedIndex = sessionStorage.getItem(
+        "qp_session_" + sessionID + "_index"
+      );
+      if (savedIndex !== null && !isNaN(savedIndex)) {
+        currentQuestionIndex = parseInt(savedIndex, 10);
+      } else {
+        // Fallback for the very first load (or if sessionStorage is cleared)
+        var lastAttemptedIndex = -1;
+        for (var i = 0; i < sessionQuestionIDs.length; i++) {
+          if (answeredStates[sessionQuestionIDs[i]]) {
+            lastAttemptedIndex = i;
+          }
+        }
+        currentQuestionIndex =
+          lastAttemptedIndex >= 0 ? lastAttemptedIndex + 1 : 0;
+      }
       currentQuestionIndex = Math.min(
-        potentialIndex,
+        currentQuestionIndex,
         sessionQuestionIDs.length - 1
       );
+      highestQuestionIndexReached = Math.max(
+        highestQuestionIndexReached,
+        currentQuestionIndex
+      );
+      if (isMockTest || isRevisionMode) {
+        $("#qp-question-counter").text(
+          currentQuestionIndex + 1 + "/" + sessionQuestionIDs.length
+        );
+      }
     }
 
+    // Restore reported questions state
     if (
       qp_session_data.reported_ids &&
       qp_session_data.reported_ids.length > 0
@@ -829,13 +1283,20 @@ jQuery(document).ready(function ($) {
       });
     }
 
-    updateHeaderStats();
+    // Update the header stats only for non-mock tests
+    if (!isMockTest) {
+      updateHeaderStats();
+    }
 
+    // Load the first (or current) question
     if (currentQuestionIndex >= sessionQuestionIDs.length) {
-      $("#qp-end-practice-btn").click();
+      endSession(false);
     } else {
       loadQuestion(sessionQuestionIDs[currentQuestionIndex]);
+      renderPalette();
     }
+
+    updateLegendCounts();
   }
 
   // --- Optional Scoring UI Toggle ---
@@ -1035,43 +1496,19 @@ jQuery(document).ready(function ($) {
   }
 
   function renderQuestion(data, questionID) {
-    clearInterval(questionTimer);
+    if (!isMockTest) {
+      clearInterval(questionTimer);
+    }
+
     var questionData = data.question;
-    if (sessionSettings.practice_mode === "revision") {
-      var currentQ = currentQuestionIndex + 1;
-      var totalQ = sessionQuestionIDs.length;
-      $("#qp-question-counter").text(currentQ + "/" + totalQ);
-    }
-    var previousState = answeredStates[questionID] || {}; // Use empty object as default
-
-    // 1. Reset UI from a clean slate
-    $(
-      "#qp-revision-indicator, #qp-reported-indicator, .qp-direction, #qp-question-source"
-    ).hide();
+    var previousState = answeredStates[questionID] || {};
     var optionsArea = $(".qp-options-area").empty().removeClass("disabled");
-    $("#qp-skip-btn, #qp-report-btn").prop("disabled", false);
-    $("#qp-next-btn").prop("disabled", true);
-    if (isAutoCheckEnabled) {
-      $("#qp-check-answer-btn").hide();
-    } else {
-      $("#qp-check-answer-btn").show().prop("disabled", true);
-    }
 
-    // 2. Render all static content
-    var indicatorBar = $(".qp-indicator-bar").hide(); // Hide the bar by default
-    optionsArea.data("correct-option-id", data.correct_option_id);
-    // Only show the revision indicator if it's a revision question AND it hasn't been answered in this session yet
-    if (data.is_revision && !previousState.answered_in_session) {
-      $("#qp-revision-indicator").show();
-      indicatorBar.show();
-    }
-    $("#qp-mark-for-review-cb").prop("checked", data.is_marked_for_review);
-
+    // Common UI rendering for all modes
     var directionEl = $(".qp-direction").empty();
     if (questionData.direction_text || questionData.direction_image_url) {
-      if (questionData.direction_text) {
+      if (questionData.direction_text)
         directionEl.html($("<p>").html(questionData.direction_text));
-      }
       if (questionData.direction_image_url)
         directionEl.append(
           $("<img>")
@@ -1080,21 +1517,18 @@ jQuery(document).ready(function ($) {
         );
       directionEl.show();
     }
-
-    var subjectHtml = "Subject: " + questionData.subject_name;
-    if (questionData.topic_name) subjectHtml += " / " + questionData.topic_name;
-    $("#qp-question-subject").html(subjectHtml); // This was missing
+    $("#qp-question-subject").html(
+      "Subject: " +
+        questionData.subject_name +
+        (questionData.topic_name ? " / " + questionData.topic_name : "")
+    );
     $("#qp-question-id").text(
       "Question ID: " + questionData.custom_question_id
-    ); // This was missing
-
-    var sourceDisplayArea = $("#qp-question-source").hide().empty();
-    if (
-      data.is_admin &&
-      (questionData.source_name ||
-        questionData.section_name ||
-        questionData.question_number_in_section)
-    ) {
+    );
+    // --- Source Metadata Display ---
+    var sourceDisplayArea = $("#qp-question-source");
+    // Only try to populate the div if it actually exists in the HTML
+    if (sourceDisplayArea.length) {
       var sourceInfo = [];
       if (questionData.source_name)
         sourceInfo.push("<strong>Source:</strong> " + questionData.source_name);
@@ -1106,11 +1540,12 @@ jQuery(document).ready(function ($) {
         sourceInfo.push(
           "<strong>Q:</strong> " + questionData.question_number_in_section
         );
-      if (sourceInfo.length > 0)
-        sourceDisplayArea.html(sourceInfo.join(" | ")).show();
-    }
 
+      // Set the HTML content of the existing div
+      sourceDisplayArea.html(sourceInfo.join(" | "));
+    }
     $("#qp-question-text-area").html(questionData.question_text);
+    $("#qp-report-btn").prop("disabled", previousState.reported);
 
     $.each(questionData.options, function (index, option) {
       optionsArea.append(
@@ -1118,70 +1553,185 @@ jQuery(document).ready(function ($) {
           .append(
             $('<input type="radio" name="qp_option">').val(option.option_id)
           )
-          .append($("<span>").html(option.option_text)) // This is the line to check
+          .append($("<span>").html(option.option_text))
       );
     });
 
-    // 3. Apply State-Based UI
-    var isReported = previousState.reported;
-    var isAnswered = previousState.type === "answered";
-    var isExpired = previousState.type === "expired";
-    var indicatorBar = $(".qp-indicator-bar");
-    var isSkipped = previousState.type === "skipped";
-    var hasRemainingTime = typeof previousState.remainingTime !== "undefined";
-    $("#qp-report-btn").prop("disabled", isReported);
-
-    // First, display indicators based on state (this is purely visual)
-    if (isReported) {
-      $("#qp-reported-indicator").show();
-      indicatorBar.show();
-    }
-
-    // Determine the interactive state of the controls
-    // Now, handle the other controls based on other states.
-    if (isAnswered || isExpired || isReported) {
-      optionsArea
-        .addClass("disabled")
-        .find('input[type="radio"]')
-        .prop("disabled", true);
-      $("#qp-skip-btn").prop("disabled", true); // Keep skip disabled
-      $("#qp-next-btn").prop("disabled", false);
-
-      // If it was answered, we also need to apply the correctness styling.
-      if (isAnswered) {
+    // Mode-specific logic
+    if (isMockTest) {
+      // In a mock test, restore the user's previously selected answer if it exists
+      if (previousState.selected_option_id) {
         $('input[value="' + previousState.selected_option_id + '"]')
           .prop("checked", true)
           .closest(".option")
-          .addClass(previousState.is_correct ? "correct" : "incorrect");
-        if (!previousState.is_correct) {
-          $('input[value="' + previousState.correct_option_id + '"]')
+          .addClass("selected");
+      }
+
+      // Set the state of the "Mark for Review" checkbox based on the detailed status
+      const isMarked =
+        previousState.mock_status === "marked_for_review" ||
+        previousState.mock_status === "answered_and_marked_for_review";
+
+      var reviewButtonLabel = $("#qp-mock-mark-review-cb")
+        .closest("label")
+        .find("span");
+      if (isMarked) {
+        reviewButtonLabel.text("Marked for Review");
+      } else {
+        reviewButtonLabel.text("Mark for Review");
+      }
+      $("#qp-mock-mark-review-cb")
+        .prop("checked", isMarked)
+        .closest("label")
+        .toggleClass("checked", isMarked);
+
+      // If the question has no mock_status yet, it's the first time it's being viewed.
+      if (!previousState.mock_status) {
+        updateMockStatus(questionID, "viewed");
+      }
+      // Replace the entire block above with this one
+    } else {
+      // --- CORRECTED LOGIC FOR NORMAL/REVISION MODES ---
+      $("#qp-next-btn").prop("disabled", true);
+      $("#qp-skip-btn").prop("disabled", false);
+      optionsArea.data("correct-option-id", data.correct_option_id);
+      $("#qp-mark-for-review-cb").prop("checked", data.is_marked_for_review);
+
+      if (isAutoCheckEnabled) {
+        $("#qp-check-answer-btn").hide();
+      } else {
+        $("#qp-check-answer-btn").show().prop("disabled", true);
+      }
+
+      // 1. Reset all indicators first
+      var indicatorBar = $(".qp-indicator-bar");
+      indicatorBar.hide(); // Hide the parent bar
+      $(
+        "#qp-revision-indicator, #qp-reported-indicator, #qp-timer-indicator"
+      ).hide(); // Hide all children
+
+      var showIndicatorBar = false;
+
+      // --- THIS IS THE FIX: Caching the historical attempt count ---
+      if (data.is_revision) {
+        var questionID = sessionQuestionIDs[currentQuestionIndex];
+        var countToShow = 0;
+
+        // Check if we have a stored count for this question already
+        if (
+          answeredStates[questionID] &&
+          typeof answeredStates[questionID].historical_attempts !== "undefined"
+        ) {
+          // If yes, use the stored count
+          countToShow = answeredStates[questionID].historical_attempts;
+        } else {
+          // If no, use the count from the server and store it for the first time
+          countToShow = data.previous_attempt_count;
+          if (!answeredStates[questionID]) {
+            answeredStates[questionID] = {};
+          }
+          answeredStates[questionID].historical_attempts = countToShow;
+        }
+
+        // Display the indicator with the stable count
+        $("#qp-revision-indicator")
+          .text("🔄 Revision (" + countToShow + ")")
+          .show();
+        showIndicatorBar = true;
+      }
+
+      var isReported = previousState.reported;
+      var isAnswered = previousState.type === "answered";
+      var isExpired = previousState.type === "expired";
+
+      // 3. Conditionally show other indicators
+      if (isReported) {
+        $("#qp-reported-indicator").show();
+        showIndicatorBar = true;
+      }
+
+      // 4. Handle UI for answered/expired/reported questions
+      if (isAnswered || isExpired || isReported) {
+        optionsArea
+          .addClass("disabled")
+          .find('input[type="radio"]')
+          .prop("disabled", true);
+        $("#qp-skip-btn").prop("disabled", true);
+        $("#qp-next-btn").prop("disabled", false);
+
+        if (isAnswered) {
+          $('input[value="' + previousState.selected_option_id + '"]')
+            .prop("checked", true)
             .closest(".option")
-            .addClass("correct");
+            .addClass(previousState.is_correct ? "correct" : "incorrect");
+          if (!previousState.is_correct) {
+            $('input[value="' + previousState.correct_option_id + '"]')
+              .closest(".option")
+              .addClass("correct");
+          }
+        }
+        if (isExpired) {
+          $("#qp-timer-indicator")
+            .html("&#9201; Time Expired")
+            .addClass("expired")
+            .show();
+          showIndicatorBar = true;
+        }
+      } else {
+        // 5. Handle UI for active questions (timer)
+        if (sessionSettings.timer_enabled) {
+          var startTime =
+            typeof previousState.remainingTime !== "undefined"
+              ? previousState.remainingTime
+              : sessionSettings.timer_seconds;
+          $("#qp-timer-indicator").removeClass("expired").show();
+          showIndicatorBar = true;
+          startTimer(startTime);
         }
       }
 
-      // If it has expired, show the expired timer state
-      if (isExpired) {
-        $("#qp-timer-indicator")
-          .html("&#9201; Time Expired")
-          .addClass("expired")
-          .show();
-        $(".qp-indicator-bar").show();
-      }
-    } else {
-      // This block only runs for a fresh question that is NOT answered and NOT reported.
-      if (sessionSettings.timer_enabled) {
-        var startTime = hasRemainingTime
-          ? previousState.remainingTime
-          : sessionSettings.timer_seconds;
-        $("#qp-timer-indicator").removeClass("expired").show();
+      // 6. Finally, show the parent bar only if it has a visible child
+      if (showIndicatorBar) {
         indicatorBar.show();
-        startTimer(startTime);
       }
     }
 
     $("#qp-prev-btn").prop("disabled", currentQuestionIndex === 0);
-    // 4. Render Math
+    // --- NEW LOGIC TO HANDLE REPORTED QUESTIONS IN MOCK TESTS ---
+    if (isMockTest && data.is_reported_by_user) {
+      // 1. Show the indicator
+      $("#qp-reported-indicator").show();
+      $(".qp-indicator-bar").show(); // Ensure the parent bar is visible
+
+      // 2. Disable all interactive elements for this question
+      optionsArea
+        .addClass("disabled")
+        .find('input[type="radio"]')
+        .prop("disabled", true);
+      $("#qp-report-btn").prop("disabled", true);
+      $("#qp-clear-response-btn, #qp-mock-mark-review-cb").prop(
+        "disabled",
+        true
+      );
+
+      // 3. If an answer was previously selected, clear it now
+      if (previousState.selected_option_id) {
+        clearMockTestAnswer(questionID);
+      }
+    } else if (isMockTest) {
+      // Explicitly re-enable buttons for non-reported questions
+      $("#qp-reported-indicator").hide();
+      optionsArea
+        .removeClass("disabled")
+        .find('input[type="radio"]')
+        .prop("disabled", false);
+      $("#qp-report-btn").prop("disabled", false);
+      $("#qp-clear-response-btn, #qp-mock-mark-review-cb").prop(
+        "disabled",
+        false
+      );
+    }
+    // --- END OF NEW LOGIC ---
     if (typeof renderMathInElement !== "undefined") {
       renderMathInElement(document.getElementById("qp-practice-app-wrapper"), {
         delimiters: [
@@ -1200,6 +1750,10 @@ jQuery(document).ready(function ($) {
 
     function doRender(data) {
       renderQuestion(data, questionID);
+      sessionStorage.setItem(
+        "qp_session_" + sessionID + "_index",
+        currentQuestionIndex
+      );
       if (direction) {
         var slideInClass =
           direction === "next" ? "slide-in-from-right" : "slide-in-from-left";
@@ -1245,24 +1799,40 @@ jQuery(document).ready(function ($) {
 
   function loadNextQuestion() {
     // First, check if we are ALREADY on the last question.
+    highestQuestionIndexReached = Math.max(
+      highestQuestionIndexReached,
+      currentQuestionIndex + 1
+    );
     if (currentQuestionIndex >= sessionQuestionIDs.length - 1) {
       clearInterval(questionTimer);
       // If so, ask the user if they want to finish.
-      if (
-        confirm(
-          "Congratulations, you've completed all available questions! Click OK to end this session and see your summary."
-        )
-      ) {
-        practiceInProgress = false; // It's now safe to allow the page to be left
-        $("#qp-end-practice-btn").click();
-      }
+      Swal.fire({
+        title: "Congratulations!",
+        text: "You've completed all available questions.",
+        icon: "success",
+        showCancelButton: true,
+        confirmButtonColor: "#2e7d32",
+        cancelButtonText: "Stay on Last Question",
+        confirmButtonText: "End & See Summary",
+      }).then((result) => {
+        if (result.isConfirmed) {
+          practiceInProgress = false;
+          $("#qp-end-practice-btn").click();
+        }
+      });
       // If the user clicks "Cancel", we simply do nothing. They remain on the last question, and the UI is still responsive.
       return;
     }
 
     // If we are not on the last question, it's safe to increment the index and load the next question.
     currentQuestionIndex++;
+    if (isMockTest || isRevisionMode) {
+      $("#qp-question-counter").text(
+        currentQuestionIndex + 1 + "/" + sessionQuestionIDs.length
+      );
+    }
     loadQuestion(sessionQuestionIDs[currentQuestionIndex], "next");
+    renderPalette();
   }
 
   function updateHeaderStats() {
@@ -1307,19 +1877,16 @@ jQuery(document).ready(function ($) {
     }, 1000);
   }
 
-  // In public/assets/js/practice.js
-
-  // In public/assets/js/practice.js
-
   function displaySummary(summaryData) {
     closeFullscreen();
     practiceInProgress = false;
 
-    // --- Conditionally build the main score/accuracy display ---
-    var mainDisplayHtml = "";
-    var isScoredSession =
-      summaryData.settings && summaryData.settings.marks_correct !== null;
+    // Determine if the session was a mock test and if it was scored
+    var settings = summaryData.settings || {};
+    var isMockTest = settings.practice_mode === "mock_test";
+    var isScoredSession = settings.marks_correct !== null;
 
+    var mainDisplayHtml = "";
     if (isScoredSession) {
       mainDisplayHtml = `<div class="qp-summary-score"><div class="label">Final Score</div>${parseFloat(
         summaryData.final_score
@@ -1334,29 +1901,41 @@ jQuery(document).ready(function ($) {
       )}%</div>`;
     }
 
-    // --- Build the action buttons ---
-    var actionButtonsHtml = `<a href="${qp_ajax_object.dashboard_page_url}" class="qp-button qp-button-secondary">View Dashboard</a>`;
+    // --- NEW: Build the stats display based on the mode ---
+    var statsHtml = "";
+    if (isMockTest) {
+      // For mock tests, show the new detailed stats
+      statsHtml = `
+            <div class="stat"><div class="value">${summaryData.correct_count}</div><div class="label">Correct</div></div>
+            <div class="stat"><div class="value">${summaryData.incorrect_count}</div><div class="label">Incorrect</div></div>
+            <div class="stat"><div class="value">${summaryData.skipped_count}</div><div class="label">Unattempted</div></div>
+            <div class="stat"><div class="value">${summaryData.not_viewed_count}</div><div class="label">Not Viewed</div></div>
+        `;
+    } else {
+      // For other modes, show the original stats
+      statsHtml = `
+            <div class="stat"><div class="value">${summaryData.total_attempted}</div><div class="label">Attempted</div></div>
+            <div class="stat"><div class="value">${summaryData.correct_count}</div><div class="label">Correct</div></div>
+            <div class="stat"><div class="value">${summaryData.incorrect_count}</div><div class="label">Incorrect</div></div>
+            <div class="stat"><div class="value">${summaryData.skipped_count}</div><div class="label">Skipped</div></div>
+        `;
+    }
 
-    // **THE FIX**: Only create the "View Summary" button if the URL exists
+    var actionButtonsHtml = `<a href="${qp_ajax_object.dashboard_page_url}" class="qp-button qp-button-secondary">View Dashboard</a>`;
     if (qp_ajax_object.review_page_url) {
       var reviewUrl = new URL(qp_ajax_object.review_page_url);
       reviewUrl.searchParams.set("session_id", sessionID);
       actionButtonsHtml += `<a href="${reviewUrl.href}" class="qp-button qp-button-primary">Review Session</a>`;
     } else {
-      // Fallback if the review page isn't set
       actionButtonsHtml += `<a href="${qp_ajax_object.practice_page_url}" class="qp-button qp-button-primary">Start Another Practice</a>`;
     }
 
-    // --- Build the final HTML ---
     var summaryHtml = `
       <div class="qp-summary-wrapper">
           <h2>Session Summary</h2>
           ${mainDisplayHtml}
           <div class="qp-summary-stats">
-              <div class="stat"><div class="value">${summaryData.total_attempted}</div><div class="label">Attempted</div></div>
-              <div class="stat"><div class="value">${summaryData.correct_count}</div><div class="label">Correct</div></div>
-              <div class="stat"><div class="value">${summaryData.incorrect_count}</div><div class="label">Incorrect</div></div>
-              <div class="stat"><div class="value">${summaryData.skipped_count}</div><div class="label">Skipped</div></div>
+              ${statsHtml}
           </div>
           <div class="qp-summary-actions">
               ${actionButtonsHtml}
@@ -1370,25 +1949,51 @@ jQuery(document).ready(function ($) {
   wrapper.on("click", ".qp-options-area .option", function () {
     var selectedOption = $(this);
     var optionsArea = selectedOption.closest(".qp-options-area");
+    if (optionsArea.hasClass("disabled")) return;
 
-    // Do nothing if the question has already been answered
-    if (optionsArea.hasClass("disabled")) {
-      return;
-    }
-
-    // Update visual selection
     optionsArea.find(".option").removeClass("selected");
     selectedOption.addClass("selected");
     selectedOption.find('input[type="radio"]').prop("checked", true);
 
-    // If auto-check is on, check the answer immediately. Otherwise, just enable the button.
-    if (isAutoCheckEnabled) {
-      checkSelectedAnswer(); // Directly call our new function
+    if (isMockTest) {
+      // For mock tests, save the attempt and update the status
+      var questionID = sessionQuestionIDs[currentQuestionIndex];
+      var selectedOptionId = selectedOption.find('input[type="radio"]').val();
+
+      // Update local state first
+      if (!answeredStates[questionID]) answeredStates[questionID] = {};
+      answeredStates[questionID].selected_option_id = selectedOptionId;
+
+      // Determine the new status based on the "Mark for Review" checkbox
+      const isMarked = $("#qp-mock-mark-review-cb").is(":checked");
+      const newStatus = isMarked
+        ? "answered_and_marked_for_review"
+        : "answered";
+
+      // First, save the answer. The backend sets the main status to 'answered'.
+      $.ajax({
+        url: qp_ajax_object.ajax_url,
+        type: "POST",
+        data: {
+          action: "qp_save_mock_attempt",
+          nonce: qp_ajax_object.nonce,
+          session_id: sessionID,
+          question_id: questionID,
+          option_id: selectedOptionId,
+        },
+        success: function () {
+          // After successfully saving, update the detailed mock_status.
+          updateMockStatus(questionID, newStatus);
+        },
+      });
+    } else if (isAutoCheckEnabled) {
+      // For other modes with auto-check on
+      checkSelectedAnswer();
     } else {
+      // For other modes with auto-check off
       $("#qp-check-answer-btn").prop("disabled", false);
     }
   });
-
   // --- NEW: Reusable function to check the selected answer ---
   function checkSelectedAnswer() {
     var optionsArea = $(".qp-options-area");
@@ -1401,7 +2006,7 @@ jQuery(document).ready(function ($) {
 
     // Lock the UI
     optionsArea.addClass("disabled");
-    $('#qp-check-answer-btn').hide();
+    $("#qp-check-answer-btn").hide();
     $("#qp-skip-btn").prop("disabled", true);
 
     // Stop the timer
@@ -1447,6 +2052,7 @@ jQuery(document).ready(function ($) {
 
     // Update UI
     updateHeaderStats();
+    renderPalette();
     $("#qp-next-btn").prop("disabled", false);
 
     // Sync attempt with the server in the background
@@ -1462,6 +2068,8 @@ jQuery(document).ready(function ($) {
         remaining_time: remainingTime,
       },
     });
+
+    updateLegendCounts();
   }
 
   // --- UPDATED: Simplified click handler ---
@@ -1469,26 +2077,26 @@ jQuery(document).ready(function ($) {
     checkSelectedAnswer();
   });
 
-  wrapper.on('change', '#qp-auto-check-cb', function() {
-    isAutoCheckEnabled = $(this).is(':checked');
-    sessionStorage.setItem('qpAutoCheckEnabled', isAutoCheckEnabled);
+  wrapper.on("change", "#qp-auto-check-cb", function () {
+    isAutoCheckEnabled = $(this).is(":checked");
+    sessionStorage.setItem("qpAutoCheckEnabled", isAutoCheckEnabled);
 
-    var checkButton = $('#qp-check-answer-btn');
-    var optionsArea = $('.qp-options-area');
-    var isAnswerSelected = optionsArea.find('.option.selected').length > 0;
+    var checkButton = $("#qp-check-answer-btn");
+    var optionsArea = $(".qp-options-area");
+    var isAnswerSelected = optionsArea.find(".option.selected").length > 0;
 
     if (isAutoCheckEnabled) {
-        checkButton.hide();
-        // If an answer is already selected when the user enables auto-check, check it immediately.
-        if (isAnswerSelected) {
-            checkSelectedAnswer();
-        }
+      checkButton.hide();
+      // If an answer is already selected when the user enables auto-check, check it immediately.
+      if (isAnswerSelected) {
+        checkSelectedAnswer();
+      }
     } else {
-        // If auto-check is disabled, show the button.
-        // It should be enabled only if an answer has been selected.
-        checkButton.show().prop('disabled', !isAnswerSelected);
+      // If auto-check is disabled, show the button.
+      // It should be enabled only if an answer has been selected.
+      checkButton.show().prop("disabled", !isAnswerSelected);
     }
-});
+  });
 
   wrapper.on("click", "#qp-next-btn, #qp-prev-btn", function () {
     clearInterval(questionTimer); // Stop the timer immediately
@@ -1517,7 +2125,13 @@ jQuery(document).ready(function ($) {
     } else {
       if (currentQuestionIndex > 0) {
         currentQuestionIndex--;
+        if (isMockTest || isRevisionMode) {
+          $("#qp-question-counter").text(
+            currentQuestionIndex + 1 + "/" + sessionQuestionIDs.length
+          );
+        }
         loadQuestion(sessionQuestionIDs[currentQuestionIndex], "prev");
+        renderPalette();
       }
     }
   });
@@ -1558,24 +2172,32 @@ jQuery(document).ready(function ($) {
       answeredStates[questionID].remainingTime = remainingTime;
 
       updateHeaderStats();
+      renderPalette();
       loadNextQuestion();
+      updateLegendCounts();
     }
   });
 
-  wrapper.on("click", "#qp-end-practice-btn", function () {
-    clearInterval(questionTimer);
+  function endSession(isAutoSubmit = false) {
+    // --- NEW LOGIC START ---
+    var totalAttempts = correctCount + incorrectCount;
 
-    // Check if any questions have been answered.
-    if (correctCount === 0 && incorrectCount === 0) {
-      // --- Handle EMPTY session ---
-      if (
-        confirm(
-          "You have not answered any questions. This session will not be saved.\n\nAre you sure you want to leave?"
-        )
-      ) {
-        practiceInProgress = false; // Allow redirect
+    // Check for mock test answers specifically
+    if (isMockTest) {
+      totalAttempts = Object.values(answeredStates).filter(function (state) {
+        return state.selected_option_id;
+      }).length;
+    }
 
-        // **THE FIX**: Call the new endpoint to delete the empty session from the DB
+    if (!isAutoSubmit && totalAttempts === 0) {
+      practiceInProgress = false; // Allow redirect without warning
+      Swal.fire({
+        title: "Session Not Saved",
+        text: "You haven't answered any questions, so this session will not be saved in your history.",
+        icon: "info",
+        confirmButtonText: "OK, Go to Dashboard",
+      }).then(() => {
+        // Call the AJAX action to delete the empty session in the background
         $.ajax({
           url: qp_ajax_object.ajax_url,
           type: "POST",
@@ -1584,96 +2206,133 @@ jQuery(document).ready(function ($) {
             nonce: qp_ajax_object.nonce,
             session_id: sessionID,
           },
-          success: function () {
-            // Redirect to dashboard after successful deletion
-            window.location.href = qp_ajax_object.dashboard_page_url;
-          },
-          error: function () {
-            // Still redirect even if the deletion call fails, to not trap the user
-            alert(
-              "Could not delete the empty session record, but you will be redirected."
-            );
+          complete: function () {
+            // Redirect after the alert is closed and AJAX is complete
             window.location.href = qp_ajax_object.dashboard_page_url;
           },
         });
+      });
+      return; // Stop the function here
+    }
+    // --- NEW LOGIC END ---
+
+    practiceInProgress = false; // Allow user to leave the page
+    if (isMockTest) {
+      clearInterval(mockTestTimer);
+    }
+
+    $.ajax({
+      url: qp_ajax_object.ajax_url,
+      type: "POST",
+      data: {
+        action: "end_practice_session",
+        nonce: qp_ajax_object.nonce,
+        session_id: sessionID,
+      },
+      beforeSend: function () {
+        var message = "Generating your results...";
+        if (isMockTest && isAutoSubmit) {
+          message = "Time's up! Submitting your test...";
+        } else if (isMockTest) {
+          message = "Submitting your test...";
+        }
+        wrapper.html(
+          `<p style="text-align:center; padding: 50px;">${message}</p>`
+        );
+      },
+      success: function (response) {
+        if (response.success) {
+          displaySummary(response.data);
+        }
+      },
+      error: function () {
+        alert("An error occurred while submitting the session.");
+      },
+    });
+  }
+
+  // A single handler for all session-ending buttons
+  wrapper.on("click", "#qp-end-practice-btn, #qp-submit-test-btn", function () {
+    var confirmMsg = isMockTest
+      ? "Are you sure you want to submit your test? You cannot make any more changes."
+      : "Are you sure you want to end this practice session?";
+
+    Swal.fire({
+      title: "Are you sure?",
+      text: confirmMsg,
+      icon: "question",
+      showCancelButton: true,
+      confirmButtonColor: "#2271b1",
+      cancelButtonColor: "#d33",
+      confirmButtonText: isMockTest
+        ? "Yes, submit the test!"
+        : "Yes, end session!",
+    }).then((result) => {
+      if (result.isConfirmed) {
+        endSession(false);
       }
-      // If user clicks "Cancel", do nothing.
-    } else {
-      // --- Handle session WITH attempts (original logic) ---
-      if (confirm("Are you sure you want to end this practice session?")) {
-        practiceInProgress = false;
+    });
+  });
+
+  // Prevent Refresh
+  // $(window).on("beforeunload", function () {
+  //   if (practiceInProgress) {
+  //     return "Are you sure you want to leave? Your practice session is in progress.";
+  //   }
+  // });
+
+  wrapper.on("click", "#qp-pause-btn", function () {
+    Swal.fire({
+      title: "Pause Session?",
+      text: "You can resume this session later from your dashboard.",
+      icon: "question",
+      showCancelButton: true,
+      confirmButtonText: "Yes, pause it!",
+      cancelButtonText: "Cancel",
+    }).then((result) => {
+      if (result.isConfirmed) {
+        practiceInProgress = false; // Prevent the "are you sure?" popup on redirect
         $.ajax({
           url: qp_ajax_object.ajax_url,
           type: "POST",
           data: {
-            action: "end_practice_session",
+            action: "qp_pause_session",
             nonce: qp_ajax_object.nonce,
             session_id: sessionID,
           },
           beforeSend: function () {
-            wrapper.html(
-              '<p style="text-align:center; padding: 50px;">Generating your results...</p>'
-            );
+            $(".qp-footer-controls .qp-button").prop("disabled", true);
+            $("#qp-pause-btn").text("Pausing...");
+            Swal.fire({
+              title: "Pausing...",
+              text: "Your session is being saved.",
+              allowOutsideClick: false,
+              didOpen: () => {
+                Swal.showLoading();
+              },
+            });
           },
           success: function (response) {
             if (response.success) {
-              displaySummary(response.data);
+              window.location.href = qp_ajax_object.dashboard_page_url;
+            } else {
+              Swal.fire(
+                "Error!",
+                response.data.message || "Could not pause the session.",
+                "error"
+              );
+              $(".qp-footer-controls .qp-button").prop("disabled", false);
+              $("#qp-pause-btn").text("Pause & Save");
             }
+          },
+          error: function () {
+            Swal.fire("Error!", "An unknown server error occurred.", "error");
+            $(".qp-footer-controls .qp-button").prop("disabled", false);
+            $("#qp-pause-btn").text("Pause & Save");
           },
         });
       }
-    }
-  });
-
-  wrapper.on("click", "#qp-pause-btn", function () {
-    if (
-      confirm(
-        "Are you sure you want to pause this session? You can resume it later from your dashboard."
-      )
-    ) {
-      practiceInProgress = false; // Prevent the "are you sure?" popup on redirect
-
-      $.ajax({
-        url: qp_ajax_object.ajax_url,
-        type: "POST",
-        data: {
-          action: "qp_pause_session",
-          nonce: qp_ajax_object.nonce,
-          session_id: sessionID,
-        },
-        beforeSend: function () {
-          // Disable all footer buttons to prevent double-clicks
-          $(".qp-footer-controls .qp-button")
-            .prop("disabled", true)
-            .text("Pausing...");
-        },
-        success: function (response) {
-          if (response.success) {
-            // Redirect to the dashboard page on success
-            window.location.href = qp_ajax_object.dashboard_page_url;
-          } else {
-            alert(
-              "Error: " +
-                (response.data.message || "Could not pause the session.")
-            );
-            // Re-enable buttons if it fails
-            $(".qp-footer-controls .qp-button").prop("disabled", false);
-            $("#qp-pause-btn").text("Pause & Save"); // Restore text
-          }
-        },
-        error: function () {
-          alert("An unknown server error occurred.");
-          $(".qp-footer-controls .qp-button").prop("disabled", false);
-          $("#qp-pause-btn").text("Pause & Save");
-        },
-      });
-    }
-  });
-
-  $(window).on("beforeunload", function () {
-    if (practiceInProgress) {
-      return "Are you sure you want to leave? Your practice session is in progress and will be lost.";
-    }
+    });
   });
 
   // --- NEW: Handler for the Fullscreen Start Button ---
@@ -1696,5 +2355,140 @@ jQuery(document).ready(function ($) {
         startTimer(sessionSettings.timer_seconds);
       }
     }
+  });
+
+  // --- NEW: Mock Test Specific Event Handlers ---
+  if (
+    typeof qp_session_data !== "undefined" &&
+    qp_session_data.settings.practice_mode === "mock_test"
+  ) {
+    // Handler for the "Clear Response" button
+    wrapper.on("click", "#qp-clear-response-btn", function () {
+      var questionID = sessionQuestionIDs[currentQuestionIndex];
+      clearMockTestAnswer(questionID);
+
+      // Clear the radio button selection in the UI first
+      $(".qp-options-area .option").removeClass("selected");
+      $('input[name="qp_option"]').prop("checked", false);
+
+      // Determine the correct final status
+      const isMarkedForReview = $("#qp-mock-mark-review-cb").is(":checked");
+      const newStatus = isMarkedForReview ? "marked_for_review" : "viewed";
+
+      // Send a single, definitive update to the backend
+      updateMockStatus(questionID, newStatus);
+    });
+
+    // Handler for the "Mark for Review" checkbox
+    wrapper.on("change", "#qp-mock-mark-review-cb", function () {
+      var questionID = sessionQuestionIDs[currentQuestionIndex];
+      const isChecked = $(this).is(":checked");
+      const currentState =
+        (answeredStates[questionID] &&
+          answeredStates[questionID].mock_status) ||
+        "viewed";
+      let newStatus = "";
+
+      if (isChecked) {
+        // When checking the box
+        newStatus =
+          currentState === "answered" ||
+          currentState === "answered_and_marked_for_review"
+            ? "answered_and_marked_for_review"
+            : "marked_for_review";
+      } else {
+        // When unchecking the box
+        newStatus =
+          currentState === "answered_and_marked_for_review" ||
+          currentState === "answered"
+            ? "answered"
+            : "viewed";
+      }
+
+      // Visually update the button style immediately
+      $(this).closest("label").toggleClass("checked", isChecked);
+
+      updateMockStatus(questionID, newStatus);
+      var reviewButtonLabel = $(this).closest("label").find("span");
+      if (isChecked) {
+        reviewButton - Label.text("Marked for Review");
+      } else {
+        reviewButtonLabel.text("Mark for Review");
+      }
+    });
+  }
+
+  // ADD THIS NEW, REUSABLE FUNCTION anywhere in the main scope of the script
+  function clearMockTestAnswer(questionID) {
+    // Clear the radio button selection in the UI
+    $(".qp-options-area .option").removeClass("selected");
+    $('input[name="qp_option"]').prop("checked", false);
+
+    // Determine the correct final status based on the review checkbox
+    const isMarkedForReview = $("#qp-mock-mark-review-cb").is(":checked");
+    const newStatus = isMarkedForReview ? "marked_for_review" : "viewed";
+
+    // Send a single, definitive update to the backend
+    updateMockStatus(questionID, newStatus);
+  }
+
+  // --- NEW: Mock Test Scoring Checkbox UI Toggle ---
+  wrapper.on("change", "#qp_mock_scoring_enabled_cb", function () {
+    var isChecked = $(this).is(":checked");
+    var marksWrapper = $("#qp-mock-marks-group-wrapper");
+    if (isChecked) {
+      marksWrapper.slideDown();
+      marksWrapper.find("input").prop("disabled", false);
+    } else {
+      marksWrapper.slideUp();
+      marksWrapper.find("input").prop("disabled", true);
+    }
+  });
+
+  // --- NEW: Advanced Palette Activation Logic ---
+  if (typeof qp_session_data !== "undefined") {
+    var isMockTest = qp_session_data.settings.practice_mode === "mock_test";
+    var isSectionWise =
+      qp_session_data.settings.practice_mode === "Section Wise Practice";
+    var isPaletteMandatory = isMockTest || isSectionWise;
+
+    // For mandatory modes, add the permanent layout class.
+    if (isPaletteMandatory) {
+      $("body").addClass("palette-mandatory");
+    }
+
+    // Handler for the buttons: This will always toggle the palette.
+    $("#qp-palette-toggle-btn, #qp-palette-close-btn").on("click", function () {
+      $("body").toggleClass("palette-overlay-open");
+    });
+
+    // Handler for the overlay: This closes the palette ONLY if the dark backdrop itself is clicked.
+    $("#qp-palette-overlay").on("click", function (e) {
+      if (e.target === this) {
+        // Check if the click is on the overlay div, not its children.
+        $("body").removeClass("palette-overlay-open");
+      }
+    });
+  }
+
+  // --- NEW: Palette Button Click Handler ---
+  // Use event delegation on the document in case palettes are not visible on load
+  $(document).on("click", ".qp-palette-btn", function () {
+    var newIndex = parseInt($(this).data("question-index"), 10);
+    if (newIndex === currentQuestionIndex) {
+      return; // Do nothing if clicking the current question
+    }
+
+    var direction = newIndex > currentQuestionIndex ? "next" : "prev";
+    currentQuestionIndex = newIndex;
+
+    if (isMockTest || isRevisionMode) {
+      $("#qp-question-counter").text(
+        currentQuestionIndex + 1 + "/" + sessionQuestionIDs.length
+      );
+    }
+
+    loadQuestion(sessionQuestionIDs[currentQuestionIndex], direction);
+    renderPalette(); // Re-render to update the 'current' highlight
   });
 });

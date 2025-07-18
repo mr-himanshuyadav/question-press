@@ -8,35 +8,51 @@ jQuery(document).ready(function($) {
         var listItem = button.closest('li');
         var questionID = listItem.data('question-id');
 
-        if (confirm('Are you sure you want to remove this question from your review list?')) {
-            $.ajax({
-                url: qp_ajax_object.ajax_url,
-                type: 'POST',
-                data: {
-                    action: 'qp_toggle_review_later',
-                    nonce: qp_ajax_object.nonce,
-                    question_id: questionID,
-                    is_marked: 'false' // Send 'false' to remove it
-                },
-                beforeSend: function() {
-                    button.text('Removing...').prop('disabled', true);
-                },
-                success: function(response) {
-                    if (response.success) {
-                        listItem.fadeOut(400, function() {
-                            $(this).remove();
-                            // Update the count in the tab
-                            var reviewTab = $('.qp-tab-link[data-tab="review"]');
-                            var currentCount = parseInt(reviewTab.text().match(/\d+/)[0], 10);
-                            reviewTab.text('Review List (' + (currentCount - 1) + ')');
-                        });
-                    } else {
-                        alert('Could not remove the item. Please try again.');
-                        button.text('Remove').prop('disabled', false);
+        Swal.fire({
+            title: 'Remove from Review?',
+            text: "This question will be removed from your review list.",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            confirmButtonText: 'Yes, remove it!'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                $.ajax({
+                    url: qp_ajax_object.ajax_url,
+                    type: 'POST',
+                    data: {
+                        action: 'qp_toggle_review_later',
+                        nonce: qp_ajax_object.nonce,
+                        question_id: questionID,
+                        is_marked: 'false' // Send 'false' to remove it
+                    },
+                    beforeSend: function() {
+                        button.text('Removing...').prop('disabled', true);
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            listItem.fadeOut(400, function() {
+                                $(this).remove();
+                                var reviewTab = $('.qp-tab-link[data-tab="review"]');
+                                var currentCountText = reviewTab.text();
+                                var currentCountMatch = currentCountText.match(/\d+/);
+                                if (currentCountMatch) {
+                                    var currentCount = parseInt(currentCountMatch[0], 10);
+                                    reviewTab.text('Review List (' + (currentCount - 1) + ')');
+                                }
+                            });
+                        } else {
+                            Swal.fire('Error!', 'Could not remove the item. Please try again.', 'error');
+                            button.text('Remove').prop('disabled', false);
+                        }
+                    },
+                    error: function() {
+                         Swal.fire('Error!', 'A network error occurred. Please try again.', 'error');
+                         button.text('Remove').prop('disabled', false);
                     }
-                }
-            });
-        }
+                });
+            }
+        });
     });
 
     // --- NEW: Handler for starting a review session ---
@@ -46,28 +62,28 @@ jQuery(document).ready(function($) {
         var originalText = button.text();
 
         $.ajax({
-            url: qp_ajax_object.ajax_url,
-            type: 'POST',
-            data: {
-                action: 'qp_start_review_session',
-                nonce: qp_ajax_object.nonce,
-            },
-            beforeSend: function() {
-                button.text('Starting...').prop('disabled', true);
-            },
-            success: function(response) {
-                if (response.success && response.data.redirect_url) {
-                    window.location.href = response.data.redirect_url;
-                } else {
-                    alert('Error: ' + (response.data.message || 'Could not start review session.'));
+                url: qp_ajax_object.ajax_url,
+                type: 'POST',
+                data: {
+                    action: 'qp_start_review_session',
+                    nonce: qp_ajax_object.nonce,
+                },
+                beforeSend: function() {
+                    button.text('Starting...').prop('disabled', true);
+                },
+                success: function(response) {
+                    if (response.success && response.data.redirect_url) {
+                        window.location.href = response.data.redirect_url;
+                    } else {
+                        Swal.fire('Error!', response.data.message || 'Could not start review session.', 'error');
+                        button.text(originalText).prop('disabled', false);
+                    }
+                },
+                error: function() {
+                    Swal.fire('Error!', 'A server error occurred.', 'error');
                     button.text(originalText).prop('disabled', false);
                 }
-            },
-            error: function() {
-                alert('A server error occurred.');
-                button.text(originalText).prop('disabled', false);
-            }
-        });
+            });
     });
 
 
@@ -171,37 +187,51 @@ jQuery(document).ready(function($) {
     });
 
 
-    // --- NEW: Handler for the "Terminate" button ---
+    // --- Handler for the "Terminate" button ---
     wrapper.on('click', '.qp-terminate-session-btn', function(e) {
         e.preventDefault();
         var button = $(this);
         var sessionID = button.data('session-id');
 
-        if (confirm('Are you sure you want to terminate this session? This will end the session and move it to your history.')) {
-            $.ajax({
-                url: qp_ajax_object.ajax_url,
-                type: 'POST',
-                data: {
-                    action: 'qp_terminate_session',
-                    nonce: qp_ajax_object.nonce,
-                    session_id: sessionID
-                },
-                beforeSend: function() {
-                    button.text('...').prop('disabled', true);
-                    button.closest('.qp-card-actions').find('.qp-button-secondary').prop('disabled', true);
-                },
-                success: function(response) {
-                    if (response.success) {
-                        // Reload the page to see the session moved to the history table
-                        location.reload();
-                    } else {
-                        alert('Error: ' + (response.data.message || 'Could not terminate session.'));
+        Swal.fire({
+            title: 'Terminate Session?',
+            text: "This active session will be removed permanently. This action cannot be undone.",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            confirmButtonText: 'Yes, terminate it!'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                $.ajax({
+                    url: qp_ajax_object.ajax_url,
+                    type: 'POST',
+                    data: {
+                        action: 'qp_terminate_session',
+                        nonce: qp_ajax_object.nonce,
+                        session_id: sessionID
+                    },
+                    beforeSend: function() {
+                        button.text('...').prop('disabled', true);
+                        button.closest('.qp-card-actions').find('.qp-button-secondary').prop('disabled', true);
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            // Reload the page to see the session removed
+                            location.reload();
+                        } else {
+                            Swal.fire('Error!', response.data.message || 'Could not terminate the session.', 'error');
+                            button.text('Terminate').prop('disabled', false);
+                            button.closest('.qp-card-actions').find('.qp-button-secondary').prop('disabled', false);
+                        }
+                    },
+                    error: function() {
+                        Swal.fire('Error!', 'A network error occurred. Please try again.', 'error');
                         button.text('Terminate').prop('disabled', false);
                         button.closest('.qp-card-actions').find('.qp-button-secondary').prop('disabled', false);
                     }
-                }
-            });
-        }
+                });
+            }
+        });
     });
 
     // --- UPDATED: Handler for the "Show Answer" checkbox in the modal ---
@@ -233,55 +263,90 @@ jQuery(document).ready(function($) {
         e.preventDefault();
         var button = $(this);
         var sessionID = button.data('session-id');
-        if (confirm('Are you sure you want to permanently delete this session history? This cannot be undone.')) {
-            $.ajax({
-                url: qp_ajax_object.ajax_url, type: 'POST',
-                data: { action: 'delete_user_session', nonce: qp_ajax_object.nonce, session_id: sessionID },
-                beforeSend: function() { button.text('Deleting...').prop('disabled', true); },
-                success: function(response) {
-                    if (response.success) {
-                        button.closest('tr').fadeOut(500, function() { $(this).remove(); });
-                    } else {
-                        alert('Error: ' + response.data.message);
+
+        Swal.fire({
+            title: 'Delete Session?',
+            text: "This session history will be permanently deleted. This action cannot be undone.",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            confirmButtonText: 'Yes, delete it!'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                $.ajax({
+                    url: qp_ajax_object.ajax_url,
+                    type: 'POST',
+                    data: {
+                        action: 'delete_user_session',
+                        nonce: qp_ajax_object.nonce,
+                        session_id: sessionID
+                    },
+                    beforeSend: function() {
+                        button.text('Deleting...').prop('disabled', true);
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            button.closest('tr').fadeOut(500, function() {
+                                $(this).remove();
+                            });
+                        } else {
+                            Swal.fire('Error!', response.data.message || 'Could not delete the session.', 'error');
+                            button.text('Delete').prop('disabled', false);
+                        }
+                    },
+                    error: function() {
+                        Swal.fire('Error!', 'An unknown server error occurred.', 'error');
                         button.text('Delete').prop('disabled', false);
                     }
-                },
-                error: function() { alert('An unknown error occurred.'); button.text('Delete').prop('disabled', false); }
-            });
-        }
+                });
+            }
+        });
     });
 
     // Handler for deleting all revision history
     wrapper.on('click', '#qp-delete-history-btn', function(e) {
         e.preventDefault();
         var button = $(this);
-        if (confirm('Are you sure you want to delete ALL of your practice session and revision history? This action cannot be undone.')) {
-            $.ajax({
-                url: qp_ajax_object.ajax_url, type: 'POST',
-                data: { action: 'delete_revision_history', nonce: qp_ajax_object.nonce },
-                beforeSend: function() {
-                    button.text('Deleting History...').prop('disabled', true);
-                },
-                success: function(response) {
-                    if (response.success) {
-                        var tableBody = wrapper.find('.qp-dashboard-table tbody');
-                        // Fade out the table body, empty it, add the success message, and fade it back in.
-                        tableBody.fadeOut(400, function() {
-                            $(this).empty().html('<tr><td colspan="8" style="text-align: center;">Your history has been cleared.</td></tr>').fadeIn(400);
-                        });
-                        // Update the button state to reflect the action.
-                        button.text('History Deleted').css('opacity', 0.7);
-                    } else {
-                        alert('Error: ' + (response.data.message || 'An unknown error occurred.'));
-                        button.text('Delete All Revision History').prop('disabled', false);
+
+        Swal.fire({
+            title: 'Delete All History?',
+            text: "This will permanently delete all of your practice sessions. This action cannot be undone.",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            confirmButtonText: 'Yes, delete everything!'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                $.ajax({
+                    url: qp_ajax_object.ajax_url,
+                    type: 'POST',
+                    data: {
+                        action: 'delete_revision_history',
+                        nonce: qp_ajax_object.nonce
+                    },
+                    beforeSend: function() {
+                        button.text('Deleting...').prop('disabled', true);
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            Swal.fire('Deleted!', 'Your history has been cleared.', 'success');
+                            var tableBody = wrapper.find('.qp-dashboard-table tbody');
+                            tableBody.fadeOut(400, function() {
+                                $(this).empty().html('<tr><td colspan="5" style="text-align: center;">Your history has been cleared.</td></tr>').fadeIn(400);
+                            });
+                            button.text('History Deleted').css('opacity', 0.7);
+                        } else {
+                            Swal.fire('Error!', response.data.message || 'An unknown error occurred.', 'error');
+                            button.text('Clear History').prop('disabled', false);
+                        }
+                    },
+                    error: function() {
+                        Swal.fire('Error!', 'An unknown server error occurred.', 'error');
+                        button.text('Clear History').prop('disabled', false);
                     }
-                },
-                error: function() {
-                    alert('An unknown server error occurred.');
-                    button.text('Delete All Revision History').prop('disabled', false);
-                }
-            });
-        }
+                });
+            }
+        });
     });
 
     // --- NEW: Handler for starting an incorrect questions practice session ---
@@ -306,12 +371,12 @@ jQuery(document).ready(function($) {
                 if (response.success && response.data.redirect_url) {
                     window.location.href = response.data.redirect_url;
                 } else {
-                    alert('Error: ' + (response.data.message || 'Could not start practice session. You may not have any incorrect questions to practice.'));
+                    Swal.fire('Error!', response.data.message || 'Could not start practice session. You may not have any incorrect questions to practice.', 'error');
                     button.text(originalText).prop('disabled', false);
                 }
             },
             error: function() {
-                alert('A server error occurred.');
+                Swal.fire('Error!', 'A server error occurred.', 'error');
                 button.text(originalText).prop('disabled', false);
             }
         });

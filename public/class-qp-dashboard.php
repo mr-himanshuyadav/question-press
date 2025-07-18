@@ -154,8 +154,8 @@ class QP_Dashboard
         $can_delete = !empty(array_intersect($user_roles, $allowed_roles));
 
         // --- RESTORED: Fetch Active Sessions ---
-        $active_sessions = $wpdb->get_results($wpdb->prepare("SELECT * FROM $sessions_table WHERE user_id = %d AND status = 'active' ORDER BY start_time DESC", $user_id));
-        $session_history = $wpdb->get_results($wpdb->prepare("SELECT * FROM $sessions_table WHERE user_id = %d AND status IN ('completed', 'abandoned', 'paused') ORDER BY start_time DESC", $user_id));
+        $active_sessions = $wpdb->get_results($wpdb->prepare("SELECT * FROM $sessions_table WHERE user_id = %d AND status IN ('active', 'mock_test') ORDER BY start_time DESC", $user_id));
+        $session_history = $wpdb->get_results($wpdb->prepare("SELECT * FROM $sessions_table WHERE user_id = %d AND status IN ('completed', 'abandoned', 'paused', 'mock_test') ORDER BY start_time DESC", $user_id));
 
         // Pre-fetch all subjects for all questions in the user's history to optimize queries
         $all_session_qids = [];
@@ -188,20 +188,28 @@ class QP_Dashboard
             echo '<div class="qp-active-sessions-header"><h3>Active Sessions</h3></div>';
             echo '<div class="qp-active-sessions-list">';
             foreach ($active_sessions as $session) {
-                $session_qids = json_decode($session->question_ids_snapshot, true);
-                $session_subjects = [];
-                if (is_array($session_qids)) {
-                    foreach ($session_qids as $qid) {
-                        if (isset($subjects_by_question[$qid])) {
-                            $session_subjects[$subjects_by_question[$qid]] = true;
-                        }
+                $settings = json_decode($session->settings_snapshot, true);
+                // Determine the mode, adding a case for our new 'paused' status.
+                $mode = 'Practice'; // Default
+                if ($session->status === 'paused') {
+                    $mode = 'Paused';
+                } elseif (isset($settings['practice_mode'])) {
+                    if ($settings['practice_mode'] === 'revision') {
+                        $mode = 'Revision';
+                    } elseif ($settings['practice_mode'] === 'mock_test') { // This is the missing condition
+                        $mode = 'Mock Test';
+                    } elseif ($settings['practice_mode'] === 'Incorrect Que. Practice') {
+                        $mode = 'Incorrect Practice';
+                    } elseif ($settings['practice_mode'] === 'Section Wise Practice') {
+                        $mode = 'Section Practice';
                     }
+                } elseif (isset($settings['subject_id']) && $settings['subject_id'] === 'review') {
+                    $mode = 'Review';
                 }
-                $subject_display = !empty($session_subjects) ? implode(', ', array_keys($session_subjects)) : 'Mixed';
 
                 echo '<div class="qp-active-session-card">
                 <div class="qp-card-details">
-                    <span class="qp-card-subject">' . esc_html($subject_display) . '</span>
+                    <span class="qp-card-subject">' . esc_html($mode) . '</span>
                     <span class="qp-card-date">Started: ' . date_format(date_create($session->start_time), 'M j, Y, g:i a') . '</span>
                 </div>
                 <div class="qp-card-actions">
@@ -242,10 +250,12 @@ class QP_Dashboard
                 } elseif (isset($settings['practice_mode'])) {
                     if ($settings['practice_mode'] === 'revision') {
                         $mode = 'Revision';
+                    } elseif ($settings['practice_mode'] === 'mock_test') { // This is the missing condition
+                        $mode = 'Mock Test';
                     } elseif ($settings['practice_mode'] === 'Incorrect Que. Practice') {
-                        $mode = 'Incorrect Attempt Practice';
+                        $mode = 'Incorrect Practice';
                     } elseif ($settings['practice_mode'] === 'Section Wise Practice') {
-                        $mode = 'Section Wise Practice';
+                        $mode = 'Section Practice';
                     }
                 } elseif (isset($settings['subject_id']) && $settings['subject_id'] === 'review') {
                     $mode = 'Review';

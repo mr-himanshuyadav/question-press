@@ -16,30 +16,36 @@
     --qp-border-color: #e0e0e0;
     --qp-bg-light: #f5f5f5;
     --qp-bg-white: #ffffff;
-    --qp-shadow: 0 4px 15px rgba(0,0,0,0.06);
+    --qp-shadow: 0 4px 15px rgba(0, 0, 0, 0.06);
     --qp-radius: 8px;
 }
-
+:where(.wp-site-blocks) > *{
+    margin-block-start: 0;
+}
 body {
-    background-color: #f0f2f5; 
+    background-color: #f0f2f5;
 }
 
 #qp-practice-app-wrapper {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    background-color: transparent; 
-    padding: 0;
+    background-color: transparent;
+    min-height: 95vh;
+    max-width: 100%;
     box-sizing: border-box;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    padding: 1rem .5rem;
+    width: 100%;
+
 }
 
 .qp-container {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    max-width: 800px;
+    /* max-width: 800px; */
     margin: 0 auto;
     background-color: var(--qp-bg-white);
-    padding: 1.5rem 15px; 
-    box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+    padding: 1.5rem 15px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
 }
 
 .qp-button {
@@ -53,27 +59,141 @@ body {
     font-size: 14px;
     text-align: center;
 }
-.qp-button-primary { background-color: var(--qp-primary-color); color: var(--qp-bg-white); border-color: var(--qp-primary-color); }
-.qp-button-secondary { background-color: var(--qp-bg-white); color: var(--qp-dark-text); border-color: var(--qp-border-color); }
-.qp-button:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-.qp-button-danger { background-color: #d63638; color: #fff; border-color: #d63638; }
-.qp-button-danger:hover { background-color: #b02a2a; border-color: #b02a2a; }
+
+.qp-button-primary {
+    background-color: var(--qp-primary-color);
+    color: var(--qp-bg-white);
+    border-color: var(--qp-primary-color);
+}
+
+.qp-button-secondary {
+    background-color: var(--qp-bg-white);
+    color: var(--qp-dark-text);
+    border-color: var(--qp-border-color);
+}
+
+.qp-button:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.qp-button-danger {
+    background-color: #d63638;
+    color: #fff;
+    border: none;
+}
+
+.qp-button-danger:hover {
+    background-color: #b02a2a;
+    border-color: #b02a2a;
+}
 
 /* --- Settings Form --- */
-.qp-practice-form-wrapper h2 { text-align: center; margin-top: 0; margin-bottom: 2rem; font-size: 22px; }
-.qp-form-group { margin-bottom: 1.5rem; }
-.qp-form-group > label { font-weight: 600; font-size: 14px; color: var(--qp-light-text); display: block; margin-bottom: 8px; }
-.qp-form-group select, .qp-form-group input[type="number"] { width: 100%; padding: 12px; border: 1px solid var(--qp-border-color); border-radius: 4px; font-size: 16px; box-sizing: border-box; }
-.qp-checkbox-group { display: flex; gap: 1.5rem; align-items: center; flex-wrap: wrap; }
-.qp-custom-checkbox { display: inline-flex; align-items: center; padding-left: 30px; position: relative; cursor: pointer; user-select: none; }
-.qp-custom-checkbox input { position: absolute; opacity: 0; height: 0; width: 0; }
-.qp-custom-checkbox span { position: absolute; left: 0; top: 50%; transform: translateY(-50%); height: 18px; width: 18px; background: #fff; border: 1px solid var(--qp-border-color); border-radius: 4px; }
-.qp-custom-checkbox input:checked ~ span { background-color: var(--qp-primary-color); border-color: var(--qp-primary-color); }
-.qp-custom-checkbox span::after { content: ""; position: absolute; display: none; left: 6px; top: 3px; width: 4px; height: 8px; border: solid white; border-width: 0 2px 2px 0; transform: rotate(45deg); }
-.qp-custom-checkbox input:checked ~ span::after { display: block; }
-.qp-form-group-description { background: var(--qp-bg-light); border: 1px solid #e0e6eb; padding: 1rem; margin-top: 1rem; margin-bottom: 1.5rem; border-radius: 4px; }
-.qp-form-group-description p { margin: 0.5rem 0; font-size: 13px; line-height: 1.5; }
-.qp-marks-group { display: flex; flex-direction: column; gap: 1rem; }
+.qp-practice-form-wrapper h2 {
+    text-align: center;
+    margin-top: 0;
+    margin-bottom: 2rem;
+    font-size: 22px;
+}
+
+.qp-form-group {
+    margin-bottom: 1.5rem;
+}
+
+.qp-form-group>label {
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--qp-light-text);
+    display: block;
+    margin-bottom: 8px;
+}
+
+.qp-form-group select,
+.qp-form-group input[type="number"] {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid var(--qp-border-color);
+    border-radius: 4px;
+    font-size: 16px;
+    box-sizing: border-box;
+}
+
+.qp-checkbox-group {
+    display: flex;
+    gap: 1.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.qp-custom-checkbox {
+    display: inline-flex;
+    align-items: center;
+    padding-left: 30px;
+    position: relative;
+    cursor: pointer;
+    user-select: none;
+}
+
+.qp-custom-checkbox input {
+    position: absolute;
+    opacity: 0;
+    height: 0;
+    width: 0;
+}
+
+.qp-custom-checkbox span {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    height: 18px;
+    width: 18px;
+    background: #fff;
+    border: 1px solid var(--qp-border-color);
+    border-radius: 4px;
+}
+
+.qp-custom-checkbox input:checked~span {
+    background-color: var(--qp-primary-color);
+    border-color: var(--qp-primary-color);
+}
+
+.qp-custom-checkbox span::after {
+    content: "";
+    position: absolute;
+    display: none;
+    left: 6px;
+    top: 3px;
+    width: 4px;
+    height: 8px;
+    border: solid white;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+
+.qp-custom-checkbox input:checked~span::after {
+    display: block;
+}
+
+.qp-form-group-description {
+    background: var(--qp-bg-light);
+    border: 1px solid #e0e6eb;
+    padding: 1rem;
+    margin-top: 1rem;
+    margin-bottom: 1.5rem;
+    border-radius: 4px;
+}
+
+.qp-form-group-description p {
+    margin: 0.5rem 0;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.qp-marks-group {
+    display: flex;
+    gap: 1rem;
+}
 
 /* --- Final, Polished Multi-Select Dropdown Styles --- */
 .qp-multi-select-dropdown {
@@ -110,7 +230,8 @@ body {
 }
 
 .qp-multi-select-button::after {
-    content: '\25BC'; /* Downward-pointing triangle */
+    content: '\25BC';
+    /* Downward-pointing triangle */
     font-size: 12px;
     transition: transform 0.2s ease;
 }
@@ -128,7 +249,7 @@ body {
     overflow-y: auto;
     z-index: 10;
     padding: 0.5rem;
-    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
 }
 
 .qp-multi-select-list label {
@@ -170,7 +291,9 @@ body {
     flex-direction: column;
     gap: 10px;
 }
-.qp-action-buttons .qp-button, .qp-action-buttons input.qp-button {
+
+.qp-action-buttons .qp-button,
+.qp-action-buttons input.qp-button {
     width: 100%;
     box-sizing: border-box;
 }
@@ -178,8 +301,8 @@ body {
 /* --- Practice Screen Header --- */
 .qp-header {
     text-align: center;
-    margin-bottom: 1rem;
-    padding-bottom: 1rem;
+    margin-bottom: .5rem;
+    padding-bottom: .5rem;
     border-bottom: 1px solid var(--qp-border-color);
 }
 
@@ -189,20 +312,43 @@ body {
     font-size: 14px;
     font-weight: 700;
     border-radius: 50px;
-    background-color: #fdd835; /* Yellow */
-    color: #424242; /* Dark Grey */
-    min-width: 50px; /* Ensures it doesn't shrink too small */
+    background-color: #fdd835;
+    /* Yellow */
+    color: #424242;
+    /* Dark Grey */
+    min-width: 50px;
+    /* Ensures it doesn't shrink too small */
     text-align: center;
 }
 
 #qp-timer-indicator.expired {
-    background-color: #ffebee; /* Light Red */
-    color: #c62828; /* Dark Red */
+    background-color: #ffebee;
+    /* Light Red */
+    color: #c62828;
+    /* Dark Red */
+}
+
+/* --- NEW: Corrected Mock Test Timer Styles --- */
+#qp-mock-test-timer {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--qp-dark-text);
+    /* This is the critical fix for the layout shift */
+    font-variant-numeric: tabular-nums;
+    /* This ensures a smooth color change for the warning */
+    transition: color 0.3s ease-in-out;
+}
+
+/* New class to apply the warning color */
+#qp-mock-test-timer.timer-warning {
+    color: var(--qp-incorrect-color);
+    /* Uses your existing dark red variable */
 }
 
 /* Adjust the indicator bar to vertically align all items */
 .qp-indicator-bar {
-    align-items: center; /* This is the key change */
+    align-items: center;
+    /* This is the key change */
 }
 
 .qp-header-bottom-row {
@@ -214,17 +360,68 @@ body {
     border-radius: var(--qp-radius);
     padding: 0.75rem 3rem;
 }
-.qp-header-stat {width: auto;}
-.qp-header-stat.score .label { font-size: 14px; font-weight: 500; color: var(--qp-light-text); }
-.qp-header-stat.score .value {    color: var(--qp-score-color);}
-.qp-header-stat .value { font-size: 18px; font-weight: 600; }
-.qp-header-stat .label { font-size: 12px; text-transform: uppercase; }
-.qp-header-stat.correct { color: var(--qp-correct-color); }
-.qp-header-stat.incorrect { color: var(--qp-incorrect-color); }
-.qp-header-stat.skipped { color: var(--qp-skipped-color); }
-.qp-header-stat.timer-stat { display: none; text-align: right; }
-.qp-header-stat.timer-stat .label { color: var(--qp-light-text); }
-.qp-header-stat.timer-stat .value { font-size: 20px; font-weight: 600; color: var(--qp-dark-text); }
+
+/* --- NEW: Styles for Stats Bar Inside Palette --- */
+.qp-palette-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    /* Creates a 2x2 grid */
+    gap: 0.75rem;
+    padding: 1rem;
+    border-bottom: 1px solid var(--qp-border-color);
+    background-color: #fff;
+}
+
+.qp-palette-stats .qp-header-stat {
+    background-color: var(--qp-bg-light);
+    padding: 0.25rem;
+    border-radius: var(--qp-radius);
+    text-align: center;
+}
+
+.qp-palette-stats .qp-header-stat .value {
+    font-size: 20px;
+}
+
+.qp-palette-stats .qp-header-stat .label {
+    font-size: 11px;
+}
+
+.qp-header-stat {
+    width: auto;
+}
+
+.qp-header-stat.score .label {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--qp-light-text);
+}
+
+.qp-header-stat.score .value {
+    color: var(--qp-score-color);
+}
+
+.qp-header-stat .value {
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.qp-header-stat .label {
+    font-size: 12px;
+    text-transform: uppercase;
+}
+
+.qp-header-stat.correct {
+    color: var(--qp-correct-color);
+}
+
+.qp-header-stat.incorrect {
+    color: var(--qp-incorrect-color);
+}
+
+.qp-header-stat.skipped {
+    color: var(--qp-skipped-color);
+}
 
 
 /* --- Indicator Bar Styles --- */
@@ -242,44 +439,62 @@ body {
     padding: 4px 10px;
     font-size: 12px;
     font-weight: 700;
-    border-radius: 50px; /* Pill shape */
-    display: none; /* Hidden by default */
+    border-radius: 50px;
+    /* Pill shape */
+    display: none;
+    /* Hidden by default */
     align-items: center;
-    gap: 5px; /* Adds space between icon and text */
+    gap: 5px;
+    /* Adds space between icon and text */
 }
 
 #qp-revision-indicator {
-    background-color: #e8eaf6; /* Light Indigo */
-    color: #3f51b5; /* Indigo */
+    background-color: #e8eaf6;
+    /* Light Indigo */
+    color: #3f51b5;
+    text-align: center;
+    /* Indigo */
 }
 
 #qp-reported-indicator {
-    background-color: #ffe1e1; /* Light Orange */
-    color: #b02a2a; /* Orange */
+    background-color: #ffe1e1;
+    /* Light Orange */
+    color: #b02a2a;
+    /* Orange */
 }
 
-#qp-practice-app-wrapper .katex{
-    font: normal 1em KaTeX_Main,Times New Roman,serif;
+#qp-practice-app-wrapper .katex {
+    font: normal 1em KaTeX_Main, Times New Roman, serif;
 }
 
-#qp-practice-app-wrapper .qp-direction{ font: normal 1.21em KaTeX_Main,Times New Roman,serif;}
+#qp-practice-app-wrapper .qp-direction {
+    display: flex;
+    flex-direction: column;
+    font: normal 1.21em KaTeX_Main, Times New Roman, serif;
+}
+
+#qp-practice-app-wrapper .qp-direction img {
+    max-width: 80%;
+}
 
 /* --- Question Meta & Counter Styles --- */
 .question-meta {
     font-size: 12px;
     color: #777;
-    margin-bottom: 1rem;
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
     gap: 8px;
 }
+
 .qp-question-meta-left {
     display: flex;
     flex-direction: column;
-    gap: 5px; /* Adds space between the subject line and the source line */
+    gap: 5px;
+    /* Adds space between the subject line and the source line */
 }
-.qp-question-meta-right{
+
+.qp-question-meta-right {
     width: auto;
     display: flex;
     flex-direction: column;
@@ -288,7 +503,8 @@ body {
 
 /* Style for the new source line */
 #qp-question-source {
-    font-size: 11px; /* Slightly smaller for secondary info */
+    font-size: 11px;
+    /* Slightly smaller for secondary info */
     color: var(--qp-light-text);
 }
 
@@ -300,6 +516,7 @@ body {
     text-align: center;
     background-color: #f9f9f9;
 }
+
 
 .qp-counter-label {
     display: block;
@@ -317,58 +534,869 @@ body {
     line-height: 1.2;
 }
 
+
+/* --- NEW: Mode-Specific UI Styles --- */
+
+/* Style for the mode indicator tag */
+.qp-session-mode-indicator {
+    text-align: center;
+    font-weight: 700;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 8px 16px;
+    border-radius: var(--qp-radius);
+    color: #fff;
+}
+
+
+
+
+
+
+/* =================================================================
+   Question Palette System
+================================================================= */
+
+/* --- 1. Main Layout Containers --- */
+
+/* The main wrapper's default state is narrow and centered */
+.qp-practice-wrapper {
+    max-width: 840px;
+    margin: 0 auto;
+    border-radius: 10px;
+    border: 3px solid transparent;
+    transition: transform 0.35s cubic-bezier(0.25, 1, 0.5, 1), all 0.3s ease;
+}
+
+/* This is the content area that sits next to the docked palette */
+#qp-main-content {
+    width: 100%;
+}
+
+
+/* --- 2. Docked Palette Layout (Mandatory Modes on Desktop) --- */
+@media (min-width: 960px) {
+
+    /* When this class is on the body, activate the two-column grid */
+    body.palette-mandatory .qp-practice-wrapper {
+        display: grid;
+        grid-template-columns: 320px 1fr;
+        /* Fixed left column, flexible right */
+        gap: 1.5rem;
+        max-width: 1400px;
+    }
+
+    .qp-practice-wrapper {
+        transition: transform 0.35s cubic-bezier(0.25, 1, 0.5, 1), all 0.3s ease;
+    }
+
+    body.palette-overlay-open .qp-practice-wrapper {
+        transform: translateX(40px);
+    }
+
+    /* Show the docked palette and hide the sliding one */
+    body.palette-mandatory #qp-palette-docked {
+        display: flex;
+        /* Makes it visible */
+        align-self: start;
+    }
+
+    body.palette-mandatory #qp-palette-sliding {
+        display: none;
+    }
+
+    /* The main content area automatically fits in the second grid column */
+}
+
+/* --- 3. Sliding Overlay Palette (Optional & Mobile) --- */
+
+/* Base styles for BOTH palette containers */
+#qp-palette-docked,
+#qp-palette-sliding {
+    display: none;
+    /* Both are hidden by default */
+    flex-direction: column;
+    background-color: #f6f7f7;
+    border: 1px solid var(--qp-border-color);
+    border-radius: var(--qp-radius);
+    max-height: 85vh;
+    /* Prevents it from being too tall on large monitors */
+}
+
+/* --- Add this entire new block of CSS --- */
+
+/* The new full-screen backdrop/overlay */
+#qp-palette-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.4);
+    /* Semi-transparent black */
+    z-index: 1099;
+    display: none;
+    /* Hidden by default */
+    opacity: 0;
+    transition: opacity 0.3s ease-in-out;
+}
+
+/* The palette itself, now styled as a floating box */
+#qp-palette-sliding {
+    position: absolute;
+    /* Positioned within the overlay */
+    top: 20px;
+    /* Spacing from the top */
+    left: 20px;
+    /* Spacing from the left */
+    width: 340px;
+    height: calc(100% - 40px);
+    /* Full height with top/bottom spacing */
+    z-index: 1100;
+    border-radius: 12px;
+    /* Softer, more modern corners */
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
+    transform: translateX(-400px);
+    /* Start off-screen */
+    transition: transform 0.35s cubic-bezier(0.25, 1, 0.5, 1);
+    display: flex;
+    /* This replaces the old display:none */
+    height: auto;
+}
+
+/* --- State when the palette is OPEN --- */
+
+/* Show the overlay */
+body.palette-overlay-open #qp-palette-overlay {
+    display: block;
+    opacity: 1;
+}
+
+/* Slide the palette into view */
+body.palette-overlay-open #qp-palette-sliding {
+    transform: translateX(0);
+}
+
+
+/* --- 4. Mobile Layout Override --- */
+@media (max-width: 959px) {
+
+    /* Always hide the docked version on mobile */
+    #qp-palette-docked {
+        display: none !important;
+    }
+
+    /* Override the desktop sliding palette styles */
+    #qp-palette-sliding {
+        /* Position it at the bottom */
+        top: auto;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        max-height: 80vh;
+        /* 75% of the viewport height */
+
+        /* Round only the top corners */
+        border-radius: 16px 16px 0 0;
+
+        /* Start it off-screen at the bottom */
+        transform: translateY(100%);
+
+        /* Add the shadow to the top edge */
+        box-shadow: 0 -5px 25px rgba(0, 0, 0, 0.15);
+
+        transition: transform 0.35s cubic-bezier(0.25, 1, 0.5, 1);
+    }
+
+    /* The class triggers the slide-up animation on mobile */
+    body.palette-overlay-open #qp-palette-sliding {
+        transform: translateY(0);
+    }
+
+    body.palette-overlay-open #qp-main-content {
+        transform: none;
+        /* Prevents the horizontal slide on mobile */
+    }
+}
+
+
+/* --- 5. Palette Header, Grid, and Buttons --- */
+.qp-palette-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
+    border-bottom: 1px solid var(--qp-border-color);
+    background-color: #fff;
+    flex-shrink: 0;
+}
+
+.qp-palette-header h4 {
+    margin: 0;
+    font-size: 1.1rem;
+}
+
+#qp-palette-close-btn {
+    background: none;
+    border: none;
+    font-size: 28px;
+    cursor: pointer;
+    color: var(--qp-light-text);
+    padding: 0 10px;
+    outline: none;
+    border-radius: 5px;
+}
+
+#qp-palette-close-btn:active {
+    background-color: var(--qp-bg-light);
+}
+
+.qp-palette-grid {
+    padding: 1rem;
+    overflow-y: auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(45px, 1fr));
+    gap: 14px;
+}
+
+/* Base style for all palette buttons */
+.qp-palette-btn {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    height: 52px;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--qp-dark-text);
+    background-color: #fff;
+    border: 1px solid var(--qp-border-color);
+    border-radius: var(--qp-radius);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+}
+
+.qp-palette-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
+}
+
+/* --- 6. Palette Button Status Styles --- */
+
+/* Current Question */
+.qp-palette-btn.current {
+    border: 2px solid #000;
+    border-radius: 50%;
+    transform: scale(1.15);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.25);
+    z-index: 2;
+}
+
+/* --- NEW: State-Aware Borders for the CURRENT Question Indicator --- */
+
+/* --- For Mock Tests --- */
+
+
+
+/* --- For Normal/Revision Practice --- */
+
+/* Current + Correct */
+.qp-palette-btn.status-correct.current {
+    border: 3px solid var(--qp-correct-color);
+}
+
+/* Current + Incorrect */
+.qp-palette-btn.status-incorrect.current {
+    border: 3px solid var(--qp-incorrect-color);
+}
+
+/* Current + Skipped */
+.qp-palette-btn.status-skipped.current {
+    border: 3px solid #ffca28;
+    /* Amber */
+}
+
+/* --- For Not Visited/Attempted (Both Modes) --- */
+.qp-palette-btn.status-not_viewed.current {
+    border: 3px dashed #616161;
+    /* A thin dashed border for unvisited */
+}
+
+/* Not Viewed (Default) */
+.qp-palette-btn.status-not_viewed {
+    background-color: #e0e0e0;
+    color: #757575;
+}
+
+/* Viewed (but not answered) */
+.qp-palette-btn.status-viewed {
+    background-color: #ffc107;
+    /* Amber */
+    color: #fff;
+}
+
+/* Answered */
+.qp-palette-btn.status-answered {
+    background-color: var(--qp-correct-color);
+    color: #fff;
+}
+
+/* Marked for Review (and not answered) */
+.qp-palette-btn.status-marked_for_review {
+    background-color: #1976d2;
+    /* New Vibrant Blue */
+    color: #fff;
+}
+
+/* Answered AND Marked for Review */
+.qp-palette-btn.status-answered_and_marked_for_review {
+    background-color: var(--qp-correct-color);
+    color: #fff;
+}
+
+.qp-palette-btn.status-answered_and_marked_for_review::after {
+    content: '';
+    position: absolute;
+    bottom: 5px;
+    right: 5px;
+    width: 10px;
+    height: 10px;
+    background-color: #ffeb3b;
+    /* New High-Contrast Yellow */
+    border-radius: 50%;
+    border: 1px solid #fff;
+}
+
+
+/* And simply adjust the padding property like this */
+.qp-palette-legend {
+    padding: 1rem 1.25rem;
+    /* This adds 1.25rem (about 20px) of space on the left and right */
+    border-top: 1px solid var(--qp-border-color);
+    background-color: #fff;
+    font-size: 12px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+    flex-shrink: 0;
+    border-radius: inherit;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.legend-text {
+    flex-grow: 1;
+    /* Pushes the count to the very right edge */
+}
+
+.legend-count {
+    font-weight: 700;
+    color: var(--qp-dark-text);
+}
+
+/* --- NEW: Style for Reported Questions in Palette --- */
+.qp-palette-btn.status-reported {
+    background-color: #616161;
+    /* Dark Grey */
+    border-color: #424242;
+    color: #fff;
+    border-radius: 8px;
+    /* Slightly rounded corners */
+    /* Using clip-path to create a unique shape */
+    clip-path: polygon(0% 0%, 100% 0%, 100% 85%, 50% 100%, 0 85%);
+    position: relative;
+    /* Needed for the icon */
+}
+
+/* Disabled/Locked Icon for Reported Questions */
+.qp-palette-btn.status-reported::after {
+    content: '\26A0';
+    /* CORRECTED: Unicode for a warning sign ⚠ */
+    font-family: "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+    font-size: 14px;
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    opacity: 0.9;
+}
+
+/* Legend Swatch for Reported */
+.swatch.status-reported {
+    background-color: #616161;
+}
+
+.swatch {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    position: relative;
+}
+
+
+
+/* Re-use status colors from the buttons */
+.swatch.status-answered {
+    background-color: var(--qp-correct-color);
+}
+
+.swatch.status-viewed {
+    background-color: #ffc107;
+}
+
+/* Amber */
+.swatch.status-not_viewed {
+    background-color: #e0e0e0;
+}
+
+.swatch.status-marked_for_review {
+    background-color: #1976d2;
+}
+
+/* Purple */
+.swatch.status-answered_and_marked_for_review {
+    background-color: var(--qp-correct-color);
+}
+
+.swatch.status-answered_and_marked_for_review::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 6px;
+    height: 6px;
+    background-color: #ffeb3b;
+    /* Purple dot */
+    border-radius: 50%;
+}
+
+/* --- NEWLY ADDED/CORRECTED RULES --- */
+/* Normal/Revision Mode Swatches */
+.swatch.status-correct {
+    background-color: var(--qp-correct-color);
+}
+
+.swatch.status-incorrect {
+    background-color: var(--qp-incorrect-color);
+}
+
+.swatch.status-skipped {
+    background-color: #ffca28;
+    /* Amber, matching the button border */
+}
+
+/* --- Add these new styles for Normal/Revision Modes --- */
+
+/* Correctly Answered */
+.qp-palette-btn.status-correct {
+    background-color: var(--qp-correct-bg);
+    /* Light green background */
+    color: var(--qp-correct-color);
+    /* Dark green text */
+    border: 2px solid var(--qp-correct-color);
+    /* Thick green border */
+}
+
+/* Incorrectly Answered */
+.qp-palette-btn.status-incorrect {
+    background-color: var(--qp-incorrect-bg);
+    /* Light red background */
+    color: var(--qp-incorrect-color);
+    /* Dark red text */
+    border: 2px solid var(--qp-incorrect-color);
+    /* Thick red border */
+}
+
+/* Skipped */
+.qp-palette-btn.status-skipped {
+    background-color: #fffde7;
+    /* Light yellow background */
+    color: #f57f17;
+    /* Amber text */
+    border: 2px solid #ffca28;
+    /* Amber border */
+}
+
+
+/* --- 7. Header Toggle Button --- */
+.qp-header-top-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: .5rem;
+}
+
+#qp-palette-toggle-btn {
+    background: none;
+    border: 1px solid var(--qp-border-color);
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    transition: all 0.2s ease;
+    outline: none;
+}
+
+#qp-palette-toggle-btn:active {
+    background-color: var(--qp-bg-light);
+}
+
+#qp-palette-toggle-btn:hover {
+    background-color: var(--qp-bg-light);
+    border-color: #a7aaad;
+}
+
+#qp-palette-toggle-btn .dashicons {
+    font-size: 22px;
+    color: var(--qp-light-text);
+}
+
+/* This new version only hides the button on desktop */
+@media (min-width: 960px) {
+    body.palette-mandatory #qp-palette-toggle-btn {
+        display: none;
+    }
+}
+
+/* --- NEW: Mock Test Action Buttons --- */
+.qp-mock-test-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px dashed var(--qp-border-color);
+}
+
+.qp-mock-test-actions .qp-button {
+    flex-grow: 1;
+    outline: none;
+}
+
+/* Style for the Mark for Review checkbox to look like a button */
+.qp-mock-test-actions .qp-review-later-checkbox {
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 24px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    user-select: none;
+}
+
+.qp-mock-test-actions .qp-review-later-checkbox input {
+    display: none;
+    /* Hide the actual checkbox */
+}
+
+.qp-mock-test-actions .qp-review-later-checkbox.checked {
+    background-color: #303f9f;
+    /* Darker, more solid Indigo */
+    border-color: #1a237e;
+    /* Even darker border */
+    color: #ffffff;
+    /* White text for high contrast */
+}
+
+
+/* Normal Practice Mode (Blue) */
+.mode-normal .qp-session-mode-indicator {
+    background-color: #2271b1;
+    /* Primary Blue */
+}
+
+.mode-normal.qp-practice-wrapper {
+    border-color: #2271b1;
+    box-shadow: 0 0 15px rgba(34, 113, 177, 0.2);
+}
+
+/* Revision Mode (Purple) */
+.mode-revision .qp-session-mode-indicator {
+    background-color: #5d3d9b;
+    /* Purple */
+}
+
+.mode-revision.qp-practice-wrapper {
+    border-color: #5d3d9b;
+    box-shadow: 0 0 15px rgba(93, 61, 155, 0.2);
+}
+
+/* Mock Test Mode (Red) */
+.mode-mock-test .qp-session-mode-indicator {
+    background-color: #d63638;
+    /* Danger Red */
+}
+
+.mode-mock-test.qp-practice-wrapper {
+    border-color: #e08788;
+    
+    box-shadow: 0 0 15px rgba(214, 54, 56, 0.2);
+}
+
+.mode-mock-test.qp-practice-wrapper .qp-button-danger{
+    background-color: #1976d2;
+}
+
+/* --- Additional Mode Color Themes --- */
+
+/* Incorrect Practice Mode (Orange) */
+.mode-incorrect .qp-session-mode-indicator {
+    background-color: #f57c00;
+    /* Orange */
+}
+
+.mode-incorrect.qp-practice-wrapper {
+    border-color: #f57c00;
+    box-shadow: 0 0 15px rgba(245, 124, 0, 0.2);
+}
+
+/* Section Wise Practice Mode (Teal) */
+.mode-section-wise .qp-session-mode-indicator {
+    background-color: #00897b;
+    /* Teal */
+}
+
+.mode-section-wise.qp-practice-wrapper {
+    border-color: #00897b;
+    box-shadow: 0 0 15px rgba(0, 137, 123, 0.2);
+}
+
+/* Review Mode (Indigo) */
+.mode-review .qp-session-mode-indicator {
+    background-color: #3949ab;
+    /* Indigo */
+}
+
+.mode-review.qp-practice-wrapper {
+    border-color: #3949ab;
+    box-shadow: 0 0 15px rgba(57, 73, 171, 0.2);
+}
+
 /* --- Practice Screen Content --- */
-.qp-question-area {margin-bottom: 1.2rem; margin-top: .5rem}
-.qp-question-area .question-text { font: normal 1.21em KaTeX_Main,Times New Roman,serif; line-height: 1.6; }
-.qp-options-area .option { display: block; font: normal 1.1em KaTeX_Main,Times New Roman,serif;; padding: 1rem; margin-bottom: 0.75rem; border: 2px solid var(--qp-border-color); border-radius: var(--qp-radius); cursor: pointer; transition: all 0.2s ease-in-out; position: relative; }
+.qp-question-area {
+    margin-bottom: 1.2rem;
+}
+
+.qp-question-area .question-text {
+    font: normal 1.21em KaTeX_Main, Times New Roman, serif;
+    line-height: 1.6;
+}
+
+.qp-options-area .option {
+    display: block;
+    font: normal 1.1em KaTeX_Main, Times New Roman, serif;
+    ;
+    padding: 1rem;
+    margin-bottom: 0.75rem;
+    border: 2px solid var(--qp-border-color);
+    border-radius: var(--qp-radius);
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+    position: relative;
+}
+
 .qp-options-area.disabled .option {
     cursor: not-allowed;
     background-color: #f8f9fa;
     opacity: 0.7;
 }
-.qp-options-area .option input { display: none; }
-.qp-options-area .option.disabled { cursor: not-allowed; }
-.qp-options-area .option.correct { border-color: var(--qp-correct-color) !important; background: var(--qp-correct-bg); color: var(--qp-correct-text); font-weight: 600; }
-.qp-options-area .option.incorrect { border-color: var(--qp-incorrect-color) !important; background: var(--qp-incorrect-bg); color: var(--qp-incorrect-text); }
-.qp-footer-nav { margin-top: .6rem; display: flex; gap: 10px; }
+
+.qp-options-area .option input {
+    display: none;
+}
+
+.qp-options-area .option.disabled {
+    cursor: not-allowed;
+}
+
+.qp-options-area .option.correct {
+    border-color: var(--qp-correct-color) !important;
+    background: var(--qp-correct-bg);
+    color: var(--qp-correct-text);
+    font-weight: 600;
+}
+
+.qp-options-area .option.incorrect {
+    border-color: var(--qp-incorrect-color) !important;
+    background: var(--qp-incorrect-bg);
+    color: var(--qp-incorrect-text);
+}
+
+.qp-footer-nav {
+    margin-top: .6rem;
+    display: flex;
+    gap: 10px;
+}
 
 /* --- Icon Button Styles --- */
 #qp-prev-btn .dashicons,
 #qp-next-btn .dashicons {
-    font-size: 20px; /* Adjust icon size as needed */
-    line-height: 1;  /* Ensure proper vertical alignment */
+    font-size: 20px;
+    /* Adjust icon size as needed */
+    line-height: 1;
+    /* Ensure proper vertical alignment */
 }
-.qp-footer-nav button { padding: 10px; font-weight: 600; flex: 1; }
-.qp-footer-controls {display: flex;justify-content: space-between;align-items: center; gap: 10px;flex-direction: column;}
-#qp-pause-btn { order: 2; }
-#qp-end-practice-btn { order: 1; }
-.qp-footer-nav button:disabled { background-color: #f0f0f1; border-color: #ffffff00; color: #a7aaad; cursor: not-allowed; }
-#qp-prev-btn { background-color: var(--qp-bg-light); color: var(--qp-dark-text); outline: none;}/* Unique style for Previous button */
-#qp-prev-btn:disabled { background-color: #f0f0f1; border-color: #ffffff00; color: #7c7d7d; cursor: not-allowed; }
-.qp-footer-divider{margin: 2rem 0px;}
 
-#qp-pause-btn {outline: none;}
+.qp-footer-nav button {
+    padding: 10px;
+    font-weight: 600;
+    flex: 1;
+}
+
+.qp-footer-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    flex-direction: column;
+}
+
+#qp-pause-btn {
+    order: 2;
+}
+
+#qp-end-practice-btn {
+    order: 1;
+}
+
+.qp-footer-nav button:disabled {
+    background-color: #f0f0f1;
+    border-color: #ffffff00;
+    color: #a7aaad;
+    cursor: not-allowed;
+}
+
+#qp-prev-btn {
+    background-color: var(--qp-bg-light);
+    color: var(--qp-dark-text);
+    outline: none;
+}
+
+/* Unique style for Previous button */
+#qp-prev-btn:disabled {
+    background-color: #f0f0f1;
+    border-color: #ffffff00;
+    color: #7c7d7d;
+    cursor: not-allowed;
+}
+
+.qp-footer-divider {
+    margin: 2rem 0px;
+}
+
+#qp-pause-btn {
+    outline: none;
+}
 
 
 /* --- Summary Screen --- */
-.qp-summary-wrapper { text-align: center; }
-.qp-summary-wrapper h2 { font-size: 24px; margin-bottom: 1rem; }
-.qp-summary-score { font-size: 48px; font-weight: 700; margin: 1.5rem 0; color: var(--qp-score-color); }
-.qp-summary-score .label { display: block; font-size: 16px; font-weight: 400; color: var(--qp-light-text); margin-bottom: 0.5rem; }
-.qp-summary-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 2.5rem 0; justify-content: center;}
-.qp-summary-stats .stat { background-color: var(--qp-bg-light); padding: 1rem; border-radius: var(--qp-radius); }
-.qp-summary-stats .stat .value { font-size: 24px; font-weight: 600; display: block; text-align: center;display: inline-block;}
-.qp-summary-stats .stat .label { font-size: 13px; text-transform: uppercase; color: var(--qp-light-text); }
-.qp-summary-actions { margin-top: 2rem; display: flex; flex-direction: column; gap: 1rem; }
-.qp-summary-actions .qp-button { width: 100%; box-sizing: border-box; }
+.qp-summary-wrapper {
+    text-align: center;
+}
+
+.qp-summary-wrapper h2 {
+    font-size: 24px;
+    margin-bottom: 1rem;
+}
+
+.qp-summary-score {
+    font-size: 48px;
+    font-weight: 700;
+    margin: 1.5rem 0;
+    color: var(--qp-score-color);
+}
+
+.qp-summary-score .label {
+    display: block;
+    font-size: 16px;
+    font-weight: 400;
+    color: var(--qp-light-text);
+    margin-bottom: 0.5rem;
+}
+
+.qp-summary-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin: 2.5rem 0;
+    justify-content: center;
+}
+
+.qp-summary-stats .stat {
+    background-color: var(--qp-bg-light);
+    padding: 1rem;
+    border-radius: var(--qp-radius);
+}
+
+.qp-summary-stats .stat .value {
+    font-size: 24px;
+    font-weight: 600;
+    display: block;
+    text-align: center;
+    display: inline-block;
+}
+
+.qp-summary-stats .stat .label {
+    font-size: 13px;
+    text-transform: uppercase;
+    color: var(--qp-light-text);
+}
+
+.qp-summary-actions {
+    margin-top: 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.qp-summary-actions .qp-button {
+    width: 200px;
+    box-sizing: border-box;
+}
+
 .qp-summary-stats .stat.accuracy .value {
-    color: #00897b; /* A distinct teal color */
+    color: #00897b;
+    /* A distinct teal color */
 }
 
 /* --- Report Buttons --- */
-.qp-admin-report-area, .qp-user-report-area { margin-top: 30px; padding-top: 20px; border-top: 1px dashed var(--qp-border-color); text-align: center; }
-.qp-admin-report-area h4, .qp-user-report-area h4 { margin-top: 0; margin-bottom: 15px; color: var(--qp-light-text); font-size: 16px; }
-.qp-admin-report-area .button-group, .qp-user-report-area .button-group { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
+.qp-admin-report-area,
+.qp-user-report-area {
+    margin-top: 30px;
+    padding-top: 20px;
+    border-top: 1px dashed var(--qp-border-color);
+    text-align: center;
+}
+
+.qp-admin-report-area h4,
+.qp-user-report-area h4 {
+    margin-top: 0;
+    margin-bottom: 15px;
+    color: var(--qp-light-text);
+    font-size: 16px;
+}
+
+.qp-admin-report-area .button-group,
+.qp-user-report-area .button-group {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
 
 
 /* --- Final, Consolidated Footer Button Styles --- */
@@ -377,9 +1405,12 @@ body {
 .qp-footer-nav .qp-button,
 .qp-footer-controls .qp-button {
     padding: 12px 24px;
-    font-size: 14px; /* Ensure consistent font size */
-    flex: 1; /* Make all buttons take up equal space */
-    justify-content: center; /* Center content within the button */
+    font-size: 14px;
+    /* Ensure consistent font size */
+    flex: 1;
+    /* Make all buttons take up equal space */
+    justify-content: center;
+    /* Center content within the button */
     width: 100%;
 }
 
@@ -394,13 +1425,9 @@ body {
 }
 
 .qp-review-later-checkbox:hover {
-    background-color: #f0f0f1; /* Consistent hover effect */
+    background-color: #f0f0f1;
+    /* Consistent hover effect */
     border-color: var(--qp-border-color);
-}
-
-/* Style the text and icon when the checkbox is checked */
-.qp-review-later-checkbox input[type="checkbox"]:checked ~ span {
-    color: var(--qp-primary-color);
 }
 
 .qp-action-bar {
@@ -408,11 +1435,13 @@ body {
     justify-content: space-between;
     align-items: center;
     gap: 1rem;
-    margin: 1.25rem 0; /* Adds space above and below */
+    margin: 1.25rem 0;
+    /* Adds space above and below */
 }
 
-.qp-action-bar > * {
-    flex: 1; /* Makes both buttons take up equal space */
+.qp-action-bar>* {
+    flex: 1;
+    /* Makes both buttons take up equal space */
     text-align: center;
 }
 
@@ -422,7 +1451,10 @@ body {
     box-shadow: 0 0 3px 1px rgba(34, 113, 177, 0.4);
 }
 
-#qp-check-answer-btn:disabled{opacity: 0.5; cursor: not-allowed;}
+#qp-check-answer-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
 
 #qp-report-btn {
     border: none;
@@ -432,13 +1464,43 @@ body {
     padding: 7px 10px;
 }
 
-.qp-report-button { border: none; color: #e9e9e9; cursor: pointer; border-radius: 4px; padding: 5px 10px; font-weight: 600; transition: all 0.2s ease; background-color: #bc0d0d; }
-.qp-report-button:hover:not(:disabled) { opacity: 0.85; transform: translateY(-1px); }
-.qp-report-button:disabled { font-weight: 500; opacity: 0.5; cursor: not-allowed;}
-.qp-report-color-error { background-color: #e57373; }
-.qp-report-color-warning { background-color: #ffb74d; }
-.qp-report-color-info { background-color: #64b5f6; }
-.qp-report-color-neutral { background-color: #90a4ae; }
+.qp-report-button {
+    border: none;
+    color: #e9e9e9;
+    cursor: pointer;
+    border-radius: 4px;
+    padding: 5px 10px;
+    font-weight: 600;
+    transition: all 0.2s ease;
+    background-color: #bc0d0d;
+}
+
+.qp-report-button:hover:not(:disabled) {
+    opacity: 0.85;
+    transform: translateY(-1px);
+}
+
+.qp-report-button:disabled {
+    font-weight: 500;
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.qp-report-color-error {
+    background-color: #e57373;
+}
+
+.qp-report-color-warning {
+    background-color: #ffb74d;
+}
+
+.qp-report-color-info {
+    background-color: #64b5f6;
+}
+
+.qp-report-color-neutral {
+    background-color: #90a4ae;
+}
 
 /* --- Fullscreen Start Overlay Styles --- */
 #qp-start-session-overlay {
@@ -447,11 +1509,13 @@ body {
     left: 0;
     width: 100%;
     height: 100%;
-    background-color: rgba(240, 242, 245, 0.95); /* Semi-transparent background */
+    background-color: rgba(240, 242, 245, 0.95);
+    /* Semi-transparent background */
     display: flex;
     justify-content: center;
     align-items: center;
-    z-index: 2000; /* Ensure it's on top */
+    z-index: 2000;
+    /* Ensure it's on top */
     text-align: center;
 }
 
@@ -474,6 +1538,7 @@ body {
 
 /* --- NEW: Mobile-Specific Fullscreen Behavior --- */
 @media (max-width: 768px) {
+
     /* Hide the fullscreen overlay completely on smaller screens */
     #qp-start-session-overlay {
         display: none;
@@ -488,15 +1553,69 @@ body {
 
 
 /* --- Dashboard Screen --- */
-.qp-dashboard-wrapper h2 { font-size: 22px; text-align: center; margin: 0 auto 1.5rem auto; }
-.qp-dashboard-actions { display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1.5rem; }
-.qp-dashboard-table { border: 0; width: 100%; }
-.qp-dashboard-table thead { display: none; }
-.qp-dashboard-table tr { display: block; border: 1px solid var(--qp-border-color); border-radius: var(--qp-radius); margin-bottom: 1rem; padding: 0.75rem 1rem; }
-.qp-dashboard-table td { display: flex; justify-content: space-between; align-items: center; padding: .6rem 0; text-align: right; border-bottom: 1px dashed #e7e7e7; font-size: 14px; }
-.qp-dashboard-table td:last-child { border-bottom: 0; display: flex; gap: 5px;}
-.qp-dashboard-table td::before { content: attr(data-label); font-weight: 600; text-align: left; color: var(--qp-dark-text); }
-.qp-delete-session-btn { background: none; border: 1px solid #d63638; color: #d63638; cursor: pointer; border-radius: 4px; padding: 4px 8px; font-size: 12px; transition: all 0.2s; }
+.qp-dashboard-wrapper h2 {
+    font-size: 22px;
+    text-align: center;
+    margin: 0 auto 1.5rem auto;
+}
+
+.qp-dashboard-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
+}
+
+.qp-dashboard-table {
+    border: 0;
+    width: 100%;
+}
+
+.qp-dashboard-table thead {
+    display: none;
+}
+
+.qp-dashboard-table tr {
+    display: block;
+    border: 1px solid var(--qp-border-color);
+    border-radius: var(--qp-radius);
+    margin-bottom: 1rem;
+    padding: 0.75rem 1rem;
+}
+
+.qp-dashboard-table td {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: .6rem 0;
+    text-align: right;
+    border-bottom: 1px dashed #e7e7e7;
+    font-size: 14px;
+}
+
+.qp-dashboard-table td:last-child {
+    border-bottom: 0;
+    display: flex;
+    gap: 5px;
+}
+
+.qp-dashboard-table td::before {
+    content: attr(data-label);
+    font-weight: 600;
+    text-align: left;
+    color: var(--qp-dark-text);
+}
+
+.qp-delete-session-btn {
+    background: none;
+    border: 1px solid #d63638;
+    color: #d63638;
+    cursor: pointer;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 12px;
+    transition: all 0.2s;
+}
 
 /* --- New Dashboard Header & Stats Styles --- */
 
@@ -523,7 +1642,8 @@ body {
 /* Style for the new overall stats container */
 .qp-overall-stats {
     display: grid;
-    grid-template-columns: repeat(4, 1fr); /* 4 columns on desktop */
+    grid-template-columns: repeat(4, 1fr);
+    /* 4 columns on desktop */
     gap: 1rem;
     margin-bottom: 1.5rem;
 }
@@ -554,7 +1674,8 @@ body {
 
 /* A different color for the accuracy stat to make it stand out */
 .qp-overall-stats .stat-item:first-child .stat-value {
-    color: #00897b; /* Teal color */
+    color: #00897b;
+    /* Teal color */
 }
 
 /* Fix for the spacing issue you mentioned */
@@ -579,11 +1700,13 @@ body {
     justify-content: space-between;
     align-items: center;
     gap: 1rem;
-    flex-wrap: wrap; /* Allows items to wrap on smaller screens */
+    flex-wrap: wrap;
+    /* Allows items to wrap on smaller screens */
 }
 
 .qp-history-header h3 {
-    flex-grow: 1; /* Allows the title to take up remaining space */
+    flex-grow: 1;
+    /* Allows the title to take up remaining space */
 }
 
 /* Remove margin from the relocated actions button container */
@@ -597,62 +1720,78 @@ body {
     justify-content: space-between;
     align-items: center;
     margin-top: 2rem;
-}   
+}
+
 /* --- Dashboard History Header Actions --- */
 .qp-history-actions {
     display: flex;
-    gap: 10px; /* Sets the space between the buttons */ 
+    gap: 10px;
+    /* Sets the space between the buttons */
 }
 
 .qp-history-actions .qp-button {
-    flex: 1; /* Makes the buttons share the space equally */
-    white-space: nowrap; /* Prevents text from wrapping on small buttons */
+    flex: 1;
+    /* Makes the buttons share the space equally */
+    white-space: nowrap;
+    /* Prevents text from wrapping on small buttons */
 }
 
 
 /* --- Responsive layout for mobile phones --- */
 @media (max-width: 767px) {
     .qp-overall-stats {
-        grid-template-columns: repeat(2, 1fr); /* 2x2 grid on mobile */
+        grid-template-columns: repeat(2, 1fr);
+        /* 2x2 grid on mobile */
     }
+
     .qp-history-actions {
-    width: 100%;
-}
+        width: 100%;
+    }
+
     .qp-history-actions .qp-button {
         width: 40%;
-}
-.qp-header-bottom-row {
-    padding: 0.75rem 1rem;
-}
+    }
 
-.qp-review-list-header button {
-    width: 100%;
-}
+    .qp-header-bottom-row {
+        padding: 0.75rem 1rem;
+    }
 
-/* --- Balanced Incorrect Practice Card --- */
-.qp-practice-card{
-    flex-wrap: wrap;
-}
-.qp-card-content h4{
-    font-size: 18px !important;
-    font-weight: 600;
-}
-.qp-practice-card .qp-card-action, .qp-practice-card .qp-card-action button {
-    width: 100%;
-}
+    .qp-review-list-header button {
+        width: 100%;
+    }
 
-.qp-practice-card p {
-    font-size: 1rem !important;
-}
+    .qp-summary-actions .qp-button{
+        width: 100%;
+    }
 
-ul.qp-review-list li{
-    flex-direction: column;
-}
-.qp-review-list-q-text{
-    padding-right: 0 !important;
-    padding-bottom: 1rem;
-    text-align: justify;
-}
+    /* --- Balanced Incorrect Practice Card --- */
+    .qp-practice-card {
+        flex-wrap: wrap;
+    }
+
+    .qp-card-content h4 {
+        font-size: 18px !important;
+        font-weight: 600;
+    }
+
+    .qp-practice-card .qp-card-action,
+    .qp-practice-card .qp-card-action button {
+        width: 100%;
+    }
+
+    .qp-practice-card p {
+        font-size: 1rem !important;
+    }
+
+    ul.qp-review-list li {
+        flex-direction: column;
+    }
+
+    .qp-review-list-q-text {
+        padding-right: 0 !important;
+        padding-bottom: 1rem;
+        text-align: justify;
+    }
 
 
 }
@@ -661,23 +1800,47 @@ ul.qp-review-list li{
    DESKTOP AND LARGER SCREENS
    ================================================================= */
 @media (min-width: 768px) {
-    .qp-container { padding: 2rem 2.5rem; border-radius: var(--qp-radius); }
-    .qp-marks-group { flex-direction: row; gap: 1.5rem; }
+    .qp-container {
+        padding: 2rem 2.5rem;
+        border-radius: var(--qp-radius);
+    }
+
+    .qp-marks-group {
+        flex-direction: row;
+        gap: 1.5rem;
+    }
+
     .qp-action-buttons {
         flex-direction: row;
     }
-    .qp-action-buttons .qp-button, .qp-action-buttons input.qp-button {
+
+    .qp-action-buttons .qp-button,
+    .qp-action-buttons input.qp-button {
         width: auto;
         flex-grow: 1;
     }
 
     .qp-question-meta-right {
-    flex-direction: row;
-    gap: 5px;
-}
+        flex-direction: row;
+        gap: 5px;
+    }
+
+    .qp-options-area {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        /* Two equal columns */
+        gap: 0.75rem 1.5rem;
+        /* Adds vertical and horizontal spacing */
+    }
+
+    /* Prevent the last item from stretching across both columns if there's an odd number of options */
+    .qp-options-area .option:last-child:nth-child(odd) {
+        grid-column-end: span 1;
+    }
 
     .qp-footer-controls {
-        flex-direction: row; /* Back to a row on desktop */
+        flex-direction: row;
+        /* Back to a row on desktop */
     }
 
     /* Reset order for desktop so it follows HTML source */
@@ -689,35 +1852,111 @@ ul.qp-review-list li{
     /* Restore Desktop Header */
 
 
-    .qp-header-stat.score .label { font-size: 18px; font-weight: 500; color: var(--qp-light-text); }
-.qp-header-stat.score .value {
-    color: var(--qp-score-color); /* This uses the variable defined at the top */
-}
-.qp-header-stat .value { font-size: 24px; font-weight: 600; }
-.qp-header-stat .label { font-size: 12px; text-transform: uppercase; }
-.qp-header-stat.correct { color: var(--qp-correct-color); }
-.qp-header-stat.incorrect { color: var(--qp-incorrect-color); }
-.qp-header-stat.skipped { color: var(--qp-skipped-color); }
-.qp-header-stat.timer-stat { display: none; text-align: right; }
-.qp-header-stat.timer-stat .label { color: var(--qp-light-text); }
-.qp-header-stat.timer-stat .value { font-size: 20px; font-weight: 600; color: var(--qp-dark-text); }
-    
+    .qp-header-stat.score .label {
+        font-size: 18px;
+        font-weight: 500;
+        color: var(--qp-light-text);
+    }
 
-    .qp-summary-stats { display: flex; }
-    .qp-summary-actions { flex-direction: row; gap: 1rem; }
+    .qp-header-stat.score .value {
+        color: var(--qp-score-color);
+        /* This uses the variable defined at the top */
+    }
 
-    .qp-dashboard-actions { flex-direction: row; justify-content: space-between; align-items: center; margin-bottom: 2rem; }
-    .qp-dashboard-table { border-collapse: collapse; }
-    .qp-dashboard-table thead { display: table-header-group; }
-    .qp-dashboard-table tr { display: table-row; border: 0; border-bottom: 1px solid var(--qp-border-color); }
-    .qp-dashboard-table td { display: table-cell; padding: 12px 15px; text-align: left; vertical-align: middle; }
-    .qp-dashboard-table td::before { display: none; }
+    .qp-header-stat .value {
+        font-size: 24px;
+        font-weight: 600;
+    }
+
+    .qp-header-stat .label {
+        font-size: 12px;
+        text-transform: uppercase;
+    }
+
+    .qp-header-stat.correct {
+        color: var(--qp-correct-color);
+    }
+
+    .qp-header-stat.incorrect {
+        color: var(--qp-incorrect-color);
+    }
+
+    .qp-header-stat.skipped {
+        color: var(--qp-skipped-color);
+    }
+
+    .qp-header-stat.timer-stat {
+        display: none;
+        text-align: right;
+    }
+
+    .qp-header-stat.timer-stat .label {
+        color: var(--qp-light-text);
+    }
+
+    .qp-header-stat.timer-stat .value {
+        font-variant-numeric: tabular-nums;
+        /* This is the fix for the layout shift */
+        transition: color 0.3s ease-in-out;
+        font-size: 20px;
+        font-weight: 600;
+        color: var(--qp-dark-text);
+    }
+
+    .qp-header-stat.timer-stat .value.timer-warning {
+        color: var(--qp-incorrect-color);
+        /* Uses your existing dark red variable */
+    }
+
+
+    .qp-summary-stats {
+        display: flex;
+    }
+
+    .qp-summary-actions {
+        flex-direction: row;
+        gap: 1rem;
+        justify-content: center;
+    }
+
+    .qp-dashboard-actions {
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2rem;
+    }
+
+    .qp-dashboard-table {
+        border-collapse: collapse;
+    }
+
+    .qp-dashboard-table thead {
+        display: table-header-group;
+    }
+
+    .qp-dashboard-table tr {
+        display: table-row;
+        border: 0;
+        border-bottom: 1px solid var(--qp-border-color);
+    }
+
+    .qp-dashboard-table td {
+        display: table-cell;
+        padding: 12px 15px;
+        text-align: left;
+        vertical-align: middle;
+    }
+
+    .qp-dashboard-table td::before {
+        display: none;
+    }
 }
 
 /* --- Animation Styles --- */
 .qp-question-area {
     position: relative;
-    overflow: hidden; /* This is crucial for the sliding effect */
+    overflow: hidden;
+    /* This is crucial for the sliding effect */
 }
 
 .qp-question-area-content {
@@ -771,13 +2010,23 @@ ul.qp-review-list li{
 }
 
 @keyframes slideInFromRight {
-    from { transform: translateX(100%); }
-    to { transform: translateX(0); }
+    from {
+        transform: translateX(100%);
+    }
+
+    to {
+        transform: translateX(0);
+    }
 }
 
 @keyframes slideInFromLeft {
-    from { transform: translateX(-100%); }
-    to { transform: translateX(0); }
+    from {
+        transform: translateX(-100%);
+    }
+
+    to {
+        transform: translateX(0);
+    }
 }
 
 /* --- Active Session Card Styles --- */
@@ -824,6 +2073,7 @@ ul.qp-review-list li{
     padding: 1rem;
     border-radius: var(--qp-radius);
 }
+
 .qp-review-summary .qp-summary-stats {
     margin: 0;
     gap: 0.5rem;
@@ -848,56 +2098,77 @@ ul.qp-review-list li{
 .qp-review-questions-list {
     margin-top: 2rem;
 }
+
 .qp-review-question-item {
     padding: 1rem 0;
     border-bottom: 1px dashed var(--qp-border-color);
 }
+
 .qp-review-question-item:last-child {
     border-bottom: none;
 }
-.qp-review-question-text {
-    font: normal .95em KaTeX_Main,Times New Roman,serif;
+
+.qp-review-question-text,
+.qp-review-direction-text {
+    font: normal .95em KaTeX_Main, Times New Roman, serif;
     line-height: 1.6;
     font-weight: 500;
     margin-bottom: 1rem;
 }
+
 .qp-review-answer-row {
     display: flex;
     align-items: center;
     font-size: 14px;
     margin-bottom: 0.5rem;
 }
+
 .qp-review-label {
     font-weight: 600;
     color: var(--qp-light-text);
     width: 120px;
     flex-shrink: 0;
 }
+
 .qp-review-answer {
-    font: normal 1.1em KaTeX_Main,Times New Roman,serif;
+    font: normal 1.1em KaTeX_Main, Times New Roman, serif;
     padding: 4px 8px;
     border-radius: 4px;
     font-weight: 600;
 }
 
-.qp-review-question-text .katex{
-    font: normal .95em KaTeX_Main,Times New Roman,serif;
+/* --- NEW: Style for Unattempted Questions on Review Page --- */
+.qp-review-answer.unattempted {
+    background-color: #f0f0f1;
+    /* Light Gray */
+    color: #50575e;
+    /* Dark Gray Text */
+    font-style: italic;
 }
+
+.qp-review-question-text .katex {
+    font: normal .95em KaTeX_Main, Times New Roman, serif;
+}
+
 .qp-review-answer .katex {
-    font: normal 1.1em KaTeX_Main,Times New Roman,serif;
+    font: normal 1.1em KaTeX_Main, Times New Roman, serif;
 }
+
 .qp-review-answer.correct {
     background-color: var(--qp-correct-bg);
     color: var(--qp-correct-color);
 }
+
 .qp-review-answer.incorrect {
     background-color: var(--qp-incorrect-bg);
     color: var(--qp-incorrect-color);
 }
 
 .qp-review-answer.skipped {
-    background-color: #fffab1; /* Light yellow */
-    color: #f87706; /* Amber */
+    background-color: #fffab1;
+    /* Light yellow */
+    color: #f87706;
+    /* Amber */
 }
 
 .qp-review-question-meta {
@@ -932,25 +2203,32 @@ ul.qp-review-list li{
     padding: 10px;
     border-radius: var(--qp-radius);
     transition: all 0.2s ease;
-    
+
     background-color: #f0f0f1;
 }
+
 .qp-review-later {
     display: flex;
     justify-content: center;
-    align-items: center; /* This is the key for vertical alignment */
-    gap: 15px; /* This creates space between the items */
+    align-items: center;
+    /* This is the key for vertical alignment */
+    gap: 15px;
+    /* This creates space between the items */
     margin-bottom: 5px;
 }
+
 .qp-review-later-checkbox:hover {
     background-color: #f0f0f1;
 }
+
 .qp-review-later-checkbox input {
     transform: scale(1.2);
 }
+
 .qp-review-later-checkbox:hover {
     background-color: #f0f0f1;
 }
+
 .qp-review-later-checkbox input {
     transform: scale(1.2);
 }
@@ -961,6 +2239,7 @@ ul.qp-review-list li{
     border-bottom: 1px solid var(--qp-border-color);
     margin-bottom: 1.5rem;
 }
+
 .qp-tab-link {
     padding: 10px 20px;
     cursor: pointer;
@@ -971,13 +2250,16 @@ ul.qp-review-list li{
     font-weight: 600;
     color: var(--qp-light-text);
 }
+
 .qp-tab-link.active {
     color: var(--qp-primary-color);
     border-bottom-color: var(--qp-primary-color);
 }
+
 .qp-tab-content {
     display: none;
 }
+
 .qp-tab-content.active {
     display: block;
 }
@@ -997,11 +2279,13 @@ ul.qp-review-list li{
 }
 
 .qp-practice-card .qp-card-content {
-    flex: 1 1 auto; /* Allow content to grow */
+    flex: 1 1 auto;
+    /* Allow content to grow */
 }
 
 .qp-practice-card .qp-card-action {
-    flex-shrink: 0; /* Prevent action area from shrinking */
+    flex-shrink: 0;
+    /* Prevent action area from shrinking */
     display: flex;
     flex-direction: column;
     align-items: flex-start;
@@ -1020,7 +2304,7 @@ ul.qp-review-list li{
     font-size: 1.2rem;
 }
 
-.qp-practice-card .qp-card-action button{
+.qp-practice-card .qp-card-action button {
     width: 100%;
 }
 
@@ -1039,15 +2323,18 @@ ul.qp-review-list li{
     background-color: var(--qp-bg-light);
     border-radius: var(--qp-radius);
 }
+
 .qp-review-list-header p {
     margin: 0;
     font-weight: 500;
 }
+
 ul.qp-review-list {
     list-style: none;
     padding: 0;
     margin: 0;
 }
+
 ul.qp-review-list li {
     display: flex;
     justify-content: space-between;
@@ -1055,10 +2342,12 @@ ul.qp-review-list li {
     padding: 1rem 0;
     border-bottom: 1px solid var(--qp-border-color);
 }
+
 .qp-review-list-actions {
     width: 35%;
     text-align: right;
 }
+
 .qp-review-list-actions .qp-review-list-remove-btn {
     background: none;
     border: 1px solid #d63638;
@@ -1070,6 +2359,7 @@ ul.qp-review-list li {
     font-weight: 600;
     transition: all 0.2s;
 }
+
 .qp-review-list-actions .qp-review-list-remove-btn:hover {
     background-color: #d63638;
     color: #fff;
@@ -1085,9 +2375,12 @@ ul.qp-review-list li {
     gap: 1rem;
     margin-bottom: 1rem;
 }
+
 .qp-dashboard-header h2 {
-    margin: 0; /* Removes default heading margin */
+    margin: 0;
+    /* Removes default heading margin */
 }
+
 .qp-logout-link {
     font-size: 14px;
     font-weight: 600;
@@ -1098,6 +2391,7 @@ ul.qp-review-list li {
     border-radius: var(--qp-radius);
     transition: all 0.2s ease;
 }
+
 .qp-logout-link:hover {
     background-color: #e0e0e0;
     color: var(--qp-dark-text);
@@ -1110,6 +2404,7 @@ ul.qp-review-list li {
     margin-top: 1.5rem;
     margin-bottom: 1.5rem;
 }
+
 .qp-tab-link {
     padding: 10px 20px;
     cursor: pointer;
@@ -1119,15 +2414,19 @@ ul.qp-review-list li {
     font-size: 16px;
     font-weight: 600;
     color: var(--qp-light-text);
-    margin-bottom: -1px; /* Overlap the border */
+    margin-bottom: -1px;
+    /* Overlap the border */
 }
+
 .qp-tab-link.active {
     color: var(--qp-primary-color);
     border-bottom-color: var(--qp-primary-color);
 }
+
 .qp-tab-content {
     display: none;
 }
+
 .qp-tab-content.active {
     display: block;
 }
@@ -1144,15 +2443,18 @@ ul.qp-review-list li {
     background-color: var(--qp-bg-light);
     border-radius: var(--qp-radius);
 }
+
 .qp-review-list-header p {
     margin: 0;
     font-weight: 500;
 }
+
 ul.qp-review-list {
     list-style: none;
     padding: 0;
     margin: 0;
 }
+
 ul.qp-review-list li {
     display: flex;
     justify-content: space-between;
@@ -1160,16 +2462,19 @@ ul.qp-review-list li {
     padding: 1rem 0;
     border-bottom: 1px solid var(--qp-border-color);
 }
+
 .qp-review-list-q-text {
-    font: normal 1.21rem KaTeX_Main,Times New Roman,serif;
+    font: normal 1.21rem KaTeX_Main, Times New Roman, serif;
     padding-right: 1rem;
 }
+
 .qp-review-list-q-text small {
     display: block;
     font-size: 12px;
     color: var(--qp-light-text);
     margin-top: 5px;
 }
+
 .qp-review-list-actions .qp-review-list-remove-btn {
     background: none;
     border: 1px solid #d63638;
@@ -1181,6 +2486,7 @@ ul.qp-review-list li {
     font-weight: 600;
     transition: all 0.2s;
 }
+
 .qp-review-list-actions .qp-review-list-remove-btn:hover {
     background-color: #d63638;
     color: #fff;
@@ -1215,6 +2521,7 @@ ul.qp-review-list li {
     transition: all 0.2s;
     margin-right: 8px;
 }
+
 .qp-review-list-actions .qp-review-list-view-btn:hover {
     background-color: var(--qp-primary-hover);
 }
@@ -1260,7 +2567,7 @@ ul.qp-review-list li {
     padding: 1rem;
     border-radius: var(--qp-radius);
     margin-bottom: 1rem;
-    font: normal 1.21em KaTeX_Main,Times New Roman,serif;
+    font: normal 1.21em KaTeX_Main, Times New Roman, serif;
 }
 
 #qp-review-modal-content .option {
@@ -1269,6 +2576,7 @@ ul.qp-review-list li {
     margin-bottom: 0.5rem;
     border-radius: var(--qp-radius);
 }
+
 #qp-review-modal-content .option.correct {
     border-color: var(--qp-correct-color);
     background-color: var(--qp-correct-bg);
@@ -1280,6 +2588,7 @@ ul.qp-review-list li {
     border-top: 1px solid var(--qp-border-color);
     text-align: right;
 }
+
 .qp-modal-footer label {
     font-weight: 600;
     cursor: pointer;
@@ -1312,10 +2621,12 @@ hr.qp-divider {
     height: 100%;
     background-color: rgba(0, 0, 0, 0.6);
     z-index: 1050;
-    display: none; /* Changed to none */
+    display: none;
+    /* Changed to none */
     justify-content: center;
     align-items: center;
-    display: flex; /* This is the key property for centering */
+    display: flex;
+    /* This is the key property for centering */
 }
 
 #qp-report-modal-content {
@@ -1325,7 +2636,7 @@ hr.qp-divider {
     max-width: 90%;
     width: 500px;
     position: relative;
-    box-shadow: 0 5px 25px rgba(0,0,0,0.15);
+    box-shadow: 0 5px 25px rgba(0, 0, 0, 0.15);
 }
 
 #qp-report-modal-content h3 {
@@ -1348,29 +2659,35 @@ hr.qp-divider {
 
 /* --- Corrected Report Modal Checkbox Styles --- */
 #qp-report-form .qp-custom-checkbox {
-    display: flex; /* Ensures items stay on one line */
+    display: flex;
+    /* Ensures items stay on one line */
     width: 100%;
-    padding: 12px 15px 12px 40px; /* Adjusted padding: more room on the left */
+    padding: 12px 15px 12px 40px;
+    /* Adjusted padding: more room on the left */
     background-color: #f9f9f9;
     border: 1px solid var(--qp-border-color);
     border-radius: 4px;
-    box-sizing: border-box; /* Ensures padding is included in width */
+    box-sizing: border-box;
+    /* Ensures padding is included in width */
 }
 
 /* We need to adjust the position of the custom checkmark */
 #qp-report-form .qp-custom-checkbox span {
-    left: 12px; /* Gives space from the left edge */
+    left: 12px;
+    /* Gives space from the left edge */
 }
 
 /* --- Responsive Dashboard Actions --- */
 @media (max-width: 767px) {
+
     /* Targets the actions on the Review List (View/Remove) */
     .qp-review-list-actions {
         display: flex;
         flex-direction: row;
         gap: 0.5rem;
         width: auto;
-        flex-shrink: 0; /* Prevent it from shrinking */
+        flex-shrink: 0;
+        /* Prevent it from shrinking */
     }
 
     /* Targets the actions on the Active Session Card (Terminate/Continue) */
@@ -1378,21 +2695,26 @@ hr.qp-divider {
         display: flex;
         flex-direction: column;
         gap: 0.5rem;
-        align-self: stretch; /* Makes the container take full height of the card */
-        justify-content: center; /* Centers the buttons vertically */
+        align-self: stretch;
+        /* Makes the container take full height of the card */
+        justify-content: center;
+        /* Centers the buttons vertically */
     }
+
     /* NEW: Make all action buttons full-width inside their containers */
     .qp-review-list-actions button,
     .qp-card-actions .qp-button {
         width: 100%;
-        box-sizing: border-box; /* Ensures padding is included in the width */
+        box-sizing: border-box;
+        /* Ensures padding is included in the width */
         text-align: center;
     }
+
     /* --- Final UI Polish --- */
-.qp-modal-footer input[type="checkbox"]:focus {
-    outline: none;
-    box-shadow: none;
-}
+    .qp-modal-footer input[type="checkbox"]:focus {
+        outline: none;
+        box-shadow: none;
+    }
 }
 
 /* --- Multi-Step Form --- */
@@ -1465,11 +2787,11 @@ hr.qp-divider {
     text-align: center;
 }
 
-.qp-mode-radio-label input[type="radio"]:hover + .qp-mode-radio-button {
+.qp-mode-radio-label input[type="radio"]:hover+.qp-mode-radio-button {
     border-color: #a7aaad;
 }
 
-.qp-mode-radio-label input[type="radio"]:checked + .qp-mode-radio-button {
+.qp-mode-radio-label input[type="radio"]:checked+.qp-mode-radio-button {
     background-color: var(--qp-primary-color);
     border-color: var(--qp-primary-color);
     color: #fff;
@@ -1505,13 +2827,14 @@ hr.qp-divider {
 
 /* Revision Mode Specific */
 .qp-revision-type-buttons {
-     display: flex;
+    display: flex;
     justify-content: center;
     border: 1px solid var(--qp-border-color);
     border-radius: var(--qp-radius);
     overflow: hidden;
     margin-bottom: 1rem;
 }
+
 .qp-revision-type-btn {
     flex: 1;
     padding: 10px;
@@ -1520,15 +2843,21 @@ hr.qp-divider {
     cursor: pointer;
     transition: background-color 0.2s;
 }
+
 .qp-revision-type-btn.active {
     background-color: var(--qp-primary-color);
     color: #fff;
     font-weight: bold;
 }
-#qp-start-revision-form h2 { text-align: center; }
+
+#qp-start-revision-form h2 {
+    text-align: center;
+}
+
 #qp-start-revision-form .qp-action-buttons {
     flex-direction: column;
 }
+
 .qp-revision-tree {
     max-height: 250px;
     overflow-y: auto;
@@ -1537,18 +2866,22 @@ hr.qp-divider {
     text-align: left;
     background: #fff;
 }
+
 .qp-revision-tree ul {
     list-style: none;
     padding-left: 20px;
 }
-.qp-revision-tree > ul {
+
+.qp-revision-tree>ul {
     padding-left: 0;
 }
+
 .qp-revision-tree label {
     font-weight: normal;
     display: block;
 }
-.qp-revision-tree > ul > li > label {
+
+.qp-revision-tree>ul>li>label {
     font-weight: bold;
 }
 
@@ -1556,7 +2889,8 @@ hr.qp-divider {
     text-align: center;
 }
 
-#qp-start-practice-form, #qp-start-revision-form {
+#qp-start-practice-form,
+#qp-start-revision-form {
     text-align: left;
 }
 
@@ -1575,20 +2909,24 @@ hr.qp-divider {
     text-decoration: none;
     transition: color 0.2s ease;
 }
+
 .qp-dashboard-link-bottom:hover {
     color: var(--qp-dark-text);
 }
 
 #qp-step1-next-btn:disabled {
-    background-color: #d2e7f7; /* Lighter blue */
+    background-color: #d2e7f7;
+    /* Lighter blue */
     border-color: #d2e7f7;
     color: #fff;
     cursor: not-allowed;
     box-shadow: none;
     transform: none;
 }
+
 #qp-step1-next-btn:disabled:hover {
-     background-color: #d2e7f7; /* Keep color on hover when disabled */
+    background-color: #d2e7f7;
+    /* Keep color on hover when disabled */
     border-color: #d2e7f7;
 }
 
