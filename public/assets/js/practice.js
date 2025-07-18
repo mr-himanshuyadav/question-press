@@ -1903,14 +1903,21 @@ jQuery(document).ready(function ($) {
   }
 
   function displaySummary(summaryData) {
-    closeFullscreen();
-    practiceInProgress = false;
-
     // Determine if the session was a mock test and if it was scored
     var settings = summaryData.settings || {};
     var isMockTest = settings.practice_mode === "mock_test";
-    var isScoredSession = settings.marks_correct !== null;
+    if (isMockTest && qp_ajax_object.review_page_url) {
+        var reviewUrl = new URL(qp_ajax_object.review_page_url);
+        reviewUrl.searchParams.set("session_id", sessionID);
+        window.location.href = reviewUrl.href;
+        return; // Stop the rest of the function from running
+    }
 
+    closeFullscreen();
+    practiceInProgress = false;
+
+
+    var isScoredSession = settings.marks_correct !== null;
     var mainDisplayHtml = "";
     if (isScoredSession) {
       mainDisplayHtml = `<div class="qp-summary-score"><div class="label">Final Score</div>${parseFloat(
