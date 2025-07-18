@@ -188,13 +188,15 @@ class QP_Dashboard
             echo '<div class="qp-active-sessions-header"><h3>Active Sessions</h3></div>';
             echo '<div class="qp-active-sessions-list">';
             foreach ($active_sessions as $session) {
-                $session_qids = json_decode($session->question_ids_snapshot, true);
-                $mode = 'Practice'; // Default mode
-
-                if (isset($settings['practice_mode'])) {
+                $settings = json_decode($session->settings_snapshot, true);
+                // Determine the mode, adding a case for our new 'paused' status.
+                $mode = 'Practice'; // Default
+                if ($session->status === 'paused') {
+                    $mode = 'Paused';
+                } elseif (isset($settings['practice_mode'])) {
                     if ($settings['practice_mode'] === 'revision') {
                         $mode = 'Revision';
-                    } elseif ($settings['practice_mode'] === 'mock_test') {
+                    } elseif ($settings['practice_mode'] === 'mock_test') { // This is the missing condition
                         $mode = 'Mock Test';
                     } elseif ($settings['practice_mode'] === 'Incorrect Que. Practice') {
                         $mode = 'Incorrect Practice';
@@ -248,10 +250,12 @@ class QP_Dashboard
                 } elseif (isset($settings['practice_mode'])) {
                     if ($settings['practice_mode'] === 'revision') {
                         $mode = 'Revision';
+                    } elseif ($settings['practice_mode'] === 'mock_test') { // This is the missing condition
+                        $mode = 'Mock Test';
                     } elseif ($settings['practice_mode'] === 'Incorrect Que. Practice') {
-                        $mode = 'Incorrect Attempt Practice';
+                        $mode = 'Incorrect Practice';
                     } elseif ($settings['practice_mode'] === 'Section Wise Practice') {
-                        $mode = 'Section Wise Practice';
+                        $mode = 'Section Practice';
                     }
                 } elseif (isset($settings['subject_id']) && $settings['subject_id'] === 'review') {
                     $mode = 'Review';
