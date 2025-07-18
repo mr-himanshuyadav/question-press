@@ -683,25 +683,25 @@ class QP_Shortcodes
                     </div>
                 <?php endif; ?>
                 <div class="qp-palette-grid"></div>
-                    <div class="qp-palette-legend">
-                        <?php if ($is_mock_test) : ?>
-                            <div class="legend-item" data-status="answered"><span class="swatch status-answered"></span><span class="legend-text">Answered</span><span class="legend-count">(0)</span></div>
-                            <div class="legend-item" data-status="viewed"><span class="swatch status-viewed"></span><span class="legend-text">Not Answered</span><span class="legend-count">(0)</span></div>
-                            <div class="legend-item" data-status="not_viewed"><span class="swatch status-not_viewed"></span><span class="legend-text">Not Visited</span><span class="legend-count">(0)</span></div>
-                            <div class="legend-item" data-status="marked_for_review"><span class="swatch status-marked_for_review"></span><span class="legend-text">Marked for Review</span><span class="legend-count">(0)</span></div>
-                            <div class="legend-item" data-status="answered_and_marked_for_review"><span class="swatch status-answered_and_marked_for_review"></span><span class="legend-text">Answered & Marked</span><span class="legend-count">(0)</span></div>
-                            <div class="legend-item" data-status="reported"><span class="swatch status-reported"></span><span class="legend-text">Reported</span><span class="legend-count">(0)</span></div>
-                        <?php else : ?>
-                            <div class="legend-item" data-status="correct"><span class="swatch status-correct"></span><span class="legend-text">Correct</span><span class="legend-count">(0)</span></div>
-                            <div class="legend-item" data-status="incorrect"><span class="swatch status-incorrect"></span><span class="legend-text">Incorrect</span><span class="legend-count">(0)</span></div>
-                            <div class="legend-item" data-status="skipped"><span class="swatch status-skipped"></span><span class="legend-text">Skipped</span><span class="legend-count">(0)</span></div>
-                            <div class="legend-item" data-status="reported"><span class="swatch status-reported"></span><span class="legend-text">Reported</span><span class="legend-count">(0)</span></div>
-                            <?php if ($is_section_wise) : ?>
-                                <div class="legend-item" data-status="not_attempted"><span class="swatch status-not_viewed"></span><span class="legend-text">Not Attempted</span><span class="legend-count">(0)</span></div>
-                            <?php endif; ?>
+                <div class="qp-palette-legend">
+                    <?php if ($is_mock_test) : ?>
+                        <div class="legend-item" data-status="answered"><span class="swatch status-answered"></span><span class="legend-text">Answered</span><span class="legend-count">(0)</span></div>
+                        <div class="legend-item" data-status="viewed"><span class="swatch status-viewed"></span><span class="legend-text">Not Answered</span><span class="legend-count">(0)</span></div>
+                        <div class="legend-item" data-status="not_viewed"><span class="swatch status-not_viewed"></span><span class="legend-text">Not Visited</span><span class="legend-count">(0)</span></div>
+                        <div class="legend-item" data-status="marked_for_review"><span class="swatch status-marked_for_review"></span><span class="legend-text">Marked for Review</span><span class="legend-count">(0)</span></div>
+                        <div class="legend-item" data-status="answered_and_marked_for_review"><span class="swatch status-answered_and_marked_for_review"></span><span class="legend-text">Answered & Marked</span><span class="legend-count">(0)</span></div>
+                        <div class="legend-item" data-status="reported"><span class="swatch status-reported"></span><span class="legend-text">Reported</span><span class="legend-count">(0)</span></div>
+                    <?php else : ?>
+                        <div class="legend-item" data-status="correct"><span class="swatch status-correct"></span><span class="legend-text">Correct</span><span class="legend-count">(0)</span></div>
+                        <div class="legend-item" data-status="incorrect"><span class="swatch status-incorrect"></span><span class="legend-text">Incorrect</span><span class="legend-count">(0)</span></div>
+                        <div class="legend-item" data-status="skipped"><span class="swatch status-skipped"></span><span class="legend-text">Skipped</span><span class="legend-count">(0)</span></div>
+                        <div class="legend-item" data-status="reported"><span class="swatch status-reported"></span><span class="legend-text">Reported</span><span class="legend-count">(0)</span></div>
+                        <?php if ($is_section_wise) : ?>
+                            <div class="legend-item" data-status="not_attempted"><span class="swatch status-not_viewed"></span><span class="legend-text">Not Attempted</span><span class="legend-count">(0)</span></div>
                         <?php endif; ?>
-                    </div>
-                
+                    <?php endif; ?>
+                </div>
+
             </div>
         </div>
 
@@ -750,20 +750,20 @@ class QP_Shortcodes
                     </div>
 
                     <?php if ($is_mock_test) : ?>
-                    <div class="qp-header-bottom-row">
-                        <div class="qp-header-stat">
-                            <span class="value" id="qp-mock-test-timer">--:--</span>
-                            <span class="label">Time Remaining</span>
+                        <div class="qp-header-bottom-row">
+                            <div class="qp-header-stat">
+                                <span class="value" id="qp-mock-test-timer">--:--</span>
+                                <span class="label">Time Remaining</span>
+                            </div>
+                            <div class="qp-header-stat">
+                                <span class="value" id="qp-question-counter">--/--</span>
+                                <span class="label">Questions</span>
+                            </div>
                         </div>
-                        <div class="qp-header-stat">
-                            <span class="value" id="qp-question-counter">--/--</span>
-                            <span class="label">Questions</span>
-                        </div>
-                    </div>
-                    <p id="qp-timer-warning-message" style="color: #c62828; font-size: 0.8em;text-align: center; font-weight: 500; margin: 0; display: none;">
-                        The test will be submitted automatically when the time expires.
-                    </p>
-                <?php endif; ?>
+                        <p id="qp-timer-warning-message" style="color: #c62828; font-size: 0.8em;text-align: center; font-weight: 500; margin: 0; display: none;">
+                            The test will be submitted automatically when the time expires.
+                        </p>
+                    <?php endif; ?>
                 </div>
 
                 <div class="qp-animatable-area-container">
@@ -902,12 +902,13 @@ class QP_Shortcodes
             ORDER BY t.topic_name ASC
         ", $session_id));
 
-        $attempts = $wpdb->get_results($wpdb->prepare(
-            "SELECT q.question_text, q.custom_question_id, q.question_number_in_section,
-            g.direction_text, s.subject_name,
-            t.topic_name,
-            src.source_name, sec.section_name,
-            o.option_text AS selected_answer, o_correct.option_text AS correct_answer, a.is_correct, a.mock_status
+        // -- START: Replacement Code --
+        $attempts_raw = $wpdb->get_results($wpdb->prepare(
+            "SELECT 
+        a.question_id, a.selected_option_id, a.is_correct, a.mock_status,
+        q.question_text, q.custom_question_id, q.question_number_in_section,
+        g.direction_text, s.subject_name, t.topic_name,
+        src.source_name, sec.section_name
      FROM {$wpdb->prefix}qp_user_attempts a
      JOIN {$wpdb->prefix}qp_questions q ON a.question_id = q.question_id
      LEFT JOIN {$wpdb->prefix}qp_question_groups g ON q.group_id = g.group_id
@@ -915,12 +916,37 @@ class QP_Shortcodes
      LEFT JOIN {$wpdb->prefix}qp_topics t ON q.topic_id = t.topic_id
      LEFT JOIN {$wpdb->prefix}qp_sources src ON q.source_id = src.source_id
      LEFT JOIN {$wpdb->prefix}qp_source_sections sec ON q.section_id = sec.section_id
-     LEFT JOIN {$wpdb->prefix}qp_options o ON a.selected_option_id = o.option_id
-     LEFT JOIN {$wpdb->prefix}qp_options o_correct ON q.question_id = o_correct.question_id AND o_correct.is_correct = 1
      WHERE a.session_id = %d
      ORDER BY a.attempt_id ASC",
             $session_id
         ));
+
+        $attempted_question_ids = wp_list_pluck($attempts_raw, 'question_id');
+        $all_options = [];
+        if (!empty($attempted_question_ids)) {
+            $ids_placeholder = implode(',', array_map('absint', $attempted_question_ids));
+            $options_results = $wpdb->get_results("SELECT question_id, option_id, option_text, is_correct FROM {$wpdb->prefix}qp_options WHERE question_id IN ($ids_placeholder)");
+            foreach ($options_results as $option) {
+                $all_options[$option->question_id][] = $option;
+            }
+        }
+
+        // Combine attempts with their options
+        $attempts = [];
+        foreach ($attempts_raw as $attempt) {
+            $attempt->options = $all_options[$attempt->question_id] ?? [];
+            $attempt->selected_answer = '';
+            $attempt->correct_answer = '';
+            foreach ($attempt->options as $option) {
+                if ($option->is_correct) {
+                    $attempt->correct_answer = $option->option_text;
+                }
+                if ($option->option_id == $attempt->selected_option_id) {
+                    $attempt->selected_answer = $option->option_text;
+                }
+            }
+            $attempts[] = $attempt;
+        }
 
         ob_start();
         // --- Determine Session Mode ---
@@ -960,7 +986,7 @@ class QP_Shortcodes
                         <span class="qp-session-mode-indicator" style="padding: 5px 12px; font-size: 12px;"><?php echo esc_html($mode); ?></span>
                         <p style="margin: 0; color: #50575e; font-size: 14px;"><strong>Session ID:</strong> <?php echo esc_html($session_id); ?></p>
                     </div>
-                    
+
                 </div>
                 <a href="<?php echo esc_url($dashboard_page_url); ?>" class="qp-button qp-button-secondary" style="text-decoration: none;">&laquo; Dashboard</a>
             </div>
@@ -1028,18 +1054,22 @@ class QP_Shortcodes
                     }
                 ?>
                     <div class="qp-review-question-item">
-                        <div class="qp-review-question-meta">
-                            <span><strong>ID: </strong><?php echo esc_html($attempt->custom_question_id); ?></span>
-
-                            <!-- CHANGE #2: Modified Subject/Topic Display -->
-                            <span>
-                                <strong>Topic: </strong>
-                                <?php
-                                $topic_display = esc_html($attempt->subject_name);
-                                if (!empty($attempt->topic_name)) {
-                                    $topic_display .= ' / ' . esc_html($attempt->topic_name);
-                                }
-                                echo $topic_display; ?></span>
+                        <div class="qp-review-question-meta" style="display: flex; justify-content: space-between; align-items: flex-start;">
+                            <div class="meta-left" style="display: flex; flex-direction: column; gap: 5px;">
+                                <span><strong>ID: </strong><?php echo esc_html($attempt->custom_question_id); ?></span>
+                                <span>
+                                    <strong>Topic: </strong>
+                                    <?php
+                                    $topic_display = esc_html($attempt->subject_name);
+                                    if (!empty($attempt->topic_name)) {
+                                        $topic_display .= ' / ' . esc_html($attempt->topic_name);
+                                    }
+                                    echo $topic_display; ?>
+                                </span>
+                            </div>
+                            <div class="meta-right">
+                                <button class="qp-report-button qp-report-btn-review" data-question-id="<?php echo esc_attr($attempt->question_id); ?>"><span>&#9888;</span> Report</button>
+                            </div>
                         </div>
                         <?php
                         $user_can_view_source = !empty(array_intersect((array)wp_get_current_user()->roles, (array)($options['show_source_meta_roles'] ?? [])));
@@ -1079,10 +1109,36 @@ class QP_Shortcodes
                                 </span>
                             </div>
                         <?php endif; ?>
+
+                        <div class="qp-review-all-options-wrapper" style="margin-top: 1rem; border-top: 1px dashed #e0e0e0; padding-top: 1rem;">
+                        <h5 style="margin: 0 0 0.5rem 0; font-size: 13px; color: #50575e;">All Options:</h5>
+                        <ul style="margin: 0; padding-left: 20px; list-style-type: upper-alpha;">
+                            <?php foreach ($attempt->options as $option): ?>
+                                <li style="<?php echo $option->is_correct ? 'font-weight: bold; color: #2e7d32;' : ''; ?>">
+                                    <?php echo esc_html($option->option_text); ?>
+                                </li>
+                            <?php endforeach; ?>
+                        </ul>
+                    </div>
                     </div>
                 <?php endforeach; ?>
             </div>
         </div>
+
+        <div id="qp-report-modal-backdrop" style="display: none;">
+        <div id="qp-report-modal-content">
+            <button class="qp-modal-close-btn">&times;</button>
+            <h3>Report an Issue</h3>
+            <p>Please select all issues that apply to the current question.</p>
+            <form id="qp-report-form">
+                <input type="hidden" id="qp-report-question-id-field" value="">
+                <div id="qp-report-options-container"></div>
+                <div class="qp-modal-footer">
+                    <button type="submit" class="qp-button qp-button-primary">Submit Report</button>
+                </div>
+            </form>
+        </div>
+    </div>
 <?php
         return ob_get_clean();
     }

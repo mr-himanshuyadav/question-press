@@ -902,13 +902,49 @@ jQuery(document).ready(function ($) {
     $("#qp-report-modal-backdrop").fadeIn(200);
   });
 
+  // --- Report Modal on REVIEW PAGE---
+    wrapper.on("click", ".qp-report-btn-review", function () {
+        var questionID = $(this).data('question-id');
+        $('#qp-report-question-id-field').val(questionID); // Set the hidden field
+
+        var reportContainer = $("#qp-report-options-container");
+        reportContainer.html("<p>Loading reasons...</p>");
+
+        $.ajax({
+            url: qp_ajax_object.ajax_url,
+            type: "POST",
+            data: { action: "get_report_reasons", nonce: qp_ajax_object.nonce, },
+            success: function (response) {
+                if (response.success && response.data.reasons.length > 0) {
+                    reportContainer.empty();
+                    $.each(response.data.reasons, function (index, reason) {
+                        var checkboxHtml = `
+                        <label class="qp-custom-checkbox">
+                            <input type="checkbox" name="report_reasons[]" value="${reason.reason_id}">
+                            <span></span>
+                            ${reason.reason_text}
+                        </label>`;
+                        reportContainer.append(checkboxHtml);
+                    });
+                } else {
+                    reportContainer.html("<p>Could not load reporting options.</p>");
+                }
+            },
+            error: function () {
+                reportContainer.html("<p>An error occurred.</p>");
+            },
+        });
+
+        $("#qp-report-modal-backdrop").fadeIn(200);
+    });
+
   // Handle the report form submission
   wrapper.on("submit", "#qp-report-form", function (e) {
     e.preventDefault();
     var form = $(this);
     var submitButton = form.find('button[type="submit"]');
     var originalButtonText = submitButton.text();
-    var questionID = sessionQuestionIDs[currentQuestionIndex];
+    var questionID = $('#qp-report-question-id-field').val() || (typeof sessionQuestionIDs !== 'undefined' ? sessionQuestionIDs[currentQuestionIndex] : 0);
     var selectedReasons = form
       .find('input[name="report_reasons[]"]:checked')
       .map(function () {
