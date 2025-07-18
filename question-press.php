@@ -1196,8 +1196,20 @@ function qp_start_practice_session_ajax()
             $order_by_sql = ($admin_order_setting === 'in_order') ? 'ORDER BY q.custom_question_id ASC' : 'ORDER BY RAND()';
         }
 
-        $query = "SELECT q.question_id FROM {$q_table} q {$joins} WHERE {$base_where_sql} {$exclude_sql} {$order_by_sql}";
-        $question_ids = $wpdb->get_col($wpdb->prepare($query, $query_args));
+        $question_ids = [];
+        if ($practice_mode === 'Section Wise Practice') {
+            $query = "SELECT q.question_id, q.question_number_in_section FROM {$q_table} q {$joins} WHERE {$base_where_sql} {$exclude_sql} {$order_by_sql}";
+            $question_results = $wpdb->get_results($wpdb->prepare($query, $query_args));
+            if (!empty($question_results)) {
+                $question_ids = wp_list_pluck($question_results, 'question_id');
+                // Create a map of question IDs to their numbers and add it to the settings
+                $session_settings['question_numbers'] = wp_list_pluck($question_results, 'question_number_in_section', 'question_id');
+            }
+        } else {
+            // For all other modes, the original logic is fine
+            $query = "SELECT q.question_id FROM {$q_table} q {$joins} WHERE {$base_where_sql} {$exclude_sql} {$order_by_sql}";
+            $question_ids = $wpdb->get_col($wpdb->prepare($query, $query_args));
+        }
     }
 
     // --- COMMON SESSION CREATION LOGIC --- (No changes here)

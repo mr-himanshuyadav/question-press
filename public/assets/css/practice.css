@@ -1359,7 +1359,7 @@ body.palette-overlay-open #qp-palette-sliding {
 }
 
 .qp-summary-actions .qp-button {
-    width: 100%;
+    width: 200px;
     box-sizing: border-box;
 }
 
@@ -1755,6 +1755,10 @@ body.palette-overlay-open #qp-palette-sliding {
         width: 100%;
     }
 
+    .qp-summary-actions .qp-button{
+        width: 100%;
+    }
+
     /* --- Balanced Incorrect Practice Card --- */
     .qp-practice-card {
         flex-wrap: wrap;
@@ -1907,6 +1911,7 @@ body.palette-overlay-open #qp-palette-sliding {
     .qp-summary-actions {
         flex-direction: row;
         gap: 1rem;
+        justify-content: center;
     }
 
     .qp-dashboard-actions {

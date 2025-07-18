@@ -171,7 +171,13 @@ function startMockTestTimer(endTimeUTC) {
       const paletteBtn = $("<button></button>")
         .addClass("qp-palette-btn")
         .attr("data-question-index", index)
-        .text(index + 1)
+        .text(
+          sessionSettings.practice_mode === "Section Wise Practice" &&
+            sessionSettings.question_numbers &&
+            sessionSettings.question_numbers[questionID]
+            ? sessionSettings.question_numbers[questionID]
+            : index + 1
+        )
         .addClass(statusClass);
 
       if (index === currentQuestionIndex) {
