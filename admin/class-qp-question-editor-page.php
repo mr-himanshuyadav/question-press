@@ -250,10 +250,13 @@ class QP_Question_Editor_Page
                                             <p><strong>Options (Select the radio button for the correct answer)</strong></p>
                                             <?php for ($i = 0; $i < 5; $i++) :
                                                 $option = isset($question->options[$i]) ? $question->options[$i] : null;
+                                                // Use a temporary value for new options that don't have an ID yet.
+                                                $option_id_value = $option ? esc_attr($option->option_id) : 'new_' . $i;
                                                 $is_correct = $option ? $option->is_correct : ($i == 0 && !$is_editing);
                                             ?>
                                                 <div class="qp-option-row" style="display: flex; align-items: center; margin-bottom: 5px;">
-                                                    <input type="radio" name="questions[<?php echo $q_index; ?>][is_correct_option]" value="<?php echo $i; ?>" <?php checked($is_correct); ?>>
+                                                    <input type="radio" name="questions[<?php echo $q_index; ?>][correct_option_id]" value="<?php echo $option_id_value; ?>" <?php checked($is_correct); ?>>
+                                                    <input type="hidden" name="questions[<?php echo $q_index; ?>][option_ids][]" value="<?php echo $option ? esc_attr($option->option_id) : '0'; ?>">
                                                     <input type="text" name="questions[<?php echo $q_index; ?>][options][]" class="option-text-input" value="<?php echo $option ? esc_attr($option->option_text) : ''; ?>" style="flex-grow: 1; margin: 0 5px;" placeholder="Option <?php echo $i + 1; ?>">
                                                 </div>
                                             <?php endfor; ?>

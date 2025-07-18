@@ -724,17 +724,51 @@ function qp_handle_save_question_group()
         }
 
         // --- Process Options ---
-        $wpdb->delete($o_table, ['question_id' => $question_id]);
-        $options = isset($q_data['options']) ? (array)$q_data['options'] : [];
-        $correct_option_index = isset($q_data['is_correct_option']) ? absint($q_data['is_correct_option']) : -1;
-        foreach ($options as $index => $option_text) {
-            if (!empty(trim($option_text))) {
-                $wpdb->insert($o_table, [
-                    'question_id' => $question_id,
-                    'option_text' => sanitize_text_field(stripslashes($option_text)),
-                    'is_correct' => ($index === $correct_option_index) ? 1 : 0
-                ]);
+        $submitted_option_ids = [];
+        $options_text = isset($q_data['options']) ? (array)$q_data['options'] : [];
+        $option_ids = isset($q_data['option_ids']) ? (array)$q_data['option_ids'] : [];
+        $correct_option_id_from_form = isset($q_data['correct_option_id']) ? $q_data['correct_option_id'] : null;
+
+        foreach ($options_text as $index => $option_text) {
+            $option_id = isset($option_ids[$index]) ? absint($option_ids[$index]) : 0;
+            $trimmed_option_text = trim(stripslashes($option_text));
+
+            if (empty($trimmed_option_text)) {
+                continue; // Skip empty option fields
             }
+
+            $option_data = ['option_text' => sanitize_text_field($trimmed_option_text)];
+
+            if ($option_id > 0) {
+                // This is an existing option, so we UPDATE it.
+                $wpdb->update($o_table, $option_data, ['option_id' => $option_id]);
+                $submitted_option_ids[] = $option_id;
+            } else {
+                // This is a new option, so we INSERT it.
+                $option_data['question_id'] = $question_id;
+                $wpdb->insert($o_table, $option_data);
+                $new_option_id = $wpdb->insert_id;
+                $submitted_option_ids[] = $new_option_id;
+
+                // If the correct option was a new one, update its ID
+                if ($correct_option_id_from_form === 'new_' . $index) {
+                    $correct_option_id_from_form = $new_option_id;
+                }
+            }
+        }
+
+        // Now, delete any options that were removed from the form.
+        $existing_db_option_ids = $wpdb->get_col($wpdb->prepare("SELECT option_id FROM $o_table WHERE question_id = %d", $question_id));
+        $options_to_delete = array_diff($existing_db_option_ids, $submitted_option_ids);
+        if (!empty($options_to_delete)) {
+            $ids_placeholder = implode(',', array_map('absint', $options_to_delete));
+            $wpdb->query("DELETE FROM $o_table WHERE option_id IN ($ids_placeholder)");
+        }
+
+        // Finally, set the `is_correct` flag for all options of this question.
+        $wpdb->update($o_table, ['is_correct' => 0], ['question_id' => $question_id]);
+        if ($correct_option_id_from_form) {
+            $wpdb->update($o_table, ['is_correct' => 1], ['option_id' => absint($correct_option_id_from_form), 'question_id' => $question_id]);
         }
 
         // --- Process Labels ---
@@ -1223,8 +1257,8 @@ function qp_start_practice_session_ajax()
 
     // --- COMMON SESSION CREATION LOGIC --- (No changes here)
     if (empty($question_ids)) {
-    wp_send_json_error(['message' => 'No questions were found for the selected criteria. Please try different options.']);
-}
+        wp_send_json_error(['message' => 'No questions were found for the selected criteria. Please try different options.']);
+    }
 
     $options = get_option('qp_settings');
     $session_page_id = isset($options['session_page']) ? absint($options['session_page']) : 0;
@@ -1396,8 +1430,8 @@ function qp_start_mock_test_session_ajax()
     $question_pool = $wpdb->get_results($wpdb->prepare($query, $query_params));
 
     if (empty($question_pool)) {
-    wp_send_json_error(['message' => 'No questions were found for the selected criteria. Please try different options.']);
-}
+        wp_send_json_error(['message' => 'No questions were found for the selected criteria. Please try different options.']);
+    }
 
     // --- Apply distribution logic ---
     $final_question_ids = [];
@@ -1854,8 +1888,8 @@ function qp_start_revision_session_ajax()
     $topic_ids_to_query = array_unique($topic_ids_to_query);
 
     if (empty($topic_ids_to_query)) {
-    wp_send_json_error(['message' => 'No previously attempted questions found for the selected criteria. Try different options or a Normal Practice session.']);
-}
+        wp_send_json_error(['message' => 'No previously attempted questions found for the selected criteria. Try different options or a Normal Practice session.']);
+    }
 
     // --- Main Question Selection Logic ---
     $final_question_ids = [];
@@ -1919,8 +1953,8 @@ function qp_start_revision_session_ajax()
     // --- Create and Start the Session ---
     $question_ids = array_unique($final_question_ids);
     if (empty($question_ids)) {
-    wp_send_json_error(['message' => 'No questions were found for the selected criteria. Try different options or a Normal Practice session.']);
-}
+        wp_send_json_error(['message' => 'No questions were found for the selected criteria. Try different options or a Normal Practice session.']);
+    }
 
     shuffle($question_ids);
 
