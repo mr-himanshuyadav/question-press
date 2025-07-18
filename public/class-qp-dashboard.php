@@ -189,19 +189,25 @@ class QP_Dashboard
             echo '<div class="qp-active-sessions-list">';
             foreach ($active_sessions as $session) {
                 $session_qids = json_decode($session->question_ids_snapshot, true);
-                $session_subjects = [];
-                if (is_array($session_qids)) {
-                    foreach ($session_qids as $qid) {
-                        if (isset($subjects_by_question[$qid])) {
-                            $session_subjects[$subjects_by_question[$qid]] = true;
-                        }
+                $mode = 'Practice'; // Default mode
+
+                if (isset($settings['practice_mode'])) {
+                    if ($settings['practice_mode'] === 'revision') {
+                        $mode = 'Revision';
+                    } elseif ($settings['practice_mode'] === 'mock_test') {
+                        $mode = 'Mock Test';
+                    } elseif ($settings['practice_mode'] === 'Incorrect Que. Practice') {
+                        $mode = 'Incorrect Practice';
+                    } elseif ($settings['practice_mode'] === 'Section Wise Practice') {
+                        $mode = 'Section Practice';
                     }
+                } elseif (isset($settings['subject_id']) && $settings['subject_id'] === 'review') {
+                    $mode = 'Review';
                 }
-                $subject_display = !empty($session_subjects) ? implode(', ', array_keys($session_subjects)) : 'Mixed';
 
                 echo '<div class="qp-active-session-card">
                 <div class="qp-card-details">
-                    <span class="qp-card-subject">' . esc_html($subject_display) . '</span>
+                    <span class="qp-card-subject">' . esc_html($mode) . '</span>
                     <span class="qp-card-date">Started: ' . date_format(date_create($session->start_time), 'M j, Y, g:i a') . '</span>
                 </div>
                 <div class="qp-card-actions">
