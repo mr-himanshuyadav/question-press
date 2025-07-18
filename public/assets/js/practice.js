@@ -45,49 +45,63 @@ jQuery(document).ready(function ($) {
 
     // Clear any previous timer to prevent duplicates
     if (mockTestTimer) {
-        clearInterval(mockTestTimer);
+      clearInterval(mockTestTimer);
     }
 
     mockTestTimer = setInterval(function () {
-        var nowUTC = Math.floor(new Date().getTime() / 1000);
-        var secondsRemaining = endTimeUTC - nowUTC;
+      var nowUTC = Math.floor(new Date().getTime() / 1000);
+      var secondsRemaining = endTimeUTC - nowUTC;
 
-        if (secondsRemaining < 0) {
-            secondsRemaining = 0; // Prevent negative display
-        }
+      if (secondsRemaining < 0) {
+        secondsRemaining = 0; // Prevent negative display
+      }
 
-        // *** THIS IS THE FIX ***
-        // Show/hide the warning message and apply the warning class to the timer
-        if (secondsRemaining <= 300) { // 5 minutes = 300 seconds
-            timerEl.addClass('timer-warning');
-            warningMessage.show(); // This line makes the message appear
-        } else {
-            timerEl.removeClass('timer-warning');
-            warningMessage.hide(); // This line hides it when there's more than 5 mins left
-        }
+      // *** THIS IS THE FIX ***
+      // Show/hide the warning message and apply the warning class to the timer
+      if (secondsRemaining <= 300) {
+        // 5 minutes = 300 seconds
+        timerEl.addClass("timer-warning");
+        warningMessage.show(); // This line makes the message appear
+      } else {
+        timerEl.removeClass("timer-warning");
+        warningMessage.hide(); // This line hides it when there's more than 5 mins left
+      }
 
-        // Format the time conditionally
-        var hours = Math.floor(secondsRemaining / 3600);
-        var minutes = Math.floor((secondsRemaining % 3600) / 60);
-        var seconds = secondsRemaining % 60;
-        var timeString = "";
+      // Format the time conditionally
+      var hours = Math.floor(secondsRemaining / 3600);
+      var minutes = Math.floor((secondsRemaining % 3600) / 60);
+      var seconds = secondsRemaining % 60;
+      var timeString = "";
 
-        if (hours > 0) {
-            timeString += String(hours).padStart(2, "0") + ":";
-        }
-        
-        timeString += String(minutes).padStart(2, "0") + ":" + String(seconds).padStart(2, "0");
+      if (hours > 0) {
+        timeString += String(hours).padStart(2, "0") + ":";
+      }
 
-        timerEl.text(timeString);
+      timeString +=
+        String(minutes).padStart(2, "0") +
+        ":" +
+        String(seconds).padStart(2, "0");
 
-        // Stop the timer and auto-submit when time is up
-        if (secondsRemaining === 0) {
-            clearInterval(mockTestTimer);
-            alert("Time's up! Your test will be submitted automatically.");
-            endSession(true);
-        }
+      timerEl.text(timeString);
+
+      // Stop the timer and auto-submit when time is up
+      if (secondsRemaining === 0) {
+        clearInterval(mockTestTimer);
+        Swal.fire({
+          title: "Time's Up!",
+          text: "Your test will be submitted automatically.",
+          icon: "warning",
+          timer: 4000,
+          timerProgressBar: true,
+          allowOutsideClick: false,
+          allowEscapeKey: false,
+          showConfirmButton: false,
+        }).then(() => {
+          endSession(true);
+        });
+      }
     }, 1000);
-}
+  }
 
   // --- NEW: Helper function to update mock test question status ---
   function updateMockStatus(questionID, newStatus) {
@@ -1118,7 +1132,6 @@ jQuery(document).ready(function ($) {
     });
   });
 
-
   // Session state variables
   var sessionID = 0;
   var sessionQuestionIDs = [];
@@ -1565,7 +1578,7 @@ jQuery(document).ready(function ($) {
       if (!previousState.mock_status) {
         updateMockStatus(questionID, "viewed");
       }
-    // Replace the entire block above with this one
+      // Replace the entire block above with this one
     } else {
       // --- CORRECTED LOGIC FOR NORMAL/REVISION MODES ---
       $("#qp-next-btn").prop("disabled", true);
@@ -1574,80 +1587,101 @@ jQuery(document).ready(function ($) {
       $("#qp-mark-for-review-cb").prop("checked", data.is_marked_for_review);
 
       if (isAutoCheckEnabled) {
-          $("#qp-check-answer-btn").hide();
+        $("#qp-check-answer-btn").hide();
       } else {
-          $("#qp-check-answer-btn").show().prop("disabled", true);
+        $("#qp-check-answer-btn").show().prop("disabled", true);
       }
-      
+
       // 1. Reset all indicators first
       var indicatorBar = $(".qp-indicator-bar");
       indicatorBar.hide(); // Hide the parent bar
-      $("#qp-revision-indicator, #qp-reported-indicator, #qp-timer-indicator").hide(); // Hide all children
-      
+      $(
+        "#qp-revision-indicator, #qp-reported-indicator, #qp-timer-indicator"
+      ).hide(); // Hide all children
+
       var showIndicatorBar = false;
 
       // --- THIS IS THE FIX: Caching the historical attempt count ---
-if (data.is_revision) {
-    var questionID = sessionQuestionIDs[currentQuestionIndex];
-    var countToShow = 0;
+      if (data.is_revision) {
+        var questionID = sessionQuestionIDs[currentQuestionIndex];
+        var countToShow = 0;
 
-    // Check if we have a stored count for this question already
-    if (answeredStates[questionID] && typeof answeredStates[questionID].historical_attempts !== 'undefined') {
-        // If yes, use the stored count
-        countToShow = answeredStates[questionID].historical_attempts;
-    } else {
-        // If no, use the count from the server and store it for the first time
-        countToShow = data.previous_attempt_count;
-        if (!answeredStates[questionID]) {
+        // Check if we have a stored count for this question already
+        if (
+          answeredStates[questionID] &&
+          typeof answeredStates[questionID].historical_attempts !== "undefined"
+        ) {
+          // If yes, use the stored count
+          countToShow = answeredStates[questionID].historical_attempts;
+        } else {
+          // If no, use the count from the server and store it for the first time
+          countToShow = data.previous_attempt_count;
+          if (!answeredStates[questionID]) {
             answeredStates[questionID] = {};
+          }
+          answeredStates[questionID].historical_attempts = countToShow;
         }
-        answeredStates[questionID].historical_attempts = countToShow;
-    }
 
-    // Display the indicator with the stable count
-    $("#qp-revision-indicator").text('🔄 Revision (' + countToShow + ')').show();
-    showIndicatorBar = true;
-}
-      
+        // Display the indicator with the stable count
+        $("#qp-revision-indicator")
+          .text("🔄 Revision (" + countToShow + ")")
+          .show();
+        showIndicatorBar = true;
+      }
+
       var isReported = previousState.reported;
       var isAnswered = previousState.type === "answered";
       var isExpired = previousState.type === "expired";
-      
+
       // 3. Conditionally show other indicators
       if (isReported) {
-          $("#qp-reported-indicator").show();
-          showIndicatorBar = true;
+        $("#qp-reported-indicator").show();
+        showIndicatorBar = true;
       }
 
       // 4. Handle UI for answered/expired/reported questions
       if (isAnswered || isExpired || isReported) {
-          optionsArea.addClass("disabled").find('input[type="radio"]').prop("disabled", true);
-          $("#qp-skip-btn").prop("disabled", true);
-          $("#qp-next-btn").prop("disabled", false);
-          
-          if (isAnswered) {
-              $('input[value="' + previousState.selected_option_id + '"]').prop("checked", true).closest(".option").addClass(previousState.is_correct ? "correct" : "incorrect");
-              if (!previousState.is_correct) {
-                  $('input[value="' + previousState.correct_option_id + '"]').closest(".option").addClass("correct");
-              }
+        optionsArea
+          .addClass("disabled")
+          .find('input[type="radio"]')
+          .prop("disabled", true);
+        $("#qp-skip-btn").prop("disabled", true);
+        $("#qp-next-btn").prop("disabled", false);
+
+        if (isAnswered) {
+          $('input[value="' + previousState.selected_option_id + '"]')
+            .prop("checked", true)
+            .closest(".option")
+            .addClass(previousState.is_correct ? "correct" : "incorrect");
+          if (!previousState.is_correct) {
+            $('input[value="' + previousState.correct_option_id + '"]')
+              .closest(".option")
+              .addClass("correct");
           }
-          if (isExpired) {
-              $("#qp-timer-indicator").html("&#9201; Time Expired").addClass("expired").show();
-              showIndicatorBar = true;
-          }
+        }
+        if (isExpired) {
+          $("#qp-timer-indicator")
+            .html("&#9201; Time Expired")
+            .addClass("expired")
+            .show();
+          showIndicatorBar = true;
+        }
       } else {
-          // 5. Handle UI for active questions (timer)
-          if (sessionSettings.timer_enabled) {
-              var startTime = typeof previousState.remainingTime !== "undefined" ? previousState.remainingTime : sessionSettings.timer_seconds;
-              $("#qp-timer-indicator").removeClass("expired").show();
-              showIndicatorBar = true;
-              startTimer(startTime);
-          }
+        // 5. Handle UI for active questions (timer)
+        if (sessionSettings.timer_enabled) {
+          var startTime =
+            typeof previousState.remainingTime !== "undefined"
+              ? previousState.remainingTime
+              : sessionSettings.timer_seconds;
+          $("#qp-timer-indicator").removeClass("expired").show();
+          showIndicatorBar = true;
+          startTimer(startTime);
+        }
       }
 
       // 6. Finally, show the parent bar only if it has a visible child
       if (showIndicatorBar) {
-          indicatorBar.show();
+        indicatorBar.show();
       }
     }
 
@@ -1761,14 +1795,20 @@ if (data.is_revision) {
     if (currentQuestionIndex >= sessionQuestionIDs.length - 1) {
       clearInterval(questionTimer);
       // If so, ask the user if they want to finish.
-      if (
-        confirm(
-          "Congratulations, you've completed all available questions! Click OK to end this session and see your summary."
-        )
-      ) {
-        practiceInProgress = false; // It's now safe to allow the page to be left
-        $("#qp-end-practice-btn").click();
-      }
+      Swal.fire({
+        title: "Congratulations!",
+        text: "You've completed all available questions.",
+        icon: "success",
+        showCancelButton: true,
+        confirmButtonColor: "#2e7d32",
+        cancelButtonText: "Stay on Last Question",
+        confirmButtonText: "End & See Summary",
+      }).then((result) => {
+        if (result.isConfirmed) {
+          practiceInProgress = false;
+          $("#qp-end-practice-btn").click();
+        }
+      });
       // If the user clicks "Cancel", we simply do nothing. They remain on the last question, and the UI is still responsive.
       return;
     }
@@ -2133,32 +2173,34 @@ if (data.is_revision) {
 
     // Check for mock test answers specifically
     if (isMockTest) {
-        totalAttempts = Object.values(answeredStates).filter(function(state) {
-            return state.selected_option_id;
-        }).length;
+      totalAttempts = Object.values(answeredStates).filter(function (state) {
+        return state.selected_option_id;
+      }).length;
     }
 
     if (!isAutoSubmit && totalAttempts === 0) {
-      alert("You haven't answered any questions. This session will not be saved.");
+      alert(
+        "You haven't answered any questions. This session will not be saved."
+      );
       practiceInProgress = false; // Allow redirect without warning
 
       // Call a new, separate AJAX action to just delete the empty session
       $.ajax({
-          url: qp_ajax_object.ajax_url,
-          type: 'POST',
-          data: {
-              action: 'delete_empty_session',
-              nonce: qp_ajax_object.nonce,
-              session_id: sessionID
-          },
-          success: function(response) {
-              // Redirect to the dashboard regardless of success, as the session is empty
-              window.location.href = qp_ajax_object.dashboard_page_url;
-          },
-          error: function() {
-              // Still redirect even if the AJAX call fails
-              window.location.href = qp_ajax_object.dashboard_page_url;
-          }
+        url: qp_ajax_object.ajax_url,
+        type: "POST",
+        data: {
+          action: "delete_empty_session",
+          nonce: qp_ajax_object.nonce,
+          session_id: sessionID,
+        },
+        success: function (response) {
+          // Redirect to the dashboard regardless of success, as the session is empty
+          window.location.href = qp_ajax_object.dashboard_page_url;
+        },
+        error: function () {
+          // Still redirect even if the AJAX call fails
+          window.location.href = qp_ajax_object.dashboard_page_url;
+        },
       });
       return; // Stop the function here
     }
@@ -2205,9 +2247,19 @@ if (data.is_revision) {
       ? "Are you sure you want to submit your test? You cannot make any more changes."
       : "Are you sure you want to end this practice session?";
 
-    if (confirm(confirmMsg)) {
-      endSession(false);
+    Swal.fire({
+    title: 'Are you sure?',
+    text: confirmMsg,
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonColor: '#2271b1',
+    cancelButtonColor: '#d33',
+    confirmButtonText: isMockTest ? 'Yes, submit the test!' : 'Yes, end session!'
+}).then((result) => {
+    if (result.isConfirmed) {
+        endSession(false);
     }
+});
   });
 
   $(window).on("beforeunload", function () {

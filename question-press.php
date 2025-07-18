@@ -886,6 +886,8 @@ function qp_public_enqueue_scripts()
         $can_delete = !empty(array_intersect($user_roles, $allowed_roles));
 
         wp_enqueue_style('qp-practice-styles', QP_PLUGIN_URL . 'public/assets/css/practice.css', [], $css_version);
+        // SweetAlert2 for modern popups
+        wp_enqueue_script('sweetalert2', 'https://cdn.jsdelivr.net/npm/sweetalert2@11', [], null, true);
 
         $options = get_option('qp_settings');
         $ajax_data = [
