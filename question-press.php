@@ -1325,6 +1325,8 @@ function qp_start_mock_test_session_ajax()
     $topics = isset($_POST['mock_topics']) && is_array($_POST['mock_topics']) ? $_POST['mock_topics'] : [];
     $num_questions = isset($_POST['qp_mock_num_questions']) ? absint($_POST['qp_mock_num_questions']) : 20;
     $distribution = isset($_POST['question_distribution']) ? sanitize_key($_POST['question_distribution']) : 'random';
+    $reports_table = $wpdb->prefix . 'qp_question_reports';
+    $reported_question_ids = $wpdb->get_col("SELECT DISTINCT question_id FROM {$reports_table} WHERE status = 'open'");
 
     $session_settings = [
         'practice_mode'       => 'mock_test',
@@ -1346,6 +1348,12 @@ function qp_start_mock_test_session_ajax()
     $where_clauses = ["q.status = 'publish'"];
     $query_params = [];
     $joins = "LEFT JOIN {$g_table} g ON q.group_id = g.group_id";
+
+    if (!empty($reported_question_ids)) {
+        $ids_placeholder = implode(',', array_map('absint', $reported_question_ids));
+        $where_clauses[] = "q.question_id NOT IN ($ids_placeholder)";
+    }
+
 
     // Handle Subject selection
     if (!empty($subjects) && !in_array('all', $subjects)) {
