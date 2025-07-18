@@ -894,8 +894,8 @@ jQuery(document).ready(function ($) {
       .get();
 
     if (selectedReasons.length === 0) {
-      alert("Please select at least one reason for the report.");
-      return;
+        Swal.fire('No Reason Selected', 'Please select at least one reason for the report.', 'warning');
+        return;
     }
 
     $.ajax({
@@ -913,41 +913,39 @@ jQuery(document).ready(function ($) {
       },
       success: function (response) {
         if (response.success) {
-          // 1. Update the local state for the current question
-          var questionID = sessionQuestionIDs[currentQuestionIndex];
-          if (typeof answeredStates[questionID] === "undefined") {
-            answeredStates[questionID] = {};
-          }
-          answeredStates[questionID].reported = true;
+            $("#qp-report-modal-backdrop").fadeOut(200);
+            Swal.fire({
+                title: 'Report Submitted!',
+                text: 'Thank you for your feedback. The question has been flagged for review.',
+                icon: 'success',
+                timer: 2000,
+                showConfirmButton: false
+            }).then(() => {
+                var questionID = sessionQuestionIDs[currentQuestionIndex];
+                if (typeof answeredStates[questionID] === "undefined") {
+                    answeredStates[questionID] = {};
+                }
+                answeredStates[questionID].reported = true;
 
-          // 2. Manually update the UI to reflect the "reported" state
-          $("#qp-reported-indicator").show();
-          $(".qp-indicator-bar").show();
-          $(".qp-options-area")
-            .addClass("disabled")
-            .find('input[type="radio"]')
-            .prop("disabled", true);
-          $("#qp-skip-btn, #qp-report-btn").prop("disabled", true);
-          $("#qp-next-btn").prop("disabled", false);
+                $("#qp-reported-indicator").show();
+                $(".qp-indicator-bar").show();
+                $(".qp-options-area")
+                    .addClass("disabled")
+                    .find('input[type="radio"]')
+                    .prop("disabled", true);
+                $("#qp-skip-btn, #qp-report-btn").prop("disabled", true);
+                $("#qp-next-btn").prop("disabled", false);
 
-          renderPalette();
-          updateLegendCounts();
-
-          // 3. Close the modal
-          $("#qp-report-modal-backdrop").fadeOut(200);
-
-          // 4. Automatically move to the next question after a short delay
-          setTimeout(function () {
-            loadNextQuestion();
-          }, 500); // 0.5 second delay before loading next question
+                renderPalette();
+                updateLegendCounts();
+                loadNextQuestion();
+            });
         } else {
-          alert(
-            "Error: " + (response.data.message || "Could not submit report.")
-          );
+          Swal.fire('Error!', response.data.message || 'Could not submit the report.', 'error');
         }
       },
       error: function () {
-        alert("An unknown server error occurred.");
+        Swal.fire('Error!', 'An unknown server error occurred.', 'error');
       },
       complete: function () {
         submitButton.text(originalButtonText).prop("disabled", false);
