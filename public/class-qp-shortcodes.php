@@ -691,6 +691,7 @@ class QP_Shortcodes
         <div class="legend-item" data-status="not_viewed"><span class="swatch status-not_viewed"></span><span class="legend-text">Not Visited</span><span class="legend-count">(0)</span></div>
         <div class="legend-item" data-status="marked_for_review"><span class="swatch status-marked_for_review"></span><span class="legend-text">Marked for Review</span><span class="legend-count">(0)</span></div>
         <div class="legend-item" data-status="answered_and_marked_for_review"><span class="swatch status-answered_and_marked_for_review"></span><span class="legend-text">Answered & Marked</span><span class="legend-count">(0)</span></div>
+        <div class="legend-item" data-status="reported"><span class="swatch status-reported"></span><span class="legend-text">Reported</span><span class="legend-count">(0)</span></div>
     <?php else : ?>
         <div class="legend-item" data-status="correct"><span class="swatch status-correct"></span><span class="legend-text">Correct</span><span class="legend-count">(0)</span></div>
         <div class="legend-item" data-status="incorrect"><span class="swatch status-incorrect"></span><span class="legend-text">Incorrect</span><span class="legend-count">(0)</span></div>
@@ -723,6 +724,7 @@ class QP_Shortcodes
         <div class="legend-item" data-status="not_viewed"><span class="swatch status-not_viewed"></span><span class="legend-text">Not Visited</span><span class="legend-count">(0)</span></div>
         <div class="legend-item" data-status="marked_for_review"><span class="swatch status-marked_for_review"></span><span class="legend-text">Marked for Review</span><span class="legend-count">(0)</span></div>
         <div class="legend-item" data-status="answered_and_marked_for_review"><span class="swatch status-answered_and_marked_for_review"></span><span class="legend-text">Answered & Marked</span><span class="legend-count">(0)</span></div>
+        <div class="legend-item" data-status="reported"><span class="swatch status-reported"></span><span class="legend-text">Reported</span><span class="legend-count">(0)</span></div>
     <?php else : ?>
         <div class="legend-item" data-status="correct"><span class="swatch status-correct"></span><span class="legend-text">Correct</span><span class="legend-count">(0)</span></div>
         <div class="legend-item" data-status="incorrect"><span class="swatch status-incorrect"></span><span class="legend-text">Incorrect</span><span class="legend-count">(0)</span></div>

@@ -695,6 +695,32 @@ z-index: 2;
     color: var(--qp-dark-text);
 }
 
+/* --- NEW: Style for Reported Questions in Palette --- */
+.qp-palette-btn.status-reported {
+    background-color: #616161; /* Dark Grey */
+    border-color: #424242;
+    color: #fff;
+    border-radius: 8px; /* Slightly rounded corners */
+    /* Using clip-path to create a unique shape */
+    clip-path: polygon(0% 0%, 100% 0%, 100% 85%, 50% 100%, 0 85%);
+    position: relative; /* Needed for the icon */
+}
+
+/* Disabled/Locked Icon for Reported Questions */
+.qp-palette-btn.status-reported::after {
+    content: '\26A0'; /* Unicode for a warning sign ⚠ */
+    font-size: 14px;
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    opacity: 0.9;
+}
+
+/* Legend Swatch for Reported */
+.swatch.status-reported {
+    background-color: #616161;
+}
+
 .swatch {
     display: inline-block;
     width: 14px;

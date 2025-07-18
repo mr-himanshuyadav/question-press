@@ -120,92 +120,72 @@ jQuery(document).ready(function ($) {
   }
 
   // REPLACE the entire old renderPalette function with this new one.
-  function renderPalette() {
+  // Find and REPLACE the renderPalette function
+function renderPalette() {
     paletteGrids.empty();
+    sessionQuestionIDs.forEach(function(questionID, index) {
+        const questionState = answeredStates[questionID] || {};
+        let statusClass = 'status-not_viewed';
 
-    sessionQuestionIDs.forEach(function (questionID, index) {
-      const questionState = answeredStates[questionID] || {};
-      let statusClass = "status-not_viewed"; // Default status
-
-      if (isMockTest) {
-        // --- MOCK TEST LOGIC (uses mock_status) ---
-        if (questionState.mock_status) {
-          statusClass = "status-" + questionState.mock_status;
+        if (questionState.reported) {
+            statusClass = 'status-reported';
+        } else if (isMockTest && questionState.mock_status) {
+            statusClass = 'status-' + questionState.mock_status;
+        } else if (!isMockTest && questionState.type) {
+            if (questionState.type === 'answered') {
+                statusClass = questionState.is_correct ? 'status-correct' : 'status-incorrect';
+            } else if (questionState.type === 'skipped') {
+                statusClass = 'status-skipped';
+            }
         }
-      } else {
-        // --- NORMAL/REVISION MODE LOGIC (uses type and is_correct) ---
-        if (questionState.type === "answered") {
-          statusClass = questionState.is_correct
-            ? "status-correct"
-            : "status-incorrect";
-        } else if (questionState.type === "skipped") {
-          statusClass = "status-skipped";
+        
+        const paletteBtn = $('<button></button>')
+            .addClass('qp-palette-btn')
+            .attr('data-question-index', index)
+            .text(index + 1)
+            .addClass(statusClass);
+
+        if (index === currentQuestionIndex) {
+            paletteBtn.addClass('current');
         }
-      }
-
-      const paletteBtn = $("<button></button>")
-        .addClass("qp-palette-btn")
-        .attr("data-question-index", index)
-        .text(index + 1);
-
-      paletteBtn.addClass(statusClass);
-
-      if (index === currentQuestionIndex) {
-        paletteBtn.addClass("current");
-      }
-
-      paletteGrids.append(paletteBtn);
+        paletteGrids.append(paletteBtn);
     });
-  }
-
-  // --- NEW: Bulletproof Legend Counting Function ---
-  function updateLegendCounts() {
-    // 1. Initialize all possible status counts to zero.
+}
+  // Find and REPLACE the updateLegendCounts function
+function updateLegendCounts() {
     var counts = {
-      answered: 0,
-      viewed: 0,
-      not_viewed: 0,
-      marked_for_review: 0,
-      answered_and_marked_for_review: 0,
-      correct: 0,
-      incorrect: 0,
-      skipped: 0,
-      not_attempted: 0,
+        answered: 0, viewed: 0, not_viewed: 0, marked_for_review: 0,
+        answered_and_marked_for_review: 0, correct: 0, incorrect: 0, skipped: 0,
+        not_attempted: 0, reported: 0 // Initialize reported count to 0
     };
 
-    // 2. Loop through every single question in the session.
-    sessionQuestionIDs.forEach(function (qid) {
-      var state = answeredStates[qid];
-
-      if (!state) {
-        // If there's no state, it's not visited/attempted.
-        counts.not_viewed++;
-        counts.not_attempted++;
-      } else {
-        // Otherwise, increment the specific counter.
-        if (isMockTest && state.mock_status) {
-          counts[state.mock_status]++;
-        } else if (!isMockTest && state.type) {
-          if (state.type === "answered") {
-            if (state.is_correct) counts.correct++;
-            else counts.incorrect++;
-          } else if (state.type === "skipped") {
-            counts.skipped++;
-          }
+    sessionQuestionIDs.forEach(function(qid) {
+        var state = answeredStates[qid];
+        if (!state) {
+            counts.not_viewed++;
+            counts.not_attempted++;
+        } else {
+            if (state.reported) {
+                counts.reported++;
+            } else if (isMockTest && state.mock_status) {
+                counts[state.mock_status]++;
+            } else if (!isMockTest && state.type) {
+                if (state.type === 'answered') {
+                    if (state.is_correct) counts.correct++; else counts.incorrect++;
+                } else if (state.type === 'skipped') {
+                    counts.skipped++;
+                }
+            }
         }
-      }
     });
-
-    // 3. Update the text in the DOM.
+    
     for (var status in counts) {
-      if (counts.hasOwnProperty(status)) {
-        // Find the legend item with the matching data-status and update its count span.
-        $('.qp-palette-legend .legend-item[data-status="' + status + '"]')
-          .find(".legend-count")
-          .text("(" + counts[status] + ")");
-      }
+        if (counts.hasOwnProperty(status)) {
+            $('.qp-palette-legend .legend-item[data-status="' + status + '"]')
+                .find('.legend-count').text('(' + counts[status] + ')');
+        }
     }
-  }
+}
 
   // --- NEW: Function to update a single palette button ---
   function updatePaletteButton(questionID, newStatus) {
@@ -883,6 +863,9 @@ jQuery(document).ready(function ($) {
             .prop("disabled", true);
           $("#qp-skip-btn, #qp-report-btn").prop("disabled", true);
           $("#qp-next-btn").prop("disabled", false);
+
+          renderPalette();
+        updateLegendCounts();
 
           // 3. Close the modal
           $("#qp-report-modal-backdrop").fadeOut(200);
