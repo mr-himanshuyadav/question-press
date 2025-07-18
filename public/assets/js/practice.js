@@ -1599,66 +1599,72 @@ function startMockTestTimer(endTimeUTC) {
       if (!previousState.mock_status) {
         updateMockStatus(questionID, "viewed");
       }
+    // Replace the entire block above with this one
     } else {
-      // Logic for Normal/Revision modes
-      $("#qp-revision-indicator").hide();
-      $("#qp-skip-btn").prop("disabled", false);
+      // --- CORRECTED LOGIC FOR NORMAL/REVISION MODES ---
       $("#qp-next-btn").prop("disabled", true);
-      if (isAutoCheckEnabled) {
-        $("#qp-check-answer-btn").hide();
-      } else {
-        $("#qp-check-answer-btn").show().prop("disabled", true);
-      }
+      $("#qp-skip-btn").prop("disabled", false);
       optionsArea.data("correct-option-id", data.correct_option_id);
-      if (data.is_revision && !previousState.answered_in_session) {
-        $("#qp-revision-indicator").show();
-        $(".qp-indicator-bar").show();
-      }
       $("#qp-mark-for-review-cb").prop("checked", data.is_marked_for_review);
 
+      if (isAutoCheckEnabled) {
+          $("#qp-check-answer-btn").hide();
+      } else {
+          $("#qp-check-answer-btn").show().prop("disabled", true);
+      }
+      
+      // 1. Reset all indicators first
+      var indicatorBar = $(".qp-indicator-bar");
+      indicatorBar.hide(); // Hide the parent bar
+      $("#qp-revision-indicator, #qp-reported-indicator, #qp-timer-indicator").hide(); // Hide all children
+      
+      var showIndicatorBar = false;
+
+      // 2. Conditionally show the Revision indicator
+      if (data.is_revision) {
+    $("#qp-revision-indicator").show();
+    showIndicatorBar = true;
+}
+      
       var isReported = previousState.reported;
       var isAnswered = previousState.type === "answered";
       var isExpired = previousState.type === "expired";
-      var indicatorBar = $(".qp-indicator-bar").hide();
+      
+      // 3. Conditionally show other indicators
       if (isReported) {
-        $("#qp-reported-indicator").show();
-        indicatorBar.show();
+          $("#qp-reported-indicator").show();
+          showIndicatorBar = true;
       }
+
+      // 4. Handle UI for answered/expired/reported questions
       if (isAnswered || isExpired || isReported) {
-        optionsArea
-          .addClass("disabled")
-          .find('input[type="radio"]')
-          .prop("disabled", true);
-        $("#qp-skip-btn").prop("disabled", true);
-        $("#qp-next-btn").prop("disabled", false);
-        if (isAnswered) {
-          $('input[value="' + previousState.selected_option_id + '"]')
-            .prop("checked", true)
-            .closest(".option")
-            .addClass(previousState.is_correct ? "correct" : "incorrect");
-          if (!previousState.is_correct) {
-            $('input[value="' + previousState.correct_option_id + '"]')
-              .closest(".option")
-              .addClass("correct");
+          optionsArea.addClass("disabled").find('input[type="radio"]').prop("disabled", true);
+          $("#qp-skip-btn").prop("disabled", true);
+          $("#qp-next-btn").prop("disabled", false);
+          
+          if (isAnswered) {
+              $('input[value="' + previousState.selected_option_id + '"]').prop("checked", true).closest(".option").addClass(previousState.is_correct ? "correct" : "incorrect");
+              if (!previousState.is_correct) {
+                  $('input[value="' + previousState.correct_option_id + '"]').closest(".option").addClass("correct");
+              }
           }
-        }
-        if (isExpired) {
-          $("#qp-timer-indicator")
-            .html("&#9201; Time Expired")
-            .addClass("expired")
-            .show();
-          indicatorBar.show();
-        }
+          if (isExpired) {
+              $("#qp-timer-indicator").html("&#9201; Time Expired").addClass("expired").show();
+              showIndicatorBar = true;
+          }
       } else {
-        if (sessionSettings.timer_enabled) {
-          var startTime =
-            typeof previousState.remainingTime !== "undefined"
-              ? previousState.remainingTime
-              : sessionSettings.timer_seconds;
-          $("#qp-timer-indicator").removeClass("expired").show();
+          // 5. Handle UI for active questions (timer)
+          if (sessionSettings.timer_enabled) {
+              var startTime = typeof previousState.remainingTime !== "undefined" ? previousState.remainingTime : sessionSettings.timer_seconds;
+              $("#qp-timer-indicator").removeClass("expired").show();
+              showIndicatorBar = true;
+              startTimer(startTime);
+          }
+      }
+
+      // 6. Finally, show the parent bar only if it has a visible child
+      if (showIndicatorBar) {
           indicatorBar.show();
-          startTimer(startTime);
-        }
       }
     }
 
