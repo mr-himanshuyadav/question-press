@@ -375,7 +375,7 @@ body {
 
 .qp-palette-stats .qp-header-stat {
     background-color: var(--qp-bg-light);
-    padding: 0.75rem;
+    padding: 0.25rem;
     border-radius: var(--qp-radius);
     text-align: center;
 }
@@ -453,6 +453,7 @@ body {
     background-color: #e8eaf6;
     /* Light Indigo */
     color: #3f51b5;
+    text-align: center;
     /* Indigo */
 }
 

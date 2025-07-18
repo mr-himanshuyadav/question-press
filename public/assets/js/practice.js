@@ -1622,7 +1622,7 @@ function startMockTestTimer(endTimeUTC) {
 
       // 2. Conditionally show the Revision indicator
       if (data.is_revision) {
-    $("#qp-revision-indicator").show();
+        $("#qp-revision-indicator").text('🔄 Revision (' + data.previous_attempt_count + ')').show();
     showIndicatorBar = true;
 }
       
