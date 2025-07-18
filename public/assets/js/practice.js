@@ -1609,6 +1609,8 @@ function updateLegendCounts() {
         }
     } else if (isMockTest) {
         // Explicitly re-enable buttons for non-reported questions
+         $("#qp-reported-indicator").hide(); 
+        optionsArea.removeClass("disabled").find('input[type="radio"]').prop("disabled", false);
         $("#qp-report-btn").prop("disabled", false);
         $("#qp-clear-response-btn, #qp-mock-mark-review-cb").prop("disabled", false);
     }
