@@ -1038,23 +1038,19 @@ jQuery(document).ready(function ($) {
   wrapper.on("submit", "#qp-start-revision-form", function (e) {
     e.preventDefault();
 
-    // Check if the topic dropdown is visible and if any topic is selected
     if ($("#qp-topic-group-revision").is(":visible")) {
       var selectedTopics = $(
         "#qp_topic_list_container_revision input:checked"
       ).length;
       if (selectedTopics === 0) {
-        alert(
-          "Please select at least one topic to start the revision session."
-        );
-        return; // Stop the form submission
+        Swal.fire('No Topics Selected', 'Please select at least one topic to start the revision session.', 'warning');
+        return;
       }
     }
     var form = $(this);
     var submitButton = form.find('input[type="submit"]');
     var originalButtonText = submitButton.val();
-
-    var formData = $("#qp-start-revision-form").serialize(); // This will now correctly get all inputs from this specific form
+    var formData = form.serialize();
 
     $.ajax({
       url: qp_ajax_object.ajax_url,
@@ -1075,11 +1071,11 @@ jQuery(document).ready(function ($) {
             : "<p>" +
               (response.data.message || "An unknown error occurred.") +
               "</p>";
-          wrapper.html(errorMessage); // This mode has a different error display
+          wrapper.html(errorMessage);
         }
       },
       error: function () {
-        alert("A server error occurred. Please try again later.");
+        Swal.fire('Error!', 'A server error occurred. Please try again later.', 'error');
         submitButton.val(originalButtonText).prop("disabled", false);
       },
     });
@@ -1089,10 +1085,9 @@ jQuery(document).ready(function ($) {
   wrapper.on("submit", "#qp-start-mock-test-form", function (e) {
     e.preventDefault();
 
-    // Basic validation
     var selectedSubjects = $("#qp_subject_dropdown_mock input:checked").length;
     if (selectedSubjects === 0) {
-      alert("Please select at least one subject to start the mock test.");
+      Swal.fire('No Subject Selected', 'Please select at least one subject to start the mock test.', 'warning');
       return;
     }
 
@@ -1104,7 +1099,6 @@ jQuery(document).ready(function ($) {
     $.ajax({
       url: qp_ajax_object.ajax_url,
       type: "POST",
-      // Add the new action and nonce to the form data
       data:
         formData +
         "&action=qp_start_mock_test_session&nonce=" +
@@ -1114,10 +1108,8 @@ jQuery(document).ready(function ($) {
       },
       success: function (response) {
         if (response.success && response.data.redirect_url) {
-          // If successful, redirect to the session page
           window.location.href = response.data.redirect_url;
         } else {
-          // If there's an error, display it
           var errorMessage = response.data.html
             ? response.data.html
             : "<p>" +
@@ -1127,7 +1119,7 @@ jQuery(document).ready(function ($) {
         }
       },
       error: function () {
-        alert("A server error occurred. Please try again later.");
+        Swal.fire('Error!', 'A server error occurred. Please try again later.', 'error');
         submitButton.val(originalButtonText).prop("disabled", false);
       },
     });
