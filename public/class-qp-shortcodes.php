@@ -766,7 +766,7 @@ class QP_Shortcodes
                             <div class="qp-question-meta-right">
                                 <div class="qp-question-counter-box" style="display: none;">
                                     <span class="qp-counter-label">Question</span>
-                                    <span class="qp-counter-value">1/1</span>
+                                    <span class="qp-counter-value" id="qp-question-counter">1/1</span>
                                 </div>
                                 <button id="qp-report-btn" class="qp-report-button qp-button-secondary"><span>&#9888;</span> Report</button>
                             </div>

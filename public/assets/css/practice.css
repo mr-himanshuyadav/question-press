@@ -28,10 +28,12 @@ body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     background-color: transparent; 
     padding: 0;
+    min-height: 95vh;
     max-width: 100%;
     box-sizing: border-box;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    padding: 1rem 0;
 }
 
 .qp-container {
@@ -1245,6 +1247,17 @@ ul.qp-review-list li{
     gap: 5px;
 }
 
+.qp-options-area {
+        display: grid;
+        grid-template-columns: 1fr 1fr; /* Two equal columns */
+        gap: 0.75rem 1.5rem; /* Adds vertical and horizontal spacing */
+    }
+
+    /* Prevent the last item from stretching across both columns if there's an odd number of options */
+    .qp-options-area .option:last-child:nth-child(odd) {
+        grid-column-end: span 1;
+    }
+
     .qp-footer-controls {
         flex-direction: row; /* Back to a row on desktop */
     }
@@ -1424,7 +1437,7 @@ ul.qp-review-list li{
 .qp-review-question-item:last-child {
     border-bottom: none;
 }
-.qp-review-question-text {
+.qp-review-question-text, .qp-review-direction-text {
     font: normal .95em KaTeX_Main,Times New Roman,serif;
     line-height: 1.6;
     font-weight: 500;

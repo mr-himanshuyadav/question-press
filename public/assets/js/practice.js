@@ -3,6 +3,7 @@ jQuery(document).ready(function ($) {
   var isAutoCheckEnabled = false;
   var mockTestTimer; // Specific timer for mock tests
   var isMockTest = false;
+  var isRevisionMode = false;
   var paletteGrids = $('#qp-palette-docked .qp-palette-grid, #qp-palette-sliding .qp-palette-grid');
 
   function openFullscreen() {
@@ -1084,6 +1085,8 @@ function updateCurrentPaletteButton(newIndex, oldIndex) {
     sessionQuestionIDs = qp_session_data.question_ids;
     sessionSettings = qp_session_data.settings;
     isMockTest = sessionSettings.practice_mode === "mock_test"; // Set our global flag
+    isRevisionMode = sessionSettings.practice_mode === "revision";
+
 
     // Mode-specific UI setup
     if (isMockTest) {
@@ -1154,7 +1157,7 @@ function updateCurrentPaletteButton(newIndex, oldIndex) {
         currentQuestionIndex = lastAttemptedIndex >= 0 ? lastAttemptedIndex + 1 : 0;
     }
     currentQuestionIndex = Math.min(currentQuestionIndex, sessionQuestionIDs.length - 1);
-    if (isMockTest) {
+    if (isMockTest || isRevisionMode) {
     $('#qp-question-counter').text((currentQuestionIndex + 1) + "/" + sessionQuestionIDs.length);
 }
     }
@@ -1608,7 +1611,7 @@ if (sourceDisplayArea.length) {
 
     // If we are not on the last question, it's safe to increment the index and load the next question.
     currentQuestionIndex++;
-    if (isMockTest) {
+    if (isMockTest || isRevisionMode) {
         $('#qp-question-counter').text((currentQuestionIndex + 1) + "/" + sessionQuestionIDs.length);
     }
     loadQuestion(sessionQuestionIDs[currentQuestionIndex], "next");
@@ -1897,7 +1900,7 @@ if (sourceDisplayArea.length) {
     } else {
       if (currentQuestionIndex > 0) {
         currentQuestionIndex--;
-        if (isMockTest) {
+        if (isMockTest || isRevisionMode) {
                 $('#qp-question-counter').text((currentQuestionIndex + 1) + "/" + sessionQuestionIDs.length);
             }
         loadQuestion(sessionQuestionIDs[currentQuestionIndex], "prev");
@@ -2164,7 +2167,7 @@ $(document).on('click', '.qp-palette-btn', function() {
     var direction = newIndex > currentQuestionIndex ? 'next' : 'prev';
     currentQuestionIndex = newIndex;
 
-    if (isMockTest) {
+    if (isMockTest || isRevisionMode) {
         $('#qp-question-counter').text((currentQuestionIndex + 1) + "/" + sessionQuestionIDs.length);
     }
 
