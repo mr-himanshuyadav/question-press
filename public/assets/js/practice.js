@@ -2274,11 +2274,12 @@ jQuery(document).ready(function ($) {
     });
   });
 
-  $(window).on("beforeunload", function () {
-    if (practiceInProgress) {
-      return "Are you sure you want to leave? Your practice session is in progress.";
-    }
-  });
+  // Prevent Refresh
+  // $(window).on("beforeunload", function () {
+  //   if (practiceInProgress) {
+  //     return "Are you sure you want to leave? Your practice session is in progress.";
+  //   }
+  // });
 
   wrapper.on("click", "#qp-pause-btn", function () {
     Swal.fire({
