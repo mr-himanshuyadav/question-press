@@ -147,6 +147,60 @@ function renderPalette() {
     });
 }
 
+// --- NEW: Function to update the counts in the palette legend ---
+function updateLegendCounts() {
+    var counts = {
+        // Mock Test statuses
+        answered: 0,
+        viewed: 0,
+        not_viewed: 0,
+        marked_for_review: 0,
+        answered_and_marked_for_review: 0,
+        // Normal/Revision statuses
+        correct: 0,
+        incorrect: 0,
+        skipped: 0
+    };
+
+    // Calculate the counts from the answeredStates object
+    for (var qid in answeredStates) {
+        if (answeredStates.hasOwnProperty(qid)) {
+            var state = answeredStates[qid];
+            if (isMockTest) {
+                if (state.mock_status) counts[state.mock_status]++;
+            } else {
+                if (state.type === 'answered') {
+                    if (state.is_correct) counts.correct++;
+                    else counts.incorrect++;
+                } else if (state.type === 'skipped') {
+                    counts.skipped++;
+                }
+            }
+        }
+    }
+    
+    // Calculate the not_viewed/not_attempted count
+    var totalAttempted = Object.keys(answeredStates).length;
+    counts.not_viewed = sessionQuestionIDs.length - totalAttempted;
+
+    // Update the HTML for each legend item
+    $('.qp-palette-legend .legend-item').each(function() {
+        var $item = $(this);
+        var status = $item.data('status');
+        var baseText = $item.text().split('(')[0].trim();
+        var count = 0;
+
+        if (status === 'not_attempted') {
+            count = counts.not_viewed;
+        } else if (counts.hasOwnProperty(status)) {
+            count = counts[status];
+        }
+        
+        // Add the count in parentheses
+        $item.html('<span class="swatch ' + 'status-' + status + '"></span> ' + baseText + ' <span class="legend-count">(' + count + ')</span>');
+    });
+}
+
 // --- NEW: Function to update a single palette button ---
 function updatePaletteButton(questionID, newStatus) {
     // Find the buttons corresponding to this question ID
