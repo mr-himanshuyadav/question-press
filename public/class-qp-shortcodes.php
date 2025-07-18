@@ -685,20 +685,23 @@ class QP_Shortcodes
                 <div class="qp-palette-grid"></div>
                 <div class="qp-palette-legend">
                     <div class="qp-palette-legend">
-    <?php if ($is_mock_test) : ?>
-        <div class="legend-item" data-status="answered"><span class="swatch status-answered"></span><span class="legend-text">Answered</span><span class="legend-count">(0)</span></div>
-        <div class="legend-item" data-status="viewed"><span class="swatch status-viewed"></span><span class="legend-text">Not Answered</span><span class="legend-count">(0)</span></div>
-        <div class="legend-item" data-status="not_viewed"><span class="swatch status-not_viewed"></span><span class="legend-text">Not Visited</span><span class="legend-count">(0)</span></div>
-        <div class="legend-item" data-status="marked_for_review"><span class="swatch status-marked_for_review"></span><span class="legend-text">Marked for Review</span><span class="legend-count">(0)</span></div>
-        <div class="legend-item" data-status="answered_and_marked_for_review"><span class="swatch status-answered_and_marked_for_review"></span><span class="legend-text">Answered & Marked</span><span class="legend-count">(0)</span></div>
-        <div class="legend-item" data-status="reported"><span class="swatch status-reported"></span><span class="legend-text">Reported</span><span class="legend-count">(0)</span></div>
-    <?php else : ?>
-        <div class="legend-item" data-status="correct"><span class="swatch status-correct"></span><span class="legend-text">Correct</span><span class="legend-count">(0)</span></div>
-        <div class="legend-item" data-status="incorrect"><span class="swatch status-incorrect"></span><span class="legend-text">Incorrect</span><span class="legend-count">(0)</span></div>
-        <div class="legend-item" data-status="skipped"><span class="swatch status-skipped"></span><span class="legend-text">Skipped</span><span class="legend-count">(0)</span></div>
-        <div class="legend-item" data-status="not_attempted"><span class="swatch status-not_viewed"></span><span class="legend-text">Not Attempted</span><span class="legend-count">(0)</span></div>
-    <?php endif; ?>
-</div>
+                        <?php if ($is_mock_test) : ?>
+                            <div class="legend-item" data-status="answered"><span class="swatch status-answered"></span><span class="legend-text">Answered</span><span class="legend-count">(0)</span></div>
+                            <div class="legend-item" data-status="viewed"><span class="swatch status-viewed"></span><span class="legend-text">Not Answered</span><span class="legend-count">(0)</span></div>
+                            <div class="legend-item" data-status="not_viewed"><span class="swatch status-not_viewed"></span><span class="legend-text">Not Visited</span><span class="legend-count">(0)</span></div>
+                            <div class="legend-item" data-status="marked_for_review"><span class="swatch status-marked_for_review"></span><span class="legend-text">Marked for Review</span><span class="legend-count">(0)</span></div>
+                            <div class="legend-item" data-status="answered_and_marked_for_review"><span class="swatch status-answered_and_marked_for_review"></span><span class="legend-text">Answered & Marked</span><span class="legend-count">(0)</span></div>
+                            <div class="legend-item" data-status="reported"><span class="swatch status-reported"></span><span class="legend-text">Reported</span><span class="legend-count">(0)</span></div>
+                        <?php else : ?>
+                            <div class="legend-item" data-status="correct"><span class="swatch status-correct"></span><span class="legend-text">Correct</span><span class="legend-count">(0)</span></div>
+                            <div class="legend-item" data-status="incorrect"><span class="swatch status-incorrect"></span><span class="legend-text">Incorrect</span><span class="legend-count">(0)</span></div>
+                            <div class="legend-item" data-status="skipped"><span class="swatch status-skipped"></span><span class="legend-text">Skipped</span><span class="legend-count">(0)</span></div>
+                            <div class="legend-item" data-status="reported"><span class="swatch status-reported"></span><span class="legend-text">Reported</span><span class="legend-count">(0)</span></div>
+                            <?php if ($is_section_wise) : ?>
+                                <div class="legend-item" data-status="not_attempted"><span class="swatch status-not_viewed"></span><span class="legend-text">Not Attempted</span><span class="legend-count">(0)</span></div>
+                            <?php endif; ?>
+                        <?php endif; ?>
+                    </div>
                 </div>
             </div>
         </div>
@@ -718,20 +721,23 @@ class QP_Shortcodes
                 <?php endif; ?>
                 <div class="qp-palette-grid"></div>
                 <div class="qp-palette-legend">
-    <?php if ($is_mock_test) : ?>
-        <div class="legend-item" data-status="answered"><span class="swatch status-answered"></span><span class="legend-text">Answered</span><span class="legend-count">(0)</span></div>
-        <div class="legend-item" data-status="viewed"><span class="swatch status-viewed"></span><span class="legend-text">Not Answered</span><span class="legend-count">(0)</span></div>
-        <div class="legend-item" data-status="not_viewed"><span class="swatch status-not_viewed"></span><span class="legend-text">Not Visited</span><span class="legend-count">(0)</span></div>
-        <div class="legend-item" data-status="marked_for_review"><span class="swatch status-marked_for_review"></span><span class="legend-text">Marked for Review</span><span class="legend-count">(0)</span></div>
-        <div class="legend-item" data-status="answered_and_marked_for_review"><span class="swatch status-answered_and_marked_for_review"></span><span class="legend-text">Answered & Marked</span><span class="legend-count">(0)</span></div>
-        <div class="legend-item" data-status="reported"><span class="swatch status-reported"></span><span class="legend-text">Reported</span><span class="legend-count">(0)</span></div>
-    <?php else : ?>
-        <div class="legend-item" data-status="correct"><span class="swatch status-correct"></span><span class="legend-text">Correct</span><span class="legend-count">(0)</span></div>
-        <div class="legend-item" data-status="incorrect"><span class="swatch status-incorrect"></span><span class="legend-text">Incorrect</span><span class="legend-count">(0)</span></div>
-        <div class="legend-item" data-status="skipped"><span class="swatch status-skipped"></span><span class="legend-text">Skipped</span><span class="legend-count">(0)</span></div>
-        <div class="legend-item" data-status="not_attempted"><span class="swatch status-not_viewed"></span><span class="legend-text">Not Attempted</span><span class="legend-count">(0)</span></div>
-    <?php endif; ?>
-</div>
+                    <?php if ($is_mock_test) : ?>
+                        <div class="legend-item" data-status="answered"><span class="swatch status-answered"></span><span class="legend-text">Answered</span><span class="legend-count">(0)</span></div>
+                        <div class="legend-item" data-status="viewed"><span class="swatch status-viewed"></span><span class="legend-text">Not Answered</span><span class="legend-count">(0)</span></div>
+                        <div class="legend-item" data-status="not_viewed"><span class="swatch status-not_viewed"></span><span class="legend-text">Not Visited</span><span class="legend-count">(0)</span></div>
+                        <div class="legend-item" data-status="marked_for_review"><span class="swatch status-marked_for_review"></span><span class="legend-text">Marked for Review</span><span class="legend-count">(0)</span></div>
+                        <div class="legend-item" data-status="answered_and_marked_for_review"><span class="swatch status-answered_and_marked_for_review"></span><span class="legend-text">Answered & Marked</span><span class="legend-count">(0)</span></div>
+                        <div class="legend-item" data-status="reported"><span class="swatch status-reported"></span><span class="legend-text">Reported</span><span class="legend-count">(0)</span></div>
+                    <?php else : ?>
+                        <div class="legend-item" data-status="correct"><span class="swatch status-correct"></span><span class="legend-text">Correct</span><span class="legend-count">(0)</span></div>
+                        <div class="legend-item" data-status="incorrect"><span class="swatch status-incorrect"></span><span class="legend-text">Incorrect</span><span class="legend-count">(0)</span></div>
+                        <div class="legend-item" data-status="skipped"><span class="swatch status-skipped"></span><span class="legend-text">Skipped</span><span class="legend-count">(0)</span></div>
+                        <div class="legend-item" data-status="reported"><span class="swatch status-reported"></span><span class="legend-text">Reported</span><span class="legend-count">(0)</span></div>
+                        <?php if ($is_section_wise) : ?>
+                            <div class="legend-item" data-status="not_attempted"><span class="swatch status-not_viewed"></span><span class="legend-text">Not Attempted</span><span class="legend-count">(0)</span></div>
+                        <?php endif; ?>
+                    <?php endif; ?>
+                </div>
 
             </div>
 
@@ -776,12 +782,12 @@ class QP_Shortcodes
                             </div>
                         </div>
 
-                        
-                            <div class="qp-indicator-bar" style="display: none;">
-                                <?php if (!$is_mock_test) : ?><div id="qp-timer-indicator" class="timer-stat" style="display: none;">--:--</div><?php endif; ?>
-                                <div id="qp-revision-indicator" style="display: none;">&#9851; Revision</div>
-                                <div id="qp-reported-indicator" style="display: none;">&#9888; Reported</div>
-                            </div>
+
+                        <div class="qp-indicator-bar" style="display: none;">
+                            <?php if (!$is_mock_test) : ?><div id="qp-timer-indicator" class="timer-stat" style="display: none;">--:--</div><?php endif; ?>
+                            <div id="qp-revision-indicator" style="display: none;">&#9851; Revision</div>
+                            <div id="qp-reported-indicator" style="display: none;">&#9888; Reported</div>
+                        </div>
 
                         <div class="qp-question-area">
                             <div class="qp-direction" style="display: none;"></div>
