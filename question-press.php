@@ -1479,7 +1479,8 @@ function qp_get_question_data_ajax()
     $previous_attempt_count = $wpdb->get_var($wpdb->prepare(
         "SELECT COUNT(*) FROM {$a_table} WHERE user_id = %d AND question_id = %d",
         $user_id,
-        $question_id
+        $question_id,
+        $session_id
     ));
 
     if (!$question_data) {

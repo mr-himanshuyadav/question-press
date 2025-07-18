@@ -922,26 +922,42 @@ class QP_Shortcodes
 
         ob_start();
         // --- Determine Session Mode ---
-        $mode = 'Practice'; // Default
-        if (isset($settings['practice_mode'])) {
-            if ($settings['practice_mode'] === 'revision') {
-                $mode = 'Revision';
-            } elseif ($settings['practice_mode'] === 'Incorrect Que. Practice') {
-                $mode = 'Incorrect Attempt Practice';
-            } elseif ($settings['practice_mode'] === 'Section Wise Practice') {
-                $mode = 'Section Wise Practice';
+        $is_mock_test = isset($settings['practice_mode']) && $settings['practice_mode'] === 'mock_test';
+
+        $mode_class = 'mode-normal';
+        $mode = 'Practice'; // A generic default
+
+        if ($is_mock_test) {
+            $mode_class = 'mode-mock-test';
+            $mode = 'Mock Test';
+        } elseif (isset($settings['practice_mode'])) {
+            switch ($settings['practice_mode']) {
+                case 'revision':
+                    $mode_class = 'mode-revision';
+                    $mode = 'Revision Mode';
+                    break;
+                case 'Incorrect Que. Practice':
+                    $mode_class = 'mode-incorrect';
+                    $mode = 'Incorrect Practice';
+                    break;
+                case 'Section Wise Practice':
+                    $mode_class = 'mode-section-wise';
+                    $mode = 'Section Practice';
+                    break;
             }
         } elseif (isset($settings['subject_id']) && $settings['subject_id'] === 'review') {
-            $mode = 'Review';
+            $mode_class = 'mode-review';
+            $mode = 'Review Mode';
         }
     ?>
-        <div class="qp-container qp-review-wrapper">
+        <div class="qp-container qp-review-wrapper <?php echo esc_attr($mode_class); ?>">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
                 <div>
                     <h2>Session Review</h2>
-                    <p style="margin: 0; color: #777; font-size: 14px;">
-                        <strong>Mode:</strong> <?php echo esc_html($mode); ?> | <strong>Session ID:</strong> <?php echo esc_html($session_id); ?>
-                    </p>
+                    <div style="display: flex; align-items: center; gap: 15px; margin-top: 5px;">
+                        <span class="qp-session-mode-indicator" style="padding: 5px 12px; font-size: 12px;"><?php echo esc_html($mode); ?></span>
+                        <p style="margin: 0; color: #50575e; font-size: 14px;"><strong>Session ID:</strong> <?php echo esc_html($session_id); ?></p>
+                    </div>
                 </div>
                 <a href="<?php echo esc_url($dashboard_page_url); ?>" class="qp-button qp-button-secondary" style="text-decoration: none;">&laquo; Back to Dashboard</a>
             </div>

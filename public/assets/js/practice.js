@@ -1620,9 +1620,26 @@ function startMockTestTimer(endTimeUTC) {
       
       var showIndicatorBar = false;
 
-      // 2. Conditionally show the Revision indicator
-      if (data.is_revision) {
-        $("#qp-revision-indicator").text('🔄 Revision (' + data.previous_attempt_count + ')').show();
+      // --- THIS IS THE FIX: Caching the historical attempt count ---
+if (data.is_revision) {
+    var questionID = sessionQuestionIDs[currentQuestionIndex];
+    var countToShow = 0;
+
+    // Check if we have a stored count for this question already
+    if (answeredStates[questionID] && typeof answeredStates[questionID].historical_attempts !== 'undefined') {
+        // If yes, use the stored count
+        countToShow = answeredStates[questionID].historical_attempts;
+    } else {
+        // If no, use the count from the server and store it for the first time
+        countToShow = data.previous_attempt_count;
+        if (!answeredStates[questionID]) {
+            answeredStates[questionID] = {};
+        }
+        answeredStates[questionID].historical_attempts = countToShow;
+    }
+
+    // Display the indicator with the stable count
+    $("#qp-revision-indicator").text('🔄 Revision (' + countToShow + ')').show();
     showIndicatorBar = true;
 }
       
