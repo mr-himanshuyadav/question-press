@@ -277,33 +277,46 @@ jQuery(document).ready(function($) {
     wrapper.on('click', '#qp-delete-history-btn', function(e) {
         e.preventDefault();
         var button = $(this);
-        if (confirm('Are you sure you want to delete ALL of your practice session and revision history? This action cannot be undone.')) {
-            $.ajax({
-                url: qp_ajax_object.ajax_url, type: 'POST',
-                data: { action: 'delete_revision_history', nonce: qp_ajax_object.nonce },
-                beforeSend: function() {
-                    button.text('Deleting History...').prop('disabled', true);
-                },
-                success: function(response) {
-                    if (response.success) {
-                        var tableBody = wrapper.find('.qp-dashboard-table tbody');
-                        // Fade out the table body, empty it, add the success message, and fade it back in.
-                        tableBody.fadeOut(400, function() {
-                            $(this).empty().html('<tr><td colspan="8" style="text-align: center;">Your history has been cleared.</td></tr>').fadeIn(400);
-                        });
-                        // Update the button state to reflect the action.
-                        button.text('History Deleted').css('opacity', 0.7);
-                    } else {
-                        alert('Error: ' + (response.data.message || 'An unknown error occurred.'));
-                        button.text('Delete All Revision History').prop('disabled', false);
+
+        Swal.fire({
+            title: 'Delete All History?',
+            text: "This will permanently delete all of your practice sessions. This action cannot be undone.",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            confirmButtonText: 'Yes, delete everything!'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                $.ajax({
+                    url: qp_ajax_object.ajax_url,
+                    type: 'POST',
+                    data: {
+                        action: 'delete_revision_history',
+                        nonce: qp_ajax_object.nonce
+                    },
+                    beforeSend: function() {
+                        button.text('Deleting...').prop('disabled', true);
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            Swal.fire('Deleted!', 'Your history has been cleared.', 'success');
+                            var tableBody = wrapper.find('.qp-dashboard-table tbody');
+                            tableBody.fadeOut(400, function() {
+                                $(this).empty().html('<tr><td colspan="5" style="text-align: center;">Your history has been cleared.</td></tr>').fadeIn(400);
+                            });
+                            button.text('History Deleted').css('opacity', 0.7);
+                        } else {
+                            Swal.fire('Error!', response.data.message || 'An unknown error occurred.', 'error');
+                            button.text('Clear History').prop('disabled', false);
+                        }
+                    },
+                    error: function() {
+                        Swal.fire('Error!', 'An unknown server error occurred.', 'error');
+                        button.text('Clear History').prop('disabled', false);
                     }
-                },
-                error: function() {
-                    alert('An unknown server error occurred.');
-                    button.text('Delete All Revision History').prop('disabled', false);
-                }
-            });
-        }
+                });
+            }
+        });
     });
 
     // --- NEW: Handler for starting an incorrect questions practice session ---

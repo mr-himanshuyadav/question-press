@@ -91,11 +91,11 @@ jQuery(document).ready(function ($) {
           title: "Time's Up!",
           text: "Your test will be submitted automatically.",
           icon: "warning",
-          timer: 4000,
+          timer: 10000,
           timerProgressBar: true,
-          allowOutsideClick: false,
+          allowOutsideClick: true,
           allowEscapeKey: false,
-          showConfirmButton: false,
+          showConfirmButton: true,
         }).then(() => {
           endSession(true);
         });
@@ -2268,48 +2268,53 @@ jQuery(document).ready(function ($) {
   });
 
   wrapper.on("click", "#qp-pause-btn", function () {
-    if (
-      confirm(
-        "Are you sure you want to pause this session? You can resume it later from your dashboard."
-      )
-    ) {
-      practiceInProgress = false; // Prevent the "are you sure?" popup on redirect
-
-      $.ajax({
-        url: qp_ajax_object.ajax_url,
-        type: "POST",
-        data: {
-          action: "qp_pause_session",
-          nonce: qp_ajax_object.nonce,
-          session_id: sessionID,
-        },
-        beforeSend: function () {
-          // Disable all footer buttons to prevent double-clicks
-          $(".qp-footer-controls .qp-button")
-            .prop("disabled", true)
-            .text("Pausing...");
-        },
-        success: function (response) {
-          if (response.success) {
-            // Redirect to the dashboard page on success
-            window.location.href = qp_ajax_object.dashboard_page_url;
-          } else {
-            alert(
-              "Error: " +
-                (response.data.message || "Could not pause the session.")
-            );
-            // Re-enable buttons if it fails
-            $(".qp-footer-controls .qp-button").prop("disabled", false);
-            $("#qp-pause-btn").text("Pause & Save"); // Restore text
-          }
-        },
-        error: function () {
-          alert("An unknown server error occurred.");
-          $(".qp-footer-controls .qp-button").prop("disabled", false);
-          $("#qp-pause-btn").text("Pause & Save");
-        },
-      });
-    }
+    Swal.fire({
+        title: 'Pause Session?',
+        text: "You can resume this session later from your dashboard.",
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Yes, pause it!',
+        cancelButtonText: 'Cancel'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            practiceInProgress = false; // Prevent the "are you sure?" popup on redirect
+            $.ajax({
+                url: qp_ajax_object.ajax_url,
+                type: 'POST',
+                data: {
+                    action: 'qp_pause_session',
+                    nonce: qp_ajax_object.nonce,
+                    session_id: sessionID
+                },
+                beforeSend: function () {
+                    $(".qp-footer-controls .qp-button").prop('disabled', true);
+                    $("#qp-pause-btn").text("Pausing...");
+                    Swal.fire({
+                        title: 'Pausing...',
+                        text: 'Your session is being saved.',
+                        allowOutsideClick: false,
+                        didOpen: () => {
+                            Swal.showLoading()
+                        }
+                    });
+                },
+                success: function (response) {
+                    if (response.success) {
+                        window.location.href = qp_ajax_object.dashboard_page_url;
+                    } else {
+                        Swal.fire('Error!', response.data.message || 'Could not pause the session.', 'error');
+                        $(".qp-footer-controls .qp-button").prop('disabled', false);
+                        $("#qp-pause-btn").text("Pause & Save");
+                    }
+                },
+                error: function () {
+                    Swal.fire('Error!', 'An unknown server error occurred.', 'error');
+                    $(".qp-footer-controls .qp-button").prop('disabled', false);
+                    $("#qp-pause-btn").text("Pause & Save");
+                }
+            });
+        }
+    });
   });
 
   // --- NEW: Handler for the Fullscreen Start Button ---
