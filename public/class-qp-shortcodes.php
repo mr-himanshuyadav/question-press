@@ -683,7 +683,6 @@ class QP_Shortcodes
                     </div>
                 <?php endif; ?>
                 <div class="qp-palette-grid"></div>
-                <div class="qp-palette-legend">
                     <div class="qp-palette-legend">
                         <?php if ($is_mock_test) : ?>
                             <div class="legend-item" data-status="answered"><span class="swatch status-answered"></span><span class="legend-text">Answered</span><span class="legend-count">(0)</span></div>
@@ -702,7 +701,7 @@ class QP_Shortcodes
                             <?php endif; ?>
                         <?php endif; ?>
                     </div>
-                </div>
+                
             </div>
         </div>
 
@@ -961,8 +960,8 @@ class QP_Shortcodes
                         <span class="qp-session-mode-indicator" style="padding: 5px 12px; font-size: 12px;"><?php echo esc_html($mode); ?></span>
                         <p style="margin: 0; color: #50575e; font-size: 14px;"><strong>Session ID:</strong> <?php echo esc_html($session_id); ?></p>
                     </div>
+                    <a href="<?php echo esc_url($dashboard_page_url); ?>" class="qp-button qp-button-secondary" style="text-decoration: none;">&laquo; Dashboard</a>
                 </div>
-                <a href="<?php echo esc_url($dashboard_page_url); ?>" class="qp-button qp-button-secondary" style="text-decoration: none;">&laquo; Back to Dashboard</a>
             </div>
 
             <div class="qp-summary-wrapper qp-review-summary">

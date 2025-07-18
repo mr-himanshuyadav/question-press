@@ -93,9 +93,9 @@ jQuery(document).ready(function ($) {
           icon: "warning",
           timer: 10000,
           timerProgressBar: true,
-          allowOutsideClick: true,
+          allowOutsideClick: false,
           allowEscapeKey: false,
-          showConfirmButton: true,
+          showConfirmButton: false,
         }).then(() => {
           endSession(true);
         });

@@ -34,7 +34,7 @@ body {
     box-sizing: border-box;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    padding: 1rem 0;
+    padding: 1rem .5rem;
     width: 100%;
 
 }
@@ -80,7 +80,7 @@ body {
 .qp-button-danger {
     background-color: #d63638;
     color: #fff;
-    border-color: #d63638;
+    border: none;
 }
 
 .qp-button-danger:hover {
@@ -192,7 +192,6 @@ body {
 
 .qp-marks-group {
     display: flex;
-    flex-direction: column;
     gap: 1rem;
 }
 
@@ -518,37 +517,6 @@ body {
     background-color: #f9f9f9;
 }
 
-/* --- Section Mode Notice --- */
-.qp-section-notice {
-    background-color: #e8f5e9; /* Light Green */
-    color: #2e7d32; /* Dark Green */
-    padding: 1rem 2.5rem 1rem 1.5rem;
-    margin: 1rem 0;
-    border-radius: var(--qp-radius);
-    position: relative;
-    font-size: 14px;
-    display: none; /* Hidden by default */
-}
-.qp-section-notice p {
-    margin: 0;
-    line-height: 1.5;
-}
-.qp-dismiss-btn {
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    background: none;
-    border: none;
-    font-size: 24px;
-    cursor: pointer;
-    color: inherit;
-    opacity: 0.7;
-    padding: 5px;
-    line-height: 1;
-}
-.qp-dismiss-btn:hover {
-    opacity: 1;
-}
 
 .qp-counter-label {
     display: block;
@@ -596,6 +564,7 @@ body {
 .qp-practice-wrapper {
     max-width: 840px;
     margin: 0 auto;
+    border-radius: 10px;
     border: 3px solid transparent;
     transition: transform 0.35s cubic-bezier(0.25, 1, 0.5, 1), all 0.3s ease;
 }
@@ -1174,8 +1143,13 @@ body.palette-overlay-open #qp-palette-sliding {
 }
 
 .mode-mock-test.qp-practice-wrapper {
-    border-color: #d63638;
+    border-color: #e08788;
+    
     box-shadow: 0 0 15px rgba(214, 54, 56, 0.2);
+}
+
+.mode-mock-test.qp-practice-wrapper .qp-button-danger{
+    background-color: #1976d2;
 }
 
 /* --- Additional Mode Color Themes --- */

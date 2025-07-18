@@ -878,6 +878,8 @@ function qp_public_enqueue_scripts()
     global $post;
     if (is_a($post, 'WP_Post') && (has_shortcode($post->post_content, 'question_press_practice') || has_shortcode($post->post_content, 'question_press_dashboard') || has_shortcode($post->post_content, 'question_press_session') || has_shortcode($post->post_content, 'question_press_review'))) {
 
+        wp_enqueue_style('dashicons');
+
         // File versions for cache busting
         $css_version = filemtime(QP_PLUGIN_DIR . 'public/assets/css/practice.css');
         $practice_js_version = filemtime(QP_PLUGIN_DIR . 'public/assets/js/practice.js');
