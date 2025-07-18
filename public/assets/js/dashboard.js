@@ -62,28 +62,28 @@ jQuery(document).ready(function($) {
         var originalText = button.text();
 
         $.ajax({
-            url: qp_ajax_object.ajax_url,
-            type: 'POST',
-            data: {
-                action: 'qp_start_review_session',
-                nonce: qp_ajax_object.nonce,
-            },
-            beforeSend: function() {
-                button.text('Starting...').prop('disabled', true);
-            },
-            success: function(response) {
-                if (response.success && response.data.redirect_url) {
-                    window.location.href = response.data.redirect_url;
-                } else {
-                    alert('Error: ' + (response.data.message || 'Could not start review session.'));
+                url: qp_ajax_object.ajax_url,
+                type: 'POST',
+                data: {
+                    action: 'qp_start_review_session',
+                    nonce: qp_ajax_object.nonce,
+                },
+                beforeSend: function() {
+                    button.text('Starting...').prop('disabled', true);
+                },
+                success: function(response) {
+                    if (response.success && response.data.redirect_url) {
+                        window.location.href = response.data.redirect_url;
+                    } else {
+                        Swal.fire('Error!', response.data.message || 'Could not start review session.', 'error');
+                        button.text(originalText).prop('disabled', false);
+                    }
+                },
+                error: function() {
+                    Swal.fire('Error!', 'A server error occurred.', 'error');
                     button.text(originalText).prop('disabled', false);
                 }
-            },
-            error: function() {
-                alert('A server error occurred.');
-                button.text(originalText).prop('disabled', false);
-            }
-        });
+            });
     });
 
 
@@ -357,12 +357,12 @@ jQuery(document).ready(function($) {
                 if (response.success && response.data.redirect_url) {
                     window.location.href = response.data.redirect_url;
                 } else {
-                    alert('Error: ' + (response.data.message || 'Could not start practice session. You may not have any incorrect questions to practice.'));
+                    Swal.fire('Error!', response.data.message || 'Could not start practice session. You may not have any incorrect questions to practice.', 'error');
                     button.text(originalText).prop('disabled', false);
                 }
             },
             error: function() {
-                alert('A server error occurred.');
+                Swal.fire('Error!', 'A server error occurred.', 'error');
                 button.text(originalText).prop('disabled', false);
             }
         });
