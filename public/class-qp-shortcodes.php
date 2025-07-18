@@ -675,13 +675,13 @@ class QP_Shortcodes
                     <button id="qp-palette-close-btn">&times;</button>
                 </div>
                 <?php if (!$is_mock_test) : ?>
-        <div class="qp-header-bottom-row qp-palette-stats">
-            <div class="qp-header-stat score"><span class="value" id="qp-score">0.00</span><span class="label">Score</span></div>
-            <div class="qp-header-stat correct"><span class="value" id="qp-correct-count">0</span><span class="label">Correct</span></div>
-            <div class="qp-header-stat incorrect"><span class="value" id="qp-incorrect-count">0</span><span class="label">Incorrect</span></div>
-            <div class="qp-header-stat skipped"><span class="value" id="qp-skipped-count">0</span><span class="label">Skipped</span></div>
-        </div>
-    <?php endif; ?>
+                    <div class="qp-header-bottom-row qp-palette-stats">
+                        <div class="qp-header-stat score"><span class="value" id="qp-score">0.00</span><span class="label">Score</span></div>
+                        <div class="qp-header-stat correct"><span class="value" id="qp-correct-count">0</span><span class="label">Correct</span></div>
+                        <div class="qp-header-stat incorrect"><span class="value" id="qp-incorrect-count">0</span><span class="label">Incorrect</span></div>
+                        <div class="qp-header-stat skipped"><span class="value" id="qp-skipped-count">0</span><span class="label">Skipped</span></div>
+                    </div>
+                <?php endif; ?>
                 <div class="qp-palette-grid"></div>
                 <div class="qp-palette-legend">
                     <?php if ($is_mock_test) : ?>
@@ -706,13 +706,13 @@ class QP_Shortcodes
                     <h4>Question Palette</h4>
                 </div>
                 <?php if (!$is_mock_test) : ?>
-        <div class="qp-header-bottom-row qp-palette-stats">
-            <div class="qp-header-stat score"><span class="value" id="qp-score">0.00</span><span class="label">Score</span></div>
-            <div class="qp-header-stat correct"><span class="value" id="qp-correct-count">0</span><span class="label">Correct</span></div>
-            <div class="qp-header-stat incorrect"><span class="value" id="qp-incorrect-count">0</span><span class="label">Incorrect</span></div>
-            <div class="qp-header-stat skipped"><span class="value" id="qp-skipped-count">0</span><span class="label">Skipped</span></div>
-        </div>
-    <?php endif; ?>
+                    <div class="qp-header-bottom-row qp-palette-stats">
+                        <div class="qp-header-stat score"><span class="value" id="qp-score">0.00</span><span class="label">Score</span></div>
+                        <div class="qp-header-stat correct"><span class="value" id="qp-correct-count">0</span><span class="label">Correct</span></div>
+                        <div class="qp-header-stat incorrect"><span class="value" id="qp-incorrect-count">0</span><span class="label">Incorrect</span></div>
+                        <div class="qp-header-stat skipped"><span class="value" id="qp-skipped-count">0</span><span class="label">Skipped</span></div>
+                    </div>
+                <?php endif; ?>
                 <div class="qp-palette-grid"></div>
                 <div class="qp-palette-legend">
                     <?php if ($is_mock_test) : ?>
@@ -760,10 +760,14 @@ class QP_Shortcodes
                             <div class="qp-question-meta-left">
                                 <div id="qp-question-subject-line"><span id="qp-question-subject"></span> | <span id="qp-question-id"></span></div>
                                 <?php if ($user_can_view_source): ?>
-                                <div id="qp-question-source"></div>
-                            <?php endif; ?>
+                                    <div id="qp-question-source"></div>
+                                <?php endif; ?>
                             </div>
                             <div class="qp-question-meta-right">
+                                <div class="qp-question-counter-box" style="display: none;">
+                                    <span class="qp-counter-label">Question</span>
+                                    <span class="qp-counter-value">1/1</span>
+                                </div>
                                 <button id="qp-report-btn" class="qp-report-button qp-button-secondary"><span>&#9888;</span> Report</button>
                             </div>
                         </div>
