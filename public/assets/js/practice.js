@@ -39,31 +39,46 @@ jQuery(document).ready(function ($) {
     }
   }
 
-  // --- MOCK TEST TIMER ---
-  function startMockTestTimer(endTimeUTC) {
+  // Find and REPLACE the entire startMockTestTimer function
+function startMockTestTimer(endTimeUTC) {
     var timerEl = $("#qp-mock-test-timer");
     mockTestTimer = setInterval(function () {
-      // Get the current time in seconds since epoch, synced with UTC
       var nowUTC = Math.floor(new Date().getTime() / 1000);
       var secondsRemaining = endTimeUTC - nowUTC;
 
       if (secondsRemaining <= 0) {
         clearInterval(mockTestTimer);
-        timerEl.text("00:00:00");
+        timerEl.text("00:00");
         alert("Time's up! Your test will be submitted automatically.");
-        endSession(true); // Automatically end the session
+        endSession(true);
         return;
       }
+
+      // --- THIS IS THE NEW LOGIC ---
+
+      // 1. Add/remove the warning class
+      if (secondsRemaining < 300) { // 5 minutes = 300 seconds
+        timerEl.addClass('timer-warning');
+      } else {
+        timerEl.removeClass('timer-warning');
+      }
+
+      // 2. Format the time conditionally
       var hours = Math.floor(secondsRemaining / 3600);
       var minutes = Math.floor((secondsRemaining % 3600) / 60);
       var seconds = secondsRemaining % 60;
-      timerEl.text(
-        String(hours).padStart(2, "0") +
-          ":" +
-          String(minutes).padStart(2, "0") +
-          ":" +
-          String(seconds).padStart(2, "0")
-      );
+      var timeString = "";
+
+      if (hours > 0) {
+        timeString += String(hours).padStart(2, "0") + ":";
+      }
+      
+      timeString += String(minutes).padStart(2, "0") + ":" + String(seconds).padStart(2, "0");
+
+      timerEl.text(timeString);
+      
+      // --- END OF NEW LOGIC ---
+
     }, 1000);
   }
 
@@ -1091,33 +1106,52 @@ jQuery(document).ready(function ($) {
   });
 
   // --- MOCK TEST TIMER ---
-  function startMockTestTimer(endTimeUTC) {
+function startMockTestTimer(endTimeUTC) {
     var timerEl = $("#qp-mock-test-timer");
-    mockTestTimer = setInterval(function () {
-      // Get the current time in UTC seconds every interval to avoid clock drift
-      var nowUTC = Math.floor(new Date().getTime() / 1000);
-      var secondsRemaining = endTimeUTC - nowUTC;
-
-      if (secondsRemaining <= 0) {
+    
+    // Clear any previous timer to prevent duplicates
+    if (mockTestTimer) {
         clearInterval(mockTestTimer);
-        timerEl.text("00:00:00");
-        alert("Time's up! Your test will be submitted automatically.");
-        endSession(true); // Automatically end the session
-        return;
-      }
-      // Format the remaining time into HH:MM:SS
-      var hours = Math.floor(secondsRemaining / 3600);
-      var minutes = Math.floor((secondsRemaining % 3600) / 60);
-      var seconds = secondsRemaining % 60;
-      timerEl.text(
-        String(hours).padStart(2, "0") +
-          ":" +
-          String(minutes).padStart(2, "0") +
-          ":" +
-          String(seconds).padStart(2, "0")
-      );
+    }
+
+    mockTestTimer = setInterval(function () {
+        var nowUTC = Math.floor(new Date().getTime() / 1000);
+        var secondsRemaining = endTimeUTC - nowUTC;
+
+        if (secondsRemaining < 0) {
+            secondsRemaining = 0; // Prevent negative display
+        }
+
+        // Add or remove the warning class
+        if (secondsRemaining <= 300) { // 5 minutes = 300 seconds
+            timerEl.addClass('timer-warning');
+        } else {
+            timerEl.removeClass('timer-warning');
+        }
+
+        // Format the time conditionally
+        var hours = Math.floor(secondsRemaining / 3600);
+        var minutes = Math.floor((secondsRemaining % 3600) / 60);
+        var seconds = secondsRemaining % 60;
+        var timeString = "";
+
+        if (hours > 0) {
+            // Only show hours if there is at least one hour
+            timeString += String(hours).padStart(2, "0") + ":";
+        }
+        
+        timeString += String(minutes).padStart(2, "0") + ":" + String(seconds).padStart(2, "0");
+
+        timerEl.text(timeString);
+
+        // Stop the timer and auto-submit when time is up
+        if (secondsRemaining === 0) {
+            clearInterval(mockTestTimer);
+            alert("Time's up! Your test will be submitted automatically.");
+            endSession(true);
+        }
     }, 1000);
-  }
+}
 
   // Session state variables
   var sessionID = 0;

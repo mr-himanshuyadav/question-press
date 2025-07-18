@@ -26,14 +26,15 @@ body {
 
 #qp-practice-app-wrapper {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    background-color: transparent; 
-    padding: 0;
+    background-color: transparent;
     min-height: 95vh;
     max-width: 100%;
     box-sizing: border-box;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     padding: 1rem 0;
+    width: 100%;
+
 }
 
 .qp-container {
@@ -203,6 +204,22 @@ body {
     color: #c62828; /* Dark Red */
 }
 
+/* --- NEW: Corrected Mock Test Timer Styles --- */
+#qp-mock-test-timer {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--qp-dark-text);
+    /* This is the critical fix for the layout shift */
+    font-variant-numeric: tabular-nums;
+    /* This ensures a smooth color change for the warning */
+    transition: color 0.3s ease-in-out;
+}
+
+/* New class to apply the warning color */
+#qp-mock-test-timer.timer-warning {
+    color: var(--qp-incorrect-color); /* Uses your existing dark red variable */
+}
+
 /* Adjust the indicator bar to vertically align all items */
 .qp-indicator-bar {
     align-items: center; /* This is the key change */
@@ -249,9 +266,6 @@ body {
 .qp-header-stat.correct { color: var(--qp-correct-color); }
 .qp-header-stat.incorrect { color: var(--qp-incorrect-color); }
 .qp-header-stat.skipped { color: var(--qp-skipped-color); }
-.qp-header-stat.timer-stat { display: none; text-align: right; }
-.qp-header-stat.timer-stat .label { color: var(--qp-light-text); }
-.qp-header-stat.timer-stat .value { font-size: 20px; font-weight: 600; color: var(--qp-dark-text); }
 
 
 /* --- Indicator Bar Styles --- */
@@ -360,10 +374,7 @@ body {
 }
 
 
-/* --- 1. Main Wrapper & Content Area --- */
-#qp-practice-app-wrapper {
-    width: 100%;
-}
+
 
 
 
@@ -398,6 +409,10 @@ body {
         max-width: 1400px;
     }
 
+    body.palette-mandatory #qp-palette-docked {
+        align-self: start; /* This stops the grid from stretching the palette vertically */
+    }
+
     .qp-practice-wrapper {
     transition: transform 0.35s cubic-bezier(0.25, 1, 0.5, 1), all 0.3s ease;}
     body.palette-overlay-open .qp-practice-wrapper {
@@ -425,7 +440,7 @@ body {
     background-color: #f6f7f7;
     border: 1px solid var(--qp-border-color);
     border-radius: var(--qp-radius);
-    height: 85vh; /* Prevents it from being too tall on large monitors */
+    max-height: 85vh; /* Prevents it from being too tall on large monitors */
 }
 
 /* --- Add this entire new block of CSS --- */
@@ -457,6 +472,7 @@ body {
     transform: translateX(-400px); /* Start off-screen */
     transition: transform 0.35s cubic-bezier(0.25, 1, 0.5, 1);
     display: flex; /* This replaces the old display:none */
+    height: auto;
 }
 
 /* --- State when the palette is OPEN --- */
@@ -487,7 +503,7 @@ body.palette-overlay-open #qp-palette-sliding {
         bottom: 0;
         left: 0;
         width: 100%;
-        height: 80vh; /* 75% of the viewport height */
+        max-height: 80vh; /* 75% of the viewport height */
 
         /* Round only the top corners */
         border-radius: 16px 16px 0 0;
@@ -544,7 +560,6 @@ body.palette-overlay-open #qp-palette-sliding {
 .qp-palette-grid {
     padding: 1rem;
     overflow-y: auto;
-    flex-grow: 1;
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(45px, 1fr));
     gap: 14px;
@@ -577,7 +592,7 @@ body.palette-overlay-open #qp-palette-sliding {
 
 /* Current Question */
 .qp-palette-btn.current {
-border: 1px solid #000;
+border: 2px solid #000;
 border-radius: 50%;
 transform: scale(1.15);
 box-shadow: 0 5px 15px rgba(0, 0, 0, 0.25);
@@ -588,24 +603,7 @@ z-index: 2;
 
 /* --- For Mock Tests --- */
 
-/* Current + Answered */
-.qp-palette-btn.status-answered.current {
-    border: 4px solid var(--qp-correct-color);
-}
-/* Current + Not Answered */
-.qp-palette-btn.status-viewed.current {
-    border: 3px solid #ffc107; /* Amber */
-}
-/* Current + Marked for Review */
-.qp-palette-btn.status-marked_for_review.current {
-    border: 4px solid #1976d2; /* Vibrant Blue */
-}
-/* Current + Answered AND Marked for Review (Double Border Effect) */
-.qp-palette-btn.status-answered_and_marked_for_review.current {
-    /* The box-shadow creates the outer "review" border */
-    box-shadow: 0 0 0 4px #1976d2, 0 5px 15px rgba(0, 0, 0, 0.25);
-    border: 4px solid var(--qp-correct-color); /* The inner "answered" border */
-}
+
 
 /* --- For Normal/Revision Practice --- */
 
@@ -637,27 +635,23 @@ z-index: 2;
 .qp-palette-btn.status-viewed {
     background-color: #ffc107; /* Amber */
     color: #fff;
-    border-color: #c79100;
 }
 
 /* Answered */
 .qp-palette-btn.status-answered {
     background-color: var(--qp-correct-color);
-    border-color: #1b5e20;
     color: #fff;
 }
 
 /* Marked for Review (and not answered) */
 .qp-palette-btn.status-marked_for_review {
     background-color: #1976d2; /* New Vibrant Blue */
-    border-color: #0d47a1;     /* Darker Blue Border */
     color: #fff;
 }
 
 /* Answered AND Marked for Review */
 .qp-palette-btn.status-answered_and_marked_for_review {
     background-color: var(--qp-correct-color);
-    border-color: #1b5e20;
     color: #fff;
 }
 
@@ -1323,7 +1317,11 @@ ul.qp-review-list li{
 .qp-header-stat.skipped { color: var(--qp-skipped-color); }
 .qp-header-stat.timer-stat { display: none; text-align: right; }
 .qp-header-stat.timer-stat .label { color: var(--qp-light-text); }
-.qp-header-stat.timer-stat .value { font-size: 20px; font-weight: 600; color: var(--qp-dark-text); }
+.qp-header-stat.timer-stat .value { font-variant-numeric: tabular-nums; /* This is the fix for the layout shift */
+    transition: color 0.3s ease-in-out; font-size: 20px; font-weight: 600; color: var(--qp-dark-text); }
+    .qp-header-stat.timer-stat .value.timer-warning {
+    color: var(--qp-incorrect-color); /* Uses your existing dark red variable */
+}
     
 
     .qp-summary-stats { display: flex; }
