@@ -674,6 +674,14 @@ class QP_Shortcodes
                     <h4>Question Palette</h4>
                     <button id="qp-palette-close-btn">&times;</button>
                 </div>
+                <?php if (!$is_mock_test) : ?>
+        <div class="qp-header-bottom-row qp-palette-stats">
+            <div class="qp-header-stat score"><span class="value" id="qp-score">0.00</span><span class="label">Score</span></div>
+            <div class="qp-header-stat correct"><span class="value" id="qp-correct-count">0</span><span class="label">Correct</span></div>
+            <div class="qp-header-stat incorrect"><span class="value" id="qp-incorrect-count">0</span><span class="label">Incorrect</span></div>
+            <div class="qp-header-stat skipped"><span class="value" id="qp-skipped-count">0</span><span class="label">Skipped</span></div>
+        </div>
+    <?php endif; ?>
                 <div class="qp-palette-grid"></div>
                 <div class="qp-palette-legend">
                     <?php if ($is_mock_test) : ?>
@@ -697,6 +705,14 @@ class QP_Shortcodes
                 <div class="qp-palette-header">
                     <h4>Question Palette</h4>
                 </div>
+                <?php if (!$is_mock_test) : ?>
+        <div class="qp-header-bottom-row qp-palette-stats">
+            <div class="qp-header-stat score"><span class="value" id="qp-score">0.00</span><span class="label">Score</span></div>
+            <div class="qp-header-stat correct"><span class="value" id="qp-correct-count">0</span><span class="label">Correct</span></div>
+            <div class="qp-header-stat incorrect"><span class="value" id="qp-incorrect-count">0</span><span class="label">Incorrect</span></div>
+            <div class="qp-header-stat skipped"><span class="value" id="qp-skipped-count">0</span><span class="label">Skipped</span></div>
+        </div>
+    <?php endif; ?>
                 <div class="qp-palette-grid"></div>
                 <div class="qp-palette-legend">
                     <?php if ($is_mock_test) : ?>
@@ -734,13 +750,6 @@ class QP_Shortcodes
                                 <span class="value" id="qp-question-counter">--/--</span>
                                 <span class="label">Questions</span>
                             </div>
-                        </div>
-                    <?php else : ?>
-                        <div class="qp-header-bottom-row">
-                            <div class="qp-header-stat score"><span class="value" id="qp-score">0.00</span><span class="label">Score</span></div>
-                            <div class="qp-header-stat correct"><span class="value" id="qp-correct-count">0</span><span class="label">Correct</span></div>
-                            <div class="qp-header-stat incorrect"><span class="value" id="qp-incorrect-count">0</span><span class="label">Incorrect</span></div>
-                            <div class="qp-header-stat skipped"><span class="value" id="qp-skipped-count">0</span><span class="label">Skipped</span></div>
                         </div>
                     <?php endif; ?>
                 </div>

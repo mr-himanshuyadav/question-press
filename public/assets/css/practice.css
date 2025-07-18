@@ -179,8 +179,8 @@ body {
 /* --- Practice Screen Header --- */
 .qp-header {
     text-align: center;
-    margin-bottom: 1rem;
-    padding-bottom: 1rem;
+    margin-bottom: .5rem;
+    padding-bottom: .5rem;
     border-bottom: 1px solid var(--qp-border-color);
 }
 
@@ -214,6 +214,30 @@ body {
     background-color: var(--qp-bg-light);
     border-radius: var(--qp-radius);
     padding: 0.75rem 3rem;
+}
+
+/* --- NEW: Styles for Stats Bar Inside Palette --- */
+.qp-palette-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr; /* Creates a 2x2 grid */
+    gap: 0.75rem;
+    padding: 1rem;
+    border-bottom: 1px solid var(--qp-border-color);
+    background-color: #fff;
+}
+
+.qp-palette-stats .qp-header-stat {
+    background-color: var(--qp-bg-light);
+    padding: 0.75rem;
+    border-radius: var(--qp-radius);
+    text-align: center;
+}
+
+.qp-palette-stats .qp-header-stat .value {
+    font-size: 20px;
+}
+.qp-palette-stats .qp-header-stat .label {
+    font-size: 11px;
 }
 .qp-header-stat {width: auto;}
 .qp-header-stat.score .label { font-size: 14px; font-weight: 500; color: var(--qp-light-text); }
@@ -270,7 +294,6 @@ body {
 .question-meta {
     font-size: 12px;
     color: #777;
-    margin-bottom: 1rem;
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
@@ -331,7 +354,6 @@ body {
     letter-spacing: 0.5px;
     padding: 8px 16px;
     border-radius: var(--qp-radius);
-    margin-bottom: 1.5rem; /* Pull it into the header padding */
     color: #fff;
 }
 
@@ -734,7 +756,7 @@ z-index: 2;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 1rem;
+    margin-bottom: .5rem;
 }
 
 #qp-palette-toggle-btn {
@@ -865,7 +887,7 @@ z-index: 2;
 }
 
 /* --- Practice Screen Content --- */
-.qp-question-area {margin-bottom: 1.2rem; margin-top: .5rem}
+.qp-question-area {margin-bottom: 1.2rem;}
 .qp-question-area .question-text { font: normal 1.21em KaTeX_Main,Times New Roman,serif; line-height: 1.6; }
 .qp-options-area .option { display: block; font: normal 1.1em KaTeX_Main,Times New Roman,serif;; padding: 1rem; margin-bottom: 0.75rem; border: 2px solid var(--qp-border-color); border-radius: var(--qp-radius); cursor: pointer; transition: all 0.2s ease-in-out; position: relative; }
 .qp-options-area.disabled .option {
