@@ -952,6 +952,11 @@ class QP_Shortcodes
         echo '<div id="qp-practice-app-wrapper">';
         // --- Determine Session Mode ---
         $is_mock_test = isset($settings['practice_mode']) && $settings['practice_mode'] === 'mock_test';
+        // Get a list of all open reports for the current user to disable buttons
+        $reported_qids_for_user = $wpdb->get_col($wpdb->prepare(
+            "SELECT DISTINCT question_id FROM {$wpdb->prefix}qp_question_reports WHERE user_id = %d AND status = 'open'",
+            $user_id
+        ));
 
         $mode_class = 'mode-normal';
         $mode = 'Practice'; // A generic default
@@ -1069,7 +1074,14 @@ class QP_Shortcodes
                                 </span>
                             </div>
                             <div class="meta-right">
-                                <button class="qp-report-button qp-report-btn-review" data-question-id="<?php echo esc_attr($attempt->question_id); ?>"><span>&#9888;</span> Report</button>
+                                <?php
+                                $is_reported = in_array($attempt->question_id, $reported_qids_for_user);
+                                ?>
+                                <button class="qp-report-button qp-report-btn-review"
+                                    data-question-id="<?php echo esc_attr($attempt->question_id); ?>"
+                                    <?php echo $is_reported ? 'disabled' : ''; ?>>
+                                    <span>&#9888;</span> <?php echo $is_reported ? 'Reported' : 'Report'; ?>
+                                </button>
                             </div>
                         </div>
                         <?php
@@ -1125,27 +1137,27 @@ class QP_Shortcodes
                                 </ul>
                             </details>
                         </div>
-                        </div>
+                    </div>
                 <?php endforeach; ?>
             </div>
         </div>
 
         <div id="qp-report-modal-backdrop" style="display: none;">
-        <div id="qp-report-modal-content">
-            <button class="qp-modal-close-btn">&times;</button>
-            <h3>Report an Issue</h3>
-            <p>Please select all issues that apply to the current question.</p>
-            <form id="qp-report-form">
-                <input type="hidden" id="qp-report-question-id-field" value="">
-                <div id="qp-report-options-container"></div>
-                <div class="qp-modal-footer">
-                    <button type="submit" class="qp-button qp-button-primary">Submit Report</button>
-                </div>
-            </form>
+            <div id="qp-report-modal-content">
+                <button class="qp-modal-close-btn">&times;</button>
+                <h3>Report an Issue</h3>
+                <p>Please select all issues that apply to the current question.</p>
+                <form id="qp-report-form">
+                    <input type="hidden" id="qp-report-question-id-field" value="">
+                    <div id="qp-report-options-container"></div>
+                    <div class="qp-modal-footer">
+                        <button type="submit" class="qp-button qp-button-primary">Submit Report</button>
+                    </div>
+                </form>
+            </div>
         </div>
-    </div>
 <?php
-echo '</div>';
+        echo '</div>';
         return ob_get_clean();
     }
 }
