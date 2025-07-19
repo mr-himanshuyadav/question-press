@@ -518,7 +518,7 @@ $topicListContainer.append('<label><input type="checkbox" name="' + topicNameAtt
                         if (response.success && response.data.sections.length > 0) {
                             $sectionSelect.prop('disabled', false).empty().append('<option value="all">All Sections</option>');
                             $.each(response.data.sections, function(index, sec) {
-                                var count = (unattemptedCounts.by_section && unattemptedCounts.by_section[sec.section_id]) ? ' (' + unattemptedCounts.by_section[sec.section_id] + ')' : '';
+                                var count = (sec.unattempted_count && sec.unattempted_count > 0) ? ' (' + sec.unattempted_count + ')' : '';
                                 var optionText = sec.source_name + ' / ' + sec.section_name + count;
                                 $sectionSelect.append($('<option></option>').val(sec.section_id).text(optionText));
                             });
