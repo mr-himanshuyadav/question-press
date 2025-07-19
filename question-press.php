@@ -2044,28 +2044,32 @@ function qp_finalize_and_end_session($session_id, $new_status = 'completed', $en
     $attempts_table = $wpdb->prefix . 'qp_user_attempts';
     $pauses_table = $wpdb->prefix . 'qp_session_pauses';
 
-    // Check if there are any answered attempts before proceeding
-    $total_answered_attempts = (int) $wpdb->get_var($wpdb->prepare(
-        "SELECT COUNT(*) FROM {$attempts_table} WHERE session_id = %d AND status = 'answered'",
-        $session_id
-    ));
-
-    if ($total_answered_attempts === 0 && $new_status !== 'abandoned') {
-        $wpdb->delete($sessions_table, ['session_id' => $session_id]);
-        return null; // Indicate that the session was empty and deleted
-    }
-
     $session = $wpdb->get_row($wpdb->prepare("SELECT * FROM $sessions_table WHERE session_id = %d", $session_id));
     if (!$session) {
         return null;
     }
 
+    // Check for any answered attempts.
+    $total_answered_attempts = (int) $wpdb->get_var($wpdb->prepare(
+        "SELECT COUNT(*) FROM {$attempts_table} WHERE session_id = %d AND status = 'answered'",
+        $session_id
+    ));
+
+    // If there are no answered attempts, delete the session immediately and stop.
+    if ($total_answered_attempts === 0) {
+        $wpdb->delete($sessions_table, ['session_id' => $session_id]);
+        $wpdb->delete($attempts_table, ['session_id' => $session_id]); // Also clear any skipped/expired attempts
+        return null; // Indicate that the session was empty and deleted
+    }
+
+    // If we are here, it means there were attempts, so we proceed to finalize.
     $settings = json_decode($session->settings_snapshot, true);
     $marks_correct = $settings['marks_correct'] ?? 0;
     $marks_incorrect = $settings['marks_incorrect'] ?? 0;
     $is_mock_test = isset($settings['practice_mode']) && $settings['practice_mode'] === 'mock_test';
 
     if ($is_mock_test) {
+        // Grade any unanswered mock test questions
         $answered_attempts = $wpdb->get_results($wpdb->prepare(
             "SELECT attempt_id, question_id, selected_option_id FROM {$attempts_table} WHERE session_id = %d AND mock_status IN ('answered', 'answered_and_marked_for_review')",
             $session_id
@@ -2102,7 +2106,7 @@ function qp_finalize_and_end_session($session_id, $new_status = 'completed', $en
     }
     $skipped_count = $unattempted_count;
     $final_score = ($correct_count * $marks_correct) + ($incorrect_count * $marks_incorrect);
-    $end_time_for_calc = $new_status === 'abandoned' ? $session->last_activity : current_time('mysql');
+    $end_time_for_calc = ($new_status === 'abandoned' && !empty($session->last_activity) && $session->last_activity !== '0000-00-00 00:00:00') ? $session->last_activity : current_time('mysql');
     $end_time_gmt = get_gmt_from_date($end_time_for_calc);
     $start_time_gmt = get_gmt_from_date($session->start_time);
     $total_session_duration = strtotime($end_time_gmt) - strtotime($start_time_gmt);
@@ -2750,7 +2754,6 @@ function qp_cleanup_abandoned_sessions() {
     }
 
     $sessions_table = $wpdb->prefix . 'qp_user_sessions';
-    $attempts_table = $wpdb->prefix . 'qp_user_attempts';
 
     // --- 1. Handle Expired Mock Tests ---
     $active_mock_tests = $wpdb->get_results(
@@ -2761,33 +2764,20 @@ function qp_cleanup_abandoned_sessions() {
         $settings = json_decode($test->settings_snapshot, true);
         $duration_seconds = $settings['timer_seconds'] ?? 0;
 
-        if ($duration_seconds <= 0) {
-            continue; // Skip tests without a valid duration
-        }
+        if ($duration_seconds <= 0) continue;
 
         $start_time_gmt = get_gmt_from_date($test->start_time);
         $start_timestamp = strtotime($start_time_gmt);
         $end_timestamp = $start_timestamp + $duration_seconds;
 
-        // Check if the current time is past the test's official end time
+        // If the current time is past the test's official end time, finalize it as abandoned.
         if (time() > $end_timestamp) {
-            // The test has expired. Check if any questions were actually answered.
-            $attempt_count = (int) $wpdb->get_var($wpdb->prepare(
-                "SELECT COUNT(*) FROM {$attempts_table} WHERE session_id = %d AND selected_option_id IS NOT NULL",
-                $test->session_id
-            ));
-
-            if ($attempt_count > 0) {
-                // If questions were answered, complete the session.
-                qp_finalize_and_end_session($test->session_id, 'completed', 'autosubmitted_timer');
-            } else {
-                // If no questions were answered, abandon it (which will also delete it).
-                qp_finalize_and_end_session($test->session_id, 'abandoned', 'autosubmitted_timer');
-            }
+            // Our updated function will delete it if empty, or mark as abandoned if there are attempts.
+            qp_finalize_and_end_session($test->session_id, 'abandoned', 'abandoned_system');
         }
     }
 
-    // --- 2. Handle Abandoned 'active' or 'paused' sessions (Original Logic) ---
+    // --- 2. Handle Abandoned 'active' or 'paused' sessions ---
     $abandoned_session_ids = $wpdb->get_col($wpdb->prepare(
         "SELECT session_id FROM {$sessions_table}
          WHERE status IN ('active', 'paused') AND last_activity < NOW() - INTERVAL %d MINUTE",
@@ -2796,6 +2786,7 @@ function qp_cleanup_abandoned_sessions() {
 
     if (!empty($abandoned_session_ids)) {
         foreach ($abandoned_session_ids as $session_id) {
+            // Our updated function will delete if empty, or mark as abandoned if there are attempts.
             qp_finalize_and_end_session($session_id, 'abandoned', 'abandoned_system');
         }
     }
