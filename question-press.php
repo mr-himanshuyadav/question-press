@@ -2750,21 +2750,54 @@ function qp_cleanup_abandoned_sessions() {
     }
 
     $sessions_table = $wpdb->prefix . 'qp_user_sessions';
+    $attempts_table = $wpdb->prefix . 'qp_user_attempts';
 
-    // Get the IDs of all sessions that are active/paused/mock_test but have timed out
+    // --- 1. Handle Expired Mock Tests ---
+    $active_mock_tests = $wpdb->get_results(
+        "SELECT session_id, start_time, settings_snapshot FROM {$sessions_table} WHERE status = 'mock_test'"
+    );
+
+    foreach ($active_mock_tests as $test) {
+        $settings = json_decode($test->settings_snapshot, true);
+        $duration_seconds = $settings['timer_seconds'] ?? 0;
+
+        if ($duration_seconds <= 0) {
+            continue; // Skip tests without a valid duration
+        }
+
+        $start_time_gmt = get_gmt_from_date($test->start_time);
+        $start_timestamp = strtotime($start_time_gmt);
+        $end_timestamp = $start_timestamp + $duration_seconds;
+
+        // Check if the current time is past the test's official end time
+        if (time() > $end_timestamp) {
+            // The test has expired. Check if any questions were actually answered.
+            $attempt_count = (int) $wpdb->get_var($wpdb->prepare(
+                "SELECT COUNT(*) FROM {$attempts_table} WHERE session_id = %d AND selected_option_id IS NOT NULL",
+                $test->session_id
+            ));
+
+            if ($attempt_count > 0) {
+                // If questions were answered, complete the session.
+                qp_finalize_and_end_session($test->session_id, 'completed', 'autosubmitted_timer');
+            } else {
+                // If no questions were answered, abandon it (which will also delete it).
+                qp_finalize_and_end_session($test->session_id, 'abandoned', 'autosubmitted_timer');
+            }
+        }
+    }
+
+    // --- 2. Handle Abandoned 'active' or 'paused' sessions (Original Logic) ---
     $abandoned_session_ids = $wpdb->get_col($wpdb->prepare(
         "SELECT session_id FROM {$sessions_table}
-         WHERE status IN ('active', 'paused', 'mock_test') AND last_activity < NOW() - INTERVAL %d MINUTE", // <-- THE FIX IS HERE
+         WHERE status IN ('active', 'paused') AND last_activity < NOW() - INTERVAL %d MINUTE",
         $timeout_minutes
     ));
 
-    if (empty($abandoned_session_ids)) {
-        return; // No sessions to clean up.
-    }
-
-    // Loop through each abandoned session and finalize it with 'abandoned' status
-    foreach ($abandoned_session_ids as $session_id) {
-        qp_finalize_and_end_session($session_id, 'abandoned', 'abandoned_system');
+    if (!empty($abandoned_session_ids)) {
+        foreach ($abandoned_session_ids as $session_id) {
+            qp_finalize_and_end_session($session_id, 'abandoned', 'abandoned_system');
+        }
     }
 }
 add_action('qp_cleanup_abandoned_sessions_event', 'qp_cleanup_abandoned_sessions');
