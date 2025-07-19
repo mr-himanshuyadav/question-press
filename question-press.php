@@ -1101,6 +1101,79 @@ function qp_get_sections_for_subject_ajax()
 }
 add_action('wp_ajax_get_sections_for_subject', 'qp_get_sections_for_subject_ajax');
 
+
+/**
+ * AJAX handler to get the number of unattempted questions for the current user.
+ */
+function qp_get_unattempted_counts_ajax() {
+    check_ajax_referer('qp_practice_nonce', 'nonce');
+    if (!is_user_logged_in()) {
+        wp_send_json_error(['message' => 'User not logged in.']);
+    }
+
+    global $wpdb;
+    $user_id = get_current_user_id();
+    $q_table = $wpdb->prefix . 'qp_questions';
+    $g_table = $wpdb->prefix . 'qp_question_groups';
+    $a_table = $wpdb->prefix . 'qp_user_attempts';
+
+    // 1. Get all question IDs the user has already attempted.
+    $attempted_q_ids = $wpdb->get_col($wpdb->prepare(
+        "SELECT DISTINCT question_id FROM {$a_table} WHERE user_id = %d AND status = 'answered'",
+        $user_id
+    ));
+    $attempted_q_ids_placeholder = !empty($attempted_q_ids) ? implode(',', array_map('absint', $attempted_q_ids)) : '0';
+
+    // 2. Build the main query to count unattempted questions, grouped by taxonomy.
+    $sql = "
+        SELECT 
+            g.subject_id,
+            q.topic_id,
+            q.section_id,
+            COUNT(q.question_id) as unattempted_count
+        FROM {$q_table} q
+        JOIN {$g_table} g ON q.group_id = g.group_id
+        WHERE q.status = 'publish' AND q.question_id NOT IN ({$attempted_q_ids_placeholder})
+        GROUP BY g.subject_id, q.topic_id, q.section_id
+    ";
+
+    $results = $wpdb->get_results($sql);
+
+    // 3. Process the results into a structured array for the frontend.
+    $counts = [
+        'by_subject' => [],
+        'by_topic' => [],
+        'by_section' => [],
+    ];
+
+    foreach ($results as $row) {
+        // Aggregate counts for subjects
+        if ($row->subject_id) {
+            if (!isset($counts['by_subject'][$row->subject_id])) {
+                $counts['by_subject'][$row->subject_id] = 0;
+            }
+            $counts['by_subject'][$row->subject_id] += $row->unattempted_count;
+        }
+        // Aggregate counts for topics
+        if ($row->topic_id) {
+            if (!isset($counts['by_topic'][$row->topic_id])) {
+                $counts['by_topic'][$row->topic_id] = 0;
+            }
+            $counts['by_topic'][$row->topic_id] += $row->unattempted_count;
+        }
+        // Aggregate counts for sections
+        if ($row->section_id) {
+             if (!isset($counts['by_section'][$row->section_id])) {
+                $counts['by_section'][$row->section_id] = 0;
+            }
+            $counts['by_section'][$row->section_id] += $row->unattempted_count;
+        }
+    }
+
+    wp_send_json_success(['counts' => $counts]);
+}
+add_action('wp_ajax_get_unattempted_counts', 'qp_get_unattempted_counts_ajax');
+
 function qp_start_practice_session_ajax()
 {
     check_ajax_referer('qp_practice_nonce', 'nonce');
