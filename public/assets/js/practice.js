@@ -530,25 +530,6 @@ jQuery(document).ready(function ($) {
       }
     }
   );
-  // --- NEW: Add handler for the "All Topics" checkbox behavior ---
-  $("#qp_topic_list_container_revision").on(
-    "change",
-    'input[value="all"]',
-    function () {
-      var $this = $(this);
-      var $list = $this.closest(".qp-multi-select-list");
-      if ($this.is(":checked")) {
-        // If "All Topics" is checked, uncheck and disable all others
-        $list
-          .find('input[value!="all"]')
-          .prop("checked", false)
-          .prop("disabled", true);
-      } else {
-        // If "All Topics" is unchecked, enable all others
-        $list.find('input[value!="all"]').prop("disabled", false);
-      }
-    }
-  );
 
   // Update button text when a topic is selected in the revision form
   $("#qp_topic_dropdown_revision").on(
@@ -601,22 +582,29 @@ jQuery(document).ready(function ($) {
     });
   });
 
-  // Specific logic for the "All Subjects" checkbox
-  $("#qp_subject_dropdown .qp-multi-select-list").on(
-    "change",
-    'input[value="all"]',
-    function () {
-      var $list = $(this).closest(".qp-multi-select-list");
-      if ($(this).is(":checked")) {
-        $list
-          .find('input[value!="all"]')
-          .prop("checked", false)
-          .prop("disabled", true);
-      } else {
-        $list.find('input[value!="all"]').prop("disabled", false);
-      }
+  // --- IMPROVED "SELECT ALL" LOGIC ---
+// This delegated handler works for ALL multi-select lists
+wrapper.on('change', '.qp-multi-select-list input[type="checkbox"]', function() {
+    var $this = $(this);
+    var $list = $this.closest('.qp-multi-select-list');
+    var $allCheckbox = $list.find('input[value="all"]');
+
+    if ($this.val() === 'all') {
+        // If "All" is checked or unchecked, set the state of all others to match
+        $list.find('input[value!="all"]').prop('checked', $this.is(':checked'));
+    } else {
+        // If an individual item is unchecked, uncheck the "All" checkbox
+        if (!$this.is(':checked')) {
+            $allCheckbox.prop('checked', false);
+        }
+        // If all individual items are checked, also check the "All" checkbox
+        else {
+            if ($list.find('input[value!="all"]:not(:checked)').length === 0) {
+                $allCheckbox.prop('checked', true);
+            }
+        }
     }
-  );
+});
 
   // Logic to fetch topics when subjects change
   $("#qp_subject_dropdown").on("change", 'input[type="checkbox"]', function () {
