@@ -393,7 +393,7 @@ jQuery(document).ready(function ($) {
   });
 
   
-// --- FINAL: UNIFIED AND CORRECTED DROPDOWN LOGIC ---
+// --- NEW: FULLY SYNCHRONIZED DROPDOWN LOGIC ---
 wrapper.on('change', '.qp-multi-select-list input[type="checkbox"]', function() {
     var $this = $(this);
     var $list = $this.closest('.qp-multi-select-list');
@@ -401,45 +401,45 @@ wrapper.on('change', '.qp-multi-select-list input[type="checkbox"]', function() 
     var $button = $dropdown.find('.qp-multi-select-button');
     var $form = $dropdown.closest('form');
 
-    // --- Part 1: Handle "Select All" checking/unchecking ---
-    var $allCheckbox = $list.find('input[value="all"]');
+    // --- Part 1: Handle User Actions ---
     if ($this.val() === 'all') {
-        $list.find('input[value!="all"]').prop('checked', $this.is(':checked'));
-    } else {
-        if (!$this.is(':checked')) {
-            $allCheckbox.prop('checked', false);
-        } else {
-            if ($list.find('input[value!="all"]:not(:checked)').length === 0) {
-                $allCheckbox.prop('checked', true);
-            }
-        }
+        // If main "All" is clicked, check/uncheck everything else
+        $list.find('input[type="checkbox"]').prop('checked', $this.is(':checked'));
+    } else if ($this.hasClass('qp-subject-topic-toggle')) {
+        // If a subject-level toggle is clicked, check/uncheck its topics
+        $this.closest('label').nextUntil('.qp-topic-group-header').find('input[type="checkbox"]').prop('checked', $this.is(':checked'));
     }
 
-    // --- Part 2: Update the button text correctly ---
+    // --- Part 2: Synchronize Parent Checkboxes ---
+    // Sync all subject-level toggles based on their topics
+    $list.find('.qp-subject-topic-toggle').each(function() {
+        var $subjectToggle = $(this);
+        var $topicCheckboxes = $subjectToggle.closest('label').nextUntil('.qp-topic-group-header').find('input[type="checkbox"]');
+        var allTopicsChecked = $topicCheckboxes.length > 0 && $topicCheckboxes.filter(':checked').length === $topicCheckboxes.length;
+        $subjectToggle.prop('checked', allTopicsChecked);
+    });
+
+    // Sync the main "All" toggle based on all other checkboxes
+    var $allCheckboxes = $list.find('input[type="checkbox"][value!="all"]');
+    var allChecked = $allCheckboxes.length > 0 && $allCheckboxes.filter(':checked').length === $allCheckboxes.length;
+    $list.find('input[value="all"]').prop('checked', allChecked);
+
+
+    // --- Part 3: Update Button Text & Dynamic Dropdowns (No changes here) ---
     var placeholder = $dropdown.attr('id').includes('subject') ? '-- Please select --' : '-- Select Topic(s) --';
     var singularLabel = $dropdown.attr('id').includes('subject') ? 'Subject' : 'Topic';
     updateButtonText($button, placeholder, singularLabel);
 
-    // --- Part 3: Handle dynamic topic dropdown updates (if a subject was changed) ---
     if ($dropdown.attr('id').includes('subject')) {
         var selectedSubjects = [];
-        $list.find('input:checked[value!="all"]').each(function() {
-            selectedSubjects.push($(this).val());
-        });
-
+        $list.find('input:checked[value!="all"]').each(function() { selectedSubjects.push($(this).val()); });
         var $topicGroup = $form.find('[id^="qp-topic-group"]');
         var $topicListContainer = $form.find('[id^="qp_topic_list_container"]');
         var $topicButton = $form.find('[id^="qp_topic_dropdown"] .qp-multi-select-button');
-
         if (selectedSubjects.length > 0) {
             $.ajax({
-                url: qp_ajax_object.ajax_url,
-                type: 'POST',
-                data: {
-                    action: 'get_topics_for_subject',
-                    nonce: qp_ajax_object.nonce,
-                    subject_id: selectedSubjects,
-                },
+                url: qp_ajax_object.ajax_url, type: 'POST',
+                data: { action: 'get_topics_for_subject', nonce: qp_ajax_object.nonce, subject_id: selectedSubjects },
                 beforeSend: function() {
                     $topicButton.text('Loading Topics...').prop('disabled', true);
                     $topicListContainer.empty();
@@ -468,28 +468,18 @@ wrapper.on('change', '.qp-multi-select-list input[type="checkbox"]', function() 
             updateButtonText($topicButton, '-- Select subject(s) first --', 'Topic');
         }
     }
-
-    // --- Part 4: Handle dynamic section dropdown updates (on any change) ---
     var $sectionGroup = $form.find('#qp-section-group');
-    if ($sectionGroup.length > 0) { // Only run this for the forms that have a section dropdown
+    if ($sectionGroup.length > 0) {
         var $sectionSelect = $form.find('#qp_section');
         var $selectedTopicCheckboxes = $form.find('[id^="qp_topic_list_container"] input:checked[value!="all"]');
-
         if ($selectedTopicCheckboxes.length === 1) {
             var singleTopicCheckbox = $selectedTopicCheckboxes.first();
             var topicId = singleTopicCheckbox.val();
-            var subjectIdForTopic = singleTopicCheckbox.data('subject-id'); // The key fix
-
+            var subjectIdForTopic = singleTopicCheckbox.data('subject-id');
             if (topicId && subjectIdForTopic) {
                 $.ajax({
-                    url: qp_ajax_object.ajax_url,
-                    type: 'POST',
-                    data: {
-                        action: 'get_sections_for_subject',
-                        nonce: qp_ajax_object.nonce,
-                        subject_id: subjectIdForTopic, // Use the correct subject ID
-                        topic_id: topicId
-                    },
+                    url: qp_ajax_object.ajax_url, type: 'POST',
+                    data: { action: 'get_sections_for_subject', nonce: qp_ajax_object.nonce, subject_id: subjectIdForTopic, topic_id: topicId },
                     beforeSend: function() {
                         $sectionSelect.prop('disabled', true).html('<option>Loading sections...</option>');
                         $sectionGroup.slideDown();
@@ -501,23 +491,13 @@ wrapper.on('change', '.qp-multi-select-list input[type="checkbox"]', function() 
                                 var optionText = sec.source_name + ' / ' + sec.section_name;
                                 $sectionSelect.append($('<option></option>').val(sec.section_id).text(optionText));
                             });
-                        } else {
-                            $sectionGroup.slideUp();
-                        }
+                        } else { $sectionGroup.slideUp(); }
                     },
                     error: function() { $sectionGroup.slideUp(); }
                 });
             } else { $sectionGroup.slideUp(); }
         } else { $sectionGroup.slideUp(); }
     }
-});
-
-// --- NEW: Handler for the subject-level checkboxes within the topic list ---
-wrapper.on('change', '.qp-subject-topic-toggle', function() {
-    var $this = $(this);
-    var isChecked = $this.is(':checked');
-    // Find all sibling topic labels that come after this header, but before the next header
-    $this.closest('label').nextUntil('.qp-topic-group-header').find('input[type="checkbox"]').prop('checked', isChecked);
 });
 
 
