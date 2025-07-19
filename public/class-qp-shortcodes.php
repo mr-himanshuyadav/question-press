@@ -582,8 +582,7 @@ class QP_Shortcodes
                     </label>
                 </div>
                 <div class="qp-form-group-description">
-                    <p><strong>PYQ Only:</strong> Only include Previous Year Question.</p>
-                    <p><strong>Revision Mode:</strong> Previously answered questions will reappear in your session.</p>
+                    <p>Subject<strong>(number)</strong>: The number in front of subject, topic, section shows unattempted questions.</p>
                 </div>
 
                 <div class="qp-form-group">
