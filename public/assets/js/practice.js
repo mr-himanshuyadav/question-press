@@ -432,7 +432,6 @@ wrapper.on('change', '.qp-multi-select-list input[type="checkbox"]', function() 
         var $topicButton = $form.find('[id^="qp_topic_dropdown"] .qp-multi-select-button');
 
         if (selectedSubjects.length > 0) {
-            // AJAX call to get topics...
             $.ajax({
                 url: qp_ajax_object.ajax_url,
                 type: 'POST',
@@ -453,7 +452,7 @@ wrapper.on('change', '.qp-multi-select-list input[type="checkbox"]', function() 
                         $.each(response.data.topics, function(subjectName, topics) {
                             $topicListContainer.append('<label class="qp-topic-group-header"><input type="checkbox" class="qp-subject-topic-toggle"> ' + subjectName + '</label>');
                             $.each(topics, function(i, topic) {
-                                $topicListContainer.append('<label><input type="checkbox" name="' + topicNameAttr + '" value="' + topic.topic_id + '"> ' + topic.topic_name + '</label>');
+                                $topicListContainer.append('<label><input type="checkbox" name="' + topicNameAttr + '" value="' + topic.topic_id + '" data-subject-id="' + topic.subject_id + '"> ' + topic.topic_name + '</label>');
                             });
                         });
                         updateButtonText($topicButton, '-- Select Topic(s) --', 'Topic');
@@ -472,42 +471,44 @@ wrapper.on('change', '.qp-multi-select-list input[type="checkbox"]', function() 
 
     // --- Part 4: Handle dynamic section dropdown updates (on any change) ---
     var $sectionGroup = $form.find('#qp-section-group');
-    var $sectionSelect = $form.find('#qp_section');
-    var selectedTopics = $form.find('[id^="qp_topic_list_container"] input:checked[value!="all"]').map((_, el) => $(el).val()).get();
-    var selectedSubjectsForQuery = $form.find('[id^="qp_subject_dropdown"] input:checked[value!="all"]').map((_, el) => $(el).val()).get();
+    if ($sectionGroup.length > 0) { // Only run this for the forms that have a section dropdown
+        var $sectionSelect = $form.find('#qp_section');
+        var $selectedTopicCheckboxes = $form.find('[id^="qp_topic_list_container"] input:checked[value!="all"]');
 
-    // New logic: Show section dropdown if ONLY ONE topic is selected
-    if (selectedTopics.length === 1) {
-        $.ajax({
-            url: qp_ajax_object.ajax_url,
-            type: 'POST',
-            data: {
-                action: 'get_sections_for_subject',
-                nonce: qp_ajax_object.nonce,
-                subject_id: selectedSubjectsForQuery[0], // Pass the subject for context
-                topic_id: selectedTopics[0]
-            },
-            beforeSend: function() {
-                $sectionSelect.prop('disabled', true).html('<option>Loading sections...</option>');
-                $sectionGroup.slideDown();
-            },
-            success: function(response) {
-                if (response.success && response.data.sections.length > 0) {
-                    $sectionSelect.prop('disabled', false).empty().append('<option value="all">All Sections</option>');
-                    $.each(response.data.sections, function(index, sec) {
-                        var optionText = sec.source_name + ' / ' + sec.section_name;
-                        $sectionSelect.append($('<option></option>').val(sec.section_id).text(optionText));
-                    });
-                } else {
-                    $sectionGroup.slideUp();
-                }
-            },
-            error: function() {
-                $sectionGroup.slideUp();
-            }
-        });
-    } else {
-        $sectionGroup.slideUp();
+        if ($selectedTopicCheckboxes.length === 1) {
+            var singleTopicCheckbox = $selectedTopicCheckboxes.first();
+            var topicId = singleTopicCheckbox.val();
+            var subjectIdForTopic = singleTopicCheckbox.data('subject-id'); // The key fix
+
+            if (topicId && subjectIdForTopic) {
+                $.ajax({
+                    url: qp_ajax_object.ajax_url,
+                    type: 'POST',
+                    data: {
+                        action: 'get_sections_for_subject',
+                        nonce: qp_ajax_object.nonce,
+                        subject_id: subjectIdForTopic, // Use the correct subject ID
+                        topic_id: topicId
+                    },
+                    beforeSend: function() {
+                        $sectionSelect.prop('disabled', true).html('<option>Loading sections...</option>');
+                        $sectionGroup.slideDown();
+                    },
+                    success: function(response) {
+                        if (response.success && response.data.sections.length > 0) {
+                            $sectionSelect.prop('disabled', false).empty().append('<option value="all">All Sections</option>');
+                            $.each(response.data.sections, function(index, sec) {
+                                var optionText = sec.source_name + ' / ' + sec.section_name;
+                                $sectionSelect.append($('<option></option>').val(sec.section_id).text(optionText));
+                            });
+                        } else {
+                            $sectionGroup.slideUp();
+                        }
+                    },
+                    error: function() { $sectionGroup.slideUp(); }
+                });
+            } else { $sectionGroup.slideUp(); }
+        } else { $sectionGroup.slideUp(); }
     }
 });
 

@@ -1023,7 +1023,7 @@ function qp_get_topics_for_subject_ajax()
 
     // Base query to get topics linked to subjects that have questions
     $sql = "
-        SELECT DISTINCT s.subject_name, t.topic_id, t.topic_name
+        SELECT DISTINCT s.subject_id, s.subject_name, t.topic_id, t.topic_name
         FROM {$topics_table} t
         JOIN {$subjects_table} s ON t.subject_id = s.subject_id
         JOIN {$questions_table} q ON t.topic_id = q.topic_id
@@ -1047,8 +1047,9 @@ function qp_get_topics_for_subject_ajax()
             $grouped_topics[$row->subject_name] = [];
         }
         $grouped_topics[$row->subject_name][] = [
-            'topic_id' => $row->topic_id,
-            'topic_name' => $row->topic_name
+            'topic_id'   => $row->topic_id,
+            'topic_name' => $row->topic_name,
+            'subject_id' => $row->subject_id // Add this line
         ];
     }
 
@@ -2038,7 +2039,8 @@ add_action('wp_ajax_skip_question', 'qp_skip_question_ajax');
  * @param string|null $end_reason The reason the session ended.
  * @return array|null An array of summary data, or null if the session was empty.
  */
-function qp_finalize_and_end_session($session_id, $new_status = 'completed', $end_reason = null) {
+function qp_finalize_and_end_session($session_id, $new_status = 'completed', $end_reason = null)
+{
     global $wpdb;
     $sessions_table = $wpdb->prefix . 'qp_user_sessions';
     $attempts_table = $wpdb->prefix . 'qp_user_attempts';
@@ -2078,7 +2080,8 @@ function qp_finalize_and_end_session($session_id, $new_status = 'completed', $en
         foreach ($answered_attempts as $attempt) {
             $is_correct = (bool) $wpdb->get_var($wpdb->prepare(
                 "SELECT is_correct FROM {$options_table} WHERE option_id = %d AND question_id = %d",
-                $attempt->selected_option_id, $attempt->question_id
+                $attempt->selected_option_id,
+                $attempt->question_id
             ));
             $wpdb->update($attempts_table, ['is_correct' => $is_correct ? 1 : 0], ['attempt_id' => $attempt->attempt_id]);
         }
@@ -2087,8 +2090,11 @@ function qp_finalize_and_end_session($session_id, $new_status = 'completed', $en
         $not_viewed_ids = array_diff($all_question_ids_in_session, $interacted_question_ids);
         foreach ($not_viewed_ids as $question_id) {
             $wpdb->insert($attempts_table, [
-                'session_id' => $session_id, 'user_id' => $session->user_id, 'question_id' => $question_id,
-                'status' => 'skipped', 'mock_status' => 'not_viewed'
+                'session_id' => $session_id,
+                'user_id' => $session->user_id,
+                'question_id' => $question_id,
+                'status' => 'skipped',
+                'mock_status' => 'not_viewed'
             ]);
         }
         $wpdb->query($wpdb->prepare("UPDATE {$attempts_table} SET status = 'skipped' WHERE session_id = %d AND mock_status IN ('viewed', 'marked_for_review')", $session_id));
@@ -2123,15 +2129,25 @@ function qp_finalize_and_end_session($session_id, $new_status = 'completed', $en
     }
 
     $wpdb->update($sessions_table, [
-        'end_time' => $end_time_for_calc, 'status' => $new_status, 'end_reason' => $end_reason,
-        'total_active_seconds' => $total_active_seconds, 'total_attempted' => $total_attempted,
-        'correct_count' => $correct_count, 'incorrect_count' => $incorrect_count,
-        'skipped_count' => $skipped_count, 'not_viewed_count' => $not_viewed_count, 'marks_obtained' => $final_score
+        'end_time' => $end_time_for_calc,
+        'status' => $new_status,
+        'end_reason' => $end_reason,
+        'total_active_seconds' => $total_active_seconds,
+        'total_attempted' => $total_attempted,
+        'correct_count' => $correct_count,
+        'incorrect_count' => $incorrect_count,
+        'skipped_count' => $skipped_count,
+        'not_viewed_count' => $not_viewed_count,
+        'marks_obtained' => $final_score
     ], ['session_id' => $session_id]);
 
     return [
-        'final_score' => $final_score, 'total_attempted' => $total_attempted, 'correct_count' => $correct_count,
-        'incorrect_count' => $incorrect_count, 'skipped_count' => $skipped_count, 'not_viewed_count' => $not_viewed_count,
+        'final_score' => $final_score,
+        'total_attempted' => $total_attempted,
+        'correct_count' => $correct_count,
+        'incorrect_count' => $incorrect_count,
+        'skipped_count' => $skipped_count,
+        'not_viewed_count' => $not_viewed_count,
         'settings' => $settings,
     ];
 }
@@ -2139,7 +2155,8 @@ function qp_finalize_and_end_session($session_id, $new_status = 'completed', $en
 /**
  * AJAX handler for ending a practice session.
  */
-function qp_end_practice_session_ajax() {
+function qp_end_practice_session_ajax()
+{
     check_ajax_referer('qp_practice_nonce', 'nonce');
     $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
     if (!$session_id) {
@@ -2744,7 +2761,8 @@ add_action('wp', 'qp_schedule_session_cleanup');
 /**
  * The function that runs on the scheduled cron event to clean up old sessions.
  */
-function qp_cleanup_abandoned_sessions() {
+function qp_cleanup_abandoned_sessions()
+{
     global $wpdb;
     $options = get_option('qp_settings');
     $timeout_minutes = isset($options['session_timeout']) ? absint($options['session_timeout']) : 20;
