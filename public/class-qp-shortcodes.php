@@ -949,6 +949,7 @@ class QP_Shortcodes
         }
 
         ob_start();
+        echo '<div id="qp-practice-app-wrapper">';
         // --- Determine Session Mode ---
         $is_mock_test = isset($settings['practice_mode']) && $settings['practice_mode'] === 'mock_test';
 
@@ -1144,6 +1145,7 @@ class QP_Shortcodes
         </div>
     </div>
 <?php
+echo '</div>';
         return ob_get_clean();
     }
 }

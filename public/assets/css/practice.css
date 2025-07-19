@@ -1280,20 +1280,6 @@ body.palette-overlay-open #qp-palette-sliding {
     cursor: not-allowed;
 }
 
-#qp-prev-btn {
-    background-color: var(--qp-bg-light);
-    color: var(--qp-dark-text);
-    outline: none;
-}
-
-/* Unique style for Previous button */
-#qp-prev-btn:disabled {
-    background-color: #f0f0f1;
-    border-color: #ffffff00;
-    color: #7c7d7d;
-    cursor: not-allowed;
-}
-
 .qp-footer-divider {
     margin: 2rem 0px;
 }
