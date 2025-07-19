@@ -498,29 +498,41 @@ $topicListContainer.append('<label><input type="checkbox" name="' + topicNameAtt
             updateButtonText($topicButton, '-- Select subject(s) first --', 'Topic');
         }
     }
+
+
+    // --- Part 4: Handle dynamic section dropdown updates (on any change) ---
     var $sectionGroup = $form.find('#qp-section-group');
     if ($sectionGroup.length > 0) {
-        var $sectionSelect = $form.find('#qp_section');
+        var $sectionButton = $form.find('#qp_section_dropdown .qp-multi-select-button');
+        var $sectionList = $form.find('#qp_section_list_container');
+        var $hiddenSelect = $form.find('select#qp_section');
         var $selectedTopicCheckboxes = $form.find('[id^="qp_topic_list_container"] input:checked[value!="all"]').not('.qp-subject-topic-toggle');
+
         if ($selectedTopicCheckboxes.length === 1) {
             var singleTopicCheckbox = $selectedTopicCheckboxes.first();
             var topicId = singleTopicCheckbox.val();
             var subjectIdForTopic = singleTopicCheckbox.data('subject-id');
+
             if (topicId && subjectIdForTopic) {
                 $.ajax({
                     url: qp_ajax_object.ajax_url, type: 'POST',
                     data: { action: 'get_sections_for_subject', nonce: qp_ajax_object.nonce, subject_id: subjectIdForTopic, topic_id: topicId },
                     beforeSend: function() {
-                        $sectionSelect.prop('disabled', true).html('<option>Loading sections...</option>');
+                        $sectionButton.text('Loading sections...');
+                        $sectionList.empty();
                         $sectionGroup.slideDown();
                     },
                     success: function(response) {
                         if (response.success && response.data.sections.length > 0) {
-                            $sectionSelect.prop('disabled', false).empty().append('<option value="all">All Sections</option>');
+                            $sectionButton.text('All Sections');
+                            $hiddenSelect.html('<option value="all" selected>All Sections</option>');
+                            $sectionList.html('<div class="qp-section-item" data-value="all">All Sections</div>');
+
                             $.each(response.data.sections, function(index, sec) {
                                 var count = (unattemptedCounts.by_section && unattemptedCounts.by_section[sec.section_id]) ? ' (' + unattemptedCounts.by_section[sec.section_id] + ')' : '';
-                                var optionText = sec.source_name + ' / ' + sec.section_name + count;
-                                $sectionSelect.append($('<option></option>').val(sec.section_id).text(optionText));
+                                var optionText = sec.source_name + ' / ' + sec.section_name;
+                                $sectionList.append('<div class="qp-section-item" data-value="' + sec.section_id + '">' + optionText + count + '</div>');
+                                $hiddenSelect.append($('<option></option>').val(sec.section_id).text(optionText));
                             });
                         } else { $sectionGroup.slideUp(); }
                     },
@@ -531,6 +543,24 @@ $topicListContainer.append('<label><input type="checkbox" name="' + topicNameAtt
     }
 });
 
+// --- NEW: Handler for the custom single-select section dropdown ---
+wrapper.on('click', '.qp-section-item', function() {
+    var $this = $(this);
+    var value = $this.data('value');
+    var text = $this.text();
+    var $dropdown = $this.closest('.qp-multi-select-dropdown');
+    var $button = $dropdown.find('.qp-multi-select-button');
+    var $list = $dropdown.find('.qp-multi-select-list');
+    var $hiddenSelect = $dropdown.siblings('select#qp_section');
+
+    // Update the button text and the hidden select's value
+    $button.text(text);
+    $hiddenSelect.val(value);
+
+    // Close the dropdown list
+    $list.hide();
+});
+
 
   // Hide dropdowns when clicking outside
   $(document).on("click", function (e) {
@@ -538,6 +568,8 @@ $topicListContainer.append('<label><input type="checkbox" name="' + topicNameAtt
       $(".qp-multi-select-list").hide();
     }
   });
+
+  
 
   // --- MULTI-STEP FORM LOGIC ---
   if ($(".qp-multi-step-container").length) {
