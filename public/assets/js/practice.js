@@ -393,12 +393,13 @@ jQuery(document).ready(function ($) {
   });
 
   
-  // --- NEW: UNIFIED AND CORRECTED DROPDOWN LOGIC ---
+// --- FINAL: UNIFIED AND CORRECTED DROPDOWN LOGIC ---
 wrapper.on('change', '.qp-multi-select-list input[type="checkbox"]', function() {
     var $this = $(this);
     var $list = $this.closest('.qp-multi-select-list');
     var $dropdown = $this.closest('.qp-multi-select-dropdown');
     var $button = $dropdown.find('.qp-multi-select-button');
+    var $form = $dropdown.closest('form');
 
     // --- Part 1: Handle "Select All" checking/unchecking ---
     var $allCheckbox = $list.find('input[value="all"]');
@@ -415,25 +416,23 @@ wrapper.on('change', '.qp-multi-select-list input[type="checkbox"]', function() 
     }
 
     // --- Part 2: Update the button text correctly ---
-    // Determine placeholder and label based on the dropdown's ID
     var placeholder = $dropdown.attr('id').includes('subject') ? '-- Please select --' : '-- Select Topic(s) --';
     var singularLabel = $dropdown.attr('id').includes('subject') ? 'Subject' : 'Topic';
     updateButtonText($button, placeholder, singularLabel);
 
-    // --- Part 3: Handle dynamic topic dropdown updates ---
+    // --- Part 3: Handle dynamic topic dropdown updates (if a subject was changed) ---
     if ($dropdown.attr('id').includes('subject')) {
         var selectedSubjects = [];
         $list.find('input:checked[value!="all"]').each(function() {
             selectedSubjects.push($(this).val());
         });
 
-        // Find the corresponding topic group and dropdown for the current form
-        var $form = $dropdown.closest('form');
         var $topicGroup = $form.find('[id^="qp-topic-group"]');
         var $topicListContainer = $form.find('[id^="qp_topic_list_container"]');
         var $topicButton = $form.find('[id^="qp_topic_dropdown"] .qp-multi-select-button');
 
         if (selectedSubjects.length > 0) {
+            // AJAX call to get topics...
             $.ajax({
                 url: qp_ajax_object.ajax_url,
                 type: 'POST',
@@ -449,12 +448,12 @@ wrapper.on('change', '.qp-multi-select-list input[type="checkbox"]', function() 
                 success: function(response) {
                     $topicButton.prop('disabled', false);
                     if (response.success && Object.keys(response.data.topics).length > 0) {
-                        $topicListContainer.append('<label class="qp-topic-group-header"><input type="checkbox" name="' + $topicListContainer.attr('id').replace('container', 'topics[]') + '" value="all"> All Topics</label>');
+                        var topicNameAttr = $topicListContainer.attr('id').replace('container_', '').replace('_mock', '').replace('_revision', '') + '[]';
+                        $topicListContainer.append('<label><input type="checkbox" name="' + topicNameAttr + '" value="all"> All Topics</label>');
                         $.each(response.data.topics, function(subjectName, topics) {
-                            var subjectHeader = '<label class="qp-topic-group-header"><input type="checkbox" class="qp-subject-topic-toggle"> ' + subjectName + '</label>';
-$topicListContainer.append(subjectHeader);
+                            $topicListContainer.append('<label class="qp-topic-group-header"><input type="checkbox" class="qp-subject-topic-toggle"> ' + subjectName + '</label>');
                             $.each(topics, function(i, topic) {
-                                $topicListContainer.append('<label><input type="checkbox" name="' + $topicListContainer.attr('id').replace('container', 'topics[]') + '" value="' + topic.topic_id + '"> ' + topic.topic_name + '</label>');
+                                $topicListContainer.append('<label><input type="checkbox" name="' + topicNameAttr + '" value="' + topic.topic_id + '"> ' + topic.topic_name + '</label>');
                             });
                         });
                         updateButtonText($topicButton, '-- Select Topic(s) --', 'Topic');
@@ -469,6 +468,46 @@ $topicListContainer.append(subjectHeader);
             $topicGroup.slideUp();
             updateButtonText($topicButton, '-- Select subject(s) first --', 'Topic');
         }
+    }
+
+    // --- Part 4: Handle dynamic section dropdown updates (on any change) ---
+    var $sectionGroup = $form.find('#qp-section-group');
+    var $sectionSelect = $form.find('#qp_section');
+    var selectedTopics = $form.find('[id^="qp_topic_list_container"] input:checked[value!="all"]').map((_, el) => $(el).val()).get();
+    var selectedSubjectsForQuery = $form.find('[id^="qp_subject_dropdown"] input:checked[value!="all"]').map((_, el) => $(el).val()).get();
+
+    // New logic: Show section dropdown if ONLY ONE topic is selected
+    if (selectedTopics.length === 1) {
+        $.ajax({
+            url: qp_ajax_object.ajax_url,
+            type: 'POST',
+            data: {
+                action: 'get_sections_for_subject',
+                nonce: qp_ajax_object.nonce,
+                subject_id: selectedSubjectsForQuery[0], // Pass the subject for context
+                topic_id: selectedTopics[0]
+            },
+            beforeSend: function() {
+                $sectionSelect.prop('disabled', true).html('<option>Loading sections...</option>');
+                $sectionGroup.slideDown();
+            },
+            success: function(response) {
+                if (response.success && response.data.sections.length > 0) {
+                    $sectionSelect.prop('disabled', false).empty().append('<option value="all">All Sections</option>');
+                    $.each(response.data.sections, function(index, sec) {
+                        var optionText = sec.source_name + ' / ' + sec.section_name;
+                        $sectionSelect.append($('<option></option>').val(sec.section_id).text(optionText));
+                    });
+                } else {
+                    $sectionGroup.slideUp();
+                }
+            },
+            error: function() {
+                $sectionGroup.slideUp();
+            }
+        });
+    } else {
+        $sectionGroup.slideUp();
     }
 });
 
