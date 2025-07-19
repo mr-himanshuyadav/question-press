@@ -358,7 +358,7 @@ jQuery(document).ready(function ($) {
   function updateButtonText($button, placeholder, singularLabel) {
     var $list = $button.next(".qp-multi-select-list");
     var selected = [];
-    $list.find('input:checked[value!="all"]').each(function () {
+    $list.find('input:checked[value!="all"]').not('.qp-subject-topic-toggle').each(function () {
       selected.push($(this).parent().text().trim());
     });
 
