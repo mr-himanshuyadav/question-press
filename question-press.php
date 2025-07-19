@@ -3,7 +3,7 @@
 /**
  * Plugin Name:       Question Press
  * Description:       A complete plugin for creating, managing, and practicing questions.
- * Version:           3.1.0
+ * Version:           3.1.1
  * Author:            Himanshu
  */
 
@@ -1072,33 +1072,37 @@ function qp_get_sections_for_subject_ajax()
     // Get subject_id (required) and topic_id (optional) from the request
     $subject_id = isset($_POST['subject_id']) ? absint($_POST['subject_id']) : 0;
     $topic_id = isset($_POST['topic_id']) ? absint($_POST['topic_id']) : 0;
+    $user_id = get_current_user_id();
 
-    if (!$subject_id) {
-        wp_send_json_error(['message' => 'Invalid subject ID.']);
+    if (!$subject_id || !$topic_id) { // A topic is now required for this logic
+        wp_send_json_error(['message' => 'Invalid subject or topic ID.']);
     }
 
     global $wpdb;
     $sources_table = $wpdb->prefix . 'qp_sources';
     $sections_table = $wpdb->prefix . 'qp_source_sections';
     $questions_table = $wpdb->prefix . 'qp_questions';
+    $attempts_table = $wpdb->prefix . 'qp_user_attempts';
 
-    // Base query joins sections to sources and questions
+    // Get all question IDs the user has already answered correctly.
+    $attempted_q_ids = $wpdb->get_col($wpdb->prepare(
+        "SELECT DISTINCT question_id FROM {$attempts_table} WHERE user_id = %d AND is_correct = 1",
+        $user_id
+    ));
+    $attempted_q_ids_placeholder = !empty($attempted_q_ids) ? implode(',', array_map('absint', $attempted_q_ids)) : '0';
+
+    // Base query that now includes a subquery to count unattempted questions
     $query = "
-        SELECT DISTINCT sec.section_id, src.source_name, sec.section_name
+        SELECT DISTINCT sec.section_id, src.source_name, sec.section_name,
+        (SELECT COUNT(q2.question_id) FROM {$questions_table} q2 WHERE q2.section_id = sec.section_id AND q2.topic_id = q.topic_id AND q2.question_id NOT IN ({$attempted_q_ids_placeholder})) as unattempted_count
         FROM {$sections_table} sec
         JOIN {$sources_table} src ON sec.source_id = src.source_id
         JOIN {$questions_table} q ON sec.section_id = q.section_id
-        WHERE src.subject_id = %d
+        WHERE src.subject_id = %d AND q.topic_id = %d
     ";
-    $params = [$subject_id];
+    $params = [$subject_id, $topic_id];
 
-    // If a specific topic is selected, add it to the filter
-    if ($topic_id > 0) {
-        $query .= " AND q.topic_id = %d";
-        $params[] = $topic_id;
-    }
-
-    $query .= " ORDER BY src.source_name ASC, sec.section_name ASC";
+    $query .= " GROUP BY sec.section_id ORDER BY src.source_name ASC, sec.section_name ASC";
 
     $results = $wpdb->get_results($wpdb->prepare($query, $params));
 
