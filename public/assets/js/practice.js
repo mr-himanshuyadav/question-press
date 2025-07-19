@@ -1675,7 +1675,11 @@ jQuery(document).ready(function ($) {
       // Replace the entire block above with this one
     } else {
       // --- CORRECTED LOGIC FOR NORMAL/REVISION MODES ---
-      $("#qp-next-btn").prop("disabled", true);
+      var isSectionWise = sessionSettings.practice_mode === 'Section Wise Practice';
+
+// Disable the next button ONLY if it's NOT section-wise practice.
+// Also, re-enable the skip button for section-wise mode.
+$("#qp-next-btn").prop("disabled", !isSectionWise);
       $("#qp-skip-btn").prop("disabled", false);
       optionsArea.data("correct-option-id", data.correct_option_id);
       $("#qp-mark-for-review-cb").prop("checked", data.is_marked_for_review);
