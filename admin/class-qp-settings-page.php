@@ -54,6 +54,7 @@ class QP_Settings_Page
         add_settings_field('qp_show_source_meta_roles', 'Display Source Meta To', [self::class, 'render_source_meta_role_multiselect'], 'qp-settings-page', 'qp_data_settings_section');
         add_settings_field('qp_delete_on_uninstall', 'Delete Data on Uninstall', [self::class, 'render_delete_data_checkbox'], 'qp-settings-page', 'qp_data_settings_section');
         add_settings_field('qp_session_timeout', 'Session Timeout (Minutes)', [self::class, 'render_session_timeout_input'], 'qp-settings-page', 'qp_data_settings_section');
+        add_settings_field('qp_show_question_counts', 'Show Unattempted Counts', [self::class, 'render_show_question_counts_checkbox'], 'qp-settings-page', 'qp_data_settings_section');
 
 
         add_settings_field('qp_can_delete_history_roles', 'Roles That Can Delete History', [self::class, 'render_can_delete_history_roles_multiselect'], 'qp-settings-page', 'qp_data_settings_section');
@@ -134,6 +135,15 @@ class QP_Settings_Page
         $timeout = isset($options['session_timeout']) ? $options['session_timeout'] : 20;
         echo '<input type="number" name="qp_settings[session_timeout]" value="' . esc_attr($timeout) . '" min="5" /> ';
         echo '<p class="description">Automatically mark a session as "abandoned" if there is no activity for this many minutes. Minimum: 5 minutes.</p>';
+    }
+
+    public static function render_show_question_counts_checkbox()
+    {
+        $options = get_option('qp_settings');
+        $checked = isset($options['show_question_counts']) ? $options['show_question_counts'] : 0;
+        echo '<label><input type="checkbox" name="qp_settings[show_question_counts]" value="1" ' . checked(1, $checked, false) . ' /> ';
+        echo '<span>Display the number of unattempted questions next to subjects, topics, and sections on the practice form.</span></label>';
+        echo '<p class="description">Note: Enabling this may slightly increase the form loading time for users with a large history.</p>';
     }
 
     public static function render_can_delete_history_roles_multiselect()
@@ -310,6 +320,11 @@ class QP_Settings_Page
 
         if (isset($input['session_timeout'])) {
             $new_input['session_timeout'] = absint($input['session_timeout']) >= 5 ? absint($input['session_timeout']) : 20;
+        }
+        if (isset($input['show_question_counts'])) {
+            $new_input['show_question_counts'] = absint($input['show_question_counts']);
+        } else {
+            $new_input['show_question_counts'] = 0;
         }
         if (isset($input['review_page'])) {
             $new_input['review_page'] = absint($input['review_page']);

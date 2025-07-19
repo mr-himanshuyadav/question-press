@@ -7,6 +7,35 @@ jQuery(document).ready(function ($) {
   var paletteGrids = $(
     "#qp-palette-docked .qp-palette-grid, #qp-palette-sliding .qp-palette-grid"
   );
+  var unattemptedCounts = {};
+
+  // --- Fetch unattempted counts if the setting is enabled ---
+if (typeof qp_practice_settings !== 'undefined' && qp_practice_settings.show_counts) {
+    $.ajax({
+        url: qp_ajax_object.ajax_url,
+        type: 'POST',
+        data: {
+            action: 'get_unattempted_counts',
+            nonce: qp_ajax_object.nonce
+        },
+        success: function(response) {
+            if (response.success) {
+                unattemptedCounts = response.data.counts;
+                // Re-render the initial subject list with counts
+                var subjectList = $('#qp_subject_dropdown .qp-multi-select-list, #qp_subject_dropdown_revision .qp-multi-select-list, #qp_subject_dropdown_mock .qp-multi-select-list');
+                subjectList.find('label').each(function() {
+                    var $label = $(this);
+                    var $checkbox = $label.find('input');
+                    var subjectId = $checkbox.val();
+                    var count = unattemptedCounts.by_subject[subjectId] || 0;
+                    if (subjectId !== 'all' && count > 0) {
+                        $label.append(' (' + count + ')');
+                    }
+                });
+            }
+        }
+    });
+}
 
   function openFullscreen() {
     var elem = document.documentElement; // Get the root element (the whole page)
@@ -87,18 +116,43 @@ jQuery(document).ready(function ($) {
       // Stop the timer and auto-submit when time is up
       if (secondsRemaining === 0) {
         clearInterval(mockTestTimer);
-        Swal.fire({
-          title: "Time's Up!",
-          text: "Your test will be submitted automatically.",
-          icon: "warning",
-          timer: 10000,
-          timerProgressBar: true,
-          allowOutsideClick: false,
-          allowEscapeKey: false,
-          showConfirmButton: false,
-        }).then(() => {
-          endSession(true);
-        });
+
+        // Check if any questions have been answered in this mock test
+        var totalAttempts = Object.values(answeredStates).filter(function (
+          state
+        ) {
+          return state.selected_option_id;
+        }).length;
+
+        if (totalAttempts === 0) {
+          // If no attempts, show the "not saved" message
+          Swal.fire({
+            title: "Time's Up!",
+            text: "You didn't attempt any questions, so this session will not be saved.",
+            icon: "info",
+            timer: 5000,
+            timerProgressBar: true,
+            allowOutsideClick: false,
+            allowEscapeKey: false,
+            showConfirmButton: false,
+          }).then(() => {
+            endSession(true); // This will trigger the backend to delete the session
+          });
+        } else {
+          // If there are attempts, show the standard submission message
+          Swal.fire({
+            title: "Time's Up!",
+            text: "Your test will be submitted automatically.",
+            icon: "warning",
+            timer: 10000,
+            timerProgressBar: true,
+            allowOutsideClick: false,
+            allowEscapeKey: false,
+            showConfirmButton: false,
+          }).then(() => {
+            endSession(true);
+          });
+        }
       }
     }, 1000);
   }
@@ -280,100 +334,8 @@ jQuery(document).ready(function ($) {
       "current"
     );
   }
-  // --- LOGIC FOR MOCK TEST FORM DROPDOWNS ---
-  $("#qp_subject_dropdown_mock").on(
-    "change",
-    'input[type="checkbox"]',
-    function () {
-      var $this = $(this);
-      var $list = $this.closest(".qp-multi-select-list");
+  
 
-      // Handle "All Subjects" logic
-      if ($this.val() === "all") {
-        if ($this.is(":checked")) {
-          $list
-            .find('input[value!="all"]')
-            .prop("checked", false)
-            .prop("disabled", true);
-        } else {
-          $list.find('input[value!="all"]').prop("disabled", false);
-        }
-      } else {
-        if ($this.is(":checked")) {
-          $list.find('input[value="all"]').prop("checked", false);
-        }
-      }
-
-      var selectedSubjects = [];
-      $("#qp_subject_dropdown_mock input:checked").each(function () {
-        selectedSubjects.push($(this).val());
-      });
-
-      var $topicGroup = $("#qp-topic-group-mock");
-      var $topicListContainer = $("#qp_topic_list_container_mock");
-      var $topicButton = $("#qp_topic_dropdown_mock .qp-multi-select-button");
-
-      // Update the Subject button text
-      updateButtonText(
-        $("#qp_subject_dropdown_mock .qp-multi-select-button"),
-        "-- Please select --",
-        "Subject"
-      );
-
-      if (selectedSubjects.length > 0) {
-        $.ajax({
-          url: qp_ajax_object.ajax_url,
-          type: "POST",
-          data: {
-            action: "get_topics_for_subject",
-            nonce: qp_ajax_object.nonce,
-            subject_id: selectedSubjects,
-          },
-          beforeSend: function () {
-            $topicButton.text("Loading Topics...").prop("disabled", true);
-            $topicListContainer.empty();
-          },
-          success: function (response) {
-            $topicButton.prop("disabled", false);
-            if (
-              response.success &&
-              Object.keys(response.data.topics).length > 0
-            ) {
-              $topicListContainer.append(
-                '<label><input type="checkbox" name="mock_topics[]" value="all"> All Topics</label>'
-              );
-              $.each(response.data.topics, function (subjectName, topics) {
-                $topicListContainer.append(
-                  '<div class="qp-topic-group-header">' + subjectName + "</div>"
-                );
-                $.each(topics, function (i, topic) {
-                  $topicListContainer.append(
-                    '<label><input type="checkbox" name="mock_topics[]" value="' +
-                      topic.topic_id +
-                      '"> ' +
-                      topic.topic_name +
-                      "</label>"
-                  );
-                });
-              });
-              updateButtonText($topicButton, "-- Select Topic(s) --", "Topic");
-              $topicGroup.slideDown();
-            } else {
-              updateButtonText($topicButton, "No Topics Found", "Topic");
-              $topicGroup.slideUp();
-            }
-          },
-        });
-      } else {
-        $topicGroup.slideUp();
-        updateButtonText(
-          $topicButton,
-          "-- Select subject(s) first --",
-          "Topic"
-        );
-      }
-    }
-  );
 
   // Handle the "All Topics" checkbox for the mock test form
   $("#qp_topic_list_container_mock").on(
@@ -405,125 +367,8 @@ jQuery(document).ready(function ($) {
       );
     }
   );
-  // --- CONSOLIDATED LOGIC FOR REVISION FORM SUBJECT DROPDOWN ---
-  $("#qp_subject_dropdown_revision").on(
-    "change",
-    'input[type="checkbox"]',
-    function () {
-      var $this = $(this);
-      var $list = $this.closest(".qp-multi-select-list");
-
-      // Handle the "All Subjects" logic first
-      if ($this.val() === "all") {
-        if ($this.is(":checked")) {
-          // If "All Subjects" is checked, uncheck and disable all others
-          $list
-            .find('input[value!="all"]')
-            .prop("checked", false)
-            .prop("disabled", true);
-        } else {
-          // If "All Subjects" is unchecked, enable all others
-          $list.find('input[value!="all"]').prop("disabled", false);
-        }
-      } else {
-        // If any other checkbox is checked, uncheck "All Subjects"
-        if ($this.is(":checked")) {
-          $list.find('input[value="all"]').prop("checked", false);
-        }
-      }
-
-      // Now, proceed with updating the topics dropdown based on the current selection
-      var selectedSubjects = [];
-      $("#qp_subject_dropdown_revision input:checked").each(function () {
-        selectedSubjects.push($(this).val());
-      });
-
-      var $topicGroup = $("#qp-topic-group-revision");
-      var $topicListContainer = $("#qp_topic_list_container_revision");
-      var $topicButton = $(
-        "#qp_topic_dropdown_revision .qp-multi-select-button"
-      );
-
-      // Update the Subject button text
-      updateButtonText(
-        $("#qp_subject_dropdown_revision .qp-multi-select-button"),
-        "-- Please select --",
-        "Subject"
-      );
-
-      if (selectedSubjects.length > 0) {
-        $.ajax({
-          url: qp_ajax_object.ajax_url,
-          type: "POST",
-          data: {
-            action: "get_topics_for_subject",
-            nonce: qp_ajax_object.nonce,
-            subject_id: selectedSubjects,
-          },
-          beforeSend: function () {
-            $topicButton.text("Loading Topics...").prop("disabled", true);
-            $topicListContainer.empty();
-          },
-          success: function (response) {
-            $topicButton.prop("disabled", false);
-            if (
-              response.success &&
-              Object.keys(response.data.topics).length > 0
-            ) {
-              $topicListContainer.append(
-                '<label><input type="checkbox" name="revision_topics[]" value="all"> All Topics</label>'
-              );
-              $.each(response.data.topics, function (subjectName, topics) {
-                $topicListContainer.append(
-                  '<div class="qp-topic-group-header">' + subjectName + "</div>"
-                );
-                $.each(topics, function (i, topic) {
-                  $topicListContainer.append(
-                    '<label><input type="checkbox" name="revision_topics[]" value="' +
-                      topic.topic_id +
-                      '"> ' +
-                      topic.topic_name +
-                      "</label>"
-                  );
-                });
-              });
-              updateButtonText($topicButton, "-- Select Topic(s) --", "Topic");
-              $topicGroup.slideDown();
-            } else {
-              updateButtonText($topicButton, "No Topics Found", "Topic");
-              $topicGroup.slideUp();
-            }
-          },
-        });
-      } else {
-        $topicGroup.slideUp();
-        updateButtonText(
-          $topicButton,
-          "-- Select subject(s) first --",
-          "Topic"
-        );
-      }
-    }
-  );
-  // --- NEW: Add handler for the "All Topics" checkbox behavior ---
-  $("#qp_topic_list_container_revision").on(
-    "change",
-    'input[value="all"]',
-    function () {
-      var $this = $(this);
-      var $list = $this.closest(".qp-multi-select-list");
-      if ($this.is(":checked")) {
-        // If "All Topics" is checked, uncheck and disable all others
-        $list
-          .find('input[value!="all"]')
-          .prop("checked", false)
-          .prop("disabled", true);
-      } else {
-        // If "All Topics" is unchecked, enable all others
-        $list.find('input[value!="all"]').prop("disabled", false);
-      }
-    }
-  );
+  
+  
 
   // Update button text when a topic is selected in the revision form
   $("#qp_topic_dropdown_revision").on(
@@ -542,7 +387,7 @@ jQuery(document).ready(function ($) {
   function updateButtonText($button, placeholder, singularLabel) {
     var $list = $button.next(".qp-multi-select-list");
     var selected = [];
-    $list.find("input:checked").each(function () {
+    $list.find('input:checked[value!="all"]').not('.qp-subject-topic-toggle').each(function () {
       selected.push($(this).parent().text().trim());
     });
 
@@ -576,170 +421,116 @@ jQuery(document).ready(function ($) {
     });
   });
 
-  // Specific logic for the "All Subjects" checkbox
-  $("#qp_subject_dropdown .qp-multi-select-list").on(
-    "change",
-    'input[value="all"]',
-    function () {
-      var $list = $(this).closest(".qp-multi-select-list");
-      if ($(this).is(":checked")) {
-        $list
-          .find('input[value!="all"]')
-          .prop("checked", false)
-          .prop("disabled", true);
-      } else {
-        $list.find('input[value!="all"]').prop("disabled", false);
-      }
-    }
-  );
+  
+// --- NEW: FULLY SYNCHRONIZED DROPDOWN LOGIC ---
+wrapper.on('change', '.qp-multi-select-list input[type="checkbox"]', function() {
+    var $this = $(this);
+    var $list = $this.closest('.qp-multi-select-list');
+    var $dropdown = $this.closest('.qp-multi-select-dropdown');
+    var $button = $dropdown.find('.qp-multi-select-button');
+    var $form = $dropdown.closest('form');
 
-  // Logic to fetch topics when subjects change
-  $("#qp_subject_dropdown").on("change", 'input[type="checkbox"]', function () {
-    var selectedSubjects = [];
-    $("#qp_subject_dropdown input:checked").each(function () {
-      selectedSubjects.push($(this).val());
+    // --- Part 1: Handle User Actions ---
+    if ($this.val() === 'all') {
+        // If main "All" is clicked, check/uncheck everything else
+        $list.find('input[type="checkbox"]').prop('checked', $this.is(':checked'));
+    } else if ($this.hasClass('qp-subject-topic-toggle')) {
+        // If a subject-level toggle is clicked, check/uncheck its topics
+        $this.closest('label').nextUntil('.qp-topic-group-header').find('input[type="checkbox"]').prop('checked', $this.is(':checked'));
+    }
+
+    // --- Part 2: Synchronize Parent Checkboxes ---
+    // Sync all subject-level toggles based on their topics
+    $list.find('.qp-subject-topic-toggle').each(function() {
+        var $subjectToggle = $(this);
+        var $topicCheckboxes = $subjectToggle.closest('label').nextUntil('.qp-topic-group-header').find('input[type="checkbox"]');
+        var allTopicsChecked = $topicCheckboxes.length > 0 && $topicCheckboxes.filter(':checked').length === $topicCheckboxes.length;
+        $subjectToggle.prop('checked', allTopicsChecked);
     });
 
-    var $topicGroup = $("#qp-topic-group");
-    var $topicListContainer = $("#qp_topic_list_container");
-    var $topicButton = $("#qp_topic_dropdown .qp-multi-select-button");
-    var $sectionGroup = $("#qp-section-group");
+    // Sync the main "All" toggle based on all other checkboxes
+    var $allCheckboxes = $list.find('input[type="checkbox"][value!="all"]');
+    var allChecked = $allCheckboxes.length > 0 && $allCheckboxes.filter(':checked').length === $allCheckboxes.length;
+    $list.find('input[value="all"]').prop('checked', allChecked);
 
-    // Update the Subject button text
-    updateButtonText(
-      $("#qp_subject_dropdown .qp-multi-select-button"),
-      "-- Please select --",
-      "Subject"
-    );
 
-    // Always hide section group when subjects change
-    $sectionGroup.slideUp();
+    // --- Part 3: Update Button Text & Dynamic Dropdowns (No changes here) ---
+    var placeholder = $dropdown.attr('id').includes('subject') ? '-- Please select --' : '-- Select Topic(s) --';
+    var singularLabel = $dropdown.attr('id').includes('subject') ? 'Subject' : 'Topic';
+    updateButtonText($button, placeholder, singularLabel);
 
-    if (selectedSubjects.length > 0) {
-      $.ajax({
-        url: qp_ajax_object.ajax_url,
-        type: "POST",
-        data: {
-          action: "get_topics_for_subject",
-          nonce: qp_ajax_object.nonce,
-          subject_id: selectedSubjects,
-        },
-        beforeSend: function () {
-          $topicButton.text("Loading Topics...").prop("disabled", true);
-          $topicListContainer.empty();
-        },
-        success: function (response) {
-          $topicButton.prop("disabled", false);
-          if (
-            response.success &&
-            Object.keys(response.data.topics).length > 0
-          ) {
-            $.each(response.data.topics, function (subjectName, topics) {
-              $topicListContainer.append(
-                '<div class="qp-topic-group-header">' + subjectName + "</div>"
-              );
-              $.each(topics, function (i, topic) {
-                $topicListContainer.append(
-                  '<label><input type="checkbox" name="qp_topic[]" value="' +
-                    topic.topic_id +
-                    '"> ' +
-                    topic.topic_name +
-                    "</label>"
-                );
-              });
+    if ($dropdown.attr('id').includes('subject')) {
+        var selectedSubjects = [];
+        $list.find('input:checked[value!="all"]').each(function() { selectedSubjects.push($(this).val()); });
+        var $topicGroup = $form.find('[id^="qp-topic-group"]');
+        var $topicListContainer = $form.find('[id^="qp_topic_list_container"]');
+        var $topicButton = $form.find('[id^="qp_topic_dropdown"] .qp-multi-select-button');
+        if (selectedSubjects.length > 0) {
+            $.ajax({
+                url: qp_ajax_object.ajax_url, type: 'POST',
+                data: { action: 'get_topics_for_subject', nonce: qp_ajax_object.nonce, subject_id: selectedSubjects },
+                beforeSend: function() {
+                    $topicButton.text('Loading Topics...').prop('disabled', true);
+                    $topicListContainer.empty();
+                },
+                success: function(response) {
+                    $topicButton.prop('disabled', false);
+                    if (response.success && Object.keys(response.data.topics).length > 0) {
+                        var topicNameAttr = $topicListContainer.attr('id').replace('container_', '').replace('_mock', '').replace('_revision', '') + '[]';
+                        $topicListContainer.append('<label><input type="checkbox" name="' + topicNameAttr + '" value="all"> All Topics</label>');
+                        $.each(response.data.topics, function(subjectName, topics) {
+                            $topicListContainer.append('<label class="qp-topic-group-header"><input type="checkbox" class="qp-subject-topic-toggle"> ' + subjectName + '</label>');
+                            $.each(topics, function(i, topic) {
+                                var count = (unattemptedCounts.by_topic && unattemptedCounts.by_topic[topic.topic_id]) ? ' (' + unattemptedCounts.by_topic[topic.topic_id] + ')' : '';
+$topicListContainer.append('<label><input type="checkbox" name="' + topicNameAttr + '" value="' + topic.topic_id + '" data-subject-id="' + topic.subject_id + '"> ' + topic.topic_name + count + '</label>');
+                            });
+                        });
+                        updateButtonText($topicButton, '-- Select Topic(s) --', 'Topic');
+                        $topicGroup.slideDown();
+                    } else {
+                        updateButtonText($topicButton, 'No Topics Found', 'Topic');
+                        $topicGroup.slideUp();
+                    }
+                }
             });
-            updateButtonText($topicButton, "-- Select Topic(s) --", "Topic");
-            $topicGroup.slideDown();
-          } else {
-            updateButtonText($topicButton, "No Topics Found", "Topic");
+        } else {
             $topicGroup.slideUp();
-          }
-        },
-      });
-    } else {
-      $topicGroup.slideUp();
+            updateButtonText($topicButton, '-- Select subject(s) first --', 'Topic');
+        }
     }
-  });
-
-  // **THE FIX**: This single handler listens for changes on BOTH dropdowns.
-  wrapper.on(
-    "change",
-    '#qp_subject_dropdown input[type="checkbox"], #qp_topic_dropdown input[type="checkbox"]',
-    function () {
-      // Update the button text for whichever dropdown was changed
-      var $dropdown = $(this).closest(".qp-multi-select-dropdown");
-      if ($dropdown.attr("id") === "qp_subject_dropdown") {
-        updateButtonText(
-          $dropdown.find(".qp-multi-select-button"),
-          "-- Please select --",
-          "Subject"
-        );
-      } else {
-        updateButtonText(
-          $dropdown.find(".qp-multi-select-button"),
-          "-- Select Topic(s) --",
-          "Topic"
-        );
-      }
-
-      // Now, check the visibility logic for the Section dropdown
-      var $sectionGroup = $("#qp-section-group");
-      var $sectionSelect = $("#qp_section");
-      var selectedSubjects = $("#qp_subject_dropdown input:checked")
-        .map((_, el) => $(el).val())
-        .get();
-      var selectedTopics = $("#qp_topic_list_container input:checked")
-        .map((_, el) => $(el).val())
-        .get();
-
-      // Show Section select only if exactly ONE subject and ONE topic are selected
-      if (
-        selectedSubjects.length === 1 &&
-        selectedSubjects[0] !== "all" &&
-        selectedTopics.length === 1
-      ) {
-        // **THE FIX**: Add the AJAX call to populate the sections
-        $.ajax({
-          url: qp_ajax_object.ajax_url,
-          type: "POST",
-          data: {
-            action: "get_sections_for_subject", // Reuse the existing AJAX handler
-            nonce: qp_ajax_object.nonce,
-            subject_id: selectedSubjects[0], // Pass the single selected subject ID
-            topic_id: selectedTopics[0], // Pass the single selected topic ID
-          },
-          beforeSend: function () {
-            $sectionSelect
-              .prop("disabled", true)
-              .html("<option>Loading sections...</option>");
-            $sectionGroup.slideDown(); // Show the group with the loading message
-          },
-          success: function (response) {
-            if (response.success && response.data.sections.length > 0) {
-              $sectionSelect
-                .prop("disabled", false)
-                .empty()
-                .append('<option value="all">All Sections</option>');
-              $.each(response.data.sections, function (index, sec) {
-                var optionText = sec.source_name + " / " + sec.section_name;
-                $sectionSelect.append(
-                  $("<option></option>").val(sec.section_id).text(optionText)
-                );
-              });
-            } else {
-              // If no sections are found, hide the dropdown again
-              $sectionGroup.slideUp();
-            }
-          },
-          error: function () {
-            $sectionGroup.slideUp(); // Also hide on error
-          },
-        });
-      } else {
-        $sectionGroup.slideUp();
-      }
+    var $sectionGroup = $form.find('#qp-section-group');
+    if ($sectionGroup.length > 0) {
+        var $sectionSelect = $form.find('#qp_section');
+        var $selectedTopicCheckboxes = $form.find('[id^="qp_topic_list_container"] input:checked[value!="all"]').not('.qp-subject-topic-toggle');
+        if ($selectedTopicCheckboxes.length === 1) {
+            var singleTopicCheckbox = $selectedTopicCheckboxes.first();
+            var topicId = singleTopicCheckbox.val();
+            var subjectIdForTopic = singleTopicCheckbox.data('subject-id');
+            if (topicId && subjectIdForTopic) {
+                $.ajax({
+                    url: qp_ajax_object.ajax_url, type: 'POST',
+                    data: { action: 'get_sections_for_subject', nonce: qp_ajax_object.nonce, subject_id: subjectIdForTopic, topic_id: topicId },
+                    beforeSend: function() {
+                        $sectionSelect.prop('disabled', true).html('<option>Loading sections...</option>');
+                        $sectionGroup.slideDown();
+                    },
+                    success: function(response) {
+                        if (response.success && response.data.sections.length > 0) {
+                            $sectionSelect.prop('disabled', false).empty().append('<option value="all">All Sections</option>');
+                            $.each(response.data.sections, function(index, sec) {
+                                var count = (unattemptedCounts.by_section && unattemptedCounts.by_section[sec.section_id]) ? ' (' + unattemptedCounts.by_section[sec.section_id] + ')' : '';
+                                var optionText = sec.source_name + ' / ' + sec.section_name + count;
+                                $sectionSelect.append($('<option></option>').val(sec.section_id).text(optionText));
+                            });
+                        } else { $sectionGroup.slideUp(); }
+                    },
+                    error: function() { $sectionGroup.slideUp(); }
+                });
+            } else { $sectionGroup.slideUp(); }
+        } else { $sectionGroup.slideUp(); }
     }
-  );
+});
+
 
   // Hide dropdowns when clicking outside
   $(document).on("click", function (e) {
@@ -879,13 +670,53 @@ jQuery(document).ready(function ($) {
     $("#qp-report-modal-backdrop").fadeIn(200);
   });
 
+  // --- Report Modal on REVIEW PAGE---
+  wrapper.on("click", ".qp-report-btn-review", function () {
+    var questionID = $(this).data("question-id");
+    $("#qp-report-question-id-field").val(questionID); // Set the hidden field
+
+    var reportContainer = $("#qp-report-options-container");
+    reportContainer.html("<p>Loading reasons...</p>");
+
+    $.ajax({
+      url: qp_ajax_object.ajax_url,
+      type: "POST",
+      data: { action: "get_report_reasons", nonce: qp_ajax_object.nonce },
+      success: function (response) {
+        if (response.success && response.data.reasons.length > 0) {
+          reportContainer.empty();
+          $.each(response.data.reasons, function (index, reason) {
+            var checkboxHtml = `
+                        <label class="qp-custom-checkbox">
+                            <input type="checkbox" name="report_reasons[]" value="${reason.reason_id}">
+                            <span></span>
+                            ${reason.reason_text}
+                        </label>`;
+            reportContainer.append(checkboxHtml);
+          });
+        } else {
+          reportContainer.html("<p>Could not load reporting options.</p>");
+        }
+      },
+      error: function () {
+        reportContainer.html("<p>An error occurred.</p>");
+      },
+    });
+
+    $("#qp-report-modal-backdrop").fadeIn(200);
+  });
+
   // Handle the report form submission
   wrapper.on("submit", "#qp-report-form", function (e) {
     e.preventDefault();
     var form = $(this);
     var submitButton = form.find('button[type="submit"]');
     var originalButtonText = submitButton.text();
-    var questionID = sessionQuestionIDs[currentQuestionIndex];
+    var questionID =
+      $("#qp-report-question-id-field").val() ||
+      (typeof sessionQuestionIDs !== "undefined"
+        ? sessionQuestionIDs[currentQuestionIndex]
+        : 0);
     var selectedReasons = form
       .find('input[name="report_reasons[]"]:checked')
       .map(function () {
@@ -925,24 +756,40 @@ jQuery(document).ready(function ($) {
             timer: 2000,
             showConfirmButton: false,
           }).then(() => {
-            var questionID = sessionQuestionIDs[currentQuestionIndex];
-            if (typeof answeredStates[questionID] === "undefined") {
-              answeredStates[questionID] = {};
+            // Check if we are on the review page by looking at the hidden field
+            var reviewPageQuestionId = $("#qp-report-question-id-field").val();
+
+            if (reviewPageQuestionId) {
+              // --- Review Page Logic ---
+              // Find the specific report button for this question and disable it.
+              var buttonToDisable = $(
+                '.qp-report-btn-review[data-question-id="' +
+                  reviewPageQuestionId +
+                  '"]'
+              );
+              buttonToDisable.prop("disabled", true).text("Reported");
+              // Clear the hidden field for the next report
+              $("#qp-report-question-id-field").val("");
+            } else {
+              // --- Practice Session Page Logic (Original Logic) ---
+              var questionID = sessionQuestionIDs[currentQuestionIndex];
+              if (typeof answeredStates[questionID] === "undefined") {
+                answeredStates[questionID] = {};
+              }
+              answeredStates[questionID].reported = true;
+
+              $("#qp-reported-indicator").show();
+              $(".qp-indicator-bar").show();
+              $(".qp-options-area")
+                .addClass("disabled")
+                .find('input[type="radio"]')
+                .prop("disabled", true);
+              $("#qp-next-btn").prop("disabled", false);
+
+              renderPalette();
+              updateLegendCounts();
+              loadNextQuestion();
             }
-            answeredStates[questionID].reported = true;
-
-            $("#qp-reported-indicator").show();
-            $(".qp-indicator-bar").show();
-            $(".qp-options-area")
-              .addClass("disabled")
-              .find('input[type="radio"]')
-              .prop("disabled", true);
-            $("#qp-skip-btn, #qp-report-btn").prop("disabled", true);
-            $("#qp-next-btn").prop("disabled", false);
-
-            renderPalette();
-            updateLegendCounts();
-            loadNextQuestion();
           });
         } else {
           Swal.fire(
@@ -1068,18 +915,20 @@ jQuery(document).ready(function ($) {
         submitButton.val("Setting up session...").prop("disabled", true);
       },
       success: function (response) {
-    if (response.success && response.data.redirect_url) {
-      window.location.href = response.data.redirect_url;
-    } else {
-        Swal.fire({
-          title: 'Could Not Start Session',
-          text: response.data.message || 'An unknown error occurred. Please try adjusting your selections.',
-          icon: 'warning',
-          confirmButtonText: 'OK'
-        });
-        submitButton.val(originalButtonText).prop("disabled", false);
-    }
-  },
+        if (response.success && response.data.redirect_url) {
+          window.location.href = response.data.redirect_url;
+        } else {
+          Swal.fire({
+            title: "Could Not Start Session",
+            text:
+              response.data.message ||
+              "An unknown error occurred. Please try adjusting your selections.",
+            icon: "warning",
+            confirmButtonText: "OK",
+          });
+          submitButton.val(originalButtonText).prop("disabled", false);
+        }
+      },
       error: function () {
         Swal.fire(
           "Error!",
@@ -1592,7 +1441,11 @@ jQuery(document).ready(function ($) {
       // Replace the entire block above with this one
     } else {
       // --- CORRECTED LOGIC FOR NORMAL/REVISION MODES ---
-      $("#qp-next-btn").prop("disabled", true);
+      var isSectionWise = sessionSettings.practice_mode === 'Section Wise Practice';
+
+// Disable the next button ONLY if it's NOT section-wise practice.
+// Also, re-enable the skip button for section-wise mode.
+$("#qp-next-btn").prop("disabled", !isSectionWise);
       $("#qp-skip-btn").prop("disabled", false);
       optionsArea.data("correct-option-id", data.correct_option_id);
       $("#qp-mark-for-review-cb").prop("checked", data.is_marked_for_review);
@@ -1697,11 +1550,13 @@ jQuery(document).ready(function ($) {
     }
 
     $("#qp-prev-btn").prop("disabled", currentQuestionIndex === 0);
-    // --- NEW LOGIC TO HANDLE REPORTED QUESTIONS IN MOCK TESTS ---
-    if (isMockTest && data.is_reported_by_user) {
+    // --- UNIFIED LOGIC TO HANDLE REPORTED QUESTIONS IN ALL MODES ---
+    var isQuestionReported = data.is_reported_by_user || previousState.reported;
+
+    if (isQuestionReported) {
       // 1. Show the indicator
       $("#qp-reported-indicator").show();
-      $(".qp-indicator-bar").show(); // Ensure the parent bar is visible
+      $(".qp-indicator-bar").show();
 
       // 2. Disable all interactive elements for this question
       optionsArea
@@ -1709,27 +1564,33 @@ jQuery(document).ready(function ($) {
         .find('input[type="radio"]')
         .prop("disabled", true);
       $("#qp-report-btn").prop("disabled", true);
-      $("#qp-clear-response-btn, #qp-mock-mark-review-cb").prop(
-        "disabled",
-        true
-      );
 
-      // 3. If an answer was previously selected, clear it now
-      if (previousState.selected_option_id) {
-        clearMockTestAnswer(questionID);
+      // 3. Mode-specific button disabling
+      if (isMockTest) {
+        $("#qp-clear-response-btn, #qp-mock-mark-review-cb").prop(
+          "disabled",
+          true
+        );
+        if (previousState.selected_option_id) {
+          clearMockTestAnswer(questionID);
+        }
+      } else {
+        $("#qp-skip-btn, #qp-check-answer-btn").prop("disabled", true);
+        // Since the question is locked, the user must be able to move on.
+        $("#qp-next-btn").prop("disabled", false);
       }
-    } else if (isMockTest) {
-      // Explicitly re-enable buttons for non-reported questions
-      $("#qp-reported-indicator").hide();
-      optionsArea
-        .removeClass("disabled")
-        .find('input[type="radio"]')
-        .prop("disabled", false);
+    } else {
+      // Explicitly ensure buttons are enabled for non-reported questions
       $("#qp-report-btn").prop("disabled", false);
-      $("#qp-clear-response-btn, #qp-mock-mark-review-cb").prop(
-        "disabled",
-        false
-      );
+
+      // Mode-specific button enabling
+      if (isMockTest) {
+        $("#qp-clear-response-btn, #qp-mock-mark-review-cb").prop(
+          "disabled",
+          false
+        );
+      }
+      // For other modes, the button states are handled by other logic in this function.
     }
     // --- END OF NEW LOGIC ---
     if (typeof renderMathInElement !== "undefined") {
@@ -1878,14 +1739,20 @@ jQuery(document).ready(function ($) {
   }
 
   function displaySummary(summaryData) {
-    closeFullscreen();
-    practiceInProgress = false;
-
     // Determine if the session was a mock test and if it was scored
     var settings = summaryData.settings || {};
     var isMockTest = settings.practice_mode === "mock_test";
-    var isScoredSession = settings.marks_correct !== null;
+    if (isMockTest && qp_ajax_object.review_page_url) {
+      var reviewUrl = new URL(qp_ajax_object.review_page_url);
+      reviewUrl.searchParams.set("session_id", sessionID);
+      window.location.href = reviewUrl.href;
+      return; // Stop the rest of the function from running
+    }
 
+    closeFullscreen();
+    practiceInProgress = false;
+
+    var isScoredSession = settings.marks_correct !== null;
     var mainDisplayHtml = "";
     if (isScoredSession) {
       mainDisplayHtml = `<div class="qp-summary-score"><div class="label">Final Score</div>${parseFloat(
@@ -2205,6 +2072,7 @@ jQuery(document).ready(function ($) {
             action: "delete_empty_session",
             nonce: qp_ajax_object.nonce,
             session_id: sessionID,
+            is_auto_submit: isAutoSubmit,
           },
           complete: function () {
             // Redirect after the alert is closed and AJAX is complete
@@ -2242,6 +2110,14 @@ jQuery(document).ready(function ($) {
       },
       success: function (response) {
         if (response.success) {
+          // START: New code to add
+          // Check if the backend deleted the session because it was empty
+          if (response.data.status && response.data.status === "no_attempts") {
+            // Redirect to the dashboard without showing a summary.
+            window.location.href = qp_ajax_object.dashboard_page_url;
+            return;
+          }
+          // END: New code to add
           displaySummary(response.data);
         }
       },

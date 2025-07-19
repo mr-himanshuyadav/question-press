@@ -155,7 +155,7 @@ class QP_Dashboard
 
         // --- RESTORED: Fetch Active Sessions ---
         $active_sessions = $wpdb->get_results($wpdb->prepare("SELECT * FROM $sessions_table WHERE user_id = %d AND status IN ('active', 'mock_test') ORDER BY start_time DESC", $user_id));
-        $session_history = $wpdb->get_results($wpdb->prepare("SELECT * FROM $sessions_table WHERE user_id = %d AND status IN ('completed', 'abandoned', 'paused', 'mock_test') ORDER BY start_time DESC", $user_id));
+        $session_history = $wpdb->get_results($wpdb->prepare("SELECT * FROM $sessions_table WHERE user_id = %d AND status IN ('completed', 'abandoned', 'paused') ORDER BY start_time DESC", $user_id));
 
         // Pre-fetch all subjects for all questions in the user's history to optimize queries
         $all_session_qids = [];
@@ -235,8 +235,8 @@ class QP_Dashboard
         echo '</div></div>';
 
         echo '<table class="qp-dashboard-table">
-        <thead><tr><th>Date</th><th>Mode</th><th>Subjects</th><th>Accuracy</th><th>Actions</th></tr></thead>
-        <tbody>';
+    <thead><tr><th>Date</th><th>Mode</th><th>Subjects</th><th>Accuracy</th><th>Status</th><th>Actions</th></tr></thead>
+    <tbody>';
 
         if (!empty($session_history)) {
             foreach ($session_history as $session) {
@@ -303,11 +303,35 @@ class QP_Dashboard
 
                 $accuracy = ($session->total_attempted > 0) ? round(($session->correct_count / $session->total_attempted) * 100, 2) . '%' : 'N/A';
 
+                // START: Replace this block
+                $status_display = 'Completed'; // Default status
+                // First, check if the end_reason property exists and has a value
+                if (!empty($session->end_reason)) {
+                    switch ($session->end_reason) {
+                        case 'user_submitted':
+                            $status_display = 'Completed';
+                            break;
+                        case 'autosubmitted_timer':
+                            $status_display = 'Auto-Submitted';
+                            break;
+                        case 'abandoned_system':
+                            $status_display = 'Abandoned';
+                            break;
+                    }
+                } elseif ($session->status === 'abandoned') {
+                    // Fallback for older sessions that were marked abandoned before the end_reason column existed
+                    $status_display = 'Abandoned';
+                }
+                // END: Replacement block
+
+                
+
                 echo '<tr>
                 <td data-label="Date">' . date_format(date_create($session->start_time), 'M j, Y, g:i a') . '</td>
                 <td data-label="Mode">' . esc_html($mode) . '</td>
                 <td data-label="Subjects">' . $subjects_display . '</td>
                 <td data-label="Accuracy"><strong>' . $accuracy . '</strong></td>
+                <td data-label="Status">' . esc_html($status_display) . '</td>
                 <td data-label="Actions">';
                 // Conditionally show "Resume" or "Review" button based on the status.
                 if ($session->status === 'paused') {
