@@ -958,6 +958,11 @@ function qp_public_enqueue_scripts()
             // THE FIX: Add 'hammer-js' as a dependency for your practice script
             wp_enqueue_script('qp-practice-script', QP_PLUGIN_URL . 'public/assets/js/practice.js', ['jquery', 'hammer-js'], $practice_js_version, true);
             wp_localize_script('qp-practice-script', 'qp_ajax_object', $ajax_data);
+            // Localize settings, including the new 'show_counts' option
+            $qp_settings = get_option('qp_settings');
+            wp_localize_script('qp-practice-script', 'qp_practice_settings', [
+                'show_counts' => !empty($qp_settings['show_question_counts'])
+            ]);
         }
 
         // Load KaTeX if any page that can display questions is present
@@ -1105,7 +1110,8 @@ add_action('wp_ajax_get_sections_for_subject', 'qp_get_sections_for_subject_ajax
 /**
  * AJAX handler to get the number of unattempted questions for the current user.
  */
-function qp_get_unattempted_counts_ajax() {
+function qp_get_unattempted_counts_ajax()
+{
     check_ajax_referer('qp_practice_nonce', 'nonce');
     if (!is_user_logged_in()) {
         wp_send_json_error(['message' => 'User not logged in.']);
@@ -1163,7 +1169,7 @@ function qp_get_unattempted_counts_ajax() {
         }
         // Aggregate counts for sections
         if ($row->section_id) {
-             if (!isset($counts['by_section'][$row->section_id])) {
+            if (!isset($counts['by_section'][$row->section_id])) {
                 $counts['by_section'][$row->section_id] = 0;
             }
             $counts['by_section'][$row->section_id] += $row->unattempted_count;

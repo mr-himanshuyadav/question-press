@@ -7,6 +7,35 @@ jQuery(document).ready(function ($) {
   var paletteGrids = $(
     "#qp-palette-docked .qp-palette-grid, #qp-palette-sliding .qp-palette-grid"
   );
+  var unattemptedCounts = {};
+
+  // --- Fetch unattempted counts if the setting is enabled ---
+if (typeof qp_practice_settings !== 'undefined' && qp_practice_settings.show_counts) {
+    $.ajax({
+        url: qp_ajax_object.ajax_url,
+        type: 'POST',
+        data: {
+            action: 'get_unattempted_counts',
+            nonce: qp_ajax_object.nonce
+        },
+        success: function(response) {
+            if (response.success) {
+                unattemptedCounts = response.data.counts;
+                // Re-render the initial subject list with counts
+                var subjectList = $('#qp_subject_dropdown .qp-multi-select-list, #qp_subject_dropdown_revision .qp-multi-select-list, #qp_subject_dropdown_mock .qp-multi-select-list');
+                subjectList.find('label').each(function() {
+                    var $label = $(this);
+                    var $checkbox = $label.find('input');
+                    var subjectId = $checkbox.val();
+                    var count = unattemptedCounts.by_subject[subjectId] || 0;
+                    if (subjectId !== 'all' && count > 0) {
+                        $label.append(' (' + count + ')');
+                    }
+                });
+            }
+        }
+    });
+}
 
   function openFullscreen() {
     var elem = document.documentElement; // Get the root element (the whole page)
@@ -452,7 +481,8 @@ wrapper.on('change', '.qp-multi-select-list input[type="checkbox"]', function() 
                         $.each(response.data.topics, function(subjectName, topics) {
                             $topicListContainer.append('<label class="qp-topic-group-header"><input type="checkbox" class="qp-subject-topic-toggle"> ' + subjectName + '</label>');
                             $.each(topics, function(i, topic) {
-                                $topicListContainer.append('<label><input type="checkbox" name="' + topicNameAttr + '" value="' + topic.topic_id + '" data-subject-id="' + topic.subject_id + '"> ' + topic.topic_name + '</label>');
+                                var count = (unattemptedCounts.by_topic && unattemptedCounts.by_topic[topic.topic_id]) ? ' (' + unattemptedCounts.by_topic[topic.topic_id] + ')' : '';
+$topicListContainer.append('<label><input type="checkbox" name="' + topicNameAttr + '" value="' + topic.topic_id + '" data-subject-id="' + topic.subject_id + '"> ' + topic.topic_name + count + '</label>');
                             });
                         });
                         updateButtonText($topicButton, '-- Select Topic(s) --', 'Topic');
@@ -488,7 +518,8 @@ wrapper.on('change', '.qp-multi-select-list input[type="checkbox"]', function() 
                         if (response.success && response.data.sections.length > 0) {
                             $sectionSelect.prop('disabled', false).empty().append('<option value="all">All Sections</option>');
                             $.each(response.data.sections, function(index, sec) {
-                                var optionText = sec.source_name + ' / ' + sec.section_name;
+                                var count = (unattemptedCounts.by_section && unattemptedCounts.by_section[sec.section_id]) ? ' (' + unattemptedCounts.by_section[sec.section_id] + ')' : '';
+                                var optionText = sec.source_name + ' / ' + sec.section_name + count;
                                 $sectionSelect.append($('<option></option>').val(sec.section_id).text(optionText));
                             });
                         } else { $sectionGroup.slideUp(); }
