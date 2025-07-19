@@ -305,100 +305,8 @@ jQuery(document).ready(function ($) {
       "current"
     );
   }
-  // --- LOGIC FOR MOCK TEST FORM DROPDOWNS ---
-  $("#qp_subject_dropdown_mock").on(
-    "change",
-    'input[type="checkbox"]',
-    function () {
-      var $this = $(this);
-      var $list = $this.closest(".qp-multi-select-list");
+  
 
-      // Handle "All Subjects" logic
-      if ($this.val() === "all") {
-        if ($this.is(":checked")) {
-          $list
-            .find('input[value!="all"]')
-            .prop("checked", false)
-            .prop("disabled", true);
-        } else {
-          $list.find('input[value!="all"]').prop("disabled", false);
-        }
-      } else {
-        if ($this.is(":checked")) {
-          $list.find('input[value="all"]').prop("checked", false);
-        }
-      }
-
-      var selectedSubjects = [];
-      $("#qp_subject_dropdown_mock input:checked").each(function () {
-        selectedSubjects.push($(this).val());
-      });
-
-      var $topicGroup = $("#qp-topic-group-mock");
-      var $topicListContainer = $("#qp_topic_list_container_mock");
-      var $topicButton = $("#qp_topic_dropdown_mock .qp-multi-select-button");
-
-      // Update the Subject button text
-      updateButtonText(
-        $("#qp_subject_dropdown_mock .qp-multi-select-button"),
-        "-- Please select --",
-        "Subject"
-      );
-
-      if (selectedSubjects.length > 0) {
-        $.ajax({
-          url: qp_ajax_object.ajax_url,
-          type: "POST",
-          data: {
-            action: "get_topics_for_subject",
-            nonce: qp_ajax_object.nonce,
-            subject_id: selectedSubjects,
-          },
-          beforeSend: function () {
-            $topicButton.text("Loading Topics...").prop("disabled", true);
-            $topicListContainer.empty();
-          },
-          success: function (response) {
-            $topicButton.prop("disabled", false);
-            if (
-              response.success &&
-              Object.keys(response.data.topics).length > 0
-            ) {
-              $topicListContainer.append(
-                '<label><input type="checkbox" name="mock_topics[]" value="all"> All Topics</label>'
-              );
-              $.each(response.data.topics, function (subjectName, topics) {
-                $topicListContainer.append(
-                  '<div class="qp-topic-group-header">' + subjectName + "</div>"
-                );
-                $.each(topics, function (i, topic) {
-                  $topicListContainer.append(
-                    '<label><input type="checkbox" name="mock_topics[]" value="' +
-                      topic.topic_id +
-                      '"> ' +
-                      topic.topic_name +
-                      "</label>"
-                  );
-                });
-              });
-              updateButtonText($topicButton, "-- Select Topic(s) --", "Topic");
-              $topicGroup.slideDown();
-            } else {
-              updateButtonText($topicButton, "No Topics Found", "Topic");
-              $topicGroup.slideUp();
-            }
-          },
-        });
-      } else {
-        $topicGroup.slideUp();
-        updateButtonText(
-          $topicButton,
-          "-- Select subject(s) first --",
-          "Topic"
-        );
-      }
-    }
-  );
 
   // Handle the "All Topics" checkbox for the mock test form
   $("#qp_topic_list_container_mock").on(
@@ -430,106 +338,8 @@ jQuery(document).ready(function ($) {
       );
     }
   );
-  // --- CONSOLIDATED LOGIC FOR REVISION FORM SUBJECT DROPDOWN ---
-  $("#qp_subject_dropdown_revision").on(
-    "change",
-    'input[type="checkbox"]',
-    function () {
-      var $this = $(this);
-      var $list = $this.closest(".qp-multi-select-list");
-
-      // Handle the "All Subjects" logic first
-      if ($this.val() === "all") {
-        if ($this.is(":checked")) {
-          // If "All Subjects" is checked, uncheck and disable all others
-          $list
-            .find('input[value!="all"]')
-            .prop("checked", false)
-            .prop("disabled", true);
-        } else {
-          // If "All Subjects" is unchecked, enable all others
-          $list.find('input[value!="all"]').prop("disabled", false);
-        }
-      } else {
-        // If any other checkbox is checked, uncheck "All Subjects"
-        if ($this.is(":checked")) {
-          $list.find('input[value="all"]').prop("checked", false);
-        }
-      }
-
-      // Now, proceed with updating the topics dropdown based on the current selection
-      var selectedSubjects = [];
-      $("#qp_subject_dropdown_revision input:checked").each(function () {
-        selectedSubjects.push($(this).val());
-      });
-
-      var $topicGroup = $("#qp-topic-group-revision");
-      var $topicListContainer = $("#qp_topic_list_container_revision");
-      var $topicButton = $(
-        "#qp_topic_dropdown_revision .qp-multi-select-button"
-      );
-
-      // Update the Subject button text
-      updateButtonText(
-        $("#qp_subject_dropdown_revision .qp-multi-select-button"),
-        "-- Please select --",
-        "Subject"
-      );
-
-      if (selectedSubjects.length > 0) {
-        $.ajax({
-          url: qp_ajax_object.ajax_url,
-          type: "POST",
-          data: {
-            action: "get_topics_for_subject",
-            nonce: qp_ajax_object.nonce,
-            subject_id: selectedSubjects,
-          },
-          beforeSend: function () {
-            $topicButton.text("Loading Topics...").prop("disabled", true);
-            $topicListContainer.empty();
-          },
-          success: function (response) {
-            $topicButton.prop("disabled", false);
-            if (
-              response.success &&
-              Object.keys(response.data.topics).length > 0
-            ) {
-              $topicListContainer.append(
-                '<label><input type="checkbox" name="revision_topics[]" value="all"> All Topics</label>'
-              );
-              $.each(response.data.topics, function (subjectName, topics) {
-                $topicListContainer.append(
-                  '<div class="qp-topic-group-header">' + subjectName + "</div>"
-                );
-                $.each(topics, function (i, topic) {
-                  $topicListContainer.append(
-                    '<label><input type="checkbox" name="revision_topics[]" value="' +
-                      topic.topic_id +
-                      '"> ' +
-                      topic.topic_name +
-                      "</label>"
-                  );
-                });
-              });
-              updateButtonText($topicButton, "-- Select Topic(s) --", "Topic");
-              $topicGroup.slideDown();
-            } else {
-              updateButtonText($topicButton, "No Topics Found", "Topic");
-              $topicGroup.slideUp();
-            }
-          },
-        });
-      } else {
-        $topicGroup.slideUp();
-        updateButtonText(
-          $topicButton,
-          "-- Select subject(s) first --",
-          "Topic"
-        );
-      }
-    }
-  );
+  
+  
 
   // Update button text when a topic is selected in the revision form
   $("#qp_topic_dropdown_revision").on(
@@ -548,7 +358,7 @@ jQuery(document).ready(function ($) {
   function updateButtonText($button, placeholder, singularLabel) {
     var $list = $button.next(".qp-multi-select-list");
     var selected = [];
-    $list.find("input:checked").each(function () {
+    $list.find('input:checked[value!="all"]').each(function () {
       selected.push($(this).parent().text().trim());
     });
 
@@ -582,97 +392,86 @@ jQuery(document).ready(function ($) {
     });
   });
 
-  // --- IMPROVED "SELECT ALL" LOGIC ---
-// This delegated handler works for ALL multi-select lists
+  
+  // --- NEW: UNIFIED AND CORRECTED DROPDOWN LOGIC ---
 wrapper.on('change', '.qp-multi-select-list input[type="checkbox"]', function() {
     var $this = $(this);
     var $list = $this.closest('.qp-multi-select-list');
-    var $allCheckbox = $list.find('input[value="all"]');
+    var $dropdown = $this.closest('.qp-multi-select-dropdown');
+    var $button = $dropdown.find('.qp-multi-select-button');
 
+    // --- Part 1: Handle "Select All" checking/unchecking ---
+    var $allCheckbox = $list.find('input[value="all"]');
     if ($this.val() === 'all') {
-        // If "All" is checked or unchecked, set the state of all others to match
         $list.find('input[value!="all"]').prop('checked', $this.is(':checked'));
     } else {
-        // If an individual item is unchecked, uncheck the "All" checkbox
         if (!$this.is(':checked')) {
             $allCheckbox.prop('checked', false);
-        }
-        // If all individual items are checked, also check the "All" checkbox
-        else {
+        } else {
             if ($list.find('input[value!="all"]:not(:checked)').length === 0) {
                 $allCheckbox.prop('checked', true);
             }
         }
     }
+
+    // --- Part 2: Update the button text correctly ---
+    // Determine placeholder and label based on the dropdown's ID
+    var placeholder = $dropdown.attr('id').includes('subject') ? '-- Please select --' : '-- Select Topic(s) --';
+    var singularLabel = $dropdown.attr('id').includes('subject') ? 'Subject' : 'Topic';
+    updateButtonText($button, placeholder, singularLabel);
+
+    // --- Part 3: Handle dynamic topic dropdown updates ---
+    if ($dropdown.attr('id').includes('subject')) {
+        var selectedSubjects = [];
+        $list.find('input:checked[value!="all"]').each(function() {
+            selectedSubjects.push($(this).val());
+        });
+
+        // Find the corresponding topic group and dropdown for the current form
+        var $form = $dropdown.closest('form');
+        var $topicGroup = $form.find('[id^="qp-topic-group"]');
+        var $topicListContainer = $form.find('[id^="qp_topic_list_container"]');
+        var $topicButton = $form.find('[id^="qp_topic_dropdown"] .qp-multi-select-button');
+
+        if (selectedSubjects.length > 0) {
+            $.ajax({
+                url: qp_ajax_object.ajax_url,
+                type: 'POST',
+                data: {
+                    action: 'get_topics_for_subject',
+                    nonce: qp_ajax_object.nonce,
+                    subject_id: selectedSubjects,
+                },
+                beforeSend: function() {
+                    $topicButton.text('Loading Topics...').prop('disabled', true);
+                    $topicListContainer.empty();
+                },
+                success: function(response) {
+                    $topicButton.prop('disabled', false);
+                    if (response.success && Object.keys(response.data.topics).length > 0) {
+                        $topicListContainer.append('<label><input type="checkbox" name="' + $topicListContainer.attr('id').replace('container', 'topics[]') + '" value="all"> All Topics</label>');
+                        $.each(response.data.topics, function(subjectName, topics) {
+                            $topicListContainer.append('<div class="qp-topic-group-header">' + subjectName + '</div>');
+                            $.each(topics, function(i, topic) {
+                                $topicListContainer.append('<label><input type="checkbox" name="' + $topicListContainer.attr('id').replace('container', 'topics[]') + '" value="' + topic.topic_id + '"> ' + topic.topic_name + '</label>');
+                            });
+                        });
+                        updateButtonText($topicButton, '-- Select Topic(s) --', 'Topic');
+                        $topicGroup.slideDown();
+                    } else {
+                        updateButtonText($topicButton, 'No Topics Found', 'Topic');
+                        $topicGroup.slideUp();
+                    }
+                }
+            });
+        } else {
+            $topicGroup.slideUp();
+            updateButtonText($topicButton, '-- Select subject(s) first --', 'Topic');
+        }
+    }
 });
 
-  // Logic to fetch topics when subjects change
-  $("#qp_subject_dropdown").on("change", 'input[type="checkbox"]', function () {
-    var selectedSubjects = [];
-    $("#qp_subject_dropdown input:checked").each(function () {
-      selectedSubjects.push($(this).val());
-    });
-
-    var $topicGroup = $("#qp-topic-group");
-    var $topicListContainer = $("#qp_topic_list_container");
-    var $topicButton = $("#qp_topic_dropdown .qp-multi-select-button");
-    var $sectionGroup = $("#qp-section-group");
-
-    // Update the Subject button text
-    updateButtonText(
-      $("#qp_subject_dropdown .qp-multi-select-button"),
-      "-- Please select --",
-      "Subject"
-    );
-
-    // Always hide section group when subjects change
-    $sectionGroup.slideUp();
-
-    if (selectedSubjects.length > 0) {
-      $.ajax({
-        url: qp_ajax_object.ajax_url,
-        type: "POST",
-        data: {
-          action: "get_topics_for_subject",
-          nonce: qp_ajax_object.nonce,
-          subject_id: selectedSubjects,
-        },
-        beforeSend: function () {
-          $topicButton.text("Loading Topics...").prop("disabled", true);
-          $topicListContainer.empty();
-        },
-        success: function (response) {
-          $topicButton.prop("disabled", false);
-          if (
-            response.success &&
-            Object.keys(response.data.topics).length > 0
-          ) {
-            $.each(response.data.topics, function (subjectName, topics) {
-              $topicListContainer.append(
-                '<div class="qp-topic-group-header">' + subjectName + "</div>"
-              );
-              $.each(topics, function (i, topic) {
-                $topicListContainer.append(
-                  '<label><input type="checkbox" name="qp_topic[]" value="' +
-                    topic.topic_id +
-                    '"> ' +
-                    topic.topic_name +
-                    "</label>"
-                );
-              });
-            });
-            updateButtonText($topicButton, "-- Select Topic(s) --", "Topic");
-            $topicGroup.slideDown();
-          } else {
-            updateButtonText($topicButton, "No Topics Found", "Topic");
-            $topicGroup.slideUp();
-          }
-        },
-      });
-    } else {
-      $topicGroup.slideUp();
-    }
-  });
+  
 
   // **THE FIX**: This single handler listens for changes on BOTH dropdowns.
   wrapper.on(
