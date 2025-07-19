@@ -451,7 +451,8 @@ wrapper.on('change', '.qp-multi-select-list input[type="checkbox"]', function() 
                     if (response.success && Object.keys(response.data.topics).length > 0) {
                         $topicListContainer.append('<label><input type="checkbox" name="' + $topicListContainer.attr('id').replace('container', 'topics[]') + '" value="all"> All Topics</label>');
                         $.each(response.data.topics, function(subjectName, topics) {
-                            $topicListContainer.append('<div class="qp-topic-group-header">' + subjectName + '</div>');
+                            var subjectHeader = '<label class="qp-topic-group-header"><input type="checkbox" class="qp-subject-topic-toggle"> ' + subjectName + '</label>';
+$topicListContainer.append(subjectHeader);
                             $.each(topics, function(i, topic) {
                                 $topicListContainer.append('<label><input type="checkbox" name="' + $topicListContainer.attr('id').replace('container', 'topics[]') + '" value="' + topic.topic_id + '"> ' + topic.topic_name + '</label>');
                             });
@@ -470,6 +471,15 @@ wrapper.on('change', '.qp-multi-select-list input[type="checkbox"]', function() 
         }
     }
 });
+
+// --- NEW: Handler for the subject-level checkboxes within the topic list ---
+wrapper.on('change', '.qp-subject-topic-toggle', function() {
+    var $this = $(this);
+    var isChecked = $this.is(':checked');
+    // Find all sibling topic labels that come after this header, but before the next header
+    $this.closest('label').nextUntil('.qp-topic-group-header').find('input[type="checkbox"]').prop('checked', isChecked);
+});
+
 
   
 
