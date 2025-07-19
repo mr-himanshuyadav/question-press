@@ -3,7 +3,7 @@
 /**
  * Plugin Name:       Question Press
  * Description:       A complete plugin for creating, managing, and practicing questions.
- * Version:           3.1.2
+ * Version:           3.1.3
  * Author:            Himanshu
  */
 
@@ -1086,9 +1086,9 @@ function qp_get_sections_for_subject_ajax()
 
     // Get all question IDs the user has already answered correctly.
     $attempted_q_ids = $wpdb->get_col($wpdb->prepare(
-        "SELECT DISTINCT question_id FROM {$attempts_table} WHERE user_id = %d AND is_correct = 1",
-        $user_id
-    ));
+    "SELECT DISTINCT question_id FROM {$attempts_table} WHERE user_id = %d AND status = 'answered'",
+    $user_id
+));
     $attempted_q_ids_placeholder = !empty($attempted_q_ids) ? implode(',', array_map('absint', $attempted_q_ids)) : '0';
 
     // Base query that now includes a subquery to count unattempted questions
