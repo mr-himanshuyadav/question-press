@@ -569,7 +569,7 @@ class QP_Shortcodes
                         <div class="qp-multi-select-list" id="qp_section_list_container">
                         </div>
                     </div>
-                    <select name="qp_section" id="qp_section" style="display: none;"></select>
+                    <select name="qp_section[]" id="qp_section" multiple="multiple" style="display: none;"></select>
                 </div>
 
                 <div class="qp-form-group qp-checkbox-group">
