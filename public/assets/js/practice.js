@@ -89,7 +89,9 @@ jQuery(document).ready(function ($) {
         clearInterval(mockTestTimer);
 
         // Check if any questions have been answered in this mock test
-        var totalAttempts = Object.values(answeredStates).filter(function (state) {
+        var totalAttempts = Object.values(answeredStates).filter(function (
+          state
+        ) {
           return state.selected_option_id;
         }).length;
 
@@ -903,40 +905,40 @@ jQuery(document).ready(function ($) {
   });
 
   // --- Report Modal on REVIEW PAGE---
-    wrapper.on("click", ".qp-report-btn-review", function () {
-        var questionID = $(this).data('question-id');
-        $('#qp-report-question-id-field').val(questionID); // Set the hidden field
+  wrapper.on("click", ".qp-report-btn-review", function () {
+    var questionID = $(this).data("question-id");
+    $("#qp-report-question-id-field").val(questionID); // Set the hidden field
 
-        var reportContainer = $("#qp-report-options-container");
-        reportContainer.html("<p>Loading reasons...</p>");
+    var reportContainer = $("#qp-report-options-container");
+    reportContainer.html("<p>Loading reasons...</p>");
 
-        $.ajax({
-            url: qp_ajax_object.ajax_url,
-            type: "POST",
-            data: { action: "get_report_reasons", nonce: qp_ajax_object.nonce, },
-            success: function (response) {
-                if (response.success && response.data.reasons.length > 0) {
-                    reportContainer.empty();
-                    $.each(response.data.reasons, function (index, reason) {
-                        var checkboxHtml = `
+    $.ajax({
+      url: qp_ajax_object.ajax_url,
+      type: "POST",
+      data: { action: "get_report_reasons", nonce: qp_ajax_object.nonce },
+      success: function (response) {
+        if (response.success && response.data.reasons.length > 0) {
+          reportContainer.empty();
+          $.each(response.data.reasons, function (index, reason) {
+            var checkboxHtml = `
                         <label class="qp-custom-checkbox">
                             <input type="checkbox" name="report_reasons[]" value="${reason.reason_id}">
                             <span></span>
                             ${reason.reason_text}
                         </label>`;
-                        reportContainer.append(checkboxHtml);
-                    });
-                } else {
-                    reportContainer.html("<p>Could not load reporting options.</p>");
-                }
-            },
-            error: function () {
-                reportContainer.html("<p>An error occurred.</p>");
-            },
-        });
-
-        $("#qp-report-modal-backdrop").fadeIn(200);
+            reportContainer.append(checkboxHtml);
+          });
+        } else {
+          reportContainer.html("<p>Could not load reporting options.</p>");
+        }
+      },
+      error: function () {
+        reportContainer.html("<p>An error occurred.</p>");
+      },
     });
+
+    $("#qp-report-modal-backdrop").fadeIn(200);
+  });
 
   // Handle the report form submission
   wrapper.on("submit", "#qp-report-form", function (e) {
@@ -944,7 +946,11 @@ jQuery(document).ready(function ($) {
     var form = $(this);
     var submitButton = form.find('button[type="submit"]');
     var originalButtonText = submitButton.text();
-    var questionID = $('#qp-report-question-id-field').val() || (typeof sessionQuestionIDs !== 'undefined' ? sessionQuestionIDs[currentQuestionIndex] : 0);
+    var questionID =
+      $("#qp-report-question-id-field").val() ||
+      (typeof sessionQuestionIDs !== "undefined"
+        ? sessionQuestionIDs[currentQuestionIndex]
+        : 0);
     var selectedReasons = form
       .find('input[name="report_reasons[]"]:checked')
       .map(function () {
@@ -976,47 +982,50 @@ jQuery(document).ready(function ($) {
       },
       success: function (response) {
         if (response.success) {
-    $("#qp-report-modal-backdrop").fadeOut(200);
-    Swal.fire({
-        title: "Report Submitted!",
-        text: "Thank you for your feedback. The question has been flagged for review.",
-        icon: "success",
-        timer: 2000,
-        showConfirmButton: false,
-    }).then(() => {
-        // Check if we are on the review page by looking at the hidden field
-        var reviewPageQuestionId = $('#qp-report-question-id-field').val();
+          $("#qp-report-modal-backdrop").fadeOut(200);
+          Swal.fire({
+            title: "Report Submitted!",
+            text: "Thank you for your feedback. The question has been flagged for review.",
+            icon: "success",
+            timer: 2000,
+            showConfirmButton: false,
+          }).then(() => {
+            // Check if we are on the review page by looking at the hidden field
+            var reviewPageQuestionId = $("#qp-report-question-id-field").val();
 
-        if (reviewPageQuestionId) {
-            // --- Review Page Logic ---
-            // Find the specific report button for this question and disable it.
-            var buttonToDisable = $('.qp-report-btn-review[data-question-id="' + reviewPageQuestionId + '"]');
-            buttonToDisable.prop('disabled', true).text('Reported');
-            // Clear the hidden field for the next report
-            $('#qp-report-question-id-field').val('');
-        } else {
-            // --- Practice Session Page Logic (Original Logic) ---
-            var questionID = sessionQuestionIDs[currentQuestionIndex];
-            if (typeof answeredStates[questionID] === "undefined") {
+            if (reviewPageQuestionId) {
+              // --- Review Page Logic ---
+              // Find the specific report button for this question and disable it.
+              var buttonToDisable = $(
+                '.qp-report-btn-review[data-question-id="' +
+                  reviewPageQuestionId +
+                  '"]'
+              );
+              buttonToDisable.prop("disabled", true).text("Reported");
+              // Clear the hidden field for the next report
+              $("#qp-report-question-id-field").val("");
+            } else {
+              // --- Practice Session Page Logic (Original Logic) ---
+              var questionID = sessionQuestionIDs[currentQuestionIndex];
+              if (typeof answeredStates[questionID] === "undefined") {
                 answeredStates[questionID] = {};
-            }
-            answeredStates[questionID].reported = true;
+              }
+              answeredStates[questionID].reported = true;
 
-            $("#qp-reported-indicator").show();
-            $(".qp-indicator-bar").show();
-            $(".qp-options-area")
+              $("#qp-reported-indicator").show();
+              $(".qp-indicator-bar").show();
+              $(".qp-options-area")
                 .addClass("disabled")
                 .find('input[type="radio"]')
                 .prop("disabled", true);
-            $("#qp-skip-btn, #qp-report-btn").prop("disabled", true);
-            $("#qp-next-btn").prop("disabled", false);
+              $("#qp-next-btn").prop("disabled", false);
 
-            renderPalette();
-            updateLegendCounts();
-            loadNextQuestion();
-        }
-    });
-} else {
+              renderPalette();
+              updateLegendCounts();
+              loadNextQuestion();
+            }
+          });
+        } else {
           Swal.fire(
             "Error!",
             response.data.message || "Could not submit the report.",
@@ -1771,11 +1780,13 @@ jQuery(document).ready(function ($) {
     }
 
     $("#qp-prev-btn").prop("disabled", currentQuestionIndex === 0);
-    // --- NEW LOGIC TO HANDLE REPORTED QUESTIONS IN MOCK TESTS ---
-    if (isMockTest && data.is_reported_by_user) {
+    // --- UNIFIED LOGIC TO HANDLE REPORTED QUESTIONS IN ALL MODES ---
+    var isQuestionReported = data.is_reported_by_user || previousState.reported;
+
+    if (isQuestionReported) {
       // 1. Show the indicator
       $("#qp-reported-indicator").show();
-      $(".qp-indicator-bar").show(); // Ensure the parent bar is visible
+      $(".qp-indicator-bar").show();
 
       // 2. Disable all interactive elements for this question
       optionsArea
@@ -1783,27 +1794,33 @@ jQuery(document).ready(function ($) {
         .find('input[type="radio"]')
         .prop("disabled", true);
       $("#qp-report-btn").prop("disabled", true);
-      $("#qp-clear-response-btn, #qp-mock-mark-review-cb").prop(
-        "disabled",
-        true
-      );
 
-      // 3. If an answer was previously selected, clear it now
-      if (previousState.selected_option_id) {
-        clearMockTestAnswer(questionID);
+      // 3. Mode-specific button disabling
+      if (isMockTest) {
+        $("#qp-clear-response-btn, #qp-mock-mark-review-cb").prop(
+          "disabled",
+          true
+        );
+        if (previousState.selected_option_id) {
+          clearMockTestAnswer(questionID);
+        }
+      } else {
+        $("#qp-skip-btn, #qp-check-answer-btn").prop("disabled", true);
+        // Since the question is locked, the user must be able to move on.
+        $("#qp-next-btn").prop("disabled", false);
       }
-    } else if (isMockTest) {
-      // Explicitly re-enable buttons for non-reported questions
-      $("#qp-reported-indicator").hide();
-      optionsArea
-        .removeClass("disabled")
-        .find('input[type="radio"]')
-        .prop("disabled", false);
+    } else {
+      // Explicitly ensure buttons are enabled for non-reported questions
       $("#qp-report-btn").prop("disabled", false);
-      $("#qp-clear-response-btn, #qp-mock-mark-review-cb").prop(
-        "disabled",
-        false
-      );
+
+      // Mode-specific button enabling
+      if (isMockTest) {
+        $("#qp-clear-response-btn, #qp-mock-mark-review-cb").prop(
+          "disabled",
+          false
+        );
+      }
+      // For other modes, the button states are handled by other logic in this function.
     }
     // --- END OF NEW LOGIC ---
     if (typeof renderMathInElement !== "undefined") {
@@ -1956,15 +1973,14 @@ jQuery(document).ready(function ($) {
     var settings = summaryData.settings || {};
     var isMockTest = settings.practice_mode === "mock_test";
     if (isMockTest && qp_ajax_object.review_page_url) {
-        var reviewUrl = new URL(qp_ajax_object.review_page_url);
-        reviewUrl.searchParams.set("session_id", sessionID);
-        window.location.href = reviewUrl.href;
-        return; // Stop the rest of the function from running
+      var reviewUrl = new URL(qp_ajax_object.review_page_url);
+      reviewUrl.searchParams.set("session_id", sessionID);
+      window.location.href = reviewUrl.href;
+      return; // Stop the rest of the function from running
     }
 
     closeFullscreen();
     practiceInProgress = false;
-
 
     var isScoredSession = settings.marks_correct !== null;
     var mainDisplayHtml = "";
@@ -2286,7 +2302,7 @@ jQuery(document).ready(function ($) {
             action: "delete_empty_session",
             nonce: qp_ajax_object.nonce,
             session_id: sessionID,
-            is_auto_submit: isAutoSubmit
+            is_auto_submit: isAutoSubmit,
           },
           complete: function () {
             // Redirect after the alert is closed and AJAX is complete
