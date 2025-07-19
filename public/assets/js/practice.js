@@ -471,7 +471,7 @@ wrapper.on('change', '.qp-multi-select-list input[type="checkbox"]', function() 
     var $sectionGroup = $form.find('#qp-section-group');
     if ($sectionGroup.length > 0) {
         var $sectionSelect = $form.find('#qp_section');
-        var $selectedTopicCheckboxes = $form.find('[id^="qp_topic_list_container"] input:checked[value!="all"]');
+        var $selectedTopicCheckboxes = $form.find('[id^="qp_topic_list_container"] input:checked[value!="all"]').not('.qp-subject-topic-toggle');
         if ($selectedTopicCheckboxes.length === 1) {
             var singleTopicCheckbox = $selectedTopicCheckboxes.first();
             var topicId = singleTopicCheckbox.val();
