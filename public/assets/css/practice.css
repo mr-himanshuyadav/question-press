@@ -278,12 +278,20 @@ body {
 }
 
 .qp-topic-group-header {
+    display: block; /* Ensures the whole area is clickable */
     font-weight: bold;
     font-size: 14px;
-    padding: 0.75rem;
+    padding: 0.6rem 0.75rem; /* Adjusted padding for better alignment */
     margin-top: 0.5rem;
     border-bottom: 1px solid var(--qp-border-color);
-    color: var(--qp-light-text);
+    color: var(--qp-dark-text); /* Darker text for better readability */
+    background-color: #f6f7f7; /* Subtle background color */
+    border-radius: 4px;
+    transition: background-color 0.2s ease;
+}
+
+.qp-topic-group-header:hover {
+    background-color: #e9e9e9; /* Add a hover effect */
 }
 
 .qp-action-buttons {

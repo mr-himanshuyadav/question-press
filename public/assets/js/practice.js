@@ -449,7 +449,7 @@ wrapper.on('change', '.qp-multi-select-list input[type="checkbox"]', function() 
                 success: function(response) {
                     $topicButton.prop('disabled', false);
                     if (response.success && Object.keys(response.data.topics).length > 0) {
-                        $topicListContainer.append('<label><input type="checkbox" name="' + $topicListContainer.attr('id').replace('container', 'topics[]') + '" value="all"> All Topics</label>');
+                        $topicListContainer.append('<label class="qp-topic-group-header"><input type="checkbox" name="' + $topicListContainer.attr('id').replace('container', 'topics[]') + '" value="all"> All Topics</label>');
                         $.each(response.data.topics, function(subjectName, topics) {
                             var subjectHeader = '<label class="qp-topic-group-header"><input type="checkbox" class="qp-subject-topic-toggle"> ' + subjectName + '</label>';
 $topicListContainer.append(subjectHeader);
