@@ -563,13 +563,10 @@ class QP_Shortcodes
                 </div>
 
                 <div class="qp-form-group" id="qp-section-group" style="display: none;">
-                    <label for="qp_section_dropdown">Select Section (Optional):</label>
-                    <div class="qp-multi-select-dropdown" id="qp_section_dropdown">
-                        <button type="button" class="qp-multi-select-button">-- Select a topic first --</button>
-                        <div class="qp-multi-select-list" id="qp_section_list_container">
-                        </div>
-                    </div>
-                    <select name="qp_section[]" id="qp_section" multiple="multiple" style="display: none;"></select>
+                    <label for="qp_section">Select Section (Optional):</label>
+                    <select name="qp_section" id="qp_section" disabled>
+                        <option value="">-- Select a subject first --</option>
+                    </select>
                 </div>
 
                 <div class="qp-form-group qp-checkbox-group">

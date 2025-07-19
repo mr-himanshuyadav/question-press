@@ -498,58 +498,37 @@ $topicListContainer.append('<label><input type="checkbox" name="' + topicNameAtt
             updateButtonText($topicButton, '-- Select subject(s) first --', 'Topic');
         }
     }
-
-
-    // --- Part 4: Handle dynamic section dropdown updates (on any change) ---
-var $form = $this.closest('form');
-var $sectionGroup = $form.find('#qp-section-group');
-if ($sectionGroup.length > 0) {
-    var $sectionButton = $form.find('#qp_section_dropdown .qp-multi-select-button');
-    var $sectionList = $form.find('#qp_section_list_container');
-    var $hiddenSelect = $form.find('select#qp_section');
-    var $selectedTopicCheckboxes = $form.find('[id^="qp_topic_list_container"] input:checked[value!="all"]').not('.qp-subject-topic-toggle');
-
-    if ($selectedTopicCheckboxes.length === 1) {
-        var singleTopicCheckbox = $selectedTopicCheckboxes.first();
-        var topicId = singleTopicCheckbox.val();
-        var subjectIdForTopic = singleTopicCheckbox.data('subject-id');
-
-        if (topicId && subjectIdForTopic) {
-            $.ajax({
-                url: qp_ajax_object.ajax_url, type: 'POST',
-                data: { action: 'get_sections_for_subject', nonce: qp_ajax_object.nonce, subject_id: subjectIdForTopic, topic_id: topicId },
-                beforeSend: function() {
-                    $sectionButton.text('Loading sections...');
-                    $sectionList.empty();
-                    $hiddenSelect.empty();
-                    $sectionGroup.slideDown();
-                },
-                success: function(response) {
-                    if (response.success && response.data.sections.length > 0) {
-                        $sectionList.append('<label><input type="checkbox" value="all"> All Sections</label>');
-                        $.each(response.data.sections, function(index, sec) {
-                            var count = (unattemptedCounts.by_section && unattemptedCounts.by_section[sec.section_id]) ? ' (' + unattemptedCounts.by_section[sec.section_id] + ')' : '';
-                            var optionText = sec.source_name + ' / ' + sec.section_name;
-                            $sectionList.append('<label><input type="checkbox" value="' + sec.section_id + '"> ' + optionText + count + '</label>');
-                            $hiddenSelect.append($('<option></option>').val(sec.section_id).text(optionText));
-                        });
-                        updateButtonText($sectionButton, 'Select Section(s)', 'Section');
-                    } else { $sectionGroup.slideUp(); }
-                },
-                error: function() { $sectionGroup.slideUp(); }
-            });
+    var $sectionGroup = $form.find('#qp-section-group');
+    if ($sectionGroup.length > 0) {
+        var $sectionSelect = $form.find('#qp_section');
+        var $selectedTopicCheckboxes = $form.find('[id^="qp_topic_list_container"] input:checked[value!="all"]').not('.qp-subject-topic-toggle');
+        if ($selectedTopicCheckboxes.length === 1) {
+            var singleTopicCheckbox = $selectedTopicCheckboxes.first();
+            var topicId = singleTopicCheckbox.val();
+            var subjectIdForTopic = singleTopicCheckbox.data('subject-id');
+            if (topicId && subjectIdForTopic) {
+                $.ajax({
+                    url: qp_ajax_object.ajax_url, type: 'POST',
+                    data: { action: 'get_sections_for_subject', nonce: qp_ajax_object.nonce, subject_id: subjectIdForTopic, topic_id: topicId },
+                    beforeSend: function() {
+                        $sectionSelect.prop('disabled', true).html('<option>Loading sections...</option>');
+                        $sectionGroup.slideDown();
+                    },
+                    success: function(response) {
+                        if (response.success && response.data.sections.length > 0) {
+                            $sectionSelect.prop('disabled', false).empty().append('<option value="all">All Sections</option>');
+                            $.each(response.data.sections, function(index, sec) {
+                                var count = (unattemptedCounts.by_section && unattemptedCounts.by_section[sec.section_id]) ? ' (' + unattemptedCounts.by_section[sec.section_id] + ')' : '';
+                                var optionText = sec.source_name + ' / ' + sec.section_name + count;
+                                $sectionSelect.append($('<option></option>').val(sec.section_id).text(optionText));
+                            });
+                        } else { $sectionGroup.slideUp(); }
+                    },
+                    error: function() { $sectionGroup.slideUp(); }
+                });
+            } else { $sectionGroup.slideUp(); }
         } else { $sectionGroup.slideUp(); }
-    } else { $sectionGroup.slideUp(); }
-}
-
-// --- Part 5: Sync hidden selects for multi-select dropdowns ---
-if ($dropdown.attr('id') === 'qp_section_dropdown') {
-    var selectedValues = [];
-    $list.find('input:checked[value!="all"]').each(function() {
-        selectedValues.push($(this).val());
-    });
-    $form.find('select#qp_section').val(selectedValues);
-}
+    }
 });
 
 
@@ -559,8 +538,6 @@ if ($dropdown.attr('id') === 'qp_section_dropdown') {
       $(".qp-multi-select-list").hide();
     }
   });
-
-  
 
   // --- MULTI-STEP FORM LOGIC ---
   if ($(".qp-multi-step-container").length) {

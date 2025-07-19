@@ -294,22 +294,6 @@ body {
     background-color: #e9e9e9; /* Add a hover effect */
 }
 
-/* --- Custom Section Dropdown Item Styles --- */
-.qp-section-item {
-    display: block;
-    padding: 0.6rem 0.75rem;
-    cursor: pointer;
-    border-radius: 4px;
-    font-size: 15px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.qp-section-item:hover {
-    background-color: var(--qp-bg-light);
-}
-
 .qp-action-buttons {
     display: flex;
     flex-direction: column;
