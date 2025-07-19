@@ -476,7 +476,13 @@ wrapper.on('change', '.qp-multi-select-list input[type="checkbox"]', function() 
                 success: function(response) {
                     $topicButton.prop('disabled', false);
                     if (response.success && Object.keys(response.data.topics).length > 0) {
-                        var topicNameAttr = $topicListContainer.attr('id').replace('container_', '').replace('_mock', '').replace('_revision', '') + '[]';
+                        var formId = $form.attr('id');
+var topicNameAttr = 'qp_topic[]'; // Default for normal practice
+if (formId === 'qp-start-revision-form') {
+    topicNameAttr = 'revision_topics[]';
+} else if (formId === 'qp-start-mock-test-form') {
+    topicNameAttr = 'mock_topics[]';
+}
                         $topicListContainer.append('<label><input type="checkbox" name="' + topicNameAttr + '" value="all"> All Topics</label>');
                         $.each(response.data.topics, function(subjectName, topics) {
                             $topicListContainer.append('<label class="qp-topic-group-header"><input type="checkbox" class="qp-subject-topic-toggle"> ' + subjectName + '</label>');
