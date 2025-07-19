@@ -976,34 +976,47 @@ jQuery(document).ready(function ($) {
       },
       success: function (response) {
         if (response.success) {
-          $("#qp-report-modal-backdrop").fadeOut(200);
-          Swal.fire({
-            title: "Report Submitted!",
-            text: "Thank you for your feedback. The question has been flagged for review.",
-            icon: "success",
-            timer: 2000,
-            showConfirmButton: false,
-          }).then(() => {
+    $("#qp-report-modal-backdrop").fadeOut(200);
+    Swal.fire({
+        title: "Report Submitted!",
+        text: "Thank you for your feedback. The question has been flagged for review.",
+        icon: "success",
+        timer: 2000,
+        showConfirmButton: false,
+    }).then(() => {
+        // Check if we are on the review page by looking at the hidden field
+        var reviewPageQuestionId = $('#qp-report-question-id-field').val();
+
+        if (reviewPageQuestionId) {
+            // --- Review Page Logic ---
+            // Find the specific report button for this question and disable it.
+            var buttonToDisable = $('.qp-report-btn-review[data-question-id="' + reviewPageQuestionId + '"]');
+            buttonToDisable.prop('disabled', true).text('Reported');
+            // Clear the hidden field for the next report
+            $('#qp-report-question-id-field').val('');
+        } else {
+            // --- Practice Session Page Logic (Original Logic) ---
             var questionID = sessionQuestionIDs[currentQuestionIndex];
             if (typeof answeredStates[questionID] === "undefined") {
-              answeredStates[questionID] = {};
+                answeredStates[questionID] = {};
             }
             answeredStates[questionID].reported = true;
 
             $("#qp-reported-indicator").show();
             $(".qp-indicator-bar").show();
             $(".qp-options-area")
-              .addClass("disabled")
-              .find('input[type="radio"]')
-              .prop("disabled", true);
+                .addClass("disabled")
+                .find('input[type="radio"]')
+                .prop("disabled", true);
             $("#qp-skip-btn, #qp-report-btn").prop("disabled", true);
             $("#qp-next-btn").prop("disabled", false);
 
             renderPalette();
             updateLegendCounts();
             loadNextQuestion();
-          });
-        } else {
+        }
+    });
+} else {
           Swal.fire(
             "Error!",
             response.data.message || "Could not submit the report.",
