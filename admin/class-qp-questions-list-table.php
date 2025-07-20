@@ -132,43 +132,44 @@ class QP_Questions_List_Table extends WP_List_Table
             }
             echo '</select>';
         }
-        
+
         // --- END CUSTOM DROPDOWN ---
 
         submit_button(__('Apply'), 'action', '', false, array('id' => 'doaction' . ('top' === $which ? '' : '2'), 'style' => 'margin-left: 5px;'));
         echo "\n";
     }
 
-    protected function get_views() {
-    global $wpdb;
-    $q_table = $wpdb->prefix . 'qp_questions';
-    $reports_table = $wpdb->prefix . 'qp_question_reports';
+    protected function get_views()
+    {
+        global $wpdb;
+        $q_table = $wpdb->prefix . 'qp_questions';
+        $reports_table = $wpdb->prefix . 'qp_question_reports';
 
-    $current_status = isset($_REQUEST['status']) ? sanitize_key($_REQUEST['status']) : 'all';
-    $base_url = admin_url('admin.php?page=question-press');
-    
-    // --- THE FIX ---
-    // Correctly count unique questions with "open" reports.
-    $review_count = $wpdb->get_var($wpdb->prepare(
-        "SELECT COUNT(DISTINCT question_id) FROM {$reports_table} WHERE status = %s",
-        'open'
-    ));
-    
-    // Correctly link to the new Reports tab.
-    $review_url = admin_url('admin.php?page=qp-logs-reports&tab=reports');
-    // --- END OF FIX ---
+        $current_status = isset($_REQUEST['status']) ? sanitize_key($_REQUEST['status']) : 'all';
+        $base_url = admin_url('admin.php?page=question-press');
 
-    $publish_count = $wpdb->get_var("SELECT COUNT(*) FROM $q_table WHERE status = 'publish'");
-    $trash_count = $wpdb->get_var("SELECT COUNT(*) FROM $q_table WHERE status = 'trash'");
+        // --- THE FIX ---
+        // Correctly count unique questions with "open" reports.
+        $review_count = $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(DISTINCT question_id) FROM {$reports_table} WHERE status = %s",
+            'open'
+        ));
 
-    $views = [
-        'all' => sprintf('<a href="%s" class="%s">Published <span class="count">(%d)</span></a>', esc_url($base_url), $current_status === 'all' || $current_status === 'publish' ? 'current' : '', $publish_count),
-        'needs_review' => sprintf('<a href="%s">Needs Review <span class="count" style="color: #c00;">(%d)</span></a>', esc_url($review_url), $review_count),
-        'trash' => sprintf('<a href="%s" class="%s">Trash <span class="count">(%d)</span></a>', esc_url(add_query_arg('status', 'trash', $base_url)), $current_status === 'trash' ? 'current' : '', $trash_count)
-    ];
+        // Correctly link to the new Reports tab.
+        $review_url = admin_url('admin.php?page=qp-logs-reports&tab=reports');
+        // --- END OF FIX ---
 
-    return $views;
-}   
+        $publish_count = $wpdb->get_var("SELECT COUNT(*) FROM $q_table WHERE status = 'publish'");
+        $trash_count = $wpdb->get_var("SELECT COUNT(*) FROM $q_table WHERE status = 'trash'");
+
+        $views = [
+            'all' => sprintf('<a href="%s" class="%s">Published <span class="count">(%d)</span></a>', esc_url($base_url), $current_status === 'all' || $current_status === 'publish' ? 'current' : '', $publish_count),
+            'needs_review' => sprintf('<a href="%s">Needs Review <span class="count" style="color: #c00;">(%d)</span></a>', esc_url($review_url), $review_count),
+            'trash' => sprintf('<a href="%s" class="%s">Trash <span class="count">(%d)</span></a>', esc_url(add_query_arg('status', 'trash', $base_url)), $current_status === 'trash' ? 'current' : '', $trash_count)
+        ];
+
+        return $views;
+    }
 
 
     protected function extra_tablenav($which)
@@ -218,62 +219,61 @@ class QP_Questions_List_Table extends WP_List_Table
             echo '</div>';
 
             // --- ROW 2: Bulk Edit Controls ---
-            
+
             echo '<div id="qp-bulk-edit-panel" class="alignleft actions" style="display: none; clear: both; margin-top: 10px; padding: 10px; border: 1px solid #cce7f6; background-color: #f6f7f7;">';
 
-                $all_exams = $wpdb->get_results("SELECT exam_id, exam_name FROM {$wpdb->prefix}qp_exams ORDER BY exam_name ASC");
-                $all_sources = $wpdb->get_results("SELECT source_id, source_name FROM {$wpdb->prefix}qp_sources ORDER BY source_name ASC");
-                $all_sections = $wpdb->get_results("SELECT section_id, section_name FROM {$wpdb->prefix}qp_source_sections ORDER BY section_name ASC");
-                $all_topics = $wpdb->get_results("SELECT topic_id, topic_name FROM {$wpdb->prefix}qp_topics ORDER BY topic_name ASC");
+            $all_exams = $wpdb->get_results("SELECT exam_id, exam_name FROM {$wpdb->prefix}qp_exams ORDER BY exam_name ASC");
+            $all_sources = $wpdb->get_results("SELECT source_id, source_name FROM {$wpdb->prefix}qp_sources ORDER BY source_name ASC");
+            $all_sections = $wpdb->get_results("SELECT section_id, section_name FROM {$wpdb->prefix}qp_source_sections ORDER BY section_name ASC");
+            $all_topics = $wpdb->get_results("SELECT topic_id, topic_name FROM {$wpdb->prefix}qp_topics ORDER BY topic_name ASC");
 
-                echo '<span style="font-weight: bold; margin-right: 5px;">Bulk Edit:</span>';
+            echo '<span style="font-weight: bold; margin-right: 5px;">Bulk Edit:</span>';
 
-                // --- NEW ORDER ---
+            // --- NEW ORDER ---
 
-                // THE FIX: Add a variable to hold the disabled state for the source dropdown
-                $is_subject_filtered = !empty($_REQUEST['filter_by_subject']);
-                $source_disabled_attr = $is_subject_filtered ? '' : ' disabled="disabled"';
+            // THE FIX: Add a variable to hold the disabled state for the source dropdown
+            $is_subject_filtered = !empty($_REQUEST['filter_by_subject']);
+            $source_disabled_attr = $is_subject_filtered ? '' : ' disabled="disabled"';
 
-                // Source Dropdown (Now first)
-                // Add the disabled attribute we just created
-                echo '<select name="bulk_edit_source" id="bulk_edit_source" style="margin-right: 5px;max-width: 18rem;"' . $source_disabled_attr . '>';
-                echo '<option value="">— Change Source —</option>';
-                foreach ($all_sources as $source) {
-                    printf('<option value="%s">%s</option>', esc_attr($source->source_id), esc_html($source->source_name));
-                }
-                echo '</select>';
-
-                // Section Dropdown (Now second)
-                echo '<select name="bulk_edit_section" id="bulk_edit_section" style="margin-right: 5px;" disabled="disabled">'; // Add disabled here too
-                // THE FIX: Change the default instructional text
-                echo '<option value="">— Select Source First —</option>';
-                foreach ($all_sections as $section) {
-                    printf('<option value="%s">%s</option>', esc_attr($section->section_id), esc_html($section->section_name));
-                }
-                echo '</select>';
-
-                // NEW: Topic Dropdown
-                echo '<select name="bulk_edit_topic" id="bulk_edit_topic" style="margin-right: 5px;" disabled="disabled">';
-                echo '<option value="">— Change Topic —</option>';
-                foreach ($all_topics as $topic) {
-                    printf('<option value="%s">%s</option>', esc_attr($topic->topic_id), esc_html($topic->topic_name));
-                }
-                echo '</select>';
-
-
-                // Exam Dropdown (Now last)
-                echo '<select name="bulk_edit_exam" id="bulk_edit_exam" style="margin-right: 5px; max-width: 20rem;" disabled="disabled">';
-                echo '<option value="">— Select Subject to edit exam —</option>';
-                foreach ($all_exams as $exam) {
-                    printf('<option value="%s">%s</option>', esc_attr($exam->exam_id), esc_html($exam->exam_name));
-                }
-                echo '</select>';
-
-                submit_button('Apply Changes', 'primary', 'bulk_edit_apply', false);
-
-                echo '</div>';
+            // Source Dropdown (Now first)
+            // Add the disabled attribute we just created
+            echo '<select name="bulk_edit_source" id="bulk_edit_source" style="margin-right: 5px;max-width: 18rem;"' . $source_disabled_attr . '>';
+            echo '<option value="">— Change Source —</option>';
+            foreach ($all_sources as $source) {
+                printf('<option value="%s">%s</option>', esc_attr($source->source_id), esc_html($source->source_name));
             }
-        
+            echo '</select>';
+
+            // Section Dropdown (Now second)
+            echo '<select name="bulk_edit_section" id="bulk_edit_section" style="margin-right: 5px;" disabled="disabled">'; // Add disabled here too
+            // THE FIX: Change the default instructional text
+            echo '<option value="">— Select Source First —</option>';
+            foreach ($all_sections as $section) {
+                printf('<option value="%s">%s</option>', esc_attr($section->section_id), esc_html($section->section_name));
+            }
+            echo '</select>';
+
+            // NEW: Topic Dropdown
+            echo '<select name="bulk_edit_topic" id="bulk_edit_topic" style="margin-right: 5px;" disabled="disabled">';
+            echo '<option value="">— Change Topic —</option>';
+            foreach ($all_topics as $topic) {
+                printf('<option value="%s">%s</option>', esc_attr($topic->topic_id), esc_html($topic->topic_name));
+            }
+            echo '</select>';
+
+
+            // Exam Dropdown (Now last)
+            echo '<select name="bulk_edit_exam" id="bulk_edit_exam" style="margin-right: 5px; max-width: 20rem;" disabled="disabled">';
+            echo '<option value="">— Select Subject to edit exam —</option>';
+            foreach ($all_exams as $exam) {
+                printf('<option value="%s">%s</option>', esc_attr($exam->exam_id), esc_html($exam->exam_name));
+            }
+            echo '</select>';
+
+            submit_button('Apply Changes', 'primary', 'bulk_edit_apply', false);
+
+            echo '</div>';
+        }
     }
 
     public function search_box($text, $input_id)
@@ -320,11 +320,11 @@ class QP_Questions_List_Table extends WP_List_Table
         $id_query_joins = " LEFT JOIN {$g_table} g ON q.group_id = g.group_id";
 
         $current_status = isset($_REQUEST['status']) ? sanitize_key($_REQUEST['status']) : 'publish';
-if ($current_status === 'trash') {
-    $where_conditions[] = "q.status = 'trash'";
-} else {
-    $where_conditions[] = "q.status = 'publish'";
-}
+        if ($current_status === 'trash') {
+            $where_conditions[] = "q.status = 'trash'";
+        } else {
+            $where_conditions[] = "q.status = 'publish'";
+        }
 
         if (!empty($_REQUEST['filter_by_subject'])) {
             $where_conditions[] = $wpdb->prepare("g.subject_id = %d", absint($_REQUEST['filter_by_subject']));
@@ -393,7 +393,7 @@ if ($current_status === 'trash') {
             ORDER BY {$orderby} {$order}
             LIMIT {$per_page} OFFSET {$offset}";
 
-        $this->items = $wpdb->get_results($data_query, ARRAY_A);
+            $this->items = $wpdb->get_results($data_query, ARRAY_A);
         }
 
         $question_ids_on_page = wp_list_pluck($this->items, 'question_id');
@@ -414,27 +414,28 @@ if ($current_status === 'trash') {
         $this->set_pagination_args(['total_items' => $total_items, 'per_page' => $per_page]);
     }
 
-    public function column_subject_name($item) {
-    $output = '';
+    public function column_subject_name($item)
+    {
+        $output = '';
 
-    // Display the Subject
-    if (!empty($item['subject_name'])) {
-        $output .= '<strong>Subject:</strong> ' . esc_html($item['subject_name']);
-    } else {
-        $output .= '<strong>Subject:</strong> <em style="color:#a00;">None</em>';
+        // Display the Subject
+        if (!empty($item['subject_name'])) {
+            $output .= '<strong>Subject:</strong> ' . esc_html($item['subject_name']);
+        } else {
+            $output .= '<strong>Subject:</strong> <em style="color:#a00;">None</em>';
+        }
+
+        $output .= '<br>'; // Add a line break
+
+        // Display the Topic
+        if (!empty($item['topic_name'])) {
+            $output .= '<strong>Topic:</strong> ' . esc_html($item['topic_name']);
+        } else {
+            $output .= '<strong>Topic:</strong> <em style="color:#888;">None</em>';
+        }
+
+        return $output;
     }
-
-    $output .= '<br>'; // Add a line break
-
-    // Display the Topic
-    if (!empty($item['topic_name'])) {
-        $output .= '<strong>Topic:</strong> ' . esc_html($item['topic_name']);
-    } else {
-        $output .= '<strong>Topic:</strong> <em style="color:#888;">None</em>';
-    }
-
-    return $output;
-}
 
     /**
      * UPDATED: Process all bulk actions, now correctly handling nonces for single-item actions.
@@ -490,7 +491,7 @@ if ($current_status === 'trash') {
 
         $nonce = $_REQUEST['_wpnonce'] ?? '';
         if (!isset($_REQUEST['bulk_edit_apply'])) {
-             if (isset($_REQUEST['question_id']) && !isset($_REQUEST['question_ids'])) {
+            if (isset($_REQUEST['question_id']) && !isset($_REQUEST['question_ids'])) {
                 if (!wp_verify_nonce($nonce, 'qp_' . $action . '_question_' . absint($_REQUEST['question_id']))) {
                     wp_die('Security check failed for single item action.');
                 }
@@ -498,14 +499,14 @@ if ($current_status === 'trash') {
                 wp_die('Security check failed for bulk action.');
             }
         }
-       
+
         $question_ids = isset($_REQUEST['question_ids']) ? array_map('absint', (array) $_REQUEST['question_ids']) : (isset($_REQUEST['question_id']) ? [absint($_REQUEST['question_id'])] : []);
-        
+
         if (empty(array_filter($question_ids))) {
-             wp_safe_redirect(remove_query_arg(['action', 'action2', '_wpnonce', 'question_ids', 'labels_to_apply', 'bulk_edit_apply', 'bulk_edit_source', 'bulk_edit_section'], wp_get_referer()));
-             exit;
+            wp_safe_redirect(remove_query_arg(['action', 'action2', '_wpnonce', 'question_ids', 'labels_to_apply', 'bulk_edit_apply', 'bulk_edit_source', 'bulk_edit_section'], wp_get_referer()));
+            exit;
         }
-        
+
         global $wpdb;
 
         if (!empty($labels_to_apply)) {
@@ -553,7 +554,7 @@ if ($current_status === 'trash') {
                 }
             }
         }
-        
+
         // --- Redirect to preserve state ---
         wp_safe_redirect(remove_query_arg(['action', 'action2', '_wpnonce', 'question_ids', 'labels_to_apply', 'bulk_edit_apply', 'bulk_edit_source', 'bulk_edit_section'], wp_get_referer()));
         exit;
@@ -657,6 +658,10 @@ if ($current_status === 'trash') {
                     '<a href="#" class="editinline" data-question-id="%d" data-nonce="%s">Quick Edit</a>',
                     $item['question_id'],
                     $quick_edit_nonce
+                ),
+                'view' => sprintf(
+                    '<a href="#" class="view-question" data-question-id="%d">View</a>',
+                    $item['question_id']
                 ),
                 'trash' => sprintf('<a href="?page=%s&action=trash&question_id=%s&_wpnonce=%s" style="color:#a00;">Trash</a>', $page, $item['question_id'], $trash_nonce),
             ];
