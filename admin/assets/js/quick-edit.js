@@ -348,5 +348,69 @@ jQuery(document).ready(function($) {
         manageBulkEditPanel();
     });
 
+});
 
+jQuery(document).ready(function($) {
+    var wrapper = $('#the-list');
+    var modalBackdrop = $('#wpbody-content').find('#qp-view-modal-backdrop');
+    var modalBody = modalBackdrop.find('#qp-view-modal-body');
+
+    // Show the modal
+    wrapper.on('click', '.view-question', function(e) {
+        e.preventDefault();
+        var questionId = $(this).data('question-id');
+
+        modalBody.html('<p>Loading...</p>');
+        modalBackdrop.css('display', 'flex');
+
+        $.ajax({
+            url: ajaxurl,
+            type: 'POST',
+            data: {
+                action: 'get_single_question_for_review', // We can reuse the existing AJAX action
+                nonce: qp_quick_edit_object.nonce, // We can reuse the existing nonce object
+                question_id: questionId
+            },
+            success: function(response) {
+                if (response.success) {
+                    var data = response.data;
+                    var html = '<h4>' + data.subject_name + ' (ID: ' + data.custom_question_id + ')</h4>';
+                    if (data.direction_text) {
+                        html += '<div style="background: #f6f7f7; padding: 1rem; border-radius: 4px; margin-bottom: 1rem;">' + data.direction_text + '</div>';
+                    }
+                    html += '<div class="question-text" style="margin-bottom: 1.5rem;">' + data.question_text + '</div>';
+                    html += '<div class="qp-options-area">';
+                    data.options.forEach(function(opt) {
+                        var style = opt.is_correct == 1 ? 'border-color: #2e7d32; background: #e8f5e9; font-weight: bold;' : 'border-color: #e0e0e0;';
+                        html += '<div class="option" style="border: 2px solid; padding: 1rem; margin-bottom: 0.5rem; border-radius: 8px; ' + style + '">' + opt.option_text + '</div>';
+                    });
+                    html += '</div>';
+
+                    modalBody.html(html);
+
+                    if (typeof renderMathInElement === 'function') {
+                        renderMathInElement(modalBody[0], {
+                            delimiters: [
+                                {left: '$$', right: '$$', display: true},
+                                {left: '$', right: '$', display: false},
+                                {left: '\\\\[', right: '\\\\]', display: true},
+                                {left: '\\\\(', right: '\\\\)', display: false}
+                            ],
+                            throwOnError: false
+                        });
+                    }
+                } else {
+                    modalBody.html('<p style="color:red;">Could not load question data.</p>');
+                }
+            }
+        });
+    });
+
+    // Hide the modal
+    modalBackdrop.on('click', function(e) {
+        if (e.target === this || $(e.target).hasClass('qp-modal-close-btn')) {
+            modalBackdrop.hide();
+            modalBody.empty();
+        }
+    });
 });

@@ -3,7 +3,7 @@
 /**
  * Plugin Name:       Question Press
  * Description:       A complete plugin for creating, managing, and practicing questions.
- * Version:           3.1.3
+ * Version:           3.1.4
  * Author:            Himanshu
  */
 
@@ -469,6 +469,13 @@ function qp_admin_enqueue_scripts($hook_suffix)
         wp_enqueue_script('sweetalert2', 'https://cdn.jsdelivr.net/npm/sweetalert2@11', [], null, true);
     }
 
+    // Load KaTeX for the admin view modal
+    if ($hook_suffix === 'toplevel_page_question-press') {
+        wp_enqueue_style('katex-css', 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css', [], '0.16.9');
+        wp_enqueue_script('katex-js', 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js', [], '0.16.9', true);
+        wp_enqueue_script('katex-auto-render', 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js', ['katex-js'], '0.16.9', true);
+    }
+
     if ($hook_suffix === 'toplevel_page_question-press') {
         wp_enqueue_script('qp-quick-edit-script', QP_PLUGIN_URL . 'admin/assets/js/quick-edit.js', ['jquery'], '1.0.2', true); // Version bump
         // NEW: Add a nonce specifically for our new admin filters
@@ -499,7 +506,8 @@ function qp_admin_enqueue_scripts($hook_suffix)
         ]);
 
         wp_localize_script('qp-quick-edit-script', 'qp_quick_edit_object', [
-            'save_nonce' => wp_create_nonce('qp_save_quick_edit_nonce')
+            'save_nonce' => wp_create_nonce('qp_save_quick_edit_nonce'),
+            'nonce' => wp_create_nonce('qp_practice_nonce')
         ]);
         wp_enqueue_script('qp-multi-select-dropdown-script', QP_PLUGIN_URL . 'admin/assets/js/multi-select-dropdown.js', ['jquery'], '1.0.1', true);
     }
@@ -652,6 +660,7 @@ function qp_all_questions_page_cb()
             max-height: 90vh;
             overflow-y: auto;
             position: relative;
+            font: normal 1.5em KaTeX_Main, Times New Roman, serif;
         }
 
         .qp-modal-close-btn {
