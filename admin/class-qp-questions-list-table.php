@@ -587,6 +587,17 @@ class QP_Questions_List_Table extends WP_List_Table
 <?php
     }
 
+    public function display_view_modal() {
+    ?>
+    <div id="qp-view-modal-backdrop" style="display: none;">
+        <div id="qp-view-modal-content">
+            <button class="qp-modal-close-btn">&times;</button>
+            <div id="qp-view-modal-body"></div>
+        </div>
+    </div>
+    <?php
+}
+
     public function column_cb($item)
     {
         return sprintf('<input type="checkbox" name="question_ids[]" value="%s" />', $item['question_id']);

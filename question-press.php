@@ -600,6 +600,7 @@ function qp_all_questions_page_cb()
             <?php $list_table->search_box('Search Questions', 'question'); ?>
             <?php $list_table->display(); ?>
         </form>
+        <?php $list_table->display_view_modal();?>
         <style type="text/css">
             #post-query-submit {
                 margin-left: 8px;
@@ -628,6 +629,41 @@ function qp_all_questions_page_cb()
             .wp-list-table.questions #the-list tr td {
                 border-bottom: 1px solid rgb(174, 174, 174);
             }
+
+            #qp-view-modal-backdrop {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.6);
+            z-index: 1001;
+            display: none; /* Initially hidden */
+            justify-content: center;
+            align-items: center;
+        }
+
+        #qp-view-modal-content {
+            background: #fff;
+            padding: 2rem;
+            border-radius: 8px;
+            max-width: 90%;
+            width: 700px;
+            max-height: 90vh;
+            overflow-y: auto;
+            position: relative;
+        }
+
+        .qp-modal-close-btn {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            font-size: 24px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: #50575e;
+        }
         </style>
     </div>
 <?php
