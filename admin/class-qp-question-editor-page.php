@@ -244,7 +244,7 @@ class QP_Question_Editor_Page
                                             <input type="hidden" name="questions[<?php echo $q_index; ?>][question_id]" class="question-id-input" value="<?php echo esc_attr($question->question_id); ?>">
                                             <p>
                                                 <label for="question_number_in_section_<?php echo $q_index; ?>"><strong>Question Number in Source</strong></label>
-                                                <input type="text" name="questions[<?php echo $q_index; ?>][question_number_in_section]" id="question_number_in_section_<?php echo $q_index; ?>" value="<?php echo esc_attr($question->question_number_in_section); ?>" style="width: 50%;">
+                                                <input type="text" name="questions[<?php echo $q_index; ?>][question_number_in_section]" id="question_number_in_section_<?php echo $q_index; ?>" value="<?php echo esc_attr($question->question_number_in_section ?? ''); ?>" style="width: 50%;">
                                             </p>
                                             <?php
                                             wp_editor(
