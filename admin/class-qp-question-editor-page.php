@@ -202,6 +202,12 @@ class QP_Question_Editor_Page
                                 </div>
                             </div>
 
+                            <div class="notice notice-info inline" style="margin-top: 1rem;">
+                        <p>
+                            <strong>Tip:</strong> You can use LaTeX for mathematical notations in the Direction, Question, and Option fields. For example, use <code>$ E = mc^2 $</code> for inline and <code>$$ \frac{a}{b} $$</code> for block equations.
+                        </p>
+                    </div>
+
                             <div id="qp-question-blocks-container">
                                 <?php foreach ($questions_in_group as $q_index => $question) :
                                     $current_label_ids = wp_list_pluck($question->labels, 'label_id');
@@ -304,37 +310,37 @@ class QP_Question_Editor_Page
                                 </div>
                             </div>
                             <div class="postbox">
-    <h2 class="hndle"><span>PYQ Details</span></h2>
-    <div class="inside">
-        <div class="qp-pyq-container">
-            <div class="qp-pyq-toggle-row">
-                <label for="is_pyq_checkbox"><strong>Is a PYQ?</strong></label>
-                <input type="checkbox" name="is_pyq" id="is_pyq_checkbox" value="1" <?php checked($is_pyq_group, 1); ?>>
-            </div>
+                                <h2 class="hndle"><span>PYQ Details</span></h2>
+                                <div class="inside">
+                                    <div class="qp-pyq-container">
+                                        <div class="qp-pyq-toggle-row">
+                                            <label for="is_pyq_checkbox"><strong>Is a PYQ?</strong></label>
+                                            <input type="checkbox" name="is_pyq" id="is_pyq_checkbox" value="1" <?php checked($is_pyq_group, 1); ?>>
+                                        </div>
 
-            <div id="pyq_fields_wrapper" style="<?php echo $is_pyq_group ? '' : 'display: none;'; ?>">
-                <div class="qp-pyq-fields-row">
-                    <div class="qp-pyq-field-group">
-                        <label for="exam_id"><strong>Exam</strong></label>
-                        <select name="exam_id" id="exam_id" style="width: 100%;">
-                            <option value="">— Select an Exam —</option>
-                            <?php foreach ($all_exams as $exam) : ?>
-                                <option value="<?php echo esc_attr($exam->exam_id); ?>" <?php selected($current_exam_id, $exam->exam_id); ?>>
-                                    <?php echo esc_html($exam->exam_name); ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div class="qp-pyq-field-group">
-                        <label for="pyq_year"><strong>Year</strong></label>
-                        <input type="number" name="pyq_year" value="<?php echo esc_attr($current_pyq_year); ?>" style="width: 100%;" placeholder="e.g., 2023">
-                    </div>
-                </div>
-            </div>
+                                        <div id="pyq_fields_wrapper" style="<?php echo $is_pyq_group ? '' : 'display: none;'; ?>">
+                                            <div class="qp-pyq-fields-row">
+                                                <div class="qp-pyq-field-group">
+                                                    <label for="exam_id"><strong>Exam</strong></label>
+                                                    <select name="exam_id" id="exam_id" style="width: 100%;">
+                                                        <option value="">— Select an Exam —</option>
+                                                        <?php foreach ($all_exams as $exam) : ?>
+                                                            <option value="<?php echo esc_attr($exam->exam_id); ?>" <?php selected($current_exam_id, $exam->exam_id); ?>>
+                                                                <?php echo esc_html($exam->exam_name); ?>
+                                                            </option>
+                                                        <?php endforeach; ?>
+                                                    </select>
+                                                </div>
+                                                <div class="qp-pyq-field-group">
+                                                    <label for="pyq_year"><strong>Year</strong></label>
+                                                    <input type="number" name="pyq_year" value="<?php echo esc_attr($current_pyq_year); ?>" style="width: 100%;" placeholder="e.g., 2023">
+                                                </div>
+                                            </div>
+                                        </div>
 
-        </div>
-    </div>
-</div>
+                                    </div>
+                                </div>
+                            </div>
                             <div class="postbox">
                                 <h2 class="hndle"><span>Organize</span></h2>
                                 <div class="inside">
@@ -497,12 +503,14 @@ class QP_Question_Editor_Page
             }
 
             .qp-editor-labels-container {
-        display: flex;
-        gap: 5px;
-        flex-wrap: wrap;
-        margin-right: auto; /* This is the key change: pushes other elements to the right */
-        padding-top: 5px; /* Align vertically with the tabs */
-    }
+                display: flex;
+                gap: 5px;
+                flex-wrap: wrap;
+                margin-right: auto;
+                /* This is the key change: pushes other elements to the right */
+                padding-top: 5px;
+                /* Align vertically with the tabs */
+            }
         </style>
 <?php
     }
