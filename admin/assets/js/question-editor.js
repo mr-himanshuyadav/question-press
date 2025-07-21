@@ -80,6 +80,30 @@ jQuery(document).ready(function($) {
         }
     }
 
+    // --- NEW: Function to update Source dropdown based on Subject ---
+    function updateSources() {
+        var selectedSubjectId = subjectSelect.val();
+        var currentSourceId = qp_editor_data.current_source_id;
+
+        sourceSelect.empty().prop('disabled', true);
+
+        if (selectedSubjectId && qp_editor_data.sources_by_subject[selectedSubjectId]) {
+            sourceSelect.prop('disabled', false).append('<option value="">— Select a Source —</option>');
+            $.each(qp_editor_data.sources_by_subject[selectedSubjectId], function(index, source) {
+                var option = $('<option></option>').val(source.id).text(source.name);
+                if (source.id == currentSourceId) {
+                    option.prop('selected', true);
+                }
+                sourceSelect.append(option);
+            });
+        } else {
+            sourceSelect.append('<option value="">— No sources for this subject —</option>');
+        }
+        // Trigger an update on the sections dropdown as well
+        sourceSelect.trigger('change');
+    }
+
+
     // --- Function to update Section dropdown based on Source ---
     function updateSections() {
         var selectedSourceId = sourceSelect.val();
@@ -112,8 +136,10 @@ jQuery(document).ready(function($) {
 
     // --- Bind Event Handlers ---
     subjectSelect.on('change', function() {
-        qp_editor_data.current_topic_id = ''; 
+        qp_editor_data.current_topic_id = '';
+        qp_editor_data.current_source_id = ''; // <-- Add this to reset selection
         updateTopics();
+        updateSources(); // <-- Add this call
     });
 
     sourceSelect.on('change', function() {
@@ -125,6 +151,7 @@ jQuery(document).ready(function($) {
 
     // --- Initial population on page load ---
     updateTopics();
+    updateSources();
     updateSections();
     togglePyqFields();
 

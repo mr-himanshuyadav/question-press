@@ -102,10 +102,17 @@ class QP_Question_Editor_Page
         $all_sections = $wpdb->get_results("SELECT section_id, section_name, source_id FROM {$wpdb->prefix}qp_source_sections ORDER BY section_name ASC");
 
 
-        // Prepare topics and sections data for JavaScript
+        // Prepare topics, sources, and sections data for JavaScript
         $topics_by_subject = [];
         foreach ($all_topics as $topic) {
             $topics_by_subject[$topic->subject_id][] = ['id' => $topic->topic_id, 'name' => $topic->topic_name];
+        }
+        $sources_by_subject = [];
+        foreach ($all_sources as $source) {
+            // Assuming each source has a subject_id property from the query
+            if (isset($source->subject_id)) {
+                $sources_by_subject[$source->subject_id][] = ['id' => $source->source_id, 'name' => $source->source_name];
+            }
         }
         $sections_by_source = [];
         foreach ($all_sections as $section) {
@@ -115,8 +122,10 @@ class QP_Question_Editor_Page
         // Pass all necessary data to our JavaScript file
         wp_localize_script('qp-editor-script', 'qp_editor_data', [
             'topics_by_subject'   => $topics_by_subject,
+            'sources_by_subject'  => $sources_by_subject, // <-- Add this line
             'sections_by_source'  => $sections_by_source,
             'current_topic_id'    => $current_topic_id,
+            'current_source_id'   => $current_source_id, // <-- Add this line
             'current_section_id'  => $current_section_id,
         ]);
 
