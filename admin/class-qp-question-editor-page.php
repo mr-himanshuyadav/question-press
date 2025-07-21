@@ -258,7 +258,7 @@ class QP_Question_Editor_Page
                                                 </span>
                                             </h2>
                                             <div class="handle-actions qp-editor-quesiton-remove-btn">
-                                                <button type="button" class="button-link-delete remove-question-block" title="Remove this question">
+                                                <button type="button" class="button-link-delete remove-question-block" title="Remove this question" style="cursor: pointer;">
                                                     <span class="dashicons dashicons-no-alt"></span> Remove
                                                 </button>
                                             </div>
@@ -502,6 +502,9 @@ class QP_Question_Editor_Page
                 align-items: center;
                 gap: 5px;
             }
+            #post-body-content .postbox-header{
+                cursor: none;
+            }
 
             .qp-option-row .option-text-input {
                 flex-grow: 1;
@@ -532,6 +535,25 @@ class QP_Question_Editor_Page
                 padding-top: 5px;
                 /* Align vertically with the tabs */
             }
+            /* Force the parent container to use a flexbox layout instead of floats */
+    #post-body.columns-2 {
+        display: flex;
+        align-items: flex-start; /* Align columns to the top */
+    }
+
+    /* Set the main content to be flexible */
+    #post-body-content {
+        flex: 1;
+        min-width: 0; /* Prevents overflow issues with flex items */
+    }
+
+    /* Apply sticky positioning to the sidebar */
+    #postbox-container-1 {
+        position: -webkit-sticky;
+        position: sticky;
+        top: 48px; /* Offset for admin bar (32px) + some margin (16px) */
+        margin-left: 20px;
+    }
         </style>
 <?php
     }
