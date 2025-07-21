@@ -162,7 +162,7 @@ function qp_activate_plugin()
         question_text_hash VARCHAR(32) NOT NULL,
         duplicate_of BIGINT(20) UNSIGNED DEFAULT NULL,
         import_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        status VARCHAR(20) NOT NULL DEFAULT 'publish',
+        status VARCHAR(20) NOT NULL DEFAULT 'draft',
         last_modified DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         PRIMARY KEY (question_id),
         UNIQUE KEY custom_question_id (custom_question_id),
@@ -760,13 +760,22 @@ function qp_handle_save_question_group()
             'question_text_hash' => md5(strtolower(trim(preg_replace('/\s+/', '', $question_text)))),
         ];
 
+        $options_from_form = isset($q_data['options']) ? array_filter(array_map('trim', $q_data['options'])) : [];
+        $has_options = !empty($options_from_form);
+
         if ($question_id > 0 && in_array($question_id, $existing_q_ids)) {
+            // This is an existing question, so we are updating it.
+            if ($has_options) {
+                // If options are provided, it's ready to be published.
+                $question_db_data['status'] = 'publish';
+            }
             $wpdb->update($q_table, $question_db_data, ['question_id' => $question_id]);
             $submitted_q_ids[] = $question_id;
         } else {
-            // Insert new question
+            // This is a new question. It's always saved as a draft first.
             $next_custom_id = get_option('qp_next_custom_question_id', 1000);
             $question_db_data['custom_question_id'] = $next_custom_id;
+            $question_db_data['status'] = 'draft'; // Explicitly set as draft
             $wpdb->insert($q_table, $question_db_data);
             $question_id = $wpdb->insert_id;
             update_option('qp_next_custom_question_id', $next_custom_id + 1);
