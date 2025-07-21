@@ -302,7 +302,7 @@ class QP_Question_Editor_Page
                                 <h2 class="hndle"><span>Publish</span></h2>
                                 <div class="inside">
                                     <div id="major-publishing-actions">
-                                        <input name="save_group" type="submit" class="button button-primary button-large" id="publish" value="<?php echo $is_editing ? 'Update Group' : 'Save Group'; ?>">
+                                        <input name="save_group" type="submit" class="button button-primary button-large" id="publish" value="<?php echo $is_editing ? 'Update Group' : 'Save and Add Options'; ?>">
                                     </div>
                                 </div>
                             </div>
