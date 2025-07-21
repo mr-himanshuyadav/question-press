@@ -762,20 +762,18 @@ function qp_handle_save_question_group()
 
         $options_from_form = isset($q_data['options']) ? array_filter(array_map('trim', $q_data['options'])) : [];
         $has_options = !empty($options_from_form);
+        $is_question_complete = !empty($q_data['correct_option_id']);
 
         if ($question_id > 0 && in_array($question_id, $existing_q_ids)) {
-            // This is an existing question, so we are updating it.
-            if ($has_options) {
-                // If options are provided, it's ready to be published.
-                $question_db_data['status'] = 'publish';
-            }
+            // This is an existing question. Update its status based on completion.
+            $question_db_data['status'] = $is_question_complete ? 'publish' : 'draft';
             $wpdb->update($q_table, $question_db_data, ['question_id' => $question_id]);
             $submitted_q_ids[] = $question_id;
         } else {
             // This is a new question. It's always saved as a draft first.
             $next_custom_id = get_option('qp_next_custom_question_id', 1000);
             $question_db_data['custom_question_id'] = $next_custom_id;
-            $question_db_data['status'] = 'draft'; // Explicitly set as draft
+            $question_db_data['status'] = 'draft'; // New questions are always drafts
             $wpdb->insert($q_table, $question_db_data);
             $question_id = $wpdb->insert_id;
             update_option('qp_next_custom_question_id', $next_custom_id + 1);
