@@ -434,4 +434,18 @@ jQuery(document).ready(function($) {
             }
         });
     });
+
+    $(window).on('load', function() {
+        $('.qp-editor-labels-container').each(function() {
+            var $labelsContainer = $(this);
+            var editorId = $labelsContainer.data('editor-id');
+            var $editorWrapper = $('#wp-' + editorId + '-wrap');
+            var $toolbar = $editorWrapper.find('.wp-editor-tools');
+
+            if ($toolbar.length > 0) {
+                // Prepend the labels to the toolbar area
+                $toolbar.prepend($labelsContainer);
+            }
+        });
+    });
 });

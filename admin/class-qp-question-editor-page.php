@@ -271,14 +271,14 @@ class QP_Question_Editor_Page
                                         <div class="inside">
                                             <input type="hidden" name="questions[<?php echo $q_index; ?>][question_id]" class="question-id-input" value="<?php echo esc_attr($question->question_id); ?>">
                                             <?php if (!empty($question->labels)) : ?>
-        <div class="qp-labels-container" style="margin-bottom: 10px; display: flex; flex-wrap: wrap; gap: 5px;">
-            <?php foreach ($question->labels as $label) : ?>
-                <span class="qp-label" style="background-color: <?php echo esc_attr($label->label_color); ?>; color: #fff; padding: 2px 6px; font-size: 11px; border-radius: 3px; font-weight: 600;">
-                    <?php echo esc_html($label->label_name); ?>
-                </span>
-            <?php endforeach; ?>
-        </div>
-    <?php endif; ?>
+                                                <div id="qp-labels-container-<?php echo $q_index; ?>" class="qp-editor-labels-container" data-editor-id="question_text_editor_<?php echo $q_index; ?>">
+                                                    <?php foreach ($question->labels as $label) : ?>
+                                                        <span class="qp-label" style="background-color: <?php echo esc_attr($label->label_color); ?>; color: #fff; padding: 2px 6px; font-size: 11px; border-radius: 3px; font-weight: 600;">
+                                                            <?php echo esc_html($label->label_name); ?>
+                                                        </span>
+                                                    <?php endforeach; ?>
+                                                </div>
+                                            <?php endif; ?>
                                             <?php
                                             wp_editor(
                                                 $question->question_text, // The content
@@ -487,6 +487,24 @@ class QP_Question_Editor_Page
             .qp-option-row .option-id-display {
                 color: #777;
                 white-space: nowrap;
+            }
+
+            .wp-editor-tools {
+                display: flex;
+                /* Use flexbox for alignment */
+                align-items: center;
+                flex-wrap: wrap;
+                /* Allow wrapping on small screens */
+            }
+
+            .qp-editor-labels-container {
+                display: flex;
+                gap: 5px;
+                flex-wrap: wrap;
+                margin-right: 15px;
+                /* Add space between labels and the "Visual/Text" tabs */
+                padding-top: 5px;
+                /* Align vertically with the tabs */
             }
         </style>
 <?php
