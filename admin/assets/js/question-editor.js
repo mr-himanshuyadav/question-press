@@ -186,40 +186,55 @@ jQuery(document).ready(function($) {
 
     // --- NEW: SweetAlert Validation on Submit ---
     $('form[method="post"]').on('submit', function(e) {
-        // Only run this validation if the options section is visible on the page.
+        // Step 1: Always prevent the default submission to perform analysis first
+        e.preventDefault();
+        var form = this; // Store the form element for later
+
+        // Do not run validation on the initial "Add New" page
         if ($('.qp-option-row').length === 0) {
-            return; // This is Step 1, so we allow submission without validation.
+            form.submit();
+            return;
         }
 
-        var allQuestionsValid = true;
-        
+        // Step 2: Initialize counters and reset highlights
+        let unchangedPublished = 0;
+        let draftsToPublish = 0;
+        let draftsToRemain = 0;
+
         $('.qp-question-block').each(function() {
             var $block = $(this);
-            var questionIndex = $block.index('.qp-question-block'); // Get the index of the block
-            
-            // Construct the name attribute for the radio buttons in this block
+            var questionIndex = $block.index();
             var radioName = 'questions[' + questionIndex + '][correct_option_id]';
-            
-            // Check if any radio button with that name is checked
-            if ($('input[name="' + radioName + '"]:checked').length === 0) {
-                allQuestionsValid = false;
-                // Add a red border to highlight the invalid question block
-                $block.css('border', '2px solid #d33'); 
-            } else {
-                // Remove the border if it was previously invalid but is now fixed
-                $block.css('border', ''); 
+            var isComplete = $('input[name="' + radioName + '"]:checked').length > 0;
+
+            // Reset any previous error highlighting
+            $block.css('border-color', '');
+
+            // Step 3: Analyze each question and increment counters
+            if ($block.hasClass('status-publish')) {
+                // This question is already published.
+                unchangedPublished++;
+            } else if ($block.hasClass('status-draft') || $block.hasClass('status-new')) {
+                // This question is a draft or is brand new.
+                if (isComplete) {
+                    draftsToPublish++;
+                } else {
+                    draftsToRemain++;
+                    // Highlight incomplete drafts
+                    $block.css('border-color', '#d33'); 
+                }
             }
         });
 
-        // If any question block is invalid, prevent form submission and show an alert.
-        if (!allQuestionsValid) {
-            e.preventDefault(); 
-            Swal.fire({
-                title: 'Incomplete Options',
-                text: 'You must select a correct answer for every question before saving the group.',
-                icon: 'error',
-                confirmButtonText: 'OK'
-            });
-        }
+        // --- FOR VERIFICATION ONLY (will be replaced in the next step) ---
+        console.log('--- ANALYSIS COMPLETE ---');
+        console.log('Unchanged Published Questions:', unchangedPublished);
+        console.log('Drafts to be Published:', draftsToPublish);
+        console.log('Drafts to Remain Drafts:', draftsToRemain);
+        // --- END VERIFICATION ---
+        
+        // In the next step, we will add the SweetAlert logic here.
+        // For now, we will allow the form to submit so we don't break functionality.
+        form.submit();
     });
 });
