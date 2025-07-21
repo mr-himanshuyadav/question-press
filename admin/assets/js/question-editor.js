@@ -79,7 +79,13 @@ jQuery(document).ready(function($) {
     // --- Logic for adding/removing question blocks ---
     $('#add-new-question-block').on('click', function(e) {
         e.preventDefault();
-        var newBlock = $('.qp-question-block:first').clone();
+
+        // --- FIX START: Remember the original correct answer ---
+        var firstBlock = $('.qp-question-block:first');
+        var originalCorrectOptionValue = firstBlock.find('input[name="questions[0][correct_option_id]"]:checked').val();
+        // --- FIX END ---
+
+        var newBlock = firstBlock.clone();
 
         // --- FIX: Clean up the cloned editor before appending ---
         var editorWrapper = newBlock.find('.wp-editor-wrap');
@@ -108,6 +114,11 @@ jQuery(document).ready(function($) {
 
         $('#qp-question-blocks-container').append(newBlock);
         reindexQuestionBlocks();
+
+        // --- FIX START: Restore the original correct answer ---
+        if (originalCorrectOptionValue) {
+            firstBlock.find('input[name="questions[0][correct_option_id]"][value="' + originalCorrectOptionValue + '"]').prop('checked', true);
+        }
     });
 
     $('#qp-question-blocks-container').on('click', '.remove-question-block', function(e) {
