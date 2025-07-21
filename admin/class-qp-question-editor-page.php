@@ -247,6 +247,12 @@ class QP_Question_Editor_Page
                                                     Q<?php echo ($q_index + 1); ?>: Question (ID: <?php echo esc_html($question->custom_question_id); ?>)
                                                     <?php if ($question->question_id > 0) : ?>
                                                         <small style="font-weight: normal; font-size: 12px; color: #777;"> | DB ID: <?php echo esc_html($question->question_id); ?></small>
+                                                    <?php endif; ?>
+                                                    <small style="font-weight: normal; font-size: 12px; color: #777; margin-left: 15px;">
+                                                        <label for="question_number_in_section_<?php echo $q_index; ?>" style="vertical-align: middle;"><strong>Q. No:</strong></label>
+                                                        <input type="text" name="questions[<?php echo $q_index; ?>][question_number_in_section]" id="question_number_in_section_<?php echo $q_index; ?>" value="<?php echo esc_attr($question->question_number_in_section ?? ''); ?>" style="width: 80px; vertical-align: middle; margin-left: 5px; font-weight: normal;">
+                                                    </small>
+                                                    <?php if ($question->question_id > 0) : ?>
                                                         <?php
                                                         $status = $question->status ?? 'draft';
                                                         $status_color = $status === 'publish' ? '#4CAF50' : '#FFC107';
@@ -262,10 +268,6 @@ class QP_Question_Editor_Page
                                         </div>
                                         <div class="inside">
                                             <input type="hidden" name="questions[<?php echo $q_index; ?>][question_id]" class="question-id-input" value="<?php echo esc_attr($question->question_id); ?>">
-                                            <p>
-                                                <label for="question_number_in_section_<?php echo $q_index; ?>"><strong>Question Number in Source</strong></label>
-                                                <input type="text" name="questions[<?php echo $q_index; ?>][question_number_in_section]" id="question_number_in_section_<?php echo $q_index; ?>" value="<?php echo esc_attr($question->question_number_in_section ?? ''); ?>" style="width: 50%;">
-                                            </p>
                                             <?php
                                             wp_editor(
                                                 $question->question_text, // The content
@@ -284,21 +286,21 @@ class QP_Question_Editor_Page
                                                     <p><strong>Options (Select the radio button for the correct answer)</strong></p>
                                                     <?php for ($i = 0; $i < 5; $i++) :
                                                         $option = isset($question->options[$i]) ? $question->options[$i] : null;
-                                                    $option_id_value = $option ? esc_attr($option->option_id) : 'new_' . $i;
-                                                $is_correct = $option ? $option->is_correct : false;
-                                            ?>
-                                                <div class="qp-option-row" style="display: flex; align-items: center; margin-bottom: 5px; gap: 5px;">
-                                                    <input type="radio" name="questions[<?php echo $q_index; ?>][correct_option_id]" value="<?php echo $option_id_value; ?>" <?php checked($is_correct); ?>>
-                                                        <input type="hidden" name="questions[<?php echo $q_index; ?>][option_ids][]" value="<?php echo $option ? esc_attr($option->option_id) : '0'; ?>">
-                                                        <input type="text" name="questions[<?php echo $q_index; ?>][options][]" class="option-text-input" value="<?php echo $option ? esc_attr($option->option_text) : ''; ?>" style="flex-grow: 1;" placeholder="Option <?php echo $i + 1; ?>">
-                                                        <?php if ($option && $option->option_id): ?>
-                                                            <small style="color: #777; white-space: nowrap;">ID: <?php echo esc_html($option->option_id); ?></small>
-                                                        <?php endif; ?>
-                                                    </div>
-                                                <?php endfor; ?>
-                                                <hr>
-                                                <p><strong>Labels for this Question:</strong></p>
-                                                <div class="labels-group">
+                                                        $option_id_value = $option ? esc_attr($option->option_id) : 'new_' . $i;
+                                                        $is_correct = $option ? $option->is_correct : false;
+                                                    ?>
+                                                        <div class="qp-option-row" style="display: flex; align-items: center; margin-bottom: 5px; gap: 5px;">
+                                                            <input type="radio" name="questions[<?php echo $q_index; ?>][correct_option_id]" value="<?php echo $option_id_value; ?>" <?php checked($is_correct); ?>>
+                                                            <input type="hidden" name="questions[<?php echo $q_index; ?>][option_ids][]" value="<?php echo $option ? esc_attr($option->option_id) : '0'; ?>">
+                                                            <input type="text" name="questions[<?php echo $q_index; ?>][options][]" class="option-text-input" value="<?php echo $option ? esc_attr($option->option_text) : ''; ?>" style="flex-grow: 1;" placeholder="Option <?php echo $i + 1; ?>">
+                                                            <?php if ($option && $option->option_id): ?>
+                                                                <small style="color: #777; white-space: nowrap;">ID: <?php echo esc_html($option->option_id); ?></small>
+                                                            <?php endif; ?>
+                                                        </div>
+                                                    <?php endfor; ?>
+                                                    <hr>
+                                                    <p><strong>Labels for this Question:</strong></p>
+                                                    <div class="labels-group">
                                                         <?php foreach ($all_labels as $label) : ?>
                                                             <label class="inline-checkbox"><input value="<?php echo esc_attr($label->label_id); ?>" type="checkbox" name="questions[<?php echo $q_index; ?>][labels][]" class="label-checkbox" <?php checked(in_array($label->label_id, $current_label_ids)); ?>> <?php echo esc_html($label->label_name); ?></label>
                                                         <?php endforeach; ?>
@@ -411,15 +413,21 @@ class QP_Question_Editor_Page
                 /* Makes checkbox bigger */
                 margin-top: 5px;
             }
-             /* Style for the question block borders based on status */
+
+            /* Style for the question block borders based on status */
             .qp-question-block.status-publish {
-                border-left: 4px solid #4CAF50; /* Green for Published */
+                border-left: 4px solid #4CAF50;
+                /* Green for Published */
             }
+
             .qp-question-block.status-draft {
-                border-left: 4px solid #FFC107; /* Yellow for Draft */
+                border-left: 4px solid #FFC107;
+                /* Yellow for Draft */
             }
+
             .qp-question-block.status-new {
-                border-left: 4px solid #2196F3; /* Blue for New/Unsaved */
+                border-left: 4px solid #2196F3;
+                /* Blue for New/Unsaved */
             }
         </style>
 <?php
