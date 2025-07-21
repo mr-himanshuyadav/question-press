@@ -418,6 +418,9 @@ class QP_Question_Editor_Page
             .qp-question-block.status-draft {
                 border-left: 4px solid #FFC107; /* Yellow for Draft */
             }
+            .qp-question-block.status-new {
+                border-left: 4px solid #2196F3; /* Blue for New/Unsaved */
+            }
         </style>
 <?php
     }

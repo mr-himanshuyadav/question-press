@@ -85,7 +85,7 @@ jQuery(document).ready(function($) {
         var originalCorrectOptionValue = firstBlock.find('input[name="questions[0][correct_option_id]"]:checked').val();
         // --- FIX END ---
 
-        var newBlock = firstBlock.clone();
+        var newBlock = firstBlock.clone().removeClass('status-publish status-draft').addClass('status-new');
 
         // --- FIX: Clean up the cloned editor before appending ---
         var editorWrapper = newBlock.find('.wp-editor-wrap');
