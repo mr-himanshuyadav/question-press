@@ -101,7 +101,10 @@ jQuery(document).ready(function($) {
         newBlock.find('input[type="checkbox"], input[type="radio"]').prop('checked', false);
         newBlock.find('input[type="radio"]:first').prop('checked', true);
         newBlock.find('.question-id-input').val('0');
-        newBlock.find('.hndle span').html('<span>Question (ID: New)</span>');
+        newBlock.find('.hndle span').html('<span>Question (ID: New - Save group to add options)</span>');
+
+        // Hide the options and labels for this new, unsaved block
+        newBlock.find('.qp-options-and-labels-wrapper').hide();
 
         $('#qp-question-blocks-container').append(newBlock);
         reindexQuestionBlocks();

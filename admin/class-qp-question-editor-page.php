@@ -278,10 +278,11 @@ class QP_Question_Editor_Page
                                             );
                                             ?>
                                             <?php if ($is_editing) : ?>
-                                                <hr>
-                                                <p><strong>Options (Select the radio button for the correct answer)</strong></p>
-                                                <?php for ($i = 0; $i < 5; $i++) :
-                                                    $option = isset($question->options[$i]) ? $question->options[$i] : null;
+                                                <div class="qp-options-and-labels-wrapper">
+                                                    <hr>
+                                                    <p><strong>Options (Select the radio button for the correct answer)</strong></p>
+                                                    <?php for ($i = 0; $i < 5; $i++) :
+                                                        $option = isset($question->options[$i]) ? $question->options[$i] : null;
                                                     $option_id_value = $option ? esc_attr($option->option_id) : 'new_' . $i;
                                                 $is_correct = $option ? $option->is_correct : false;
                                             ?>
@@ -297,9 +298,10 @@ class QP_Question_Editor_Page
                                                 <hr>
                                                 <p><strong>Labels for this Question:</strong></p>
                                                 <div class="labels-group">
-                                                    <?php foreach ($all_labels as $label) : ?>
-                                                        <label class="inline-checkbox"><input value="<?php echo esc_attr($label->label_id); ?>" type="checkbox" name="questions[<?php echo $q_index; ?>][labels][]" class="label-checkbox" <?php checked(in_array($label->label_id, $current_label_ids)); ?>> <?php echo esc_html($label->label_name); ?></label>
-                                                    <?php endforeach; ?>
+                                                        <?php foreach ($all_labels as $label) : ?>
+                                                            <label class="inline-checkbox"><input value="<?php echo esc_attr($label->label_id); ?>" type="checkbox" name="questions[<?php echo $q_index; ?>][labels][]" class="label-checkbox" <?php checked(in_array($label->label_id, $current_label_ids)); ?>> <?php echo esc_html($label->label_name); ?></label>
+                                                        <?php endforeach; ?>
+                                                    </div>
                                                 </div>
                                             <?php endif; ?>
                                         </div>
