@@ -5,6 +5,61 @@ jQuery(document).ready(function($) {
     var sectionSelect = $('#section_id');
     var isPyqCheckbox = $('#is_pyq_checkbox');
     var pyqFieldsWrapper = $('#pyq_fields_wrapper');
+    let initialFormState = {};
+
+    function getQuestionBlockData($block) {
+        var questionId = $block.find('.question-id-input').val();
+        var editorId = $block.find('textarea.wp-editor-area').attr('id');
+        var questionText = tinymce.get(editorId) ? tinymce.get(editorId).getContent() : '';
+
+        var options = [];
+        $block.find('.qp-option-row').each(function() {
+            var $row = $(this);
+            options.push({
+                id: $row.find('input[name$="[option_ids][]"]').val(),
+                text: $row.find('.option-text-input').val()
+            });
+        });
+
+        var labels = [];
+        $block.find('.label-checkbox:checked').each(function() {
+            labels.push($(this).val());
+        });
+
+        return {
+            id: questionId,
+            text: questionText,
+            options: options,
+            correctOptionId: $block.find('input[name$="[correct_option_id]"]:checked').val() || null,
+            labels: labels
+        };
+    }
+
+    function cacheInitialState() {
+        var questions = [];
+        $('.qp-question-block').each(function() {
+            questions.push(getQuestionBlockData($(this)));
+        });
+
+        var directionEditor = tinymce.get('direction_text_editor');
+
+        initialFormState = {
+            groupId: $('input[name="group_id"]').val(),
+            subjectId: $('#subject_id').val(),
+            topicId: $('#topic_id').val(),
+            sourceId: $('#source_id').val(),
+            sectionId: $('#section_id').val(),
+            isPyq: $('#is_pyq_checkbox').is(':checked'),
+            examId: $('#exam_id').val(),
+            pyqYear: $('input[name="pyq_year"]').val(),
+            directionText: directionEditor ? directionEditor.getContent() : '',
+            directionImageId: $('#direction-image-id').val(),
+            questions: questions
+        };
+    }
+
+    // Call the function to cache the state as soon as the page is ready
+    cacheInitialState();
 
     // --- Function to update Topic dropdown based on Subject ---
     function updateTopics() {
@@ -228,14 +283,10 @@ jQuery(document).ready(function($) {
         e.preventDefault();
         var $button = $(this);
 
-        // This is where our analysis and AJAX call will go.
-        // For now, let's just confirm it's working.
-        alert('Save button clicked! AJAX functionality will be built here.');
+        // Log the initial state to the console for verification
+        console.log('Initial Form State:', initialFormState);
 
-        // Future steps will replace the alert with:
-        // 1. Caching the initial state (on page load).
-        // 2. Analyzing changes between initial and current state.
-        // 3. Showing the confirmation modal with stats.
-        // 4. Sending the data via AJAX if confirmed.
+        // In the next step, we will create a 'currentState' object
+        // and compare it against the 'initialFormState'.
     });
 });
