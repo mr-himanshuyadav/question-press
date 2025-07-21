@@ -63,6 +63,14 @@ class QP_Question_Editor_Page
                 ));
 
                 if (!empty($questions_in_group)) {
+
+                    $has_draft_question = false;
+                    foreach ($questions_in_group as $q) {
+                        if (!isset($q->status) || $q->status === 'draft') {
+                            $has_draft_question = true;
+                            break;
+                        }
+                    }
                     // Get the status from the first question to determine if the group is a draft.
                     $group_status = $questions_in_group[0]->status;
                     // --- Get details from the FIRST question to populate metaboxes that are shared ---
@@ -167,6 +175,11 @@ class QP_Question_Editor_Page
                     <div id="post-body" class="metabox-holder columns-2">
                         <div id="post-body-content">
                             <div class="postbox">
+                                <?php if ($is_editing && $has_draft_question) : ?>
+        <div class="notice notice-warning inline">
+            <p><strong>Draft Status:</strong> This group contains one or more questions that are still drafts (missing a correct answer). Draft questions will not appear on the frontend until they are completed and published.</p>
+        </div>
+    <?php endif; ?>
                                 <h2 class="hndle">
                                     <span>
                                         Direction (Optional Passage)
@@ -203,10 +216,10 @@ class QP_Question_Editor_Page
                             </div>
 
                             <div class="notice notice-info inline" style="margin-top: 1rem;">
-                        <p>
-                            <strong>Tip:</strong> You can use LaTeX for mathematical notations in the Direction, Question, and Option fields. For example, use <code>$ E = mc^2 $</code> for inline and <code>$$ \frac{a}{b} $$</code> for block equations.
-                        </p>
-                    </div>
+                                <p>
+                                    <strong>Tip:</strong> You can use LaTeX for mathematical notations in the Direction, Question, and Option fields. For example, use <code>$ E = mc^2 $</code> for inline and <code>$$ \frac{a}{b} $$</code> for block equations.
+                                </p>
+                            </div>
 
                             <div id="qp-question-blocks-container">
                                 <?php foreach ($questions_in_group as $q_index => $question) :
