@@ -167,39 +167,6 @@ class QP_Question_Editor_Page
                     <div id="post-body" class="metabox-holder columns-2">
                         <div id="post-body-content">
                             <div class="postbox">
-                                <h2 class="hndle"><span>PYQ Details</span></h2>
-                                <div class="inside">
-                                    <div class="qp-horizontal-flex-group">
-
-                                        <div class="qp-flex-item qp-flex-item-shrink">
-                                            <label for="is_pyq_checkbox"><strong>Is a PYQ?</strong></label>
-                                            <input type="checkbox" name="is_pyq" id="is_pyq_checkbox" value="1" <?php checked($is_pyq_group, 1); ?>>
-                                        </div>
-
-                                        <div id="pyq_fields_wrapper" class="qp-flex-item-grow" style="<?php echo $is_pyq_group ? '' : 'display: none;'; ?>">
-                                            <div class="qp-horizontal-flex-group">
-                                                <div class="qp-flex-item qp-flex-item-grow">
-                                                    <label for="exam_id"><strong>Exam</strong></label>
-                                                    <select name="exam_id" id="exam_id" style="width: 100%;">
-                                                        <option value="">— Select an Exam —</option>
-                                                        <?php foreach ($all_exams as $exam) : ?>
-                                                            <option value="<?php echo esc_attr($exam->exam_id); ?>" <?php selected($current_exam_id, $exam->exam_id); ?>>
-                                                                <?php echo esc_html($exam->exam_name); ?>
-                                                            </option>
-                                                        <?php endforeach; ?>
-                                                    </select>
-                                                </div>
-                                                <div class="qp-flex-item">
-                                                    <label for="pyq_year"><strong>Year</strong></label>
-                                                    <input type="number" name="pyq_year" value="<?php echo esc_attr($current_pyq_year); ?>" style="width: 100%;" placeholder="e.g., 2023">
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="postbox">
                                 <h2 class="hndle">
                                     <span>
                                         Direction (Optional Passage)
@@ -333,6 +300,39 @@ class QP_Question_Editor_Page
                                 <div class="inside">
                                     <div id="major-publishing-actions">
                                         <button type="button" name="save_group" class="button button-primary button-large" id="qp-save-group-btn"><?php echo $is_editing ? 'Update Group' : 'Save Draft & Add Options'; ?></button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="postbox">
+                                <h2 class="hndle"><span>PYQ Details</span></h2>
+                                <div class="inside">
+                                    <div class="qp-horizontal-flex-group">
+
+                                        <div class="qp-flex-item qp-flex-item-shrink">
+                                            <label for="is_pyq_checkbox"><strong>Is a PYQ?</strong></label>
+                                            <input type="checkbox" name="is_pyq" id="is_pyq_checkbox" value="1" <?php checked($is_pyq_group, 1); ?>>
+                                        </div>
+
+                                        <div id="pyq_fields_wrapper" class="qp-flex-item-grow" style="<?php echo $is_pyq_group ? '' : 'display: none;'; ?>">
+                                            <div class="qp-horizontal-flex-group">
+                                                <div class="qp-flex-item qp-flex-item-grow">
+                                                    <label for="exam_id"><strong>Exam</strong></label>
+                                                    <select name="exam_id" id="exam_id" style="width: 100%;">
+                                                        <option value="">— Select an Exam —</option>
+                                                        <?php foreach ($all_exams as $exam) : ?>
+                                                            <option value="<?php echo esc_attr($exam->exam_id); ?>" <?php selected($current_exam_id, $exam->exam_id); ?>>
+                                                                <?php echo esc_html($exam->exam_name); ?>
+                                                            </option>
+                                                        <?php endforeach; ?>
+                                                    </select>
+                                                </div>
+                                                <div class="qp-flex-item">
+                                                    <label for="pyq_year"><strong>Year</strong></label>
+                                                    <input type="number" name="pyq_year" value="<?php echo esc_attr($current_pyq_year); ?>" style="width: 100%;" placeholder="e.g., 2023">
+                                                </div>
+                                            </div>
+                                        </div>
+
                                     </div>
                                 </div>
                             </div>
@@ -498,14 +498,12 @@ class QP_Question_Editor_Page
             }
 
             .qp-editor-labels-container {
-                display: flex;
-                gap: 5px;
-                flex-wrap: wrap;
-                margin-right: 15px;
-                /* Add space between labels and the "Visual/Text" tabs */
-                padding-top: 5px;
-                /* Align vertically with the tabs */
-            }
+        display: flex;
+        gap: 5px;
+        flex-wrap: wrap;
+        margin-right: auto; /* This is the key change: pushes other elements to the right */
+        padding-top: 5px; /* Align vertically with the tabs */
+    }
         </style>
 <?php
     }
