@@ -335,12 +335,43 @@ jQuery(document).ready(function($) {
         var currentState = getCurrentState();
         var changes = analyzeChanges(initialFormState, currentState);
 
-        // Log everything to the console for verification
-        console.log('--- Change Analysis ---');
-        console.log('Initial State:', initialFormState);
-        console.log('Current State:', currentState);
-        console.log('Detected Changes:', changes);
-        
-        alert('Change analysis complete. Check the browser console (F12) for details.');
+        if (!changes.hasChanges) {
+            Swal.fire({
+                title: 'No Changes Detected',
+                text: 'You haven\'t made any changes to this question group.',
+                icon: 'info',
+                confirmButtonText: 'OK'
+            });
+            return;
+        }
+
+        // Build the HTML content for the confirmation alert
+        let changesHtml = '<div style="text-align: left; display: inline-block;"><ul>';
+        if (changes.added > 0) changesHtml += `<li><strong>New Questions:</strong> ${changes.added} will be added.</li>`;
+        if (changes.deleted > 0) changesHtml += `<li><strong>Deleted Questions:</strong> ${changes.deleted} will be removed.</li>`;
+        if (changes.updated > 0) changesHtml += `<li><strong>Updated Questions:</strong> ${changes.updated} have been modified.</li>`;
+        if (changes.promotedToPublish > 0) changesHtml += `<li><strong>Status Change:</strong> ${changes.promotedToPublish} question(s) will be published.</li>`;
+        if (changes.remainsDraft > 0) changesHtml += `<li><strong>Draft Status:</strong> ${changes.remainsDraft} question(s) will remain as drafts.</li>`;
+        changesHtml += '</ul></div>';
+
+        Swal.fire({
+            title: 'Confirm Your Changes',
+            html: changesHtml,
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonColor: '#3085d6',
+            cancelButtonColor: '#d33',
+            confirmButtonText: 'Yes, save changes!'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                // In the final step, we will replace this with the AJAX call.
+                Swal.fire(
+                    'Confirmed!',
+                    'In the next step, this is where the data would be sent to the server.',
+                    'success'
+                );
+                console.log("User confirmed save. Ready to submit data:", currentState);
+            }
+        });
     });
 });
