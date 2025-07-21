@@ -76,14 +76,33 @@ jQuery(document).ready(function($) {
     togglePyqFields();
 
 
-    // --- Logic for adding/removing question blocks (Unchanged) ---
+    // --- Logic for adding/removing question blocks ---
     $('#add-new-question-block').on('click', function(e) {
         e.preventDefault();
         var newBlock = $('.qp-question-block:first').clone();
+
+        // --- FIX: Clean up the cloned editor before appending ---
+        var editorWrapper = newBlock.find('.wp-editor-wrap');
+        var textarea = newBlock.find('textarea.wp-editor-area');
+        var oldEditorId = textarea.attr('id');
+
+        // Destroy the cloned tinymce instance
+        if (tinymce.get(oldEditorId)) {
+            tinymce.get(oldEditorId).remove();
+        }
+        
+        // Remove the HTML elements created by TinyMCE
+        editorWrapper.find('.mce-container').remove();
+        editorWrapper.removeClass('tmce-active').addClass('html-active');
+        textarea.show();
+
+        // Reset values
         newBlock.find('textarea, input[type="text"]').val('');
         newBlock.find('input[type="checkbox"], input[type="radio"]').prop('checked', false);
         newBlock.find('input[type="radio"]:first').prop('checked', true);
         newBlock.find('.question-id-input').val('0');
+        newBlock.find('.hndle span').html('<span>Question (ID: New)</span>');
+
         $('#qp-question-blocks-container').append(newBlock);
         reindexQuestionBlocks();
     });
@@ -91,7 +110,14 @@ jQuery(document).ready(function($) {
     $('#qp-question-blocks-container').on('click', '.remove-question-block', function(e) {
         e.preventDefault();
         if ($('.qp-question-block').length > 1) {
-            $(this).closest('.qp-question-block').remove();
+            var blockToRemove = $(this).closest('.qp-question-block');
+            var editorId = blockToRemove.find('textarea.wp-editor-area').attr('id');
+
+            // --- FIX: Properly remove the editor instance before removing the element ---
+            if (tinymce.get(editorId)) {
+                tinymce.get(editorId).remove();
+            }
+            blockToRemove.remove();
             reindexQuestionBlocks();
         } else {
             alert('You must have at least one question.');
@@ -102,15 +128,45 @@ jQuery(document).ready(function($) {
         $('.qp-question-block').each(function(questionIndex, questionElement) {
             var $questionBlock = $(questionElement);
             var baseName = 'questions[' + questionIndex + ']';
-            $questionBlock.find('.question-id-input').attr('name', baseName + '[question_id]');
-            $questionBlock.find('.question-text-area').attr('name', baseName + '[question_text]');
-            $questionBlock.find('input[type="radio"]').attr('name', baseName + '[is_correct_option]');
-            $questionBlock.find('.option-text-input').each(function() {
-                $(this).attr('name', baseName + '[options][]');
+            
+            // --- FIX: Update all names, IDs, and for attributes ---
+            $questionBlock.find('[name^="questions["]').each(function() {
+                var currentName = $(this).attr('name');
+                if (currentName) {
+                    var newName = currentName.replace(/questions\[\d+\]/, baseName);
+                    $(this).attr('name', newName);
+                }
             });
-            $questionBlock.find('.label-checkbox').each(function() {
-                $(this).attr('name', baseName + '[labels][]');
-            });
+
+            // Re-index editor related elements
+            var $editorWrapper = $questionBlock.find('.wp-editor-wrap');
+            var $textarea = $questionBlock.find('textarea.wp-editor-area');
+            var newEditorId = 'question_text_editor_' + questionIndex;
+
+            // Only proceed if the ID needs changing (i.e., it's a new or re-indexed block)
+            if ($textarea.length > 0 && $textarea.attr('id') !== newEditorId) {
+                // Update wrapper and textarea IDs
+                $editorWrapper.attr('id', 'wp-' + newEditorId + '-wrap');
+                $textarea.attr('id', newEditorId);
+
+                // Update quicktags toolbar ID
+                $editorWrapper.find('.quicktags-toolbar').attr('id', 'qt_' + newEditorId + '_toolbar');
+
+                // Update editor switch button IDs and data attributes
+                $editorWrapper.find('.wp-switch-editor').each(function() {
+                    var mode = $(this).hasClass('switch-tmce') ? 'tmce' : 'html';
+                    $(this).attr('id', newEditorId + '-' + mode);
+                    $(this).attr('data-editor', newEditorId);
+                });
+
+                // Re-initialize the editor using the WordPress API
+                if (typeof wp.editor.initialize === 'function') {
+                     wp.editor.initialize(newEditorId, {
+                        tinymce: true,
+                        quicktags: true
+                    });
+                }
+            }
         });
     }
 });
