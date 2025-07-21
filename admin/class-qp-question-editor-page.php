@@ -74,7 +74,7 @@ class QP_Question_Editor_Page
 
                     foreach ($questions_in_group as $q) {
                         $q->options = $wpdb->get_results($wpdb->prepare("SELECT * FROM $o_table WHERE question_id = %d ORDER BY option_id ASC", $q->question_id));
-                        $q->labels = $wpdb->get_results($wpdb->prepare("SELECT l.label_id, l.label_name FROM {$ql_table} ql JOIN {$l_table} l ON ql.label_id = l.label_id WHERE ql.question_id = %d", $q->question_id));
+                        $q->labels = $wpdb->get_results($wpdb->prepare("SELECT l.label_id, l.label_name, l.label_color FROM {$ql_table} ql JOIN {$l_table} l ON ql.label_id = l.label_id WHERE ql.question_id = %d", $q->question_id));
                     }
                 }
             }
@@ -270,6 +270,15 @@ class QP_Question_Editor_Page
                                         </div>
                                         <div class="inside">
                                             <input type="hidden" name="questions[<?php echo $q_index; ?>][question_id]" class="question-id-input" value="<?php echo esc_attr($question->question_id); ?>">
+                                            <?php if (!empty($question->labels)) : ?>
+        <div class="qp-labels-container" style="margin-bottom: 10px; display: flex; flex-wrap: wrap; gap: 5px;">
+            <?php foreach ($question->labels as $label) : ?>
+                <span class="qp-label" style="background-color: <?php echo esc_attr($label->label_color); ?>; color: #fff; padding: 2px 6px; font-size: 11px; border-radius: 3px; font-weight: 600;">
+                    <?php echo esc_html($label->label_name); ?>
+                </span>
+            <?php endforeach; ?>
+        </div>
+    <?php endif; ?>
                                             <?php
                                             wp_editor(
                                                 $question->question_text, // The content
