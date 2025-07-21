@@ -304,38 +304,37 @@ class QP_Question_Editor_Page
                                 </div>
                             </div>
                             <div class="postbox">
-                                <h2 class="hndle"><span>PYQ Details</span></h2>
-                                <div class="inside">
-                                    <div class="qp-horizontal-flex-group">
+    <h2 class="hndle"><span>PYQ Details</span></h2>
+    <div class="inside">
+        <div class="qp-pyq-container">
+            <div class="qp-pyq-toggle-row">
+                <label for="is_pyq_checkbox"><strong>Is a PYQ?</strong></label>
+                <input type="checkbox" name="is_pyq" id="is_pyq_checkbox" value="1" <?php checked($is_pyq_group, 1); ?>>
+            </div>
 
-                                        <div class="qp-flex-item qp-flex-item-shrink">
-                                            <label for="is_pyq_checkbox"><strong>Is a PYQ?</strong></label>
-                                            <input type="checkbox" name="is_pyq" id="is_pyq_checkbox" value="1" <?php checked($is_pyq_group, 1); ?>>
-                                        </div>
+            <div id="pyq_fields_wrapper" style="<?php echo $is_pyq_group ? '' : 'display: none;'; ?>">
+                <div class="qp-pyq-fields-row">
+                    <div class="qp-pyq-field-group">
+                        <label for="exam_id"><strong>Exam</strong></label>
+                        <select name="exam_id" id="exam_id" style="width: 100%;">
+                            <option value="">— Select an Exam —</option>
+                            <?php foreach ($all_exams as $exam) : ?>
+                                <option value="<?php echo esc_attr($exam->exam_id); ?>" <?php selected($current_exam_id, $exam->exam_id); ?>>
+                                    <?php echo esc_html($exam->exam_name); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="qp-pyq-field-group">
+                        <label for="pyq_year"><strong>Year</strong></label>
+                        <input type="number" name="pyq_year" value="<?php echo esc_attr($current_pyq_year); ?>" style="width: 100%;" placeholder="e.g., 2023">
+                    </div>
+                </div>
+            </div>
 
-                                        <div id="pyq_fields_wrapper" class="qp-flex-item-grow" style="<?php echo $is_pyq_group ? '' : 'display: none;'; ?>">
-                                            <div class="qp-horizontal-flex-group">
-                                                <div class="qp-flex-item qp-flex-item-grow">
-                                                    <label for="exam_id"><strong>Exam</strong></label>
-                                                    <select name="exam_id" id="exam_id" style="width: 100%;">
-                                                        <option value="">— Select an Exam —</option>
-                                                        <?php foreach ($all_exams as $exam) : ?>
-                                                            <option value="<?php echo esc_attr($exam->exam_id); ?>" <?php selected($current_exam_id, $exam->exam_id); ?>>
-                                                                <?php echo esc_html($exam->exam_name); ?>
-                                                            </option>
-                                                        <?php endforeach; ?>
-                                                    </select>
-                                                </div>
-                                                <div class="qp-flex-item">
-                                                    <label for="pyq_year"><strong>Year</strong></label>
-                                                    <input type="number" name="pyq_year" value="<?php echo esc_attr($current_pyq_year); ?>" style="width: 100%;" placeholder="e.g., 2023">
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                    </div>
-                                </div>
-                            </div>
+        </div>
+    </div>
+</div>
                             <div class="postbox">
                                 <h2 class="hndle"><span>Organize</span></h2>
                                 <div class="inside">
