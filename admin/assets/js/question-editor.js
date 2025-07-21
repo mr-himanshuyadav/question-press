@@ -475,4 +475,34 @@ jQuery(document).ready(function($) {
             }
         });
     });
+
+    // --- Add New Option Logic ---
+    $('#qp-question-blocks-container').on('click', '.add-new-option-btn', function(e) {
+        e.preventDefault();
+        var $button = $(this);
+        var $questionBlock = $button.closest('.qp-question-block');
+        var $optionsContainer = $questionBlock.find('.qp-options-grid-container');
+        var optionCount = $optionsContainer.find('.qp-option-row').length;
+
+        if (optionCount < 6) {
+            var questionIndex = $questionBlock.index();
+            var newOptionIndex = optionCount;
+
+            // Create the new option row from a string template
+            var newOptionHtml = `
+                <div class="qp-option-row">
+                    <input type="radio" name="questions[${questionIndex}][correct_option_id]" value="new_${newOptionIndex}">
+                    <input type="hidden" name="questions[${questionIndex}][option_ids][]" value="0">
+                    <input type="text" name="questions[${questionIndex}][options][]" class="option-text-input" placeholder="Option ${newOptionIndex + 1}">
+                </div>
+            `;
+
+            $optionsContainer.append(newOptionHtml);
+
+            // Hide the button if we've reached the max limit of 6
+            if (optionCount + 1 >= 6) {
+                $button.hide();
+            }
+        }
+    });
 });

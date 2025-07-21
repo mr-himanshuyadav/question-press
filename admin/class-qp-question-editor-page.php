@@ -185,10 +185,10 @@ class QP_Question_Editor_Page
                         <div id="post-body-content">
                             <div class="postbox">
                                 <?php if ($is_editing && $has_draft_question) : ?>
-        <div class="notice notice-warning inline">
-            <p><strong>Draft Status:</strong> This group contains one or more questions that are still drafts (missing a correct answer). Draft questions will not appear on the frontend until they are completed and published.</p>
-        </div>
-    <?php endif; ?>
+                                    <div class="notice notice-warning inline">
+                                        <p><strong>Draft Status:</strong> This group contains one or more questions that are still drafts (missing a correct answer). Draft questions will not appear on the frontend until they are completed and published.</p>
+                                    </div>
+                                <?php endif; ?>
                                 <h2 class="hndle">
                                     <span>
                                         Direction (Optional Passage)
@@ -291,7 +291,19 @@ class QP_Question_Editor_Page
                                                     <hr>
                                                     <p><strong>Options (Select the radio button for the correct answer)</strong></p>
                                                     <div class="qp-options-grid-container">
-                                                        <?php for ($i = 0; $i < 5; $i++) :
+                                                        <?php
+                                                        // Always show at least 4 options
+                                                        $options_to_show = 4;
+                                                        // If a 5th option exists and has text, make sure we show it
+                                                        if (isset($question->options[4]) && !empty($question->options[4]->option_text)) {
+                                                            $options_to_show = 5;
+                                                        }
+                                                        // If a 6th option exists and has text, make sure we show it
+                                                        if (isset($question->options[5]) && !empty($question->options[5]->option_text)) {
+                                                            $options_to_show = 6;
+                                                        }
+
+                                                        for ($i = 0; $i < $options_to_show; $i++) :
                                                             $option = isset($question->options[$i]) ? $question->options[$i] : null;
                                                             $option_id_value = $option ? esc_attr($option->option_id) : 'new_' . $i;
                                                             $is_correct = $option ? $option->is_correct : false;
@@ -305,6 +317,9 @@ class QP_Question_Editor_Page
                                                                 <?php endif; ?>
                                                             </div>
                                                         <?php endfor; ?>
+                                                    </div>
+                                                    <div class="qp-options-actions">
+                                                        <button type="button" class="button button-secondary add-new-option-btn" <?php if ($options_to_show >= 6) echo 'style="display:none;"'; ?>>+ Add Option</button>
                                                     </div>
                                                     <hr>
                                                     <p><strong>Labels for this Question:</strong></p>
@@ -325,10 +340,10 @@ class QP_Question_Editor_Page
                         <div id="postbox-container-1" class="postbox-container">
                             <div class="postbox">
                                 <h2 class="hndle"><span>Publish</span></h2>
-                                    <div id="major-publishing-actions">
-                                        <button type="button" name="save_group" class="button button-primary button-large" id="qp-save-group-btn"><?php echo $is_editing ? 'Update Group' : 'Save Draft & Add Options'; ?></button>
-                                    </div>
-                                
+                                <div id="major-publishing-actions">
+                                    <button type="button" name="save_group" class="button button-primary button-large" id="qp-save-group-btn"><?php echo $is_editing ? 'Update Group' : 'Save Draft & Add Options'; ?></button>
+                                </div>
+
                             </div>
                             <div class="postbox">
                                 <h2 class="hndle"><span>PYQ Details</span></h2>
@@ -502,7 +517,8 @@ class QP_Question_Editor_Page
                 align-items: center;
                 gap: 5px;
             }
-            #post-body-content .postbox-header{
+
+            #post-body-content .postbox-header {
                 cursor: none;
             }
 
@@ -535,24 +551,31 @@ class QP_Question_Editor_Page
                 padding-top: 5px;
                 /* Align vertically with the tabs */
             }
+
             /* Force the parent container to use a flexbox layout instead of floats */
-    #post-body.columns-2 {
-        display: flex;
-        align-items: flex-start; /* Align columns to the top */
-    }
+            #post-body.columns-2 {
+                display: flex;
+                align-items: flex-start;
+                /* Align columns to the top */
+            }
 
-    /* Set the main content to be flexible */
-    #post-body-content {
-        flex: 1;
-        min-width: 0; /* Prevents overflow issues with flex items */
-    }
+            /* Set the main content to be flexible */
+            #post-body-content {
+                flex: 1;
+                min-width: 0;
+                /* Prevents overflow issues with flex items */
+            }
 
-    /* Apply sticky positioning to the sidebar */
-    #postbox-container-1 {
-        position: -webkit-sticky;
-        position: sticky;
-        top: 48px; /* Offset for admin bar (32px) + some margin (16px) */
-        margin-left: 20px;
+            /* Apply sticky positioning to the sidebar */
+            #postbox-container-1 {
+                position: -webkit-sticky;
+                position: sticky;
+                top: 48px;
+                /* Offset for admin bar (32px) + some margin (16px) */
+                margin-left: 20px;
+            }
+            .qp-options-actions {
+        margin-top: 10px;
     }
         </style>
 <?php
