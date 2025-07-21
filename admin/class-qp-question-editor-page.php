@@ -262,8 +262,10 @@ class QP_Question_Editor_Page
                                                     <?php endif; ?>
                                                 </span>
                                             </h2>
-                                            <div class="handle-actions">
-                                                <button type="button" class="button-link remove-question-block">Remove</button>
+                                            <div class="handle-actions qp-editor-quesiton-remove-btn">
+                                                <button type="button" class="button-link-delete remove-question-block" title="Remove this question">
+                                                    <span class="dashicons dashicons-no-alt"></span> Remove
+                                                </button>
                                             </div>
                                         </div>
                                         <div class="inside">
@@ -428,6 +430,26 @@ class QP_Question_Editor_Page
             .qp-question-block.status-new {
                 border-left: 4px solid #2196F3;
                 /* Blue for New/Unsaved */
+            }
+
+            .postbox-header .qp-editor-quesiton-remove-btn {
+                margin-right: 10px;
+            }
+
+            .qp-question-block .button-link-delete {
+                color: #a0a5aa;
+                text-decoration: none;
+                transition: color 0.1s ease-in-out;
+            }
+
+            .qp-question-block .button-link-delete:hover {
+                color: #d63638;
+                /* Red color on hover */
+            }
+
+            .qp-question-block .button-link-delete .dashicons {
+                font-size: 22px;
+                line-height: 1;
             }
         </style>
 <?php
