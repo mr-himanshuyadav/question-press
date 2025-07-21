@@ -341,11 +341,49 @@ jQuery(document).ready(function($) {
         if (!changes.hasChanges) {
             Swal.fire({
                 title: 'No Changes Detected',
-                text: 'You haven\'t made any changes to this question group.',
-                icon: 'info',
-                confirmButtonText: 'OK'
+                text: "The analysis didn't find any changes. This can sometimes happen if you only edited text. Would you like to save the form anyway?",
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#3085d6',
+                cancelButtonColor: '#aaa',
+                confirmButtonText: 'Yes, Save Anyway',
+                cancelButtonText: 'Cancel'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    // This reuses the same logic from the main confirmation modal's preConfirm block
+                    Swal.fire({
+                        title: 'Saving...',
+                        text: 'Your changes are being saved.',
+                        allowOutsideClick: false,
+                        didOpen: () => {
+                            Swal.showLoading();
+                            if (typeof tinymce !== "undefined") {
+                                tinymce.triggerSave();
+                            }
+                            $.ajax({
+                                url: $form.attr('action') || window.location.href,
+                                type: 'POST',
+                                data: $form.serialize() + '&save_group=1',
+                            })
+                            .done(function() {
+                                Swal.fire({
+                                    title: 'Success!',
+                                    text: 'Your changes have been saved.',
+                                    icon: 'success',
+                                    timer: 2000,
+                                    showConfirmButton: false
+                                }).then(() => {
+                                    location.reload();
+                                });
+                            })
+                            .fail(function(jqXHR, textStatus, errorThrown) {
+                                Swal.fire('Save Failed', `Request failed: ${errorThrown}`, 'error');
+                            });
+                        }
+                    });
+                }
             });
-            return;
+            return; // Stop execution to prevent the main confirmation modal from showing
         }
 
         let changesHtml = '<div style="text-align: left; display: inline-block;"><ul>';
