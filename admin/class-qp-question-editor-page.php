@@ -286,20 +286,22 @@ class QP_Question_Editor_Page
                                                 <div class="qp-options-and-labels-wrapper">
                                                     <hr>
                                                     <p><strong>Options (Select the radio button for the correct answer)</strong></p>
-                                                    <?php for ($i = 0; $i < 5; $i++) :
-                                                        $option = isset($question->options[$i]) ? $question->options[$i] : null;
-                                                        $option_id_value = $option ? esc_attr($option->option_id) : 'new_' . $i;
-                                                        $is_correct = $option ? $option->is_correct : false;
-                                                    ?>
-                                                        <div class="qp-option-row" style="display: flex; align-items: center; margin-bottom: 5px; gap: 5px;">
-                                                            <input type="radio" name="questions[<?php echo $q_index; ?>][correct_option_id]" value="<?php echo $option_id_value; ?>" <?php checked($is_correct); ?>>
-                                                            <input type="hidden" name="questions[<?php echo $q_index; ?>][option_ids][]" value="<?php echo $option ? esc_attr($option->option_id) : '0'; ?>">
-                                                            <input type="text" name="questions[<?php echo $q_index; ?>][options][]" class="option-text-input" value="<?php echo $option ? esc_attr($option->option_text) : ''; ?>" style="flex-grow: 1;" placeholder="Option <?php echo $i + 1; ?>">
-                                                            <?php if ($option && $option->option_id): ?>
-                                                                <small style="color: #777; white-space: nowrap;">ID: <?php echo esc_html($option->option_id); ?></small>
-                                                            <?php endif; ?>
-                                                        </div>
-                                                    <?php endfor; ?>
+                                                    <div class="qp-options-grid-container">
+                                                        <?php for ($i = 0; $i < 5; $i++) :
+                                                            $option = isset($question->options[$i]) ? $question->options[$i] : null;
+                                                            $option_id_value = $option ? esc_attr($option->option_id) : 'new_' . $i;
+                                                            $is_correct = $option ? $option->is_correct : false;
+                                                        ?>
+                                                            <div class="qp-option-row">
+                                                                <input type="radio" name="questions[<?php echo $q_index; ?>][correct_option_id]" value="<?php echo $option_id_value; ?>" <?php checked($is_correct); ?>>
+                                                                <input type="hidden" name="questions[<?php echo $q_index; ?>][option_ids][]" value="<?php echo $option ? esc_attr($option->option_id) : '0'; ?>">
+                                                                <input type="text" name="questions[<?php echo $q_index; ?>][options][]" class="option-text-input" value="<?php echo $option ? esc_attr($option->option_text) : ''; ?>" placeholder="Option <?php echo $i + 1; ?>">
+                                                                <?php if ($option && $option->option_id): ?>
+                                                                    <small class="option-id-display">ID: <?php echo esc_html($option->option_id); ?></small>
+                                                                <?php endif; ?>
+                                                            </div>
+                                                        <?php endfor; ?>
+                                                    </div>
                                                     <hr>
                                                     <p><strong>Labels for this Question:</strong></p>
                                                     <div class="labels-group">
@@ -326,7 +328,7 @@ class QP_Question_Editor_Page
                                 </div>
                             </div>
                             <div class="postbox">
-                                <h2 class="hndle"><span>Categorization</span></h2>
+                                <h2 class="hndle"><span>Organize</span></h2>
                                 <div class="inside">
                                     <p>
                                         <label for="subject_id"><strong>Subject</strong></label>
@@ -450,6 +452,32 @@ class QP_Question_Editor_Page
             .qp-question-block .button-link-delete .dashicons {
                 font-size: 22px;
                 line-height: 1;
+            }
+
+            .qp-options-grid-container {
+                display: grid;
+                grid-template-columns: repeat(2, 1fr);
+                /* Create two equal columns */
+                gap: 10px 15px;
+                /* Add space between rows and columns */
+            }
+
+            .qp-option-row {
+                display: flex;
+                align-items: center;
+                gap: 5px;
+            }
+
+            .qp-option-row .option-text-input {
+                flex-grow: 1;
+                /* Allow text input to fill available space */
+                width: 100%;
+                /* Ensure it takes up the column width */
+            }
+
+            .qp-option-row .option-id-display {
+                color: #777;
+                white-space: nowrap;
             }
         </style>
 <?php
