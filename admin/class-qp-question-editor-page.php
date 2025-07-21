@@ -246,6 +246,12 @@ class QP_Question_Editor_Page
                                                     Q<?php echo ($q_index + 1); ?>: Question (ID: <?php echo esc_html($question->custom_question_id); ?>)
                                                     <?php if ($question->question_id > 0) : ?>
                                                         <small style="font-weight: normal; font-size: 12px; color: #777;"> | DB ID: <?php echo esc_html($question->question_id); ?></small>
+                                                        <?php
+                                                        $status = $question->status ?? 'draft';
+                                                        $status_color = $status === 'publish' ? '#4CAF50' : '#FFC107';
+                                                        $status_text = ucfirst($status);
+                                                        ?>
+                                                        <span style="background-color: <?php echo $status_color; ?>; color: #fff; padding: 2px 6px; font-size: 10px; border-radius: 3px; font-weight: bold; vertical-align: middle; margin-left: 10px;"><?php echo esc_html($status_text); ?></span>
                                                     <?php endif; ?>
                                                 </span>
                                             </h2>
