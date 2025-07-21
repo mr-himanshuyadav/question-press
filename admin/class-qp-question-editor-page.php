@@ -150,6 +150,12 @@ class QP_Question_Editor_Page
                 <?php wp_nonce_field('qp_save_question_group_nonce'); ?>
                 <input type="hidden" name="group_id" value="<?php echo esc_attr($group_id); ?>">
 
+                <?php if (!$is_editing) : ?>
+                    <div class="notice notice-info inline">
+                        <p><b>Step 1 of 2:</b> Enter the direction and question text first. You will be able to add options and labels after saving.</p>
+                    </div>
+                <?php endif; ?>
+
                 <div id="poststuff">
                     <div id="post-body" class="metabox-holder columns-2">
                         <div id="post-body-content">
