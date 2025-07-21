@@ -180,7 +180,7 @@ class QP_Question_Editor_Page
             if ($show_back_button) : ?>
                 <a href="<?php echo esc_url($referer); ?>" class="page-title-action qp-back-button">&larr; Back to Previous Page</a>
             <?php endif; ?>
-            <a href="<?php echo admin_url('admin.php?page=question-press'); ?>" class="page-title-action">Back to All Questions</a>
+            <a href="<?php echo admin_url('admin.php?page=question-press'); ?>" class="page-title-action">All Questions</a>
             <hr class="wp-header-end">
 
             <form method="post" action="">
