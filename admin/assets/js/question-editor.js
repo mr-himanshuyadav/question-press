@@ -7,43 +7,39 @@ jQuery(document).ready(function($) {
     var pyqFieldsWrapper = $('#pyq_fields_wrapper');
     let initialFormState = {};
 
-    function getQuestionBlockData($block) {
-        var questionId = $block.find('.question-id-input').val();
-        var editorId = $block.find('textarea.wp-editor-area').attr('id');
-        var questionText = tinymce.get(editorId) ? tinymce.get(editorId).getContent() : '';
-
-        var options = [];
-        $block.find('.qp-option-row').each(function() {
-            var $row = $(this);
-            options.push({
-                id: $row.find('input[name$="[option_ids][]"]').val(),
-                text: $row.find('.option-text-input').val()
-            });
-        });
-
-        var labels = [];
-        $block.find('.label-checkbox:checked').each(function() {
-            labels.push($(this).val());
-        });
-
-        return {
-            id: questionId,
-            text: questionText,
-            options: options,
-            correctOptionId: $block.find('input[name$="[correct_option_id]"]:checked').val() || null,
-            labels: labels
-        };
-    }
-
-    function cacheInitialState() {
+    function getCurrentState() {
         var questions = [];
         $('.qp-question-block').each(function() {
-            questions.push(getQuestionBlockData($(this)));
+            var $block = $(this);
+            var editorId = $block.find('textarea.wp-editor-area').attr('id');
+            var questionText = (typeof tinymce !== "undefined" && tinymce.get(editorId)) ? tinymce.get(editorId).getContent() : '';
+
+            var options = [];
+            $block.find('.qp-option-row').each(function() {
+                var $row = $(this);
+                options.push({
+                    id: $row.find('input[name$="[option_ids][]"]').val(),
+                    text: $row.find('.option-text-input').val()
+                });
+            });
+
+            var labels = [];
+            $block.find('.label-checkbox:checked').each(function() {
+                labels.push($(this).val());
+            });
+
+            questions.push({
+                id: $block.find('.question-id-input').val(),
+                text: questionText,
+                options: options,
+                correctOptionId: $block.find('input[name$="[correct_option_id]"]:checked').val() || null,
+                labels: labels
+            });
         });
+        
+        var directionEditor = (typeof tinymce !== "undefined") ? tinymce.get('direction_text_editor') : null;
 
-        var directionEditor = tinymce.get('direction_text_editor');
-
-        initialFormState = {
+        return {
             groupId: $('input[name="group_id"]').val(),
             subjectId: $('#subject_id').val(),
             topicId: $('#topic_id').val(),
@@ -58,8 +54,10 @@ jQuery(document).ready(function($) {
         };
     }
 
-    // Call the function to cache the state as soon as the page is ready
-    cacheInitialState();
+    // Use $(window).on('load') to ensure all scripts, including TinyMCE, are fully loaded.
+    $(window).on('load', function() {
+        initialFormState = getCurrentState();
+    });
 
     // --- Function to update Topic dropdown based on Subject ---
     function updateTopics() {
