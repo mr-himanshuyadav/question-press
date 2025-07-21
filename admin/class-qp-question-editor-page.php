@@ -264,30 +264,32 @@ class QP_Question_Editor_Page
                                                 ]
                                             );
                                             ?>
-                                            <hr>
-                                            <p><strong>Options (Select the radio button for the correct answer)</strong></p>
-                                            <?php for ($i = 0; $i < 5; $i++) :
-                                                $option = isset($question->options[$i]) ? $question->options[$i] : null;
-                                                // Use a temporary value for new options that don't have an ID yet.
-                                                $option_id_value = $option ? esc_attr($option->option_id) : 'new_' . $i;
-                                                $is_correct = $option ? $option->is_correct : ($i == 0 && !$is_editing);
-                                            ?>
-                                                <div class="qp-option-row" style="display: flex; align-items: center; margin-bottom: 5px; gap: 5px;">
-                                                    <input type="radio" name="questions[<?php echo $q_index; ?>][correct_option_id]" value="<?php echo $option_id_value; ?>" <?php checked($is_correct); ?>>
-                                                    <input type="hidden" name="questions[<?php echo $q_index; ?>][option_ids][]" value="<?php echo $option ? esc_attr($option->option_id) : '0'; ?>">
-                                                    <input type="text" name="questions[<?php echo $q_index; ?>][options][]" class="option-text-input" value="<?php echo $option ? esc_attr($option->option_text) : ''; ?>" style="flex-grow: 1;" placeholder="Option <?php echo $i + 1; ?>">
-                                                    <?php if ($option && $option->option_id): ?>
-                                                        <small style="color: #777; white-space: nowrap;">ID: <?php echo esc_html($option->option_id); ?></small>
-                                                    <?php endif; ?>
+                                            <?php if ($is_editing) : ?>
+                                                <hr>
+                                                <p><strong>Options (Select the radio button for the correct answer)</strong></p>
+                                                <?php for ($i = 0; $i < 5; $i++) :
+                                                    $option = isset($question->options[$i]) ? $question->options[$i] : null;
+                                                    // Use a temporary value for new options that don't have an ID yet.
+                                                    $option_id_value = $option ? esc_attr($option->option_id) : 'new_' . $i;
+                                                    $is_correct = $option ? $option->is_correct : ($i == 0 && !$is_editing);
+                                                ?>
+                                                    <div class="qp-option-row" style="display: flex; align-items: center; margin-bottom: 5px; gap: 5px;">
+                                                        <input type="radio" name="questions[<?php echo $q_index; ?>][correct_option_id]" value="<?php echo $option_id_value; ?>" <?php checked($is_correct); ?>>
+                                                        <input type="hidden" name="questions[<?php echo $q_index; ?>][option_ids][]" value="<?php echo $option ? esc_attr($option->option_id) : '0'; ?>">
+                                                        <input type="text" name="questions[<?php echo $q_index; ?>][options][]" class="option-text-input" value="<?php echo $option ? esc_attr($option->option_text) : ''; ?>" style="flex-grow: 1;" placeholder="Option <?php echo $i + 1; ?>">
+                                                        <?php if ($option && $option->option_id): ?>
+                                                            <small style="color: #777; white-space: nowrap;">ID: <?php echo esc_html($option->option_id); ?></small>
+                                                        <?php endif; ?>
+                                                    </div>
+                                                <?php endfor; ?>
+                                                <hr>
+                                                <p><strong>Labels for this Question:</strong></p>
+                                                <div class="labels-group">
+                                                    <?php foreach ($all_labels as $label) : ?>
+                                                        <label class="inline-checkbox"><input value="<?php echo esc_attr($label->label_id); ?>" type="checkbox" name="questions[<?php echo $q_index; ?>][labels][]" class="label-checkbox" <?php checked(in_array($label->label_id, $current_label_ids)); ?>> <?php echo esc_html($label->label_name); ?></label>
+                                                    <?php endforeach; ?>
                                                 </div>
-                                            <?php endfor; ?>
-                                            <hr>
-                                            <p><strong>Labels for this Question:</strong></p>
-                                            <div class="labels-group">
-                                                <?php foreach ($all_labels as $label) : ?>
-                                                    <label class="inline-checkbox"><input value="<?php echo esc_attr($label->label_id); ?>" type="checkbox" name="questions[<?php echo $q_index; ?>][labels][]" class="label-checkbox" <?php checked(in_array($label->label_id, $current_label_ids)); ?>> <?php echo esc_html($label->label_name); ?></label>
-                                                <?php endforeach; ?>
-                                            </div>
+                                            <?php endif; ?>
                                         </div>
                                     </div>
                                 <?php endforeach; ?>
