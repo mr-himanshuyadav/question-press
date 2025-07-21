@@ -237,6 +237,9 @@ class QP_Question_Editor_Page
                                 ?>
                                     <div class="postbox qp-question-block <?php echo esc_attr($status_class); ?>">
                                         <div class="postbox-header">
+                                            <button type="button" class="qp-toggle-question-block" title="Toggle visibility">
+                                                <span class="dashicons dashicons-arrow-down-alt2"></span>
+                                            </button>
                                             <h2 class="hndle">
                                                 <span>
                                                     Q<?php echo ($q_index + 1); ?>: Question (ID: <?php echo esc_html($question->custom_question_id); ?>)
@@ -574,8 +577,24 @@ class QP_Question_Editor_Page
                 /* Offset for admin bar (32px) + some margin (16px) */
                 margin-left: 20px;
             }
+
             .qp-options-actions {
-        margin-top: 10px;
+                margin-top: 10px;
+            }
+
+            /* --- Styles for collapsible question block button --- */
+    .qp-toggle-question-block {
+        background: none;
+        border: none;
+        cursor: pointer;
+        padding: 0 8px 0 0;
+        color: #787c82;
+    }
+    .qp-toggle-question-block .dashicons {
+        transition: transform 0.2s ease-in-out;
+    }
+    .qp-toggle-question-block.is-closed .dashicons {
+        transform: rotate(-90deg);
     }
         </style>
 <?php

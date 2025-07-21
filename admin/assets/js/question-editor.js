@@ -505,4 +505,13 @@ jQuery(document).ready(function($) {
             }
         }
     });
+    // --- Collapsible Question Block Logic ---
+    $('#qp-question-blocks-container').on('click', '.qp-toggle-question-block', function() {
+        var $button = $(this);
+        var $block = $button.closest('.qp-question-block');
+        var $content = $block.find('.inside');
+
+        $content.slideToggle(200);
+        $button.toggleClass('is-closed');
+    });
 });
