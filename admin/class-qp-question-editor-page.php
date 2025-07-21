@@ -29,6 +29,7 @@ class QP_Question_Editor_Page
         $current_subject_id = 0;
         $current_topic_id = 0;
         $questions_in_group = [];
+        $group_status = 'draft';
 
         // --- NEW data holders ---
         $is_pyq_group = false;
@@ -62,6 +63,8 @@ class QP_Question_Editor_Page
                 ));
 
                 if (!empty($questions_in_group)) {
+                    // Get the status from the first question to determine if the group is a draft.
+                    $group_status = $questions_in_group[0]->status;
                     // --- Get details from the FIRST question to populate metaboxes that are shared ---
                     $first_q = $questions_in_group[0];
                     $current_topic_id = $first_q->topic_id ?? 0;
@@ -152,7 +155,11 @@ class QP_Question_Editor_Page
 
                 <?php if (!$is_editing) : ?>
                     <div class="notice notice-info inline">
-                        <p><b>Step 1 of 2:</b> Enter the direction and question text first. You will be able to add options and labels after saving.</p>
+                        <p><b>Step 1 of 2:</b> Enter the question text and categorization details. You will add options and labels in the next step.</p>
+                    </div>
+                <?php elseif ($is_editing && $group_status === 'draft') : ?>
+                    <div class="notice notice-warning inline">
+                        <p><b>Step 2 of 2:</b> This question is a draft. Please add options for each question and select a correct answer to publish it.</p>
                     </div>
                 <?php endif; ?>
 
@@ -301,7 +308,7 @@ class QP_Question_Editor_Page
                                 <h2 class="hndle"><span>Publish</span></h2>
                                 <div class="inside">
                                     <div id="major-publishing-actions">
-                                        <input name="save_group" type="submit" class="button button-primary button-large" id="publish" value="<?php echo $is_editing ? 'Update Group' : 'Save and Add Options'; ?>">
+                                        <input name="save_group" type="submit" class="button button-primary button-large" id="publish" value="<?php echo $is_editing ? 'Update Group' : 'Save Draft & Add Options'; ?>">
                                     </div>
                                 </div>
                             </div>
