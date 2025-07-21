@@ -236,7 +236,7 @@ class QP_Question_Editor_Page
                                         <div class="postbox-header">
                                             <h2 class="hndle">
                                                 <span>
-                                                    Question (ID: <?php echo esc_html($question->custom_question_id); ?>)
+                                                    Q<?php echo ($q_index + 1); ?>: Question (ID: <?php echo esc_html($question->custom_question_id); ?>)
                                                     <?php if ($question->question_id > 0) : ?>
                                                         <small style="font-weight: normal; font-size: 12px; color: #777;"> | DB ID: <?php echo esc_html($question->question_id); ?></small>
                                                     <?php endif; ?>
@@ -269,12 +269,11 @@ class QP_Question_Editor_Page
                                                 <p><strong>Options (Select the radio button for the correct answer)</strong></p>
                                                 <?php for ($i = 0; $i < 5; $i++) :
                                                     $option = isset($question->options[$i]) ? $question->options[$i] : null;
-                                                    // Use a temporary value for new options that don't have an ID yet.
                                                     $option_id_value = $option ? esc_attr($option->option_id) : 'new_' . $i;
-                                                    $is_correct = $option ? $option->is_correct : ($i == 0 && !$is_editing);
-                                                ?>
-                                                    <div class="qp-option-row" style="display: flex; align-items: center; margin-bottom: 5px; gap: 5px;">
-                                                        <input type="radio" name="questions[<?php echo $q_index; ?>][correct_option_id]" value="<?php echo $option_id_value; ?>" <?php checked($is_correct); ?>>
+                                                $is_correct = $option ? $option->is_correct : false;
+                                            ?>
+                                                <div class="qp-option-row" style="display: flex; align-items: center; margin-bottom: 5px; gap: 5px;">
+                                                    <input type="radio" name="questions[<?php echo $q_index; ?>][correct_option_id]" value="<?php echo $option_id_value; ?>" <?php checked($is_correct); ?>>
                                                         <input type="hidden" name="questions[<?php echo $q_index; ?>][option_ids][]" value="<?php echo $option ? esc_attr($option->option_id) : '0'; ?>">
                                                         <input type="text" name="questions[<?php echo $q_index; ?>][options][]" class="option-text-input" value="<?php echo $option ? esc_attr($option->option_text) : ''; ?>" style="flex-grow: 1;" placeholder="Option <?php echo $i + 1; ?>">
                                                         <?php if ($option && $option->option_id): ?>

@@ -465,7 +465,12 @@ function qp_admin_enqueue_scripts($hook_suffix)
         wp_enqueue_script('qp-settings-script', QP_PLUGIN_URL . 'admin/assets/js/settings-page.js', ['jquery'], '1.0.0', true);
     }
     // Enqueue SweetAlert2 for admin pages that use it
-    if ($hook_suffix === 'question-press_page_qp-settings' || $hook_suffix === 'toplevel_page_question-press') {
+    if (
+        $hook_suffix === 'question-press_page_qp-settings' || 
+        $hook_suffix === 'toplevel_page_question-press' ||
+        $hook_suffix === 'question-press_page_qp-question-editor' || 
+        $hook_suffix === 'admin_page_qp-edit-group'
+    ) {
         wp_enqueue_script('sweetalert2', 'https://cdn.jsdelivr.net/npm/sweetalert2@11', [], null, true);
     }
 
@@ -743,7 +748,6 @@ function qp_handle_save_question_group()
 
         $question_id = isset($q_data['question_id']) ? absint($q_data['question_id']) : 0;
 
-        // --- CORRECTED: Get question number from the individual question data array ---
         $question_num = isset($q_data['question_number_in_section']) ? sanitize_text_field($q_data['question_number_in_section']) : '';
 
         $question_db_data = [
@@ -751,7 +755,7 @@ function qp_handle_save_question_group()
             'topic_id' => $topic_id > 0 ? $topic_id : null,
             'source_id' => $source_id > 0 ? $source_id : null,
             'section_id' => $section_id > 0 ? $section_id : null,
-            'question_number_in_section' => $question_num, // Save the individual number
+            'question_number_in_section' => $question_num,
             'question_text' => wp_kses_post($question_text),
             'question_text_hash' => md5(strtolower(trim(preg_replace('/\s+/', '', $question_text)))),
         ];
@@ -769,59 +773,55 @@ function qp_handle_save_question_group()
             $submitted_q_ids[] = $question_id;
         }
 
-        // --- Process Options ---
-        $submitted_option_ids = [];
-        $options_text = isset($q_data['options']) ? (array)$q_data['options'] : [];
-        $option_ids = isset($q_data['option_ids']) ? (array)$q_data['option_ids'] : [];
-        $correct_option_id_from_form = isset($q_data['correct_option_id']) ? $q_data['correct_option_id'] : null;
+        // --- Process Options & Labels ONLY IF EDITING ---
+        if ($is_editing) {
+            $submitted_option_ids = [];
+            $options_text = isset($q_data['options']) ? (array)$q_data['options'] : [];
+            $option_ids = isset($q_data['option_ids']) ? (array)$q_data['option_ids'] : [];
+            $correct_option_id_from_form = isset($q_data['correct_option_id']) ? $q_data['correct_option_id'] : null;
 
-        foreach ($options_text as $index => $option_text) {
-            $option_id = isset($option_ids[$index]) ? absint($option_ids[$index]) : 0;
-            $trimmed_option_text = trim(stripslashes($option_text));
+            foreach ($options_text as $index => $option_text) {
+                $option_id = isset($option_ids[$index]) ? absint($option_ids[$index]) : 0;
+                $trimmed_option_text = trim(stripslashes($option_text));
 
-            if (empty($trimmed_option_text)) {
-                continue; // Skip empty option fields
-            }
+                if (empty($trimmed_option_text)) {
+                    continue;
+                }
 
-            $option_data = ['option_text' => sanitize_text_field($trimmed_option_text)];
+                $option_data = ['option_text' => sanitize_text_field($trimmed_option_text)];
 
-            if ($option_id > 0) {
-                // This is an existing option, so we UPDATE it.
-                $wpdb->update($o_table, $option_data, ['option_id' => $option_id]);
-                $submitted_option_ids[] = $option_id;
-            } else {
-                // This is a new option, so we INSERT it.
-                $option_data['question_id'] = $question_id;
-                $wpdb->insert($o_table, $option_data);
-                $new_option_id = $wpdb->insert_id;
-                $submitted_option_ids[] = $new_option_id;
+                if ($option_id > 0) {
+                    $wpdb->update($o_table, $option_data, ['option_id' => $option_id]);
+                    $submitted_option_ids[] = $option_id;
+                } else {
+                    $option_data['question_id'] = $question_id;
+                    $wpdb->insert($o_table, $option_data);
+                    $new_option_id = $wpdb->insert_id;
+                    $submitted_option_ids[] = $new_option_id;
 
-                // If the correct option was a new one, update its ID
-                if ($correct_option_id_from_form === 'new_' . $index) {
-                    $correct_option_id_from_form = $new_option_id;
+                    if ($correct_option_id_from_form === 'new_' . $index) {
+                        $correct_option_id_from_form = $new_option_id;
+                    }
                 }
             }
-        }
 
-        // Now, delete any options that were removed from the form.
-        $existing_db_option_ids = $wpdb->get_col($wpdb->prepare("SELECT option_id FROM $o_table WHERE question_id = %d", $question_id));
-        $options_to_delete = array_diff($existing_db_option_ids, $submitted_option_ids);
-        if (!empty($options_to_delete)) {
-            $ids_placeholder = implode(',', array_map('absint', $options_to_delete));
-            $wpdb->query("DELETE FROM $o_table WHERE option_id IN ($ids_placeholder)");
-        }
+            $existing_db_option_ids = $wpdb->get_col($wpdb->prepare("SELECT option_id FROM $o_table WHERE question_id = %d", $question_id));
+            $options_to_delete = array_diff($existing_db_option_ids, $submitted_option_ids);
+            if (!empty($options_to_delete)) {
+                $ids_placeholder = implode(',', array_map('absint', $options_to_delete));
+                $wpdb->query("DELETE FROM $o_table WHERE option_id IN ($ids_placeholder)");
+            }
 
-        // Finally, set the `is_correct` flag for all options of this question.
-        $wpdb->update($o_table, ['is_correct' => 0], ['question_id' => $question_id]);
-        if ($correct_option_id_from_form) {
-            $wpdb->update($o_table, ['is_correct' => 1], ['option_id' => absint($correct_option_id_from_form), 'question_id' => $question_id]);
-        }
+            $wpdb->update($o_table, ['is_correct' => 0], ['question_id' => $question_id]);
+            if ($correct_option_id_from_form) {
+                $wpdb->update($o_table, ['is_correct' => 1], ['option_id' => absint($correct_option_id_from_form), 'question_id' => $question_id]);
+            }
 
-        // --- Process Labels ---
-        $wpdb->delete($ql_table, ['question_id' => $question_id]);
-        $labels = isset($q_data['labels']) ? array_map('absint', $q_data['labels']) : [];
-        foreach ($labels as $label_id) {
-            $wpdb->insert($ql_table, ['question_id' => $question_id, 'label_id' => $label_id]);
+            $wpdb->delete($ql_table, ['question_id' => $question_id]);
+            $labels = isset($q_data['labels']) ? array_map('absint', $q_data['labels']) : [];
+            foreach ($labels as $label_id) {
+                $wpdb->insert($ql_table, ['question_id' => $question_id, 'label_id' => $label_id]);
+            }
         }
     }
 
@@ -842,7 +842,9 @@ function qp_handle_save_question_group()
     }
 
     // --- Redirect on success ---
-    $redirect_url = $is_editing ? admin_url('admin.php?page=qp-edit-group&group_id=' . $group_id . '&message=1') : admin_url('admin.php?page=qp-edit-group&group_id=' . $group_id . '&message=2');
+    $redirect_url = $is_editing 
+        ? admin_url('admin.php?page=qp-edit-group&group_id=' . $group_id . '&message=1') 
+        : admin_url('admin.php?page=qp-edit-group&group_id=' . $group_id . '&message=2');
     wp_safe_redirect($redirect_url);
     exit;
 }

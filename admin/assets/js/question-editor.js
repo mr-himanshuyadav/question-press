@@ -169,4 +169,43 @@ jQuery(document).ready(function($) {
             }
         });
     }
+
+    // --- NEW: SweetAlert Validation on Submit ---
+    $('form[method="post"]').on('submit', function(e) {
+        // Only run this validation if the options section is visible on the page.
+        if ($('.qp-option-row').length === 0) {
+            return; // This is Step 1, so we allow submission without validation.
+        }
+
+        var allQuestionsValid = true;
+        
+        $('.qp-question-block').each(function() {
+            var $block = $(this);
+            var questionIndex = $block.index('.qp-question-block'); // Get the index of the block
+            
+            // Construct the name attribute for the radio buttons in this block
+            var radioName = 'questions[' + questionIndex + '][correct_option_id]';
+            
+            // Check if any radio button with that name is checked
+            if ($('input[name="' + radioName + '"]:checked').length === 0) {
+                allQuestionsValid = false;
+                // Add a red border to highlight the invalid question block
+                $block.css('border', '2px solid #d33'); 
+            } else {
+                // Remove the border if it was previously invalid but is now fixed
+                $block.css('border', ''); 
+            }
+        });
+
+        // If any question block is invalid, prevent form submission and show an alert.
+        if (!allQuestionsValid) {
+            e.preventDefault(); 
+            Swal.fire({
+                title: 'Incomplete Options',
+                text: 'You must select a correct answer for every question before saving the group.',
+                icon: 'error',
+                confirmButtonText: 'OK'
+            });
+        }
+    });
 });
