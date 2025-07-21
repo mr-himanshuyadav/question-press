@@ -331,7 +331,10 @@ jQuery(document).ready(function($) {
     // --- NEW: AJAX-powered Save Logic ---
     $('#qp-save-group-btn').on('click', function(e) {
         e.preventDefault();
+        var $button = $(this);
+        var $form = $('form[method="post"]');
 
+        // We still need to get current state to analyze changes
         var currentState = getCurrentState();
         var changes = analyzeChanges(initialFormState, currentState);
 
@@ -345,7 +348,6 @@ jQuery(document).ready(function($) {
             return;
         }
 
-        // Build the HTML content for the confirmation alert
         let changesHtml = '<div style="text-align: left; display: inline-block;"><ul>';
         if (changes.added > 0) changesHtml += `<li><strong>New Questions:</strong> ${changes.added} will be added.</li>`;
         if (changes.deleted > 0) changesHtml += `<li><strong>Deleted Questions:</strong> ${changes.deleted} will be removed.</li>`;
@@ -361,16 +363,36 @@ jQuery(document).ready(function($) {
             showCancelButton: true,
             confirmButtonColor: '#3085d6',
             cancelButtonColor: '#d33',
-            confirmButtonText: 'Yes, save changes!'
+            confirmButtonText: 'Yes, save changes!',
+            showLoaderOnConfirm: true, // <-- Add loader
+            preConfirm: () => {
+                // Trigger an update on all TinyMCE editors before serializing the form
+                if (typeof tinymce !== "undefined") {
+                    tinymce.triggerSave();
+                }
+                return $.ajax({
+                    url: $form.attr('action') || window.location.href,
+                    type: 'POST',
+                    data: $form.serialize() + '&save_group=1', // Add the save_group flag
+                    // We don't need success/error here, preConfirm handles it
+                })
+                .fail(function(jqXHR, textStatus, errorThrown) {
+                    Swal.showValidationMessage(`Request failed: ${errorThrown}`);
+                });
+            },
+            allowOutsideClick: () => !Swal.isLoading()
         }).then((result) => {
             if (result.isConfirmed) {
-                // In the final step, we will replace this with the AJAX call.
-                Swal.fire(
-                    'Confirmed!',
-                    'In the next step, this is where the data would be sent to the server.',
-                    'success'
-                );
-                console.log("User confirmed save. Ready to submit data:", currentState);
+                Swal.fire({
+                    title: 'Success!',
+                    text: 'Your changes have been saved.',
+                    icon: 'success',
+                    timer: 2000,
+                    showConfirmButton: false
+                }).then(() => {
+                    // Reload the page to see the changes
+                    location.reload();
+                });
             }
         });
     });
