@@ -276,15 +276,71 @@ jQuery(document).ready(function($) {
         }
     });
 
+    function analyzeChanges(initialState, currentState) {
+        let stats = {
+            added: 0,
+            deleted: 0,
+            updated: 0,
+            promotedToPublish: 0,
+            remainsDraft: 0,
+            hasChanges: false
+        };
+
+        // Use stringify for a simple, top-level check first.
+        if (JSON.stringify(initialState) !== JSON.stringify(currentState)) {
+            stats.hasChanges = true;
+        }
+
+        const initialQuestionIds = initialState.questions.map(q => q.id);
+        const currentQuestionIds = currentState.questions.map(q => q.id);
+
+        stats.added = currentQuestionIds.filter(id => id.toString().startsWith('0')).length;
+        stats.deleted = initialQuestionIds.filter(id => id !== '0' && !currentQuestionIds.includes(id)).length;
+
+        currentState.questions.forEach(currentQ => {
+            if (currentQ.id === '0') return; // Already counted in 'added'
+
+            const initialQ = initialState.questions.find(q => q.id === currentQ.id);
+            if (!initialQ) return; // Should not happen, but for safety
+
+            // Check for updates
+            if (JSON.stringify(initialQ) !== JSON.stringify(currentQ)) {
+                stats.updated++;
+            }
+
+            // Check for status changes
+            const wasDraft = !initialQ.correctOptionId;
+            const isPublished = !!currentQ.correctOptionId;
+
+            if (wasDraft && isPublished) {
+                stats.promotedToPublish++;
+            }
+        });
+
+        // Count how many will remain as draft
+        stats.remainsDraft = currentState.questions.filter(q => !q.correctOptionId).length;
+        
+        // Final check if any stat is non-zero
+        if (stats.added || stats.deleted || stats.updated) {
+            stats.hasChanges = true;
+        }
+
+        return stats;
+    }
+
     // --- NEW: AJAX-powered Save Logic ---
     $('#qp-save-group-btn').on('click', function(e) {
         e.preventDefault();
-        var $button = $(this);
 
-        // Log the initial state to the console for verification
-        console.log('Initial Form State:', initialFormState);
+        var currentState = getCurrentState();
+        var changes = analyzeChanges(initialFormState, currentState);
 
-        // In the next step, we will create a 'currentState' object
-        // and compare it against the 'initialFormState'.
+        // Log everything to the console for verification
+        console.log('--- Change Analysis ---');
+        console.log('Initial State:', initialFormState);
+        console.log('Current State:', currentState);
+        console.log('Detected Changes:', changes);
+        
+        alert('Change analysis complete. Check the browser console (F12) for details.');
     });
 });
