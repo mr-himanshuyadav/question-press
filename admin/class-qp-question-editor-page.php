@@ -98,7 +98,7 @@ class QP_Question_Editor_Page
         $all_topics = $wpdb->get_results("SELECT topic_id, topic_name, subject_id FROM {$wpdb->prefix}qp_topics ORDER BY topic_name ASC");
         $all_labels = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}qp_labels ORDER BY label_name ASC");
         $all_exams = $wpdb->get_results("SELECT exam_id, exam_name FROM {$wpdb->prefix}qp_exams ORDER BY exam_name ASC");
-        $all_sources = $wpdb->get_results("SELECT source_id, source_name FROM {$wpdb->prefix}qp_sources ORDER BY source_name ASC");
+        $all_sources = $wpdb->get_results("SELECT source_id, source_name, subject_id FROM {$wpdb->prefix}qp_sources ORDER BY source_name ASC");
         $all_sections = $wpdb->get_results("SELECT section_id, section_name, source_id FROM {$wpdb->prefix}qp_source_sections ORDER BY section_name ASC");
 
 
@@ -325,11 +325,10 @@ class QP_Question_Editor_Page
                         <div id="postbox-container-1" class="postbox-container">
                             <div class="postbox">
                                 <h2 class="hndle"><span>Publish</span></h2>
-                                <div class="inside">
                                     <div id="major-publishing-actions">
                                         <button type="button" name="save_group" class="button button-primary button-large" id="qp-save-group-btn"><?php echo $is_editing ? 'Update Group' : 'Save Draft & Add Options'; ?></button>
                                     </div>
-                                </div>
+                                
                             </div>
                             <div class="postbox">
                                 <h2 class="hndle"><span>PYQ Details</span></h2>
