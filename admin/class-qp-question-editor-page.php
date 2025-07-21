@@ -238,8 +238,9 @@ class QP_Question_Editor_Page
                             <div id="qp-question-blocks-container">
                                 <?php foreach ($questions_in_group as $q_index => $question) :
                                     $current_label_ids = wp_list_pluck($question->labels, 'label_id');
+                                    $status_class = 'status-' . ($question->status ?? 'draft');
                                 ?>
-                                    <div class="postbox qp-question-block">
+                                    <div class="postbox qp-question-block <?php echo esc_attr($status_class); ?>">
                                         <div class="postbox-header">
                                             <h2 class="hndle">
                                                 <span>
@@ -409,6 +410,13 @@ class QP_Question_Editor_Page
                 transform: scale(1.5);
                 /* Makes checkbox bigger */
                 margin-top: 5px;
+            }
+             /* Style for the question block borders based on status */
+            .qp-question-block.status-publish {
+                border-left: 4px solid #4CAF50; /* Green for Published */
+            }
+            .qp-question-block.status-draft {
+                border-left: 4px solid #FFC107; /* Yellow for Draft */
             }
         </style>
 <?php
