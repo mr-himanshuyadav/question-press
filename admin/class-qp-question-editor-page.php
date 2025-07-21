@@ -163,6 +163,23 @@ class QP_Question_Editor_Page
                 </div>
             <?php endif; ?>
             <h1 class="wp-heading-inline"><?php echo $is_editing ? 'Edit Question Group' : 'Add New Question Group'; ?></h1>
+            <?php
+            $referer = wp_get_referer();
+            $show_back_button = false;
+            if ($referer) {
+                $referer_query = parse_url($referer, PHP_URL_QUERY);
+                if ($referer_query) {
+                    parse_str($referer_query, $query_vars);
+                    // Show the button if the user came from a WP admin page that is NOT the main question list
+                    if (isset($query_vars['page']) && $query_vars['page'] !== 'question-press') {
+                        $show_back_button = true;
+                    }
+                }
+            }
+
+            if ($show_back_button) : ?>
+                <a href="<?php echo esc_url($referer); ?>" class="page-title-action qp-back-button">&larr; Back to Previous Page</a>
+            <?php endif; ?>
             <a href="<?php echo admin_url('admin.php?page=question-press'); ?>" class="page-title-action">Back to All Questions</a>
             <hr class="wp-header-end">
 
@@ -583,18 +600,32 @@ class QP_Question_Editor_Page
             }
 
             /* --- Styles for collapsible question block button --- */
-    .qp-toggle-question-block {
-        background: none;
-        border: none;
-        cursor: pointer;
-        padding: 0 8px 0 0;
-        color: #787c82;
+            .qp-toggle-question-block {
+                background: none;
+                border: none;
+                cursor: pointer;
+                padding: 0 8px 0 0;
+                color: #787c82;
+            }
+
+            .qp-toggle-question-block .dashicons {
+                transition: transform 0.2s ease-in-out;
+            }
+
+            .qp-toggle-question-block.is-closed .dashicons {
+                transform: rotate(-90deg);
+            }
+            /* --- Style for the contextual back button --- */
+    .page-title-action.qp-back-button {
+        background: #f6f7f7;
+        border-color: #dcdcde;
+        color: #50575e;
     }
-    .qp-toggle-question-block .dashicons {
-        transition: transform 0.2s ease-in-out;
-    }
-    .qp-toggle-question-block.is-closed .dashicons {
-        transform: rotate(-90deg);
+    .page-title-action.qp-back-button:hover,
+    .page-title-action.qp-back-button:focus {
+        background: #eef0f2;
+        border-color: #c6c9cc;
+        color: #2c3338;
     }
         </style>
 <?php
