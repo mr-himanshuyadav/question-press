@@ -222,4 +222,20 @@ jQuery(document).ready(function($) {
             });
         }
     });
+
+    // --- NEW: AJAX-powered Save Logic ---
+    $('#qp-save-group-btn').on('click', function(e) {
+        e.preventDefault();
+        var $button = $(this);
+
+        // This is where our analysis and AJAX call will go.
+        // For now, let's just confirm it's working.
+        alert('Save button clicked! AJAX functionality will be built here.');
+
+        // Future steps will replace the alert with:
+        // 1. Caching the initial state (on page load).
+        // 2. Analyzing changes between initial and current state.
+        // 3. Showing the confirmation modal with stats.
+        // 4. Sending the data via AJAX if confirmed.
+    });
 });
