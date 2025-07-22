@@ -249,9 +249,20 @@ class QP_Question_Editor_Page
 
                             <div id="qp-question-blocks-container">
                                 <?php foreach ($questions_in_group as $q_index => $question) :
-                                    $current_label_ids = wp_list_pluck($question->labels, 'label_id');
-                                    $status_class = 'status-' . ($question->status ?? 'draft');
-                                ?>
+    $current_label_ids = wp_list_pluck($question->labels, 'label_id');
+    
+    // Set the correct initial status class
+    if ($question->question_id > 0) {
+        $status_class = 'status-' . ($question->status ?? 'draft');
+    } else {
+        $status_class = 'status-new';
+    }
+
+    // Prioritize 'reported' status for highlighting
+    if (isset($reports_by_question[$question->question_id])) {
+        $status_class = 'status-reported';
+    }
+?>
                                     <div class="postbox qp-question-block <?php echo esc_attr($status_class); ?>">
                                         <div class="postbox-header">
                                             <button type="button" class="qp-toggle-question-block" title="Toggle visibility">
@@ -268,36 +279,37 @@ class QP_Question_Editor_Page
                                                         <input type="text" name="questions[<?php echo $q_index; ?>][question_number_in_section]" id="question_number_in_section_<?php echo $q_index; ?>" value="<?php echo esc_attr($question->question_number_in_section ?? ''); ?>" style="width: 80px; vertical-align: middle; margin-left: 5px; font-weight: normal;">
                                                     </small>
                                                     <div class="qp-header-label-dropdown-container qp-custom-dropdown">
-            <button type="button" class="button qp-dropdown-toggle">
-                <span>
-                    <?php
-                    $count = count($current_label_ids);
-                    echo $count > 0 ? esc_html($count) . ' Label(s)' : 'Select Labels';
-                    ?>
-                </span>
-                <span class="dashicons dashicons-arrow-down-alt2"></span>
-            </button>
-            <div class="qp-dropdown-panel">
-                <?php foreach ($all_labels as $label) : ?>
-                    <label>
-                        <input type="checkbox" name="questions[<?php echo $q_index; ?>][labels][]" value="<?php echo esc_attr($label->label_id); ?>" <?php checked(in_array($label->label_id, $current_label_ids)); ?>>
-                        <?php echo esc_html($label->label_name); ?>
-                    </label>
-                <?php endforeach; ?>
-            </div>
-        </div>
+                                                        <button type="button" class="button qp-dropdown-toggle">
+                                                            <span>
+                                                                <?php
+                                                                $count = count($current_label_ids);
+                                                                echo $count > 0 ? esc_html($count) . ' Label(s)' : 'Select Labels';
+                                                                ?>
+                                                            </span>
+                                                            <span class="dashicons dashicons-arrow-down-alt2"></span>
+                                                        </button>
+                                                        <div class="qp-dropdown-panel">
+                                                            <?php foreach ($all_labels as $label) : ?>
+                                                                <label>
+                                                                    <input type="checkbox" name="questions[<?php echo $q_index; ?>][labels][]" value="<?php echo esc_attr($label->label_id); ?>" <?php checked(in_array($label->label_id, $current_label_ids)); ?>>
+                                                                    <?php echo esc_html($label->label_name); ?>
+                                                                </label>
+                                                            <?php endforeach; ?>
+                                                        </div>
+                                                    </div>
                                                     <?php if ($question->question_id > 0) : ?>
                                                         <?php if (isset($reports_by_question[$question->question_id])) : ?>
-                <span class="qp-status-indicator qp-reported-indicator" title="This question has open reports. Reason(s): <?php echo esc_attr(implode(', ', $reports_by_question[$question->question_id])); ?>">
-                    <span class="dashicons dashicons-warning"></span> Reported
-                </span>
-            <?php endif; ?>
-                                                        <?php
-                                                        $status = $question->status ?? 'draft';
-                                                        $status_color = $status === 'publish' ? '#4CAF50' : '#FFC107';
-                                                        $status_text = ucfirst($status);
-                                                        ?>
-                                                        <span class="qp-status-indicator" style="background-color: <?php echo $status_color; ?>; color: #fff; border-radius: 3px; font-weight: bold; vertical-align: middle; margin-left: 10px;"><?php echo esc_html($status_text); ?></span>
+                                                            <span class="qp-status-indicator qp-reported-indicator" title="This question has open reports. Reason(s): <?php echo esc_attr(implode(', ', array_unique($reports_by_question[$question->question_id]))); ?>">
+                                                                <span class="dashicons dashicons-warning"></span> Reported
+                                                            </span>
+                                                        <?php else: ?>
+                                                            <?php
+                                                            $status = $question->status ?? 'draft';
+                                                            $status_color = $status === 'publish' ? '#4CAF50' : '#FFC107';
+                                                            $status_text = $status === 'publish' ? 'Published' : 'In Draft';
+                                                            ?>
+                                                            <span class="qp-status-indicator" style="background-color: <?php echo $status_color; ?>;"><?php echo esc_html($status_text); ?></span>
+                                                        <?php endif; ?>
                                                     <?php endif; ?>
                                                 </span>
                                             </h2>
@@ -521,6 +533,12 @@ class QP_Question_Editor_Page
                 /* Blue for New/Unsaved */
             }
 
+            /* --- Style for reported question block highlight --- */
+            .qp-question-block.status-reported {
+                border-left: 4px solid #d63638;
+                /* Red for Reported */
+            }
+
             .postbox-header .qp-editor-quesiton-remove-btn {
                 margin-right: 10px;
             }
@@ -612,13 +630,14 @@ class QP_Question_Editor_Page
                 margin-left: 20px;
             }
 
-            @media (max-width: 1000px){
+            @media (max-width: 1000px) {
+
                 /* Force the parent container to use a flexbox layout instead of floats */
-            #post-body.columns-2 {
-                display: block;
+                #post-body.columns-2 {
+                    display: block;
+                }
             }
-            }
- 
+
             .qp-options-actions {
                 margin-top: 10px;
             }
@@ -669,7 +688,7 @@ class QP_Question_Editor_Page
             .qp-status-indicator {
                 color: #fff;
                 padding: 7px 10px;
-    font-size: .8em;
+                font-size: .8em;
                 border-radius: 3px;
                 font-weight: bold;
                 vertical-align: middle;
@@ -682,55 +701,59 @@ class QP_Question_Editor_Page
             }
 
             /* --- Styles for custom label dropdown --- */
-    .qp-custom-dropdown .qp-dropdown-toggle {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-    }
-    .qp-custom-dropdown .qp-dropdown-toggle .dashicons {
-        font-size: 16px;
-        line-height: 1;
-        margin-top: 6px;
-    }
+            .qp-custom-dropdown .qp-dropdown-toggle {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+            }
 
-    .qp-dropdown-panel {
-        display: none;
-        position: absolute;
-        z-index: 10;
-        background-color: #fff;
-        border: 1px solid #c3c4c7;
-        box-shadow: 0 1px 1px rgba(0,0,0,.04);
-        border-radius: 4px;
-        padding: 8px;
-        min-width: 200px;
-        max-height: 250px;
-        overflow-y: auto;
-    }
-    .qp-dropdown-panel label {
-        display: block;
-        padding: 5px;
-        white-space: nowrap;
-        cursor: pointer;
-        border-radius: 3px;
-    }
-    .qp-dropdown-panel label:hover {
-        background-color: #f0f0f1;
-    }
+            .qp-custom-dropdown .qp-dropdown-toggle .dashicons {
+                font-size: 16px;
+                line-height: 1;
+                margin-top: 6px;
+            }
 
-    /* --- Style for reported question indicator --- */
-    .qp-reported-indicator {
-        background-color: #d63638;
-        display: inline-flex;
-        align-items: center;
-        gap: 3px;
-            
-    }
-    .qp-reported-indicator .dashicons {
-        font-size: 14px;
-        line-height: 1;
-        height: auto;
-        width: auto;
-    }
+            .qp-dropdown-panel {
+                display: none;
+                position: absolute;
+                z-index: 10;
+                background-color: #fff;
+                border: 1px solid #c3c4c7;
+                box-shadow: 0 1px 1px rgba(0, 0, 0, .04);
+                border-radius: 4px;
+                padding: 8px;
+                min-width: 200px;
+                max-height: 250px;
+                overflow-y: auto;
+            }
+
+            .qp-dropdown-panel label {
+                display: block;
+                padding: 5px;
+                white-space: nowrap;
+                cursor: pointer;
+                border-radius: 3px;
+            }
+
+            .qp-dropdown-panel label:hover {
+                background-color: #f0f0f1;
+            }
+
+            /* --- Style for reported question indicator --- */
+            .qp-reported-indicator {
+                background-color: #d63638;
+                display: inline-flex;
+                align-items: center;
+                gap: 3px;
+
+            }
+
+            .qp-reported-indicator .dashicons {
+                font-size: 14px;
+                line-height: 1;
+                height: auto;
+                width: auto;
+            }
         </style>
 <?php
     }
