@@ -1231,21 +1231,30 @@ function qp_restore_backup_ajax() {
     }
     
     // --- CLEANUP ---
-    // A basic recursive delete function
-    function qp_delete_dir($dirPath) {
-        if (!is_dir($dirPath)) { return; }
-        if (substr($dirPath, strlen($dirPath) - 1, 1) != '/') { $dirPath .= '/'; }
-        $files = glob($dirPath . '*', GLOB_MARK);
-        foreach ($files as $file) {
-            is_dir($file) ? qp_delete_dir($file) : unlink($file);
-        }
-        rmdir($dirPath);
-    }
     qp_delete_dir($temp_extract_dir);
 
     wp_send_json_success(['message' => 'Data has been successfully restored.']);
 }
 add_action('wp_ajax_qp_restore_backup', 'qp_restore_backup_ajax');
+
+/**
+ * Helper function to recursively delete a directory.
+ *
+ * @param string $dirPath The path to the directory to delete.
+ */
+function qp_delete_dir($dirPath) {
+    if (!is_dir($dirPath)) {
+        return;
+    }
+    if (substr($dirPath, strlen($dirPath) - 1, 1) != '/') {
+        $dirPath .= '/';
+    }
+    $files = glob($dirPath . '*', GLOB_MARK);
+    foreach ($files as $file) {
+        is_dir($file) ? qp_delete_dir($file) : unlink($file);
+    }
+    rmdir($dirPath);
+}
 
 
 
