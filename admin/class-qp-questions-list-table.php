@@ -145,32 +145,28 @@ class QP_Questions_List_Table extends WP_List_Table
         $q_table = $wpdb->prefix . 'qp_questions';
         $reports_table = $wpdb->prefix . 'qp_question_reports';
 
-        $current_status = isset($_REQUEST['status']) ? sanitize_key($_REQUEST['status']) : 'all';
+        $current_status = isset($_REQUEST['status']) ? sanitize_key($_REQUEST['status']) : 'publish'; // Default to 'publish'
         $base_url = admin_url('admin.php?page=question-press');
 
-        // --- THE FIX ---
-        // Correctly count unique questions with "open" reports.
         $review_count = $wpdb->get_var($wpdb->prepare(
             "SELECT COUNT(DISTINCT question_id) FROM {$reports_table} WHERE status = %s",
             'open'
         ));
-
-        // Correctly link to the new Reports tab.
         $review_url = admin_url('admin.php?page=qp-logs-reports&tab=reports');
-        // --- END OF FIX ---
 
         $publish_count = $wpdb->get_var("SELECT COUNT(*) FROM $q_table WHERE status = 'publish'");
+        $draft_count = $wpdb->get_var("SELECT COUNT(*) FROM $q_table WHERE status = 'draft'");
         $trash_count = $wpdb->get_var("SELECT COUNT(*) FROM $q_table WHERE status = 'trash'");
 
         $views = [
-            'all' => sprintf('<a href="%s" class="%s">Published <span class="count">(%d)</span></a>', esc_url($base_url), $current_status === 'all' || $current_status === 'publish' ? 'current' : '', $publish_count),
+            'publish' => sprintf('<a href="%s" class="%s">Published <span class="count">(%d)</span></a>', esc_url($base_url), in_array($current_status, ['all', 'publish']) ? 'current' : '', $publish_count),
+            'draft' => sprintf('<a href="%s" class="%s">Drafts <span class="count">(%d)</span></a>', esc_url(add_query_arg('status', 'draft', $base_url)), $current_status === 'draft' ? 'current' : '', $draft_count),
             'needs_review' => sprintf('<a href="%s">Needs Review <span class="count" style="color: #c00;">(%d)</span></a>', esc_url($review_url), $review_count),
             'trash' => sprintf('<a href="%s" class="%s">Trash <span class="count">(%d)</span></a>', esc_url(add_query_arg('status', 'trash', $base_url)), $current_status === 'trash' ? 'current' : '', $trash_count)
         ];
 
-        return $views;
+        return array_filter($views); // Use array_filter to remove views with a count of 0 if needed in the future
     }
-
 
     protected function extra_tablenav($which)
     {
@@ -322,12 +318,11 @@ class QP_Questions_List_Table extends WP_List_Table
         $current_status = isset($_REQUEST['status']) ? sanitize_key($_REQUEST['status']) : 'publish';
         if ($current_status === 'trash') {
             $where_conditions[] = "q.status = 'trash'";
+        } elseif ($current_status === 'draft') {
+            $where_conditions[] = "q.status = 'draft'";
         } else {
+            // Default to 'publish' view, which also covers 'all'
             $where_conditions[] = "q.status = 'publish'";
-        }
-
-        if (!empty($_REQUEST['filter_by_subject'])) {
-            $where_conditions[] = $wpdb->prepare("g.subject_id = %d", absint($_REQUEST['filter_by_subject']));
         }
 
         // Handle the new Topic filter
