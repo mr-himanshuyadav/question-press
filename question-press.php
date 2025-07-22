@@ -469,6 +469,17 @@ add_filter('set-screen-option', 'qp_save_screen_options', 10, 3);
 
 function qp_admin_enqueue_scripts($hook_suffix)
 {
+    // --- NEW: Enqueue script for Tools page ---
+    if ($hook_suffix === 'question-press_page_qp-tools') {
+        // First, ensure SweetAlert2 is loaded
+        wp_enqueue_script('sweetalert2', 'https://cdn.jsdelivr.net/npm/sweetalert2@11', [], null, true);
+        // Now, enqueue our script which depends on it
+        wp_enqueue_script('qp-backup-restore-script', QP_PLUGIN_URL . 'admin/assets/js/backup-restore.js', ['jquery', 'sweetalert2'], '1.0.0', true);
+        wp_localize_script('qp-backup-restore-script', 'qp_backup_restore_data', [
+            'nonce' => wp_create_nonce('qp_backup_restore_nonce')
+        ]);
+    }
+
     if (strpos($hook_suffix, 'qp-') !== false || strpos($hook_suffix, 'question-press') !== false) {
         wp_enqueue_style('wp-color-picker');
         wp_enqueue_script('wp-color-picker');
@@ -571,7 +582,7 @@ function qp_handle_form_submissions()
 }
 add_action('admin_init', 'qp_handle_form_submissions');
 
-// *** ADD THIS ENTIRE NEW FUNCTION ***
+
 function qp_handle_topic_forms()
 {
     global $wpdb;
@@ -709,7 +720,6 @@ function qp_all_questions_page_cb()
 <?php
 }
 
-// ADD THIS NEW HELPER FUNCTION anywhere in question-press.php
 function get_question_custom_id($question_id)
 {
     global $wpdb;
@@ -972,6 +982,81 @@ function qp_get_sources_for_list_table_filter_ajax()
     wp_send_json_success(['sources' => array_values($sources)]); // Return as a simple array
 }
 add_action('wp_ajax_get_sources_for_list_table_filter', 'qp_get_sources_for_list_table_filter_ajax');
+
+/**
+ * AJAX handler to create a new backup.
+ */
+function qp_create_backup_ajax()
+{
+    check_ajax_referer('qp_backup_restore_nonce', 'nonce');
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error(['message' => 'Permission denied.']);
+    }
+
+    global $wpdb;
+    $upload_dir = wp_upload_dir();
+    $backup_dir = trailingslashit($upload_dir['basedir']) . 'qp-backups';
+    if (!file_exists($backup_dir)) {
+        wp_mkdir_p($backup_dir);
+    }
+
+    // List of all custom tables to back up
+    $tables_to_backup = [
+        'qp_subjects', 'qp_topics', 'qp_labels', 'qp_exams', 'qp_exam_subjects',
+        'qp_sources', 'qp_source_sections', 'qp_question_groups', 'qp_questions',
+        'qp_options', 'qp_question_labels', 'qp_report_reasons'
+    ];
+    $full_table_names = array_map(function ($table) use ($wpdb) {
+        return $wpdb->prefix . $table;
+    }, $tables_to_backup);
+
+    $backup_data = [];
+    foreach ($full_table_names as $table) {
+        $table_name_without_prefix = str_replace($wpdb->prefix, '', $table);
+        $backup_data[$table_name_without_prefix] = $wpdb->get_results("SELECT * FROM {$table}", ARRAY_A);
+    }
+    
+    // Add plugin options to the backup
+    $backup_data['qp_options'] = [
+        'qp_settings' => get_option('qp_settings'),
+        'qp_next_custom_question_id' => get_option('qp_next_custom_question_id'),
+    ];
+
+    $json_data = json_encode($backup_data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    $json_filename = 'database.json';
+    file_put_contents(trailingslashit($backup_dir) . $json_filename, $json_data);
+
+    // Get all image IDs used in question groups
+    $image_ids = $wpdb->get_col("SELECT DISTINCT direction_image_id FROM {$wpdb->prefix}qp_question_groups WHERE direction_image_id IS NOT NULL AND direction_image_id > 0");
+
+    $backup_filename = 'qp-backup-' . date('Y-m-d_H-i-s') . '.zip';
+    $zip_path = trailingslashit($backup_dir) . $backup_filename;
+
+    $zip = new ZipArchive();
+    if ($zip->open($zip_path, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== TRUE) {
+        wp_send_json_error(['message' => 'Cannot create ZIP archive.']);
+    }
+
+    $zip->addFile(trailingslashit($backup_dir) . $json_filename, $json_filename);
+
+    if (!empty($image_ids)) {
+        $zip->addEmptyDir('images');
+        foreach ($image_ids as $image_id) {
+            $image_path = get_attached_file($image_id);
+            if ($image_path && file_exists($image_path)) {
+                $zip->addFile($image_path, 'images/' . basename($image_path));
+            }
+        }
+    }
+
+    $zip->close();
+    unlink(trailingslashit($backup_dir) . $json_filename); // Clean up the temporary JSON file
+
+    // In the next step, we'll create a function to generate the table HTML.
+    // For now, we just send success.
+    wp_send_json_success();
+}
+add_action('wp_ajax_qp_create_backup', 'qp_create_backup_ajax');
 
 // Public-facing hooks and AJAX handlers
 function qp_public_init()
