@@ -200,12 +200,12 @@ class QP_Question_Editor_Page
                 <div id="poststuff">
                     <div id="post-body" class="metabox-holder columns-2">
                         <div id="post-body-content">
-                            <div class="postbox">
-                                <?php if ($is_editing && $has_draft_question) : ?>
-                                    <div class="notice notice-warning inline">
+                            <?php if ($is_editing && $has_draft_question) : ?>
+                                    <div class="notice notice-warning inline" style="margin: 0; margin-bottom: 5px;">
                                         <p><strong>Draft Status:</strong> This group contains one or more questions that are still drafts (missing a correct answer). Draft questions will not appear on the frontend until they are completed and published.</p>
                                     </div>
                                 <?php endif; ?>
+                            <div class="postbox">
                                 <h2 class="hndle">
                                     <span>
                                         Direction (Optional Passage)
@@ -754,6 +754,9 @@ class QP_Question_Editor_Page
                 height: auto;
                 width: auto;
             }
+            .qp-question-block .hndle, .postbox .hndle {
+        cursor: default;
+    }
         </style>
 <?php
     }
