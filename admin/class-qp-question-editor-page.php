@@ -267,6 +267,25 @@ class QP_Question_Editor_Page
                                                         <label for="question_number_in_section_<?php echo $q_index; ?>" style="vertical-align: middle;"><strong>Q. No:</strong></label>
                                                         <input type="text" name="questions[<?php echo $q_index; ?>][question_number_in_section]" id="question_number_in_section_<?php echo $q_index; ?>" value="<?php echo esc_attr($question->question_number_in_section ?? ''); ?>" style="width: 80px; vertical-align: middle; margin-left: 5px; font-weight: normal;">
                                                     </small>
+                                                    <div class="qp-header-label-dropdown-container qp-custom-dropdown">
+            <button type="button" class="button qp-dropdown-toggle">
+                <span>
+                    <?php
+                    $count = count($current_label_ids);
+                    echo $count > 0 ? esc_html($count) . ' Label(s)' : 'Select Labels';
+                    ?>
+                </span>
+                <span class="dashicons dashicons-arrow-down-alt2"></span>
+            </button>
+            <div class="qp-dropdown-panel">
+                <?php foreach ($all_labels as $label) : ?>
+                    <label>
+                        <input type="checkbox" name="questions[<?php echo $q_index; ?>][labels][]" value="<?php echo esc_attr($label->label_id); ?>" <?php checked(in_array($label->label_id, $current_label_ids)); ?>>
+                        <?php echo esc_html($label->label_name); ?>
+                    </label>
+                <?php endforeach; ?>
+            </div>
+        </div>
                                                     <?php if ($question->question_id > 0) : ?>
                                                         <?php
                                                         $status = $question->status ?? 'draft';
@@ -340,13 +359,6 @@ class QP_Question_Editor_Page
                                                     </div>
                                                     <div class="qp-options-actions">
                                                         <button type="button" class="button button-secondary add-new-option-btn" <?php if ($options_to_show >= 6) echo 'style="display:none;"'; ?>>+ Add Option</button>
-                                                    </div>
-                                                    <hr>
-                                                    <p><strong>Labels for this Question:</strong></p>
-                                                    <div class="labels-group">
-                                                        <?php foreach ($all_labels as $label) : ?>
-                                                            <label class="inline-checkbox"><input value="<?php echo esc_attr($label->label_id); ?>" type="checkbox" name="questions[<?php echo $q_index; ?>][labels][]" class="label-checkbox" <?php checked(in_array($label->label_id, $current_label_ids)); ?>> <?php echo esc_html($label->label_name); ?></label>
-                                                        <?php endforeach; ?>
                                                     </div>
                                                 </div>
                                             <?php endif; ?>
@@ -595,6 +607,13 @@ class QP_Question_Editor_Page
                 margin-left: 20px;
             }
 
+            @media (max-width: 1000px){
+                /* Force the parent container to use a flexbox layout instead of floats */
+            #post-body.columns-2 {
+                display: block;
+            }
+            }
+ 
             .qp-options-actions {
                 margin-top: 10px;
             }
@@ -615,17 +634,82 @@ class QP_Question_Editor_Page
             .qp-toggle-question-block.is-closed .dashicons {
                 transform: rotate(-90deg);
             }
+
             /* --- Style for the contextual back button --- */
-    .page-title-action.qp-back-button {
-        background: #f6f7f7;
-        border-color: #dcdcde;
-        color: #50575e;
+            .page-title-action.qp-back-button {
+                background: #f6f7f7;
+                border-color: #dcdcde;
+                color: #50575e;
+            }
+
+            .page-title-action.qp-back-button:hover,
+            .page-title-action.qp-back-button:focus {
+                background: #eef0f2;
+                border-color: #c6c9cc;
+                color: #2c3338;
+            }
+
+            .qp-header-label-dropdown-container {
+                position: relative;
+                margin-left: 15px;
+                vertical-align: middle;
+                display: inline-block;
+            }
+
+            .qp-header-label-select {
+                /* You can use a library like Select2 or Choices.js for a better UI,
+           but for a minimal approach, we can style a custom dropdown trigger. */
+            }
+
+            .qp-status-indicator {
+                color: #fff;
+                padding: 2px 6px;
+                font-size: 10px;
+                border-radius: 3px;
+                font-weight: bold;
+                vertical-align: middle;
+                margin-left: 10px;
+            }
+
+            .hndle>span {
+                display: flex;
+                align-items: center;
+            }
+
+            /* --- Styles for custom label dropdown --- */
+    .qp-custom-dropdown .qp-dropdown-toggle {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
     }
-    .page-title-action.qp-back-button:hover,
-    .page-title-action.qp-back-button:focus {
-        background: #eef0f2;
-        border-color: #c6c9cc;
-        color: #2c3338;
+    .qp-custom-dropdown .qp-dropdown-toggle .dashicons {
+        font-size: 16px;
+        line-height: 1;
+        margin-top: 6px;
+    }
+
+    .qp-dropdown-panel {
+        display: none;
+        position: absolute;
+        z-index: 10;
+        background-color: #fff;
+        border: 1px solid #c3c4c7;
+        box-shadow: 0 1px 1px rgba(0,0,0,.04);
+        border-radius: 4px;
+        padding: 8px;
+        min-width: 200px;
+        max-height: 250px;
+        overflow-y: auto;
+    }
+    .qp-dropdown-panel label {
+        display: block;
+        padding: 5px;
+        white-space: nowrap;
+        cursor: pointer;
+        border-radius: 3px;
+    }
+    .qp-dropdown-panel label:hover {
+        background-color: #f0f0f1;
     }
         </style>
 <?php

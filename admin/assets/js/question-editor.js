@@ -514,4 +514,38 @@ jQuery(document).ready(function($) {
         $content.slideToggle(200);
         $button.toggleClass('is-closed');
     });
+
+    // --- Custom Dropdown Logic for Labels ---
+    var $container = $('#qp-question-blocks-container');
+
+    // Toggle dropdown panel
+    $container.on('click', '.qp-dropdown-toggle', function(e) {
+        e.stopPropagation();
+        // Close other dropdowns first
+        $('.qp-dropdown-panel').not($(this).next()).hide();
+        $(this).next('.qp-dropdown-panel').toggle();
+    });
+
+    // Stop propagation inside the panel
+    $container.on('click', '.qp-dropdown-panel', function(e) {
+        e.stopPropagation();
+    });
+
+    // Update button text on change
+    $container.on('change', '.qp-dropdown-panel input[type="checkbox"]', function() {
+        var $panel = $(this).closest('.qp-dropdown-panel');
+        var $buttonSpan = $panel.prev('.qp-dropdown-toggle').find('span');
+        var count = $panel.find('input:checked').length;
+
+        if (count > 0) {
+            $buttonSpan.text(count + ' Label(s)');
+        } else {
+            $buttonSpan.text('Select Labels');
+        }
+    });
+
+    // Close dropdowns when clicking outside
+    $(document).on('click', function() {
+        $('.qp-dropdown-panel').hide();
+    });
 });
