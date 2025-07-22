@@ -364,7 +364,7 @@ function qp_admin_menu()
     // --- NEW: Unified Tools Page ---
     add_submenu_page('question-press', 'Tools', 'Tools', 'manage_options', 'qp-tools', 'qp_render_tools_page');
 
-    add_submenu_page('question-press', 'Logs / Reports', 'Logs / Reports', 'manage_options', 'qp-logs-reports', ['QP_Logs_Reports_Page', 'render']);
+    add_submenu_page('question-press', 'Reports', 'Reports', 'manage_options', 'qp-logs-reports', ['QP_Logs_Reports_Page', 'render']);
     add_submenu_page('question-press', 'Settings', 'Settings', 'manage_options', 'qp-settings', ['QP_Settings_Page', 'render']);
 
     // Hidden pages (for editing links and backwards compatibility)
