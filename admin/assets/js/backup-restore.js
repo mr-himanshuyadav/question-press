@@ -47,4 +47,57 @@ jQuery(document).ready(function($) {
             }
         });
     });
+
+
+    wrapper.on('click', '.qp-delete-backup-btn', function(e) {
+        e.preventDefault();
+        var $button = $(this);
+        var $row = $button.closest('tr');
+        var filename = $row.data('filename');
+
+        Swal.fire({
+            title: 'Delete this backup?',
+            html: `You are about to permanently delete the file:<br><strong>${filename}</strong><br>This action cannot be undone.`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            confirmButtonText: 'Yes, delete it!'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                $.ajax({
+                    url: ajaxurl,
+                    type: 'POST',
+                    data: {
+                        action: 'qp_delete_backup',
+                        nonce: qp_backup_restore_data.nonce,
+                        filename: filename
+                    },
+                    beforeSend: function() {
+                        // Visually indicate loading on the specific row
+                        $row.css('opacity', '0.5');
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            // The AJAX call returns the full new table body, so we just replace it
+                            $('#qp-local-backups-list').html(response.data.backups_html);
+                            Swal.fire({
+                                title: 'Deleted!',
+                                text: response.data.message,
+                                icon: 'success',
+                                timer: 1500,
+                                showConfirmButton: false
+                            });
+                        } else {
+                            Swal.fire('Error!', response.data.message, 'error');
+                            $row.css('opacity', '1');
+                        }
+                    },
+                    error: function() {
+                        Swal.fire('Error!', 'A server error occurred.', 'error');
+                        $row.css('opacity', '1');
+                    }
+                });
+            }
+        });
+    });
 });

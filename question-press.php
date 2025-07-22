@@ -1099,6 +1099,40 @@ function qp_get_local_backups_html() {
     return ob_get_clean();
 }
 
+/**
+ * AJAX handler to delete a local backup file.
+ */
+function qp_delete_backup_ajax()
+{
+    check_ajax_referer('qp_backup_restore_nonce', 'nonce');
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error(['message' => 'Permission denied.']);
+    }
+
+    $filename = isset($_POST['filename']) ? sanitize_file_name($_POST['filename']) : '';
+
+    if (empty($filename) || strpos($filename, 'qp-backup-') !== 0 || pathinfo($filename, PATHINFO_EXTENSION) !== 'zip') {
+        wp_send_json_error(['message' => 'Invalid or malicious filename provided.']);
+    }
+
+    $upload_dir = wp_upload_dir();
+    $backup_dir = trailingslashit($upload_dir['basedir']) . 'qp-backups';
+    $file_path = trailingslashit($backup_dir) . $filename;
+
+    if (file_exists($file_path)) {
+        if (unlink($file_path)) {
+            // Deletion successful, send back the updated list
+            $backups_html = qp_get_local_backups_html();
+            wp_send_json_success(['backups_html' => $backups_html, 'message' => 'Backup deleted successfully.']);
+        } else {
+            wp_send_json_error(['message' => 'Could not delete the file. Please check file permissions.']);
+        }
+    } else {
+        wp_send_json_error(['message' => 'File not found. It may have already been deleted.']);
+    }
+}
+add_action('wp_ajax_qp_delete_backup', 'qp_delete_backup_ajax');
+
 
 
 
