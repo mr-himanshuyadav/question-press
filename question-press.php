@@ -348,7 +348,6 @@ function qp_deactivate_plugin() {}
 register_deactivation_hook(QP_PLUGIN_FILE, 'qp_deactivate_plugin');
 
 
-// In question-press.php, replace the existing qp_admin_menu function
 function qp_admin_menu()
 {
     // Add top-level menu page for "All Questions" and store the hook
@@ -360,12 +359,11 @@ function qp_admin_menu()
     // Primary Submenu Pages
     add_submenu_page('question-press', 'All Questions', 'All Questions', 'manage_options', 'question-press', 'qp_all_questions_page_cb');
     add_submenu_page('question-press', 'Add New', 'Add New', 'manage_options', 'qp-question-editor', ['QP_Question_Editor_Page', 'render']);
-
-    // --- NEW: Unified Organization Page ---
     add_submenu_page('question-press', 'Organize', 'Organize', 'manage_options', 'qp-organization', 'qp_render_organization_page');
 
-    add_submenu_page('question-press', 'Import', 'Import', 'manage_options', 'qp-import', ['QP_Import_Page', 'render']);
-    add_submenu_page('question-press', 'Export', 'Export', 'manage_options', 'qp-export', ['QP_Export_Page', 'render']);
+    // --- NEW: Unified Tools Page ---
+    add_submenu_page('question-press', 'Tools', 'Tools', 'manage_options', 'qp-tools', 'qp_render_tools_page');
+
     add_submenu_page('question-press', 'Logs / Reports', 'Logs / Reports', 'manage_options', 'qp-logs-reports', ['QP_Logs_Reports_Page', 'render']);
     add_submenu_page('question-press', 'Settings', 'Settings', 'manage_options', 'qp-settings', ['QP_Settings_Page', 'render']);
 
@@ -405,6 +403,52 @@ function qp_render_organization_page()
             // Call the render method for the active tab
             call_user_func($tabs[$active_tab]['callback']);
             ?>
+        </div>
+    </div>
+<?php
+}
+
+function qp_render_tools_page()
+{
+    $tabs = [
+        'import' => ['label' => 'Import', 'callback' => ['QP_Import_Page', 'render']],
+        'export'   => ['label' => 'Export', 'callback' => ['QP_Export_Page', 'render']],
+        'backup_restore'   => ['label' => 'Backup & Restore', 'callback' => 'qp_render_backup_restore_tab_content'],
+    ];
+    $active_tab = isset($_GET['tab']) && array_key_exists($_GET['tab'], $tabs) ? $_GET['tab'] : 'import';
+?>
+    <div class="wrap">
+        <h1 class="wp-heading-inline">Tools</h1>
+        <p>Import, export, and manage your Question Press data.</p>
+        <hr class="wp-header-end">
+
+        <nav class="nav-tab-wrapper wp-clearfix" aria-label="Secondary menu">
+            <?php
+            foreach ($tabs as $tab_id => $tab_data) {
+                $class = ($tab_id === $active_tab) ? ' nav-tab-active' : '';
+                echo '<a href="?page=qp-tools&tab=' . esc_attr($tab_id) . '" class="nav-tab' . esc_attr($class) . '">' . esc_html($tab_data['label']) . '</a>';
+            }
+            ?>
+        </nav>
+
+        <div class="tab-content" style="margin-top: 1.5rem;">
+            <?php
+            // Call the render method for the active tab
+            call_user_func($tabs[$active_tab]['callback']);
+            ?>
+        </div>
+    </div>
+<?php
+}
+
+function qp_render_backup_restore_tab_content()
+{
+?>
+    <div class="postbox">
+        <div class="inside">
+            <h2>Backup & Restore</h2>
+            <p>This feature is currently under development.</p>
+            <p>It will allow you to create a full backup of your Question Press data (questions, subjects, labels, etc.) and restore it on this or another site.</p>
         </div>
     </div>
 <?php
