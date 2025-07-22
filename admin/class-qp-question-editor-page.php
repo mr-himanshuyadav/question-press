@@ -287,12 +287,17 @@ class QP_Question_Editor_Page
             </div>
         </div>
                                                     <?php if ($question->question_id > 0) : ?>
+                                                        <?php if (isset($reports_by_question[$question->question_id])) : ?>
+                <span class="qp-status-indicator qp-reported-indicator" title="This question has open reports. Reason(s): <?php echo esc_attr(implode(', ', $reports_by_question[$question->question_id])); ?>">
+                    <span class="dashicons dashicons-warning"></span> Reported
+                </span>
+            <?php endif; ?>
                                                         <?php
                                                         $status = $question->status ?? 'draft';
                                                         $status_color = $status === 'publish' ? '#4CAF50' : '#FFC107';
                                                         $status_text = ucfirst($status);
                                                         ?>
-                                                        <span style="background-color: <?php echo $status_color; ?>; color: #fff; padding: 2px 6px; font-size: 10px; border-radius: 3px; font-weight: bold; vertical-align: middle; margin-left: 10px;"><?php echo esc_html($status_text); ?></span>
+                                                        <span class="qp-status-indicator" style="background-color: <?php echo $status_color; ?>; color: #fff; border-radius: 3px; font-weight: bold; vertical-align: middle; margin-left: 10px;"><?php echo esc_html($status_text); ?></span>
                                                     <?php endif; ?>
                                                 </span>
                                             </h2>
@@ -663,8 +668,8 @@ class QP_Question_Editor_Page
 
             .qp-status-indicator {
                 color: #fff;
-                padding: 2px 6px;
-                font-size: 10px;
+                padding: 7px 10px;
+    font-size: .8em;
                 border-radius: 3px;
                 font-weight: bold;
                 vertical-align: middle;
@@ -710,6 +715,21 @@ class QP_Question_Editor_Page
     }
     .qp-dropdown-panel label:hover {
         background-color: #f0f0f1;
+    }
+
+    /* --- Style for reported question indicator --- */
+    .qp-reported-indicator {
+        background-color: #d63638;
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+            
+    }
+    .qp-reported-indicator .dashicons {
+        font-size: 14px;
+        line-height: 1;
+        height: auto;
+        width: auto;
     }
         </style>
 <?php
