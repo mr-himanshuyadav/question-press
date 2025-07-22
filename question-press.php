@@ -21,7 +21,7 @@ define('QP_PLUGIN_URL', plugin_dir_url(QP_PLUGIN_FILE));
 require_once QP_PLUGIN_DIR . 'admin/class-qp-subjects-page.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-labels-page.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-topics-page.php';
-require_once QP_PLUGIN_DIR . 'admin/class-qp-exams-page.php'; // <-- ADD THIS
+require_once QP_PLUGIN_DIR . 'admin/class-qp-exams-page.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-sources-page.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-import-page.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-importer.php';
@@ -30,6 +30,7 @@ require_once QP_PLUGIN_DIR . 'admin/class-qp-questions-list-table.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-question-editor-page.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-settings-page.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-logs-reports-page.php';
+require_once QP_PLUGIN_DIR . 'admin/class-qp-backup-restore-page.php';
 require_once QP_PLUGIN_DIR . 'public/class-qp-shortcodes.php';
 require_once QP_PLUGIN_DIR . 'public/class-qp-dashboard.php';
 require_once QP_PLUGIN_DIR . 'api/class-qp-rest-api.php';
@@ -413,7 +414,7 @@ function qp_render_tools_page()
     $tabs = [
         'import' => ['label' => 'Import', 'callback' => ['QP_Import_Page', 'render']],
         'export'   => ['label' => 'Export', 'callback' => ['QP_Export_Page', 'render']],
-        'backup_restore'   => ['label' => 'Backup & Restore', 'callback' => 'qp_render_backup_restore_tab_content'],
+        'backup_restore'   => ['label' => 'Backup & Restore', 'callback' => ['QP_Backup_Restore_Page', 'render']],
     ];
     $active_tab = isset($_GET['tab']) && array_key_exists($_GET['tab'], $tabs) ? $_GET['tab'] : 'import';
 ?>
@@ -441,20 +442,6 @@ function qp_render_tools_page()
 <?php
 }
 
-function qp_render_backup_restore_tab_content()
-{
-?>
-    <div class="postbox">
-        <div class="inside">
-            <h2>Backup & Restore</h2>
-            <p>This feature is currently under development.</p>
-            <p>It will allow you to create a full backup of your Question Press data (questions, subjects, labels, etc.) and restore it on this or another site.</p>
-        </div>
-    </div>
-<?php
-}
-
-// CORRECTED: Function to add screen options
 function qp_add_screen_options()
 {
     $option = 'per_page';
