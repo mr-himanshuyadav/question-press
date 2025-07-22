@@ -1052,11 +1052,55 @@ function qp_create_backup_ajax()
     $zip->close();
     unlink(trailingslashit($backup_dir) . $json_filename); // Clean up the temporary JSON file
 
-    // In the next step, we'll create a function to generate the table HTML.
-    // For now, we just send success.
-    wp_send_json_success();
+    // Generate the fresh HTML for the table
+    $backups_html = qp_get_local_backups_html();
+
+    wp_send_json_success(['backups_html' => $backups_html]);
 }
 add_action('wp_ajax_qp_create_backup', 'qp_create_backup_ajax');
+
+/**
+ * Scans the backup directory and returns the HTML for the local backups table body.
+ *
+ * @return string The HTML for the table rows.
+ */
+function qp_get_local_backups_html() {
+    $upload_dir = wp_upload_dir();
+    $backup_dir = trailingslashit($upload_dir['basedir']) . 'qp-backups';
+    $backup_url_base = trailingslashit($upload_dir['baseurl']) . 'qp-backups';
+    $backups = file_exists($backup_dir) ? array_diff(scandir($backup_dir), ['..', '.']) : [];
+
+    ob_start();
+
+    if (empty($backups)) {
+        echo '<tr class="no-items"><td class="colspanchange" colspan="4">No local backups found.</td></tr>';
+    } else {
+        foreach ($backups as $backup_file) {
+            $file_path = trailingslashit($backup_dir) . $backup_file;
+            $file_url = trailingslashit($backup_url_base) . $backup_file;
+            if (is_dir($file_path)) continue;
+
+            $file_size = size_format(filesize($file_path));
+            $file_date = date('M j, Y, g:i a', filemtime($file_path));
+            ?>
+            <tr data-filename="<?php echo esc_attr($backup_file); ?>">
+                <td><?php echo esc_html($file_date); ?></td>
+                <td><?php echo esc_html($backup_file); ?></td>
+                <td><?php echo esc_html($file_size); ?></td>
+                <td>
+                    <a href="<?php echo esc_url($file_url); ?>" class="button button-secondary" download>Download</a>
+                    <button type="button" class="button button-primary qp-restore-btn">Restore</button>
+                    <button type="button" class="button button-link-delete qp-delete-backup-btn">Delete</button>
+                </td>
+            </tr>
+            <?php
+        }
+    }
+    return ob_get_clean();
+}
+
+
+
 
 // Public-facing hooks and AJAX handlers
 function qp_public_init()

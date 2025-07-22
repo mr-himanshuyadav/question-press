@@ -52,15 +52,9 @@ class QP_Backup_Restore_Page
                                 <th>Actions</th>
                             </tr>
                         </thead>
-                        <tbody>
-                            <?php if (empty($local_backups)) : ?>
-                                <tr class="no-items">
-                                    <td class="colspanchange" colspan="4">No local backups found.</td>
-                                </tr>
-                            <?php else : ?>
-                                <?php // Loop will go here in a future step ?>
-                            <?php endif; ?>
-                        </tbody>
+                        <tbody id="qp-local-backups-list">
+        <?php echo qp_get_local_backups_html(); ?>
+    </tbody>
                     </table>
                 </div>
             </div>

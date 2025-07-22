@@ -31,10 +31,12 @@ jQuery(document).ready(function($) {
                     Swal.fire({
                         title: 'Backup Created!',
                         text: 'Your new backup has been created and saved locally.',
-                        icon: 'success'
+                        icon: 'success',
+                        timer: 1500,
+                        showConfirmButton: false
                     });
-                    // In the next step, we will use the response to update the table
-                    // console.log(result.value.data.backups_html);
+                    // Refresh the table with the new list
+                    $('#qp-local-backups-list').html(result.value.data.backups_html);
                 } else {
                     Swal.fire({
                         title: 'Error!',
