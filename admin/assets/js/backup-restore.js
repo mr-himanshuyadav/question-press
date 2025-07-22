@@ -100,4 +100,51 @@ jQuery(document).ready(function($) {
             }
         });
     });
+
+    wrapper.on('click', '.qp-restore-btn', function(e) {
+        e.preventDefault();
+        var $button = $(this);
+        var $row = $button.closest('tr');
+        var filename = $row.data('filename');
+
+        Swal.fire({
+            title: 'ARE YOU SURE?',
+            html: `This will <strong>permanently delete</strong> all current Question Press data and replace it with the data from:<br><strong>${filename}</strong>.<br><br>This action cannot be undone. It is highly recommended to create a new backup before restoring.`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#3085d6',
+            confirmButtonText: 'Yes, Overwrite and Restore!',
+            showLoaderOnConfirm: true,
+            preConfirm: () => {
+                return $.ajax({
+                    url: ajaxurl,
+                    type: 'POST',
+                    data: {
+                        action: 'qp_restore_backup',
+                        nonce: qp_backup_restore_data.nonce,
+                        filename: filename
+                    }
+                }).fail(function(jqXHR, textStatus, errorThrown) {
+                    Swal.showValidationMessage(`Request failed: ${errorThrown}`);
+                });
+            },
+            allowOutsideClick: () => !Swal.isLoading()
+        }).then((result) => {
+            if (result.isConfirmed) {
+                if (result.value.success) {
+                    Swal.fire({
+                        title: 'Restore Complete!',
+                        text: result.value.data.message,
+                        icon: 'success'
+                    }).then(() => {
+                        // Reload the page to see changes reflected everywhere
+                        location.reload();
+                    });
+                } else {
+                    Swal.fire('Error!', result.value.data.message, 'error');
+                }
+            }
+        });
+    });
 });

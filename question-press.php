@@ -1133,6 +1133,120 @@ function qp_delete_backup_ajax()
 }
 add_action('wp_ajax_qp_delete_backup', 'qp_delete_backup_ajax');
 
+/**
+ * AJAX handler to restore a backup from a local file.
+ */
+function qp_restore_backup_ajax() {
+    check_ajax_referer('qp_backup_restore_nonce', 'nonce');
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error(['message' => 'Permission denied.']);
+    }
+
+    $filename = isset($_POST['filename']) ? sanitize_file_name($_POST['filename']) : '';
+    if (empty($filename)) {
+        wp_send_json_error(['message' => 'Invalid filename.']);
+    }
+
+    global $wpdb;
+    $upload_dir = wp_upload_dir();
+    $backup_dir = trailingslashit($upload_dir['basedir']) . 'qp-backups';
+    $file_path = trailingslashit($backup_dir) . $filename;
+    $temp_extract_dir = trailingslashit($backup_dir) . 'temp_restore_' . time();
+
+    if (!file_exists($file_path)) {
+        wp_send_json_error(['message' => 'Backup file not found on server.']);
+    }
+
+    // Unzip the backup file
+    wp_mkdir_p($temp_extract_dir);
+    $zip = new ZipArchive;
+    if ($zip->open($file_path) !== TRUE) {
+        wp_send_json_error(['message' => 'Failed to open the backup file.']);
+    }
+    $zip->extractTo($temp_extract_dir);
+    $zip->close();
+
+    $json_file_path = trailingslashit($temp_extract_dir) . 'database.json';
+    if (!file_exists($json_file_path)) {
+        wp_send_json_error(['message' => 'database.json not found in the backup file.']);
+    }
+
+    $backup_data = json_decode(file_get_contents($json_file_path), true);
+    if (json_last_error() !== JSON_ERROR_NONE) {
+        wp_send_json_error(['message' => 'Invalid JSON in backup file.']);
+    }
+
+    // --- DESTRUCTIVE ACTION: CLEAR EXISTING DATA ---
+    $tables_to_clear = [
+        'qp_subjects', 'qp_topics', 'qp_labels', 'qp_exams', 'qp_exam_subjects',
+        'qp_sources', 'qp_source_sections', 'qp_question_groups', 'qp_questions',
+        'qp_options', 'qp_question_labels', 'qp_report_reasons'
+    ];
+    foreach ($tables_to_clear as $table) {
+        $wpdb->query("TRUNCATE TABLE {$wpdb->prefix}{$table}");
+    }
+
+    // --- RESTORE DATA ---
+    // Restore tables in a specific order to maintain relationships
+    $restore_order = [
+        'qp_subjects', 'qp_topics', 'qp_labels', 'qp_exams', 'qp_exam_subjects',
+        'qp_sources', 'qp_source_sections', 'qp_question_groups', 'qp_questions',
+        'qp_options', 'qp_question_labels', 'qp_report_reasons'
+    ];
+
+    foreach ($restore_order as $table_name) {
+        if (isset($backup_data[$table_name])) {
+            foreach ($backup_data[$table_name] as $row) {
+                $wpdb->insert($wpdb->prefix . $table_name, $row);
+            }
+        }
+    }
+    
+    // Restore options
+    if (isset($backup_data['qp_options'])) {
+        update_option('qp_settings', $backup_data['qp_options']['qp_settings']);
+        update_option('qp_next_custom_question_id', $backup_data['qp_options']['qp_next_custom_question_id']);
+    }
+
+    // --- RESTORE IMAGES ---
+    $images_dir = trailingslashit($temp_extract_dir) . 'images';
+    if (file_exists($images_dir)) {
+        require_once(ABSPATH . 'wp-admin/includes/image.php');
+        require_once(ABSPATH . 'wp-admin/includes/file.php');
+        require_once(ABSPATH . 'wp-admin/includes/media.php');
+
+        $image_files = array_diff(scandir($images_dir), ['..', '.']);
+        foreach($image_files as $image_filename) {
+            $existing_attachment_id = $wpdb->get_var($wpdb->prepare("SELECT post_id FROM $wpdb->postmeta WHERE meta_key = '_wp_attached_file' AND meta_value LIKE %s", '%' . $wpdb->esc_like($image_filename)));
+            
+            // Only upload if it doesn't already exist
+            if (!$existing_attachment_id) {
+                $file_array = [
+                    'name' => $image_filename,
+                    'tmp_name' => trailingslashit($images_dir) . $image_filename
+                ];
+                media_handle_sideload($file_array, 0); // We don't need the new ID for this process
+            }
+        }
+    }
+    
+    // --- CLEANUP ---
+    // A basic recursive delete function
+    function qp_delete_dir($dirPath) {
+        if (!is_dir($dirPath)) { return; }
+        if (substr($dirPath, strlen($dirPath) - 1, 1) != '/') { $dirPath .= '/'; }
+        $files = glob($dirPath . '*', GLOB_MARK);
+        foreach ($files as $file) {
+            is_dir($file) ? qp_delete_dir($file) : unlink($file);
+        }
+        rmdir($dirPath);
+    }
+    qp_delete_dir($temp_extract_dir);
+
+    wp_send_json_success(['message' => 'Data has been successfully restored.']);
+}
+add_action('wp_ajax_qp_restore_backup', 'qp_restore_backup_ajax');
+
 
 
 
