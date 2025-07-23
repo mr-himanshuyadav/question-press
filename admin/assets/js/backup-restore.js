@@ -38,7 +38,6 @@ jQuery(document).ready(function($) {
                         text: 'Your new backup has been created and saved locally.',
                         icon: 'success',
                         timer: 1500,
-                        showConfirmButton: false
                     });
                     // Refresh the table with the new list
                     $('#qp-local-backups-list').html(result.value.data.backups_html);
@@ -152,7 +151,7 @@ jQuery(document).ready(function($) {
 
                     Swal.fire({
                         title: 'Restore Complete!',
-                        html: 'Your data has been successfully restored.' + statsHtml,
+                        html: 'Your data has been successfully restored.<br>' + statsHtml,
                         icon: 'success'
                     }).then(() => {
                         // Reload the page to see changes reflected everywhere

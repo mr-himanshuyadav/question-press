@@ -996,7 +996,7 @@ function qp_create_backup_ajax()
         wp_send_json_error(['message' => 'Permission denied.']);
     }
 
-    $result = qp_perform_backup();
+    $result = qp_perform_backup('manual');
 
     if ($result['success']) {
         $backups_html = qp_get_local_backups_html();
@@ -1010,9 +1010,10 @@ add_action('wp_ajax_qp_create_backup', 'qp_create_backup_ajax');
 /**
  * Performs the core backup creation process and saves the file locally.
  *
+ * @param string $type The type of backup ('manual' or 'auto').
  * @return array An array containing 'success' status and a 'message' or 'filename'.
  */
-function qp_perform_backup() {
+function qp_perform_backup($type = 'manual') {
     global $wpdb;
     $upload_dir = wp_upload_dir();
     $backup_dir = trailingslashit($upload_dir['basedir']) . 'qp-backups';
@@ -1048,8 +1049,14 @@ function qp_perform_backup() {
     file_put_contents($temp_json_path, $json_data);
 
     $image_ids = $wpdb->get_col("SELECT DISTINCT direction_image_id FROM {$wpdb->prefix}qp_question_groups WHERE direction_image_id IS NOT NULL AND direction_image_id > 0");
-
-    $backup_filename = 'qp-backup-' . date('Y-m-d_H-i-s') . '.zip';
+    
+    // --- NEW: Filename logic ---
+    $prefix = ($type === 'auto') ? 'qp-auto-backup-' : 'qp-backup-';
+    $timestamp = current_time('mysql'); // Get time in WordPress's configured timezone
+    $datetime = new DateTime($timestamp);
+    $timezone_abbr = 'IST'; // Manually setting to IST as requested
+    $backup_filename = $prefix . $datetime->format('Y-m-d_H-i-s') . '_' . $timezone_abbr . '.zip';
+    
     $zip_path = trailingslashit($backup_dir) . $backup_filename;
 
     $zip = new ZipArchive();
@@ -1076,17 +1083,26 @@ function qp_perform_backup() {
     $schedule = get_option('qp_auto_backup_schedule', false);
     if ($schedule && isset($schedule['keep'])) {
         $backups_to_keep = absint($schedule['keep']);
+        $prune_manual = !empty($schedule['prune_manual']);
+        
         $all_backups = file_exists($backup_dir) ? array_diff(scandir($backup_dir), ['..', '.']) : [];
         
-        // Filter out any non-backup files, just in case
-        $all_backups = array_filter($all_backups, function($file) {
-            return strpos($file, 'qp-backup-') === 0;
-        });
+        $files_to_prune = [];
+        if ($prune_manual) {
+            // Consider all backup files for pruning
+            $files_to_prune = array_filter($all_backups, function($file) {
+                return strpos($file, 'qp-backup-') === 0 || strpos($file, 'qp-auto-backup-') === 0;
+            });
+        } else {
+            // Consider only auto-backups for pruning
+            $files_to_prune = array_filter($all_backups, function($file) {
+                return strpos($file, 'qp-auto-backup-') === 0;
+            });
+        }
 
-        if (count($all_backups) > $backups_to_keep) {
-            // Sort files by name, which corresponds to date, oldest first
-            sort($all_backups);
-            $backups_to_delete = array_slice($all_backups, 0, count($all_backups) - $backups_to_keep);
+        if (count($files_to_prune) > $backups_to_keep) {
+            sort($files_to_prune); // Sort files by name (date), oldest first
+            $backups_to_delete = array_slice($files_to_prune, 0, count($files_to_prune) - $backups_to_keep);
 
             foreach ($backups_to_delete as $file_to_delete) {
                 unlink(trailingslashit($backup_dir) . $file_to_delete);
@@ -1103,7 +1119,7 @@ function qp_perform_backup() {
 function qp_run_scheduled_backup_event() {
     // We can simply call our reusable backup function.
     // We could add logging here in the future if needed.
-    qp_perform_backup();
+    qp_perform_backup('auto');
 }
 add_action('qp_scheduled_backup_hook', 'qp_run_scheduled_backup_event');
 
@@ -1159,9 +1175,9 @@ function qp_delete_backup_ajax()
 
     $filename = isset($_POST['filename']) ? sanitize_file_name($_POST['filename']) : '';
 
-    if (empty($filename) || (strpos($filename, 'qp-backup-') !== 0 && strpos($filename, 'uploaded-') !== 0) || pathinfo($filename, PATHINFO_EXTENSION) !== 'zip') {
-        wp_send_json_error(['message' => 'Invalid or malicious filename provided.']);
-    }
+    if (empty($filename) || (strpos($filename, 'qp-backup-') !== 0 && strpos($filename, 'qp-auto-backup-') !== 0 && strpos($filename, 'uploaded-') !== 0) || pathinfo($filename, PATHINFO_EXTENSION) !== 'zip') {
+    wp_send_json_error(['message' => 'Invalid or malicious filename provided.']);
+}
 
     $upload_dir = wp_upload_dir();
     $backup_dir = trailingslashit($upload_dir['basedir']) . 'qp-backups';

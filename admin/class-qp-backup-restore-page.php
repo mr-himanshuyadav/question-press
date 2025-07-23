@@ -22,6 +22,8 @@ class QP_Backup_Restore_Page
                 $interval = isset($_POST['auto_backup_interval']) ? absint($_POST['auto_backup_interval']) : 1;
                 $frequency = isset($_POST['auto_backup_frequency']) ? sanitize_key($_POST['auto_backup_frequency']) : 'daily';
                 $keep = isset($_POST['auto_backup_keep']) ? absint($_POST['auto_backup_keep']) : 5;
+                $prune_manual = isset($_POST['auto_backup_prune_manual']) ? 1 : 0;
+
 
                 // This is a custom cron schedule, not a built-in one.
                 $schedule_name = 'every_' . $interval . '_' . $frequency;
@@ -30,7 +32,7 @@ class QP_Backup_Restore_Page
                 // A more complex system would add custom schedules to WordPress.
                 // We will handle the interval manually for this implementation.
 
-                $schedule_settings = ['interval' => $interval, 'frequency' => $frequency, 'keep' => $keep];
+                $schedule_settings = ['interval' => $interval, 'frequency' => $frequency, 'keep' => $keep, 'prune_manual' => $prune_manual];
                 update_option('qp_auto_backup_schedule', $schedule_settings);
 
                 // Schedule the first event to run after the interval passes.
@@ -133,6 +135,7 @@ class QP_Backup_Restore_Page
                     <div class="form-wrap">
                         <h2>Create New Backup</h2>
                         <p>Click the button below to generate a full backup of all your Question Press data, including questions, groups, subjects, topics, sources, exams, labels, and associated images.</p>
+                        <p><strong>Filename Format:</strong></p>
                         <p>
                             <a href="#" class="button button-primary" id="qp-create-backup-btn">Create New Backup</a>
                         </p>
@@ -162,19 +165,27 @@ class QP_Backup_Restore_Page
                             <input type="hidden" name="action" value="qp_save_auto_backup_settings">
                             <?php wp_nonce_field('qp_auto_backup_nonce_action', 'qp_auto_backup_nonce_field'); ?>
 
-                            <div class="auto-backup-fields" style="display: flex; flex-wrap: wrap; gap: 10px 15px; align-items: center;">
-                                <div>
-                                    <span>Every</span>
-                                    <input type="number" name="auto_backup_interval" min="1" value="<?php echo esc_attr($schedule ? $schedule['interval'] : 1); ?>" style="width: 70px;">
-                                    <select name="auto_backup_frequency">
-                                        <option value="daily" <?php selected($schedule ? $schedule['frequency'] : '', 'daily'); ?>>Day(s)</option>
-                                        <option value="weekly" <?php selected($schedule ? $schedule['frequency'] : '', 'weekly'); ?>>Week(s)</option>
-                                        <option value="monthly" <?php selected($schedule ? $schedule['frequency'] : '', 'monthly'); ?>>Month(s)</option>
-                                    </select>
+                            <div class="auto-backup-fields" style="display: flex; flex-direction: column; gap: 15px; align-items: flex-start;">
+                                <div style="display: flex; gap: 15px; align-items: center;">
+                                    <div>
+                                        <span>Every</span>
+                                        <input type="number" name="auto_backup_interval" min="1" value="<?php echo esc_attr($schedule && isset($schedule['interval']) ? $schedule['interval'] : 1); ?>" style="width: 70px;">
+                                        <select name="auto_backup_frequency">
+                                            <option value="daily" <?php selected($schedule && isset($schedule['frequency']) ? $schedule['frequency'] : '', 'daily'); ?>>Day(s)</option>
+                                            <option value="weekly" <?php selected($schedule && isset($schedule['frequency']) ? $schedule['frequency'] : '', 'weekly'); ?>>Week(s)</option>
+                                            <option value="monthly" <?php selected($schedule && isset($schedule['frequency']) ? $schedule['frequency'] : '', 'monthly'); ?>>Month(s)</option>
+                                        </select>
+                                    </div>
+                                    <div style="border-left: 1px solid #ddd; padding-left: 15px;">
+                                        <span>Number of backups to keep:</span>
+                                        <input type="number" name="auto_backup_keep" min="1" value="<?php echo esc_attr($schedule && isset($schedule['keep']) ? $schedule['keep'] : 5); ?>" style="width: 70px;">
+                                    </div>
                                 </div>
                                 <div>
-                                    <span>Number of backups to keep:</span>
-                                    <input type="number" name="auto_backup_keep" min="1" value="<?php echo esc_attr($schedule ? $schedule['keep'] : 5); ?>" style="width: 70px;">
+                                    <label>
+                                        <input type="checkbox" name="auto_backup_prune_manual" value="1" <?php checked($schedule && !empty($schedule['prune_manual'])); ?>>
+                                        Also delete manual backups during auto-pruning.
+                                    </label>
                                 </div>
                             </div>
 
