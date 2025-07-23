@@ -1177,14 +1177,22 @@ function qp_restore_backup_ajax() {
     }
 
     // --- DESTRUCTIVE ACTION: CLEAR EXISTING DATA ---
-    $tables_to_clear = [
-        'qp_subjects', 'qp_topics', 'qp_labels', 'qp_exams', 'qp_exam_subjects',
-        'qp_sources', 'qp_source_sections', 'qp_question_groups', 'qp_questions',
-        'qp_options', 'qp_question_labels', 'qp_report_reasons'
+        $tables_to_clear = [
+        // Clear in reverse order of dependency to be safe
+        'qp_question_labels', 'qp_options', 'qp_questions', 'qp_question_groups',
+        'qp_source_sections', 'qp_sources', 'qp_exam_subjects', 'qp_exams',
+        'qp_labels', 'qp_topics', 'qp_subjects', 'qp_report_reasons'
     ];
+
+    // Temporarily disable foreign key checks for a clean delete operation
+    $wpdb->query('SET FOREIGN_KEY_CHECKS=0');
+
     foreach ($tables_to_clear as $table) {
-        $wpdb->query("TRUNCATE TABLE {$wpdb->prefix}{$table}");
+        $wpdb->query("DELETE FROM {$wpdb->prefix}{$table}");
     }
+    
+    // Re-enable foreign key checks immediately after
+    $wpdb->query('SET FOREIGN_KEY_CHECKS=1');
 
     // --- RESTORE DATA ---
     // Restore tables in a specific order to maintain relationships
