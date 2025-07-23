@@ -21,6 +21,7 @@ class QP_Backup_Restore_Page
             if ($_POST['action'] === 'qp_save_auto_backup_settings') {
                 $interval = isset($_POST['auto_backup_interval']) ? absint($_POST['auto_backup_interval']) : 1;
                 $frequency = isset($_POST['auto_backup_frequency']) ? sanitize_key($_POST['auto_backup_frequency']) : 'daily';
+                $keep = isset($_POST['auto_backup_keep']) ? absint($_POST['auto_backup_keep']) : 5;
 
                 // This is a custom cron schedule, not a built-in one.
                 $schedule_name = 'every_' . $interval . '_' . $frequency;
@@ -29,7 +30,7 @@ class QP_Backup_Restore_Page
                 // A more complex system would add custom schedules to WordPress.
                 // We will handle the interval manually for this implementation.
 
-                $schedule_settings = ['interval' => $interval, 'frequency' => $frequency];
+                $schedule_settings = ['interval' => $interval, 'frequency' => $frequency, 'keep' => $keep];
                 update_option('qp_auto_backup_schedule', $schedule_settings);
 
                 // Schedule the first event to run after the interval passes.
@@ -161,14 +162,20 @@ class QP_Backup_Restore_Page
                             <input type="hidden" name="action" value="qp_save_auto_backup_settings">
                             <?php wp_nonce_field('qp_auto_backup_nonce_action', 'qp_auto_backup_nonce_field'); ?>
 
-                            <div class="auto-backup-fields">
-                                <span>Every</span>
-                                <input type="number" name="auto_backup_interval" min="1" value="<?php echo esc_attr($schedule ? $schedule['interval'] : 1); ?>" style="width: 70px;">
-                                <select name="auto_backup_frequency">
-                                    <option value="daily" <?php selected($schedule ? $schedule['frequency'] : '', 'daily'); ?>>Day(s)</option>
-                                    <option value="weekly" <?php selected($schedule ? $schedule['frequency'] : '', 'weekly'); ?>>Week(s)</option>
-                                    <option value="monthly" <?php selected($schedule ? $schedule['frequency'] : '', 'monthly'); ?>>Month(s)</option>
-                                </select>
+                            <div class="auto-backup-fields" style="display: flex; flex-wrap: wrap; gap: 10px 15px; align-items: center;">
+                                <div>
+                                    <span>Every</span>
+                                    <input type="number" name="auto_backup_interval" min="1" value="<?php echo esc_attr($schedule ? $schedule['interval'] : 1); ?>" style="width: 70px;">
+                                    <select name="auto_backup_frequency">
+                                        <option value="daily" <?php selected($schedule ? $schedule['frequency'] : '', 'daily'); ?>>Day(s)</option>
+                                        <option value="weekly" <?php selected($schedule ? $schedule['frequency'] : '', 'weekly'); ?>>Week(s)</option>
+                                        <option value="monthly" <?php selected($schedule ? $schedule['frequency'] : '', 'monthly'); ?>>Month(s)</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <span>Number of backups to keep:</span>
+                                    <input type="number" name="auto_backup_keep" min="1" value="<?php echo esc_attr($schedule ? $schedule['keep'] : 5); ?>" style="width: 70px;">
+                                </div>
                             </div>
 
                             <?php if ($schedule && wp_next_scheduled('qp_scheduled_backup_hook')) : ?>

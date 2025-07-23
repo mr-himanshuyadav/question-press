@@ -1072,6 +1072,28 @@ function qp_perform_backup() {
     $zip->close();
     unlink($temp_json_path);
 
+    // --- NEW: Auto-pruning logic ---
+    $schedule = get_option('qp_auto_backup_schedule', false);
+    if ($schedule && isset($schedule['keep'])) {
+        $backups_to_keep = absint($schedule['keep']);
+        $all_backups = file_exists($backup_dir) ? array_diff(scandir($backup_dir), ['..', '.']) : [];
+        
+        // Filter out any non-backup files, just in case
+        $all_backups = array_filter($all_backups, function($file) {
+            return strpos($file, 'qp-backup-') === 0;
+        });
+
+        if (count($all_backups) > $backups_to_keep) {
+            // Sort files by name, which corresponds to date, oldest first
+            sort($all_backups);
+            $backups_to_delete = array_slice($all_backups, 0, count($all_backups) - $backups_to_keep);
+
+            foreach ($backups_to_delete as $file_to_delete) {
+                unlink(trailingslashit($backup_dir) . $file_to_delete);
+            }
+        }
+    }
+
     return ['success' => true, 'filename' => $backup_filename];
 }
 
