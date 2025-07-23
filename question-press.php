@@ -1183,6 +1183,31 @@ function qp_restore_backup_ajax() {
     }
     $wpdb->query('SET FOREIGN_KEY_CHECKS=1');
 
+    // --- NEW: De-duplicate user attempts data before insertion ---
+    if (!empty($backup_data['qp_user_attempts'])) {
+        $unique_attempts = [];
+        foreach ($backup_data['qp_user_attempts'] as $attempt) {
+            $key = $attempt['session_id'] . '-' . $attempt['question_id'];
+
+            if (!isset($unique_attempts[$key])) {
+                // If we haven't seen this session-question combo yet, store it.
+                $unique_attempts[$key] = $attempt;
+            } else {
+                // A duplicate exists. Apply the user's logic.
+                $existing_attempt = $unique_attempts[$key];
+                $current_attempt = $attempt;
+
+                // Prioritize the attempt that has a selected option.
+                if (!empty($current_attempt['selected_option_id']) && empty($existing_attempt['selected_option_id'])) {
+                    $unique_attempts[$key] = $current_attempt;
+                }
+                // If both or neither have an answer, we do nothing, preserving the first one encountered.
+            }
+        }
+        // Replace the original attempts data with the cleaned, unique data.
+        $backup_data['qp_user_attempts'] = array_values($unique_attempts);
+    }
+
     // 5. Restore Data via a MORE ROBUST BATCH INSERT
     $restore_order = [
         // Restore parent tables first
