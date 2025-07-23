@@ -1135,13 +1135,21 @@ add_action('wp_ajax_qp_delete_backup', 'qp_delete_backup_ajax');
 
 /**
  * AJAX handler to restore a backup from a local file.
+ * This version is optimized for performance and reliability.
  */
 function qp_restore_backup_ajax() {
+    // 1. Security and Permissions
     check_ajax_referer('qp_backup_restore_nonce', 'nonce');
     if (!current_user_can('manage_options')) {
         wp_send_json_error(['message' => 'Permission denied.']);
     }
 
+    // 2. Increase Execution Limits (Best Effort)
+    // This helps prevent timeouts on larger backups. May not work on all hosts.
+    @ini_set('max_execution_time', 300); // 5 minutes
+    @ini_set('memory_limit', '256M');
+
+    // 3. File Validation and Extraction
     $filename = isset($_POST['filename']) ? sanitize_file_name($_POST['filename']) : '';
     if (empty($filename)) {
         wp_send_json_error(['message' => 'Invalid filename.']);
@@ -1157,10 +1165,10 @@ function qp_restore_backup_ajax() {
         wp_send_json_error(['message' => 'Backup file not found on server.']);
     }
 
-    // Unzip the backup file
     wp_mkdir_p($temp_extract_dir);
     $zip = new ZipArchive;
     if ($zip->open($file_path) !== TRUE) {
+        qp_delete_dir($temp_extract_dir); // Cleanup
         wp_send_json_error(['message' => 'Failed to open the backup file.']);
     }
     $zip->extractTo($temp_extract_dir);
@@ -1168,34 +1176,30 @@ function qp_restore_backup_ajax() {
 
     $json_file_path = trailingslashit($temp_extract_dir) . 'database.json';
     if (!file_exists($json_file_path)) {
+        qp_delete_dir($temp_extract_dir); // Cleanup
         wp_send_json_error(['message' => 'database.json not found in the backup file.']);
     }
 
     $backup_data = json_decode(file_get_contents($json_file_path), true);
     if (json_last_error() !== JSON_ERROR_NONE) {
+        qp_delete_dir($temp_extract_dir); // Cleanup
         wp_send_json_error(['message' => 'Invalid JSON in backup file.']);
     }
 
-    // --- DESTRUCTIVE ACTION: CLEAR EXISTING DATA ---
-        $tables_to_clear = [
-        // Clear in reverse order of dependency to be safe
+    // 4. Clear Existing Data (The Safe Way)
+    $tables_to_clear = [
         'qp_question_labels', 'qp_options', 'qp_questions', 'qp_question_groups',
         'qp_source_sections', 'qp_sources', 'qp_exam_subjects', 'qp_exams',
         'qp_labels', 'qp_topics', 'qp_subjects', 'qp_report_reasons'
     ];
-
-    // Temporarily disable foreign key checks for a clean delete operation
     $wpdb->query('SET FOREIGN_KEY_CHECKS=0');
-
     foreach ($tables_to_clear as $table) {
         $wpdb->query("DELETE FROM {$wpdb->prefix}{$table}");
     }
-    
-    // Re-enable foreign key checks immediately after
     $wpdb->query('SET FOREIGN_KEY_CHECKS=1');
 
-    // --- RESTORE DATA ---
-    // Restore tables in a specific order to maintain relationships
+
+    // 5. Restore Data via BATCH INSERT (The Performance Fix)
     $restore_order = [
         'qp_subjects', 'qp_topics', 'qp_labels', 'qp_exams', 'qp_exam_subjects',
         'qp_sources', 'qp_source_sections', 'qp_question_groups', 'qp_questions',
@@ -1203,20 +1207,40 @@ function qp_restore_backup_ajax() {
     ];
 
     foreach ($restore_order as $table_name) {
-        if (isset($backup_data[$table_name])) {
-            foreach ($backup_data[$table_name] as $row) {
-                $wpdb->insert($wpdb->prefix . $table_name, $row);
+        if (!empty($backup_data[$table_name])) {
+            $rows = $backup_data[$table_name];
+            $chunks = array_chunk($rows, 100); // Process 100 rows at a time
+            
+            foreach ($chunks as $chunk) {
+                $query = "INSERT INTO {$wpdb->prefix}{$table_name} (";
+                $query .= implode(', ', array_keys($chunk[0])) . ") VALUES ";
+                
+                $values = [];
+                foreach ($chunk as $row) {
+                    $row_values = [];
+                    foreach ($row as $value) {
+                        $row_values[] = is_null($value) ? 'NULL' : $wpdb->prepare('%s', $value);
+                    }
+                    $values[] = '(' . implode(', ', $row_values) . ')';
+                }
+                
+                $query .= implode(', ', $values);
+                $result = $wpdb->query($query);
+
+                if ($result === false) {
+                    qp_delete_dir($temp_extract_dir); // Cleanup
+                    wp_send_json_error(['message' => "An error occurred while restoring the '{$table_name}' table. DB Error: " . $wpdb->last_error]);
+                }
             }
         }
     }
     
-    // Restore options
+    // 6. Restore Options and Images (Unchanged)
     if (isset($backup_data['qp_options'])) {
         update_option('qp_settings', $backup_data['qp_options']['qp_settings']);
         update_option('qp_next_custom_question_id', $backup_data['qp_options']['qp_next_custom_question_id']);
     }
-
-    // --- RESTORE IMAGES ---
+    
     $images_dir = trailingslashit($temp_extract_dir) . 'images';
     if (file_exists($images_dir)) {
         require_once(ABSPATH . 'wp-admin/includes/image.php');
@@ -1226,22 +1250,15 @@ function qp_restore_backup_ajax() {
         $image_files = array_diff(scandir($images_dir), ['..', '.']);
         foreach($image_files as $image_filename) {
             $existing_attachment_id = $wpdb->get_var($wpdb->prepare("SELECT post_id FROM $wpdb->postmeta WHERE meta_key = '_wp_attached_file' AND meta_value LIKE %s", '%' . $wpdb->esc_like($image_filename)));
-            
-            // Only upload if it doesn't already exist
             if (!$existing_attachment_id) {
-                $file_array = [
-                    'name' => $image_filename,
-                    'tmp_name' => trailingslashit($images_dir) . $image_filename
-                ];
-                media_handle_sideload($file_array, 0); // We don't need the new ID for this process
+                media_handle_sideload(['name' => $image_filename, 'tmp_name' => trailingslashit($images_dir) . $image_filename], 0);
             }
         }
     }
     
-    // --- CLEANUP ---
+    // 7. Cleanup and Success
     qp_delete_dir($temp_extract_dir);
-
-    wp_send_json_success(['message' => 'Data has been successfully restored.']);
+    wp_send_json_success(['message' => 'Data has been successfully restored. The page will now reload.']);
 }
 add_action('wp_ajax_qp_restore_backup', 'qp_restore_backup_ajax');
 
