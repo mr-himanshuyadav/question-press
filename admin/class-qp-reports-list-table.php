@@ -67,8 +67,9 @@ class QP_Reports_List_Table extends WP_List_Table {
         $users_table = $wpdb->users;
 
         // --- NEW: Add Filtering Logic ---
-        $where_clauses = ["r.status = 'open'"]; // Default to show only open reports
-        $params = [];
+        $current_status = isset($_GET['status']) ? sanitize_key($_GET['status']) : 'open';
+        $where_clauses = ["r.status = %s"];
+        $params = [$current_status];
 
         if (!empty($_REQUEST['s'])) {
             $search = '%' . $wpdb->esc_like($_REQUEST['s']) . '%';
@@ -113,16 +114,21 @@ class QP_Reports_List_Table extends WP_List_Table {
     }
 
     public function column_actions($item) {
+        $current_status = isset($_GET['status']) ? sanitize_key($_GET['status']) : 'open';
         $review_url = esc_url(admin_url('admin.php?page=qp-edit-group&group_id=' . $item['group_id']));
+        
+        $actions['review'] = sprintf('<a href="%s" class="button button-secondary button-small">Review</a>', $review_url);
 
-        // --- NEW: Add Resolve Link ---
-        $resolve_nonce = wp_create_nonce('qp_resolve_report_' . $item['question_id']);
-        $resolve_url = esc_url(admin_url('admin.php?page=qp-logs-reports&tab=reports&action=resolve_report&question_id=' . $item['question_id'] . '&_wpnonce=' . $resolve_nonce));
+        if ($current_status === 'open') {
+            $resolve_nonce = wp_create_nonce('qp_resolve_report_' . $item['question_id']);
+            $resolve_url = esc_url(admin_url('admin.php?page=qp-logs-reports&tab=reports&action=resolve_report&question_id=' . $item['question_id'] . '&_wpnonce=' . $resolve_nonce));
+            $actions['resolve'] = sprintf('<a href="%s" class="button button-primary button-small">Mark as Resolved</a>', $resolve_url);
+        } else {
+            $reopen_nonce = wp_create_nonce('qp_reopen_report_' . $item['question_id']);
+            $reopen_url = esc_url(admin_url('admin.php?page=qp-logs-reports&tab=reports&status=resolved&action=reopen_report&question_id=' . $item['question_id'] . '&_wpnonce=' . $reopen_nonce));
+            $actions['reopen'] = sprintf('<a href="%s" class="button button-secondary button-small">Open Again</a>', $reopen_url);
+        }
 
-        $actions = [
-            'review' => sprintf('<a href="%s" class="button button-secondary button-small">Review</a>', $review_url),
-            'resolve' => sprintf('<a href="%s" class="button button-primary button-small">Mark as Resolved</a>', $resolve_url)
-        ];
         return $this->row_actions($actions, true);
     }
 
