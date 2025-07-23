@@ -166,9 +166,9 @@ class QP_Backup_Restore_Page
                             <?php wp_nonce_field('qp_auto_backup_nonce_action', 'qp_auto_backup_nonce_field'); ?>
 
                             <div class="auto-backup-fields" style="display: flex; flex-direction: column; gap: 15px; align-items: flex-start;">
-    <div style="display: flex; gap: 15px; align-items: center;">
-        <div>
-            <span>Every</span>
+    <div style="display: flex; gap: 15px; align-items: flex-start;flex-direction:column;">
+        <div style="display: flex; align-items: center;">
+            <span style="margin-right: 5px;">Every</span>
             <input type="number" name="auto_backup_interval" min="1" value="<?php echo esc_attr($schedule && isset($schedule['interval']) ? $schedule['interval'] : 1); ?>" style="width: 70px;">
             <select name="auto_backup_frequency">
                 <option value="daily" <?php selected($schedule && isset($schedule['frequency']) ? $schedule['frequency'] : '', 'daily'); ?>>Day(s)</option>
@@ -176,7 +176,7 @@ class QP_Backup_Restore_Page
                 <option value="monthly" <?php selected($schedule && isset($schedule['frequency']) ? $schedule['frequency'] : '', 'monthly'); ?>>Month(s)</option>
             </select>
         </div>
-        <div style="border-left: 1px solid #ddd; padding-left: 15px;">
+        <div>
             <span>Number of backups to keep:</span>
             <input type="number" name="auto_backup_keep" min="1" value="<?php echo esc_attr($schedule && isset($schedule['keep']) ? $schedule['keep'] : 5); ?>" style="width: 70px;">
         </div>
