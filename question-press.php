@@ -3,7 +3,7 @@
 /**
  * Plugin Name:       Question Press
  * Description:       A complete plugin for creating, managing, and practicing questions.
- * Version:           3.1.4
+ * Version:           3.2.0
  * Author:            Himanshu
  */
 
@@ -21,7 +21,7 @@ define('QP_PLUGIN_URL', plugin_dir_url(QP_PLUGIN_FILE));
 require_once QP_PLUGIN_DIR . 'admin/class-qp-subjects-page.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-labels-page.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-topics-page.php';
-require_once QP_PLUGIN_DIR . 'admin/class-qp-exams-page.php'; // <-- ADD THIS
+require_once QP_PLUGIN_DIR . 'admin/class-qp-exams-page.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-sources-page.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-import-page.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-importer.php';
@@ -30,6 +30,7 @@ require_once QP_PLUGIN_DIR . 'admin/class-qp-questions-list-table.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-question-editor-page.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-settings-page.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-logs-reports-page.php';
+require_once QP_PLUGIN_DIR . 'admin/class-qp-backup-restore-page.php';
 require_once QP_PLUGIN_DIR . 'public/class-qp-shortcodes.php';
 require_once QP_PLUGIN_DIR . 'public/class-qp-dashboard.php';
 require_once QP_PLUGIN_DIR . 'api/class-qp-rest-api.php';
@@ -348,7 +349,6 @@ function qp_deactivate_plugin() {}
 register_deactivation_hook(QP_PLUGIN_FILE, 'qp_deactivate_plugin');
 
 
-// In question-press.php, replace the existing qp_admin_menu function
 function qp_admin_menu()
 {
     // Add top-level menu page for "All Questions" and store the hook
@@ -360,13 +360,12 @@ function qp_admin_menu()
     // Primary Submenu Pages
     add_submenu_page('question-press', 'All Questions', 'All Questions', 'manage_options', 'question-press', 'qp_all_questions_page_cb');
     add_submenu_page('question-press', 'Add New', 'Add New', 'manage_options', 'qp-question-editor', ['QP_Question_Editor_Page', 'render']);
-
-    // --- NEW: Unified Organization Page ---
     add_submenu_page('question-press', 'Organize', 'Organize', 'manage_options', 'qp-organization', 'qp_render_organization_page');
 
-    add_submenu_page('question-press', 'Import', 'Import', 'manage_options', 'qp-import', ['QP_Import_Page', 'render']);
-    add_submenu_page('question-press', 'Export', 'Export', 'manage_options', 'qp-export', ['QP_Export_Page', 'render']);
-    add_submenu_page('question-press', 'Logs / Reports', 'Logs / Reports', 'manage_options', 'qp-logs-reports', ['QP_Logs_Reports_Page', 'render']);
+    // --- NEW: Unified Tools Page ---
+    add_submenu_page('question-press', 'Tools', 'Tools', 'manage_options', 'qp-tools', 'qp_render_tools_page');
+
+    add_submenu_page('question-press', 'Reports', 'Reports', 'manage_options', 'qp-logs-reports', ['QP_Logs_Reports_Page', 'render']);
     add_submenu_page('question-press', 'Settings', 'Settings', 'manage_options', 'qp-settings', ['QP_Settings_Page', 'render']);
 
     // Hidden pages (for editing links and backwards compatibility)
@@ -410,7 +409,39 @@ function qp_render_organization_page()
 <?php
 }
 
-// CORRECTED: Function to add screen options
+function qp_render_tools_page()
+{
+    $tabs = [
+        'import' => ['label' => 'Import', 'callback' => ['QP_Import_Page', 'render']],
+        'export'   => ['label' => 'Export', 'callback' => ['QP_Export_Page', 'render']],
+        'backup_restore'   => ['label' => 'Backup & Restore', 'callback' => ['QP_Backup_Restore_Page', 'render']],
+    ];
+    $active_tab = isset($_GET['tab']) && array_key_exists($_GET['tab'], $tabs) ? $_GET['tab'] : 'import';
+?>
+    <div class="wrap">
+        <h1 class="wp-heading-inline">Tools</h1>
+        <p>Import, export, and manage your Question Press data.</p>
+        <hr class="wp-header-end">
+
+        <nav class="nav-tab-wrapper wp-clearfix" aria-label="Secondary menu">
+            <?php
+            foreach ($tabs as $tab_id => $tab_data) {
+                $class = ($tab_id === $active_tab) ? ' nav-tab-active' : '';
+                echo '<a href="?page=qp-tools&tab=' . esc_attr($tab_id) . '" class="nav-tab' . esc_attr($class) . '">' . esc_html($tab_data['label']) . '</a>';
+            }
+            ?>
+        </nav>
+
+        <div class="tab-content" style="margin-top: 1.5rem;">
+            <?php
+            // Call the render method for the active tab
+            call_user_func($tabs[$active_tab]['callback']);
+            ?>
+        </div>
+    </div>
+<?php
+}
+
 function qp_add_screen_options()
 {
     $option = 'per_page';
@@ -438,6 +469,17 @@ add_filter('set-screen-option', 'qp_save_screen_options', 10, 3);
 
 function qp_admin_enqueue_scripts($hook_suffix)
 {
+    // --- NEW: Enqueue script for Tools page ---
+    if ($hook_suffix === 'question-press_page_qp-tools') {
+        // First, ensure SweetAlert2 is loaded
+        wp_enqueue_script('sweetalert2', 'https://cdn.jsdelivr.net/npm/sweetalert2@11', [], null, true);
+        // Now, enqueue our script which depends on it
+        wp_enqueue_script('qp-backup-restore-script', QP_PLUGIN_URL . 'admin/assets/js/backup-restore.js', ['jquery', 'sweetalert2'], '1.0.0', true);
+        wp_localize_script('qp-backup-restore-script', 'qp_backup_restore_data', [
+            'nonce' => wp_create_nonce('qp_backup_restore_nonce')
+        ]);
+    }
+
     if (strpos($hook_suffix, 'qp-') !== false || strpos($hook_suffix, 'question-press') !== false) {
         wp_enqueue_style('wp-color-picker');
         wp_enqueue_script('wp-color-picker');
@@ -540,12 +582,12 @@ function qp_handle_form_submissions()
     qp_handle_save_question_group();
     qp_handle_topic_forms();
     QP_Settings_Page::register_settings();
-    // --- ADD THIS LINE to hook our new unified migration handler ---
+    QP_Backup_Restore_Page::handle_forms();
     qp_run_unified_data_migration();
 }
 add_action('admin_init', 'qp_handle_form_submissions');
 
-// *** ADD THIS ENTIRE NEW FUNCTION ***
+
 function qp_handle_topic_forms()
 {
     global $wpdb;
@@ -613,7 +655,7 @@ function qp_all_questions_page_cb()
             <?php $list_table->search_box('Search Questions', 'question'); ?>
             <?php $list_table->display(); ?>
         </form>
-        <?php $list_table->display_view_modal();?>
+        <?php $list_table->display_view_modal(); ?>
         <style type="text/css">
             #post-query-submit {
                 margin-left: 8px;
@@ -644,46 +686,46 @@ function qp_all_questions_page_cb()
             }
 
             #qp-view-modal-backdrop {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.6);
-            z-index: 1001;
-            display: none; /* Initially hidden */
-            justify-content: center;
-            align-items: center;
-        }
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background-color: rgba(0, 0, 0, 0.6);
+                z-index: 1001;
+                display: none;
+                /* Initially hidden */
+                justify-content: center;
+                align-items: center;
+            }
 
-        #qp-view-modal-content {
-            background: #fff;
-            padding: 2rem;
-            border-radius: 8px;
-            max-width: 90%;
-            width: 700px;
-            max-height: 90vh;
-            overflow-y: auto;
-            position: relative;
-            font: normal 1.5em KaTeX_Main, Times New Roman, serif;
-        }
+            #qp-view-modal-content {
+                background: #fff;
+                padding: 2rem;
+                border-radius: 8px;
+                max-width: 90%;
+                width: 700px;
+                max-height: 90vh;
+                overflow-y: auto;
+                position: relative;
+                font: normal 1.5em KaTeX_Main, Times New Roman, serif;
+            }
 
-        .qp-modal-close-btn {
-            position: absolute;
-            top: 1rem;
-            right: 1rem;
-            font-size: 24px;
-            background: none;
-            border: none;
-            cursor: pointer;
-            color: #50575e;
-        }
+            .qp-modal-close-btn {
+                position: absolute;
+                top: 1rem;
+                right: 1rem;
+                font-size: 24px;
+                background: none;
+                border: none;
+                cursor: pointer;
+                color: #50575e;
+            }
         </style>
     </div>
-<?php
+    <?php
 }
 
-// ADD THIS NEW HELPER FUNCTION anywhere in question-press.php
 function get_question_custom_id($question_id)
 {
     global $wpdb;
@@ -951,6 +993,502 @@ function qp_get_sources_for_list_table_filter_ajax()
 }
 add_action('wp_ajax_get_sources_for_list_table_filter', 'qp_get_sources_for_list_table_filter_ajax');
 
+/**
+ * AJAX handler to create a new backup.
+ */
+/**
+ * AJAX handler to create a new backup.
+ */
+function qp_create_backup_ajax()
+{
+    check_ajax_referer('qp_backup_restore_nonce', 'nonce');
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error(['message' => 'Permission denied.']);
+    }
+
+    $result = qp_perform_backup('manual');
+
+    if ($result['success']) {
+        $backups_html = qp_get_local_backups_html();
+        wp_send_json_success(['backups_html' => $backups_html]);
+    } else {
+        wp_send_json_error(['message' => $result['message']]);
+    }
+}
+add_action('wp_ajax_qp_create_backup', 'qp_create_backup_ajax');
+
+/**
+ * Performs the core backup creation process and saves the file locally.
+ *
+ * @param string $type The type of backup ('manual' or 'auto').
+ * @return array An array containing 'success' status and a 'message' or 'filename'.
+ */
+function qp_perform_backup($type = 'manual')
+{
+    
+
+    global $wpdb;
+    $upload_dir = wp_upload_dir();
+    $backup_dir = trailingslashit($upload_dir['basedir']) . 'qp-backups';
+    if (!file_exists($backup_dir)) {
+        wp_mkdir_p($backup_dir);
+    }
+
+    $tables_to_backup = [
+        'qp_subjects',
+        'qp_topics',
+        'qp_labels',
+        'qp_exams',
+        'qp_exam_subjects',
+        'qp_sources',
+        'qp_source_sections',
+        'qp_question_groups',
+        'qp_questions',
+        'qp_options',
+        'qp_question_labels',
+        'qp_report_reasons',
+        'qp_question_reports',
+        'qp_logs',
+        'qp_user_sessions',
+        'qp_session_pauses',
+        'qp_user_attempts',
+        'qp_review_later',
+        'qp_revision_attempts'
+    ];
+    $full_table_names = array_map(function ($table) use ($wpdb) {
+        return $wpdb->prefix . $table;
+    }, $tables_to_backup);
+
+    $backup_data = [];
+    foreach ($full_table_names as $table) {
+        $table_name_without_prefix = str_replace($wpdb->prefix, '', $table);
+        $backup_data[$table_name_without_prefix] = $wpdb->get_results("SELECT * FROM {$table}", ARRAY_A);
+    }
+
+    $backup_data['plugin_settings'] = [
+        'qp_settings' => get_option('qp_settings'),
+        'qp_next_custom_question_id' => get_option('qp_next_custom_question_id'),
+    ];
+
+    $json_data = json_encode($backup_data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    $json_filename = 'database.json';
+    $temp_json_path = trailingslashit($backup_dir) . $json_filename;
+    file_put_contents($temp_json_path, $json_data);
+
+    $image_ids = $wpdb->get_col("SELECT DISTINCT direction_image_id FROM {$wpdb->prefix}qp_question_groups WHERE direction_image_id IS NOT NULL AND direction_image_id > 0");
+
+    // --- NEW: Filename logic ---
+    $prefix = ($type === 'auto') ? 'qp-auto-backup-' : 'qp-backup-';
+    $timestamp = current_time('mysql'); // Get time in WordPress's configured timezone
+    $datetime = new DateTime($timestamp);
+    $timezone_abbr = 'IST'; // Manually setting to IST as requested
+    $backup_filename = $prefix . $datetime->format('Y-m-d_H-i-s') . '_' . $timezone_abbr . '.zip';
+
+    $zip_path = trailingslashit($backup_dir) . $backup_filename;
+
+    $zip = new ZipArchive();
+    if ($zip->open($zip_path, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== TRUE) {
+        return ['success' => false, 'message' => 'Cannot create ZIP archive.'];
+    }
+
+    $zip->addFile($temp_json_path, $json_filename);
+
+    if (!empty($image_ids)) {
+        $zip->addEmptyDir('images');
+        foreach ($image_ids as $image_id) {
+            $image_path = get_attached_file($image_id);
+            if ($image_path && file_exists($image_path)) {
+                $zip->addFile($image_path, 'images/' . basename($image_path));
+            }
+        }
+    }
+
+    $zip->close();
+    unlink($temp_json_path);
+    qp_prune_old_backups();
+
+    return ['success' => true, 'filename' => $backup_filename];
+}
+
+/**
+ * Intelligently prunes old backup files based on saved schedule settings.
+ * Correctly sorts by file modification time and respects pruning rules.
+ */
+function qp_prune_old_backups() {
+    $schedule = get_option('qp_auto_backup_schedule', false);
+    if (!$schedule || !isset($schedule['keep'])) {
+        return; // No schedule or keep limit set, so do nothing.
+    }
+
+    $backups_to_keep = absint($schedule['keep']);
+    $prune_manual = !empty($schedule['prune_manual']);
+    
+    $upload_dir = wp_upload_dir();
+    $backup_dir = trailingslashit($upload_dir['basedir']) . 'qp-backups';
+    if (!is_dir($backup_dir)) {
+        return;
+    }
+
+    $all_files_in_dir = array_diff(scandir($backup_dir), ['..', '.']);
+    
+    // Create a detailed list of backup files with their timestamps
+    $backup_files_with_time = [];
+    foreach ($all_files_in_dir as $file) {
+        $is_auto = strpos($file, 'qp-auto-backup-') === 0;
+        $is_manual = strpos($file, 'qp-backup-') === 0;
+
+        if ($is_auto || $is_manual) {
+            $backup_files_with_time[] = [
+                'name' => $file,
+                'type' => $is_auto ? 'auto' : 'manual',
+                'time' => filemtime(trailingslashit($backup_dir) . $file)
+            ];
+        }
+    }
+
+    // Determine which files are candidates for deletion
+    $candidate_files = [];
+    if ($prune_manual) {
+        // If pruning manual, all backups are candidates
+        $candidate_files = $backup_files_with_time;
+    } else {
+        // Otherwise, only auto-backups are candidates
+        foreach ($backup_files_with_time as $file_data) {
+            if ($file_data['type'] === 'auto') {
+                $candidate_files[] = $file_data;
+            }
+        }
+    }
+
+    if (count($candidate_files) <= $backups_to_keep) {
+        return; // Nothing to do
+    }
+
+    // **CRITICAL FIX:** Sort candidates by their actual file time, oldest first
+    usort($candidate_files, function($a, $b) {
+        return $a['time'] <=> $b['time'];
+    });
+
+    $backups_to_delete = array_slice($candidate_files, 0, count($candidate_files) - $backups_to_keep);
+
+    foreach ($backups_to_delete as $file_data_to_delete) {
+        unlink(trailingslashit($backup_dir) . $file_data_to_delete['name']);
+    }
+}
+
+/**
+ * The function that runs on the scheduled cron event to create a backup.
+ */
+function qp_run_scheduled_backup_event()
+{
+    // We can simply call our reusable backup function.
+    // We could add logging here in the future if needed.
+    qp_prune_old_backups();
+    qp_perform_backup('auto');
+}
+add_action('qp_scheduled_backup_hook', 'qp_run_scheduled_backup_event');
+
+/**
+ * Scans the backup directory and returns the HTML for the local backups table body.
+ *
+ * @return string The HTML for the table rows.
+ */
+function qp_get_local_backups_html()
+{
+    $upload_dir = wp_upload_dir();
+    $backup_dir = trailingslashit($upload_dir['basedir']) . 'qp-backups';
+    $backup_url_base = trailingslashit($upload_dir['baseurl']) . 'qp-backups';
+    $backups = file_exists($backup_dir) ? array_reverse(array_diff(scandir($backup_dir), ['..', '.'])) : [];
+
+    ob_start();
+
+    if (empty($backups)) {
+        echo '<tr class="no-items"><td class="colspanchange" colspan="4">No local backups found.</td></tr>';
+    } else {
+        foreach ($backups as $backup_file) {
+            $file_path = trailingslashit($backup_dir) . $backup_file;
+            $file_url = trailingslashit($backup_url_base) . $backup_file;
+            if (is_dir($file_path)) continue;
+
+            $file_size = size_format(filesize($file_path));
+            $file_timestamp_gmt = filemtime($file_path);
+            $file_date = get_date_from_gmt(date('Y-m-d H:i:s', $file_timestamp_gmt), 'M j, Y, g:i a');
+            ?>
+            <tr data-filename="<?php echo esc_attr($backup_file); ?>">
+                <td><?php echo esc_html($file_date); ?></td>
+                <td>
+                    <?php echo esc_html($backup_file); ?>
+                    <?php if (strpos($backup_file, 'qp-auto-backup-') === 0) : ?>
+                        <span style="background-color: #f0f0f1; color: #50575e; padding: 2px 6px; font-size: 10px; border-radius: 3px; font-weight: 600; vertical-align: middle; margin-left: 5px;">AUTO</span>
+                    <?php else : ?>
+                        <span style="background-color: #e3f2fd; color: #1e88e5; padding: 2px 6px; font-size: 10px; border-radius: 3px; font-weight: 600; vertical-align: middle; margin-left: 5px;">MANUAL</span>
+                    <?php endif; ?>
+                </td>
+                <td><?php echo esc_html($file_size); ?></td>
+                <td>
+                    <a href="<?php echo esc_url($file_url); ?>" class="button button-secondary" download>Download</a>
+                    <button type="button" class="button button-primary qp-restore-btn">Restore</button>
+                    <button type="button" class="button button-link-delete qp-delete-backup-btn">Delete</button>
+                </td>
+            </tr>
+    <?php
+        }
+    }
+    return ob_get_clean();
+}
+
+/**
+ * AJAX handler to delete a local backup file.
+ */
+function qp_delete_backup_ajax()
+{
+    check_ajax_referer('qp_backup_restore_nonce', 'nonce');
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error(['message' => 'Permission denied.']);
+    }
+
+    $filename = isset($_POST['filename']) ? sanitize_file_name($_POST['filename']) : '';
+
+    if (empty($filename) || (strpos($filename, 'qp-backup-') !== 0 && strpos($filename, 'qp-auto-backup-') !== 0 && strpos($filename, 'uploaded-') !== 0) || pathinfo($filename, PATHINFO_EXTENSION) !== 'zip') {
+        wp_send_json_error(['message' => 'Invalid or malicious filename provided.']);
+    }
+
+    $upload_dir = wp_upload_dir();
+    $backup_dir = trailingslashit($upload_dir['basedir']) . 'qp-backups';
+    $file_path = trailingslashit($backup_dir) . $filename;
+
+    if (file_exists($file_path)) {
+        if (unlink($file_path)) {
+            // Deletion successful, send back the updated list
+            $backups_html = qp_get_local_backups_html();
+            wp_send_json_success(['backups_html' => $backups_html, 'message' => 'Backup deleted successfully.']);
+        } else {
+            wp_send_json_error(['message' => 'Could not delete the file. Please check file permissions.']);
+        }
+    } else {
+        wp_send_json_error(['message' => 'File not found. It may have already been deleted.']);
+    }
+}
+add_action('wp_ajax_qp_delete_backup', 'qp_delete_backup_ajax');
+
+/**
+ * AJAX handler to restore a backup from a local file.
+ * This version is optimized for performance and reliability.
+ */
+function qp_restore_backup_ajax()
+{
+    check_ajax_referer('qp_backup_restore_nonce', 'nonce');
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error(['message' => 'Permission denied.']);
+    }
+
+    $filename = isset($_POST['filename']) ? sanitize_file_name($_POST['filename']) : '';
+    if (empty($filename)) {
+        wp_send_json_error(['message' => 'Invalid filename.']);
+    }
+
+    $result = qp_perform_restore($filename);
+
+    if ($result['success']) {
+        wp_send_json_success(['message' => 'Data has been successfully restored.', 'stats' => $result['stats']]);
+    } else {
+        wp_send_json_error(['message' => $result['message']]);
+    }
+}
+add_action('wp_ajax_qp_restore_backup', 'qp_restore_backup_ajax');
+
+/**
+ * Performs the core backup restore process from a given filename.
+ *
+ * @param string $filename The name of the backup .zip file in the qp-backups directory.
+ * @return array An array containing 'success' status and a 'message' or 'stats'.
+ */
+function qp_perform_restore($filename)
+{
+    // This function contains the exact logic from the previous qp_restore_backup_ajax(),
+    // but instead of sending JSON, it returns an array.
+    @ini_set('max_execution_time', 300);
+    @ini_set('memory_limit', '256M');
+
+    global $wpdb;
+    $upload_dir = wp_upload_dir();
+    $backup_dir = trailingslashit($upload_dir['basedir']) . 'qp-backups';
+    $file_path = trailingslashit($backup_dir) . $filename;
+    $temp_extract_dir = trailingslashit($backup_dir) . 'temp_restore_' . time();
+
+    if (!file_exists($file_path)) {
+        return ['success' => false, 'message' => 'Backup file not found on server.'];
+    }
+
+    wp_mkdir_p($temp_extract_dir);
+    $zip = new ZipArchive;
+    if ($zip->open($file_path) !== TRUE) {
+        qp_delete_dir($temp_extract_dir);
+        return ['success' => false, 'message' => 'Failed to open the backup file.'];
+    }
+    $zip->extractTo($temp_extract_dir);
+    $zip->close();
+
+    $json_file_path = trailingslashit($temp_extract_dir) . 'database.json';
+    if (!file_exists($json_file_path)) {
+        qp_delete_dir($temp_extract_dir);
+        return ['success' => false, 'message' => 'database.json not found in the backup file.'];
+    }
+
+    $backup_data = json_decode(file_get_contents($json_file_path), true);
+    if (json_last_error() !== JSON_ERROR_NONE) {
+        qp_delete_dir($temp_extract_dir);
+        return ['success' => false, 'message' => 'Invalid JSON in backup file.'];
+    }
+
+    $tables_to_clear = [
+        'qp_question_reports',
+        'qp_question_labels',
+        'qp_options',
+        'qp_questions',
+        'qp_question_groups',
+        'qp_source_sections',
+        'qp_sources',
+        'qp_exam_subjects',
+        'qp_exams',
+        'qp_labels',
+        'qp_topics',
+        'qp_subjects',
+        'qp_report_reasons',
+        'qp_user_sessions',
+        'qp_session_pauses',
+        'qp_user_attempts',
+        'qp_logs',
+        'qp_review_later',
+        'qp_revision_attempts'
+    ];
+    $wpdb->query('SET FOREIGN_KEY_CHECKS=0');
+    foreach ($tables_to_clear as $table) {
+        $wpdb->query("DELETE FROM {$wpdb->prefix}{$table}");
+    }
+    $wpdb->query('SET FOREIGN_KEY_CHECKS=1');
+
+    $stats = [
+        'questions' => isset($backup_data['qp_questions']) ? count($backup_data['qp_questions']) : 0,
+        'options' => isset($backup_data['qp_options']) ? count($backup_data['qp_options']) : 0,
+        'sessions' => isset($backup_data['qp_user_sessions']) ? count($backup_data['qp_user_sessions']) : 0,
+        'attempts' => isset($backup_data['qp_user_attempts']) ? count($backup_data['qp_user_attempts']) : 0,
+        'reports' => isset($backup_data['qp_question_reports']) ? count($backup_data['qp_question_reports']) : 0,
+        'duplicates_handled' => 0
+    ];
+    if (!empty($backup_data['qp_user_attempts'])) {
+        $original_attempt_count = count($backup_data['qp_user_attempts']);
+        $unique_attempts = [];
+        foreach ($backup_data['qp_user_attempts'] as $attempt) {
+            $key = $attempt['session_id'] . '-' . $attempt['question_id'];
+            if (!isset($unique_attempts[$key])) {
+                $unique_attempts[$key] = $attempt;
+            } else {
+                $existing_attempt = $unique_attempts[$key];
+                $current_attempt = $attempt;
+                if (!empty($current_attempt['selected_option_id']) && empty($existing_attempt['selected_option_id'])) {
+                    $unique_attempts[$key] = $current_attempt;
+                }
+            }
+        }
+        $final_attempts = array_values($unique_attempts);
+        $stats['duplicates_handled'] = $original_attempt_count - count($final_attempts);
+        $backup_data['qp_user_attempts'] = $final_attempts;
+    }
+
+    $restore_order = [
+        'qp_subjects',
+        'qp_topics',
+        'qp_labels',
+        'qp_exams',
+        'qp_exam_subjects',
+        'qp_sources',
+        'qp_source_sections',
+        'qp_question_groups',
+        'qp_questions',
+        'qp_options',
+        'qp_question_labels',
+        'qp_report_reasons',
+        'qp_question_reports',
+        'qp_logs',
+        'qp_user_sessions',
+        'qp_session_pauses',
+        'qp_user_attempts',
+        'qp_review_later',
+        'qp_revision_attempts'
+    ];
+    foreach ($restore_order as $table_name) {
+        if (!empty($backup_data[$table_name])) {
+            $rows = $backup_data[$table_name];
+            $chunks = array_chunk($rows, 100);
+            foreach ($chunks as $chunk) {
+                if (empty($chunk)) continue;
+                $columns = array_keys($chunk[0]);
+                $placeholders = [];
+                $values = [];
+                foreach ($chunk as $row) {
+                    $row_placeholders = [];
+                    foreach ($columns as $column) {
+                        $row_placeholders[] = '%s';
+                        $values[] = $row[$column];
+                    }
+                    $placeholders[] = '(' . implode(', ', $row_placeholders) . ')';
+                }
+                $query = "INSERT INTO {$wpdb->prefix}{$table_name} (`" . implode('`, `', $columns) . "`) VALUES " . implode(', ', $placeholders);
+                if ($wpdb->query($wpdb->prepare($query, $values)) === false) {
+                    qp_delete_dir($temp_extract_dir);
+                    return ['success' => false, 'message' => "An error occurred while restoring '{$table_name}'. DB Error: " . $wpdb->last_error];
+                }
+            }
+        }
+    }
+
+    if (isset($backup_data['plugin_settings'])) {
+        update_option('qp_settings', $backup_data['plugin_settings']['qp_settings']);
+        update_option('qp_next_custom_question_id', $backup_data['plugin_settings']['qp_next_custom_question_id']);
+    }
+
+    $images_dir = trailingslashit($temp_extract_dir) . 'images';
+    if (file_exists($images_dir)) {
+        require_once(ABSPATH . 'wp-admin/includes/image.php');
+        require_once(ABSPATH . 'wp-admin/includes/file.php');
+        require_once(ABSPATH . 'wp-admin/includes/media.php');
+        $image_files = array_diff(scandir($images_dir), ['..', '.']);
+        foreach ($image_files as $image_filename) {
+            $existing_attachment_id = $wpdb->get_var($wpdb->prepare("SELECT post_id FROM $wpdb->postmeta WHERE meta_key = '_wp_attached_file' AND meta_value LIKE %s", '%' . $wpdb->esc_like($image_filename)));
+            if (!$existing_attachment_id) {
+                media_handle_sideload(['name' => $image_filename, 'tmp_name' => trailingslashit($images_dir) . $image_filename], 0);
+            }
+        }
+    }
+
+    qp_delete_dir($temp_extract_dir);
+    return ['success' => true, 'stats' => $stats];
+}
+
+/**
+ * Helper function to recursively delete a directory.
+ *
+ * @param string $dirPath The path to the directory to delete.
+ */
+function qp_delete_dir($dirPath)
+{
+    if (!is_dir($dirPath)) {
+        return;
+    }
+    if (substr($dirPath, strlen($dirPath) - 1, 1) != '/') {
+        $dirPath .= '/';
+    }
+    $files = glob($dirPath . '*', GLOB_MARK);
+    foreach ($files as $file) {
+        is_dir($file) ? qp_delete_dir($file) : unlink($file);
+    }
+    rmdir($dirPath);
+}
+
+
+
+
 // Public-facing hooks and AJAX handlers
 function qp_public_init()
 {
@@ -1140,9 +1678,9 @@ function qp_get_sections_for_subject_ajax()
 
     // Get all question IDs the user has already answered correctly.
     $attempted_q_ids = $wpdb->get_col($wpdb->prepare(
-    "SELECT DISTINCT question_id FROM {$attempts_table} WHERE user_id = %d AND status = 'answered'",
-    $user_id
-));
+        "SELECT DISTINCT question_id FROM {$attempts_table} WHERE user_id = %d AND status = 'answered'",
+        $user_id
+    ));
     $attempted_q_ids_placeholder = !empty($attempted_q_ids) ? implode(',', array_map('absint', $attempted_q_ids)) : '0';
 
     // Base query that now includes a subquery to count unattempted questions
@@ -2464,7 +3002,7 @@ function qp_get_quick_edit_form_ajax()
 
     // Start output buffering to capture the form HTML
     ob_start();
-?>
+    ?>
     <script>
         var qp_quick_edit_data = {
             topics_by_subject: <?php echo json_encode($topics_by_subject); ?>,

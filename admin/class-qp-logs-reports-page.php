@@ -15,7 +15,7 @@ class QP_Logs_Reports_Page {
         $active_tab = isset($_GET['tab']) && array_key_exists($_GET['tab'], $tabs) ? $_GET['tab'] : 'reports';
 ?>
         <div class="wrap">
-            <h1 class="wp-heading-inline">Logs & Reports</h1>
+            <h1 class="wp-heading-inline">Reports</h1>
             <p>Review questions reported by users and manage the reasons available for reporting.</p>
             <hr class="wp-header-end">
 

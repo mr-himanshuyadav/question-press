@@ -4,30 +4,33 @@ if (!defined('ABSPATH')) {
     exit; // Exit if accessed directly.
 }
 
-class QP_Export_Page {
+class QP_Export_Page
+{
 
-    public static function handle_export_submission() {
-        if (isset($_GET['page']) && $_GET['page'] === 'qp-export' && isset($_POST['export_questions'])) {
+    public static function handle_export_submission()
+    {
+        if (isset($_GET['page']) && $_GET['page'] === 'qp-tools' && isset($_POST['export_questions'])) {
             if (check_admin_referer('qp_export_nonce_action', 'qp_export_nonce_field')) {
                 self::generate_zip();
             }
         }
     }
 
-    public static function render() {
+    public static function render()
+    {
         global $wpdb;
         $subjects_table = $wpdb->prefix . 'qp_subjects';
         $subjects = $wpdb->get_results("SELECT * FROM $subjects_table ORDER BY subject_name ASC");
-        ?>
+?>
         <div class="wrap">
             <h1 class="wp-heading-inline">Export Questions</h1>
             <hr class="wp-header-end">
 
             <p>Select the subjects you wish to export. All questions within the selected subjects will be exported into a single <code>.zip</code> file conforming to schema v2.2.</p>
 
-            <form method="post" action="admin.php?page=qp-export">
+            <form method="post" action="admin.php?page=qp-tools&tab=export">
                 <?php wp_nonce_field('qp_export_nonce_action', 'qp_export_nonce_field'); ?>
-                
+
                 <h2>Select Subjects</h2>
                 <fieldset>
                     <?php if (!empty($subjects)) : ?>
@@ -47,10 +50,11 @@ class QP_Export_Page {
                 </p>
             </form>
         </div>
-        <?php
+<?php
     }
 
-    private static function generate_zip() {
+    private static function generate_zip()
+    {
         if (empty($_POST['subject_ids'])) {
             wp_die('Please select at least one subject to export.');
         }
@@ -97,8 +101,8 @@ class QP_Export_Page {
                  WHERE q.group_id = %d",
                 $group->group_id
             ));
-            
-            if(empty($questions_in_group)) continue; // Skip groups with no questions
+
+            if (empty($questions_in_group)) continue; // Skip groups with no questions
 
             $direction_image_name = $group->direction_image_id ? basename(get_attached_file($group->direction_image_id)) : null;
 
@@ -146,9 +150,9 @@ class QP_Export_Page {
             'sourceFile' => 'database_export',
             'questionGroups' => $final_question_groups
         ];
-        
+
         $json_data = json_encode($final_json, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-        
+
         $zip_path = tempnam(sys_get_temp_dir(), 'qp_export');
         $zip = new ZipArchive();
 
@@ -158,7 +162,7 @@ class QP_Export_Page {
 
         $zip->addFromString($json_filename, $json_data);
         $zip->close();
-        
+
         header('Content-Type: application/zip');
         header('Content-Disposition: attachment; filename="' . $filename . '"');
         header('Content-Length: ' . filesize($zip_path));
