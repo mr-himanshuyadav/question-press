@@ -1183,29 +1183,35 @@ function qp_restore_backup_ajax() {
     }
     $wpdb->query('SET FOREIGN_KEY_CHECKS=1');
 
-    // --- NEW: De-duplicate user attempts data before insertion ---
+    // --- NEW: De-duplicate user attempts data and collect stats ---
+    $stats = [
+        'questions' => isset($backup_data['qp_questions']) ? count($backup_data['qp_questions']) : 0,
+        'options' => isset($backup_data['qp_options']) ? count($backup_data['qp_options']) : 0,
+        'sessions' => isset($backup_data['qp_user_sessions']) ? count($backup_data['qp_user_sessions']) : 0,
+        'attempts' => isset($backup_data['qp_user_attempts']) ? count($backup_data['qp_user_attempts']) : 0,
+        'reports' => isset($backup_data['qp_question_reports']) ? count($backup_data['qp_question_reports']) : 0,
+        'duplicates_handled' => 0
+    ];
+
     if (!empty($backup_data['qp_user_attempts'])) {
+        $original_attempt_count = count($backup_data['qp_user_attempts']);
         $unique_attempts = [];
         foreach ($backup_data['qp_user_attempts'] as $attempt) {
             $key = $attempt['session_id'] . '-' . $attempt['question_id'];
 
             if (!isset($unique_attempts[$key])) {
-                // If we haven't seen this session-question combo yet, store it.
                 $unique_attempts[$key] = $attempt;
             } else {
-                // A duplicate exists. Apply the user's logic.
                 $existing_attempt = $unique_attempts[$key];
                 $current_attempt = $attempt;
-
-                // Prioritize the attempt that has a selected option.
                 if (!empty($current_attempt['selected_option_id']) && empty($existing_attempt['selected_option_id'])) {
                     $unique_attempts[$key] = $current_attempt;
                 }
-                // If both or neither have an answer, we do nothing, preserving the first one encountered.
             }
         }
-        // Replace the original attempts data with the cleaned, unique data.
-        $backup_data['qp_user_attempts'] = array_values($unique_attempts);
+        $final_attempts = array_values($unique_attempts);
+        $stats['duplicates_handled'] = $original_attempt_count - count($final_attempts);
+        $backup_data['qp_user_attempts'] = $final_attempts;
     }
 
     // 5. Restore Data via a MORE ROBUST BATCH INSERT
@@ -1275,7 +1281,10 @@ function qp_restore_backup_ajax() {
     
     // 7. Cleanup and Success
     qp_delete_dir($temp_extract_dir);
-    wp_send_json_success(['message' => 'Data has been successfully restored. The page will now reload.']);
+    wp_send_json_success([
+        'message' => 'Data has been successfully restored. The page will now reload.',
+        'stats' => $stats
+    ]);
 }
 add_action('wp_ajax_qp_restore_backup', 'qp_restore_backup_ajax');
 

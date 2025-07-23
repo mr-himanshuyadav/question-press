@@ -133,9 +133,21 @@ jQuery(document).ready(function($) {
         }).then((result) => {
             if (result.isConfirmed) {
                 if (result.value.success) {
+                    const stats = result.value.data.stats;
+                    let statsHtml = '<div style="text-align: left; display: inline-block; margin-top: 1rem;">';
+                    statsHtml += `<p><strong>Questions:</strong> ${stats.questions}</p>`;
+                    statsHtml += `<p><strong>Options:</strong> ${stats.options}</p>`;
+                    statsHtml += `<p><strong>Sessions:</strong> ${stats.sessions}</p>`;
+                    statsHtml += `<p><strong>Attempts:</strong> ${stats.attempts}</p>`;
+                    statsHtml += `<p><strong>Reports:</strong> ${stats.reports}</p>`;
+                    if (stats.duplicates_handled > 0) {
+                        statsHtml += `<p><strong>Duplicate Attempts Handled:</strong> ${stats.duplicates_handled}</p>`;
+                    }
+                    statsHtml += '</div>';
+
                     Swal.fire({
                         title: 'Restore Complete!',
-                        text: result.value.data.message,
+                        html: 'Your data has been successfully restored.' + statsHtml,
                         icon: 'success'
                     }).then(() => {
                         // Reload the page to see changes reflected everywhere
