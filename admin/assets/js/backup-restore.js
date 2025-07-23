@@ -1,5 +1,10 @@
 jQuery(document).ready(function($) {
     var wrapper = $('#col-container');
+    // --- Auto Backup UI Logic ---
+    var $autoBackupForm = $('#qp-auto-backup-form');
+    var $saveButton = $('#qp-save-schedule-btn');
+    var $disableButton = $('#qp-disable-auto-backup-btn');
+    var $hiddenDisableForm = $('#qp-disable-backup-form');
 
     wrapper.on('click', '#qp-create-backup-btn', function(e) {
         e.preventDefault();
@@ -158,5 +163,19 @@ jQuery(document).ready(function($) {
                 }
             }
         });
+    });
+
+    // Monitor for changes in the form fields
+    $autoBackupForm.on('change keyup', 'input, select', function() {
+        if ($saveButton.is(':disabled')) {
+            $saveButton.prop('disabled', false).val('Update Schedule');
+        }
+    });
+
+    // Handle the disable button click
+    $disableButton.on('click', function(e) {
+        e.preventDefault();
+        // Simply submit the hidden form
+        $hiddenDisableForm.submit();
     });
 });

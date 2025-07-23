@@ -9,91 +9,91 @@ class QP_Backup_Restore_Page
     /**
      * Handles form submissions for the Backup & Restore page.
      */
-    public static function handle_forms() {
-    // Handle Auto Backup Settings
-    if (isset($_POST['action']) && in_array($_POST['action'], ['qp_save_auto_backup_settings', 'qp_disable_auto_backup'])) {
-        check_admin_referer('qp_auto_backup_nonce_action', 'qp_auto_backup_nonce_field');
+    public static function handle_forms()
+    {
+        // Handle Auto Backup Settings
+        if (isset($_POST['action']) && in_array($_POST['action'], ['qp_save_auto_backup_settings', 'qp_disable_auto_backup'])) {
+            check_admin_referer('qp_auto_backup_nonce_action', 'qp_auto_backup_nonce_field');
 
-        // Always clear any previously scheduled event first.
-        wp_clear_scheduled_hook('qp_scheduled_backup_hook');
+            // Always clear any previously scheduled event first.
+            wp_clear_scheduled_hook('qp_scheduled_backup_hook');
 
-        if ($_POST['action'] === 'qp_save_auto_backup_settings') {
-            $interval = isset($_POST['auto_backup_interval']) ? absint($_POST['auto_backup_interval']) : 1;
-            $frequency = isset($_POST['auto_backup_frequency']) ? sanitize_key($_POST['auto_backup_frequency']) : 'daily';
-            
-            // This is a custom cron schedule, not a built-in one.
-            $schedule_name = 'every_' . $interval . '_' . $frequency;
+            if ($_POST['action'] === 'qp_save_auto_backup_settings') {
+                $interval = isset($_POST['auto_backup_interval']) ? absint($_POST['auto_backup_interval']) : 1;
+                $frequency = isset($_POST['auto_backup_frequency']) ? sanitize_key($_POST['auto_backup_frequency']) : 'daily';
 
-            // Note: For simplicity, we are assuming 'daily', 'weekly', 'monthly'.
-            // A more complex system would add custom schedules to WordPress.
-            // We will handle the interval manually for this implementation.
-            
-            $schedule_settings = ['interval' => $interval, 'frequency' => $frequency];
-            update_option('qp_auto_backup_schedule', $schedule_settings);
-            
-            // Schedule the first event to run after the interval passes.
-            wp_schedule_event(time(), $frequency, 'qp_scheduled_backup_hook');
-            
-            add_settings_error('qp_backup_notices', 'auto_backup_saved', 'Auto backup schedule has been saved and activated.', 'success');
+                // This is a custom cron schedule, not a built-in one.
+                $schedule_name = 'every_' . $interval . '_' . $frequency;
 
-        } elseif ($_POST['action'] === 'qp_disable_auto_backup') {
-            delete_option('qp_auto_backup_schedule');
-            add_settings_error('qp_backup_notices', 'auto_backup_disabled', 'Auto backup schedule has been disabled.', 'info');
+                // Note: For simplicity, we are assuming 'daily', 'weekly', 'monthly'.
+                // A more complex system would add custom schedules to WordPress.
+                // We will handle the interval manually for this implementation.
+
+                $schedule_settings = ['interval' => $interval, 'frequency' => $frequency];
+                update_option('qp_auto_backup_schedule', $schedule_settings);
+
+                // Schedule the first event to run after the interval passes.
+                wp_schedule_event(time(), $frequency, 'qp_scheduled_backup_hook');
+
+                add_settings_error('qp_backup_notices', 'auto_backup_saved', 'Auto backup schedule has been saved and activated.', 'success');
+            } elseif ($_POST['action'] === 'qp_disable_auto_backup') {
+                delete_option('qp_auto_backup_schedule');
+                add_settings_error('qp_backup_notices', 'auto_backup_disabled', 'Auto backup schedule has been disabled.', 'info');
+            }
+            return;
         }
-        return;
+
+        if (!isset($_POST['action']) || $_POST['action'] !== 'qp_restore_from_upload') {
+            return;
+        }
+
+
+        if (!isset($_POST['qp_restore_nonce_field']) || !wp_verify_nonce($_POST['qp_restore_nonce_field'], 'qp_restore_nonce_action')) {
+            wp_die('Security check failed.');
+        }
+
+        if (!isset($_FILES['backup_zip_file']) || $_FILES['backup_zip_file']['error'] !== UPLOAD_ERR_OK) {
+            add_settings_error('qp_backup_notices', 'restore_error', 'File upload error. Please try again.', 'error');
+            return;
+        }
+
+        $file = $_FILES['backup_zip_file'];
+
+        if (!in_array($file['type'], ['application/zip', 'application/x-zip-compressed'])) {
+            add_settings_error('qp_backup_notices', 'restore_error', 'Invalid file type. Please upload a .zip file.', 'error');
+            return;
+        }
+
+        $upload_dir = wp_upload_dir();
+        $backup_dir = trailingslashit($upload_dir['basedir']) . 'qp-backups';
+        if (!file_exists($backup_dir)) {
+            wp_mkdir_p($backup_dir);
+        }
+
+        $new_filename = 'uploaded-' . date('Y-m-d-H-i-s') . '-' . sanitize_file_name($file['name']);
+        $new_filepath = trailingslashit($backup_dir) . $new_filename;
+
+        if (!move_uploaded_file($file['tmp_name'], $new_filepath)) {
+            add_settings_error('qp_backup_notices', 'restore_error', 'Failed to move uploaded file.', 'error');
+            return;
+        }
+
+        // Now, call the new restore function with the uploaded filename
+        $result = qp_perform_restore($new_filename);
+
+        // Clean up the uploaded file regardless of success or failure
+        if (file_exists($new_filepath)) {
+            unlink($new_filepath);
+        }
+
+        if ($result['success']) {
+            $stats = $result['stats'];
+            $message = '<strong>Restore Complete!</strong><br> - Questions: ' . $stats['questions'] . '<br> - Options: ' . $stats['options'] . '<br> - Sessions: ' . $stats['sessions'] . '<br> - Attempts: ' . $stats['attempts'];
+            add_settings_error('qp_backup_notices', 'restore_success', $message, 'success');
+        } else {
+            add_settings_error('qp_backup_notices', 'restore_error', 'Restore failed: ' . $result['message'], 'error');
+        }
     }
-
-    if (!isset($_POST['action']) || $_POST['action'] !== 'qp_restore_from_upload') {
-        return;
-    }
-
-
-    if (!isset($_POST['qp_restore_nonce_field']) || !wp_verify_nonce($_POST['qp_restore_nonce_field'], 'qp_restore_nonce_action')) {
-        wp_die('Security check failed.');
-    }
-
-    if (!isset($_FILES['backup_zip_file']) || $_FILES['backup_zip_file']['error'] !== UPLOAD_ERR_OK) {
-        add_settings_error('qp_backup_notices', 'restore_error', 'File upload error. Please try again.', 'error');
-        return;
-    }
-
-    $file = $_FILES['backup_zip_file'];
-
-    if (!in_array($file['type'], ['application/zip', 'application/x-zip-compressed'])) {
-        add_settings_error('qp_backup_notices', 'restore_error', 'Invalid file type. Please upload a .zip file.', 'error');
-        return;
-    }
-
-    $upload_dir = wp_upload_dir();
-    $backup_dir = trailingslashit($upload_dir['basedir']) . 'qp-backups';
-    if (!file_exists($backup_dir)) {
-        wp_mkdir_p($backup_dir);
-    }
-    
-    $new_filename = 'uploaded-' . date('Y-m-d-H-i-s') . '-' . sanitize_file_name($file['name']);
-    $new_filepath = trailingslashit($backup_dir) . $new_filename;
-
-    if (!move_uploaded_file($file['tmp_name'], $new_filepath)) {
-        add_settings_error('qp_backup_notices', 'restore_error', 'Failed to move uploaded file.', 'error');
-        return;
-    }
-
-    // Now, call the new restore function with the uploaded filename
-    $result = qp_perform_restore($new_filename);
-
-    // Clean up the uploaded file regardless of success or failure
-    if (file_exists($new_filepath)) {
-        unlink($new_filepath);
-    }
-
-    if ($result['success']) {
-        $stats = $result['stats'];
-        $message = '<strong>Restore Complete!</strong><br> - Questions: ' . $stats['questions'] . '<br> - Options: ' . $stats['options'] . '<br> - Sessions: ' . $stats['sessions'] . '<br> - Attempts: ' . $stats['attempts'];
-        add_settings_error('qp_backup_notices', 'restore_success', $message, 'success');
-    } else {
-        add_settings_error('qp_backup_notices', 'restore_error', 'Restore failed: ' . $result['message'], 'error');
-    }
-}
 
 
     /**
@@ -105,12 +105,26 @@ class QP_Backup_Restore_Page
         $local_backups = []; // Placeholder for now.
 ?>
         <style>
-        .qp-backups-table th.column-date { width: 20%; }
-        .qp-backups-table th.column-name { width: 35%; }
-        .qp-backups-table th.column-size { width: 10%; }
-        .qp-backups-table th.column-actions { width: 35%; }
-        .qp-backups-table .column-actions .button { white-space: nowrap; }
-            </style>
+            .qp-backups-table th.column-date {
+                width: 20%;
+            }
+
+            .qp-backups-table th.column-name {
+                width: 35%;
+            }
+
+            .qp-backups-table th.column-size {
+                width: 10%;
+            }
+
+            .qp-backups-table th.column-actions {
+                width: 35%;
+            }
+
+            .qp-backups-table .column-actions .button {
+                white-space: nowrap;
+            }
+        </style>
         <?php settings_errors('qp_backup_notices'); ?>
         <div id="col-container" class="wp-clearfix">
             <div id="col-left">
@@ -158,19 +172,24 @@ class QP_Backup_Restore_Page
                             </div>
 
                             <?php if ($schedule && wp_next_scheduled('qp_scheduled_backup_hook')) : ?>
-                                <p><strong>Status:</strong> Active. Next backup scheduled for <?php echo esc_html(get_date_from_gmt(date('Y-m-d H:i:s', wp_next_scheduled('qp_scheduled_backup_hook')), 'M j, Y, g:i a')); ?>.</p>
+                                <div class="notice notice-info inline" style="margin-top: 1rem;">
+                                    <p><strong>Status:</strong> Active. Next backup is scheduled for <?php echo esc_html(get_date_from_gmt(date('Y-m-d H:i:s', wp_next_scheduled('qp_scheduled_backup_hook')), 'M j, Y, g:i a')); ?>.</p>
+                                </div>
                             <?php else: ?>
-                                <p><strong>Status:</strong> Inactive.</p>
+                                <div class="notice notice-warning inline" style="margin-top: 1rem;">
+                                    <p><strong>Status:</strong> Inactive.</p>
+                                </div>
                             <?php endif; ?>
 
                             <p class="submit">
-                                <input type="submit" class="button button-primary" value="Save Schedule">
+                                <input type="submit" class="button button-primary" id="qp-save-schedule-btn" value="<?php echo $schedule ? 'Update Schedule' : 'Save Schedule'; ?>" <?php if ($schedule) echo 'disabled'; ?>>
+
+                                <button type="button" class="button button-secondary" id="qp-disable-auto-backup-btn" <?php if (!$schedule) echo 'disabled'; ?>>Disable</button>
                             </p>
                         </form>
-                        <form method="post" action="<?php echo esc_url(admin_url('admin.php?page=qp-tools&tab=backup_restore')); ?>">
+                        <form id="qp-disable-backup-form" method="post" action="<?php echo esc_url(admin_url('admin.php?page=qp-tools&tab=backup_restore')); ?>" style="display: none;">
                             <input type="hidden" name="action" value="qp_disable_auto_backup">
                             <?php wp_nonce_field('qp_auto_backup_nonce_action', 'qp_auto_backup_nonce_field'); ?>
-                            <button type="submit" class="button button-secondary" <?php if (!$schedule) echo 'disabled'; ?>>Disable</button>
                         </form>
                     </div>
                 </div>
