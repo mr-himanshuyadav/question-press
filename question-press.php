@@ -986,6 +986,9 @@ add_action('wp_ajax_get_sources_for_list_table_filter', 'qp_get_sources_for_list
 /**
  * AJAX handler to create a new backup.
  */
+/**
+ * AJAX handler to create a new backup.
+ */
 function qp_create_backup_ajax()
 {
     check_ajax_referer('qp_backup_restore_nonce', 'nonce');
@@ -993,6 +996,23 @@ function qp_create_backup_ajax()
         wp_send_json_error(['message' => 'Permission denied.']);
     }
 
+    $result = qp_perform_backup();
+
+    if ($result['success']) {
+        $backups_html = qp_get_local_backups_html();
+        wp_send_json_success(['backups_html' => $backups_html]);
+    } else {
+        wp_send_json_error(['message' => $result['message']]);
+    }
+}
+add_action('wp_ajax_qp_create_backup', 'qp_create_backup_ajax');
+
+/**
+ * Performs the core backup creation process and saves the file locally.
+ *
+ * @return array An array containing 'success' status and a 'message' or 'filename'.
+ */
+function qp_perform_backup() {
     global $wpdb;
     $upload_dir = wp_upload_dir();
     $backup_dir = trailingslashit($upload_dir['basedir']) . 'qp-backups';
@@ -1000,7 +1020,6 @@ function qp_create_backup_ajax()
         wp_mkdir_p($backup_dir);
     }
 
-    // List of all custom tables to back up
     $tables_to_backup = [
         'qp_subjects', 'qp_topics', 'qp_labels', 'qp_exams', 'qp_exam_subjects',
         'qp_sources', 'qp_source_sections', 'qp_question_groups', 'qp_questions',
@@ -1018,7 +1037,6 @@ function qp_create_backup_ajax()
         $backup_data[$table_name_without_prefix] = $wpdb->get_results("SELECT * FROM {$table}", ARRAY_A);
     }
     
-    // Add plugin options to the backup under a separate key
     $backup_data['plugin_settings'] = [
         'qp_settings' => get_option('qp_settings'),
         'qp_next_custom_question_id' => get_option('qp_next_custom_question_id'),
@@ -1026,9 +1044,9 @@ function qp_create_backup_ajax()
 
     $json_data = json_encode($backup_data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
     $json_filename = 'database.json';
-    file_put_contents(trailingslashit($backup_dir) . $json_filename, $json_data);
+    $temp_json_path = trailingslashit($backup_dir) . $json_filename;
+    file_put_contents($temp_json_path, $json_data);
 
-    // Get all image IDs used in question groups
     $image_ids = $wpdb->get_col("SELECT DISTINCT direction_image_id FROM {$wpdb->prefix}qp_question_groups WHERE direction_image_id IS NOT NULL AND direction_image_id > 0");
 
     $backup_filename = 'qp-backup-' . date('Y-m-d_H-i-s') . '.zip';
@@ -1036,10 +1054,10 @@ function qp_create_backup_ajax()
 
     $zip = new ZipArchive();
     if ($zip->open($zip_path, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== TRUE) {
-        wp_send_json_error(['message' => 'Cannot create ZIP archive.']);
+        return ['success' => false, 'message' => 'Cannot create ZIP archive.'];
     }
 
-    $zip->addFile(trailingslashit($backup_dir) . $json_filename, $json_filename);
+    $zip->addFile($temp_json_path, $json_filename);
 
     if (!empty($image_ids)) {
         $zip->addEmptyDir('images');
@@ -1052,14 +1070,10 @@ function qp_create_backup_ajax()
     }
 
     $zip->close();
-    unlink(trailingslashit($backup_dir) . $json_filename); // Clean up the temporary JSON file
+    unlink($temp_json_path);
 
-    // Generate the fresh HTML for the table
-    $backups_html = qp_get_local_backups_html();
-
-    wp_send_json_success(['backups_html' => $backups_html]);
+    return ['success' => true, 'filename' => $backup_filename];
 }
-add_action('wp_ajax_qp_create_backup', 'qp_create_backup_ajax');
 
 /**
  * Scans the backup directory and returns the HTML for the local backups table body.

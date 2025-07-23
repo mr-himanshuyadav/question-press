@@ -108,7 +108,7 @@ class QP_Backup_Restore_Page
             </div>
             <div id="col-right">
                 <div class="col-wrap">
-                    <h3>Local Backups</h3>
+                    <h3>Backups</h3>
                     <table class="wp-list-table widefat fixed striped qp-backups-table">
                         <thead>
                             <tr>
