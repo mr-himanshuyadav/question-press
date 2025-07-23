@@ -28,7 +28,7 @@ class QP_Import_Page
                     <h3>Upload Question Package</h3>
                     <p>Upload a <code>.zip</code> file containing a <code>questions.json</code> file to import questions into the database.</p>
 
-                    <form method="post" action="admin.php?page=qp-import" enctype="multipart/form-data">
+                    <form method="post" action="admin.php?page=qp-tools&tab=import" enctype="multipart/form-data">
                         <?php wp_nonce_field('qp_import_nonce_action', 'qp_import_nonce_field'); ?>
                         <table class="form-table">
                             <tbody>
