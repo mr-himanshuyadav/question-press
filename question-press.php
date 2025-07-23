@@ -1004,7 +1004,9 @@ function qp_create_backup_ajax()
     $tables_to_backup = [
         'qp_subjects', 'qp_topics', 'qp_labels', 'qp_exams', 'qp_exam_subjects',
         'qp_sources', 'qp_source_sections', 'qp_question_groups', 'qp_questions',
-        'qp_options', 'qp_question_labels', 'qp_report_reasons', 'qp_question_reports'
+        'qp_options', 'qp_question_labels', 'qp_report_reasons', 'qp_question_reports',
+        'qp_logs', 'qp_user_sessions', 'qp_session_pauses', 'qp_user_attempts',
+        'qp_review_later', 'qp_revision_attempts'
     ];
     $full_table_names = array_map(function ($table) use ($wpdb) {
         return $wpdb->prefix . $table;
@@ -1169,9 +1171,11 @@ function qp_restore_backup_ajax() {
 
     // 4. Clear Existing Data (The Safe Way)
     $tables_to_clear = [
-        'qp_question_reports', 'qp_question_labels', 'qp_options', 'qp_questions', 'qp_question_groups',
-        'qp_source_sections', 'qp_sources', 'qp_exam_subjects', 'qp_exams',
-        'qp_labels', 'qp_topics', 'qp_subjects', 'qp_report_reasons'
+        // Clear tables with dependencies first
+        'qp_user_attempts', 'qp_session_pauses', 'qp_question_reports', 'qp_question_labels',
+        'qp_options', 'qp_questions', 'qp_question_groups', 'qp_source_sections', 'qp_sources',
+        'qp_exam_subjects', 'qp_exams', 'qp_labels', 'qp_topics', 'qp_subjects',
+        'qp_report_reasons', 'qp_user_sessions', 'qp_logs', 'qp_review_later', 'qp_revision_attempts'
     ];
     $wpdb->query('SET FOREIGN_KEY_CHECKS=0');
     foreach ($tables_to_clear as $table) {
@@ -1181,9 +1185,12 @@ function qp_restore_backup_ajax() {
 
     // 5. Restore Data via a MORE ROBUST BATCH INSERT
     $restore_order = [
+        // Restore parent tables first
         'qp_subjects', 'qp_topics', 'qp_labels', 'qp_exams', 'qp_exam_subjects',
         'qp_sources', 'qp_source_sections', 'qp_question_groups', 'qp_questions',
-        'qp_options', 'qp_question_labels', 'qp_report_reasons', 'qp_question_reports' // <-- Added missing table
+        'qp_options', 'qp_question_labels', 'qp_report_reasons', 'qp_question_reports',
+        'qp_logs', 'qp_user_sessions', 'qp_session_pauses', 'qp_user_attempts',
+        'qp_review_later', 'qp_revision_attempts'
     ];
 
     foreach ($restore_order as $table_name) {
