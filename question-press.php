@@ -1095,33 +1095,34 @@ function qp_perform_backup($type = 'manual')
     $zip->close();
     unlink($temp_json_path);
 
-    // --- NEW: Auto-pruning logic ---
+    // --- NEW: Corrected Auto-pruning logic ---
     $schedule = get_option('qp_auto_backup_schedule', false);
     if ($schedule && isset($schedule['keep'])) {
         $backups_to_keep = absint($schedule['keep']);
         $prune_manual = !empty($schedule['prune_manual']);
         
-        $all_backups = file_exists($backup_dir) ? array_diff(scandir($backup_dir), ['..', '.']) : [];
+        $all_files_in_dir = file_exists($backup_dir) ? array_diff(scandir($backup_dir), ['..', '.']) : [];
         
-        // Always get a list of auto-backups
-        $auto_backups = array_filter($all_backups, function($file) {
-            return strpos($file, 'qp-auto-backup-') === 0;
-        });
-
-        $files_to_prune = $auto_backups; // Start with the auto-backups
-
+        $candidate_files = [];
         if ($prune_manual) {
-            // If the setting is checked, also get the manual backups
-            $manual_backups = array_filter($all_backups, function($file) {
-                return strpos($file, 'qp-backup-') === 0;
-            });
-            // Merge both arrays to consider all files for deletion
-            $files_to_prune = array_merge($auto_backups, $manual_backups);
+            // If pruning manual backups, consider ALL backup files.
+            foreach ($all_files_in_dir as $file) {
+                if (strpos($file, 'qp-backup-') === 0 || strpos($file, 'qp-auto-backup-') === 0) {
+                    $candidate_files[] = $file;
+                }
+            }
+        } else {
+            // Otherwise, ONLY consider auto-backups.
+            foreach ($all_files_in_dir as $file) {
+                if (strpos($file, 'qp-auto-backup-') === 0) {
+                    $candidate_files[] = $file;
+                }
+            }
         }
 
-        if (count($files_to_prune) > $backups_to_keep) {
-            sort($files_to_prune); // Sort files by name (date), oldest first
-            $backups_to_delete = array_slice($files_to_prune, 0, count($files_to_prune) - $backups_to_keep);
+        if (count($candidate_files) > $backups_to_keep) {
+            sort($candidate_files); // Sort files by name (date), oldest first
+            $backups_to_delete = array_slice($candidate_files, 0, count($candidate_files) - $backups_to_keep);
 
             foreach ($backups_to_delete as $file_to_delete) {
                 unlink(trailingslashit($backup_dir) . $file_to_delete);
