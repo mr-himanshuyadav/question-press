@@ -176,7 +176,7 @@ class QP_Backup_Restore_Page
                                             <option value="monthly" <?php selected($schedule && isset($schedule['frequency']) ? $schedule['frequency'] : '', 'monthly'); ?>>Month(s)</option>
                                         </select>
                                     </div>
-                                    <div style="border-left: 1px solid #ddd; padding-left: 15px;">
+                                    <div>
                                         <span>Number of backups to keep:</span>
                                         <input type="number" name="auto_backup_keep" min="1" value="<?php echo esc_attr($schedule && isset($schedule['keep']) ? $schedule['keep'] : 5); ?>" style="width: 70px;">
                                     </div>
@@ -184,7 +184,7 @@ class QP_Backup_Restore_Page
                                 <div>
                                     <label>
                                         <input type="checkbox" name="auto_backup_prune_manual" value="1" <?php checked($schedule && !empty($schedule['prune_manual'])); ?>>
-                                        Also delete manual backups during auto-pruning.
+                                        Also delete manual backups during auto-delete.
                                     </label>
                                 </div>
                             </div>
