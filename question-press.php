@@ -577,7 +577,7 @@ function qp_handle_form_submissions()
     qp_handle_save_question_group();
     qp_handle_topic_forms();
     QP_Settings_Page::register_settings();
-    // --- ADD THIS LINE to hook our new unified migration handler ---
+    QP_Backup_Restore_Page::handle_forms();
     qp_run_unified_data_migration();
 }
 add_action('admin_init', 'qp_handle_form_submissions');
