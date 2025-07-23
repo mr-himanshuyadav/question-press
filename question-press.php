@@ -1004,7 +1004,7 @@ function qp_create_backup_ajax()
     $tables_to_backup = [
         'qp_subjects', 'qp_topics', 'qp_labels', 'qp_exams', 'qp_exam_subjects',
         'qp_sources', 'qp_source_sections', 'qp_question_groups', 'qp_questions',
-        'qp_options', 'qp_question_labels', 'qp_report_reasons'
+        'qp_options', 'qp_question_labels', 'qp_report_reasons', 'qp_question_reports'
     ];
     $full_table_names = array_map(function ($table) use ($wpdb) {
         return $wpdb->prefix . $table;
@@ -1144,51 +1144,32 @@ function qp_restore_backup_ajax() {
         wp_send_json_error(['message' => 'Permission denied.']);
     }
 
-    // 2. Increase Execution Limits (Best Effort)
-    // This helps prevent timeouts on larger backups. May not work on all hosts.
-    @ini_set('max_execution_time', 300); // 5 minutes
+    // 2. Increase Execution Limits
+    @ini_set('max_execution_time', 300);
     @ini_set('memory_limit', '256M');
 
-    // 3. File Validation and Extraction
+    // 3. File Validation and Extraction (Same as before)
     $filename = isset($_POST['filename']) ? sanitize_file_name($_POST['filename']) : '';
-    if (empty($filename)) {
-        wp_send_json_error(['message' => 'Invalid filename.']);
-    }
-
+    if (empty($filename)) { wp_send_json_error(['message' => 'Invalid filename.']); }
     global $wpdb;
     $upload_dir = wp_upload_dir();
     $backup_dir = trailingslashit($upload_dir['basedir']) . 'qp-backups';
     $file_path = trailingslashit($backup_dir) . $filename;
     $temp_extract_dir = trailingslashit($backup_dir) . 'temp_restore_' . time();
-
-    if (!file_exists($file_path)) {
-        wp_send_json_error(['message' => 'Backup file not found on server.']);
-    }
-
+    if (!file_exists($file_path)) { wp_send_json_error(['message' => 'Backup file not found on server.']); }
     wp_mkdir_p($temp_extract_dir);
     $zip = new ZipArchive;
-    if ($zip->open($file_path) !== TRUE) {
-        qp_delete_dir($temp_extract_dir); // Cleanup
-        wp_send_json_error(['message' => 'Failed to open the backup file.']);
-    }
+    if ($zip->open($file_path) !== TRUE) { qp_delete_dir($temp_extract_dir); wp_send_json_error(['message' => 'Failed to open the backup file.']); }
     $zip->extractTo($temp_extract_dir);
     $zip->close();
-
     $json_file_path = trailingslashit($temp_extract_dir) . 'database.json';
-    if (!file_exists($json_file_path)) {
-        qp_delete_dir($temp_extract_dir); // Cleanup
-        wp_send_json_error(['message' => 'database.json not found in the backup file.']);
-    }
-
+    if (!file_exists($json_file_path)) { qp_delete_dir($temp_extract_dir); wp_send_json_error(['message' => 'database.json not found in the backup file.']); }
     $backup_data = json_decode(file_get_contents($json_file_path), true);
-    if (json_last_error() !== JSON_ERROR_NONE) {
-        qp_delete_dir($temp_extract_dir); // Cleanup
-        wp_send_json_error(['message' => 'Invalid JSON in backup file.']);
-    }
+    if (json_last_error() !== JSON_ERROR_NONE) { qp_delete_dir($temp_extract_dir); wp_send_json_error(['message' => 'Invalid JSON in backup file.']); }
 
     // 4. Clear Existing Data (The Safe Way)
     $tables_to_clear = [
-        'qp_question_labels', 'qp_options', 'qp_questions', 'qp_question_groups',
+        'qp_question_reports', 'qp_question_labels', 'qp_options', 'qp_questions', 'qp_question_groups',
         'qp_source_sections', 'qp_sources', 'qp_exam_subjects', 'qp_exams',
         'qp_labels', 'qp_topics', 'qp_subjects', 'qp_report_reasons'
     ];
@@ -1198,44 +1179,48 @@ function qp_restore_backup_ajax() {
     }
     $wpdb->query('SET FOREIGN_KEY_CHECKS=1');
 
-
-    // 5. Restore Data via BATCH INSERT (The Performance Fix)
+    // 5. Restore Data via a MORE ROBUST BATCH INSERT
     $restore_order = [
         'qp_subjects', 'qp_topics', 'qp_labels', 'qp_exams', 'qp_exam_subjects',
         'qp_sources', 'qp_source_sections', 'qp_question_groups', 'qp_questions',
-        'qp_options', 'qp_question_labels', 'qp_report_reasons'
+        'qp_options', 'qp_question_labels', 'qp_report_reasons', 'qp_question_reports' // <-- Added missing table
     ];
 
     foreach ($restore_order as $table_name) {
         if (!empty($backup_data[$table_name])) {
             $rows = $backup_data[$table_name];
-            $chunks = array_chunk($rows, 100); // Process 100 rows at a time
-            
+            $chunks = array_chunk($rows, 100); // Process 100 rows at a time for performance
+
             foreach ($chunks as $chunk) {
-                $query = "INSERT INTO {$wpdb->prefix}{$table_name} (";
-                $query .= implode(', ', array_keys($chunk[0])) . ") VALUES ";
+                if (empty($chunk)) continue;
                 
+                $columns = array_keys($chunk[0]);
+                $placeholders = [];
                 $values = [];
-                foreach ($chunk as $row) {
-                    $row_values = [];
-                    foreach ($row as $value) {
-                        $row_values[] = is_null($value) ? 'NULL' : $wpdb->prepare('%s', $value);
-                    }
-                    $values[] = '(' . implode(', ', $row_values) . ')';
-                }
                 
-                $query .= implode(', ', $values);
-                $result = $wpdb->query($query);
+                foreach ($chunk as $row) {
+                    $row_placeholders = [];
+                    foreach ($columns as $column) {
+                        $row_placeholders[] = '%s'; // Use placeholders for wpdb->prepare
+                        $values[] = $row[$column];
+                    }
+                    $placeholders[] = '(' . implode(', ', $row_placeholders) . ')';
+                }
+
+                $query = "INSERT INTO {$wpdb->prefix}{$table_name} (`" . implode('`, `', $columns) . "`) VALUES " . implode(', ', $placeholders);
+                
+                $result = $wpdb->query($wpdb->prepare($query, $values));
 
                 if ($result === false) {
                     qp_delete_dir($temp_extract_dir); // Cleanup
                     wp_send_json_error(['message' => "An error occurred while restoring the '{$table_name}' table. DB Error: " . $wpdb->last_error]);
+                    return;
                 }
             }
         }
     }
     
-    // 6. Restore Options and Images (Unchanged)
+    // 6. Restore Options and Images (Unchanged, but now works correctly)
     if (isset($backup_data['plugin_settings'])) {
         update_option('qp_settings', $backup_data['plugin_settings']['qp_settings']);
         update_option('qp_next_custom_question_id', $backup_data['plugin_settings']['qp_next_custom_question_id']);
