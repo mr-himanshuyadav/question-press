@@ -10,9 +10,23 @@ class QP_Backup_Restore_Page
      * Handles form submissions for the Backup & Restore page.
      */
     public static function handle_forms() {
+    // Handle Auto Backup Settings
+    if (isset($_POST['action']) && $_POST['action'] === 'qp_save_auto_backup_settings') {
+        if (check_admin_referer('qp_auto_backup_nonce_action', 'qp_auto_backup_nonce_field')) {
+            $interval = isset($_POST['auto_backup_interval']) ? absint($_POST['auto_backup_interval']) : 1;
+            $frequency = isset($_POST['auto_backup_frequency']) ? sanitize_key($_POST['auto_backup_frequency']) : 'daily';
+            
+            // In the next step, we will add the scheduling logic here.
+            // For now, we just show a success message.
+            add_settings_error('qp_backup_notices', 'auto_backup_saved', 'Auto backup schedule saved. Scheduling logic to be added.', 'success');
+        }
+        return;
+    }
+
     if (!isset($_POST['action']) || $_POST['action'] !== 'qp_restore_from_upload') {
         return;
     }
+
 
     if (!isset($_POST['qp_restore_nonce_field']) || !wp_verify_nonce($_POST['qp_restore_nonce_field'], 'qp_restore_nonce_action')) {
         wp_die('Security check failed.');
@@ -101,6 +115,30 @@ class QP_Backup_Restore_Page
                             </div>
                             <p class="submit">
                                 <input type="submit" class="button button-danger" value="Upload and Restore">
+                            </p>
+                        </form>
+                    </div>
+                    <hr>
+                    <div class="form-wrap">
+                        <h2>Auto Backup Settings</h2>
+                        <p>Automatically create a local backup at a scheduled interval. The WordPress cron system requires site visits to trigger events, so schedules may not be exact.</p>
+                        <form id="qp-auto-backup-form" method="post" action="<?php echo esc_url(admin_url('admin.php?page=qp-tools&tab=backup_restore')); ?>">
+                            <input type="hidden" name="action" value="qp_save_auto_backup_settings">
+                            <?php wp_nonce_field('qp_auto_backup_nonce_action', 'qp_auto_backup_nonce_field'); ?>
+
+                            <div class="auto-backup-fields">
+                                <span>Every</span>
+                                <input type="number" name="auto_backup_interval" min="1" value="1" style="width: 70px;">
+                                <select name="auto_backup_frequency">
+                                    <option value="daily">Day(s)</option>
+                                    <option value="weekly">Week(s)</option>
+                                    <option value="monthly">Month(s)</option>
+                                </select>
+                            </div>
+
+                            <p class="submit">
+                                <input type="submit" class="button button-primary" value="Save Schedule">
+                                <button type="button" class="button button-secondary" id="qp-disable-auto-backup-btn">Disable</button>
                             </p>
                         </form>
                     </div>
