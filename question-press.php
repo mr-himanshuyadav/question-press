@@ -1070,7 +1070,7 @@ function qp_get_local_backups_html() {
     $upload_dir = wp_upload_dir();
     $backup_dir = trailingslashit($upload_dir['basedir']) . 'qp-backups';
     $backup_url_base = trailingslashit($upload_dir['baseurl']) . 'qp-backups';
-    $backups = file_exists($backup_dir) ? array_diff(scandir($backup_dir), ['..', '.']) : [];
+    $backups = file_exists($backup_dir) ? array_reverse(array_diff(scandir($backup_dir), ['..', '.'])) : [];
 
     ob_start();
 

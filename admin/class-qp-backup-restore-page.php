@@ -70,6 +70,13 @@ class QP_Backup_Restore_Page
         // In future steps, we will add logic here to fetch local backups.
         $local_backups = []; // Placeholder for now.
 ?>
+        <style>
+        .qp-backups-table th.column-date { width: 20%; }
+        .qp-backups-table th.column-name { width: 35%; }
+        .qp-backups-table th.column-size { width: 10%; }
+        .qp-backups-table th.column-actions { width: 35%; }
+        .qp-backups-table .column-actions .button { white-space: nowrap; }
+            </style>
         <?php settings_errors('qp_backup_notices'); ?>
         <div id="col-container" class="wp-clearfix">
             <div id="col-left">
@@ -102,13 +109,13 @@ class QP_Backup_Restore_Page
             <div id="col-right">
                 <div class="col-wrap">
                     <h3>Local Backups</h3>
-                    <table class="wp-list-table widefat fixed striped">
+                    <table class="wp-list-table widefat fixed striped qp-backups-table">
                         <thead>
                             <tr>
-                                <th>Backup Date</th>
-                                <th>Backup Name</th>
-                                <th>File Size</th>
-                                <th>Actions</th>
+                                <th class="column-date">Backup Date</th>
+                                <th class="column-name">Backup Name</th>
+                                <th class="column-size">File Size</th>
+                                <th class="column-actions">Actions</th>
                             </tr>
                         </thead>
                         <tbody id="qp-local-backups-list">
