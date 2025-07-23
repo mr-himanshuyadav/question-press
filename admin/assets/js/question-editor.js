@@ -62,7 +62,8 @@ jQuery(document).ready(function($) {
     // --- Function to update Topic dropdown based on Subject ---
     function updateTopics() {
         var selectedSubjectId = subjectSelect.val();
-        var currentTopicId = qp_editor_data.current_topic_id;
+        // Capture the currently selected topic before clearing
+        var previouslySelectedTopicId = topicSelect.val();
         
         topicSelect.empty().prop('disabled', true);
 
@@ -70,11 +71,14 @@ jQuery(document).ready(function($) {
             topicSelect.prop('disabled', false).append('<option value="">— Select a Topic —</option>');
             $.each(qp_editor_data.topics_by_subject[selectedSubjectId], function(index, topic) {
                 var option = $('<option></option>').val(topic.id).text(topic.name);
-                if (topic.id == currentTopicId) {
+                // Prioritize previously selected value, then initial load value
+                if (topic.id == previouslySelectedTopicId || topic.id == qp_editor_data.current_topic_id) {
                     option.prop('selected', true);
                 }
                 topicSelect.append(option);
             });
+            // After initial load, clear current_topic_id to prevent interference
+            qp_editor_data.current_topic_id = '';
         } else {
             topicSelect.append('<option value="">— No topics for this subject —</option>');
         }
@@ -83,7 +87,8 @@ jQuery(document).ready(function($) {
     // --- NEW: Function to update Source dropdown based on Subject ---
     function updateSources() {
         var selectedSubjectId = subjectSelect.val();
-        var currentSourceId = qp_editor_data.current_source_id;
+        // Capture the currently selected source before clearing
+        var previouslySelectedSourceId = sourceSelect.val();
 
         sourceSelect.empty().prop('disabled', true);
 
@@ -91,11 +96,14 @@ jQuery(document).ready(function($) {
             sourceSelect.prop('disabled', false).append('<option value="">— Select a Source —</option>');
             $.each(qp_editor_data.sources_by_subject[selectedSubjectId], function(index, source) {
                 var option = $('<option></option>').val(source.id).text(source.name);
-                if (source.id == currentSourceId) {
+                // Prioritize previously selected value, then initial load value
+                if (source.id == previouslySelectedSourceId || source.id == qp_editor_data.current_source_id) {
                     option.prop('selected', true);
                 }
                 sourceSelect.append(option);
             });
+            // After initial load, clear current_source_id to prevent interference
+            qp_editor_data.current_source_id = '';
         } else {
             sourceSelect.append('<option value="">— No sources for this subject —</option>');
         }
@@ -107,7 +115,8 @@ jQuery(document).ready(function($) {
     // --- Function to update Section dropdown based on Source ---
     function updateSections() {
         var selectedSourceId = sourceSelect.val();
-        var currentSectionId = qp_editor_data.current_section_id;
+        // Capture the currently selected section before clearing
+        var previouslySelectedSectionId = sectionSelect.val();
 
         sectionSelect.empty().prop('disabled', true);
 
@@ -115,11 +124,14 @@ jQuery(document).ready(function($) {
             sectionSelect.prop('disabled', false).append('<option value="">— Select a Section —</option>');
             $.each(qp_editor_data.sections_by_source[selectedSourceId], function(index, section) {
                 var option = $('<option></option>').val(section.id).text(section.name);
-                if (section.id == currentSectionId) {
+                // Prioritize previously selected value, then initial load value
+                if (section.id == previouslySelectedSectionId || section.id == qp_editor_data.current_section_id) {
                     option.prop('selected', true);
                 }
                 sectionSelect.append(option);
             });
+            // After initial load, clear current_section_id to prevent interference
+            qp_editor_data.current_section_id = '';
         } else {
             sectionSelect.append('<option value="">— No sections for this source —</option>');
         }
@@ -136,14 +148,11 @@ jQuery(document).ready(function($) {
 
     // --- Bind Event Handlers ---
     subjectSelect.on('change', function() {
-        qp_editor_data.current_topic_id = '';
-        qp_editor_data.current_source_id = ''; // <-- Add this to reset selection
         updateTopics();
-        updateSources(); // <-- Add this call
+        updateSources();
     });
 
     sourceSelect.on('change', function() {
-        qp_editor_data.current_section_id = '';
         updateSections();
     });
 
