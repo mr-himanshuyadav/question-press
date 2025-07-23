@@ -1016,6 +1016,8 @@ add_action('wp_ajax_qp_create_backup', 'qp_create_backup_ajax');
  */
 function qp_perform_backup($type = 'manual')
 {
+    
+
     global $wpdb;
     $upload_dir = wp_upload_dir();
     $backup_dir = trailingslashit($upload_dir['basedir']) . 'qp-backups';
@@ -1094,43 +1096,75 @@ function qp_perform_backup($type = 'manual')
 
     $zip->close();
     unlink($temp_json_path);
+    qp_prune_old_backups();
 
-    // --- NEW: Corrected Auto-pruning logic ---
+    return ['success' => true, 'filename' => $backup_filename];
+}
+
+/**
+ * Intelligently prunes old backup files based on saved schedule settings.
+ * Correctly sorts by file modification time and respects pruning rules.
+ */
+function qp_prune_old_backups() {
     $schedule = get_option('qp_auto_backup_schedule', false);
-    if ($schedule && isset($schedule['keep'])) {
-        $backups_to_keep = absint($schedule['keep']);
-        $prune_manual = !empty($schedule['prune_manual']);
-        
-        $all_files_in_dir = file_exists($backup_dir) ? array_diff(scandir($backup_dir), ['..', '.']) : [];
-        
-        $candidate_files = [];
-        if ($prune_manual) {
-            // If pruning manual backups, consider ALL backup files.
-            foreach ($all_files_in_dir as $file) {
-                if (strpos($file, 'qp-backup-') === 0 || strpos($file, 'qp-auto-backup-') === 0) {
-                    $candidate_files[] = $file;
-                }
-            }
-        } else {
-            // Otherwise, ONLY consider auto-backups.
-            foreach ($all_files_in_dir as $file) {
-                if (strpos($file, 'qp-auto-backup-') === 0) {
-                    $candidate_files[] = $file;
-                }
-            }
+    if (!$schedule || !isset($schedule['keep'])) {
+        return; // No schedule or keep limit set, so do nothing.
+    }
+
+    $backups_to_keep = absint($schedule['keep']);
+    $prune_manual = !empty($schedule['prune_manual']);
+    
+    $upload_dir = wp_upload_dir();
+    $backup_dir = trailingslashit($upload_dir['basedir']) . 'qp-backups';
+    if (!is_dir($backup_dir)) {
+        return;
+    }
+
+    $all_files_in_dir = array_diff(scandir($backup_dir), ['..', '.']);
+    
+    // Create a detailed list of backup files with their timestamps
+    $backup_files_with_time = [];
+    foreach ($all_files_in_dir as $file) {
+        $is_auto = strpos($file, 'qp-auto-backup-') === 0;
+        $is_manual = strpos($file, 'qp-backup-') === 0;
+
+        if ($is_auto || $is_manual) {
+            $backup_files_with_time[] = [
+                'name' => $file,
+                'type' => $is_auto ? 'auto' : 'manual',
+                'time' => filemtime(trailingslashit($backup_dir) . $file)
+            ];
         }
+    }
 
-        if (count($candidate_files) > $backups_to_keep) {
-            sort($candidate_files); // Sort files by name (date), oldest first
-            $backups_to_delete = array_slice($candidate_files, 0, count($candidate_files) - $backups_to_keep);
-
-            foreach ($backups_to_delete as $file_to_delete) {
-                unlink(trailingslashit($backup_dir) . $file_to_delete);
+    // Determine which files are candidates for deletion
+    $candidate_files = [];
+    if ($prune_manual) {
+        // If pruning manual, all backups are candidates
+        $candidate_files = $backup_files_with_time;
+    } else {
+        // Otherwise, only auto-backups are candidates
+        foreach ($backup_files_with_time as $file_data) {
+            if ($file_data['type'] === 'auto') {
+                $candidate_files[] = $file_data;
             }
         }
     }
 
-    return ['success' => true, 'filename' => $backup_filename];
+    if (count($candidate_files) <= $backups_to_keep) {
+        return; // Nothing to do
+    }
+
+    // **CRITICAL FIX:** Sort candidates by their actual file time, oldest first
+    usort($candidate_files, function($a, $b) {
+        return $a['time'] <=> $b['time'];
+    });
+
+    $backups_to_delete = array_slice($candidate_files, 0, count($candidate_files) - $backups_to_keep);
+
+    foreach ($backups_to_delete as $file_data_to_delete) {
+        unlink(trailingslashit($backup_dir) . $file_data_to_delete['name']);
+    }
 }
 
 /**
@@ -1140,6 +1174,7 @@ function qp_run_scheduled_backup_event()
 {
     // We can simply call our reusable backup function.
     // We could add logging here in the future if needed.
+    qp_prune_old_backups();
     qp_perform_backup('auto');
 }
 add_action('qp_scheduled_backup_hook', 'qp_run_scheduled_backup_event');
