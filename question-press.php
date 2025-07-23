@@ -1076,6 +1076,16 @@ function qp_perform_backup() {
 }
 
 /**
+ * The function that runs on the scheduled cron event to create a backup.
+ */
+function qp_run_scheduled_backup_event() {
+    // We can simply call our reusable backup function.
+    // We could add logging here in the future if needed.
+    qp_perform_backup();
+}
+add_action('qp_scheduled_backup_hook', 'qp_run_scheduled_backup_event');
+
+/**
  * Scans the backup directory and returns the HTML for the local backups table body.
  *
  * @return string The HTML for the table rows.

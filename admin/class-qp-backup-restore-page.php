@@ -11,14 +11,34 @@ class QP_Backup_Restore_Page
      */
     public static function handle_forms() {
     // Handle Auto Backup Settings
-    if (isset($_POST['action']) && $_POST['action'] === 'qp_save_auto_backup_settings') {
-        if (check_admin_referer('qp_auto_backup_nonce_action', 'qp_auto_backup_nonce_field')) {
+    if (isset($_POST['action']) && in_array($_POST['action'], ['qp_save_auto_backup_settings', 'qp_disable_auto_backup'])) {
+        check_admin_referer('qp_auto_backup_nonce_action', 'qp_auto_backup_nonce_field');
+
+        // Always clear any previously scheduled event first.
+        wp_clear_scheduled_hook('qp_scheduled_backup_hook');
+
+        if ($_POST['action'] === 'qp_save_auto_backup_settings') {
             $interval = isset($_POST['auto_backup_interval']) ? absint($_POST['auto_backup_interval']) : 1;
             $frequency = isset($_POST['auto_backup_frequency']) ? sanitize_key($_POST['auto_backup_frequency']) : 'daily';
             
-            // In the next step, we will add the scheduling logic here.
-            // For now, we just show a success message.
-            add_settings_error('qp_backup_notices', 'auto_backup_saved', 'Auto backup schedule saved. Scheduling logic to be added.', 'success');
+            // This is a custom cron schedule, not a built-in one.
+            $schedule_name = 'every_' . $interval . '_' . $frequency;
+
+            // Note: For simplicity, we are assuming 'daily', 'weekly', 'monthly'.
+            // A more complex system would add custom schedules to WordPress.
+            // We will handle the interval manually for this implementation.
+            
+            $schedule_settings = ['interval' => $interval, 'frequency' => $frequency];
+            update_option('qp_auto_backup_schedule', $schedule_settings);
+            
+            // Schedule the first event to run after the interval passes.
+            wp_schedule_event(time(), $frequency, 'qp_scheduled_backup_hook');
+            
+            add_settings_error('qp_backup_notices', 'auto_backup_saved', 'Auto backup schedule has been saved and activated.', 'success');
+
+        } elseif ($_POST['action'] === 'qp_disable_auto_backup') {
+            delete_option('qp_auto_backup_schedule');
+            add_settings_error('qp_backup_notices', 'auto_backup_disabled', 'Auto backup schedule has been disabled.', 'info');
         }
         return;
     }
@@ -122,24 +142,35 @@ class QP_Backup_Restore_Page
                     <div class="form-wrap">
                         <h2>Auto Backup Settings</h2>
                         <p>Automatically create a local backup at a scheduled interval. The WordPress cron system requires site visits to trigger events, so schedules may not be exact.</p>
+                        <?php $schedule = get_option('qp_auto_backup_schedule', false); ?>
                         <form id="qp-auto-backup-form" method="post" action="<?php echo esc_url(admin_url('admin.php?page=qp-tools&tab=backup_restore')); ?>">
                             <input type="hidden" name="action" value="qp_save_auto_backup_settings">
                             <?php wp_nonce_field('qp_auto_backup_nonce_action', 'qp_auto_backup_nonce_field'); ?>
 
                             <div class="auto-backup-fields">
                                 <span>Every</span>
-                                <input type="number" name="auto_backup_interval" min="1" value="1" style="width: 70px;">
+                                <input type="number" name="auto_backup_interval" min="1" value="<?php echo esc_attr($schedule ? $schedule['interval'] : 1); ?>" style="width: 70px;">
                                 <select name="auto_backup_frequency">
-                                    <option value="daily">Day(s)</option>
-                                    <option value="weekly">Week(s)</option>
-                                    <option value="monthly">Month(s)</option>
+                                    <option value="daily" <?php selected($schedule ? $schedule['frequency'] : '', 'daily'); ?>>Day(s)</option>
+                                    <option value="weekly" <?php selected($schedule ? $schedule['frequency'] : '', 'weekly'); ?>>Week(s)</option>
+                                    <option value="monthly" <?php selected($schedule ? $schedule['frequency'] : '', 'monthly'); ?>>Month(s)</option>
                                 </select>
                             </div>
 
+                            <?php if ($schedule && wp_next_scheduled('qp_scheduled_backup_hook')) : ?>
+                                <p><strong>Status:</strong> Active. Next backup scheduled for <?php echo esc_html(get_date_from_gmt(date('Y-m-d H:i:s', wp_next_scheduled('qp_scheduled_backup_hook')), 'M j, Y, g:i a')); ?>.</p>
+                            <?php else: ?>
+                                <p><strong>Status:</strong> Inactive.</p>
+                            <?php endif; ?>
+
                             <p class="submit">
                                 <input type="submit" class="button button-primary" value="Save Schedule">
-                                <button type="button" class="button button-secondary" id="qp-disable-auto-backup-btn">Disable</button>
                             </p>
+                        </form>
+                        <form method="post" action="<?php echo esc_url(admin_url('admin.php?page=qp-tools&tab=backup_restore')); ?>">
+                            <input type="hidden" name="action" value="qp_disable_auto_backup">
+                            <?php wp_nonce_field('qp_auto_backup_nonce_action', 'qp_auto_backup_nonce_field'); ?>
+                            <button type="submit" class="button button-secondary" <?php if (!$schedule) echo 'disabled'; ?>>Disable</button>
                         </form>
                     </div>
                 </div>
