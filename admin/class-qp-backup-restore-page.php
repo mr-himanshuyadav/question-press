@@ -47,6 +47,11 @@ class QP_Backup_Restore_Page
     // Now, call the new restore function with the uploaded filename
     $result = qp_perform_restore($new_filename);
 
+    // Clean up the uploaded file regardless of success or failure
+    if (file_exists($new_filepath)) {
+        unlink($new_filepath);
+    }
+
     if ($result['success']) {
         $stats = $result['stats'];
         $message = '<strong>Restore Complete!</strong><br> - Questions: ' . $stats['questions'] . '<br> - Options: ' . $stats['options'] . '<br> - Sessions: ' . $stats['sessions'] . '<br> - Attempts: ' . $stats['attempts'];

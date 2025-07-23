@@ -1113,7 +1113,7 @@ function qp_delete_backup_ajax()
 
     $filename = isset($_POST['filename']) ? sanitize_file_name($_POST['filename']) : '';
 
-    if (empty($filename) || strpos($filename, 'qp-backup-') !== 0 || pathinfo($filename, PATHINFO_EXTENSION) !== 'zip') {
+    if (empty($filename) || (strpos($filename, 'qp-backup-') !== 0 && strpos($filename, 'uploaded-') !== 0) || pathinfo($filename, PATHINFO_EXTENSION) !== 'zip') {
         wp_send_json_error(['message' => 'Invalid or malicious filename provided.']);
     }
 
