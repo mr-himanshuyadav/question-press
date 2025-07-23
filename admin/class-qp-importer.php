@@ -156,7 +156,6 @@ class QP_Importer {
                 }
             }
 
-            // --- CORRECTED: Insert group data, including new PYQ fields ---
             $wpdb->insert($groups_table, [
                 'direction_text' => isset($group['Direction']['text']) ? $group['Direction']['text'] : null,
                 'direction_image_id' => $direction_image_id,
@@ -183,7 +182,6 @@ class QP_Importer {
                 $existing_question_id = $wpdb->get_var($wpdb->prepare("SELECT question_id FROM $questions_table WHERE question_text_hash = %s", $hash));
                 $next_custom_id = get_option('qp_next_custom_question_id', 1000);
 
-                // --- CORRECTED: Insert question data without PYQ fields ---
                 $wpdb->insert($questions_table, [
                     'custom_question_id' => $next_custom_id,
                     'group_id' => $group_id,
@@ -193,15 +191,30 @@ class QP_Importer {
                     'question_number_in_section' => isset($question['questionNumber']) ? sanitize_text_field($question['questionNumber']) : null,
                     'question_text' => $question['questionText'],
                     'question_text_hash' => $hash,
-                    'duplicate_of' => $existing_question_id ? $existing_question_id : null
+                    'duplicate_of' => $existing_question_id ? $existing_question_id : null,
+                    'status' => 'draft' // Initially save as draft
                 ]);
                 $question_id = $wpdb->insert_id;
                 update_option('qp_next_custom_question_id', $next_custom_id + 1);
 
+                $has_correct_answer = false;
                 if (isset($question['options']) && is_array($question['options'])) {
                     foreach ($question['options'] as $option) {
-                        $wpdb->insert($options_table, ['question_id' => $question_id, 'option_text' => $option['optionText'], 'is_correct' => (int)$option['isCorrect']]);
+                        $is_correct_val = (isset($option['isCorrect']) && $option['isCorrect']) ? 1 : 0;
+                        $wpdb->insert($options_table, [
+                            'question_id' => $question_id, 
+                            'option_text' => $option['optionText'], 
+                            'is_correct' => $is_correct_val
+                        ]);
+                        if ($is_correct_val === 1) {
+                            $has_correct_answer = true;
+                        }
                     }
+                }
+                
+                // If a correct answer was found, update the question's status to publish
+                if ($has_correct_answer) {
+                    $wpdb->update($questions_table, ['status' => 'publish'], ['question_id' => $question_id]);
                 }
 
                 if ($existing_question_id) {
@@ -244,7 +257,7 @@ class QP_Importer {
                     Marked as duplicate: <?php echo esc_html($result['duplicates']); ?> questions.
                 </p>
             </div>
-            <p><a href="<?php echo esc_url(admin_url('admin.php?page=qp-import')); ?>" class="button button-primary">Import Another File</a></p>
+            <p><a href="<?php echo esc_url(admin_url('admin.php?page=qp-tools&tab=import')); ?>" class="button button-primary">Import Another File</a></p>
             <p><a href="<?php echo esc_url(admin_url('admin.php?page=question-press')); ?>" class="button button-secondary">Go to All Questions</a></p>
         </div>
         <?php
