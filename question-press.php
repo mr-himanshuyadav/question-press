@@ -1140,50 +1140,70 @@ add_action('wp_ajax_qp_delete_backup', 'qp_delete_backup_ajax');
  * This version is optimized for performance and reliability.
  */
 function qp_restore_backup_ajax() {
-    // 1. Security and Permissions
     check_ajax_referer('qp_backup_restore_nonce', 'nonce');
     if (!current_user_can('manage_options')) {
         wp_send_json_error(['message' => 'Permission denied.']);
     }
 
-    // 2. Increase Execution Limits
+    $filename = isset($_POST['filename']) ? sanitize_file_name($_POST['filename']) : '';
+    if (empty($filename)) {
+        wp_send_json_error(['message' => 'Invalid filename.']);
+    }
+
+    $result = qp_perform_restore($filename);
+
+    if ($result['success']) {
+        wp_send_json_success(['message' => 'Data has been successfully restored.', 'stats' => $result['stats']]);
+    } else {
+        wp_send_json_error(['message' => $result['message']]);
+    }
+}
+add_action('wp_ajax_qp_restore_backup', 'qp_restore_backup_ajax');
+
+/**
+ * Performs the core backup restore process from a given filename.
+ *
+ * @param string $filename The name of the backup .zip file in the qp-backups directory.
+ * @return array An array containing 'success' status and a 'message' or 'stats'.
+ */
+function qp_perform_restore($filename) {
+    // This function contains the exact logic from the previous qp_restore_backup_ajax(),
+    // but instead of sending JSON, it returns an array.
     @ini_set('max_execution_time', 300);
     @ini_set('memory_limit', '256M');
 
-    // 3. File Validation and Extraction (Same as before)
-    $filename = isset($_POST['filename']) ? sanitize_file_name($_POST['filename']) : '';
-    if (empty($filename)) { wp_send_json_error(['message' => 'Invalid filename.']); }
     global $wpdb;
     $upload_dir = wp_upload_dir();
     $backup_dir = trailingslashit($upload_dir['basedir']) . 'qp-backups';
     $file_path = trailingslashit($backup_dir) . $filename;
     $temp_extract_dir = trailingslashit($backup_dir) . 'temp_restore_' . time();
-    if (!file_exists($file_path)) { wp_send_json_error(['message' => 'Backup file not found on server.']); }
+
+    if (!file_exists($file_path)) {
+        return ['success' => false, 'message' => 'Backup file not found on server.'];
+    }
+
     wp_mkdir_p($temp_extract_dir);
     $zip = new ZipArchive;
-    if ($zip->open($file_path) !== TRUE) { qp_delete_dir($temp_extract_dir); wp_send_json_error(['message' => 'Failed to open the backup file.']); }
+    if ($zip->open($file_path) !== TRUE) { qp_delete_dir($temp_extract_dir); return ['success' => false, 'message' => 'Failed to open the backup file.']; }
     $zip->extractTo($temp_extract_dir);
     $zip->close();
-    $json_file_path = trailingslashit($temp_extract_dir) . 'database.json';
-    if (!file_exists($json_file_path)) { qp_delete_dir($temp_extract_dir); wp_send_json_error(['message' => 'database.json not found in the backup file.']); }
-    $backup_data = json_decode(file_get_contents($json_file_path), true);
-    if (json_last_error() !== JSON_ERROR_NONE) { qp_delete_dir($temp_extract_dir); wp_send_json_error(['message' => 'Invalid JSON in backup file.']); }
 
-    // 4. Clear Existing Data (The Safe Way)
+    $json_file_path = trailingslashit($temp_extract_dir) . 'database.json';
+    if (!file_exists($json_file_path)) { qp_delete_dir($temp_extract_dir); return ['success' => false, 'message' => 'database.json not found in the backup file.']; }
+
+    $backup_data = json_decode(file_get_contents($json_file_path), true);
+    if (json_last_error() !== JSON_ERROR_NONE) { qp_delete_dir($temp_extract_dir); return ['success' => false, 'message' => 'Invalid JSON in backup file.']; }
+
     $tables_to_clear = [
-        // Clear tables with dependencies first
-        'qp_user_attempts', 'qp_session_pauses', 'qp_question_reports', 'qp_question_labels',
-        'qp_options', 'qp_questions', 'qp_question_groups', 'qp_source_sections', 'qp_sources',
-        'qp_exam_subjects', 'qp_exams', 'qp_labels', 'qp_topics', 'qp_subjects',
-        'qp_report_reasons', 'qp_user_sessions', 'qp_logs', 'qp_review_later', 'qp_revision_attempts'
+        'qp_question_reports', 'qp_question_labels', 'qp_options', 'qp_questions', 'qp_question_groups',
+        'qp_source_sections', 'qp_sources', 'qp_exam_subjects', 'qp_exams',
+        'qp_labels', 'qp_topics', 'qp_subjects', 'qp_report_reasons', 'qp_user_sessions',
+        'qp_session_pauses', 'qp_user_attempts', 'qp_logs', 'qp_review_later', 'qp_revision_attempts'
     ];
     $wpdb->query('SET FOREIGN_KEY_CHECKS=0');
-    foreach ($tables_to_clear as $table) {
-        $wpdb->query("DELETE FROM {$wpdb->prefix}{$table}");
-    }
+    foreach ($tables_to_clear as $table) { $wpdb->query("DELETE FROM {$wpdb->prefix}{$table}"); }
     $wpdb->query('SET FOREIGN_KEY_CHECKS=1');
 
-    // --- NEW: De-duplicate user attempts data and collect stats ---
     $stats = [
         'questions' => isset($backup_data['qp_questions']) ? count($backup_data['qp_questions']) : 0,
         'options' => isset($backup_data['qp_options']) ? count($backup_data['qp_options']) : 0,
@@ -1192,13 +1212,11 @@ function qp_restore_backup_ajax() {
         'reports' => isset($backup_data['qp_question_reports']) ? count($backup_data['qp_question_reports']) : 0,
         'duplicates_handled' => 0
     ];
-
     if (!empty($backup_data['qp_user_attempts'])) {
         $original_attempt_count = count($backup_data['qp_user_attempts']);
         $unique_attempts = [];
         foreach ($backup_data['qp_user_attempts'] as $attempt) {
             $key = $attempt['session_id'] . '-' . $attempt['question_id'];
-
             if (!isset($unique_attempts[$key])) {
                 $unique_attempts[$key] = $attempt;
             } else {
@@ -1214,51 +1232,37 @@ function qp_restore_backup_ajax() {
         $backup_data['qp_user_attempts'] = $final_attempts;
     }
 
-    // 5. Restore Data via a MORE ROBUST BATCH INSERT
     $restore_order = [
-        // Restore parent tables first
-        'qp_subjects', 'qp_topics', 'qp_labels', 'qp_exams', 'qp_exam_subjects',
-        'qp_sources', 'qp_source_sections', 'qp_question_groups', 'qp_questions',
-        'qp_options', 'qp_question_labels', 'qp_report_reasons', 'qp_question_reports',
-        'qp_logs', 'qp_user_sessions', 'qp_session_pauses', 'qp_user_attempts',
-        'qp_review_later', 'qp_revision_attempts'
+        'qp_subjects', 'qp_topics', 'qp_labels', 'qp_exams', 'qp_exam_subjects', 'qp_sources', 
+        'qp_source_sections', 'qp_question_groups', 'qp_questions', 'qp_options', 'qp_question_labels', 
+        'qp_report_reasons', 'qp_question_reports', 'qp_logs', 'qp_user_sessions', 'qp_session_pauses', 
+        'qp_user_attempts', 'qp_review_later', 'qp_revision_attempts'
     ];
-
     foreach ($restore_order as $table_name) {
         if (!empty($backup_data[$table_name])) {
             $rows = $backup_data[$table_name];
-            $chunks = array_chunk($rows, 100); // Process 100 rows at a time for performance
-
+            $chunks = array_chunk($rows, 100);
             foreach ($chunks as $chunk) {
                 if (empty($chunk)) continue;
-                
                 $columns = array_keys($chunk[0]);
-                $placeholders = [];
-                $values = [];
-                
+                $placeholders = []; $values = [];
                 foreach ($chunk as $row) {
                     $row_placeholders = [];
                     foreach ($columns as $column) {
-                        $row_placeholders[] = '%s'; // Use placeholders for wpdb->prepare
+                        $row_placeholders[] = '%s';
                         $values[] = $row[$column];
                     }
                     $placeholders[] = '(' . implode(', ', $row_placeholders) . ')';
                 }
-
                 $query = "INSERT INTO {$wpdb->prefix}{$table_name} (`" . implode('`, `', $columns) . "`) VALUES " . implode(', ', $placeholders);
-                
-                $result = $wpdb->query($wpdb->prepare($query, $values));
-
-                if ($result === false) {
-                    qp_delete_dir($temp_extract_dir); // Cleanup
-                    wp_send_json_error(['message' => "An error occurred while restoring the '{$table_name}' table. DB Error: " . $wpdb->last_error]);
-                    return;
+                if ($wpdb->query($wpdb->prepare($query, $values)) === false) {
+                    qp_delete_dir($temp_extract_dir);
+                    return ['success' => false, 'message' => "An error occurred while restoring '{$table_name}'. DB Error: " . $wpdb->last_error];
                 }
             }
         }
     }
     
-    // 6. Restore Options and Images (Unchanged, but now works correctly)
     if (isset($backup_data['plugin_settings'])) {
         update_option('qp_settings', $backup_data['plugin_settings']['qp_settings']);
         update_option('qp_next_custom_question_id', $backup_data['plugin_settings']['qp_next_custom_question_id']);
@@ -1269,7 +1273,6 @@ function qp_restore_backup_ajax() {
         require_once(ABSPATH . 'wp-admin/includes/image.php');
         require_once(ABSPATH . 'wp-admin/includes/file.php');
         require_once(ABSPATH . 'wp-admin/includes/media.php');
-
         $image_files = array_diff(scandir($images_dir), ['..', '.']);
         foreach($image_files as $image_filename) {
             $existing_attachment_id = $wpdb->get_var($wpdb->prepare("SELECT post_id FROM $wpdb->postmeta WHERE meta_key = '_wp_attached_file' AND meta_value LIKE %s", '%' . $wpdb->esc_like($image_filename)));
@@ -1279,14 +1282,9 @@ function qp_restore_backup_ajax() {
         }
     }
     
-    // 7. Cleanup and Success
     qp_delete_dir($temp_extract_dir);
-    wp_send_json_success([
-        'message' => 'Data has been successfully restored. The page will now reload.',
-        'stats' => $stats
-    ]);
+    return ['success' => true, 'stats' => $stats];
 }
-add_action('wp_ajax_qp_restore_backup', 'qp_restore_backup_ajax');
 
 /**
  * Helper function to recursively delete a directory.

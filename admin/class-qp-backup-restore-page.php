@@ -9,48 +9,52 @@ class QP_Backup_Restore_Page
     /**
      * Handles form submissions for the Backup & Restore page.
      */
-    public static function handle_forms()
-    {
-        if (!isset($_POST['action']) || $_POST['action'] !== 'qp_restore_from_upload') {
-            return;
-        }
-
-        if (!isset($_POST['qp_restore_nonce_field']) || !wp_verify_nonce($_POST['qp_restore_nonce_field'], 'qp_restore_nonce_action')) {
-            wp_die('Security check failed.');
-        }
-
-        if (!isset($_FILES['backup_zip_file']) || $_FILES['backup_zip_file']['error'] !== UPLOAD_ERR_OK) {
-            add_settings_error('qp_backup_notices', 'restore_error', 'File upload error. Please try again.', 'error');
-            return;
-        }
-
-        $file = $_FILES['backup_zip_file'];
-
-        // Security: Check file type
-        if (!in_array($file['type'], ['application/zip', 'application/x-zip-compressed'])) {
-            add_settings_error('qp_backup_notices', 'restore_error', 'Invalid file type. Please upload a .zip file.', 'error');
-            return;
-        }
-
-        // Move the uploaded file to our backups directory
-        $upload_dir = wp_upload_dir();
-        $backup_dir = trailingslashit($upload_dir['basedir']) . 'qp-backups';
-        if (!file_exists($backup_dir)) {
-            wp_mkdir_p($backup_dir);
-        }
-
-        $new_filename = 'uploaded-' . date('Y-m-d-H-i-s') . '-' . sanitize_file_name($file['name']);
-        $new_filepath = trailingslashit($backup_dir) . $new_filename;
-
-        if (!move_uploaded_file($file['tmp_name'], $new_filepath)) {
-            add_settings_error('qp_backup_notices', 'restore_error', 'Failed to move uploaded file.', 'error');
-            return;
-        }
-
-        // Now, call the restore logic (we will refactor this in the next steps)
-        // For now, this will just confirm the file was uploaded.
-        add_settings_error('qp_backup_notices', 'restore_success', 'File uploaded successfully and saved locally as ' . $new_filename . '. Restore logic will be implemented next.', 'success');
+    public static function handle_forms() {
+    if (!isset($_POST['action']) || $_POST['action'] !== 'qp_restore_from_upload') {
+        return;
     }
+
+    if (!isset($_POST['qp_restore_nonce_field']) || !wp_verify_nonce($_POST['qp_restore_nonce_field'], 'qp_restore_nonce_action')) {
+        wp_die('Security check failed.');
+    }
+
+    if (!isset($_FILES['backup_zip_file']) || $_FILES['backup_zip_file']['error'] !== UPLOAD_ERR_OK) {
+        add_settings_error('qp_backup_notices', 'restore_error', 'File upload error. Please try again.', 'error');
+        return;
+    }
+
+    $file = $_FILES['backup_zip_file'];
+
+    if (!in_array($file['type'], ['application/zip', 'application/x-zip-compressed'])) {
+        add_settings_error('qp_backup_notices', 'restore_error', 'Invalid file type. Please upload a .zip file.', 'error');
+        return;
+    }
+
+    $upload_dir = wp_upload_dir();
+    $backup_dir = trailingslashit($upload_dir['basedir']) . 'qp-backups';
+    if (!file_exists($backup_dir)) {
+        wp_mkdir_p($backup_dir);
+    }
+    
+    $new_filename = 'uploaded-' . date('Y-m-d-H-i-s') . '-' . sanitize_file_name($file['name']);
+    $new_filepath = trailingslashit($backup_dir) . $new_filename;
+
+    if (!move_uploaded_file($file['tmp_name'], $new_filepath)) {
+        add_settings_error('qp_backup_notices', 'restore_error', 'Failed to move uploaded file.', 'error');
+        return;
+    }
+
+    // Now, call the new restore function with the uploaded filename
+    $result = qp_perform_restore($new_filename);
+
+    if ($result['success']) {
+        $stats = $result['stats'];
+        $message = '<strong>Restore Complete!</strong><br> - Questions: ' . $stats['questions'] . '<br> - Options: ' . $stats['options'] . '<br> - Sessions: ' . $stats['sessions'] . '<br> - Attempts: ' . $stats['attempts'];
+        add_settings_error('qp_backup_notices', 'restore_success', $message, 'success');
+    } else {
+        add_settings_error('qp_backup_notices', 'restore_error', 'Restore failed: ' . $result['message'], 'error');
+    }
+}
 
 
     /**
