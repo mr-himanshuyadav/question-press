@@ -1016,8 +1016,8 @@ function qp_create_backup_ajax()
         $backup_data[$table_name_without_prefix] = $wpdb->get_results("SELECT * FROM {$table}", ARRAY_A);
     }
     
-    // Add plugin options to the backup
-    $backup_data['qp_options'] = [
+    // Add plugin options to the backup under a separate key
+    $backup_data['plugin_settings'] = [
         'qp_settings' => get_option('qp_settings'),
         'qp_next_custom_question_id' => get_option('qp_next_custom_question_id'),
     ];
@@ -1236,9 +1236,9 @@ function qp_restore_backup_ajax() {
     }
     
     // 6. Restore Options and Images (Unchanged)
-    if (isset($backup_data['qp_options'])) {
-        update_option('qp_settings', $backup_data['qp_options']['qp_settings']);
-        update_option('qp_next_custom_question_id', $backup_data['qp_options']['qp_next_custom_question_id']);
+    if (isset($backup_data['plugin_settings'])) {
+        update_option('qp_settings', $backup_data['plugin_settings']['qp_settings']);
+        update_option('qp_next_custom_question_id', $backup_data['plugin_settings']['qp_next_custom_question_id']);
     }
     
     $images_dir = trailingslashit($temp_extract_dir) . 'images';
