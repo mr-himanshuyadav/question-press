@@ -1217,12 +1217,12 @@ function qp_get_local_backups_html()
             <tr data-filename="<?php echo esc_attr($backup_file); ?>">
                 <td><?php echo esc_html($file_date); ?></td>
                 <td>
-                    <?php echo esc_html($backup_file); ?>
                     <?php if (strpos($backup_file, 'qp-auto-backup-') === 0) : ?>
-                        <span style="background-color: #f0f0f1; color: #50575e; padding: 2px 6px; font-size: 10px; border-radius: 3px; font-weight: 600; vertical-align: middle; margin-left: 5px;">AUTO</span>
+                        <span style="background-color: #dadae0ff; color: #383d42ff; padding: 2px 6px; font-size: 10px; border-radius: 3px; font-weight: 600; vertical-align: middle; margin-left: 5px;">AUTO</span>
                     <?php else : ?>
-                        <span style="background-color: #e3f2fd; color: #1e88e5; padding: 2px 6px; font-size: 10px; border-radius: 3px; font-weight: 600; vertical-align: middle; margin-left: 5px;">MANUAL</span>
+                        <span style="background-color: #d8e7f2ff; color: #0f82e7ff; padding: 2px 6px; font-size: 10px; border-radius: 3px; font-weight: 600; vertical-align: middle; margin-left: 5px;">MANUAL</span>
                     <?php endif; ?>
+                    <?php echo esc_html($backup_file); ?>
                 </td>
                 <td><?php echo esc_html($file_size); ?></td>
                 <td>

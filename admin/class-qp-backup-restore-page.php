@@ -109,11 +109,11 @@ class QP_Backup_Restore_Page
 ?>
         <style>
             .qp-backups-table th.column-date {
-                width: 20%;
+                width: 15%;
             }
 
             .qp-backups-table th.column-name {
-                width: 35%;
+                width: 45%;
             }
 
             .qp-backups-table th.column-size {
@@ -121,7 +121,7 @@ class QP_Backup_Restore_Page
             }
 
             .qp-backups-table th.column-actions {
-                width: 35%;
+                width: 30%;
             }
 
             .qp-backups-table .column-actions .button {
