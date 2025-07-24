@@ -109,7 +109,7 @@ class QP_Backup_Restore_Page
 ?>
         <style>
             .qp-backups-table th.column-date {
-                width: 15%;
+                width: 18%;
             }
 
             .qp-backups-table th.column-name {
@@ -117,7 +117,7 @@ class QP_Backup_Restore_Page
             }
 
             .qp-backups-table th.column-size {
-                width: 10%;
+                width: 7%;
             }
 
             .qp-backups-table th.column-actions {
@@ -126,6 +126,14 @@ class QP_Backup_Restore_Page
 
             .qp-backups-table .column-actions .button {
                 white-space: nowrap;
+                font-weight: 600;
+            }
+            #qp-local-backups-list .qp-delete-backup-btn{
+                border-color: #d63638;
+            }
+            #qp-local-backups-list td{
+                display: table-cell;
+                vertical-align: middle;
             }
         </style>
         <?php settings_errors('qp_backup_notices'); ?>
@@ -221,7 +229,7 @@ class QP_Backup_Restore_Page
                             <tr>
                                 <th class="column-date">Backup Date</th>
                                 <th class="column-name">Backup Name</th>
-                                <th class="column-size">File Size</th>
+                                <th class="column-size">Size</th>
                                 <th class="column-actions">Actions</th>
                             </tr>
                         </thead>
