@@ -17,6 +17,54 @@ class QP_Shortcodes
                     </div>';
         }
 
+        // --- NEW: Handle pre-filled section practice ---
+        if (isset($_GET['start_section_practice']) && $_GET['start_section_practice'] === 'true') {
+            $subject_id = isset($_GET['subject']) ? absint($_GET['subject']) : 0;
+            $topic_id = isset($_GET['topic']) ? absint($_GET['topic']) : 0;
+            $section_id = isset($_GET['section']) ? absint($_GET['section']) : 0;
+
+            // Pass these IDs to a script that will select them after the form loads
+            wp_register_script('qp-prefill-script', '', [], '', true);
+            wp_enqueue_script('qp-prefill-script');
+            $prefill_script = sprintf(
+                "
+                document.addEventListener('DOMContentLoaded', function() {
+                    const subjectDropdown = document.querySelector('#qp_subject_dropdown .qp-multi-select-list');
+                    if (subjectDropdown) {
+                        const subjectCheckbox = subjectDropdown.querySelector('input[value=\"%d\"]');
+                        if (subjectCheckbox) {
+                            subjectCheckbox.click(); // Use click to trigger the AJAX for topics
+                        }
+                    }
+                    // We need to wait for the topic/section AJAX calls to complete
+                    const observer = new MutationObserver(function(mutations, me) {
+                        const topicDropdown = document.querySelector('#qp_topic_list_container');
+                        const sectionDropdown = document.querySelector('#qp_section');
+                        
+                        if (topicDropdown && topicDropdown.children.length > 1) {
+                            const topicCheckbox = topicDropdown.querySelector('input[value=\"%d\"]');
+                            if (topicCheckbox) {
+                                topicCheckbox.click();
+                            }
+                        }
+                        if (sectionDropdown && sectionDropdown.options.length > 1) {
+                            sectionDropdown.value = '%d';
+                            me.disconnect(); // Stop observing once we've set the section
+                        }
+                    });
+                    observer.observe(document.getElementById('qp-practice-app-wrapper'), { childList: true, subtree: true });
+                });
+                ",
+                $subject_id,
+                $topic_id,
+                $section_id
+            );
+            wp_add_inline_script('qp-prefill-script', $prefill_script);
+
+            // Directly render the settings form, bypassing the mode selection
+            return '<div id="qp-practice-app-wrapper">' . self::render_settings_form() . '</div>';
+        }
+
         // Get the question order setting
         $options = get_option('qp_settings');
         $question_order_setting = isset($options['question_order']) ? $options['question_order'] : 'random';
@@ -825,7 +873,9 @@ class QP_Shortcodes
                         <button id="qp-submit-test-btn" class="qp-button qp-button-danger">Submit Test</button>
                     <?php else : ?>
                         <button id="qp-pause-btn" class="qp-button qp-button-secondary">Pause & Save</button>
-                        <button id="qp-end-practice-btn" class="qp-button qp-button-danger">End Session</button>
+                        <?php if ($session_settings['practice_mode'] !== 'Section Wise Practice') : ?>
+                            <button id="qp-end-practice-btn" class="qp-button qp-button-danger">End Session</button>
+                        <?php endif; ?>
                     <?php endif; ?>
                 </div>
             </div>

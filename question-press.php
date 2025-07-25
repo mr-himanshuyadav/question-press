@@ -1959,92 +1959,6 @@ function qp_start_practice_session_ajax()
 add_action('wp_ajax_start_practice_session', 'qp_start_practice_session_ajax');
 
 /**
- * AJAX handler to either start a new section-wise practice or resume an existing one.
- * Prevents duplicate sessions for the same section.
- */
-function qp_start_or_resume_section_practice_ajax() {
-    check_ajax_referer('qp_practice_nonce', 'nonce');
-    if (!is_user_logged_in()) {
-        wp_send_json_error(['message' => 'You must be logged in.']);
-    }
-
-    global $wpdb;
-    $user_id = get_current_user_id();
-    $subject_id = isset($_POST['subject_id']) ? absint($_POST['subject_id']) : 0;
-    $topic_id = isset($_POST['topic_id']) ? absint($_POST['topic_id']) : 0;
-    $section_id = isset($_POST['section_id']) ? absint($_POST['section_id']) : 0;
-    $source_id = isset($_POST['source_id']) ? absint($_POST['source_id']) : 0;
-
-    if (!$subject_id || !$topic_id || !$section_id || !$source_id) {
-        wp_send_json_error(['message' => 'Missing required IDs to start the session.']);
-    }
-
-    // --- Check for an existing active/paused session with these exact settings ---
-    $active_sessions_raw = $wpdb->get_results($wpdb->prepare(
-        "SELECT session_id, settings_snapshot FROM {$wpdb->prefix}qp_user_sessions WHERE user_id = %d AND status IN ('active', 'paused')",
-        $user_id
-    ));
-
-    foreach ($active_sessions_raw as $session) {
-        $settings = json_decode($session->settings_snapshot, true);
-        if (
-            isset($settings['practice_mode']) && $settings['practice_mode'] === 'Section Wise Practice' &&
-            $settings['subject_id'] == $subject_id &&
-            $settings['topic_id'] == $topic_id &&
-            $settings['section_id'] == $section_id
-        ) {
-            // Found an existing session, return its URL
-            $options = get_option('qp_settings');
-            $session_page_id = isset($options['session_page']) ? absint($options['session_page']) : 0;
-            if ($session_page_id) {
-                $redirect_url = add_query_arg('session_id', $session->session_id, get_permalink($session_page_id));
-                wp_send_json_success(['redirect_url' => $redirect_url, 'message' => 'Resuming existing session.']);
-            }
-        }
-    }
-
-    // --- No existing session found, so create a new one ---
-    $question_ids = $wpdb->get_col($wpdb->prepare(
-        "SELECT question_id FROM {$wpdb->prefix}qp_questions WHERE source_id = %d AND topic_id = %d AND section_id = %d AND status = 'publish' ORDER BY CAST(question_number_in_section AS UNSIGNED), custom_question_id ASC",
-        $source_id,
-        $topic_id,
-        $section_id
-    ));
-
-    if (empty($question_ids)) {
-        wp_send_json_error(['message' => 'No questions found for this specific section.']);
-    }
-
-    $session_settings = [
-        'practice_mode' => 'Section Wise Practice',
-        'subject_id'    => $subject_id,
-        'topic_id'      => $topic_id,
-        'section_id'    => $section_id,
-        'source_id'     => $source_id
-    ];
-
-    $options = get_option('qp_settings');
-    $session_page_id = isset($options['session_page']) ? absint($options['session_page']) : 0;
-    if (!$session_page_id) {
-        wp_send_json_error(['message' => 'The administrator has not configured a session page.']);
-    }
-
-    $wpdb->insert($wpdb->prefix . 'qp_user_sessions', [
-        'user_id'                 => $user_id,
-        'status'                  => 'active',
-        'start_time'              => current_time('mysql'),
-        'last_activity'           => current_time('mysql'),
-        'settings_snapshot'       => wp_json_encode($session_settings),
-        'question_ids_snapshot'   => wp_json_encode($question_ids)
-    ]);
-    $session_id = $wpdb->insert_id;
-
-    $redirect_url = add_query_arg('session_id', $session_id, get_permalink($session_page_id));
-    wp_send_json_success(['redirect_url' => $redirect_url, 'message' => 'Starting new session.']);
-}
-add_action('wp_ajax_start_or_resume_section_practice', 'qp_start_or_resume_section_practice_ajax');
-
-/**
  * AJAX handler to start a special session with incorrectly answered questions.
  */
 function qp_start_incorrect_practice_session_ajax()
@@ -2292,8 +2206,7 @@ add_action('wp_ajax_get_sources_for_subject_progress', 'qp_get_sources_for_subje
  * AJAX handler for the dashboard progress tab.
  * Calculates and returns the hierarchical progress data.
  */
-function qp_get_progress_data_ajax()
-{
+function qp_get_progress_data_ajax() {
     check_ajax_referer('qp_practice_nonce', 'nonce');
     $source_id = isset($_POST['source_id']) ? absint($_POST['source_id']) : 0;
     $user_id = get_current_user_id();
@@ -2304,21 +2217,7 @@ function qp_get_progress_data_ajax()
 
     global $wpdb;
 
-    // --- Find all active/paused section-wise sessions for this user ---
-    $active_sessions_raw = $wpdb->get_results($wpdb->prepare(
-        "SELECT session_id, settings_snapshot FROM {$wpdb->prefix}qp_user_sessions WHERE user_id = %d AND status IN ('active', 'paused')",
-        $user_id
-    ));
-    $active_section_sessions = [];
-    foreach ($active_sessions_raw as $session) {
-        $settings = json_decode($session->settings_snapshot, true);
-        if (isset($settings['practice_mode']) && $settings['practice_mode'] === 'Section Wise Practice') {
-            $key = $settings['subject_id'] . '-' . $settings['topic_id'] . '-' . $settings['section_id'];
-            $active_section_sessions[$key] = $session->session_id;
-        }
-    }
-
-    // 1. Get all questions and their parent subject FOR THE SELECTED SOURCE.
+    // 1. Get all questions and their parent subject FOR THE SELECTED SOURCE. This is our master dataset.
     $all_questions_in_source = $wpdb->get_results($wpdb->prepare(
         "SELECT q.question_id, q.topic_id, q.section_id, t.topic_name, sec.section_name, g.subject_id
          FROM {$wpdb->prefix}qp_questions q
@@ -2337,18 +2236,19 @@ function qp_get_progress_data_ajax()
     // 2. Get all questions the user has answered correctly from this specific set of questions
     $all_qids_in_source = wp_list_pluck($all_questions_in_source, 'question_id');
     $qids_placeholder = implode(',', $all_qids_in_source);
+
     $correctly_answered_qids = $wpdb->get_col($wpdb->prepare(
         "SELECT DISTINCT question_id FROM {$wpdb->prefix}qp_user_attempts
          WHERE user_id = %d AND is_correct = 1 AND question_id IN ({$qids_placeholder})",
         $user_id
     ));
 
-    // 3. Calculate Subject progress based on our filtered dataset
-    $subject_id = $all_questions_in_source[0]->subject_id;
+    // 3. --- NEW: Calculate Subject progress based on our filtered dataset ---
+    $subject_id = $all_questions_in_source[0]->subject_id; // Get subject from the first question
     $subject_total = count($all_qids_in_source);
     $subject_completed_count = count($correctly_answered_qids);
-
-    // 4. Structure the Topic/Section data hierarchically
+    
+    // 4. Structure the Topic/Section data hierarchically (same as before)
     $progress_data = [];
     foreach ($all_questions_in_source as $question) {
         $topic_id = $question->topic_id ?: 0;
@@ -2357,20 +2257,26 @@ function qp_get_progress_data_ajax()
         $section_name = $question->section_name ?: 'Main Section';
 
         if (!isset($progress_data[$topic_id])) {
-            $progress_data[$topic_id] = ['name' => $topic_name, 'total' => 0, 'completed' => 0, 'sections' => []];
+            $progress_data[$topic_id] = [
+                'name' => $topic_name, 'total' => 0, 'completed' => 0, 'sections' => []
+            ];
         }
         if (!isset($progress_data[$topic_id]['sections'][$section_id])) {
-            $progress_data[$topic_id]['sections'][$section_id] = ['name' => $section_name, 'total' => 0, 'completed' => 0];
+            $progress_data[$topic_id]['sections'][$section_id] = [
+                'name' => $section_name, 'total' => 0, 'completed' => 0
+            ];
         }
+
         $progress_data[$topic_id]['total']++;
         $progress_data[$topic_id]['sections'][$section_id]['total']++;
+
         if (in_array($question->question_id, $correctly_answered_qids)) {
             $progress_data[$topic_id]['completed']++;
             $progress_data[$topic_id]['sections'][$section_id]['completed']++;
         }
     }
 
-    // 5. Generate the HTML response
+    // 5. Generate the HTML response (same as before)
     ob_start();
     echo '<div class="qp-progress-tree">';
     $subject_name = $wpdb->get_var($wpdb->prepare("SELECT subject_name FROM {$wpdb->prefix}qp_subjects WHERE subject_id = %d", $subject_id));
@@ -2382,48 +2288,23 @@ function qp_get_progress_data_ajax()
 
     foreach ($progress_data as $topic_id => $topic) {
         $topic_percentage = $topic['total'] > 0 ? round(($topic['completed'] / $topic['total']) * 100) : 0;
+        // Add a data-attribute to the topic item
         echo '<div class="qp-progress-item topic-level qp-topic-toggle" data-topic-id="' . esc_attr($topic_id) . '">';
         echo '<div class="qp-progress-bar-bg" style="width: ' . esc_attr($topic_percentage) . '%;"></div>';
+        // Add a toggle icon to the label
         echo '<div class="qp-progress-label"><span class="dashicons dashicons-arrow-right-alt2"></span>' . esc_html($topic['name']) . ' <span class="qp-progress-percentage">' . esc_html($topic_percentage) . '%</span></div>';
         echo '</div>';
 
+        // Wrap sections in a container that is hidden by default
         echo '<div class="qp-topic-sections-container" data-parent-topic="' . esc_attr($topic_id) . '" style="display: none;">';
-        foreach ($topic['sections'] as $section_id => $section) {
+        foreach ($topic['sections'] as $section) {
             $section_percentage = $section['total'] > 0 ? round(($section['completed'] / $section['total']) * 100) : 0;
-            
-            // --- NEW BUTTON LOGIC ---
-            $session_key = $subject_id . '-' . $topic_id . '-' . $section_id;
-            $existing_session_id = $active_section_sessions[$session_key] ?? 0;
-            
             echo '<div class="qp-progress-item section-level">';
-            echo '  <div class="qp-progress-bar-bg" style="width: ' . esc_attr($section_percentage) . '%;"></div>';
-            echo '  <div class="qp-progress-label">';
-            echo '      <span>' . esc_html($section['name']) . ' <span class="qp-progress-percentage">' . esc_html($section_percentage) . '%</span></span>';
-            
-            if ($existing_session_id) {
-                // If a session exists, render a "Resume" button that triggers AJAX
-                echo '      <button type="button" class="qp-button qp-button-secondary qp-start-resume-section-btn" 
-                                data-subject-id="' . esc_attr($subject_id) . '" 
-                                data-topic-id="' . esc_attr($topic_id) . '" 
-                                data-section-id="' . esc_attr($section_id) . '"
-                                data-source-id="' . esc_attr($source_id) . '">Resume</button>';
-            } else {
-                // If no session exists, render a link to the pre-filled practice page
-                $options = get_option('qp_settings');
-                $practice_page_url = isset($options['practice_page']) ? get_permalink($options['practice_page']) : home_url('/');
-                $start_url = add_query_arg([
-                    'start_section_practice' => 'true',
-                    'subject' => $subject_id,
-                    'topic' => $topic_id,
-                    'section' => $section_id
-                ], $practice_page_url);
-                echo '      <a href="' . esc_url($start_url) . '" class="qp-button qp-button-primary">Start Practice</a>';
-            }
-
-            echo '  </div>';
+            echo '<div class="qp-progress-bar-bg" style="width: ' . esc_attr($section_percentage) . '%;"></div>';
+            echo '<div class="qp-progress-label">' . esc_html($section['name']) . ' <span class="qp-progress-percentage">' . esc_html($section_percentage) . '%</span></div>';
             echo '</div>';
         }
-        echo '</div>';
+        echo '</div>'; // Close sections container
     }
     echo '</div>';
     $html = ob_get_clean();
