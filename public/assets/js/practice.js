@@ -8,6 +8,16 @@ jQuery(document).ready(function ($) {
     "#qp-palette-docked .qp-palette-grid, #qp-palette-sliding .qp-palette-grid"
   );
   var unattemptedCounts = {};
+  // --- FINAL: Enhanced & Responsive Rough Work Canvas ---
+    var canvasOverlay = $('#qp-rough-work-overlay');
+    var canvasEl = $('#qp-rough-work-canvas');
+    var canvas = canvasEl[0]; // Get the raw DOM element
+    var ctx;
+    var isDrawing = false;
+    var lastX = 0;
+    var lastY = 0;
+    var currentTool = 'pencil'; // 'pencil' or 'eraser'
+    var brushSize = 2; // Default brush size
 
   // --- Fetch unattempted counts if the setting is enabled ---
 if (typeof qp_practice_settings !== 'undefined' && qp_practice_settings.show_counts) {
@@ -2246,6 +2256,121 @@ $("#qp-next-btn").prop("disabled", !isSectionWise);
       }
     }
   });
+
+  function resizeCanvas() {
+        if (canvas) {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            if (ctx) {
+                // Re-apply settings after resize
+                ctx.strokeStyle = $('.qp-color-btn.active').data('color');
+                ctx.lineWidth = brushSize;
+                ctx.lineJoin = 'round';
+                ctx.lineCap = 'round';
+            }
+        }
+    }
+
+    function draw(e) {
+        if (!isDrawing) return;
+
+        // Set tool properties before drawing
+        if (currentTool === 'eraser') {
+            ctx.globalCompositeOperation = 'destination-out'; // Erase mode
+            ctx.lineWidth = 20; // Use a larger fixed size for the eraser
+        } else {
+            ctx.globalCompositeOperation = 'source-over'; // Normal drawing mode
+            ctx.strokeStyle = $('.qp-color-btn.active').data('color');
+            ctx.lineWidth = brushSize;
+        }
+        
+        ctx.beginPath();
+        ctx.moveTo(lastX, lastY);
+
+        var rect = canvas.getBoundingClientRect();
+        var currentX = (e.offsetX || (e.touches && e.touches[0].clientX - rect.left));
+        var currentY = (e.offsetY || (e.touches && e.touches[0].clientY - rect.top));
+
+        ctx.lineTo(currentX, currentY);
+        ctx.stroke();
+        [lastX, lastY] = [currentX, currentY];
+    }
+
+    // Show Canvas
+    wrapper.on('click', '#qp-rough-work-btn', function() {
+
+      // --- NEW: Admin Bar Detection ---
+        var adminBarHeight = 0;
+        if ($('body').hasClass('admin-bar')) {
+            adminBarHeight = $('#wpadminbar').height();
+        }
+        canvasOverlay.find('.qp-rough-work-controls').css('top', (adminBarHeight + 10) + 'px');
+        canvasOverlay.fadeIn(200);
+        if (!ctx) { // Initialize only once
+            ctx = canvas.getContext('2d');
+            resizeCanvas(); // Sets initial size and properties
+            window.addEventListener('resize', resizeCanvas);
+
+            // Mouse Events
+            canvasEl.on('mousedown', (e) => {
+                isDrawing = true;
+                [lastX, lastY] = [e.offsetX, e.offsetY];
+            });
+            canvasEl.on('mousemove', draw);
+            canvasEl.on('mouseup mouseout', () => isDrawing = false);
+
+            // Touch Events
+            canvasEl.on('touchstart', (e) => {
+                isDrawing = true;
+                const touch = e.originalEvent.touches[0];
+                var rect = canvas.getBoundingClientRect();
+                [lastX, lastY] = [touch.clientX - rect.left, touch.clientY - rect.top];
+                e.preventDefault();
+            });
+            canvasEl.on('touchmove', (e) => {
+                draw(e.originalEvent);
+                e.preventDefault();
+            });
+            canvasEl.on('touchend', () => isDrawing = false);
+        }
+    });
+    
+    // Tool selection (Pencil/Eraser)
+    wrapper.on('click', '.qp-tool-btn', function() {
+        $('.qp-tool-btn').removeClass('active');
+        $(this).addClass('active');
+        currentTool = $(this).attr('id') === 'qp-tool-eraser' ? 'eraser' : 'pencil';
+        canvasEl.removeClass('cursor-pencil cursor-eraser').addClass('cursor-' + currentTool);
+    });
+    
+    // Color selection
+    wrapper.on('click', '.qp-color-btn', function() {
+        $('.qp-color-btn').removeClass('active');
+        $(this).addClass('active');
+        // Automatically switch to pencil tool when a color is chosen
+        $('.qp-tool-btn').removeClass('active');
+        $('#qp-tool-pencil').addClass('active');
+        currentTool = 'pencil';
+        canvasEl.removeClass('cursor-pencil cursor-eraser').addClass('cursor-pencil');
+    });
+
+    // Handle Transparency Slider
+    wrapper.on('input', '#qp-canvas-opacity-slider', function() {
+        var opacity = $(this).val() / 100;
+        canvasEl.css('background-color', `rgba(240, 242, 245, ${opacity})`);
+    });
+
+    // Close Canvas
+    wrapper.on('click', '#qp-close-canvas-btn', function() {
+        canvasOverlay.fadeOut(200);
+    });
+
+    // Clear Canvas
+    wrapper.on('click', '#qp-clear-canvas-btn', function() {
+        if (ctx) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+    });
 
   // --- NEW: Mock Test Specific Event Handlers ---
   if (

@@ -795,9 +795,15 @@ class QP_Shortcodes
                 <div class="qp-header">
                     <div class="qp-header-top-row">
                         <div class="qp-session-mode-indicator"><?php echo esc_html($mode_name); ?></div>
-                        <button id="qp-palette-toggle-btn" title="Toggle Question Palette">
+                        <div style="display: flex; flex-direction: row; gap: 5px;">
+                            <button id="qp-palette-toggle-btn" title="Toggle Question Palette">
                             <span class="dashicons dashicons-layout"></span>
                         </button>
+                        <button id="qp-rough-work-btn" class="qp-button qp-button-secondary" title="Rough Work" style="padding: 8px; line-height: 1;">
+                            <span class="dashicons dashicons-edit"></span>
+                        </button>
+                        </div>
+                        
                     </div>
 
                     <?php if ($is_mock_test) : ?>
@@ -899,6 +905,21 @@ class QP_Shortcodes
                 <h3>Your session is ready.</h3>
                 <p>Click the button below to begin in an immersive, fullscreen environment.</p><button id="qp-fullscreen-start-btn" class="qp-button qp-button-primary">Start & Enter Fullscreen</button>
             </div>
+        </div>
+        <div id="qp-rough-work-overlay" style="display: none;">
+            <div class="qp-rough-work-controls">
+                <button id="qp-tool-pencil" class="qp-tool-btn active" title="Pencil"><span class="dashicons dashicons-edit"></span></button>
+                <button id="qp-tool-eraser" class="qp-tool-btn" title="Eraser"><span class="dashicons dashicons-editor-removeformatting"></span></button>
+                <div class="qp-color-swatches">
+                    <button class="qp-color-btn active" data-color="#171717ff" style="background-color: #171717ff;" title="Black"></button>
+                    <button class="qp-color-btn" data-color="#ca0808ff" style="background-color: #ca0808ff;" title="Red"></button>
+                    <button class="qp-color-btn" data-color="#002daaff" style="background-color: #002daaff;" title="Blue"></button>
+                </div>
+                <input type="range" min="10" max="100" value="30" class="qp-canvas-slider" id="qp-canvas-opacity-slider" title="Change Transparency">
+                <button id="qp-clear-canvas-btn" class="qp-button qp-button-secondary">Clear</button>
+                <button id="qp-close-canvas-btn" class="qp-button qp-button-danger">Close</button>
+            </div>
+            <canvas id="qp-rough-work-canvas"></canvas>
         </div>
     <?php
         return ob_get_clean();
