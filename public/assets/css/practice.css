@@ -2625,7 +2625,7 @@ ul.qp-review-list li {
     top: 0;
     left: 0;
     height: 100%;
-    background-color: #e8f5e9; /* Light green */
+    background-color: #d8f3da; /* Light green */
     z-index: 1;
     transition: width 0.5s ease-in-out;
 }
