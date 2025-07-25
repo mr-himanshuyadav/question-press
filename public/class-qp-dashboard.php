@@ -80,6 +80,7 @@ class QP_Dashboard
             <div class="qp-dashboard-tabs">
                 <button class="qp-tab-link active" data-tab="sessions">History</button>
                 <button class="qp-tab-link" data-tab="review">Review</button>
+                <button class="qp-tab-link" data-tab="progress">Progress</button>
             </div>
 
             <div id="sessions" class="qp-tab-content active">
@@ -128,6 +129,33 @@ class QP_Dashboard
             </div>
             <div id="qp-review-modal-backdrop" style="display: none;">
                 <div id="qp-review-modal-content"></div>
+            </div>
+
+            <div id="progress" class="qp-tab-content">
+                <div class="qp-progress-filters">
+                    <div class="qp-form-group">
+                        <label for="qp-progress-subject">Select Subject</label>
+                        <select name="qp-progress-subject" id="qp-progress-subject">
+                            <option value="">— Select a Subject —</option>
+                            <?php
+                            global $wpdb;
+                            $subjects = $wpdb->get_results("SELECT subject_id, subject_name FROM {$wpdb->prefix}qp_subjects WHERE subject_name != 'Uncategorized' ORDER BY subject_name ASC");
+                            foreach ($subjects as $subject) {
+                                echo '<option value="' . esc_attr($subject->subject_id) . '">' . esc_html($subject->subject_name) . '</option>';
+                            }
+                            ?>
+                        </select>
+                    </div>
+                    <div class="qp-form-group">
+                        <label for="qp-progress-source">Select Source</label>
+                        <select name="qp-progress-source" id="qp-progress-source" disabled>
+                            <option value="">— Select a Subject First —</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="qp-progress-results-container">
+                    <!-- Progress bars will be loaded here via AJAX -->
+                </div>
             </div>
         </div>
 <?php
