@@ -453,21 +453,34 @@ jQuery(document).ready(function($) {
         var $clickedTopic = $(this);
         var topicId = $clickedTopic.data('topic-id');
         var $sectionsContainer = wrapper.find('.qp-topic-sections-container[data-parent-topic="' + topicId + '"]');
+        var $sections = $sectionsContainer.find('.qp-progress-item');
 
-        // --- NEW: Accordion Logic ---
-        // Find any other topic that is currently open (and is not the one we just clicked)
+        // --- Accordion Logic ---
         var $otherOpenTopic = $('.qp-topic-toggle.is-open').not($clickedTopic);
         if ($otherOpenTopic.length > 0) {
             var otherTopicId = $otherOpenTopic.data('topic-id');
-            // Close the other topic's sections
-            wrapper.find('.qp-topic-sections-container[data-parent-topic="' + otherTopicId + '"]').slideUp(200);
-            $otherOpenTopic.removeClass('is-open');
+            var $otherSectionsContainer = wrapper.find('.qp-topic-sections-container[data-parent-topic="' + otherTopicId + '"]');
+            var $otherSections = $otherSectionsContainer.find('.qp-progress-item');
+
+            // Close the other topic's sections and remove all highlight classes
+            $otherSectionsContainer.slideUp(200);
+            $otherOpenTopic.removeClass('is-open is-active-group');
+            $otherSections.removeClass('is-active-group');
         }
         // --- End of Accordion Logic ---
 
         // Toggle the clicked topic
         $sectionsContainer.slideToggle(200);
         $clickedTopic.toggleClass('is-open');
+
+        // --- NEW: Apply/Remove highlight to the entire group ---
+        if ($clickedTopic.hasClass('is-open')) {
+            $clickedTopic.addClass('is-active-group');
+            $sections.addClass('is-active-group');
+        } else {
+            $clickedTopic.removeClass('is-active-group');
+            $sections.removeClass('is-active-group');
+        }
     });
 
 

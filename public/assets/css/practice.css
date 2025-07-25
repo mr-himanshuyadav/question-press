@@ -2667,8 +2667,15 @@ ul.qp-review-list li {
 .qp-topic-toggle.is-open .qp-progress-label .dashicons {
     transform: rotate(90deg);
 }
-
-
+/* --- NEW: Styles for highlighting the active/open progress group --- */
+.qp-progress-item.is-active-group {
+    border-color: #bde2f7; /* A light blue border */
+    background-color: #ffffff; /* A subtle grey background */
+}
+.qp-progress-item.is-active-group .qp-progress-label {
+    font-weight: 700; /* Bolder font for emphasis */
+    color: var(--qp-dark-text);
+}
 .qp-modal-close-btn {
     position: absolute;
     top: 1rem;
