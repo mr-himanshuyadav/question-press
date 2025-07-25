@@ -1684,7 +1684,9 @@ $("#qp-next-btn").prop("disabled", !isSectionWise);
       }).then((result) => {
         if (result.isConfirmed) {
           practiceInProgress = false;
-          $("#qp-end-practice-btn").click();
+          if (result.isConfirmed) {
+            endSession(false);
+          }
         }
       });
       // If the user clicks "Cancel", we simply do nothing. They remain on the last question, and the UI is still responsive.
