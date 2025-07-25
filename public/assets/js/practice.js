@@ -1705,10 +1705,10 @@ $("#qp-next-btn").prop("disabled", !isSectionWise);
   }
 
   function updateHeaderStats() {
-    $("#qp-score").text(score.toFixed(2));
-    $("#qp-correct-count").text(correctCount);
-    $("#qp-incorrect-count").text(incorrectCount);
-    $("#qp-skipped-count").text(skippedCount);
+    $(".qp-header-stat.score .value").text(score.toFixed(2));
+    $(".qp-header-stat.correct .value").text(correctCount);
+    $(".qp-header-stat.incorrect .value").text(incorrectCount);
+    $(".qp-header-stat.skipped .value").text(skippedCount);
   }
 
   function startTimer(seconds) {
