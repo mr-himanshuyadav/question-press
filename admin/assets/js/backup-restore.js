@@ -89,7 +89,7 @@ jQuery(document).ready(function($) {
                                 text: response.data.message,
                                 icon: 'success',
                                 timer: 1500,
-                                showConfirmButton: false
+                                timerProgressBar: true,
                             });
                         } else {
                             Swal.fire('Error!', response.data.message, 'error');

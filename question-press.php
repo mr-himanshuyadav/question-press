@@ -1217,12 +1217,12 @@ function qp_get_local_backups_html()
             <tr data-filename="<?php echo esc_attr($backup_file); ?>">
                 <td><?php echo esc_html($file_date); ?></td>
                 <td>
-                    <?php echo esc_html($backup_file); ?>
                     <?php if (strpos($backup_file, 'qp-auto-backup-') === 0) : ?>
-                        <span style="background-color: #f0f0f1; color: #50575e; padding: 2px 6px; font-size: 10px; border-radius: 3px; font-weight: 600; vertical-align: middle; margin-left: 5px;">AUTO</span>
+                        <span style="background-color: #dadae0ff; color: #383d42ff; padding: 2px 6px; font-size: 10px; border-radius: 3px; font-weight: 600; vertical-align: middle; margin-left: 5px;">AUTO</span>
                     <?php else : ?>
-                        <span style="background-color: #e3f2fd; color: #1e88e5; padding: 2px 6px; font-size: 10px; border-radius: 3px; font-weight: 600; vertical-align: middle; margin-left: 5px;">MANUAL</span>
+                        <span style="background-color: #d8e7f2ff; color: #0f82e7ff; padding: 2px 6px; font-size: 10px; border-radius: 3px; font-weight: 600; vertical-align: middle; margin-left: 5px;">MANUAL</span>
                     <?php endif; ?>
+                    <?php echo esc_html($backup_file); ?>
                 </td>
                 <td><?php echo esc_html($file_size); ?></td>
                 <td>
@@ -2172,6 +2172,146 @@ function qp_get_practice_form_html_ajax()
     wp_send_json_success(['form_html' => QP_Shortcodes::render_practice_form()]);
 }
 add_action('wp_ajax_get_practice_form_html', 'qp_get_practice_form_html_ajax');
+
+
+/**
+ * AJAX handler for the dashboard progress tab.
+ * Gets sources that have questions for a given subject.
+ */
+function qp_get_sources_for_subject_progress_ajax() {
+    check_ajax_referer('qp_practice_nonce', 'nonce');
+    $subject_id = isset($_POST['subject_id']) ? absint($_POST['subject_id']) : 0;
+
+    if (!$subject_id) {
+        wp_send_json_success(['sources' => []]);
+    }
+
+    global $wpdb;
+    // This query finds sources that are linked to questions which are in groups associated with the selected subject.
+    $sources = $wpdb->get_results($wpdb->prepare(
+        "SELECT DISTINCT s.source_id, s.source_name
+         FROM {$wpdb->prefix}qp_sources s
+         JOIN {$wpdb->prefix}qp_questions q ON s.source_id = q.source_id
+         JOIN {$wpdb->prefix}qp_question_groups g ON q.group_id = g.group_id
+         WHERE g.subject_id = %d
+         ORDER BY s.source_name ASC",
+        $subject_id
+    ));
+
+    wp_send_json_success(['sources' => $sources]);
+}
+add_action('wp_ajax_get_sources_for_subject_progress', 'qp_get_sources_for_subject_progress_ajax');
+
+/**
+ * AJAX handler for the dashboard progress tab.
+ * Calculates and returns the hierarchical progress data.
+ */
+function qp_get_progress_data_ajax() {
+    check_ajax_referer('qp_practice_nonce', 'nonce');
+    $source_id = isset($_POST['source_id']) ? absint($_POST['source_id']) : 0;
+    $user_id = get_current_user_id();
+
+    if (!$source_id || !$user_id) {
+        wp_send_json_error(['message' => 'Invalid request.']);
+    }
+
+    global $wpdb;
+
+    // 1. Get all questions and their parent subject FOR THE SELECTED SOURCE. This is our master dataset.
+    $all_questions_in_source = $wpdb->get_results($wpdb->prepare(
+        "SELECT q.question_id, q.topic_id, q.section_id, t.topic_name, sec.section_name, g.subject_id
+         FROM {$wpdb->prefix}qp_questions q
+         JOIN {$wpdb->prefix}qp_question_groups g ON q.group_id = g.group_id
+         LEFT JOIN {$wpdb->prefix}qp_topics t ON q.topic_id = t.topic_id
+         LEFT JOIN {$wpdb->prefix}qp_source_sections sec ON q.section_id = sec.section_id
+         WHERE q.source_id = %d AND q.status = 'publish'",
+        $source_id
+    ));
+
+    if (empty($all_questions_in_source)) {
+        wp_send_json_success(['html' => '<p>No questions found for this source.</p>']);
+        return;
+    }
+
+    // 2. Get all questions the user has answered correctly from this specific set of questions
+    $all_qids_in_source = wp_list_pluck($all_questions_in_source, 'question_id');
+    $qids_placeholder = implode(',', $all_qids_in_source);
+
+    $correctly_answered_qids = $wpdb->get_col($wpdb->prepare(
+        "SELECT DISTINCT question_id FROM {$wpdb->prefix}qp_user_attempts
+         WHERE user_id = %d AND is_correct = 1 AND question_id IN ({$qids_placeholder})",
+        $user_id
+    ));
+
+    // 3. --- NEW: Calculate Subject progress based on our filtered dataset ---
+    $subject_id = $all_questions_in_source[0]->subject_id; // Get subject from the first question
+    $subject_total = count($all_qids_in_source);
+    $subject_completed_count = count($correctly_answered_qids);
+    
+    // 4. Structure the Topic/Section data hierarchically (same as before)
+    $progress_data = [];
+    foreach ($all_questions_in_source as $question) {
+        $topic_id = $question->topic_id ?: 0;
+        $topic_name = $question->topic_name ?: 'General';
+        $section_id = $question->section_id ?: 0;
+        $section_name = $question->section_name ?: 'Main Section';
+
+        if (!isset($progress_data[$topic_id])) {
+            $progress_data[$topic_id] = [
+                'name' => $topic_name, 'total' => 0, 'completed' => 0, 'sections' => []
+            ];
+        }
+        if (!isset($progress_data[$topic_id]['sections'][$section_id])) {
+            $progress_data[$topic_id]['sections'][$section_id] = [
+                'name' => $section_name, 'total' => 0, 'completed' => 0
+            ];
+        }
+
+        $progress_data[$topic_id]['total']++;
+        $progress_data[$topic_id]['sections'][$section_id]['total']++;
+
+        if (in_array($question->question_id, $correctly_answered_qids)) {
+            $progress_data[$topic_id]['completed']++;
+            $progress_data[$topic_id]['sections'][$section_id]['completed']++;
+        }
+    }
+
+    // 5. Generate the HTML response (same as before)
+    ob_start();
+    echo '<div class="qp-progress-tree">';
+    $subject_name = $wpdb->get_var($wpdb->prepare("SELECT subject_name FROM {$wpdb->prefix}qp_subjects WHERE subject_id = %d", $subject_id));
+    $subject_percentage = $subject_total > 0 ? round(($subject_completed_count / $subject_total) * 100) : 0;
+    echo '<div class="qp-progress-item subject-level">';
+    echo '<div class="qp-progress-bar-bg" style="width: ' . esc_attr($subject_percentage) . '%;"></div>';
+    echo '<div class="qp-progress-label">' . esc_html($subject_name) . ' <span class="qp-progress-percentage">' . esc_html($subject_percentage) . '%</span></div>';
+    echo '</div>';
+
+    foreach ($progress_data as $topic_id => $topic) {
+        $topic_percentage = $topic['total'] > 0 ? round(($topic['completed'] / $topic['total']) * 100) : 0;
+        // Add a data-attribute to the topic item
+        echo '<div class="qp-progress-item topic-level qp-topic-toggle" data-topic-id="' . esc_attr($topic_id) . '">';
+        echo '<div class="qp-progress-bar-bg" style="width: ' . esc_attr($topic_percentage) . '%;"></div>';
+        // Add a toggle icon to the label
+        echo '<div class="qp-progress-label"><span class="dashicons dashicons-arrow-right-alt2"></span>' . esc_html($topic['name']) . ' <span class="qp-progress-percentage">' . esc_html($topic_percentage) . '%</span></div>';
+        echo '</div>';
+
+        // Wrap sections in a container that is hidden by default
+        echo '<div class="qp-topic-sections-container" data-parent-topic="' . esc_attr($topic_id) . '" style="display: none;">';
+        foreach ($topic['sections'] as $section) {
+            $section_percentage = $section['total'] > 0 ? round(($section['completed'] / $section['total']) * 100) : 0;
+            echo '<div class="qp-progress-item section-level">';
+            echo '<div class="qp-progress-bar-bg" style="width: ' . esc_attr($section_percentage) . '%;"></div>';
+            echo '<div class="qp-progress-label">' . esc_html($section['name']) . ' <span class="qp-progress-percentage">' . esc_html($section_percentage) . '%</span></div>';
+            echo '</div>';
+        }
+        echo '</div>'; // Close sections container
+    }
+    echo '</div>';
+    $html = ob_get_clean();
+
+    wp_send_json_success(['html' => $html]);
+}
+add_action('wp_ajax_get_progress_data', 'qp_get_progress_data_ajax');
 
 function qp_get_question_data_ajax()
 {

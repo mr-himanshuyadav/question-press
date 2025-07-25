@@ -33,6 +33,41 @@ class QP_Rest_Api {
             'callback' => [self::class, 'get_subjects'],
             'permission_callback' => [self::class, 'check_auth_token']
         ]);
+
+        // --- Topics Endpoint (Protected) ---
+        register_rest_route('questionpress/v1', '/topics', [
+            'methods' => WP_REST_Server::READABLE, // GET
+            'callback' => [self::class, 'get_topics'],
+            'permission_callback' => [self::class, 'check_auth_token']
+        ]);
+
+        // --- Exams Endpoint (Protected) ---
+        register_rest_route('questionpress/v1', '/exams', [
+            'methods' => WP_REST_Server::READABLE, // GET
+            'callback' => [self::class, 'get_exams'],
+            'permission_callback' => [self::class, 'check_auth_token']
+        ]);
+
+        // --- Sources Endpoint (Protected) ---
+        register_rest_route('questionpress/v1', '/sources', [
+            'methods' => WP_REST_Server::READABLE, // GET
+            'callback' => [self::class, 'get_sources'],
+            'permission_callback' => [self::class, 'check_auth_token']
+        ]);
+
+        // --- Labels Endpoint (Protected) ---
+        register_rest_route('questionpress/v1', '/labels', [
+            'methods' => WP_REST_Server::READABLE, // GET
+            'callback' => [self::class, 'get_labels'],
+            'permission_callback' => [self::class, 'check_auth_token']
+        ]);
+
+        // --- Add Question Group Endpoint (Protected) ---
+        register_rest_route('questionpress/v1', '/questions/add', [
+            'methods' => WP_REST_Server::CREATABLE, // POST
+            'callback' => [self::class, 'add_question_group'],
+            'permission_callback' => [self::class, 'check_auth_token']
+        ]);
         
         // --- Start Session / Get Questions Endpoint (Protected) ---
         register_rest_route('questionpress/v1', '/start-session', [
@@ -291,6 +326,111 @@ class QP_Rest_Api {
         $wpdb->update($sessions_table, ['end_time' => current_time('mysql', 1), 'total_attempted' => $total_attempted, 'correct_count' => $correct_count, 'incorrect_count' => $incorrect_count, 'skipped_count' => $skipped_count, 'marks_obtained' => $final_score], ['session_id' => $session_id]);
 
         return new WP_REST_Response(['message' => 'Session ended successfully.', 'final_score' => $final_score], 200);
+    }
+
+    public static function get_topics() {
+        global $wpdb;
+        $results = $wpdb->get_results("SELECT topic_id, topic_name, subject_id FROM {$wpdb->prefix}qp_topics ORDER BY topic_name ASC");
+        return new WP_REST_Response($results, 200);
+    }
+
+    public static function get_exams() {
+        global $wpdb;
+        $results = $wpdb->get_results("SELECT exam_id, exam_name FROM {$wpdb->prefix}qp_exams ORDER BY exam_name ASC");
+        return new WP_REST_Response($results, 200);
+    }
+
+    public static function get_sources() {
+        global $wpdb;
+        $results = $wpdb->get_results("SELECT source_id, source_name, subject_id FROM {$wpdb->prefix}qp_sources ORDER BY source_name ASC");
+        return new WP_REST_Response($results, 200);
+    }
+
+    public static function get_labels() {
+        global $wpdb;
+        $results = $wpdb->get_results("SELECT label_id, label_name, label_color FROM {$wpdb->prefix}qp_labels ORDER BY label_name ASC");
+        return new WP_REST_Response($results, 200);
+    }
+
+    public static function add_question_group(WP_REST_Request $request) {
+        global $wpdb;
+
+        // Get all data sent from the app
+        $data = $request->get_json_params();
+
+        // Basic validation
+        if (!isset($data['subject_id']) || !isset($data['questions']) || !is_array($data['questions'])) {
+            return new WP_Error('rest_invalid_request', 'Missing required fields: subject_id and questions are required.', ['status' => 400]);
+        }
+
+        // --- Create the Question Group ---
+        $wpdb->insert(
+            "{$wpdb->prefix}qp_question_groups",
+            [
+                'subject_id' => absint($data['subject_id']),
+                'direction_text' => isset($data['direction_text']) ? sanitize_textarea_field($data['direction_text']) : null,
+                'is_pyq' => isset($data['is_pyq']) ? (int)$data['is_pyq'] : 0,
+                'exam_id' => isset($data['exam_id']) ? absint($data['exam_id']) : null,
+                'pyq_year' => isset($data['pyq_year']) ? sanitize_text_field($data['pyq_year']) : null,
+            ]
+        );
+        $group_id = $wpdb->insert_id;
+
+        if (!$group_id) {
+            return new WP_Error('db_error', 'Could not create the question group.', ['status' => 500]);
+        }
+
+        // --- Loop Through and Create Each Question ---
+        foreach ($data['questions'] as $question_data) {
+            $question_text = sanitize_textarea_field($question_data['question_text']);
+            $hash = md5(strtolower(trim(preg_replace('/\s+/', '', $question_text))));
+            $next_custom_id = get_option('qp_next_custom_question_id', 1000);
+
+            $wpdb->insert(
+                "{$wpdb->prefix}qp_questions",
+                [
+                    'group_id' => $group_id,
+                    'custom_question_id' => $next_custom_id,
+                    'question_text' => $question_text,
+                    'question_text_hash' => $hash,
+                    'topic_id' => isset($data['topic_id']) ? absint($data['topic_id']) : null,
+                    'source_id' => isset($data['source_id']) ? absint($data['source_id']) : null,
+                    'section_id' => isset($data['section_id']) ? absint($data['section_id']) : null,
+                    'status' => 'publish' // Assume questions from app are ready
+                ]
+            );
+            $question_id = $wpdb->insert_id;
+            update_option('qp_next_custom_question_id', $next_custom_id + 1);
+
+            // --- Add Options ---
+            if (isset($question_data['options']) && is_array($question_data['options'])) {
+                foreach ($question_data['options'] as $option) {
+                    $wpdb->insert(
+                        "{$wpdb->prefix}qp_options",
+                        [
+                            'question_id' => $question_id,
+                            'option_text' => sanitize_text_field($option['option_text']),
+                            'is_correct' => (int)$option['is_correct']
+                        ]
+                    );
+                }
+            }
+
+            // --- Add Labels ---
+            if (isset($question_data['labels']) && is_array($question_data['labels'])) {
+                foreach ($question_data['labels'] as $label_id) {
+                    $wpdb->insert(
+                        "{$wpdb->prefix}qp_question_labels",
+                        [
+                            'question_id' => $question_id,
+                            'label_id' => absint($label_id)
+                        ]
+                    );
+                }
+            }
+        }
+
+        return new WP_REST_Response(['success' => true, 'message' => 'Question group created successfully.', 'group_id' => $group_id], 201);
     }
 
 }

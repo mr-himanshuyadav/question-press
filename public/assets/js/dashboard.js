@@ -1,5 +1,8 @@
 jQuery(document).ready(function($) {
     var wrapper = $('.qp-dashboard-wrapper');
+    var subjectSelect = $('#qp-progress-subject');
+    var sourceSelect = $('#qp-progress-source');
+    var resultsContainer = $('#qp-progress-results-container');
 
     // --- NEW: Handler for removing an item from the review list ---
     wrapper.on('click', '.qp-review-list-remove-btn', function(e) {
@@ -382,4 +385,101 @@ jQuery(document).ready(function($) {
         });
     });
 
+    subjectSelect.on('change', function() {
+        var subjectId = $(this).val();
+        sourceSelect.val('');
+        resultsContainer.html('');
+
+        if (!subjectId) {
+            sourceSelect.html('<option value="">— Select a Subject First —</option>').prop('disabled', true);
+            return;
+        }
+
+        $.ajax({
+            url: qp_ajax_object.ajax_url,
+            type: 'POST',
+            data: {
+                action: 'get_sources_for_subject_progress',
+                nonce: qp_ajax_object.nonce,
+                subject_id: subjectId
+            },
+            beforeSend: function() {
+                sourceSelect.html('<option value="">Loading Sources...</option>').prop('disabled', true);
+            },
+            success: function(response) {
+                if (response.success && response.data.sources.length > 0) {
+                    var optionsHtml = '<option value="">— Select a Source —</option>';
+                    $.each(response.data.sources, function(index, source) {
+                        optionsHtml += `<option value="${source.source_id}">${source.source_name}</option>`;
+                    });
+                    sourceSelect.html(optionsHtml).prop('disabled', false);
+                } else {
+                    sourceSelect.html('<option value="">— No Sources Found —</option>').prop('disabled', true);
+                }
+            }
+        });
+    });
+
+    sourceSelect.on('change', function() {
+        var sourceId = $(this).val();
+        if (!sourceId) {
+            resultsContainer.html('');
+            return;
+        }
+
+        $.ajax({
+            url: qp_ajax_object.ajax_url,
+            type: 'POST',
+            data: {
+                action: 'get_progress_data',
+                nonce: qp_ajax_object.nonce,
+                source_id: sourceId
+            },
+            beforeSend: function() {
+                resultsContainer.html('<div class="qp-loader-spinner"></div>');
+            },
+            success: function(response) {
+                if (response.success) {
+                    resultsContainer.html(response.data.html);
+                } else {
+                    resultsContainer.html('<p>Could not load progress data.</p>');
+                }
+            }
+        });
+    });
+
+    // --- Collapsible Progress Sections Logic ---
+    wrapper.on('click', '.qp-topic-toggle', function() {
+        var $clickedTopic = $(this);
+        var topicId = $clickedTopic.data('topic-id');
+        var $sectionsContainer = wrapper.find('.qp-topic-sections-container[data-parent-topic="' + topicId + '"]');
+        var $sections = $sectionsContainer.find('.qp-progress-item');
+
+        // --- Accordion Logic ---
+        var $otherOpenTopic = $('.qp-topic-toggle.is-open').not($clickedTopic);
+        if ($otherOpenTopic.length > 0) {
+            var otherTopicId = $otherOpenTopic.data('topic-id');
+            var $otherSectionsContainer = wrapper.find('.qp-topic-sections-container[data-parent-topic="' + otherTopicId + '"]');
+            var $otherSections = $otherSectionsContainer.find('.qp-progress-item');
+
+            // Close the other topic's sections and remove all highlight classes
+            $otherSectionsContainer.slideUp(200);
+            $otherOpenTopic.removeClass('is-open is-active-group');
+            $otherSections.removeClass('is-active-group');
+        }
+        // --- End of Accordion Logic ---
+
+        // Toggle the clicked topic
+        $sectionsContainer.slideToggle(200);
+        $clickedTopic.toggleClass('is-open');
+
+        // --- NEW: Apply/Remove highlight to the entire group ---
+        if ($clickedTopic.hasClass('is-open')) {
+            $clickedTopic.addClass('is-active-group');
+            $sections.addClass('is-active-group');
+        } else {
+            $clickedTopic.removeClass('is-active-group');
+            $sections.removeClass('is-active-group');
+        }
+    });
 });
