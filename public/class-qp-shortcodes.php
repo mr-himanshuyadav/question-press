@@ -1038,16 +1038,15 @@ class QP_Shortcodes
         }
     ?>
         <div class="qp-container qp-review-wrapper <?php echo esc_attr($mode_class); ?>">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-                <div>
-                    <h2>Session Review</h2>
-                    <div style="display: flex; align-items: center; gap: 15px; margin-top: 5px;">
+            <div style="display: flex; flex-direction: column;justify-content: space-between; margin-bottom: 1.5rem;">
+                <div style="display: flex;flex-direction: row; justify-content: space-between;">
+                    <h2>Review</h2>
+                    <a href="<?php echo esc_url($dashboard_page_url); ?>" class="qp-button qp-button-secondary" style="align-self: center; padding: 12px 14px;">&laquo; Dashboard</a>
+                </div>
+                <div style="display: flex; align-items: center; gap: 15px; margin-top: 5px;">
                         <span class="qp-session-mode-indicator" style="padding: 5px 12px; font-size: 12px;"><?php echo esc_html($mode); ?></span>
                         <p style="margin: 0; color: #50575e; font-size: 14px;"><strong>Session ID:</strong> <?php echo esc_html($session_id); ?></p>
                     </div>
-
-                </div>
-                <a href="<?php echo esc_url($dashboard_page_url); ?>" class="qp-button qp-button-secondary" style="text-decoration: none;">&laquo; Dashboard</a>
             </div>
 
             <div class="qp-summary-wrapper qp-review-summary">

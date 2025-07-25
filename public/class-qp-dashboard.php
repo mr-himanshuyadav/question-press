@@ -42,6 +42,21 @@ class QP_Dashboard
             $user_id
         ));
 
+        // --- NEW: Calculate both counts for "Practice Your Mistakes" ---
+        $attempts_table = $wpdb->prefix . 'qp_user_attempts';
+
+        // Count all questions EVER answered incorrectly
+        $total_incorrect_count = $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(DISTINCT question_id) FROM {$attempts_table} WHERE user_id = %d AND is_correct = 0",
+            $user_id
+        ));
+
+        // Count questions NEVER answered correctly
+        $correctly_answered_qids = $wpdb->get_col($wpdb->prepare("SELECT DISTINCT question_id FROM {$attempts_table} WHERE user_id = %d AND is_correct = 1", $user_id));
+        $all_answered_qids = $wpdb->get_col($wpdb->prepare("SELECT DISTINCT question_id FROM {$attempts_table} WHERE user_id = %d AND status = 'answered'", $user_id));
+        $never_correct_qids = array_diff($all_answered_qids, $correctly_answered_qids);
+        $never_correct_count = count($never_correct_qids);
+
         ob_start();
 ?>
         <div class="qp-container qp-dashboard-wrapper">
@@ -97,7 +112,11 @@ class QP_Dashboard
             <div id="review" class="qp-tab-content">
                 <div class="qp-practice-card">
                     <div class="qp-card-content">
-                        <h4>Practice Your Mistakes</h4>
+                        <h4 id="qp-incorrect-practice-heading" 
+                            data-never-correct-count="<?php echo (int)$never_correct_count; ?>" 
+                            data-total-incorrect-count="<?php echo (int)$total_incorrect_count; ?>">
+                            Practice Your Mistakes (<span><?php echo (int)$never_correct_count; ?></span>)
+                        </h4>
                         <p>Create a session from questions you have not yet answered correctly.</p>
                     </div>
                     <div class="qp-card-action">

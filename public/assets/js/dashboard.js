@@ -352,6 +352,23 @@ jQuery(document).ready(function($) {
         });
     });
 
+    // --- NEW: Dynamically update the "Practice Your Mistakes" counter ---
+    wrapper.on('change', '#qp-include-all-incorrect-cb', function() {
+        var isChecked = $(this).is(':checked');
+        var heading = $('#qp-incorrect-practice-heading');
+        var counterSpan = heading.find('span');
+
+        if (isChecked) {
+            // If checked, show the total count of all past mistakes
+            var totalCount = heading.data('total-incorrect-count');
+            counterSpan.text(totalCount);
+        } else {
+            // If unchecked, show the count of questions never answered correctly
+            var neverCorrectCount = heading.data('never-correct-count');
+            counterSpan.text(neverCorrectCount);
+        }
+    });
+
     // --- NEW: Handler for starting an incorrect questions practice session ---
     wrapper.on('click', '#qp-start-incorrect-practice-btn', function(e) {
         e.preventDefault();
