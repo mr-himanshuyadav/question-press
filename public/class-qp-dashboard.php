@@ -78,9 +78,15 @@ class QP_Dashboard
             </div>
 
             <div class="qp-dashboard-tabs">
-                <button class="qp-tab-link active" data-tab="sessions">History</button>
-                <button class="qp-tab-link" data-tab="review">Review</button>
-                <button class="qp-tab-link" data-tab="progress">Progress</button>
+                <button class="qp-tab-link active" data-tab="sessions" title="History">
+                    <span class="dashicons dashicons-clock"></span>
+                </button>
+                <button class="qp-tab-link" data-tab="review" title="Review">
+                    <span class="dashicons dashicons-star-filled"></span>
+                </button>
+                <button class="qp-tab-link" data-tab="progress" title="Progress">
+                    <span class="dashicons dashicons-chart-bar"></span>
+                </button>
             </div>
 
             <div id="sessions" class="qp-tab-content active">
@@ -132,6 +138,7 @@ class QP_Dashboard
             </div>
 
             <div id="progress" class="qp-tab-content">
+                <p style="text-align: center; font-style: italic; color: #50575e;">Progress of Attempts (Correct + Incorrect)</p>
                 <div class="qp-progress-filters">
                     <div class="qp-form-group">
                         <label for="qp-progress-subject">Select Subject</label>
@@ -153,9 +160,15 @@ class QP_Dashboard
                         </select>
                     </div>
                 </div>
-                <div id="qp-progress-results-container">
-                    <!-- Progress bars will be loaded here via AJAX -->
+                 <div class="qp-form-group" style="text-align: left; margin-bottom: 1.5rem;">
+                    <label class="qp-custom-checkbox">
+                        <input type="checkbox" id="qp-exclude-incorrect-cb" name="exclude_incorrect_attempts" value="1">
+                        <span></span>
+                        Exclude Incorrect Attempts
+                    </label>
                 </div>
+                <div id="qp-progress-results-container">
+                    </div>
             </div>
         </div>
 <?php

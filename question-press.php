@@ -3,7 +3,7 @@
 /**
  * Plugin Name:       Question Press
  * Description:       A complete plugin for creating, managing, and practicing questions.
- * Version:           3.2.2
+ * Version:           3.2.3
  * Author:            Himanshu
  */
 
@@ -2217,7 +2217,7 @@ function qp_get_progress_data_ajax() {
 
     global $wpdb;
 
-    // 1. Get all questions and their parent subject FOR THE SELECTED SOURCE. This is our master dataset.
+    // 1. Get all questions for the selected source to establish the total.
     $all_questions_in_source = $wpdb->get_results($wpdb->prepare(
         "SELECT q.question_id, q.topic_id, q.section_id, t.topic_name, sec.section_name, g.subject_id
          FROM {$wpdb->prefix}qp_questions q
@@ -2233,20 +2233,35 @@ function qp_get_progress_data_ajax() {
         return;
     }
 
-    // 2. Get all questions the user has answered correctly from this specific set of questions
     $all_qids_in_source = wp_list_pluck($all_questions_in_source, 'question_id');
-    $qids_placeholder = implode(',', $all_qids_in_source);
+    $exclude_incorrect = isset($_POST['exclude_incorrect']) && $_POST['exclude_incorrect'] === 'true';
 
-    $correctly_answered_qids = $wpdb->get_col($wpdb->prepare(
-        "SELECT DISTINCT question_id FROM {$wpdb->prefix}qp_user_attempts
-         WHERE user_id = %d AND is_correct = 1 AND question_id IN ({$qids_placeholder})",
-        $user_id
-    ));
+    // *** THIS IS THE CRITICAL FIX ***
+    // Base SQL query and parameters are built first.
+    $sql = "SELECT DISTINCT question_id FROM {$wpdb->prefix}qp_user_attempts WHERE user_id = %d";
+    $params = [$user_id];
 
-    // 3. --- NEW: Calculate Subject progress based on our filtered dataset ---
-    $subject_id = $all_questions_in_source[0]->subject_id; // Get subject from the first question
+    // Conditionally add the filter for the type of attempt.
+    if ($exclude_incorrect) {
+        $sql .= " AND is_correct = 1";
+    } else {
+        $sql .= " AND status = 'answered'";
+    }
+
+    // Prepare the placeholders for the IN clause and add them to the query and parameters.
+    if (!empty($all_qids_in_source)) {
+        $sql .= " AND question_id IN (" . implode(',', array_fill(0, count($all_qids_in_source), '%d')) . ")";
+        $params = array_merge($params, $all_qids_in_source);
+    }
+    
+    // Prepare and execute the final, safe query.
+    $completed_qids = $wpdb->get_col($wpdb->prepare($sql, $params));
+    // *** END OF CRITICAL FIX ***
+
+    // 3. Calculate Subject progress based on our filtered dataset.
+    $subject_id = $all_questions_in_source[0]->subject_id;
     $subject_total = count($all_qids_in_source);
-    $subject_completed_count = count($correctly_answered_qids);
+    $subject_completed_count = count($completed_qids);
     
     // 4. Structure the Topic/Section data hierarchically (same as before)
     $progress_data = [];
@@ -2270,7 +2285,7 @@ function qp_get_progress_data_ajax() {
         $progress_data[$topic_id]['total']++;
         $progress_data[$topic_id]['sections'][$section_id]['total']++;
 
-        if (in_array($question->question_id, $correctly_answered_qids)) {
+        if (in_array($question->question_id, $completed_qids)) {
             $progress_data[$topic_id]['completed']++;
             $progress_data[$topic_id]['sections'][$section_id]['completed']++;
         }

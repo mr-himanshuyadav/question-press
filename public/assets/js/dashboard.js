@@ -433,7 +433,8 @@ jQuery(document).ready(function($) {
             data: {
                 action: 'get_progress_data',
                 nonce: qp_ajax_object.nonce,
-                source_id: sourceId
+                source_id: sourceId,
+                exclude_incorrect: $('#qp-exclude-incorrect-cb').is(':checked')
             },
             beforeSend: function() {
                 resultsContainer.html('<div class="qp-loader-spinner"></div>');
@@ -446,6 +447,13 @@ jQuery(document).ready(function($) {
                 }
             }
         });
+    });
+
+    // --- NEW: Handler for the "Exclude Incorrect" checkbox ---
+    wrapper.on('change', '#qp-exclude-incorrect-cb', function() {
+        // When the checkbox changes, just re-trigger the source dropdown's change event.
+        // This will automatically re-run the progress calculation with the new checkbox state.
+        sourceSelect.trigger('change');
     });
 
     // --- Collapsible Progress Sections Logic ---
