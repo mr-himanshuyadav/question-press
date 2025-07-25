@@ -273,9 +273,7 @@ class QP_Dashboard
 
                 // Determine the mode, adding a case for our new 'paused' status.
                 $mode = 'Practice'; // Default
-                if ($session->status === 'paused') {
-                    $mode = 'Paused';
-                } elseif (isset($settings['practice_mode'])) {
+                if (isset($settings['practice_mode'])) {
                     if ($settings['practice_mode'] === 'revision') {
                         $mode = 'Revision';
                     } elseif ($settings['practice_mode'] === 'mock_test') { // This is the missing condition
@@ -334,7 +332,9 @@ class QP_Dashboard
                 // START: Replace this block
                 $status_display = 'Completed'; // Default status
                 // First, check if the end_reason property exists and has a value
-                if (!empty($session->end_reason)) {
+                if ($session->status === 'paused') {
+                    $status_display = 'Paused';
+                } elseif (!empty($session->end_reason)) {
                     switch ($session->end_reason) {
                         case 'user_submitted':
                             $status_display = 'Completed';
