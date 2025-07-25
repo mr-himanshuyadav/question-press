@@ -2244,6 +2244,24 @@ function qp_get_progress_data_ajax() {
 
     // 3. Structure the data hierarchically
     $progress_data = [];
+
+    // --- NEW: Calculate overall Subject progress first ---
+    $subject_id = $wpdb->get_var($wpdb->prepare("SELECT subject_id FROM {$wpdb->prefix}qp_sources WHERE source_id = %d", $source_id));
+    $all_questions_in_subject = $wpdb->get_col($wpdb->prepare(
+        "SELECT q.question_id FROM {$wpdb->prefix}qp_questions q JOIN {$wpdb->prefix}qp_question_groups g ON q.group_id = g.group_id WHERE g.subject_id = %d AND q.status = 'publish'",
+        $subject_id
+    ));
+    $subject_total = count($all_questions_in_subject);
+    $subject_completed_qids = [];
+    if (!empty($all_questions_in_subject)) {
+        $subject_qids_placeholder = implode(',', $all_questions_in_subject);
+        $subject_completed_qids = $wpdb->get_col($wpdb->prepare(
+            "SELECT DISTINCT question_id FROM {$wpdb->prefix}qp_user_attempts WHERE user_id = %d AND is_correct = 1 AND question_id IN ({$subject_qids_placeholder})",
+            $user_id
+        ));
+    }
+    $subject_completed_count = count($subject_completed_qids);
+
     foreach ($all_questions_in_source as $question) {
         $topic_id = $question->topic_id ?: 0;
         $topic_name = $question->topic_name ?: 'General';
@@ -2280,6 +2298,14 @@ function qp_get_progress_data_ajax() {
     // 4. Generate the HTML response
     ob_start();
     echo '<div class="qp-progress-tree">';
+
+    $subject_name = $wpdb->get_var($wpdb->prepare("SELECT subject_name FROM {$wpdb->prefix}qp_subjects WHERE subject_id = %d", $subject_id));
+    $subject_percentage = $subject_total > 0 ? round(($subject_completed_count / $subject_total) * 100) : 0;
+    echo '<div class="qp-progress-item subject-level">';
+    echo '<div class="qp-progress-bar-bg" style="width: ' . esc_attr($subject_percentage) . '%;"></div>';
+    echo '<div class="qp-progress-label">' . esc_html($subject_name) . ' <span class="qp-progress-percentage">' . esc_html($subject_percentage) . '%</span></div>';
+    echo '</div>';
+
     foreach ($progress_data as $topic) {
         $topic_percentage = $topic['total'] > 0 ? round(($topic['completed'] / $topic['total']) * 100) : 0;
         echo '<div class="qp-progress-item topic-level">';

@@ -2577,21 +2577,48 @@ ul.qp-review-list li {
     margin-top: 1.5rem;
 }
 .qp-progress-item {
-    margin-bottom: 8px;
-    padding: 12px 15px;
-    background-color: #fff;
+    margin-bottom: 5px;
     border: 1px solid #e0e0e0;
     border-radius: 6px;
     position: relative;
     overflow: hidden;
 }
-.qp-progress-item.topic-level {
-    margin-left: 20px;
-    background-color: #f9f9f9;
+.qp-progress-label {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: 500;
 }
+/* Subject Level (Largest) */
+.qp-progress-item.subject-level {
+    padding: 12px 15px;
+    background-color: #f5f5f5; /* Light grey background */
+    border-width: 2px;
+}
+.qp-progress-item.subject-level .qp-progress-label {
+    font-size: 16px;
+    font-weight: 700;
+}
+/* Topic Level (Medium) */
+.qp-progress-item.topic-level {
+    padding: 10px 15px;
+    margin-left: 20px;
+    background-color: #fafafa;
+}
+.qp-progress-item.topic-level .qp-progress-label {
+    font-size: 15px;
+}
+/* Section Level (Smallest) */
 .qp-progress-item.section-level {
+    padding: 8px 15px;
     margin-left: 40px;
-    background-color: #fdfdfd;
+    background-color: #fff;
+}
+.qp-progress-item.section-level .qp-progress-label {
+    font-size: 14px;
+    font-weight: 400;
 }
 .qp-progress-bar-bg {
     position: absolute;
@@ -2601,14 +2628,6 @@ ul.qp-review-list li {
     background-color: #e8f5e9; /* Light green */
     z-index: 1;
     transition: width 0.5s ease-in-out;
-}
-.qp-progress-label {
-    position: relative;
-    z-index: 2;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-weight: 600;
 }
 .qp-progress-percentage {
     font-weight: 700;
