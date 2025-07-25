@@ -726,7 +726,7 @@ class QP_Shortcodes
                         <div class="qp-header-stat score"><span class="value" id="qp-score">0.00</span><span class="label">Score</span></div>
                         <div class="qp-header-stat correct"><span class="value" id="qp-correct-count">0</span><span class="label">Correct</span></div>
                         <div class="qp-header-stat incorrect"><span class="value" id="qp-incorrect-count">0</span><span class="label">Incorrect</span></div>
-                        <div class="qp-header-stat skipped"><span class="value" id="qp-skipped-count">0</span><span class="label">Skipped</span></div>
+                        <div class="qp-header-stat skipped"><span class="value" id="qp-skipped-count">0</span><span class="label"><?php echo $is_section_wise ? 'Not Attempted' : 'Skipped'; ?></span></div>
                     </div>
                 <?php endif; ?>
                 <div class="qp-palette-grid"></div>
@@ -741,7 +741,9 @@ class QP_Shortcodes
                     <?php else : ?>
                         <div class="legend-item" data-status="correct"><span class="swatch status-correct"></span><span class="legend-text">Correct</span><span class="legend-count">(0)</span></div>
                         <div class="legend-item" data-status="incorrect"><span class="swatch status-incorrect"></span><span class="legend-text">Incorrect</span><span class="legend-count">(0)</span></div>
-                        <div class="legend-item" data-status="skipped"><span class="swatch status-skipped"></span><span class="legend-text">Skipped</span><span class="legend-count">(0)</span></div>
+                        <?php if (!$is_section_wise) : ?>
+                            <div class="legend-item" data-status="skipped"><span class="swatch status-skipped"></span><span class="legend-text">Skipped</span><span class="legend-count">(0)</span></div>
+                        <?php endif; ?>
                         <div class="legend-item" data-status="reported"><span class="swatch status-reported"></span><span class="legend-text">Reported</span><span class="legend-count">(0)</span></div>
                         <?php if ($is_section_wise) : ?>
                             <div class="legend-item" data-status="not_attempted"><span class="swatch status-not_viewed"></span><span class="legend-text">Not Attempted</span><span class="legend-count">(0)</span></div>
@@ -762,7 +764,7 @@ class QP_Shortcodes
                         <div class="qp-header-stat score"><span class="value" id="qp-score">0.00</span><span class="label">Score</span></div>
                         <div class="qp-header-stat correct"><span class="value" id="qp-correct-count">0</span><span class="label">Correct</span></div>
                         <div class="qp-header-stat incorrect"><span class="value" id="qp-incorrect-count">0</span><span class="label">Incorrect</span></div>
-                        <div class="qp-header-stat skipped"><span class="value" id="qp-skipped-count">0</span><span class="label">Skipped</span></div>
+                        <div class="qp-header-stat skipped"><span class="value" id="qp-skipped-count">0</span><span class="label"><?php echo $is_section_wise ? 'Not Attempted' : 'Skipped'; ?></span></div>
                     </div>
                 <?php endif; ?>
                 <div class="qp-palette-grid"></div>
@@ -777,7 +779,9 @@ class QP_Shortcodes
                     <?php else : ?>
                         <div class="legend-item" data-status="correct"><span class="swatch status-correct"></span><span class="legend-text">Correct</span><span class="legend-count">(0)</span></div>
                         <div class="legend-item" data-status="incorrect"><span class="swatch status-incorrect"></span><span class="legend-text">Incorrect</span><span class="legend-count">(0)</span></div>
-                        <div class="legend-item" data-status="skipped"><span class="swatch status-skipped"></span><span class="legend-text">Skipped</span><span class="legend-count">(0)</span></div>
+                        <?php if (!$is_section_wise) : ?>
+                            <div class="legend-item" data-status="skipped"><span class="swatch status-skipped"></span><span class="legend-text">Skipped</span><span class="legend-count">(0)</span></div>
+                        <?php endif; ?>
                         <div class="legend-item" data-status="reported"><span class="swatch status-reported"></span><span class="legend-text">Reported</span><span class="legend-count">(0)</span></div>
                         <?php if ($is_section_wise) : ?>
                             <div class="legend-item" data-status="not_attempted"><span class="swatch status-not_viewed"></span><span class="legend-text">Not Attempted</span><span class="legend-count">(0)</span></div>
@@ -860,7 +864,7 @@ class QP_Shortcodes
 
                 <div class="qp-footer-nav">
                     <button id="qp-prev-btn" class="qp-button qp-button-primary" disabled><span>&#9664;</span></button>
-                    <?php if (!$is_mock_test) : ?>
+                    <?php if (!$is_mock_test && $session_settings['practice_mode'] !== 'Section Wise Practice') : ?>
                         <button id="qp-skip-btn" class="qp-button qp-button-secondary">Skip</button>
                     <?php endif; ?>
                     <button id="qp-next-btn" class="qp-button qp-button-primary"><span>&#9654;</span></button>

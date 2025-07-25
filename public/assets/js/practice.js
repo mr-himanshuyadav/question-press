@@ -1708,7 +1708,13 @@ $("#qp-next-btn").prop("disabled", !isSectionWise);
     $(".qp-header-stat.score .value").text(score.toFixed(2));
     $(".qp-header-stat.correct .value").text(correctCount);
     $(".qp-header-stat.incorrect .value").text(incorrectCount);
-    $(".qp-header-stat.skipped .value").text(skippedCount);
+    var isSectionWise = sessionSettings.practice_mode === 'Section Wise Practice';
+    if (isSectionWise) {
+        var notAttemptedCount = sessionQuestionIDs.length - (correctCount + incorrectCount);
+        $(".qp-header-stat.skipped .value").text(notAttemptedCount);
+    } else {
+        $(".qp-header-stat.skipped .value").text(skippedCount);
+    }
   }
 
   function startTimer(seconds) {
