@@ -448,5 +448,22 @@ jQuery(document).ready(function($) {
         });
     });
 
+    // --- Collapsible Progress Sections Logic ---
+    wrapper.on('click', '.qp-topic-toggle', function() {
+        var $topic = $(this);
+        var topicId = $topic.data('topic-id');
+        var $icon = $topic.find('.dashicons');
+        var $sectionsContainer = wrapper.find('.qp-topic-sections-container[data-parent-topic="' + topicId + '"]');
+
+        $sectionsContainer.slideToggle(200);
+        $topic.toggleClass('is-open');
+        
+        if ($topic.hasClass('is-open')) {
+            $icon.removeClass('dashicons-arrow-right-alt2').addClass('dashicons-arrow-down-alt2');
+        } else {
+            $icon.removeClass('dashicons-arrow-down-alt2').addClass('dashicons-arrow-right-alt2');
+        }
+    });
+
 
 });

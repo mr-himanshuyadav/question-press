@@ -2656,6 +2656,18 @@ ul.qp-review-list li {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
 }
+.qp-topic-toggle {
+    cursor: pointer;
+}
+.qp-topic-toggle .qp-progress-label .dashicons {
+    transition: transform 0.2s ease-in-out;
+    font-size: 20px;
+    margin-right: 8px;
+}
+.qp-topic-toggle.is-open .qp-progress-label .dashicons {
+    transform: rotate(90deg);
+}
+
 
 .qp-modal-close-btn {
     position: absolute;
