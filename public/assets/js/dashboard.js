@@ -1,5 +1,8 @@
 jQuery(document).ready(function($) {
     var wrapper = $('.qp-dashboard-wrapper');
+    var subjectSelect = $('#qp-progress-subject');
+    var sourceSelect = $('#qp-progress-source');
+    var resultsContainer = $('#qp-progress-results-container');
 
     // --- NEW: Handler for removing an item from the review list ---
     wrapper.on('click', '.qp-review-list-remove-btn', function(e) {
@@ -381,5 +384,69 @@ jQuery(document).ready(function($) {
             }
         });
     });
+
+    subjectSelect.on('change', function() {
+        var subjectId = $(this).val();
+        sourceSelect.val('');
+        resultsContainer.html('');
+
+        if (!subjectId) {
+            sourceSelect.html('<option value="">— Select a Subject First —</option>').prop('disabled', true);
+            return;
+        }
+
+        $.ajax({
+            url: qp_ajax_object.ajax_url,
+            type: 'POST',
+            data: {
+                action: 'get_sources_for_subject_progress',
+                nonce: qp_ajax_object.nonce,
+                subject_id: subjectId
+            },
+            beforeSend: function() {
+                sourceSelect.html('<option value="">Loading Sources...</option>').prop('disabled', true);
+            },
+            success: function(response) {
+                if (response.success && response.data.sources.length > 0) {
+                    var optionsHtml = '<option value="">— Select a Source —</option>';
+                    $.each(response.data.sources, function(index, source) {
+                        optionsHtml += `<option value="${source.source_id}">${source.source_name}</option>`;
+                    });
+                    sourceSelect.html(optionsHtml).prop('disabled', false);
+                } else {
+                    sourceSelect.html('<option value="">— No Sources Found —</option>').prop('disabled', true);
+                }
+            }
+        });
+    });
+
+    sourceSelect.on('change', function() {
+        var sourceId = $(this).val();
+        if (!sourceId) {
+            resultsContainer.html('');
+            return;
+        }
+
+        $.ajax({
+            url: qp_ajax_object.ajax_url,
+            type: 'POST',
+            data: {
+                action: 'get_progress_data',
+                nonce: qp_ajax_object.nonce,
+                source_id: sourceId
+            },
+            beforeSend: function() {
+                resultsContainer.html('<div class="qp-loader-spinner"></div>');
+            },
+            success: function(response) {
+                if (response.success) {
+                    resultsContainer.html(response.data.html);
+                } else {
+                    resultsContainer.html('<p>Could not load progress data.</p>');
+                }
+            }
+        });
+    });
+
 
 });
