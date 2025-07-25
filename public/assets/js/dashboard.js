@@ -483,5 +483,37 @@ jQuery(document).ready(function($) {
         }
     });
 
+    // --- Start/Resume Section Practice from Progress Page ---
+    wrapper.on('click', '.qp-start-resume-section-btn', function() {
+        var $button = $(this);
+        var originalText = $button.text();
 
+        $.ajax({
+            url: qp_ajax_object.ajax_url,
+            type: 'POST',
+            data: {
+                action: 'start_or_resume_section_practice',
+                nonce: qp_ajax_object.nonce,
+                subject_id: $button.data('subject-id'),
+                topic_id: $button.data('topic-id'),
+                section_id: $button.data('section-id'),
+                source_id: $button.data('source-id')
+            },
+            beforeSend: function() {
+                $button.text('Loading...').prop('disabled', true);
+            },
+            success: function(response) {
+                if (response.success && response.data.redirect_url) {
+                    window.location.href = response.data.redirect_url;
+                } else {
+                    Swal.fire('Error!', response.data.message || 'Could not start the session.', 'error');
+                    $button.text(originalText).prop('disabled', false);
+                }
+            },
+            error: function() {
+                Swal.fire('Error!', 'A server error occurred.', 'error');
+                $button.text(originalText).prop('disabled', false);
+            }
+        });
+    });
 });

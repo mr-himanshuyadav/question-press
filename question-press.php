@@ -1959,6 +1959,92 @@ function qp_start_practice_session_ajax()
 add_action('wp_ajax_start_practice_session', 'qp_start_practice_session_ajax');
 
 /**
+ * AJAX handler to either start a new section-wise practice or resume an existing one.
+ * Prevents duplicate sessions for the same section.
+ */
+function qp_start_or_resume_section_practice_ajax() {
+    check_ajax_referer('qp_practice_nonce', 'nonce');
+    if (!is_user_logged_in()) {
+        wp_send_json_error(['message' => 'You must be logged in.']);
+    }
+
+    global $wpdb;
+    $user_id = get_current_user_id();
+    $subject_id = isset($_POST['subject_id']) ? absint($_POST['subject_id']) : 0;
+    $topic_id = isset($_POST['topic_id']) ? absint($_POST['topic_id']) : 0;
+    $section_id = isset($_POST['section_id']) ? absint($_POST['section_id']) : 0;
+    $source_id = isset($_POST['source_id']) ? absint($_POST['source_id']) : 0;
+
+    if (!$subject_id || !$topic_id || !$section_id || !$source_id) {
+        wp_send_json_error(['message' => 'Missing required IDs to start the session.']);
+    }
+
+    // --- Check for an existing active/paused session with these exact settings ---
+    $active_sessions_raw = $wpdb->get_results($wpdb->prepare(
+        "SELECT session_id, settings_snapshot FROM {$wpdb->prefix}qp_user_sessions WHERE user_id = %d AND status IN ('active', 'paused')",
+        $user_id
+    ));
+
+    foreach ($active_sessions_raw as $session) {
+        $settings = json_decode($session->settings_snapshot, true);
+        if (
+            isset($settings['practice_mode']) && $settings['practice_mode'] === 'Section Wise Practice' &&
+            $settings['subject_id'] == $subject_id &&
+            $settings['topic_id'] == $topic_id &&
+            $settings['section_id'] == $section_id
+        ) {
+            // Found an existing session, return its URL
+            $options = get_option('qp_settings');
+            $session_page_id = isset($options['session_page']) ? absint($options['session_page']) : 0;
+            if ($session_page_id) {
+                $redirect_url = add_query_arg('session_id', $session->session_id, get_permalink($session_page_id));
+                wp_send_json_success(['redirect_url' => $redirect_url, 'message' => 'Resuming existing session.']);
+            }
+        }
+    }
+
+    // --- No existing session found, so create a new one ---
+    $question_ids = $wpdb->get_col($wpdb->prepare(
+        "SELECT question_id FROM {$wpdb->prefix}qp_questions WHERE source_id = %d AND topic_id = %d AND section_id = %d AND status = 'publish' ORDER BY CAST(question_number_in_section AS UNSIGNED), custom_question_id ASC",
+        $source_id,
+        $topic_id,
+        $section_id
+    ));
+
+    if (empty($question_ids)) {
+        wp_send_json_error(['message' => 'No questions found for this specific section.']);
+    }
+
+    $session_settings = [
+        'practice_mode' => 'Section Wise Practice',
+        'subject_id'    => $subject_id,
+        'topic_id'      => $topic_id,
+        'section_id'    => $section_id,
+        'source_id'     => $source_id
+    ];
+
+    $options = get_option('qp_settings');
+    $session_page_id = isset($options['session_page']) ? absint($options['session_page']) : 0;
+    if (!$session_page_id) {
+        wp_send_json_error(['message' => 'The administrator has not configured a session page.']);
+    }
+
+    $wpdb->insert($wpdb->prefix . 'qp_user_sessions', [
+        'user_id'                 => $user_id,
+        'status'                  => 'active',
+        'start_time'              => current_time('mysql'),
+        'last_activity'           => current_time('mysql'),
+        'settings_snapshot'       => wp_json_encode($session_settings),
+        'question_ids_snapshot'   => wp_json_encode($question_ids)
+    ]);
+    $session_id = $wpdb->insert_id;
+
+    $redirect_url = add_query_arg('session_id', $session_id, get_permalink($session_page_id));
+    wp_send_json_success(['redirect_url' => $redirect_url, 'message' => 'Starting new session.']);
+}
+add_action('wp_ajax_start_or_resume_section_practice', 'qp_start_or_resume_section_practice_ajax');
+
+/**
  * AJAX handler to start a special session with incorrectly answered questions.
  */
 function qp_start_incorrect_practice_session_ajax()
@@ -2308,18 +2394,32 @@ function qp_get_progress_data_ajax()
             // --- NEW BUTTON LOGIC ---
             $session_key = $subject_id . '-' . $topic_id . '-' . $section_id;
             $existing_session_id = $active_section_sessions[$session_key] ?? 0;
-            $button_text = $existing_session_id ? 'Resume' : 'Start Practice';
-            $button_class = $existing_session_id ? 'qp-button-secondary' : 'qp-button-primary';
             
             echo '<div class="qp-progress-item section-level">';
             echo '  <div class="qp-progress-bar-bg" style="width: ' . esc_attr($section_percentage) . '%;"></div>';
             echo '  <div class="qp-progress-label">';
             echo '      <span>' . esc_html($section['name']) . ' <span class="qp-progress-percentage">' . esc_html($section_percentage) . '%</span></span>';
-            echo '      <button type="button" class="qp-button ' . $button_class . ' qp-start-resume-section-btn" 
-                            data-subject-id="' . esc_attr($subject_id) . '" 
-                            data-topic-id="' . esc_attr($topic_id) . '" 
-                            data-section-id="' . esc_attr($section_id) . '"
-                            data-source-id="' . esc_attr($source_id) . '">' . esc_html($button_text) . '</button>';
+            
+            if ($existing_session_id) {
+                // If a session exists, render a "Resume" button that triggers AJAX
+                echo '      <button type="button" class="qp-button qp-button-secondary qp-start-resume-section-btn" 
+                                data-subject-id="' . esc_attr($subject_id) . '" 
+                                data-topic-id="' . esc_attr($topic_id) . '" 
+                                data-section-id="' . esc_attr($section_id) . '"
+                                data-source-id="' . esc_attr($source_id) . '">Resume</button>';
+            } else {
+                // If no session exists, render a link to the pre-filled practice page
+                $options = get_option('qp_settings');
+                $practice_page_url = isset($options['practice_page']) ? get_permalink($options['practice_page']) : home_url('/');
+                $start_url = add_query_arg([
+                    'start_section_practice' => 'true',
+                    'subject' => $subject_id,
+                    'topic' => $topic_id,
+                    'section' => $section_id
+                ], $practice_page_url);
+                echo '      <a href="' . esc_url($start_url) . '" class="qp-button qp-button-primary">Start Practice</a>';
+            }
+
             echo '  </div>';
             echo '</div>';
         }
