@@ -450,19 +450,24 @@ jQuery(document).ready(function($) {
 
     // --- Collapsible Progress Sections Logic ---
     wrapper.on('click', '.qp-topic-toggle', function() {
-        var $topic = $(this);
-        var topicId = $topic.data('topic-id');
-        var $icon = $topic.find('.dashicons');
+        var $clickedTopic = $(this);
+        var topicId = $clickedTopic.data('topic-id');
         var $sectionsContainer = wrapper.find('.qp-topic-sections-container[data-parent-topic="' + topicId + '"]');
 
-        $sectionsContainer.slideToggle(200);
-        $topic.toggleClass('is-open');
-        
-        if ($topic.hasClass('is-open')) {
-            $icon.removeClass('dashicons-arrow-right-alt2').addClass('dashicons-arrow-down-alt2');
-        } else {
-            $icon.removeClass('dashicons-arrow-down-alt2').addClass('dashicons-arrow-right-alt2');
+        // --- NEW: Accordion Logic ---
+        // Find any other topic that is currently open (and is not the one we just clicked)
+        var $otherOpenTopic = $('.qp-topic-toggle.is-open').not($clickedTopic);
+        if ($otherOpenTopic.length > 0) {
+            var otherTopicId = $otherOpenTopic.data('topic-id');
+            // Close the other topic's sections
+            wrapper.find('.qp-topic-sections-container[data-parent-topic="' + otherTopicId + '"]').slideUp(200);
+            $otherOpenTopic.removeClass('is-open');
         }
+        // --- End of Accordion Logic ---
+
+        // Toggle the clicked topic
+        $sectionsContainer.slideToggle(200);
+        $clickedTopic.toggleClass('is-open');
     });
 
 
