@@ -861,9 +861,17 @@ function qp_handle_save_question_group()
                 $wpdb->query("DELETE FROM $o_table WHERE option_id IN ($ids_placeholder)");
             }
 
+            // Get the original correct option ID before the update
+            $original_correct_option_id = $wpdb->get_var($wpdb->prepare("SELECT option_id FROM {$o_table} WHERE question_id = %d AND is_correct = 1", $question_id));
+
             $wpdb->update($o_table, ['is_correct' => 0], ['question_id' => $question_id]);
             if ($correct_option_id_from_form) {
                 $wpdb->update($o_table, ['is_correct' => 1], ['option_id' => absint($correct_option_id_from_form), 'question_id' => $question_id]);
+            }
+
+            // If the correct answer has changed, trigger the re-evaluation.
+            if ($original_correct_option_id != $correct_option_id_from_form) {
+                qp_re_evaluate_question_attempts($question_id, absint($correct_option_id_from_form));
             }
 
             $wpdb->delete($ql_table, ['question_id' => $question_id]);
@@ -896,6 +904,68 @@ function qp_handle_save_question_group()
         : admin_url('admin.php?page=qp-edit-group&group_id=' . $group_id . '&message=2');
     wp_safe_redirect($redirect_url);
     exit;
+}
+
+/**
+ * Re-evaluates all attempts for a specific question after its correct answer has changed.
+ * It also recalculates and updates the stats for all affected sessions.
+ *
+ * @param int $question_id The ID of the question that was updated.
+ * @param int $new_correct_option_id The ID of the new correct option.
+ */
+function qp_re_evaluate_question_attempts($question_id, $new_correct_option_id) {
+    global $wpdb;
+    $attempts_table = $wpdb->prefix . 'qp_user_attempts';
+    $sessions_table = $wpdb->prefix . 'qp_user_sessions';
+
+    // 1. Find all session IDs that have an attempt for this question.
+    $affected_session_ids = $wpdb->get_col($wpdb->prepare(
+        "SELECT DISTINCT session_id FROM {$attempts_table} WHERE question_id = %d",
+        $question_id
+    ));
+
+    if (empty($affected_session_ids)) {
+        return; // No attempts to update.
+    }
+
+    // 2. Update the is_correct status for all attempts of this question.
+    // Set is_correct = 1 where the selected option matches the new correct option.
+    $wpdb->query($wpdb->prepare(
+        "UPDATE {$attempts_table} SET is_correct = 1 WHERE question_id = %d AND selected_option_id = %d",
+        $question_id, $new_correct_option_id
+    ));
+    // Set is_correct = 0 for all other attempts of this question.
+    $wpdb->query($wpdb->prepare(
+        "UPDATE {$attempts_table} SET is_correct = 0 WHERE question_id = %d AND selected_option_id != %d",
+        $question_id, $new_correct_option_id
+    ));
+
+    // 3. Loop through each affected session and recalculate its score.
+    foreach ($affected_session_ids as $session_id) {
+        $session = $wpdb->get_row($wpdb->prepare("SELECT settings_snapshot FROM {$sessions_table} WHERE session_id = %d", $session_id));
+        if (!$session) continue;
+
+        $settings = json_decode($session->settings_snapshot, true);
+        $marks_correct = $settings['marks_correct'] ?? 0;
+        $marks_incorrect = $settings['marks_incorrect'] ?? 0;
+
+        // Recalculate counts directly from the attempts table for this session
+        $correct_count = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$attempts_table} WHERE session_id = %d AND is_correct = 1", $session_id));
+        $incorrect_count = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$attempts_table} WHERE session_id = %d AND is_correct = 0", $session_id));
+        
+        $final_score = ($correct_count * $marks_correct) + ($incorrect_count * $marks_incorrect);
+
+        // Update the session record with the new, accurate counts and score.
+        $wpdb->update(
+            $sessions_table,
+            [
+                'correct_count' => $correct_count,
+                'incorrect_count' => $incorrect_count,
+                'marks_obtained' => $final_score
+            ],
+            ['session_id' => $session_id]
+        );
+    }
 }
 
 
@@ -3445,8 +3515,16 @@ function qp_save_quick_edit_data_ajax()
 
     $correct_option_id = isset($data['correct_option_id']) ? absint($data['correct_option_id']) : 0;
     if ($correct_option_id) {
+        // Get the original correct option ID before making changes
+        $original_correct_option_id = $wpdb->get_var($wpdb->prepare("SELECT option_id FROM {$wpdb->prefix}qp_options WHERE question_id = %d AND is_correct = 1", $question_id));
+
         $wpdb->update("{$wpdb->prefix}qp_options", ['is_correct' => 0], ['question_id' => $question_id]);
         $wpdb->update("{$wpdb->prefix}qp_options", ['is_correct' => 1], ['option_id' => $correct_option_id, 'question_id' => $question_id]);
+
+        // If the correct answer has changed, trigger re-evaluation
+        if ($original_correct_option_id != $correct_option_id) {
+            qp_re_evaluate_question_attempts($question_id, $correct_option_id);
+        }
     }
 
     $wpdb->delete("{$wpdb->prefix}qp_question_labels", ['question_id' => $question_id]);
