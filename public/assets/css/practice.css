@@ -2,6 +2,15 @@
    Question Press Frontend Styles - v7.5 Final Polish
    ================================================================= */
 
+*{
+    margin: 0;
+    padding: 0;
+}
+
+.wp-block-post-content {
+    padding: 0;
+}
+
 :root {
     --qp-primary-color: #2271b1;
     --qp-primary-hover: #1d5f96;
@@ -1511,6 +1520,130 @@ body.palette-overlay-open #qp-palette-sliding {
     z-index: 2000;
     /* Ensure it's on top */
     text-align: center;
+}
+
+/* --- NEW: Rough Work Canvas Styles --- */
+#qp-header-top-row {
+    gap: 10px; /* Add space between header buttons */
+}
+
+#qp-rough-work-overlay {
+    position: fixed;
+    top: 0px;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 2000; /* Ensure it's on top of everything */
+}
+
+#qp-rough-work-canvas {
+    width: 100%;
+    height: 100%;
+    cursor: crosshair;
+    /* EDIT THIS VALUE to change the default transparency (e.g., 0.7 for 70%) */
+    background-color: rgba(240, 242, 245, 0.3); 
+}
+
+#qp-rough-work-canvas.cursor-pencil {
+    /* Hotspot is at the tip of the pencil (0, 23) */
+    cursor: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAAXNSR0IArs4c6QAAANlJREFUOBFjZICC/58xGDAwMTCQATMDM2NglQpgrhIMzIBoABdZCSi+A8S/gfg/EW8A4kGgHIgN+YH4LxA/AOKfQPwFiC2huA/EFUD8F4ifAfFXUFNBEgM21dYCq2EGEnYg/g3EnwLxF0AsA8X3gTgLFP8FxE8B8XcgFgHFf0DsAcX/gXgLFP8FxM9A/AuI/wLxLyB2QMX/gTgLFP8DxGeg+D8Qv57i30D8E4ifAPFPQHwCij8C8Reg+A8Q/wXir0DsAcVnoPinpXkZEN4C4jdgZIApBAD20Tz3pSgZVQAAAABJRU5ErkJggg==) 0 23, auto;
+}
+
+#qp-rough-work-canvas.cursor-eraser {
+    /* Hotspot is in the center of the eraser (12, 12) */
+    cursor: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAAXNSR0IArs4c6QAAADNJREFUOE9jZKAQMFKon4F4NxA/AeL/QPwfiAOB+C8QCwDxbyAWAeL/QPwFigEBAgwA3aYDBa2s2KQAAAAASUVORK5CYII=) 12 12, auto;
+}
+
+.qp-tool-btn {
+    background: #f0f0f1;
+    border: 1px solid #ccc;
+    padding: 8px;
+    cursor: pointer;
+    border-radius: 5px;
+    line-height: 1;
+}
+
+.qp-tool-btn.active {
+    background-color: #2271b1;
+    color: white;
+    border-color: #1d5f96;
+}
+
+.qp-canvas-slider {
+    -webkit-appearance: none; /* Override default look */
+    appearance: none;
+    width: 130px; /* Specific width for the slider */
+    height: 8px; /* Thickness of the slider track */
+    background: #ddd; /* Track color */
+    outline: none;
+    opacity: 0.7;
+    transition: opacity .2s;
+    border-radius: 5px;
+}
+
+.qp-canvas-slider:hover {
+    opacity: 1; /* Full opacity on hover */
+}
+
+/* Style for the slider thumb (the draggable handle) */
+.qp-canvas-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    background: #2271b1; /* Same blue as primary buttons */
+    cursor: pointer;
+    border-radius: 50%;
+    border: 2px solid white;
+}
+
+.qp-canvas-slider::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    background: #2271b1;
+    cursor: pointer;
+    border-radius: 50%;
+    border: 2px solid white;
+}
+
+.qp-rough-work-controls {
+    position: absolute;
+    right: 20px;
+    z-index: 2001;
+    background-color: #fff;
+    padding: 10px;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+    display: flex;
+    flex-wrap: wrap; /* Allows controls to wrap onto the next line */
+    gap: 10px;
+    align-items: center;
+}
+
+.qp-color-swatches {
+    display: flex;
+    gap: 5px;
+    border: none;
+    padding: 4px;
+}
+
+.qp-color-btn {
+    width: 26px;
+    height: 26px;
+    border: 2px solid #fff;
+    cursor: pointer;
+    border-radius: 50%;
+    transition: transform 0.2s;
+    outline:none;   
+}
+
+.qp-color-btn:hover {
+    transform: scale(1.1);
+}
+
+.qp-color-btn.active {
+    border-color: #2271b1;
+    box-shadow: 0 0 0 2px #fff, 0 0 0 4px #2271b1;
 }
 
 .qp-start-session-content {
