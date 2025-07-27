@@ -496,7 +496,7 @@ function qp_admin_enqueue_scripts($hook_suffix)
         ]);
         wp_enqueue_script('qp-multi-select-dropdown-script', QP_PLUGIN_URL . 'admin/assets/js/multi-select-dropdown.js', ['jquery'], '1.0.1', true);
     }
-    if ($hook_suffix === 'question-press_page_qp-labels') {
+    if ($hook_suffix === 'question-press_page_qp-organization' && isset($_GET['tab']) && $_GET['tab'] === 'labels') {
         add_action('admin_footer', function () {
             echo '<script>jQuery(document).ready(function($){$(".qp-color-picker").wpColorPicker();});</script>';
         });
