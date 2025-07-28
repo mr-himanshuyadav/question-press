@@ -2659,7 +2659,7 @@ function qp_get_sources_for_subject_progress_ajax()
         "SELECT DISTINCT t.term_id, t.parent 
          FROM {$wpdb->prefix}qp_questions q
          JOIN {$rel_table} r ON q.question_id = r.object_id AND r.object_type = 'question'
-         JOIN {$term_table} t ON r.term_id = t.term_id
+         JOIN {$term_table} t ON r.term_id = r.term_id
          WHERE q.group_id IN ($group_ids_placeholder) AND t.taxonomy_id = %d",
         $source_tax_id
     ));
@@ -2674,14 +2674,10 @@ function qp_get_sources_for_subject_progress_ajax()
         if ($term->parent == 0) {
             $top_level_source_ids[] = $term->term_id;
         } else {
-            // This is a section or sub-section, trace to top-level parent
-            $current_term_id = $term->term_id;
-            $parent_id = $term->parent;
-            while ($parent_id != 0) {
-                $current_term_id = $parent_id;
-                $parent_id = $wpdb->get_var($wpdb->prepare("SELECT parent FROM $term_table WHERE term_id = %d", $current_term_id));
+            $ancestors = get_ancestors($term->term_id, 'source', 'taxonomy');
+            if (!empty($ancestors)) {
+                $top_level_source_ids[] = end($ancestors);
             }
-            $top_level_source_ids[] = $current_term_id;
         }
     }
 
