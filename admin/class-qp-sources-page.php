@@ -48,6 +48,24 @@ class QP_Sources_Page {
                 }
                 if ($term_id > 0) {
                     qp_update_term_meta($term_id, 'description', $description);
+
+                    if ($parent == 0) {
+                        $linked_subject_ids = isset($_POST['linked_subjects']) ? array_map('absint', $_POST['linked_subjects']) : [];
+                        
+                        // First, delete all existing subject links for this source to prevent duplicates
+                        $wpdb->delete($rel_table, ['object_id' => $term_id, 'object_type' => 'source_subject_link']);
+
+                        // Then, insert the new links
+                        if (!empty($linked_subject_ids)) {
+                            foreach ($linked_subject_ids as $subject_term_id) {
+                                $wpdb->insert($rel_table, [
+                                    'object_id'   => $term_id, 
+                                    'term_id'     => $subject_term_id, 
+                                    'object_type' => 'source_subject_link'
+                                ]);
+                            }
+                        }
+                    }
                 }
             }
             self::redirect_to_tab('sources');
