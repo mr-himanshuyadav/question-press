@@ -543,7 +543,7 @@ jQuery(document).ready(function($) {
     // Update button text on change
     $container.on('change', '.qp-dropdown-panel input[type="checkbox"]', function() {
         var $panel = $(this).closest('.qp-dropdown-panel');
-        var $buttonSpan = $panel.prev('.qp-dropdown-toggle').find('span');
+        var $buttonSpan = $panel.prev('.qp-dropdown-toggle').find('span:first-child');
         var count = $panel.find('input:checked').length;
 
         if (count > 0) {

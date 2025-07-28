@@ -43,18 +43,27 @@ class QP_Question_Editor_Page
             $g_table = $wpdb->prefix . 'qp_question_groups';
             $q_table = $wpdb->prefix . 'qp_questions';
             $o_table = $wpdb->prefix . 'qp_options';
-            $ql_table = $wpdb->prefix . 'qp_question_labels';
-            $l_table = $wpdb->prefix . 'qp_labels';
+            $rel_table = $wpdb->prefix . 'qp_term_relationships';
+            $term_table = $wpdb->prefix . 'qp_terms';
+            $tax_table = $wpdb->prefix . 'qp_taxonomies';
 
             $group_data = $wpdb->get_row($wpdb->prepare("SELECT * FROM $g_table WHERE group_id = %d", $group_id));
             if ($group_data) {
                 // --- UPDATED: Load all group-level data, including new PYQ fields ---
                 $direction_text = $group_data->direction_text;
                 $direction_image_id = $group_data->direction_image_id;
-                $current_subject_id = $group_data->subject_id;
                 $is_pyq_group = !empty($group_data->is_pyq);
-                $current_exam_id = $group_data->exam_id ?? 0;
                 $current_pyq_year = $group_data->pyq_year ?? '';
+
+                // --- NEW: Fetch current term relationships from the new system ---
+                $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'subject'");
+                $exam_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'exam'");
+
+                // Get the current subject for the group
+                $current_subject_id = $wpdb->get_var($wpdb->prepare("SELECT term_id FROM {$rel_table} WHERE object_id = %d AND object_type = 'group' AND term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id = %d)", $group_id, $subject_tax_id));
+
+                // Get the current exam for the group
+                $current_exam_id = $wpdb->get_var($wpdb->prepare("SELECT term_id FROM {$rel_table} WHERE object_id = %d AND object_type = 'group' AND term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id = %d)", $group_id, $exam_tax_id));
 
 
                 $questions_in_group = $wpdb->get_results($wpdb->prepare(
@@ -75,14 +84,51 @@ class QP_Question_Editor_Page
                     $group_status = $questions_in_group[0]->status;
                     // --- Get details from the FIRST question to populate metaboxes that are shared ---
                     $first_q = $questions_in_group[0];
-                    $current_topic_id = $first_q->topic_id ?? 0;
-                    $current_source_id = $first_q->source_id ?? 0;
-                    $current_section_id = $first_q->section_id ?? 0;
+                    $source_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'source'");
+
+                    // Get all source/section terms linked to the first question
+                    $source_terms = $wpdb->get_results($wpdb->prepare(
+                        "SELECT t.term_id, t.parent FROM {$term_table} t JOIN {$rel_table} r ON t.term_id = r.term_id WHERE r.object_id = %d AND r.object_type = 'question' AND t.taxonomy_id = %d",
+                        $first_q->question_id,
+                        $source_tax_id
+                    ));
+
+                    // Determine which is the source and which is the section
+                    $current_source_id = 0;
+                    $current_section_id = 0;
+                    if (!empty($source_terms)) {
+                        foreach ($source_terms as $term) {
+                            if ($term->parent != 0) { // This is a section
+                                $current_section_id = $term->term_id;
+                                $current_source_id = $term->parent;
+                                break;
+                            }
+                        }
+                        // If no section was found, the first term must be a top-level source
+                        if ($current_source_id == 0) {
+                            $current_source_id = $source_terms[0]->term_id;
+                        }
+                    }
+
+                    // Get the current topic for the first question
+                    $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'subject'");
+                    $current_topic_id = $wpdb->get_var($wpdb->prepare("SELECT term_id FROM {$rel_table} WHERE object_id = %d AND object_type = 'question' AND term_id IN (SELECT term_id FROM {$term_table} WHERE parent != 0 AND taxonomy_id = %d)", $first_q->question_id, $subject_tax_id));
 
 
                     foreach ($questions_in_group as $q) {
                         $q->options = $wpdb->get_results($wpdb->prepare("SELECT * FROM $o_table WHERE question_id = %d ORDER BY option_id ASC", $q->question_id));
-                        $q->labels = $wpdb->get_results($wpdb->prepare("SELECT l.label_id, l.label_name, l.label_color FROM {$ql_table} ql JOIN {$l_table} l ON ql.label_id = l.label_id WHERE ql.question_id = %d", $q->question_id));
+
+                        // --- NEW: Fetch labels from the new taxonomy system ---
+                        $label_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'label'");
+                        $q->labels = $wpdb->get_results($wpdb->prepare(
+                            "SELECT t.term_id AS label_id, t.name AS label_name, m.meta_value AS label_color 
+         FROM {$term_table} t 
+         JOIN {$rel_table} r ON t.term_id = r.term_id 
+         LEFT JOIN {$wpdb->prefix}qp_term_meta m ON t.term_id = m.term_id AND m.meta_key = 'color' 
+         WHERE r.object_id = %d AND r.object_type = 'question' AND t.taxonomy_id = %d",
+                            $q->question_id,
+                            $label_tax_id
+                        ));
                     }
                 }
             }
@@ -93,25 +139,54 @@ class QP_Question_Editor_Page
             $questions_in_group[] = (object)['question_id' => 0, 'custom_question_id' => 'New', 'question_text' => '', 'options' => [], 'labels' => []];
         }
 
-        // --- Fetch ALL data needed for the form dropdowns ---
-        $all_subjects = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}qp_subjects ORDER BY subject_name ASC");
-        $all_topics = $wpdb->get_results("SELECT topic_id, topic_name, subject_id FROM {$wpdb->prefix}qp_topics ORDER BY topic_name ASC");
-        $all_labels = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}qp_labels ORDER BY label_name ASC");
-        $all_exams = $wpdb->get_results("SELECT exam_id, exam_name FROM {$wpdb->prefix}qp_exams ORDER BY exam_name ASC");
-        $all_sources = $wpdb->get_results("SELECT source_id, source_name, subject_id FROM {$wpdb->prefix}qp_sources ORDER BY source_name ASC");
-        $all_sections = $wpdb->get_results("SELECT section_id, section_name, source_id FROM {$wpdb->prefix}qp_source_sections ORDER BY section_name ASC");
+        // --- Fetch ALL data needed for the form dropdowns from the new taxonomy system ---
+        $term_table = $wpdb->prefix . 'qp_terms';
+        $tax_table = $wpdb->prefix . 'qp_taxonomies';
 
+        // Get taxonomy IDs
+        $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'subject'");
+        $label_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'label'");
+        $exam_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'exam'");
+        $source_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'source'");
+
+        // Fetch terms for each taxonomy
+        $all_subjects = $wpdb->get_results($wpdb->prepare("SELECT term_id AS subject_id, name AS subject_name FROM {$term_table} WHERE taxonomy_id = %d AND parent = 0 ORDER BY name ASC", $subject_tax_id));
+        $all_topics = $wpdb->get_results($wpdb->prepare("SELECT term_id AS topic_id, name AS topic_name, parent AS subject_id FROM {$term_table} WHERE taxonomy_id = %d AND parent != 0 ORDER BY name ASC", $subject_tax_id));
+        $all_labels = $wpdb->get_results($wpdb->prepare("SELECT term_id AS label_id, name AS label_name FROM {$term_table} WHERE taxonomy_id = %d ORDER BY name ASC", $label_tax_id));
+        $all_exams = $wpdb->get_results($wpdb->prepare("SELECT term_id AS exam_id, name AS exam_name FROM {$term_table} WHERE taxonomy_id = %d ORDER BY name ASC", $exam_tax_id));
+        $all_sources = $wpdb->get_results($wpdb->prepare("SELECT term_id AS source_id, name AS source_name FROM {$term_table} WHERE taxonomy_id = %d AND parent = 0 ORDER BY name ASC", $source_tax_id));
+        $all_sections = $wpdb->get_results($wpdb->prepare("SELECT term_id AS section_id, name AS section_name, parent AS source_id FROM {$term_table} WHERE taxonomy_id = %d AND parent != 0 ORDER BY name ASC", $source_tax_id));
 
         // Prepare topics, sources, and sections data for JavaScript
         $topics_by_subject = [];
         foreach ($all_topics as $topic) {
             $topics_by_subject[$topic->subject_id][] = ['id' => $topic->topic_id, 'name' => $topic->topic_name];
         }
-        $sources_by_subject = [];
+
+        // --- NEW: Correctly build the sources_by_subject map by analyzing question usage ---
+        $rel_table = $wpdb->prefix . 'qp_term_relationships';
+        $source_subject_links = $wpdb->get_results(
+            "SELECT DISTINCT
+        parent_source.term_id as source_id,
+        subject_term.term_id as subject_id
+    FROM {$wpdb->prefix}qp_questions q
+    JOIN {$rel_table} subject_rel ON q.group_id = subject_rel.object_id AND subject_rel.object_type = 'group'
+    JOIN {$term_table} subject_term ON subject_rel.term_id = subject_term.term_id AND subject_term.parent = 0
+    JOIN {$rel_table} source_rel ON q.question_id = source_rel.object_id AND source_rel.object_type = 'question'
+    JOIN {$term_table} linked_source_term ON source_rel.term_id = linked_source_term.term_id
+    JOIN {$term_table} parent_source ON (CASE WHEN linked_source_term.parent = 0 THEN linked_source_term.term_id ELSE linked_source_term.parent END) = parent_source.term_id"
+        );
+        $all_sources_map = [];
         foreach ($all_sources as $source) {
-            // Assuming each source has a subject_id property from the query
-            if (isset($source->subject_id)) {
-                $sources_by_subject[$source->subject_id][] = ['id' => $source->source_id, 'name' => $source->source_name];
+            $all_sources_map[$source->source_id] = $source->source_name;
+        }
+        $sources_by_subject = [];
+        foreach ($source_subject_links as $link) {
+            if (isset($all_sources_map[$link->source_id])) {
+                $sources_by_subject[$link->subject_id][] = [
+                    'id' => $link->source_id,
+                    'name' => $all_sources_map[$link->source_id]
+                ];
             }
         }
         $sections_by_source = [];
@@ -119,13 +194,17 @@ class QP_Question_Editor_Page
             $sections_by_source[$section->source_id][] = ['id' => $section->section_id, 'name' => $section->section_name];
         }
 
+        $exam_subject_links = $wpdb->get_results("SELECT object_id AS exam_id, term_id AS subject_id FROM {$rel_table} WHERE object_type = 'exam_subject_link'");
+
         // Pass all necessary data to our JavaScript file
         wp_localize_script('qp-editor-script', 'qp_editor_data', [
             'topics_by_subject'   => $topics_by_subject,
-            'sources_by_subject'  => $sources_by_subject, // <-- Add this line
+            'sources_by_subject'  => $sources_by_subject,
             'sections_by_source'  => $sections_by_source,
+            'all_exams'           => $all_exams, // Pass all exams
+            'exam_subject_links'  => $exam_subject_links, // Pass the link data
             'current_topic_id'    => $current_topic_id,
-            'current_source_id'   => $current_source_id, // <-- Add this line
+            'current_source_id'   => $current_source_id,
             'current_section_id'  => $current_section_id,
         ]);
 
@@ -201,10 +280,10 @@ class QP_Question_Editor_Page
                     <div id="post-body" class="metabox-holder columns-2">
                         <div id="post-body-content">
                             <?php if ($is_editing && $has_draft_question) : ?>
-                                    <div class="notice notice-warning inline" style="margin: 0; margin-bottom: 5px;">
-                                        <p><strong>Draft Status:</strong> This group contains one or more questions that are still drafts (missing a correct answer). Draft questions will not appear on the frontend until they are completed and published.</p>
-                                    </div>
-                                <?php endif; ?>
+                                <div class="notice notice-warning inline" style="margin: 0; margin-bottom: 5px;">
+                                    <p><strong>Draft Status:</strong> This group contains one or more questions that are still drafts (missing a correct answer). Draft questions will not appear on the frontend until they are completed and published.</p>
+                                </div>
+                            <?php endif; ?>
                             <div class="postbox">
                                 <h2 class="hndle">
                                     <span>
@@ -249,20 +328,20 @@ class QP_Question_Editor_Page
 
                             <div id="qp-question-blocks-container">
                                 <?php foreach ($questions_in_group as $q_index => $question) :
-    $current_label_ids = wp_list_pluck($question->labels, 'label_id');
-    
-    // Set the correct initial status class
-    if ($question->question_id > 0) {
-        $status_class = 'status-' . ($question->status ?? 'draft');
-    } else {
-        $status_class = 'status-new';
-    }
+                                    $current_label_ids = wp_list_pluck($question->labels, 'label_id');
 
-    // Prioritize 'reported' status for highlighting
-    if (isset($reports_by_question[$question->question_id])) {
-        $status_class = 'status-reported';
-    }
-?>
+                                    // Set the correct initial status class
+                                    if ($question->question_id > 0) {
+                                        $status_class = 'status-' . ($question->status ?? 'draft');
+                                    } else {
+                                        $status_class = 'status-new';
+                                    }
+
+                                    // Prioritize 'reported' status for highlighting
+                                    if (isset($reports_by_question[$question->question_id])) {
+                                        $status_class = 'status-reported';
+                                    }
+                                ?>
                                     <div class="postbox qp-question-block <?php echo esc_attr($status_class); ?>">
                                         <div class="postbox-header">
                                             <button type="button" class="qp-toggle-question-block" title="Toggle visibility">
@@ -754,9 +833,11 @@ class QP_Question_Editor_Page
                 height: auto;
                 width: auto;
             }
-            .qp-question-block .hndle, .postbox .hndle {
-        cursor: default;
-    }
+
+            .qp-question-block .hndle,
+            .postbox .hndle {
+                cursor: default;
+            }
         </style>
 <?php
     }

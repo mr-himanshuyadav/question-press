@@ -336,7 +336,20 @@ class QP_Rest_Api {
 
     public static function get_exams() {
         global $wpdb;
-        $results = $wpdb->get_results("SELECT exam_id, exam_name FROM {$wpdb->prefix}qp_exams ORDER BY exam_name ASC");
+        $tax_table = $wpdb->prefix . 'qp_taxonomies';
+        $term_table = $wpdb->prefix . 'qp_terms';
+
+        $exam_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'exam'");
+
+        if (!$exam_tax_id) {
+            return new WP_REST_Response([], 200); // Return empty if taxonomy doesn't exist
+        }
+
+        $results = $wpdb->get_results($wpdb->prepare(
+            "SELECT term_id as exam_id, name as exam_name FROM {$term_table} WHERE taxonomy_id = %d ORDER BY name ASC",
+            $exam_tax_id
+        ));
+
         return new WP_REST_Response($results, 200);
     }
 
@@ -348,7 +361,25 @@ class QP_Rest_Api {
 
     public static function get_labels() {
         global $wpdb;
-        $results = $wpdb->get_results("SELECT label_id, label_name, label_color FROM {$wpdb->prefix}qp_labels ORDER BY label_name ASC");
+        $tax_table = $wpdb->prefix . 'qp_taxonomies';
+        $term_table = $wpdb->prefix . 'qp_terms';
+        $meta_table = $wpdb->prefix . 'qp_term_meta';
+
+        $label_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'label'");
+
+        if (!$label_tax_id) {
+            return new WP_REST_Response([], 200);
+        }
+
+        $results = $wpdb->get_results($wpdb->prepare(
+            "SELECT t.term_id as label_id, t.name as label_name, m.meta_value as label_color
+             FROM {$term_table} t
+             LEFT JOIN {$meta_table} m ON t.term_id = m.term_id AND m.meta_key = 'color'
+             WHERE t.taxonomy_id = %d 
+             ORDER BY t.name ASC",
+            $label_tax_id
+        ));
+
         return new WP_REST_Response($results, 200);
     }
 

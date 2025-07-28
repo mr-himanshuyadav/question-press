@@ -404,8 +404,8 @@ jQuery(document).ready(function($) {
 
     subjectSelect.on('change', function() {
         var subjectId = $(this).val();
-        sourceSelect.val('');
-        resultsContainer.html('');
+        sourceSelect.val(''); // Reset source selection
+        resultsContainer.html(''); // Clear previous results
 
         if (!subjectId) {
             sourceSelect.html('<option value="">— Select a Subject First —</option>').prop('disabled', true);
@@ -418,14 +418,15 @@ jQuery(document).ready(function($) {
             data: {
                 action: 'get_sources_for_subject_progress',
                 nonce: qp_ajax_object.nonce,
-                subject_id: subjectId
+                subject_id: subjectId // The PHP handler now expects 'subject_id' which is the term_id
             },
             beforeSend: function() {
                 sourceSelect.html('<option value="">Loading Sources...</option>').prop('disabled', true);
             },
             success: function(response) {
-                if (response.success && response.data.sources.length > 0) {
+                if (response.success && response.data.sources && response.data.sources.length > 0) {
                     var optionsHtml = '<option value="">— Select a Source —</option>';
+                    // The new AJAX handler returns an array of objects with source_id and source_name
                     $.each(response.data.sources, function(index, source) {
                         optionsHtml += `<option value="${source.source_id}">${source.source_name}</option>`;
                     });
@@ -433,6 +434,9 @@ jQuery(document).ready(function($) {
                 } else {
                     sourceSelect.html('<option value="">— No Sources Found —</option>').prop('disabled', true);
                 }
+            },
+            error: function() {
+                sourceSelect.html('<option value="">— Error Loading —</option>').prop('disabled', true);
             }
         });
     });

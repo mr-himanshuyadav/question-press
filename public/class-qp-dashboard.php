@@ -165,9 +165,17 @@ class QP_Dashboard
                             <option value="">— Select a Subject —</option>
                             <?php
                             global $wpdb;
-                            $subjects = $wpdb->get_results("SELECT subject_id, subject_name FROM {$wpdb->prefix}qp_subjects WHERE subject_name != 'Uncategorized' ORDER BY subject_name ASC");
+                            $term_table = $wpdb->prefix . 'qp_terms';
+                            $tax_table = $wpdb->prefix . 'qp_taxonomies';
+                            $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'subject'");
+                            
+                            $subjects = $wpdb->get_results($wpdb->prepare(
+                                "SELECT term_id, name FROM {$term_table} WHERE taxonomy_id = %d AND name != 'Uncategorized' AND parent = 0 ORDER BY name ASC",
+                                $subject_tax_id
+                            ));
+
                             foreach ($subjects as $subject) {
-                                echo '<option value="' . esc_attr($subject->subject_id) . '">' . esc_html($subject->subject_name) . '</option>';
+                                echo '<option value="' . esc_attr($subject->term_id) . '">' . esc_html($subject->name) . '</option>';
                             }
                             ?>
                         </select>

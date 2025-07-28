@@ -87,66 +87,42 @@ class QP_Importer {
         return ['id' => $attachment_id, 'is_new' => true];
     }
 
-    private function process_data($data, $labels_to_apply = [], $temp_dir = '') {
+    private function process_data($data, $labels_to_apply = [], $temp_dir = '')
+    {
         global $wpdb;
-        $subjects_table = $wpdb->prefix . 'qp_subjects';
-        $topics_table = $wpdb->prefix . 'qp_topics';
-        $sources_table = $wpdb->prefix . 'qp_sources';
-        $sections_table = $wpdb->prefix . 'qp_source_sections';
-        $exams_table = $wpdb->prefix . 'qp_exams';
+        $tax_table = $wpdb->prefix . 'qp_taxonomies';
+        $term_table = $wpdb->prefix . 'qp_terms';
+        $rel_table = $wpdb->prefix . 'qp_term_relationships';
         $groups_table = $wpdb->prefix . 'qp_question_groups';
         $questions_table = $wpdb->prefix . 'qp_questions';
         $options_table = $wpdb->prefix . 'qp_options';
-        $labels_table = $wpdb->prefix . 'qp_labels';
-        $question_labels_table = $wpdb->prefix . 'qp_question_labels';
+
+        // Cache taxonomy IDs
+        $tax_ids = [
+            'subject' => $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'subject'"),
+            'exam'    => $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'exam'"),
+            'source'  => $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'source'"),
+            'label'   => $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'label'"),
+        ];
 
         $imported_count = 0;
         $duplicate_count = 0;
         $new_images_count = 0;
-        $duplicate_label_id = $wpdb->get_var($wpdb->prepare("SELECT label_id FROM $labels_table WHERE label_name = %s", 'Duplicate'));
+        
+        $duplicate_term_id = $wpdb->get_var($wpdb->prepare("SELECT term_id FROM $term_table WHERE name = %s AND taxonomy_id = %d", 'Duplicate', $tax_ids['label']));
 
         if (!isset($data['questionGroups']) || !is_array($data['questionGroups'])) {
             return ['imported' => 0, 'duplicates' => 0, 'new_images' => 0];
         }
 
         foreach ($data['questionGroups'] as $group) {
-            $subject_name = !empty($group['subject']) ? sanitize_text_field($group['subject']) : 'Uncategorized';
-            $subject_id = $wpdb->get_var($wpdb->prepare("SELECT subject_id FROM $subjects_table WHERE subject_name = %s", $subject_name));
-            if (!$subject_id) {
-                $wpdb->insert($subjects_table, ['subject_name' => $subject_name]);
-                $subject_id = $wpdb->insert_id;
-            }
-
-            $source_id = null;
-            if (!empty($group['sourceName'])) {
-                $source_name = sanitize_text_field($group['sourceName']);
-                $source_id = $wpdb->get_var($wpdb->prepare("SELECT source_id FROM $sources_table WHERE source_name = %s AND subject_id = %d", $source_name, $subject_id));
-                if (!$source_id) {
-                    $wpdb->insert($sources_table, ['source_name' => $source_name, 'subject_id' => $subject_id]);
-                    $source_id = $wpdb->insert_id;
-                }
-            }
+            // --- Term Handling ---
+            $subject_term_id = qp_get_or_create_term($group['subject'] ?? 'Uncategorized', $tax_ids['subject']);
+            $exam_term_id = !empty($group['examName']) ? qp_get_or_create_term($group['examName'], $tax_ids['exam']) : null;
+            $source_term_id = !empty($group['sourceName']) ? qp_get_or_create_term($group['sourceName'], $tax_ids['source']) : null;
+            $section_term_id = ($source_term_id && !empty($group['sectionName'])) ? qp_get_or_create_term($group['sectionName'], $tax_ids['source'], $source_term_id) : null;
             
-            $section_id = null;
-            if ($source_id && !empty($group['sectionName'])) {
-                $section_name = sanitize_text_field($group['sectionName']);
-                $section_id = $wpdb->get_var($wpdb->prepare("SELECT section_id FROM $sections_table WHERE section_name = %s AND source_id = %d", $section_name, $source_id));
-                if (!$section_id) {
-                    $wpdb->insert($sections_table, ['section_name' => $section_name, 'source_id' => $source_id]);
-                    $section_id = $wpdb->insert_id;
-                }
-            }
-
-            $exam_id = null;
-            if (!empty($group['examName'])) {
-                $exam_name = sanitize_text_field($group['examName']);
-                $exam_id = $wpdb->get_var($wpdb->prepare("SELECT exam_id FROM $exams_table WHERE exam_name = %s", $exam_name));
-                if (!$exam_id) {
-                    $wpdb->insert($exams_table, ['exam_name' => $exam_name]);
-                    $exam_id = $wpdb->insert_id;
-                }
-            }
-
+            // --- Image Handling ---
             $direction_image_id = null;
             if (isset($group['Direction']['image'])) {
                 $image_result = $this->get_or_upload_image($group['Direction']['image'], $temp_dir);
@@ -156,78 +132,87 @@ class QP_Importer {
                 }
             }
 
+            // --- Create Question Group ---
             $wpdb->insert($groups_table, [
                 'direction_text' => isset($group['Direction']['text']) ? $group['Direction']['text'] : null,
                 'direction_image_id' => $direction_image_id,
-                'subject_id' => $subject_id,
+                'subject_id' => 0, // Legacy column, can be removed later
                 'is_pyq' => isset($group['isPYQ']) ? (int)$group['isPYQ'] : 0,
-                'exam_id' => $exam_id,
+                'exam_id' => 0, // Legacy
                 'pyq_year' => isset($group['pyqYear']) ? sanitize_text_field($group['pyqYear']) : null,
             ]);
             $group_id = $wpdb->insert_id;
 
+            // --- Create Group Relationships ---
+            if ($subject_term_id) {
+                $wpdb->insert($rel_table, ['object_id' => $group_id, 'term_id' => $subject_term_id, 'object_type' => 'group']);
+            }
+            if ($exam_term_id && $group['isPYQ']) {
+                $wpdb->insert($rel_table, ['object_id' => $group_id, 'term_id' => $exam_term_id, 'object_type' => 'group']);
+            }
+
             foreach ($group['questions'] as $question) {
-                $topic_id = null;
-                if (!empty($question['topicName'])) {
-                    $topic_name = sanitize_text_field($question['topicName']);
-                    $topic_id = $wpdb->get_var($wpdb->prepare("SELECT topic_id FROM $topics_table WHERE topic_name = %s AND subject_id = %d", $topic_name, $subject_id));
-                    if (!$topic_id) {
-                        $wpdb->insert($topics_table, ['topic_name' => $topic_name, 'subject_id' => $subject_id]);
-                        $topic_id = $wpdb->insert_id;
-                    }
-                }
-                
+                $topic_term_id = !empty($question['topicName']) ? qp_get_or_create_term($question['topicName'], $tax_ids['subject'], $subject_term_id) : null;
+
                 $question_text = $question['questionText'];
                 $hash = md5(strtolower(trim(preg_replace('/\s+/', '', $question_text))));
                 $existing_question_id = $wpdb->get_var($wpdb->prepare("SELECT question_id FROM $questions_table WHERE question_text_hash = %s", $hash));
                 $next_custom_id = get_option('qp_next_custom_question_id', 1000);
 
+                // --- Create Question ---
                 $wpdb->insert($questions_table, [
                     'custom_question_id' => $next_custom_id,
                     'group_id' => $group_id,
-                    'topic_id' => $topic_id,
-                    'source_id' => $source_id,
-                    'section_id' => $section_id,
-                    'question_number_in_section' => isset($question['questionNumber']) ? sanitize_text_field($question['questionNumber']) : null,
-                    'question_text' => $question['questionText'],
+                    'topic_id' => 0, // Legacy
+                    'source_id' => $source_term_id, // Store term_id here
+                    'section_id' => $section_term_id, // Store term_id here
+                    'question_number_in_section' => $question['questionNumber'] ?? null,
+                    'question_text' => $question_text,
                     'question_text_hash' => $hash,
-                    'duplicate_of' => $existing_question_id ? $existing_question_id : null,
-                    'status' => 'draft' // Initially save as draft
+                    'duplicate_of' => $existing_question_id ?: null,
+                    'status' => 'draft'
                 ]);
                 $question_id = $wpdb->insert_id;
                 update_option('qp_next_custom_question_id', $next_custom_id + 1);
 
+                // --- Create Question Relationships ---
+                if ($topic_term_id) {
+                    $wpdb->insert($rel_table, ['object_id' => $question_id, 'term_id' => $topic_term_id, 'object_type' => 'question']);
+                }
+                if ($section_term_id) { // Link question to the most specific source term (the section)
+                    $wpdb->insert($rel_table, ['object_id' => $question_id, 'term_id' => $section_term_id, 'object_type' => 'question']);
+                } elseif ($source_term_id) { // Fallback to parent source if no section
+                    $wpdb->insert($rel_table, ['object_id' => $question_id, 'term_id' => $source_term_id, 'object_type' => 'question']);
+                }
+
+                // --- Add Options and Set Status ---
                 $has_correct_answer = false;
-                if (isset($question['options']) && is_array($question['options'])) {
+                if (!empty($question['options']) && is_array($question['options'])) {
                     foreach ($question['options'] as $option) {
-                        $is_correct_val = (isset($option['isCorrect']) && $option['isCorrect']) ? 1 : 0;
+                        $is_correct_val = !empty($option['isCorrect']);
                         $wpdb->insert($options_table, [
-                            'question_id' => $question_id, 
-                            'option_text' => $option['optionText'], 
-                            'is_correct' => $is_correct_val
+                            'question_id' => $question_id,
+                            'option_text' => $option['optionText'],
+                            'is_correct' => $is_correct_val ? 1 : 0
                         ]);
-                        if ($is_correct_val === 1) {
-                            $has_correct_answer = true;
-                        }
+                        if ($is_correct_val) $has_correct_answer = true;
                     }
                 }
-                
-                // If a correct answer was found, update the question's status to publish
+
                 if ($has_correct_answer) {
                     $wpdb->update($questions_table, ['status' => 'publish'], ['question_id' => $question_id]);
                 }
 
-                if ($existing_question_id) {
-                    if ($duplicate_label_id) {
-                        $wpdb->insert($question_labels_table, ['question_id' => $question_id, 'label_id' => $duplicate_label_id]);
-                    }
+                // --- Handle Labels ---
+                if ($existing_question_id && $duplicate_term_id) {
+                    $wpdb->insert($rel_table, ['object_id' => $question_id, 'term_id' => $duplicate_term_id, 'object_type' => 'question']);
                     $duplicate_count++;
                 }
                 $imported_count++;
 
                 if (!empty($labels_to_apply)) {
-                    foreach ($labels_to_apply as $label_id) {
-                        $wpdb->query($wpdb->prepare("INSERT IGNORE INTO $question_labels_table (question_id, label_id) VALUES (%d, %d)", $question_id, $label_id));
+                    foreach ($labels_to_apply as $label_term_id) {
+                        $wpdb->query($wpdb->prepare("INSERT IGNORE INTO $rel_table (object_id, term_id, object_type) VALUES (%d, %d, 'question')", $question_id, $label_term_id));
                     }
                 }
             }

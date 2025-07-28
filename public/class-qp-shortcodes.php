@@ -133,16 +133,14 @@ class QP_Shortcodes
     public static function render_revision_mode_form()
     {
         global $wpdb;
-
-        // Fetch all subjects that have at least one question associated with them
-        $subjects = $wpdb->get_results(
-            "SELECT DISTINCT s.subject_id, s.subject_name
-         FROM {$wpdb->prefix}qp_subjects s
-         JOIN {$wpdb->prefix}qp_question_groups g ON s.subject_id = g.subject_id
-         JOIN {$wpdb->prefix}qp_questions q ON g.group_id = q.group_id
-         WHERE s.subject_name != 'Uncategorized'
-         ORDER BY s.subject_name ASC"
-        );
+        $term_table = $wpdb->prefix . 'qp_terms';
+        $tax_table = $wpdb->prefix . 'qp_taxonomies';
+        $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'subject'");
+        
+        $subjects = $wpdb->get_results($wpdb->prepare(
+            "SELECT term_id AS subject_id, name AS subject_name FROM {$term_table} WHERE taxonomy_id = %d AND name != 'Uncategorized' AND parent = 0 ORDER BY name ASC",
+            $subject_tax_id
+        ));
 
         ob_start();
     ?>
@@ -234,16 +232,14 @@ class QP_Shortcodes
     public static function render_mock_test_form()
     {
         global $wpdb;
-
-        // Fetch all subjects that have at least one question associated with them
-        $subjects = $wpdb->get_results(
-            "SELECT DISTINCT s.subject_id, s.subject_name
-     FROM {$wpdb->prefix}qp_subjects s
-     JOIN {$wpdb->prefix}qp_question_groups g ON s.subject_id = g.subject_id
-     JOIN {$wpdb->prefix}qp_questions q ON g.group_id = q.group_id
-     WHERE s.subject_name != 'Uncategorized'
-     ORDER BY s.subject_name ASC"
-        );
+        $term_table = $wpdb->prefix . 'qp_terms';
+        $tax_table = $wpdb->prefix . 'qp_taxonomies';
+        $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'subject'");
+        
+        $subjects = $wpdb->get_results($wpdb->prepare(
+            "SELECT term_id AS subject_id, name AS subject_name FROM {$term_table} WHERE taxonomy_id = %d AND name != 'Uncategorized' AND parent = 0 ORDER BY name ASC",
+            $subject_tax_id
+        ));
 
         ob_start();
     ?>
@@ -567,13 +563,14 @@ class QP_Shortcodes
     public static function render_settings_form()
     {
         global $wpdb;
-        $subjects = $wpdb->get_results(
-            "SELECT DISTINCT s.subject_id, s.subject_name
-     FROM {$wpdb->prefix}qp_subjects s
-     JOIN {$wpdb->prefix}qp_question_groups g ON s.subject_id = g.subject_id
-     WHERE s.subject_name != 'Uncategorized'
-     ORDER BY s.subject_name ASC"
-        );
+        $term_table = $wpdb->prefix . 'qp_terms';
+        $tax_table = $wpdb->prefix . 'qp_taxonomies';
+        $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'subject'");
+        
+        $subjects = $wpdb->get_results($wpdb->prepare(
+            "SELECT term_id AS subject_id, name AS subject_name FROM {$term_table} WHERE taxonomy_id = %d AND name != 'Uncategorized' AND parent = 0 ORDER BY name ASC",
+            $subject_tax_id
+        ));
 
         // Get the dynamic URL for the dashboard page
         $options = get_option('qp_settings');

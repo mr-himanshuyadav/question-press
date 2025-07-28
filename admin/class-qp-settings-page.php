@@ -357,19 +357,31 @@ class QP_Settings_Page
      */
     public static function render_unified_migration_button()
     {
-        $migration_url = add_query_arg(
+        $unified_migration_url = add_query_arg(
             [
                 'action' => 'qp_unified_migration',
                 '_wpnonce' => wp_create_nonce('qp_unified_migration_nonce'),
             ],
             admin_url('admin.php?page=qp-settings')
         );
+
+        $v3_migration_url = add_query_arg(
+            [
+                'action' => 'qp_v3_taxonomy_migration',
+                '_wpnonce' => wp_create_nonce('qp_v3_taxonomy_migration_nonce'),
+            ],
+            admin_url('admin.php?page=qp-settings')
+        );
     ?>
-        <a href="<?php echo esc_url($migration_url); ?>" class="button button-danger">Run Full Data Migration & Cleanup</a>
+        <a href="<?php echo esc_url($v3_migration_url); ?>" class="button button-primary">Run Taxonomy Migration (New)</a>
         <p class="description">
-            <strong>Warning:</strong> This tool performs irreversible changes to your database to match the latest schema.
-            <br>It will migrate legacy sources, question numbers, and PYQ status, and then permanently delete the old columns.
-            <br><strong>Please back up your database before proceeding.</strong> It is safe to click this button multiple times.
+            <strong>Step 1:</strong> Click this to migrate your old Subjects, Topics, Labels, and Exams into the new unified taxonomy system. This is safe to run multiple times.
+        </p>
+        <hr>
+        <a href="<?php echo esc_url($unified_migration_url); ?>" class="button button-secondary">Run Legacy Data Cleanup (Old)</a>
+        <p class="description">
+            <strong>Step 2:</strong> This is the old migration tool. Use it after the new one to clean up legacy columns and data structures.
+            <br><strong>Please back up your database before proceeding.</strong>
         </p>
 <?php
     }
