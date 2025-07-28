@@ -1012,6 +1012,8 @@ function qp_handle_save_question_group()
             'question_text'              => wp_kses_post($question_text),
             'question_text_hash'         => md5(strtolower(trim(preg_replace('/\s+/', '', $question_text)))),
             'status'                     => $is_question_complete ? 'publish' : 'draft',
+            'source_id'                  => $source_id,
+            'section_id'                 => $section_id,
         ];
 
         // 2. Insert or Update the question
