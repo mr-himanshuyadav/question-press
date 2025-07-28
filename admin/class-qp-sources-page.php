@@ -139,6 +139,22 @@ class QP_Sources_Page {
         
         $list_table = new QP_Terms_List_Table('source', 'Source/Section', 'sources');
         $list_table->prepare_items();
+
+        // --- NEW: Fetch data needed for subject linking ---
+        $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'subject'");
+        $all_subjects = $wpdb->get_results($wpdb->prepare(
+            "SELECT term_id, name FROM $term_table WHERE taxonomy_id = %d AND parent = 0 AND name != 'Uncategorized' ORDER BY name ASC",
+            $subject_tax_id
+        ));
+
+        $linked_subject_ids = [];
+        if ($term_to_edit) {
+            $linked_subject_ids = $wpdb->get_col($wpdb->prepare(
+                "SELECT term_id FROM {$wpdb->prefix}qp_term_relationships WHERE object_id = %d AND object_type = 'source_subject_link'",
+                $term_to_edit->term_id
+            ));
+        }
+        // --- END NEW ---
         
         if (isset($_SESSION['qp_admin_message'])) {
             echo '<div id="message" class="notice notice-' . esc_attr($_SESSION['qp_admin_message_type']) . ' is-dismissible"><p>' . esc_html($_SESSION['qp_admin_message']) . '</p></div>';
@@ -189,6 +205,31 @@ class QP_Sources_Page {
                                 </select>
                                 <p>Assign a parent to create a hierarchy. A "Chapter" should have a "Book" as its parent.</p>
                             </div>
+
+                            <div class="form-field" id="linked-subjects-field" style="<?php echo ($term_to_edit && $term_to_edit->parent != 0) ? 'display:none;' : ''; ?>">
+                                <label for="linked-subjects">Linked Subjects</label>
+                                <div class="subjects-checkbox-group" style="padding: 10px; border: 1px solid #ddd; background: #fff; max-height: 150px; overflow-y: auto;">
+                                    <?php foreach ($all_subjects as $subject) : ?>
+                                        <label style="display: block; margin-bottom: 5px;">
+                                            <input type="checkbox" name="linked_subjects[]" value="<?php echo esc_attr($subject->term_id); ?>" <?php checked(in_array($subject->term_id, $linked_subject_ids)); ?>>
+                                            <?php echo esc_html($subject->name); ?>
+                                        </label>
+                                    <?php endforeach; ?>
+                                </div>
+                                <p>Select the subjects this source should be available under. This only applies to top-level sources.</p>
+                            </div>
+
+                            <script>
+                                jQuery(document).ready(function($) {
+                                    $('#parent-source').on('change', function() {
+                                        if ($(this).val() == '0') {
+                                            $('#linked-subjects-field').slideDown();
+                                        } else {
+                                            $('#linked-subjects-field').slideUp();
+                                        }
+                                    });
+                                });
+                            </script>
 
                             <div class="form-field">
                                 <label for="term-description">Description</label>

@@ -2654,12 +2654,12 @@ function qp_get_sources_for_subject_progress_ajax()
     }
     $group_ids_placeholder = implode(',', $group_ids);
 
-    // 2. Find all source AND section terms linked to questions in those groups.
+    // 2. Find all source AND section terms linked to questions WITHIN those specific groups.
     $related_terms = $wpdb->get_results($wpdb->prepare(
         "SELECT DISTINCT t.term_id, t.parent 
          FROM {$wpdb->prefix}qp_questions q
          JOIN {$rel_table} r ON q.question_id = r.object_id AND r.object_type = 'question'
-         JOIN {$term_table} t ON r.term_id = r.term_id
+         JOIN {$term_table} t ON r.term_id = t.term_id
          WHERE q.group_id IN ($group_ids_placeholder) AND t.taxonomy_id = %d",
         $source_tax_id
     ));
@@ -2674,10 +2674,16 @@ function qp_get_sources_for_subject_progress_ajax()
         if ($term->parent == 0) {
             $top_level_source_ids[] = $term->term_id;
         } else {
-            $ancestors = get_ancestors($term->term_id, 'source', 'taxonomy');
-            if (!empty($ancestors)) {
-                $top_level_source_ids[] = end($ancestors);
+            // WordPress's get_ancestors is the most reliable way to handle deep hierarchies.
+            // Note: This requires the custom taxonomy 'source' to be registered for this function to work.
+            // Assuming it's not formally registered, we'll revert to a manual lookup.
+            $current_term_id = $term->term_id;
+            $parent_id = $term->parent;
+            while ($parent_id != 0) {
+                $current_term_id = $parent_id;
+                $parent_id = $wpdb->get_var($wpdb->prepare("SELECT parent FROM $term_table WHERE term_id = %d", $current_term_id));
             }
+            $top_level_source_ids[] = $current_term_id;
         }
     }
 
@@ -4446,7 +4452,7 @@ function qp_run_v3_taxonomy_migration()
     $wpdb->query("START TRANSACTION;");
 
     try {
-        // Step 1: Define the taxonomies in the new system
+        // Step 1: Define the taxonomies in the new system (Unchanged)
         $taxonomies = [
             'subject' => ['label' => 'Subjects', 'hierarchical' => 1],
             'label'   => ['label' => 'Labels', 'hierarchical' => 0],
@@ -4456,109 +4462,75 @@ function qp_run_v3_taxonomy_migration()
         foreach ($taxonomies as $name => $data) {
             $exists = $wpdb->get_var($wpdb->prepare("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = %s", $name));
             if (!$exists) {
-                $wpdb->insert($tax_table, [
-                    'taxonomy_name'  => $name,
-                    'taxonomy_label' => $data['label'],
-                    'hierarchical'   => $data['hierarchical'],
-                ]);
+                $wpdb->insert($tax_table, ['taxonomy_name'  => $name, 'taxonomy_label' => $data['label'], 'hierarchical'   => $data['hierarchical']]);
             }
         }
-        $messages[] = "Step 1: Core taxonomies (Subject, Label, Exam) registered.";
+        $messages[] = "Step 1: Core taxonomies registered.";
 
-        // Step 2: Migrate Subjects and Topics
+        // Step 2: Migrate Subjects and Topics (Unchanged)
         $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'subject'");
         $old_subjects = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}qp_subjects");
         $subject_map = []; // [old_id => new_term_id]
         foreach ($old_subjects as $subject) {
-            $term_exists = $wpdb->get_var($wpdb->prepare("SELECT term_id FROM $term_table WHERE name = %s AND taxonomy_id = %d AND parent = 0", $subject->subject_name, $subject_tax_id));
-            if (!$term_exists) {
-                $wpdb->insert($term_table, ['taxonomy_id' => $subject_tax_id, 'name' => $subject->subject_name, 'slug' => sanitize_title($subject->subject_name)]);
-                $subject_map[$subject->subject_id] = $wpdb->insert_id;
-            } else {
-                $subject_map[$subject->subject_id] = $term_exists;
-            }
+            $subject_map[$subject->subject_id] = qp_get_or_create_term($subject->subject_name, $subject_tax_id, 0);
         }
-
         $old_topics = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}qp_topics");
         $topic_map = []; // [old_id => new_term_id]
         foreach ($old_topics as $topic) {
             $parent_term_id = $subject_map[$topic->subject_id] ?? 0;
-            $term_exists = $wpdb->get_var($wpdb->prepare("SELECT term_id FROM $term_table WHERE name = %s AND taxonomy_id = %d AND parent = %d", $topic->topic_name, $subject_tax_id, $parent_term_id));
-            if (!$term_exists) {
-                $wpdb->insert($term_table, ['taxonomy_id' => $subject_tax_id, 'name' => $topic->topic_name, 'slug' => sanitize_title($topic->topic_name), 'parent' => $parent_term_id]);
-                $topic_map[$topic->topic_id] = $wpdb->insert_id;
-            } else {
-                $topic_map[$topic->topic_id] = $term_exists;
-            }
+            $topic_map[$topic->topic_id] = qp_get_or_create_term($topic->topic_name, $subject_tax_id, $parent_term_id);
         }
         $messages[] = "Step 2: Migrated " . count($subject_map) . " subjects and " . count($topic_map) . " topics.";
 
-        // Step 3: Migrate Labels
+        // Step 3 & 4: Migrate Labels and Exams (Unchanged)
         $label_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'label'");
         $old_labels = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}qp_labels");
-        $label_map = []; // [old_id => new_term_id]
+        $label_map = [];
         foreach ($old_labels as $label) {
-            $term_exists = $wpdb->get_var($wpdb->prepare("SELECT term_id FROM $term_table WHERE name = %s AND taxonomy_id = %d", $label->label_name, $label_tax_id));
-
-            $new_term_id = 0;
-            if (!$term_exists) {
-                $wpdb->insert($term_table, ['taxonomy_id' => $label_tax_id, 'name' => $label->label_name, 'slug' => sanitize_title($label->label_name)]);
-                $new_term_id = $wpdb->insert_id;
-            } else {
-                $new_term_id = $term_exists;
-            }
+            $new_term_id = qp_get_or_create_term($label->label_name, $label_tax_id);
             $label_map[$label->label_id] = $new_term_id;
-
-            // Safely add/update meta, preventing duplicates
-            $meta_keys = ['color' => $label->label_color, 'description' => $label->description, 'is_default' => $label->is_default];
-            foreach ($meta_keys as $key => $value) {
-                $meta_exists = $wpdb->get_var($wpdb->prepare("SELECT meta_id FROM $meta_table WHERE term_id = %d AND meta_key = %s", $new_term_id, $key));
-                if ($meta_exists) {
-                    $wpdb->update($meta_table, ['meta_value' => $value], ['meta_id' => $meta_exists]);
-                } else {
-                    $wpdb->insert($meta_table, ['term_id' => $new_term_id, 'meta_key' => $key, 'meta_value' => $value]);
-                }
-            }
+            qp_update_term_meta($new_term_id, 'color', $label->label_color);
+            qp_update_term_meta($new_term_id, 'description', $label->description);
+            qp_update_term_meta($new_term_id, 'is_default', $label->is_default);
         }
-        $messages[] = "Step 3: Migrated " . count($label_map) . " labels with their metadata.";
+        $messages[] = "Step 3: Migrated " . count($label_map) . " labels.";
 
-        // Step 4: Migrate Exams
         $exam_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'exam'");
         $old_exams = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}qp_exams");
-        $exam_map = []; // [old_id => new_term_id]
+        $exam_map = [];
         foreach ($old_exams as $exam) {
-            $term_exists = $wpdb->get_var($wpdb->prepare("SELECT term_id FROM $term_table WHERE name = %s AND taxonomy_id = %d", $exam->exam_name, $exam_tax_id));
-            if (!$term_exists) {
-                $wpdb->insert($term_table, ['taxonomy_id' => $exam_tax_id, 'name' => $exam->exam_name, 'slug' => sanitize_title($exam->exam_name)]);
-                $exam_map[$exam->exam_id] = $wpdb->insert_id;
-            } else {
-                $exam_map[$exam->exam_id] = $term_exists;
-            }
+            $exam_map[$exam->exam_id] = qp_get_or_create_term($exam->exam_name, $exam_tax_id);
         }
         $messages[] = "Step 4: Migrated " . count($exam_map) . " exams.";
 
-        // Step 5: Migrate Relationships
-        // Subjects -> Question Groups
-        $group_subjects = $wpdb->get_results("SELECT group_id, subject_id FROM {$wpdb->prefix}qp_question_groups WHERE subject_id > 0");
-        foreach ($group_subjects as $gs) {
-            if (isset($subject_map[$gs->subject_id])) {
-                $wpdb->query($wpdb->prepare("INSERT IGNORE INTO $rel_table (object_id, term_id, object_type) VALUES (%d, %d, 'group')", $gs->group_id, $subject_map[$gs->subject_id]));
-            }
-        }
-        // Topics -> Questions
+        // Step 5: Migrate Relationships (REVISED)
+        // Topics -> Questions & Labels -> Questions
         $question_topics = $wpdb->get_results("SELECT question_id, topic_id FROM {$wpdb->prefix}qp_questions WHERE topic_id > 0");
         foreach ($question_topics as $qt) {
             if (isset($topic_map[$qt->topic_id])) {
                 $wpdb->query($wpdb->prepare("INSERT IGNORE INTO $rel_table (object_id, term_id, object_type) VALUES (%d, %d, 'question')", $qt->question_id, $topic_map[$qt->topic_id]));
             }
         }
-        // Labels -> Questions
         $question_labels = $wpdb->get_results("SELECT question_id, label_id FROM {$wpdb->prefix}qp_question_labels");
         foreach ($question_labels as $ql) {
             if (isset($label_map[$ql->label_id])) {
                 $wpdb->query($wpdb->prepare("INSERT IGNORE INTO $rel_table (object_id, term_id, object_type) VALUES (%d, %d, 'question')", $ql->question_id, $label_map[$ql->label_id]));
             }
         }
+        
+        // REVISED LOGIC: Reconstruct Group -> Subject relationships
+        $group_subject_pairs = $wpdb->get_results(
+            "SELECT DISTINCT q.group_id, t.subject_id
+             FROM {$wpdb->prefix}qp_questions q
+             JOIN {$wpdb->prefix}qp_topics t ON q.topic_id = t.topic_id
+             WHERE q.group_id > 0 AND t.subject_id > 0"
+        );
+        foreach ($group_subject_pairs as $pair) {
+            if (isset($subject_map[$pair->subject_id])) {
+                $wpdb->query($wpdb->prepare("INSERT IGNORE INTO $rel_table (object_id, term_id, object_type) VALUES (%d, %d, 'group')", $pair->group_id, $subject_map[$pair->subject_id]));
+            }
+        }
+
         // Exams -> Question Groups
         $group_exams = $wpdb->get_results("SELECT group_id, exam_id FROM {$wpdb->prefix}qp_question_groups WHERE exam_id > 0");
         foreach ($group_exams as $ge) {
@@ -4566,48 +4538,27 @@ function qp_run_v3_taxonomy_migration()
                 $wpdb->query($wpdb->prepare("INSERT IGNORE INTO $rel_table (object_id, term_id, object_type) VALUES (%d, %d, 'group')", $ge->group_id, $exam_map[$ge->exam_id]));
             }
         }
-        $messages[] = "Step 5: Migrated all taxonomy relationships for questions and groups.";
+        $messages[] = "Step 5: Migrated relationships for subjects, topics, labels, and exams.";
 
-        // Step 6: Migrate Sources, Topics, and Sections into a correct, nested hierarchy
+        // Step 6: Migrate Source Hierarchy (Unchanged from our last correct version)
         $source_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'source'");
-        
-        // This map will store the new term_id for each unique S-T-S path.
-        // Format: $hierarchy_map[old_source_id][old_topic_id][old_section_id] = new_term_id;
         $hierarchy_map = [];
-
-        // Part 1: Get names for all old terms to avoid querying in a loop
         $old_sources_raw = $wpdb->get_results("SELECT source_id, source_name FROM {$wpdb->prefix}qp_sources", OBJECT_K);
         $old_topics_raw = $wpdb->get_results("SELECT topic_id, topic_name FROM {$wpdb->prefix}qp_topics", OBJECT_K);
         $old_sections_raw = $wpdb->get_results("SELECT section_id, section_name FROM {$wpdb->prefix}qp_source_sections", OBJECT_K);
-
-        // Part 2: Discover all unique hierarchies from the questions table
-        $unique_hierarchies = $wpdb->get_results(
-            "SELECT DISTINCT source_id, topic_id, section_id 
-             FROM {$wpdb->prefix}qp_questions 
-             WHERE source_id > 0"
-        );
-        $messages[] = "Step 6.1: Discovered " . count($unique_hierarchies) . " unique source/topic/section hierarchies from existing questions.";
-
-        // Part 3: Build the new hierarchy in the terms table based on the discoveries
+        $unique_hierarchies = $wpdb->get_results("SELECT DISTINCT source_id, topic_id, section_id FROM {$wpdb->prefix}qp_questions WHERE source_id > 0");
+        
         foreach ($unique_hierarchies as $path) {
-            $source_id = $path->source_id;
-            $topic_id = $path->topic_id;
-            $section_id = $path->section_id;
-
-            // Create the top-level Source term
+            $source_id = $path->source_id; $topic_id = $path->topic_id; $section_id = $path->section_id;
             $source_name = $old_sources_raw[$source_id]->source_name ?? 'Unknown Source';
             $new_source_term_id = qp_get_or_create_term($source_name, $source_tax_id, 0);
             if (!isset($hierarchy_map[$source_id])) $hierarchy_map[$source_id] = [];
             $hierarchy_map[$source_id][0][0] = $new_source_term_id;
-
-            // Create the Topic as a child of the Source
             if ($topic_id > 0) {
                 $topic_name = $old_topics_raw[$topic_id]->topic_name ?? 'Unknown Topic';
                 $new_topic_term_id = qp_get_or_create_term($topic_name, $source_tax_id, $new_source_term_id);
                 if (!isset($hierarchy_map[$source_id][$topic_id])) $hierarchy_map[$source_id][$topic_id] = [];
                 $hierarchy_map[$source_id][$topic_id][0] = $new_topic_term_id;
-
-                // Create the Section as a child of the Topic
                 if ($section_id > 0) {
                     $section_name = $old_sections_raw[$section_id]->section_name ?? 'Unknown Section';
                     $new_section_term_id = qp_get_or_create_term($section_name, $source_tax_id, $new_topic_term_id);
@@ -4615,15 +4566,9 @@ function qp_run_v3_taxonomy_migration()
                 }
             }
         }
-        $messages[] = "Step 6.2: Created the new hierarchical terms in the database.";
-
-        // Part 4: Link all questions to the most specific term in the newly created hierarchy
         $all_questions = $wpdb->get_results("SELECT question_id, source_id, topic_id, section_id FROM {$wpdb->prefix}qp_questions");
-        $relationships_created = 0;
         foreach ($all_questions as $question) {
             $term_to_link = null;
-            
-            // Find the most specific term ID from our map
             if (isset($hierarchy_map[$question->source_id][$question->topic_id][$question->section_id])) {
                 $term_to_link = $hierarchy_map[$question->source_id][$question->topic_id][$question->section_id];
             } elseif (isset($hierarchy_map[$question->source_id][$question->topic_id][0])) {
@@ -4631,47 +4576,35 @@ function qp_run_v3_taxonomy_migration()
             } elseif (isset($hierarchy_map[$question->source_id][0][0])) {
                 $term_to_link = $hierarchy_map[$question->source_id][0][0];
             }
-
             if ($term_to_link) {
+                $wpdb->query($wpdb->prepare("INSERT IGNORE INTO $rel_table (object_id, term_id, object_type) VALUES (%d, %d, 'question')", $question->question_id, $term_to_link));
+            }
+        }
+        $messages[] = "Step 6: Migrated and linked source hierarchy.";
+
+        // NEW Step 7: Create Source-to-Subject links
+        $source_subject_links = $wpdb->get_results(
+            "SELECT DISTINCT q.source_id, t.subject_id
+             FROM {$wpdb->prefix}qp_questions q
+             JOIN {$wpdb->prefix}qp_topics t ON q.topic_id = t.topic_id
+             WHERE q.source_id > 0 AND t.subject_id > 0"
+        );
+        $links_created = 0;
+        foreach ($source_subject_links as $link) {
+            if (isset($hierarchy_map[$link->source_id][0][0]) && isset($subject_map[$link->subject_id])) {
+                $source_term_id = $hierarchy_map[$link->source_id][0][0];
+                $subject_term_id = $subject_map[$link->subject_id];
                 $wpdb->query($wpdb->prepare(
-                    "INSERT IGNORE INTO $rel_table (object_id, term_id, object_type) VALUES (%d, %d, 'question')",
-                    $question->question_id,
-                    $term_to_link
+                    "INSERT IGNORE INTO $rel_table (object_id, term_id, object_type) VALUES (%d, %d, 'source_subject_link')",
+                    $source_term_id,
+                    $subject_term_id
                 ));
-                $relationships_created++;
+                $links_created++;
             }
         }
-        $messages[] = "Step 6.3: Linked {$relationships_created} questions to the new source hierarchy.";
+        $messages[] = "Step 7: Created {$links_created} Source-to-Subject links.";
 
-        // Step 7: Update foreign keys in existing tables
-        $groups_updated = 0;
-        foreach ($subject_map as $old_id => $new_id) {
-            $result = $wpdb->update(
-                "{$wpdb->prefix}qp_question_groups",
-                ['subject_id' => $new_id], // Set the new term_id
-                ['subject_id' => $old_id]  // Where the old ID was
-            );
-            if ($result !== false) {
-                $groups_updated += $result;
-            }
-        }
-        $messages[] = "Step 7.1: Updated subject references for {$groups_updated} question groups.";
-
-        $exams_updated = 0;
-        foreach ($exam_map as $old_id => $new_id) {
-            $result = $wpdb->update(
-                "{$wpdb->prefix}qp_question_groups",
-                ['exam_id' => $new_id], // Set the new term_id
-                ['exam_id' => $old_id]  // Where the old ID was
-            );
-            if ($result !== false) {
-                $exams_updated += $result;
-            }
-        }
-        $messages[] = "Step 7.2: Updated exam references for {$exams_updated} question groups.";
-
-
-
+        // OLD Step 7 is now removed as it's obsolete.
 
         $wpdb->query("COMMIT;");
         $_SESSION['qp_admin_message'] = '<strong>Taxonomy Migration Report:</strong><br> - ' . implode('<br> - ', $messages);
