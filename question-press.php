@@ -4571,60 +4571,68 @@ function qp_run_v3_taxonomy_migration()
         }
         $messages[] = "Step 5: Migrated all taxonomy relationships for questions and groups.";
 
-        // Step 6: Migrate Sources, Topics, and Sections into a nested hierarchy
+        // Step 6: Migrate Sources, Topics, and Sections into a correct, nested hierarchy
         $source_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'source'");
-        $source_term_map = []; // [old_source_id => new_term_id]
-        $topic_as_section_map = []; // [old_topic_id => new_term_id]
-        $section_term_map = []; // [old_section_id => new_term_id]
+        
+        // This map will store the new term_id for each unique S-T-S path.
+        // Format: $hierarchy_map[old_source_id][old_topic_id][old_section_id] = new_term_id;
+        $hierarchy_map = [];
 
-        // Part 1: Create top-level Source terms
-        $old_sources = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}qp_sources");
-        foreach ($old_sources as $source) {
-            $source_term_map[$source->source_id] = qp_get_or_create_term($source->source_name, $source_tax_id, 0);
-        }
-        $messages[] = "Step 6.1: Migrated " . count($source_term_map) . " sources as top-level terms.";
+        // Part 1: Get names for all old terms to avoid querying in a loop
+        $old_sources_raw = $wpdb->get_results("SELECT source_id, source_name FROM {$wpdb->prefix}qp_sources", OBJECT_K);
+        $old_topics_raw = $wpdb->get_results("SELECT topic_id, topic_name FROM {$wpdb->prefix}qp_topics", OBJECT_K);
+        $old_sections_raw = $wpdb->get_results("SELECT section_id, section_name FROM {$wpdb->prefix}qp_source_sections", OBJECT_K);
 
-        // Part 2: Migrate old Topics as children of the correct Source term
-        $old_topics_with_sources = $wpdb->get_results(
-            "SELECT DISTINCT t.topic_id, t.topic_name, q.source_id 
-            FROM {$wpdb->prefix}qp_topics t
-            JOIN {$wpdb->prefix}qp_questions q ON t.topic_id = q.topic_id
-            WHERE q.source_id > 0"
+        // Part 2: Discover all unique hierarchies from the questions table
+        $unique_hierarchies = $wpdb->get_results(
+            "SELECT DISTINCT source_id, topic_id, section_id 
+             FROM {$wpdb->prefix}qp_questions 
+             WHERE source_id > 0"
         );
-        foreach ($old_topics_with_sources as $topic) {
-            if (isset($source_term_map[$topic->source_id])) {
-                $parent_source_term_id = $source_term_map[$topic->source_id];
-                $topic_as_section_map[$topic->topic_id] = qp_get_or_create_term($topic->topic_name, $source_tax_id, $parent_source_term_id);
+        $messages[] = "Step 6.1: Discovered " . count($unique_hierarchies) . " unique source/topic/section hierarchies from existing questions.";
+
+        // Part 3: Build the new hierarchy in the terms table based on the discoveries
+        foreach ($unique_hierarchies as $path) {
+            $source_id = $path->source_id;
+            $topic_id = $path->topic_id;
+            $section_id = $path->section_id;
+
+            // Create the top-level Source term
+            $source_name = $old_sources_raw[$source_id]->source_name ?? 'Unknown Source';
+            $new_source_term_id = qp_get_or_create_term($source_name, $source_tax_id, 0);
+            if (!isset($hierarchy_map[$source_id])) $hierarchy_map[$source_id] = [];
+            $hierarchy_map[$source_id][0][0] = $new_source_term_id;
+
+            // Create the Topic as a child of the Source
+            if ($topic_id > 0) {
+                $topic_name = $old_topics_raw[$topic_id]->topic_name ?? 'Unknown Topic';
+                $new_topic_term_id = qp_get_or_create_term($topic_name, $source_tax_id, $new_source_term_id);
+                if (!isset($hierarchy_map[$source_id][$topic_id])) $hierarchy_map[$source_id][$topic_id] = [];
+                $hierarchy_map[$source_id][$topic_id][0] = $new_topic_term_id;
+
+                // Create the Section as a child of the Topic
+                if ($section_id > 0) {
+                    $section_name = $old_sections_raw[$section_id]->section_name ?? 'Unknown Section';
+                    $new_section_term_id = qp_get_or_create_term($section_name, $source_tax_id, $new_topic_term_id);
+                    $hierarchy_map[$source_id][$topic_id][$section_id] = $new_section_term_id;
+                }
             }
         }
-        $messages[] = "Step 6.2: Migrated " . count($topic_as_section_map) . " old topics as children of sources.";
+        $messages[] = "Step 6.2: Created the new hierarchical terms in the database.";
 
-        // Part 3: Migrate old Sections as children of their new Topic term parent
-        $old_sections_with_topics = $wpdb->get_results(
-            "SELECT DISTINCT s.section_id, s.section_name, q.topic_id
-            FROM {$wpdb->prefix}qp_source_sections s
-            JOIN {$wpdb->prefix}qp_questions q ON s.section_id = q.section_id
-            WHERE q.topic_id > 0"
-        );
-        foreach ($old_sections_with_topics as $section) {
-            if (isset($topic_as_section_map[$section->topic_id])) {
-                $parent_topic_term_id = $topic_as_section_map[$section->topic_id];
-                $section_term_map[$section->section_id] = qp_get_or_create_term($section->section_name, $source_tax_id, $parent_topic_term_id);
-            }
-        }
-        $messages[] = "Step 6.3: Migrated " . count($section_term_map) . " old sections as children of topics.";
-
-        // Part 4: Link questions to the most specific term available (Section > Topic > Source)
-        $questions_with_sources = $wpdb->get_results("SELECT question_id, source_id, section_id, topic_id FROM {$wpdb->prefix}qp_questions");
+        // Part 4: Link all questions to the most specific term in the newly created hierarchy
+        $all_questions = $wpdb->get_results("SELECT question_id, source_id, topic_id, section_id FROM {$wpdb->prefix}qp_questions");
         $relationships_created = 0;
-        foreach ($questions_with_sources as $question) {
+        foreach ($all_questions as $question) {
             $term_to_link = null;
-            if (isset($section_term_map[$question->section_id])) {
-                $term_to_link = $section_term_map[$question->section_id];
-            } elseif (isset($topic_as_section_map[$question->topic_id])) {
-                $term_to_link = $topic_as_section_map[$question->topic_id];
-            } elseif (isset($source_term_map[$question->source_id])) {
-                $term_to_link = $source_term_map[$question->source_id];
+            
+            // Find the most specific term ID from our map
+            if (isset($hierarchy_map[$question->source_id][$question->topic_id][$question->section_id])) {
+                $term_to_link = $hierarchy_map[$question->source_id][$question->topic_id][$question->section_id];
+            } elseif (isset($hierarchy_map[$question->source_id][$question->topic_id][0])) {
+                $term_to_link = $hierarchy_map[$question->source_id][$question->topic_id][0];
+            } elseif (isset($hierarchy_map[$question->source_id][0][0])) {
+                $term_to_link = $hierarchy_map[$question->source_id][0][0];
             }
 
             if ($term_to_link) {
@@ -4636,7 +4644,7 @@ function qp_run_v3_taxonomy_migration()
                 $relationships_created++;
             }
         }
-        $messages[] = "Step 6.4: Created/Verified {$relationships_created} source/topic/section relationships for questions.";
+        $messages[] = "Step 6.3: Linked {$relationships_created} questions to the new source hierarchy.";
 
         // Step 7: Update foreign keys in existing tables
         $groups_updated = 0;
