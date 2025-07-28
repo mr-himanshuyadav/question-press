@@ -444,8 +444,7 @@ jQuery(document).ready(function($) {
     sourceSelect.on('change', function() {
         var sourceId = $(this).val();
         var subjectId = subjectSelect.val(); // Get the selected subject ID
-
-        if (!sourceId || !subjectId) {
+        if (!sourceId) {
             resultsContainer.html('');
             return;
         }
@@ -456,8 +455,8 @@ jQuery(document).ready(function($) {
             data: {
                 action: 'get_progress_data',
                 nonce: qp_ajax_object.nonce,
+                subject_id: subjectId, // Add this line
                 source_id: sourceId,
-                subject_id: subjectId, // Send the subject_id to the backend
                 exclude_incorrect: $('#qp-exclude-incorrect-cb').is(':checked')
             },
             beforeSend: function() {
@@ -465,56 +464,7 @@ jQuery(document).ready(function($) {
             },
             success: function(response) {
                 if (response.success) {
-                    var data = response.data;
-                    var sourceProgress = data.sourceProgress;
-                    
-                    if (!sourceProgress || sourceProgress.total === 0) {
-                        resultsContainer.html('<p>No questions found for this source within the selected subject.</p>');
-                        return;
-                    }
-
-                    var percentage = sourceProgress.total > 0 ? Math.round((sourceProgress.completed / sourceProgress.total) * 100) : 0;
-
-                    // --- Recursive function to build the HTML tree ---
-                    function buildTreeHtml(terms) {
-                        if (!terms || terms.length === 0) return '';
-                        
-                        let html = '';
-                        terms.forEach(function(term) {
-                            let termPercentage = term.total > 0 ? Math.round((term.completed / term.total) * 100) : 0;
-                            let hasChildren = term.children && term.children.length > 0;
-                            
-                            html += `<div class="qp-progress-item topic-level ${hasChildren ? 'qp-topic-toggle' : ''}" data-topic-id="${term.term_id}">`;
-                            html += `<div class="qp-progress-bar-bg" style="width: ${termPercentage}%;"></div>`;
-                            html += `<div class="qp-progress-label">`;
-                            if(hasChildren) html += `<span class="dashicons dashicons-arrow-right-alt2"></span>`;
-                            html += `${term.name} <span class="qp-progress-percentage">${termPercentage}%</span></div>`;
-                            html += `</div>`;
-
-                            if (hasChildren) {
-                                html += `<div class="qp-topic-sections-container" data-parent-topic="${term.term_id}" style="display: none;">${buildTreeHtml(term.children)}</div>`;
-                            }
-                        });
-                        return html;
-                    }
-
-                    // --- Build the final HTML ---
-                    var finalHtml = '<div class="qp-progress-tree">';
-                    // Top-level bar now shows the Subject Name
-                    finalHtml += `<div class="qp-progress-item subject-level">`;
-                    finalHtml += `<div class="qp-progress-bar-bg" style="width: ${percentage}%;"></div>`;
-                    finalHtml += `<div class="qp-progress-label">${data.subjectName} &raquo; ${sourceProgress.name} <span class="qp-progress-percentage">${percentage}%</span></div>`;
-                    finalHtml += `</div>`;
-
-                    // The direct children (Topics) are always visible
-                    finalHtml += `<div class="qp-topic-sections-container" style="display: block; padding-left: 20px;">`;
-                    finalHtml += buildTreeHtml(sourceProgress.children);
-                    finalHtml += `</div>`;
-                    
-                    finalHtml += '</div>';
-
-                    resultsContainer.html(finalHtml);
-
+                    resultsContainer.html(response.data.html);
                 } else {
                     resultsContainer.html('<p>Could not load progress data.</p>');
                 }
@@ -531,36 +481,24 @@ jQuery(document).ready(function($) {
 
     // --- Collapsible Progress Sections Logic ---
     wrapper.on('click', '.qp-topic-toggle', function() {
-        var $clickedTopic = $(this);
-        var topicId = $clickedTopic.data('topic-id');
+        var $clickedItem = $(this);
+        var topicId = $clickedItem.data('topic-id');
         var $sectionsContainer = wrapper.find('.qp-topic-sections-container[data-parent-topic="' + topicId + '"]');
-        var $sections = $sectionsContainer.find('.qp-progress-item');
 
-        // --- Accordion Logic ---
-        var $otherOpenTopic = $('.qp-topic-toggle.is-open').not($clickedTopic);
-        if ($otherOpenTopic.length > 0) {
-            var otherTopicId = $otherOpenTopic.data('topic-id');
-            var $otherSectionsContainer = wrapper.find('.qp-topic-sections-container[data-parent-topic="' + otherTopicId + '"]');
-            var $otherSections = $otherSectionsContainer.find('.qp-progress-item');
+        // Toggle the arrow icon and the active group highlight
+        $clickedItem.toggleClass('is-open is-active-group');
 
-            // Close the other topic's sections and remove all highlight classes
-            $otherSectionsContainer.slideUp(200);
-            $otherOpenTopic.removeClass('is-open is-active-group');
-            $otherSections.removeClass('is-active-group');
-        }
-        // --- End of Accordion Logic ---
-
-        // Toggle the clicked topic
+        // Toggle the visibility of the direct children container
         $sectionsContainer.slideToggle(200);
-        $clickedTopic.toggleClass('is-open');
 
-        // --- NEW: Apply/Remove highlight to the entire group ---
-        if ($clickedTopic.hasClass('is-open')) {
-            $clickedTopic.addClass('is-active-group');
-            $sections.addClass('is-active-group');
+        // Apply active group class to children when opening
+        if ($clickedItem.hasClass('is-open')) {
+            $sectionsContainer.find('.qp-progress-item').addClass('is-active-group');
         } else {
-            $clickedTopic.removeClass('is-active-group');
-            $sections.removeClass('is-active-group');
+            // When closing, also close any nested children and remove their active states
+            $sectionsContainer.find('.qp-topic-sections-container').slideUp(200);
+            $sectionsContainer.find('.qp-topic-toggle').removeClass('is-open is-active-group');
+            $sectionsContainer.find('.qp-progress-item').removeClass('is-active-group');
         }
     });
 });

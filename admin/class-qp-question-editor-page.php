@@ -84,35 +84,47 @@ class QP_Question_Editor_Page
                     $group_status = $questions_in_group[0]->status;
                     // --- Get details from the FIRST question to populate metaboxes that are shared ---
                     $first_q = $questions_in_group[0];
-                    $source_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'source'");
 
-                    // Get all source/section terms linked to the first question
-                    $source_terms = $wpdb->get_results($wpdb->prepare(
-                        "SELECT t.term_id, t.parent FROM {$term_table} t JOIN {$rel_table} r ON t.term_id = r.term_id WHERE r.object_id = %d AND r.object_type = 'question' AND t.taxonomy_id = %d",
-                        $first_q->question_id,
-                        $source_tax_id
+                    // Get all term relationships for the first question
+                    $all_term_rels = $wpdb->get_results($wpdb->prepare(
+                        "SELECT t.term_id, t.parent, tax.taxonomy_name
+                        FROM {$rel_table} r
+                        JOIN {$term_table} t ON r.term_id = t.term_id
+                        JOIN {$tax_table} tax ON t.taxonomy_id = tax.taxonomy_id
+                        WHERE r.object_id = %d AND r.object_type = 'question'",
+                        $first_q->question_id
                     ));
 
-                    // Determine which is the source and which is the section
+                    $current_topic_id = 0;
                     $current_source_id = 0;
                     $current_section_id = 0;
-                    if (!empty($source_terms)) {
-                        foreach ($source_terms as $term) {
-                            if ($term->parent != 0) { // This is a section
-                                $current_section_id = $term->term_id;
-                                $current_source_id = $term->parent;
-                                break;
+
+                    foreach($all_term_rels as $term) {
+                        if ($term->taxonomy_name === 'subject' && $term->parent != 0) {
+                            $current_topic_id = $term->term_id;
+                        } elseif ($term->taxonomy_name === 'source') {
+                            // This is the most specific term linked (e.g., a section or sub-section)
+                            $most_specific_term = $term;
+                            $lineage = [];
+                            
+                            // Trace up the hierarchy to find the root source
+                            $current_term_in_trace = $most_specific_term;
+                            for ($i = 0; $i < 5; $i++) { // Safety break
+                                array_unshift($lineage, $current_term_in_trace);
+                                if ($current_term_in_trace->parent == 0) break;
+                                $current_term_in_trace = $wpdb->get_row($wpdb->prepare("SELECT term_id, parent FROM {$term_table} WHERE term_id = %d", $current_term_in_trace->parent));
+                                if (!$current_term_in_trace) break;
+                            }
+                            
+                            if (!empty($lineage)) {
+                                $current_source_id = $lineage[0]->term_id; // The root is the source
+                                // The most specific term is the section, unless it's the same as the source
+                                if ($most_specific_term->term_id != $current_source_id) {
+                                    $current_section_id = $most_specific_term->term_id;
+                                }
                             }
                         }
-                        // If no section was found, the first term must be a top-level source
-                        if ($current_source_id == 0) {
-                            $current_source_id = $source_terms[0]->term_id;
-                        }
                     }
-
-                    // Get the current topic for the first question
-                    $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'subject'");
-                    $current_topic_id = $wpdb->get_var($wpdb->prepare("SELECT term_id FROM {$rel_table} WHERE object_id = %d AND object_type = 'question' AND term_id IN (SELECT term_id FROM {$term_table} WHERE parent != 0 AND taxonomy_id = %d)", $first_q->question_id, $subject_tax_id));
 
 
                     foreach ($questions_in_group as $q) {
@@ -163,28 +175,27 @@ class QP_Question_Editor_Page
             $topics_by_subject[$topic->subject_id][] = ['id' => $topic->topic_id, 'name' => $topic->topic_name];
         }
 
-        // --- NEW: Correctly build the sources_by_subject map by analyzing question usage ---
+        // --- FIX: Correctly build the sources_by_subject map by querying direct relationships ---
         $rel_table = $wpdb->prefix . 'qp_term_relationships';
         $source_subject_links = $wpdb->get_results(
-            "SELECT DISTINCT
-        parent_source.term_id as source_id,
-        subject_term.term_id as subject_id
-    FROM {$wpdb->prefix}qp_questions q
-    JOIN {$rel_table} subject_rel ON q.group_id = subject_rel.object_id AND subject_rel.object_type = 'group'
-    JOIN {$term_table} subject_term ON subject_rel.term_id = subject_term.term_id AND subject_term.parent = 0
-    JOIN {$rel_table} source_rel ON q.question_id = source_rel.object_id AND source_rel.object_type = 'question'
-    JOIN {$term_table} linked_source_term ON source_rel.term_id = linked_source_term.term_id
-    JOIN {$term_table} parent_source ON (CASE WHEN linked_source_term.parent = 0 THEN linked_source_term.term_id ELSE linked_source_term.parent END) = parent_source.term_id"
+            "SELECT 
+                rel.object_id AS source_id, 
+                rel.term_id AS subject_id
+             FROM {$rel_table} rel
+             WHERE rel.object_type = 'source_subject_link'"
         );
+
         $all_sources_map = [];
         foreach ($all_sources as $source) {
             $all_sources_map[$source->source_id] = $source->source_name;
         }
+
         $sources_by_subject = [];
         foreach ($source_subject_links as $link) {
+            // Ensure the source still exists before adding it to the map
             if (isset($all_sources_map[$link->source_id])) {
                 $sources_by_subject[$link->subject_id][] = [
-                    'id' => $link->source_id,
+                    'id'   => $link->source_id,
                     'name' => $all_sources_map[$link->source_id]
                 ];
             }

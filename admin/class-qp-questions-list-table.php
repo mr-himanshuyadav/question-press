@@ -395,21 +395,13 @@ protected function bulk_actions($which = '')
         $total_items = $wpdb->get_var($total_items_query);
 
         // Fetch the actual data for the current page
-        // Fetch the actual data for the current page
         $data_query = "SELECT 
     q.*, 
     g.group_id, g.direction_text, g.direction_image_id, g.is_pyq, g.pyq_year,
     subject_term.name AS subject_name,
     topic_term.name AS topic_name,
     exam_term.name AS exam_name,
-    CASE 
-        WHEN linked_source_term.parent != 0 THEN parent_source_term.name 
-        ELSE linked_source_term.name 
-    END AS source_name,
-    CASE 
-        WHEN linked_source_term.parent != 0 THEN linked_source_term.name 
-        ELSE NULL 
-    END AS section_name
+    source_rel.term_id AS linked_source_term_id
 FROM {$q_table} q
 LEFT JOIN {$g_table} g ON q.group_id = g.group_id
 LEFT JOIN {$rel_table} subject_rel ON g.group_id = subject_rel.object_id AND subject_rel.object_type = 'group' AND subject_rel.term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id = (SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'subject'))
@@ -419,8 +411,6 @@ LEFT JOIN {$term_table} topic_term ON topic_rel.term_id = topic_term.term_id
 LEFT JOIN {$rel_table} exam_rel ON g.group_id = exam_rel.object_id AND exam_rel.object_type = 'group' AND exam_rel.term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id = (SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'exam'))
 LEFT JOIN {$term_table} exam_term ON exam_rel.term_id = exam_term.term_id
 LEFT JOIN {$rel_table} source_rel ON q.question_id = source_rel.object_id AND source_rel.object_type = 'question' AND source_rel.term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id = (SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'source'))
-LEFT JOIN {$term_table} linked_source_term ON source_rel.term_id = linked_source_term.term_id
-LEFT JOIN {$term_table} parent_source_term ON linked_source_term.parent = parent_source_term.term_id
 {$where_clause}
 GROUP BY q.question_id
 ORDER BY {$orderby} {$order}
@@ -796,20 +786,51 @@ LIMIT {$per_page} OFFSET {$offset}";
 
     public function column_source($item)
     {
+        if (empty($item['linked_source_term_id'])) {
+            return ''; // Return empty if no source is linked
+        }
+
+        global $wpdb;
+        $term_table = $wpdb->prefix . 'qp_terms';
+
+        $term_id = absint($item['linked_source_term_id']);
+        $lineage = [];
+
+        // Trace up the tree to the root, with a safety limit
+        for ($i = 0; $i < 10; $i++) {
+            if (!$term_id) break;
+            $term = $wpdb->get_row($wpdb->prepare("SELECT term_id, name, parent FROM {$term_table} WHERE term_id = %d", $term_id));
+            if ($term) {
+                array_unshift($lineage, $term); // Add to the beginning of the array to maintain order
+                $term_id = $term->parent;
+            } else {
+                break; // Stop if a term is not found
+            }
+        }
+
+        $source_name = '';
+        $section_name = '';
+
+        if (!empty($lineage)) {
+            // The root (first item in the lineage) is the main source
+            $source_name = $lineage[0]->name;
+            // The second item in the lineage is the first child (the section)
+            if (count($lineage) > 1) {
+                $section_name = $lineage[1]->name;
+            }
+        }
+
         $source_info = [];
-        // NEW ORDER: Question Number is first
         if (!empty($item['question_number_in_section'])) {
             $source_info[] = '<strong>No:</strong> ' . esc_html($item['question_number_in_section']);
         }
 
-        // NEW ORDER: Section is second
-        if (!empty($item['section_name'])) {
-            $source_info[] = '<strong>Section:</strong> ' . esc_html($item['section_name']);
+        if (!empty($section_name)) {
+            $source_info[] = '<strong>Section:</strong> ' . esc_html($section_name);
         }
 
-        // NEW ORDER: Source is last
-        if (!empty($item['source_name'])) {
-            $source_info[] = '<strong>Source:</strong> ' . esc_html($item['source_name']);
+        if (!empty($source_name)) {
+            $source_info[] = '<strong>Source:</strong> ' . esc_html($source_name);
         }
         return implode('<br>', $source_info);
     }
