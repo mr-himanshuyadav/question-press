@@ -976,19 +976,32 @@ class QP_Shortcodes
         // -- START: Replacement Code --
         $attempts_raw = $wpdb->get_results($wpdb->prepare(
             "SELECT 
-        a.question_id, a.selected_option_id, a.is_correct, a.mock_status,
-        q.question_text, q.custom_question_id, q.question_number_in_section,
-        g.direction_text, s.subject_name, t.topic_name,
-        src.source_name, sec.section_name
-     FROM {$wpdb->prefix}qp_user_attempts a
-     JOIN {$wpdb->prefix}qp_questions q ON a.question_id = q.question_id
-     LEFT JOIN {$wpdb->prefix}qp_question_groups g ON q.group_id = g.group_id
-     LEFT JOIN {$wpdb->prefix}qp_subjects s ON g.subject_id = s.subject_id
-     LEFT JOIN {$wpdb->prefix}qp_topics t ON q.topic_id = t.topic_id
-     LEFT JOIN {$wpdb->prefix}qp_sources src ON q.source_id = src.source_id
-     LEFT JOIN {$wpdb->prefix}qp_source_sections sec ON q.section_id = sec.section_id
-     WHERE a.session_id = %d
-     ORDER BY a.attempt_id ASC",
+                a.question_id, a.selected_option_id, a.is_correct, a.mock_status,
+                q.question_text, q.custom_question_id, q.question_number_in_section,
+                g.direction_text,
+                subject_term.name AS subject_name,
+                topic_term.name AS topic_name,
+                CASE 
+                    WHEN linked_source_term.parent != 0 THEN parent_source_term.name 
+                    ELSE linked_source_term.name 
+                END AS source_name,
+                CASE 
+                    WHEN linked_source_term.parent != 0 THEN linked_source_term.name 
+                    ELSE NULL 
+                END AS section_name
+            FROM {$wpdb->prefix}qp_user_attempts a
+            JOIN {$wpdb->prefix}qp_questions q ON a.question_id = q.question_id
+            LEFT JOIN {$wpdb->prefix}qp_question_groups g ON q.group_id = g.group_id
+            LEFT JOIN {$wpdb->prefix}qp_term_relationships subject_rel ON g.group_id = subject_rel.object_id AND subject_rel.object_type = 'group' AND subject_rel.term_id IN (SELECT term_id FROM {$wpdb->prefix}qp_terms WHERE parent = 0 AND taxonomy_id = (SELECT taxonomy_id FROM {$wpdb->prefix}qp_taxonomies WHERE taxonomy_name = 'subject'))
+            LEFT JOIN {$wpdb->prefix}qp_terms subject_term ON subject_rel.term_id = subject_term.term_id
+            LEFT JOIN {$wpdb->prefix}qp_term_relationships topic_rel ON q.question_id = topic_rel.object_id AND topic_rel.object_type = 'question' AND topic_rel.term_id IN (SELECT term_id FROM {$wpdb->prefix}qp_terms WHERE parent != 0 AND taxonomy_id = (SELECT taxonomy_id FROM {$wpdb->prefix}qp_taxonomies WHERE taxonomy_name = 'subject'))
+            LEFT JOIN {$wpdb->prefix}qp_terms topic_term ON topic_rel.term_id = topic_term.term_id
+            LEFT JOIN {$wpdb->prefix}qp_term_relationships source_rel ON q.question_id = source_rel.object_id AND source_rel.object_type = 'question' AND source_rel.term_id IN (SELECT term_id FROM {$wpdb->prefix}qp_terms WHERE taxonomy_id = (SELECT taxonomy_id FROM {$wpdb->prefix}qp_taxonomies WHERE taxonomy_name = 'source'))
+            LEFT JOIN {$wpdb->prefix}qp_terms linked_source_term ON source_rel.term_id = linked_source_term.term_id
+            LEFT JOIN {$wpdb->prefix}qp_terms parent_source_term ON linked_source_term.parent = parent_source_term.term_id
+            WHERE a.session_id = %d
+            GROUP BY a.attempt_id
+            ORDER BY a.attempt_id ASC",
             $session_id
         ));
 
