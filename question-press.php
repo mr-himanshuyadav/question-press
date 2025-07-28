@@ -2819,17 +2819,30 @@ function qp_get_question_data_ajax()
 
     // --- Fetch question data ---
     $question_data = $wpdb->get_row($wpdb->prepare(
-        "SELECT q.question_id, q.custom_question_id, q.question_text, q.question_number_in_section,
-                g.direction_text, g.direction_image_id,
-                s.subject_name, t.topic_name,
-                src.source_name, sec.section_name
-         FROM {$q_table} q
-         LEFT JOIN {$g_table} g ON q.group_id = g.group_id
-         LEFT JOIN {$s_table} s ON g.subject_id = s.subject_id
-         LEFT JOIN {$t_table} t ON q.topic_id = t.topic_id
-         LEFT JOIN {$src_table} src ON q.source_id = src.source_id
-         LEFT JOIN {$sec_table} sec ON q.section_id = sec.section_id
-         WHERE q.question_id = %d",
+        "SELECT 
+            q.question_id, q.custom_question_id, q.question_text, q.question_number_in_section,
+            g.direction_text, g.direction_image_id,
+            subject_term.name AS subject_name,
+            topic_term.name AS topic_name,
+            CASE 
+                WHEN linked_source_term.parent != 0 THEN parent_source_term.name 
+                ELSE linked_source_term.name 
+            END AS source_name,
+            CASE 
+                WHEN linked_source_term.parent != 0 THEN linked_source_term.name 
+                ELSE NULL 
+            END AS section_name
+        FROM {$q_table} q
+        LEFT JOIN {$g_table} g ON q.group_id = g.group_id
+        LEFT JOIN {$wpdb->prefix}qp_term_relationships subject_rel ON g.group_id = subject_rel.object_id AND subject_rel.object_type = 'group' AND subject_rel.term_id IN (SELECT term_id FROM {$wpdb->prefix}qp_terms WHERE parent = 0 AND taxonomy_id = (SELECT taxonomy_id FROM {$wpdb->prefix}qp_taxonomies WHERE taxonomy_name = 'subject'))
+        LEFT JOIN {$wpdb->prefix}qp_terms subject_term ON subject_rel.term_id = subject_term.term_id
+        LEFT JOIN {$wpdb->prefix}qp_term_relationships topic_rel ON q.question_id = topic_rel.object_id AND topic_rel.object_type = 'question' AND topic_rel.term_id IN (SELECT term_id FROM {$wpdb->prefix}qp_terms WHERE parent != 0 AND taxonomy_id = (SELECT taxonomy_id FROM {$wpdb->prefix}qp_taxonomies WHERE taxonomy_name = 'subject'))
+        LEFT JOIN {$wpdb->prefix}qp_terms topic_term ON topic_rel.term_id = topic_term.term_id
+        LEFT JOIN {$wpdb->prefix}qp_term_relationships source_rel ON q.question_id = source_rel.object_id AND source_rel.object_type = 'question' AND source_rel.term_id IN (SELECT term_id FROM {$wpdb->prefix}qp_terms WHERE taxonomy_id = (SELECT taxonomy_id FROM {$wpdb->prefix}qp_taxonomies WHERE taxonomy_name = 'source'))
+        LEFT JOIN {$wpdb->prefix}qp_terms linked_source_term ON source_rel.term_id = linked_source_term.term_id
+        LEFT JOIN {$wpdb->prefix}qp_terms parent_source_term ON linked_source_term.parent = parent_source_term.term_id
+        WHERE q.question_id = %d
+        GROUP BY q.question_id",
         $question_id
     ), ARRAY_A);
 
