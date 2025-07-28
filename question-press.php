@@ -990,7 +990,7 @@ function qp_handle_save_question_group()
     }
 
 
-        // --- Process Individual Questions ---
+    // --- Process Individual Questions ---
     $q_table = "{$wpdb->prefix}qp_questions";
     $o_table = "{$wpdb->prefix}qp_options";
     $rel_table = "{$wpdb->prefix}qp_term_relationships";
@@ -1119,8 +1119,8 @@ function qp_handle_save_question_group()
     }
 
     // --- Redirect on success ---
-    $redirect_url = $is_editing 
-        ? admin_url('admin.php?page=qp-edit-group&group_id=' . $group_id . '&message=1') 
+    $redirect_url = $is_editing
+        ? admin_url('admin.php?page=qp-edit-group&group_id=' . $group_id . '&message=1')
         : admin_url('admin.php?page=qp-edit-group&group_id=' . $group_id . '&message=2');
     wp_safe_redirect($redirect_url);
     exit;
@@ -1129,7 +1129,8 @@ function qp_handle_save_question_group()
 
 
 // Helper function for processing options to keep the main function clean
-function process_question_options($question_id, $q_data) {
+function process_question_options($question_id, $q_data)
+{
     global $wpdb;
     $o_table = "{$wpdb->prefix}qp_options";
     $submitted_option_ids = [];
@@ -1168,7 +1169,8 @@ function process_question_options($question_id, $q_data) {
 }
 
 // Helper function for processing taxonomy to keep the main function clean
-function process_question_taxonomy($question_id, $q_data) {
+function process_question_taxonomy($question_id, $q_data)
+{
     global $wpdb;
     $rel_table = "{$wpdb->prefix}qp_term_relationships";
     $wpdb->delete($rel_table, ['object_id' => $question_id, 'object_type' => 'question']);
@@ -2337,7 +2339,7 @@ function qp_start_practice_session_ajax()
             $joins .= " JOIN {$rel_table} section_rel ON q.question_id = section_rel.object_id AND section_rel.object_type = 'question'";
             $where_clauses[] = $wpdb->prepare("section_rel.term_id = %d", absint($session_settings['section_id']));
         }
-        
+
         if ($session_settings['pyq_only']) {
             $where_clauses[] = "g.is_pyq = 1";
         }
@@ -3164,7 +3166,7 @@ function qp_start_revision_session_ajax()
     check_ajax_referer('qp_practice_nonce', 'nonce');
     global $wpdb;
 
-    // --- Gather settings from the new form ---
+    // --- Gather settings from the form ---
     $user_id = get_current_user_id();
     $subjects = isset($_POST['revision_subjects']) && is_array($_POST['revision_subjects']) ? $_POST['revision_subjects'] : [];
     $topics = isset($_POST['revision_topics']) && is_array($_POST['revision_topics']) ? $_POST['revision_topics'] : [];
@@ -3183,94 +3185,70 @@ function qp_start_revision_session_ajax()
         'timer_enabled'       => isset($_POST['qp_timer_enabled']),
         'timer_seconds'       => isset($_POST['qp_timer_seconds']) ? absint($_POST['qp_timer_seconds']) : 60
     ];
-
-    $subject_ids_numeric = array_map('absint', array_filter($subjects, 'is_numeric'));
-
-    if (empty($subject_ids_numeric) && !in_array('all', $subjects)) {
-        wp_send_json_error(['html' => '<div class="qp-container"><p>Please select at least one subject to revise.</p><button onclick="window.location.reload();" class="qp-button qp-button-secondary">Go Back</button></div>']);
-    }
+    
+    // --- Table Names ---
+    $term_table = $wpdb->prefix . 'qp_terms';
+    $rel_table = $wpdb->prefix . 'qp_term_relationships';
+    $revision_table = $wpdb->prefix . 'qp_revision_attempts';
+    $questions_table = $wpdb->prefix . 'qp_questions';
+    $groups_table = $wpdb->prefix . 'qp_question_groups';
+    $reports_table = $wpdb->prefix . 'qp_question_reports';
 
     // --- Determine the final list of topics to query ---
     $topic_ids_to_query = [];
-
-    // If "All Topics" is selected, or if no specific topics are chosen, get all topics from the selected subjects.
-    if (in_array('all', $topics) || empty($topics)) {
-        $subjects_to_query = [];
-        if (in_array('all', $subjects)) {
-            // Get all subject IDs if "All Subjects" is chosen
-            $subjects_to_query = $wpdb->get_col("SELECT subject_id FROM {$wpdb->prefix}qp_subjects");
-        } else {
-            $subjects_to_query = $subject_ids_numeric;
-        }
-
-        if (!empty($subjects_to_query)) {
-            $ids_placeholder = implode(',', array_fill(0, count($subjects_to_query), '%d'));
-            $topic_ids_to_query = $wpdb->get_col($wpdb->prepare("SELECT topic_id FROM {$wpdb->prefix}qp_topics WHERE subject_id IN ($ids_placeholder)", $subjects_to_query));
-        }
-    } else {
-        // Otherwise, use the specifically selected topics.
+    if (!empty($topics) && !in_array('all', $topics)) {
         $topic_ids_to_query = array_map('absint', array_filter($topics, 'is_numeric'));
+    } else {
+        $subject_ids_numeric = array_map('absint', array_filter($subjects, 'is_numeric'));
+        if (!empty($subject_ids_numeric)) {
+            $ids_placeholder = implode(',', $subject_ids_numeric);
+            $topic_ids_to_query = $wpdb->get_col("SELECT term_id FROM {$term_table} WHERE parent IN ($ids_placeholder)");
+        }
     }
 
-    $topic_ids_to_query = array_unique($topic_ids_to_query);
-
     if (empty($topic_ids_to_query)) {
-        wp_send_json_error(['message' => 'No previously attempted questions found for the selected criteria. Try different options or a Normal Practice session.']);
+        wp_send_json_error(['message' => 'Please select at least one subject or topic to revise.']);
     }
 
     // --- Main Question Selection Logic ---
     $final_question_ids = [];
-    $revision_table = $wpdb->prefix . 'qp_revision_attempts';
-    $questions_table = $wpdb->prefix . 'qp_questions';
-    $reports_table = $wpdb->prefix . 'qp_question_reports';
     $reported_question_ids = $wpdb->get_col("SELECT DISTINCT question_id FROM {$reports_table} WHERE status = 'open'");
-    $exclude_reported_sql = '';
-    if (!empty($reported_question_ids)) {
-        $exclude_reported_sql = ' AND q.question_id NOT IN (' . implode(',', array_map('absint', $reported_question_ids)) . ')';
-    }
+    $exclude_reported_sql = !empty($reported_question_ids) ? ' AND q.question_id NOT IN (' . implode(',', array_map('absint', $reported_question_ids)) . ')' : '';
 
     foreach ($topic_ids_to_query as $topic_id) {
-        $pyq_filter_sql = '';
-        if ($exclude_pyq) {
-            $pyq_filter_sql = " AND g.is_pyq = 0";
-        }
+        $pyq_filter_sql = $exclude_pyq ? " AND g.is_pyq = 0" : "";
 
+        // 1. Get the master list of ALL possible questions for this topic
         $master_pool_qids = $wpdb->get_col($wpdb->prepare(
             "SELECT q.question_id 
-            FROM {$wpdb->prefix}qp_questions q
-            JOIN {$wpdb->prefix}qp_question_groups g ON q.group_id = g.group_id
-            WHERE q.topic_id = %d" . $pyq_filter_sql . $exclude_reported_sql,
+            FROM {$questions_table} q
+            JOIN {$groups_table} g ON q.group_id = g.group_id
+            JOIN {$rel_table} r ON q.question_id = r.object_id
+            WHERE r.term_id = %d AND r.object_type = 'question' AND q.status = 'publish'
+            {$pyq_filter_sql} {$exclude_reported_sql}",
             $topic_id
         ));
+        
+        if (empty($master_pool_qids)) continue;
 
-        if (empty($master_pool_qids)) {
-            continue; // Skip this topic if no questions match the PYQ filter
-        }
-
+        // 2. Get questions already seen in revision for this topic by this user
         $revised_qids_for_topic = $wpdb->get_col($wpdb->prepare("SELECT question_id FROM $revision_table WHERE user_id = %d AND topic_id = %d", $user_id, $topic_id));
+        
+        // 3. Find the questions that have NOT yet been revised
         $available_qids = array_diff($master_pool_qids, $revised_qids_for_topic);
 
-        if (empty($available_qids) && !empty($master_pool_qids)) {
+        // 4. If all questions have been revised, reset the history for this topic and start over
+        if (empty($available_qids)) {
             $wpdb->delete($revision_table, ['user_id' => $user_id, 'topic_id' => $topic_id]);
             $available_qids = $master_pool_qids;
         }
 
         if (!empty($available_qids)) {
             $ids_placeholder = implode(',', array_map('absint', $available_qids));
-            // Set the ordering based on the user's choice
-            $order_by_sql = "ORDER BY src.source_name ASC, sec.section_name ASC, CAST(q.question_number_in_section AS UNSIGNED) ASC, q.question_id ASC";
-            if ($choose_random) {
-                $order_by_sql = "ORDER BY RAND()";
-            }
+            $order_by_sql = $choose_random ? "ORDER BY RAND()" : "ORDER BY CAST(q.question_number_in_section AS UNSIGNED) ASC, q.custom_question_id ASC";
 
             $q_ids = $wpdb->get_col($wpdb->prepare(
-                "SELECT q.question_id
-                FROM $questions_table q
-                LEFT JOIN {$wpdb->prefix}qp_sources src ON q.source_id = src.source_id
-                LEFT JOIN {$wpdb->prefix}qp_source_sections sec ON q.section_id = sec.section_id
-                WHERE q.question_id IN ($ids_placeholder)
-                {$order_by_sql}
-                LIMIT %d",
+                "SELECT q.question_id FROM {$questions_table} q WHERE q.question_id IN ($ids_placeholder) {$order_by_sql} LIMIT %d",
                 $questions_per_topic
             ));
             $final_question_ids = array_merge($final_question_ids, $q_ids);
@@ -3280,9 +3258,8 @@ function qp_start_revision_session_ajax()
     // --- Create and Start the Session ---
     $question_ids = array_unique($final_question_ids);
     if (empty($question_ids)) {
-        wp_send_json_error(['message' => 'No questions were found for the selected criteria. Try different options or a Normal Practice session.']);
+        wp_send_json_error(['message' => 'No new questions were found for the selected criteria. You may have already revised them all.']);
     }
-
     shuffle($question_ids);
 
     $options = get_option('qp_settings');
