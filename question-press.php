@@ -2674,9 +2674,7 @@ function qp_get_sources_for_subject_progress_ajax()
         if ($term->parent == 0) {
             $top_level_source_ids[] = $term->term_id;
         } else {
-            // WordPress's get_ancestors is the most reliable way to handle deep hierarchies.
-            // Note: This requires the custom taxonomy 'source' to be registered for this function to work.
-            // Assuming it's not formally registered, we'll revert to a manual lookup.
+            // This is a section or sub-section, trace to top-level parent
             $current_term_id = $term->term_id;
             $parent_id = $term->parent;
             while ($parent_id != 0) {
