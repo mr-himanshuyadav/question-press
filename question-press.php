@@ -2308,7 +2308,6 @@ function qp_start_practice_session_ajax()
         $g_table = $wpdb->prefix . 'qp_question_groups';
         $a_table = $wpdb->prefix . 'qp_user_attempts';
         $rel_table = $wpdb->prefix . 'qp_term_relationships';
-        $term_table = $wpdb->prefix . 'qp_terms';
 
         $where_clauses = ["q.status = 'publish'"];
         $query_params = [];
