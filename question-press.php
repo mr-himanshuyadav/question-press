@@ -2500,13 +2500,11 @@ function qp_start_mock_test_session_ajax()
 
     global $wpdb;
 
-    // --- Gather settings from the new form ---
+    // --- Settings Gathering ---
     $subjects = isset($_POST['mock_subjects']) && is_array($_POST['mock_subjects']) ? $_POST['mock_subjects'] : [];
     $topics = isset($_POST['mock_topics']) && is_array($_POST['mock_topics']) ? $_POST['mock_topics'] : [];
     $num_questions = isset($_POST['qp_mock_num_questions']) ? absint($_POST['qp_mock_num_questions']) : 20;
     $distribution = isset($_POST['question_distribution']) ? sanitize_key($_POST['question_distribution']) : 'random';
-    $reports_table = $wpdb->prefix . 'qp_question_reports';
-    $reported_question_ids = $wpdb->get_col("SELECT DISTINCT question_id FROM {$reports_table} WHERE status = 'open'");
 
     $session_settings = [
         'practice_mode'       => 'mock_test',
@@ -2516,41 +2514,44 @@ function qp_start_mock_test_session_ajax()
         'distribution'        => $distribution,
         'marks_correct'       => isset($_POST['scoring_enabled']) ? floatval($_POST['qp_marks_correct']) : null,
         'marks_incorrect'     => isset($_POST['scoring_enabled']) ? -abs(floatval($_POST['qp_marks_incorrect'])) : null,
-        'timer_enabled'       => true, // Timer is always enabled for mock tests
+        'timer_enabled'       => true,
         'timer_seconds'       => (isset($_POST['qp_mock_timer_minutes']) ? absint($_POST['qp_mock_timer_minutes']) : 30) * 60,
     ];
 
-    // --- Build the initial query to get a pool of eligible questions ---
+    // --- Table Names ---
     $q_table = $wpdb->prefix . 'qp_questions';
     $g_table = $wpdb->prefix . 'qp_question_groups';
-    $t_table = $wpdb->prefix . 'qp_topics';
+    $rel_table = $wpdb->prefix . 'qp_term_relationships';
+    $reports_table = $wpdb->prefix . 'qp_question_reports';
 
+    // --- Build the initial query to get a pool of eligible questions ---
     $where_clauses = ["q.status = 'publish'"];
     $query_params = [];
     $joins = "LEFT JOIN {$g_table} g ON q.group_id = g.group_id";
 
+    $reported_question_ids = $wpdb->get_col("SELECT DISTINCT question_id FROM {$reports_table} WHERE status = 'open'");
     if (!empty($reported_question_ids)) {
         $ids_placeholder = implode(',', array_map('absint', $reported_question_ids));
         $where_clauses[] = "q.question_id NOT IN ($ids_placeholder)";
     }
 
+    $subjects_selected = !empty($subjects) && !in_array('all', $subjects);
+    $topics_selected = !empty($topics) && !in_array('all', $topics);
 
-    // Handle Subject selection
-    if (!empty($subjects) && !in_array('all', $subjects)) {
-        $subject_ids = array_map('absint', $subjects);
-        $ids_placeholder = implode(',', array_fill(0, count($subject_ids), '%d'));
-        $where_clauses[] = $wpdb->prepare("g.subject_id IN ($ids_placeholder)", $subject_ids);
-    }
-
-    // Handle Topic selection
-    if (!empty($topics) && !in_array('all', $topics)) {
-        $topic_ids = array_map('absint', $topics);
-        $ids_placeholder = implode(',', array_fill(0, count($topic_ids), '%d'));
-        $where_clauses[] = $wpdb->prepare("q.topic_id IN ($ids_placeholder)", $topic_ids);
+    if ($topics_selected) {
+        $term_ids_to_filter = array_map('absint', $topics);
+        $joins .= " JOIN {$rel_table} topic_rel ON q.question_id = topic_rel.object_id AND topic_rel.object_type = 'question'";
+        $ids_placeholder = implode(',', array_fill(0, count($term_ids_to_filter), '%d'));
+        $where_clauses[] = $wpdb->prepare("topic_rel.term_id IN ($ids_placeholder)", $term_ids_to_filter);
+    } elseif ($subjects_selected) {
+        $term_ids_to_filter = array_map('absint', $subjects);
+        $joins .= " JOIN {$rel_table} subject_rel ON g.group_id = subject_rel.object_id AND subject_rel.object_type = 'group'";
+        $ids_placeholder = implode(',', array_fill(0, count($term_ids_to_filter), '%d'));
+        $where_clauses[] = $wpdb->prepare("subject_rel.term_id IN ($ids_placeholder)", $term_ids_to_filter);
     }
 
     $base_where_sql = implode(' AND ', $where_clauses);
-    $query = "SELECT q.question_id, q.topic_id FROM {$q_table} q {$joins} WHERE {$base_where_sql}";
+    $query = "SELECT q.question_id, (SELECT term_id FROM {$rel_table} WHERE object_id = q.question_id AND object_type = 'question' AND term_id IN (SELECT term_id FROM {$wpdb->prefix}qp_terms WHERE parent != 0) LIMIT 1) as topic_id FROM {$q_table} q {$joins} WHERE {$base_where_sql}";
 
     $question_pool = $wpdb->get_results($wpdb->prepare($query, $query_params));
 
@@ -2560,11 +2561,12 @@ function qp_start_mock_test_session_ajax()
 
     // --- Apply distribution logic ---
     $final_question_ids = [];
-
-    if ($distribution === 'equal' && !empty($topics) && !in_array('all', $topics)) {
+    if ($distribution === 'equal' && $topics_selected) {
         $questions_by_topic = [];
         foreach ($question_pool as $q) {
-            $questions_by_topic[$q->topic_id][] = $q->question_id;
+            if ($q->topic_id) { // Only consider questions that have a topic
+                $questions_by_topic[$q->topic_id][] = $q->question_id;
+            }
         }
 
         $num_topics = count($questions_by_topic);
