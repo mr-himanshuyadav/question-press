@@ -244,11 +244,14 @@ class QP_Dashboard
             $unique_qids = array_unique(array_map('absint', $all_session_qids));
             $ids_placeholder = implode(',', $unique_qids);
             $subject_results = $wpdb->get_results(
-                "SELECT q.question_id, s.subject_name
-             FROM {$wpdb->prefix}qp_questions q
-             JOIN {$wpdb->prefix}qp_question_groups g ON q.group_id = g.group_id
-             JOIN {$wpdb->prefix}qp_subjects s ON g.subject_id = s.subject_id
-             WHERE q.question_id IN ($ids_placeholder)"
+                "SELECT 
+                    q.question_id, 
+                    subject_term.name as subject_name
+                 FROM {$wpdb->prefix}qp_questions q
+                 JOIN {$wpdb->prefix}qp_question_groups g ON q.group_id = g.group_id
+                 JOIN {$wpdb->prefix}qp_term_relationships subject_rel ON g.group_id = subject_rel.object_id AND subject_rel.object_type = 'group' AND subject_rel.term_id IN (SELECT term_id FROM {$wpdb->prefix}qp_terms WHERE parent = 0 AND taxonomy_id = (SELECT taxonomy_id FROM {$wpdb->prefix}qp_taxonomies WHERE taxonomy_name = 'subject'))
+                 JOIN {$wpdb->prefix}qp_terms subject_term ON subject_rel.term_id = subject_term.term_id
+                 WHERE q.question_id IN ($ids_placeholder)"
             );
             foreach ($subject_results as $res) {
                 $subjects_by_question[$res->question_id] = $res->subject_name;
