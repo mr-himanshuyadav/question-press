@@ -2303,29 +2303,42 @@ function qp_start_practice_session_ajax()
         $g_table = $wpdb->prefix . 'qp_question_groups';
         $a_table = $wpdb->prefix . 'qp_user_attempts';
 
+        $user_id = get_current_user_id();
+        $q_table = $wpdb->prefix . 'qp_questions';
+        $g_table = $wpdb->prefix . 'qp_question_groups';
+        $a_table = $wpdb->prefix . 'qp_user_attempts';
+        $rel_table = $wpdb->prefix . 'qp_term_relationships';
+        $term_table = $wpdb->prefix . 'qp_terms';
+
         $where_clauses = ["q.status = 'publish'"];
-        $query_args = [];
-        $joins = "LEFT JOIN {$g_table} g ON q.group_id = g.group_id";
+        $query_params = [];
+        $joins = " LEFT JOIN {$g_table} g ON q.group_id = g.group_id";
 
-        // Handle Subject selection (single, multiple, or all)
-        if (!empty($subjects_raw) && !in_array('all', $subjects_raw)) {
-            $subject_ids = array_map('absint', $subjects_raw);
-            $ids_placeholder = implode(',', array_fill(0, count($subject_ids), '%d'));
-            $where_clauses[] = $wpdb->prepare("g.subject_id IN ($ids_placeholder)", $subject_ids);
+        // Handle Subject and Topic selection using the new taxonomy system
+        $term_ids_to_filter = [];
+        $subjects_selected = !empty($subjects_raw) && !in_array('all', $subjects_raw);
+        $topics_selected = !empty($topics_raw) && !in_array('all', $topics_raw);
+
+        if ($topics_selected) {
+            // If specific topics are chosen, they are the most specific filter.
+            $term_ids_to_filter = array_map('absint', $topics_raw);
+            $joins .= " JOIN {$rel_table} topic_rel ON q.question_id = topic_rel.object_id AND topic_rel.object_type = 'question'";
+            $ids_placeholder = implode(',', array_fill(0, count($term_ids_to_filter), '%d'));
+            $where_clauses[] = $wpdb->prepare("topic_rel.term_id IN ($ids_placeholder)", $term_ids_to_filter);
+        } elseif ($subjects_selected) {
+            // If only subjects are chosen, filter by them.
+            $term_ids_to_filter = array_map('absint', $subjects_raw);
+            $joins .= " JOIN {$rel_table} subject_rel ON g.group_id = subject_rel.object_id AND subject_rel.object_type = 'group'";
+            $ids_placeholder = implode(',', array_fill(0, count($term_ids_to_filter), '%d'));
+            $where_clauses[] = $wpdb->prepare("subject_rel.term_id IN ($ids_placeholder)", $term_ids_to_filter);
         }
 
-        // Handle Topic selection
-        if (!empty($topics_raw)) {
-            $topic_ids = array_map('absint', $topics_raw);
-            $ids_placeholder = implode(',', array_fill(0, count($topic_ids), '%d'));
-            $where_clauses[] = $wpdb->prepare("q.topic_id IN ($ids_placeholder)", $topic_ids);
-        }
-
-        // Handle Section selection (only if one subject and one topic were chosen)
+        // Handle Section selection
         if ($session_settings['section_id'] !== 'all' && is_numeric($session_settings['section_id'])) {
-            $where_clauses[] = "q.section_id = %d";
-            $query_args[] = absint($session_settings['section_id']);
+            $joins .= " JOIN {$rel_table} section_rel ON q.question_id = section_rel.object_id AND section_rel.object_type = 'question'";
+            $where_clauses[] = $wpdb->prepare("section_rel.term_id = %d", absint($session_settings['section_id']));
         }
+        
         if ($session_settings['pyq_only']) {
             $where_clauses[] = "g.is_pyq = 1";
         }
