@@ -634,7 +634,7 @@ function qp_all_questions_page_cb()
     $list_table->prepare_items();
 ?>
     <div class="wrap">
-        <h1 class="wp-heading-inline">All Questions</h1>
+        <h1 class="wp-heading-inline">All Questions - Updated</h1>
         <a href="<?php echo admin_url('admin.php?page=qp-question-editor'); ?>" class="page-title-action">Add New</a>
         <?php if (isset($_GET['message'])) {
             $messages = ['1' => 'Question(s) updated successfully.', '2' => 'Question(s) saved successfully.'];
