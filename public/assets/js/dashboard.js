@@ -443,7 +443,9 @@ jQuery(document).ready(function($) {
 
     sourceSelect.on('change', function() {
         var sourceId = $(this).val();
-        if (!sourceId) {
+        var subjectId = subjectSelect.val(); // Get the selected subject ID
+
+        if (!sourceId || !subjectId) {
             resultsContainer.html('');
             return;
         }
@@ -455,6 +457,7 @@ jQuery(document).ready(function($) {
                 action: 'get_progress_data',
                 nonce: qp_ajax_object.nonce,
                 source_id: sourceId,
+                subject_id: subjectId, // Send the subject_id to the backend
                 exclude_incorrect: $('#qp-exclude-incorrect-cb').is(':checked')
             },
             beforeSend: function() {
@@ -462,7 +465,56 @@ jQuery(document).ready(function($) {
             },
             success: function(response) {
                 if (response.success) {
-                    resultsContainer.html(response.data.html);
+                    var data = response.data;
+                    var sourceProgress = data.sourceProgress;
+                    
+                    if (!sourceProgress || sourceProgress.total === 0) {
+                        resultsContainer.html('<p>No questions found for this source within the selected subject.</p>');
+                        return;
+                    }
+
+                    var percentage = sourceProgress.total > 0 ? Math.round((sourceProgress.completed / sourceProgress.total) * 100) : 0;
+
+                    // --- Recursive function to build the HTML tree ---
+                    function buildTreeHtml(terms) {
+                        if (!terms || terms.length === 0) return '';
+                        
+                        let html = '';
+                        terms.forEach(function(term) {
+                            let termPercentage = term.total > 0 ? Math.round((term.completed / term.total) * 100) : 0;
+                            let hasChildren = term.children && term.children.length > 0;
+                            
+                            html += `<div class="qp-progress-item topic-level ${hasChildren ? 'qp-topic-toggle' : ''}" data-topic-id="${term.term_id}">`;
+                            html += `<div class="qp-progress-bar-bg" style="width: ${termPercentage}%;"></div>`;
+                            html += `<div class="qp-progress-label">`;
+                            if(hasChildren) html += `<span class="dashicons dashicons-arrow-right-alt2"></span>`;
+                            html += `${term.name} <span class="qp-progress-percentage">${termPercentage}%</span></div>`;
+                            html += `</div>`;
+
+                            if (hasChildren) {
+                                html += `<div class="qp-topic-sections-container" data-parent-topic="${term.term_id}" style="display: none;">${buildTreeHtml(term.children)}</div>`;
+                            }
+                        });
+                        return html;
+                    }
+
+                    // --- Build the final HTML ---
+                    var finalHtml = '<div class="qp-progress-tree">';
+                    // Top-level bar now shows the Subject Name
+                    finalHtml += `<div class="qp-progress-item subject-level">`;
+                    finalHtml += `<div class="qp-progress-bar-bg" style="width: ${percentage}%;"></div>`;
+                    finalHtml += `<div class="qp-progress-label">${data.subjectName} &raquo; ${sourceProgress.name} <span class="qp-progress-percentage">${percentage}%</span></div>`;
+                    finalHtml += `</div>`;
+
+                    // The direct children (Topics) are always visible
+                    finalHtml += `<div class="qp-topic-sections-container" style="display: block; padding-left: 20px;">`;
+                    finalHtml += buildTreeHtml(sourceProgress.children);
+                    finalHtml += `</div>`;
+                    
+                    finalHtml += '</div>';
+
+                    resultsContainer.html(finalHtml);
+
                 } else {
                     resultsContainer.html('<p>Could not load progress data.</p>');
                 }
