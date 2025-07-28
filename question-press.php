@@ -4571,39 +4571,58 @@ function qp_run_v3_taxonomy_migration()
         }
         $messages[] = "Step 5: Migrated all taxonomy relationships for questions and groups.";
 
-        // Step 6: Migrate Sources and Sections and link them to questions
+        // Step 6: Migrate Sources, Topics, and Sections into a nested hierarchy
         $source_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'source'");
         $source_term_map = []; // [old_source_id => new_term_id]
+        $topic_as_section_map = []; // [old_topic_id => new_term_id]
         $section_term_map = []; // [old_section_id => new_term_id]
-        $migrated_sources_count = 0;
-        $migrated_sections_count = 0;
 
-        // Migrate all old sources to new terms
+        // Part 1: Create top-level Source terms
         $old_sources = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}qp_sources");
         foreach ($old_sources as $source) {
             $source_term_map[$source->source_id] = qp_get_or_create_term($source->source_name, $source_tax_id, 0);
-            $migrated_sources_count++;
         }
+        $messages[] = "Step 6.1: Migrated " . count($source_term_map) . " sources as top-level terms.";
 
-        // Migrate all old sections to new terms, linking them to their parent source term
-        $old_sections = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}qp_source_sections");
-        foreach ($old_sections as $section) {
-            $parent_term_id = $source_term_map[$section->source_id] ?? 0;
-            if ($parent_term_id > 0) {
-                $section_term_map[$section->section_id] = qp_get_or_create_term($section->section_name, $source_tax_id, $parent_term_id);
-                $migrated_sections_count++;
+        // Part 2: Migrate old Topics as children of the correct Source term
+        $old_topics_with_sources = $wpdb->get_results(
+            "SELECT DISTINCT t.topic_id, t.topic_name, q.source_id 
+            FROM {$wpdb->prefix}qp_topics t
+            JOIN {$wpdb->prefix}qp_questions q ON t.topic_id = q.topic_id
+            WHERE q.source_id > 0"
+        );
+        foreach ($old_topics_with_sources as $topic) {
+            if (isset($source_term_map[$topic->source_id])) {
+                $parent_source_term_id = $source_term_map[$topic->source_id];
+                $topic_as_section_map[$topic->topic_id] = qp_get_or_create_term($topic->topic_name, $source_tax_id, $parent_source_term_id);
             }
         }
-        $messages[] = "Step 6.1: Migrated {$migrated_sources_count} sources and {$migrated_sections_count} sections as terms.";
+        $messages[] = "Step 6.2: Migrated " . count($topic_as_section_map) . " old topics as children of sources.";
 
-        // CRITICAL: Link questions to these new terms
-        $questions_with_sources = $wpdb->get_results("SELECT question_id, source_id, section_id FROM {$wpdb->prefix}qp_questions WHERE source_id > 0 OR section_id > 0");
+        // Part 3: Migrate old Sections as children of their new Topic term parent
+        $old_sections_with_topics = $wpdb->get_results(
+            "SELECT DISTINCT s.section_id, s.section_name, q.topic_id
+            FROM {$wpdb->prefix}qp_source_sections s
+            JOIN {$wpdb->prefix}qp_questions q ON s.section_id = q.section_id
+            WHERE q.topic_id > 0"
+        );
+        foreach ($old_sections_with_topics as $section) {
+            if (isset($topic_as_section_map[$section->topic_id])) {
+                $parent_topic_term_id = $topic_as_section_map[$section->topic_id];
+                $section_term_map[$section->section_id] = qp_get_or_create_term($section->section_name, $source_tax_id, $parent_topic_term_id);
+            }
+        }
+        $messages[] = "Step 6.3: Migrated " . count($section_term_map) . " old sections as children of topics.";
+
+        // Part 4: Link questions to the most specific term available (Section > Topic > Source)
+        $questions_with_sources = $wpdb->get_results("SELECT question_id, source_id, section_id, topic_id FROM {$wpdb->prefix}qp_questions");
         $relationships_created = 0;
         foreach ($questions_with_sources as $question) {
             $term_to_link = null;
-            // Prefer the most specific term (the section)
             if (isset($section_term_map[$question->section_id])) {
                 $term_to_link = $section_term_map[$question->section_id];
+            } elseif (isset($topic_as_section_map[$question->topic_id])) {
+                $term_to_link = $topic_as_section_map[$question->topic_id];
             } elseif (isset($source_term_map[$question->source_id])) {
                 $term_to_link = $source_term_map[$question->source_id];
             }
@@ -4617,7 +4636,7 @@ function qp_run_v3_taxonomy_migration()
                 $relationships_created++;
             }
         }
-        $messages[] = "Step 6.2: Created {$relationships_created} relationships between questions and their new source/section terms.";
+        $messages[] = "Step 6.4: Created/Verified {$relationships_created} source/topic/section relationships for questions.";
 
         // Step 7: Update foreign keys in existing tables
         $groups_updated = 0;
