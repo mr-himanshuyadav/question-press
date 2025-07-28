@@ -33,12 +33,16 @@ class QP_Dashboard
 
         // Fetch Review Later questions (existing logic)
         $review_questions = $wpdb->get_results($wpdb->prepare(
-            "SELECT q.question_id, q.custom_question_id, q.question_text, s.subject_name 
-         FROM {$wpdb->prefix}qp_review_later rl
-         JOIN {$wpdb->prefix}qp_questions q ON rl.question_id = q.question_id
-         LEFT JOIN {$wpdb->prefix}qp_question_groups g ON q.group_id = g.group_id
-         LEFT JOIN {$wpdb->prefix}qp_subjects s ON g.subject_id = s.subject_id
-         WHERE rl.user_id = %d ORDER BY rl.review_id DESC",
+            "SELECT 
+                q.question_id, q.custom_question_id, q.question_text, 
+                subject_term.name as subject_name
+             FROM {$wpdb->prefix}qp_review_later rl
+             JOIN {$wpdb->prefix}qp_questions q ON rl.question_id = q.question_id
+             LEFT JOIN {$wpdb->prefix}qp_question_groups g ON q.group_id = g.group_id
+             LEFT JOIN {$wpdb->prefix}qp_term_relationships subject_rel ON g.group_id = subject_rel.object_id AND subject_rel.object_type = 'group' AND subject_rel.term_id IN (SELECT term_id FROM {$wpdb->prefix}qp_terms WHERE parent = 0 AND taxonomy_id = (SELECT taxonomy_id FROM {$wpdb->prefix}qp_taxonomies WHERE taxonomy_name = 'subject'))
+             LEFT JOIN {$wpdb->prefix}qp_terms subject_term ON subject_rel.term_id = subject_term.term_id
+             WHERE rl.user_id = %d 
+             ORDER BY rl.review_id DESC",
             $user_id
         ));
 
