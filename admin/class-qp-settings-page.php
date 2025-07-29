@@ -66,12 +66,6 @@ class QP_Settings_Page
         // API Section
         add_settings_section('qp_api_settings_section', 'REST API Documentation', [self::class, 'render_api_section_text'], 'qp-settings-page');
         add_settings_field('qp_api_secret_key', 'JWT Secret Key', [self::class, 'render_api_key_field'], 'qp-settings-page', 'qp_api_settings_section');
-
-
-        // Add a new section for Plugin Updates
-        add_settings_section('qp_update_settings_section', 'Plugin Updates', [self::class, 'render_update_section_text'], 'qp-settings-page');
-        add_settings_field('qp_plugin_version', 'Current Version', [self::class, 'render_plugin_version'], 'qp-settings-page', 'qp_update_settings_section');
-        add_settings_field('qp_check_for_updates', 'Check for Updates', [self::class, 'render_check_for_updates_button'], 'qp-settings-page', 'qp_update_settings_section');
     }
 
     /**
@@ -224,34 +218,6 @@ class QP_Settings_Page
         echo '<span>Check this box to permanently delete all questions, subjects, labels, and user history when the plugin is uninstalled. This action cannot be undone.</span></label>';
     }
 
-     /**
-     * Callback to render the description for the update section.
-     */
-    public static function render_update_section_text()
-    {
-        echo '<p>Manage updates for the Question Press plugin.</p>';
-    }
-
-    /**
-     * Callback to display the current plugin version.
-     */
-    public static function render_plugin_version()
-    {
-        $plugin_data = get_plugin_data(QP_PLUGIN_FILE);
-        echo '<strong>' . $plugin_data['Version'] . '</strong>';
-    }
-
-    /**
-     * Callback to render the "Check for Updates" button.
-     */
-    public static function render_check_for_updates_button()
-    {
-        ?>
-        <a href="#" class="button" id="qp-check-for-updates">Check for Updates</a>
-        <p class="description">Click this button to manually check for new versions of the plugin.</p>
-        <div id="qp-update-message" style="display:none; margin-top:10px;"></div>
-        <?php
-    }
 
     public static function render_api_key_field()
     {
