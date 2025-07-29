@@ -41,25 +41,4 @@ jQuery(document).ready(function($) {
             }
         });
     });
-
-    // Add this new section for the update checker
-    $('#qp-check-for-updates').on('click', function(e) {
-        e.preventDefault();
-        var $button = $(this);
-        var $message = $('#qp-update-message');
-
-        $button.text('Checking...');
-        $message.hide();
-
-        $.post(ajaxurl, {
-            action: 'qp_check_for_updates'
-        }, function(response) {
-            $button.text('Check for Updates');
-            if (response.success) {
-                $message.html('<div class="notice notice-success is-dismissible"><p>' + response.data.message + '</p></div>').show();
-            } else {
-                $message.html('<div class="notice notice-error is-dismissible"><p>' + response.data.message + '</p></div>').show();
-            }
-        });
-    });
 });

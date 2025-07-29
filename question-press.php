@@ -34,7 +34,6 @@ require_once QP_PLUGIN_DIR . 'admin/class-qp-backup-restore-page.php';
 require_once QP_PLUGIN_DIR . 'public/class-qp-shortcodes.php';
 require_once QP_PLUGIN_DIR . 'public/class-qp-dashboard.php';
 require_once QP_PLUGIN_DIR . 'api/class-qp-rest-api.php';
-require_once QP_PLUGIN_DIR . 'admin/class-qp-updater.php';
 
 
 // Activation, Deactivation, Uninstall Hooks
@@ -3557,17 +3556,6 @@ function qp_save_quick_edit_data_ajax()
 }
 add_action('wp_ajax_save_quick_edit_data', 'qp_save_quick_edit_data_ajax');
 
-/**
- * AJAX handler for the "Check for Updates" button.
- */
-function qp_check_for_updates_ajax() {
-    delete_site_transient('update_plugins');
-    delete_transient('qp_github_update');
-    wp_update_plugins();
-    wp_send_json_success(array('message' => 'Update check complete. If a new version is available, it will now appear in the Plugins page.'));
-}
-add_action('wp_ajax_qp_check_for_updates', 'qp_check_for_updates_ajax');
-
 
 /**
  * Initialize all plugin features that hook into WordPress.
@@ -3575,11 +3563,6 @@ add_action('wp_ajax_qp_check_for_updates', 'qp_check_for_updates_ajax');
 function qp_init_plugin()
 {
     QP_Rest_Api::init();
-    // Initialize the updater
-    if (is_admin()) {
-        $updater = new QP_Updater(QP_PLUGIN_FILE);
-        $updater->init();
-    }
 }
 add_action('init', 'qp_init_plugin');
 
