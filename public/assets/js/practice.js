@@ -2247,7 +2247,7 @@ $("#qp-next-btn").prop("disabled", !isSectionWise);
     }
   });
 
-  // --- FINAL: Draggable, Resizable Rough Work Popup with Undo/Redo ---
+  // --- FINAL: Draggable, Resizable, Touch-Enabled Rough Work Popup with Undo/Redo ---
     var overlay = $('#qp-rough-work-overlay');
     var popup = $('#qp-rough-work-popup');
     var header = popup.find('.qp-popup-header');
@@ -2264,6 +2264,12 @@ $("#qp-next-btn").prop("disabled", !isSectionWise);
     var redoStack = [];
     var undoBtn = $('#qp-undo-btn');
     var redoBtn = $('#qp-redo-btn');
+
+    // --- Helper function to get coordinates from both mouse and touch events ---
+    function getEventCoords(e) {
+        var evt = (e.originalEvent && e.originalEvent.touches) ? e.originalEvent.touches[0] : e;
+        return { x: evt.clientX, y: evt.clientY };
+    }
 
     function saveCanvasState() {
         redoStack = [];
@@ -2315,9 +2321,10 @@ $("#qp-next-btn").prop("disabled", !isSectionWise);
 
     function draw(e) {
         if (!isDrawing) return;
+        var coords = getEventCoords(e);
         var rect = canvas.getBoundingClientRect();
-        var currentX = e.clientX - rect.left;
-        var currentY = e.clientY - rect.top;
+        var currentX = coords.x - rect.left;
+        var currentY = coords.y - rect.top;
 
         if (currentTool === 'eraser') {
             ctx.globalCompositeOperation = 'destination-out';
@@ -2333,26 +2340,28 @@ $("#qp-next-btn").prop("disabled", !isSectionWise);
         ctx.lineTo(currentX, currentY);
         ctx.stroke();
         [lastX, lastY] = [currentX, currentY];
+        e.preventDefault();
     }
 
     // Show Popup and Overlay
     wrapper.on('click', '#qp-rough-work-btn', function() {
-        var initialPopupOpacity = 0.5;
-        
-        popup.css({
-            'background-color': `rgba(255, 255, 255, ${initialPopupOpacity})`,
-            'top': '50%', 'left': '50%', 'transform': 'translate(-50%, -50%)'
-        });
-        $('#qp-canvas-opacity-slider').val(initialPopupOpacity * 100);
+        // --- REFINED: Load saved opacity or use default ---
+        var savedOpacityValue = localStorage.getItem('qpCanvasOpacityValue');
+        var initialSliderValue = savedOpacityValue ? parseFloat(savedOpacityValue) : 40; // Default opacity value.
 
-        overlay.fadeIn(100);
+        var popupOpacity = 0.3 + ((initialSliderValue / 100) * 0.7);
+        var overlayOpacity = 0.1 + ((initialSliderValue / 100) * 0.5);
+
+        popup.css('background-color', `rgba(255, 255, 255, ${popupOpacity})`);
+        overlay.css('background-color', `rgba(0, 0, 0, ${overlayOpacity})`);
+        $('#qp-canvas-opacity-slider').val(initialSliderValue);
+        
+        popup.css({ 'top': '50%', 'left': '50%', 'transform': 'translate(-50%, -50%)' });
+        
+        overlay.fadeIn(200);
 
         var offset = popup.offset();
-        popup.css({
-            top: offset.top,
-            left: offset.left,
-            transform: 'none'
-        });
+        popup.css({ top: offset.top, left: offset.left, transform: 'none' });
 
         if (!ctx) {
             ctx = canvas.getContext('2d');
@@ -2362,73 +2371,69 @@ $("#qp-next-btn").prop("disabled", !isSectionWise);
         }
     });
 
-    // Dragging
-    header.on('mousedown', function(e) {
-        if ($(e.target).closest('.qp-rough-work-controls, .qp-popup-close-btn').length) {
-            return;
-        }
-        isDragging = true;
-        initialX = e.clientX - popup.offset().left;
-        initialY = e.clientY - popup.offset().top;
-        $(document).on('mousemove.drag', onMouseMove);
-        $(document).on('mouseup.drag', onMouseUp);
-        e.preventDefault();
-    });
-
-    // Resizing
-    resizeHandle.on('mousedown', function(e) {
-        isResizing = true;
-        initialX = e.clientX;
-        initialY = e.clientY;
-        initialWidth = popup.width();
-        initialHeight = popup.height();
-        $(document).on('mousemove.resize', onMouseMove);
-        $(document).on('mouseup.resize', onMouseUp);
-        e.preventDefault();
-    });
-
-    function onMouseMove(e) {
+    // Dragging, Resizing, and Drawing events (unchanged)
+    function onInteractionMove(e) {
         if (isDragging) {
-            popup.offset({ top: e.clientY - initialY, left: e.clientX - initialX });
+            var coords = getEventCoords(e);
+            popup.offset({ top: coords.y - initialY, left: coords.x - initialX });
         }
         if (isResizing) {
-            // --- NEW: Dynamic Minimum Width Calculation ---
+            var coords = getEventCoords(e);
             var controlsWidth = popup.find('.qp-rough-work-controls').outerWidth();
             var titleWidth = popup.find('.qp-popup-title').outerWidth();
             var closeBtnWidth = popup.find('.qp-popup-close-btn').outerWidth();
-            var minWidth = controlsWidth + titleWidth + closeBtnWidth + 40; // 40px for padding/margins
-            
-            var newWidth = initialWidth + (e.clientX - initialX);
-            var newHeight = initialHeight + (e.clientY - initialY);
-
-            // Enforce the calculated minimum width
-            if (newWidth < minWidth) {
-                newWidth = minWidth;
-            }
-
+            var minWidth = controlsWidth + titleWidth + closeBtnWidth + 40;
+            var newWidth = initialWidth + (coords.x - initialX);
+            var newHeight = initialHeight + (coords.y - initialY);
+            if (newWidth < minWidth) newWidth = minWidth;
             popup.width(newWidth);
             popup.height(newHeight);
             resizeCanvas();
         }
     }
-
-    function onMouseUp() {
+    
+    function onInteractionEnd() {
         if(isResizing) saveCanvasState();
         isDragging = isResizing = false;
-        $(document).off('.drag .resize');
+        $(document).off('mousemove touchmove', onInteractionMove);
+        $(document).off('mouseup touchend', onInteractionEnd);
     }
+    
+    header.on('mousedown touchstart', function(e) {
+        if ($(e.target).closest('.qp-rough-work-controls, .qp-popup-close-btn').length) return;
+        isDragging = true;
+        var coords = getEventCoords(e);
+        initialX = coords.x - popup.offset().left;
+        initialY = coords.y - popup.offset().top;
+        $(document).on('mousemove touchmove', onInteractionMove);
+        $(document).on('mouseup touchend', onInteractionEnd);
+        e.preventDefault();
+    });
 
-    // Canvas drawing events
-    canvasEl.on('mousedown', function(e) {
+    resizeHandle.on('mousedown touchstart', function(e) {
+        isResizing = true;
+        var coords = getEventCoords(e);
+        initialX = coords.x;
+        initialY = coords.y;
+        initialWidth = popup.width();
+        initialHeight = popup.height();
+        $(document).on('mousemove touchmove', onInteractionMove);
+        $(document).on('mouseup touchend', onInteractionEnd);
+        e.preventDefault();
+    });
+
+    canvasEl.on('mousedown touchstart', function(e) {
         isDrawing = true;
         saveCanvasState();
+        var coords = getEventCoords(e);
         var rect = canvas.getBoundingClientRect();
-        [lastX, lastY] = [e.clientX - rect.left, e.clientY - rect.top];
+        [lastX, lastY] = [coords.x - rect.left, coords.y - rect.top];
+        e.preventDefault();
     });
-    $(document).on('mouseup', function() { isDrawing = false; });
-    canvasEl.on('mousemove', draw);
+    canvasEl.on('mouseup touchend', function() { isDrawing = false; });
+    canvasEl.on('mousemove touchmove', draw);
     
-    // Tool selection, color, etc.
+    // Tool selection, color, etc. (unchanged)
     popup.on('click', '.qp-tool-btn', function() {
         if($(this).is('#qp-undo-btn, #qp-redo-btn')) return;
         $('.qp-tool-btn').removeClass('active');
@@ -2436,26 +2441,30 @@ $("#qp-next-btn").prop("disabled", !isSectionWise);
         currentTool = $(this).attr('id') === 'qp-tool-eraser' ? 'eraser' : 'pencil';
         canvasEl.removeClass('cursor-pencil cursor-eraser').addClass('cursor-' + currentTool);
     });
-
     popup.on('click', '.qp-color-btn', function() {
         $('.qp-color-btn').removeClass('active');
         $(this).addClass('active');
         $('#qp-tool-pencil').click();
     });
 
+    // --- REFINED: Opacity Slider Logic with localStorage ---
     popup.on('input', '#qp-canvas-opacity-slider', function() {
-        var sliderValue = $(this).val() / 100;
-        var popupOpacity = 0.1 + (sliderValue * 0.7);
+        var sliderValue = $(this).val(); // Get value from 0-100
+        
+        // Save the raw slider value to localStorage
+        localStorage.setItem('qpCanvasOpacityValue', sliderValue);
+
+        var popupOpacity = 0.3 + ((sliderValue / 100) * 0.7);
         popup.css('background-color', `rgba(255, 255, 255, ${popupOpacity})`);
-        var overlayOpacity = (sliderValue * 0.5);
+        
+        var overlayOpacity = 0.1 + ((sliderValue / 100) * 0.5);
         overlay.css('background-color', `rgba(0, 0, 0, ${overlayOpacity})`);
     });
 
-    // Close and Clear
+    // Close and Clear (unchanged)
     popup.on('click', '#qp-close-canvas-btn', function() {
-        overlay.fadeOut(100);
+        overlay.fadeOut(200);
     });
-
     popup.on('click', '#qp-clear-canvas-btn', function() {
         if (ctx) {
             saveCanvasState();
