@@ -3706,7 +3706,7 @@ function qp_cleanup_abandoned_sessions()
     // --- 2. Handle Abandoned 'active' or 'paused' sessions ---
     $abandoned_session_ids = $wpdb->get_col($wpdb->prepare(
         "SELECT session_id FROM {$sessions_table}
-         WHERE status IN ('active', 'paused') AND last_activity < NOW() - INTERVAL %d MINUTE",
+         WHERE status IN ('active') AND last_activity < NOW() - INTERVAL %d MINUTE",
         $timeout_minutes
     ));
 
