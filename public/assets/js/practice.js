@@ -2253,8 +2253,14 @@ $("#qp-next-btn").prop("disabled", !isSectionWise);
     var header = popup.find('.qp-popup-header');
     var resizeHandle = popup.find('.qp-popup-resize-handle');
     var canvasEl = $('#qp-rough-work-canvas');
-    var canvas = canvasEl[0];
-    var ctx;
+    var canvas = canvasEl[0]; // The VISIBLE canvas
+    var ctx; // The VISIBLE canvas context
+
+    // --- NEW: Off-screen canvas for persistent drawing ---
+    var masterCanvas = document.createElement('canvas');
+    var masterCtx = masterCanvas.getContext('2d');
+    masterCanvas.width = 2000; // A large fixed size
+    masterCanvas.height = 2000;
 
     var isDrawing = false, isDragging = false, isResizing = false;
     var lastX, lastY, initialX, initialY, initialWidth, initialHeight;
@@ -2265,15 +2271,21 @@ $("#qp-next-btn").prop("disabled", !isSectionWise);
     var undoBtn = $('#qp-undo-btn');
     var redoBtn = $('#qp-redo-btn');
 
-    // --- Helper function to get coordinates from both mouse and touch events ---
     function getEventCoords(e) {
         var evt = (e.originalEvent && e.originalEvent.touches) ? e.originalEvent.touches[0] : e;
         return { x: evt.clientX, y: evt.clientY };
     }
 
+    function updateVisibleCanvas() {
+        if (ctx) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(masterCanvas, 0, 0);
+        }
+    }
+
     function saveCanvasState() {
         redoStack = [];
-        undoStack.push(canvas.toDataURL());
+        undoStack.push(masterCanvas.toDataURL());
         updateUndoRedoButtons();
     }
 
@@ -2284,13 +2296,14 @@ $("#qp-next-btn").prop("disabled", !isSectionWise);
 
     function restoreCanvasState(popStack, pushStack) {
         if (popStack.length > 0) {
-            pushStack.push(canvas.toDataURL());
+            pushStack.push(masterCanvas.toDataURL());
             var restoreData = popStack.pop();
             
             var img = new Image();
             img.onload = function() {
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                ctx.drawImage(img, 0, 0);
+                masterCtx.clearRect(0, 0, masterCanvas.width, masterCanvas.height);
+                masterCtx.drawImage(img, 0, 0);
+                updateVisibleCanvas(); // Update the view
             };
             img.src = restoreData;
             updateUndoRedoButtons();
@@ -2303,19 +2316,9 @@ $("#qp-next-btn").prop("disabled", !isSectionWise);
     function resizeCanvas() {
         if (canvas) {
             var contentArea = popup.find('.qp-popup-content');
-            var currentData = ctx ? ctx.getImageData(0, 0, canvas.width, canvas.height) : null;
-            
             canvas.width = contentArea.width();
             canvas.height = contentArea.height();
-            
-            if (ctx) {
-                if (currentData) {
-                    ctx.putImageData(currentData, 0, 0);
-                }
-                ctx.strokeStyle = $('.qp-color-btn.active').data('color');
-                ctx.lineJoin = 'round';
-                ctx.lineCap = 'round';
-            }
+            updateVisibleCanvas(); // Redraw from master canvas after resize
         }
     }
 
@@ -2327,49 +2330,50 @@ $("#qp-next-btn").prop("disabled", !isSectionWise);
         var currentY = coords.y - rect.top;
 
         if (currentTool === 'eraser') {
-            ctx.globalCompositeOperation = 'destination-out';
-            ctx.lineWidth = 20;
+            masterCtx.globalCompositeOperation = 'destination-out';
+            masterCtx.lineWidth = 20;
         } else {
-            ctx.globalCompositeOperation = 'source-over';
-            ctx.strokeStyle = $('.qp-color-btn.active').data('color');
-            ctx.lineWidth = 2;
+            masterCtx.globalCompositeOperation = 'source-over';
+            masterCtx.strokeStyle = $('.qp-color-btn.active').data('color');
+            masterCtx.lineWidth = 2;
         }
         
-        ctx.beginPath();
-        ctx.moveTo(lastX, lastY);
-        ctx.lineTo(currentX, currentY);
-        ctx.stroke();
+        masterCtx.beginPath();
+        masterCtx.moveTo(lastX, lastY);
+        masterCtx.lineTo(currentX, currentY);
+        masterCtx.stroke();
         [lastX, lastY] = [currentX, currentY];
+        
+        updateVisibleCanvas(); // Update the view after drawing on master
         e.preventDefault();
     }
 
     // Show Popup and Overlay
     wrapper.on('click', '#qp-rough-work-btn', function() {
-        // --- REFINED: Load saved opacity or use default ---
         var savedOpacityValue = localStorage.getItem('qpCanvasOpacityValue');
-        var initialSliderValue = savedOpacityValue ? parseFloat(savedOpacityValue) : 40; // Default opacity value.
-
+        var initialSliderValue = savedOpacityValue ? parseFloat(savedOpacityValue) : 90;
         var popupOpacity = 0.3 + ((initialSliderValue / 100) * 0.7);
         var overlayOpacity = 0.1 + ((initialSliderValue / 100) * 0.5);
-
         popup.css('background-color', `rgba(255, 255, 255, ${popupOpacity})`);
         overlay.css('background-color', `rgba(0, 0, 0, ${overlayOpacity})`);
         $('#qp-canvas-opacity-slider').val(initialSliderValue);
-        
         popup.css({ 'top': '50%', 'left': '50%', 'transform': 'translate(-50%, -50%)' });
-        
         overlay.fadeIn(200);
-
         var offset = popup.offset();
         popup.css({ top: offset.top, left: offset.left, transform: 'none' });
 
         if (!ctx) {
             ctx = canvas.getContext('2d');
-            resizeCanvas(); 
-            undoStack = [canvas.toDataURL()];
-            updateUndoRedoButtons();
+            masterCtx.lineJoin = 'round';
+            masterCtx.lineCap = 'round';
+            resizeCanvas();
+            if (undoStack.length === 0) {
+                 undoStack = [masterCanvas.toDataURL()];
+                 updateUndoRedoButtons();
+            }
         }
     });
+
 
     // Dragging, Resizing, and Drawing events (unchanged)
     function onInteractionMove(e) {
@@ -2422,6 +2426,7 @@ $("#qp-next-btn").prop("disabled", !isSectionWise);
         e.preventDefault();
     });
 
+    // --- Updated Drawing Events ---
     canvasEl.on('mousedown touchstart', function(e) {
         isDrawing = true;
         saveCanvasState();
@@ -2465,10 +2470,12 @@ $("#qp-next-btn").prop("disabled", !isSectionWise);
     popup.on('click', '#qp-close-canvas-btn', function() {
         overlay.fadeOut(200);
     });
+    // --- Updated Clear Button ---
     popup.on('click', '#qp-clear-canvas-btn', function() {
         if (ctx) {
             saveCanvasState();
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            masterCtx.clearRect(0, 0, masterCanvas.width, masterCanvas.height);
+            updateVisibleCanvas();
         }
     });
 

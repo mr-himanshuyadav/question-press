@@ -903,7 +903,7 @@ class QP_Shortcodes
         <div id="qp-start-session-overlay">
             <div class="qp-start-session-content">
                 <h3>Your session is ready.</h3>
-                <p>Click the button below to begin in an immersive, fullscreen environment.</p><button id="qp-fullscreen-start-btn" class="qp-button qp-button-primary">Start & Enter Fullscreen</button>
+                <p>Click the button below to start the session.</p><button id="qp-fullscreen-start-btn" class="qp-button qp-button-primary">START</button>
             </div>
         </div>
         <div id="qp-rough-work-overlay" style="display: none;">
