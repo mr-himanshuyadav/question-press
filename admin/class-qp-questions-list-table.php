@@ -328,15 +328,27 @@ protected function bulk_actions($which = '')
         $current_status = isset($_REQUEST['status']) ? sanitize_key($_REQUEST['status']) : 'publish';
         $where_conditions[] = $wpdb->prepare("q.status = %s", $current_status);
 
-        // --- NEW: Re-implement all filtering logic for the new taxonomy system ---
+        $joins_added = []; // Helper to prevent duplicate joins
+
+        // Status filter (remains the same)
+        $current_status = isset($_REQUEST['status']) ? sanitize_key($_REQUEST['status']) : 'publish';
+        $where_conditions[] = $wpdb->prepare("q.status = %s", $current_status);
 
         // Handle Subject Filter
         if (!empty($_REQUEST['filter_by_subject'])) {
+            if (!in_array('subject_rel', $joins_added)) {
+                $query_joins .= " JOIN {$rel_table} subject_rel ON g.group_id = subject_rel.object_id AND subject_rel.object_type = 'group'";
+                $joins_added[] = 'subject_rel';
+            }
             $where_conditions[] = $wpdb->prepare("subject_rel.term_id = %d", absint($_REQUEST['filter_by_subject']));
         }
 
         // Handle Topic Filter
         if (!empty($_REQUEST['filter_by_topic'])) {
+            if (!in_array('topic_rel', $joins_added)) {
+                $query_joins .= " JOIN {$rel_table} topic_rel ON q.question_id = topic_rel.object_id AND topic_rel.object_type = 'question'";
+                $joins_added[] = 'topic_rel';
+            }
             $where_conditions[] = $wpdb->prepare("topic_rel.term_id = %d", absint($_REQUEST['filter_by_topic']));
         }
 
@@ -344,7 +356,6 @@ protected function bulk_actions($which = '')
         if (!empty($_REQUEST['filter_by_source'])) {
             $filter_value = sanitize_text_field($_REQUEST['filter_by_source']);
             $term_id_to_filter = 0;
-
             if (strpos($filter_value, 'source_') === 0) {
                 $term_id_to_filter = absint(str_replace('source_', '', $filter_value));
             } elseif (strpos($filter_value, 'section_') === 0) {
@@ -352,6 +363,10 @@ protected function bulk_actions($which = '')
             }
 
             if ($term_id_to_filter > 0) {
+                if (!in_array('source_rel', $joins_added)) {
+                    $query_joins .= " JOIN {$rel_table} source_rel ON q.question_id = source_rel.object_id AND source_rel.object_type = 'question'";
+                    $joins_added[] = 'source_rel';
+                }
                 $where_conditions[] = $wpdb->prepare("source_rel.term_id = %d", $term_id_to_filter);
             }
         }
