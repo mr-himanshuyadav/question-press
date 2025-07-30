@@ -122,10 +122,10 @@ class QP_Question_Editor_Page
                         $label_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'label'");
                         $q->labels = $wpdb->get_results($wpdb->prepare(
                             "SELECT t.term_id AS label_id, t.name AS label_name, m.meta_value AS label_color 
-         FROM {$term_table} t 
-         JOIN {$rel_table} r ON t.term_id = r.term_id 
-         LEFT JOIN {$wpdb->prefix}qp_term_meta m ON t.term_id = m.term_id AND m.meta_key = 'color' 
-         WHERE r.object_id = %d AND r.object_type = 'question' AND t.taxonomy_id = %d",
+                            FROM {$term_table} t 
+                            JOIN {$rel_table} r ON t.term_id = r.term_id 
+                            LEFT JOIN {$wpdb->prefix}qp_term_meta m ON t.term_id = m.term_id AND m.meta_key = 'color' 
+                            WHERE r.object_id = %d AND r.object_type = 'question' AND t.taxonomy_id = %d",
                             $q->question_id,
                             $label_tax_id
                         ));

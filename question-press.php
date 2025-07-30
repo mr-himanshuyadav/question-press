@@ -325,6 +325,8 @@ function qp_activate_plugin()
         }
     }
 
+    // Attention! Need to migrate this from using report_reasons table to terms_table
+
     // Table: Question Reports (Needs Attention for better handling)
     $table_question_reports = $wpdb->prefix . 'qp_question_reports';
     $sql_question_reports = "CREATE TABLE $table_question_reports (
@@ -982,12 +984,15 @@ function qp_run_v3_taxonomy_migration()
     $wpdb->query("START TRANSACTION;");
 
     try {
+        
+        $skipped_relationships = [];
         // Step 1: Define the taxonomies in the new system (Unchanged)
         $taxonomies = [
             'subject' => ['label' => 'Subjects', 'hierarchical' => 1],
             'label'   => ['label' => 'Labels', 'hierarchical' => 0],
             'exam'    => ['label' => 'Exams', 'hierarchical' => 0],
             'source'  => ['label' => 'Sources', 'hierarchical' => 1],
+            'report_reason' => ['label' => 'Report Reasons', 'hierarchical' => 0],
         ];
         foreach ($taxonomies as $name => $data) {
             $exists = $wpdb->get_var($wpdb->prepare("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = %s", $name));
@@ -1002,12 +1007,23 @@ function qp_run_v3_taxonomy_migration()
         $old_subjects = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}qp_subjects");
         $subject_map = []; // [old_id => new_term_id]
         foreach ($old_subjects as $subject) {
-            $subject_map[$subject->subject_id] = qp_get_or_create_term($subject->subject_name, $subject_tax_id, 0);
+            $new_term_id = qp_get_or_create_term($subject->subject_name, $subject_tax_id, 0);
+            $subject_map[$subject->subject_id] = $new_term_id;
+            if (!empty($subject->description)) {
+                qp_update_term_meta($new_term_id, 'description', $subject->description);
+            }
         }
         $old_topics = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}qp_topics");
         $topic_map = []; // [old_id => new_term_id]
         foreach ($old_topics as $topic) {
-            $parent_term_id = $subject_map[$topic->subject_id] ?? 0;
+            if (isset($subject_map[$topic->subject_id])) {
+                // The parent subject was found in our map, proceed normally.
+                $parent_term_id = $subject_map[$topic->subject_id];
+            } else {
+                // The parent subject was NOT found. Log this and set the parent to 0.
+                $parent_term_id = 0; // Fallback for orphaned topics
+                $skipped_relationships[] = "Topic Migration: Old Topic ID {$topic->topic_id} ('" . esc_html($topic->topic_name) . "') references old Subject ID {$topic->subject_id}, which was not found/migrated. It will be created as a top-level term in the 'subject' taxonomy.";
+            }
             $topic_map[$topic->topic_id] = qp_get_or_create_term($topic->topic_name, $subject_tax_id, $parent_term_id);
         }
         $messages[] = "Step 2: Migrated " . count($subject_map) . " subjects and " . count($topic_map) . " topics.";
@@ -1039,12 +1055,16 @@ function qp_run_v3_taxonomy_migration()
         foreach ($question_topics as $qt) {
             if (isset($topic_map[$qt->topic_id])) {
                 $wpdb->query($wpdb->prepare("INSERT IGNORE INTO $rel_table (object_id, term_id, object_type) VALUES (%d, %d, 'question')", $qt->question_id, $topic_map[$qt->topic_id]));
+            } else {
+                $skipped_relationships[] = "Topic Link: Question ID {$qt->question_id} references old Topic ID {$qt->topic_id}, which was not found/migrated.";
             }
         }
         $question_labels = $wpdb->get_results("SELECT question_id, label_id FROM {$wpdb->prefix}qp_question_labels");
         foreach ($question_labels as $ql) {
             if (isset($label_map[$ql->label_id])) {
                 $wpdb->query($wpdb->prepare("INSERT IGNORE INTO $rel_table (object_id, term_id, object_type) VALUES (%d, %d, 'question')", $ql->question_id, $label_map[$ql->label_id]));
+            } else {
+               $skipped_relationships[] = "Label Link: Question ID {$ql->question_id} references old Label ID {$ql->label_id}, which was not found/migrated.";
             }
         }
         
@@ -1058,6 +1078,8 @@ function qp_run_v3_taxonomy_migration()
         foreach ($group_subject_pairs as $pair) {
             if (isset($subject_map[$pair->subject_id])) {
                 $wpdb->query($wpdb->prepare("INSERT IGNORE INTO $rel_table (object_id, term_id, object_type) VALUES (%d, %d, 'group')", $pair->group_id, $subject_map[$pair->subject_id]));
+            } else {
+                $skipped_relationships[] = "Group-to-Subject Link: Group ID {$pair->group_id} references old Subject ID {$pair->subject_id}, which was not found/migrated.";
             }
         }
 
@@ -1066,6 +1088,8 @@ function qp_run_v3_taxonomy_migration()
         foreach ($group_exams as $ge) {
             if (isset($exam_map[$ge->exam_id])) {
                 $wpdb->query($wpdb->prepare("INSERT IGNORE INTO $rel_table (object_id, term_id, object_type) VALUES (%d, %d, 'group')", $ge->group_id, $exam_map[$ge->exam_id]));
+            } else {
+                $skipped_relationships[] = "Group-to-Exam Link: Group ID {$ge->group_id} references old Exam ID {$ge->exam_id}, which was not found/migrated.";
             }
         }
         $messages[] = "Step 5: Migrated relationships for subjects, topics, labels, and exams.";
@@ -1073,24 +1097,60 @@ function qp_run_v3_taxonomy_migration()
         // Step 6: Migrate Source Hierarchy (Unchanged from our last correct version)
         $source_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'source'");
         $hierarchy_map = [];
-        $old_sources_raw = $wpdb->get_results("SELECT source_id, source_name FROM {$wpdb->prefix}qp_sources", OBJECT_K);
+        $old_sources_raw = $wpdb->get_results("SELECT source_id, subject_id, source_type, source_name, description FROM {$wpdb->prefix}qp_sources", OBJECT_K);
         $old_topics_raw = $wpdb->get_results("SELECT topic_id, topic_name FROM {$wpdb->prefix}qp_topics", OBJECT_K);
         $old_sections_raw = $wpdb->get_results("SELECT section_id, section_name FROM {$wpdb->prefix}qp_source_sections", OBJECT_K);
         $unique_hierarchies = $wpdb->get_results("SELECT DISTINCT source_id, topic_id, section_id FROM {$wpdb->prefix}qp_questions WHERE source_id > 0");
         
         foreach ($unique_hierarchies as $path) {
             $source_id = $path->source_id; $topic_id = $path->topic_id; $section_id = $path->section_id;
-            $source_name = $old_sources_raw[$source_id]->source_name ?? 'Unknown Source';
+            $source_name = 'Unknown Source'; // Default value
+            if (isset($old_sources_raw[$source_id])) {
+                $source_name = $old_sources_raw[$source_id]->source_name;
+            } else {
+                $skipped_relationships[] = "Source Hierarchy: Path references old Source ID {$source_id}, which was not found in the qp_sources table.";
+                continue; // If the source doesn't exist, we cannot process this hierarchy path further.
+            }
             $new_source_term_id = qp_get_or_create_term($source_name, $source_tax_id, 0);
+            $old_source_data = $old_sources_raw[$source_id] ?? null;
+            if ($old_source_data) {
+                // Migrate description and source_type as metadata
+                if (!empty($old_source_data->description)) {
+                    qp_update_term_meta($new_source_term_id, 'description', $old_source_data->description);
+                }
+                if (!empty($old_source_data->source_type)) {
+                    qp_update_term_meta($new_source_term_id, 'source_type', $old_source_data->source_type);
+                }
+                // MIGRATE THE DIRECT SUBJECT LINKS
+                $direct_subject_id = $old_source_data->subject_id;
+                if ($direct_subject_id > 0 && isset($subject_map[$direct_subject_id])) {
+                    $subject_term_id = $subject_map[$direct_subject_id];
+                    $wpdb->query($wpdb->prepare(
+                        "INSERT IGNORE INTO $rel_table (object_id, term_id, object_type) VALUES (%d, %d, 'source_subject_link')",
+                        $new_source_term_id,
+                        $subject_term_id
+                    ));
+                }
+            }
             if (!isset($hierarchy_map[$source_id])) $hierarchy_map[$source_id] = [];
             $hierarchy_map[$source_id][0][0] = $new_source_term_id;
             if ($topic_id > 0) {
-                $topic_name = $old_topics_raw[$topic_id]->topic_name ?? 'Unknown Topic';
+                $topic_name = 'Unknown Topic'; // Default value
+                if (isset($old_topics_raw[$topic_id])) {
+                    $topic_name = $old_topics_raw[$topic_id]->topic_name;
+                } else {
+                    $skipped_relationships[] = "Source Hierarchy: Path from Source '{$source_name}' references old Topic ID {$topic_id}, which was not found in the qp_topics table.";
+                }
                 $new_topic_term_id = qp_get_or_create_term($topic_name, $source_tax_id, $new_source_term_id);
                 if (!isset($hierarchy_map[$source_id][$topic_id])) $hierarchy_map[$source_id][$topic_id] = [];
                 $hierarchy_map[$source_id][$topic_id][0] = $new_topic_term_id;
                 if ($section_id > 0) {
-                    $section_name = $old_sections_raw[$section_id]->section_name ?? 'Unknown Section';
+                    $section_name = 'Unknown Section'; // Default value
+                    if (isset($old_sections_raw[$section_id])) {
+                        $section_name = $old_sections_raw[$section_id]->section_name;
+                    } else {
+                        $skipped_relationships[] = "Source Hierarchy: Path from Source '{$source_name}' -> Topic '{$topic_name}' references old Section ID {$section_id}, which was not found in the qp_source_sections table.";
+                    }
                     $new_section_term_id = qp_get_or_create_term($section_name, $source_tax_id, $new_topic_term_id);
                     $hierarchy_map[$source_id][$topic_id][$section_id] = $new_section_term_id;
                 }
@@ -1130,20 +1190,108 @@ function qp_run_v3_taxonomy_migration()
                     $subject_term_id
                 ));
                 $links_created++;
+            } else {
+                if (!isset($hierarchy_map[$link->source_id][0][0])) {
+                    $skipped_relationships[] = "Source-to-Subject: Skipped link for old Source ID {$link->source_id} because it was not found/migrated.";
+                }
+                if (!isset($subject_map[$link->subject_id])) {
+                    $skipped_relationships[] = "Source-to-Subject: Skipped link for old Subject ID {$link->subject_id} because it was not found/migrated.";
+                }
             }
         }
         $messages[] = "Step 7: Created {$links_created} Source-to-Subject links.";
 
-        // OLD Step 7 is now removed as it's obsolete.
+        // NEW Step 8: Migrate and Merge Exam-to-Subject Links
+        $links_created_exam_subject = 0;
+
+        // --- Phase 1: Migrate implicit links from Question Groups (HIGHER PRIORITY) ---
+        $implicit_links = $wpdb->get_results("SELECT DISTINCT exam_id, subject_id FROM {$wpdb->prefix}qp_question_groups WHERE exam_id > 0 AND subject_id > 0");
+        
+        foreach ($implicit_links as $pair) {
+            if (isset($exam_map[$pair->exam_id]) && isset($subject_map[$pair->subject_id])) {
+                $exam_term_id = $exam_map[$pair->exam_id];
+                $subject_term_id = $subject_map[$pair->subject_id];
+
+                $wpdb->query($wpdb->prepare(
+                    "INSERT IGNORE INTO $rel_table (object_id, term_id, object_type) VALUES (%d, %d, 'exam_subject_link')",
+                    $exam_term_id,
+                    $subject_term_id
+                ));
+                $links_created_exam_subject++;
+            }
+        }
+
+        // --- Phase 2: Migrate explicit links from the pivot table (LOWER PRIORITY) ---
+        $explicit_links = $wpdb->get_results("SELECT exam_id, subject_id FROM {$wpdb->prefix}qp_exam_subjects");
+
+        foreach ($explicit_links as $pair) {
+            if (isset($exam_map[$pair->exam_id]) && isset($subject_map[$pair->subject_id])) {
+                $exam_term_id = $exam_map[$pair->exam_id];
+                $subject_term_id = $subject_map[$pair->subject_id];
+
+                // INSERT IGNORE will skip any duplicates already created in Phase 1
+                $result = $wpdb->query($wpdb->prepare(
+                    "INSERT IGNORE INTO $rel_table (object_id, term_id, object_type) VALUES (%d, %d, 'exam_subject_link')",
+                    $exam_term_id,
+                    $subject_term_id
+                ));
+                // Only increment the counter if a new row was actually inserted
+                if ($result > 0) {
+                    $links_created_exam_subject++;
+                }
+
+            } else {
+                 if (!isset($exam_map[$pair->exam_id])) {
+                    $skipped_relationships[] = "Exam-to-Subject: Skipped link because old Exam ID {$pair->exam_id} was not found/migrated.";
+                 }
+                 if (!isset($subject_map[$pair->subject_id])) {
+                    $skipped_relationships[] = "Exam-to-Subject: Skipped link because old Subject ID {$pair->subject_id} was not found/migrated.";
+                 }
+            }
+        }
+        $messages[] = "Step 8: Created or merged {$links_created_exam_subject} total Exam-to-Subject links.";
+
+        // NEW Step 9: Migrate Report Reasons to a custom taxonomy
+        $reason_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'report_reason'");
+        $reasons_migrated = 0;
+        
+        if ($reason_tax_id) {
+            $old_reasons = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}qp_report_reasons");
+            $reason_map = []; // [old_reason_id => new_term_id]
+
+            foreach ($old_reasons as $reason) {
+                $new_term_id = qp_get_or_create_term($reason->reason_text, $reason_tax_id);
+                if ($new_term_id > 0) {
+                    $reason_map[$reason->reason_id] = $new_term_id;
+                    // Migrate the 'is_active' status as term metadata
+                    qp_update_term_meta($new_term_id, 'is_active', $reason->is_active);
+                    $reasons_migrated++;
+                }
+            }
+            $messages[] = "Step 9: Migrated {$reasons_migrated} report reasons into the taxonomy system.";
+
+            // Attention
+            // NOTE: You will need a separate process to update the `wp_qp_question_reports` table
+            // to use the new term IDs from the $reason_map. This is a critical follow-up task.
+
+        } else {
+             $messages[] = "Step 9: Skipped migrating report reasons because the 'report_reason' taxonomy was not found.";
+        }
+
+        if (!empty($skipped_relationships)) {
+        $skipped_details = implode('<br> - ', $skipped_relationships);
+        $messages[] = "<strong>Orphaned Data Report (For Review):</strong><br> - {$skipped_details}";
+        }
 
         $wpdb->query("COMMIT;");
         $_SESSION['qp_admin_message'] = '<strong>Taxonomy Migration Report:</strong><br> - ' . implode('<br> - ', $messages);
         $_SESSION['qp_admin_message_type'] = 'success';
-    } catch (Exception $e) {
-        $wpdb->query("ROLLBACK;");
-        $_SESSION['qp_admin_message'] = 'An error occurred during migration: ' . $e->getMessage();
-        $_SESSION['qp_admin_message_type'] = 'error';
-    }
+
+        } catch (Exception $e) {
+            $wpdb->query("ROLLBACK;");
+            $_SESSION['qp_admin_message'] = 'An error occurred during migration: ' . $e->getMessage();
+            $_SESSION['qp_admin_message_type'] = 'error';
+        }
 
     wp_safe_redirect(remove_query_arg(['action', '_wpnonce']));
     exit;
