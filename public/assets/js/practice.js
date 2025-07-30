@@ -2104,9 +2104,8 @@ $("#qp-next-btn").prop("disabled", !isSectionWise);
           },
         });
       });
-      return; // Stop the function here
+      return;
     }
-    // --- NEW LOGIC END ---
 
     practiceInProgress = false; // Allow user to leave the page
     if (isMockTest) {
@@ -2174,13 +2173,6 @@ $("#qp-next-btn").prop("disabled", !isSectionWise);
     });
   });
 
-  // Prevent Refresh
-  // $(window).on("beforeunload", function () {
-  //   if (practiceInProgress) {
-  //     return "Are you sure you want to leave? Your practice session is in progress.";
-  //   }
-  // });
-
   wrapper.on("click", "#qp-pause-btn", function () {
     Swal.fire({
       title: "Pause Session?",
@@ -2191,7 +2183,7 @@ $("#qp-next-btn").prop("disabled", !isSectionWise);
       cancelButtonText: "Cancel",
     }).then((result) => {
       if (result.isConfirmed) {
-        practiceInProgress = false; // Prevent the "are you sure?" popup on redirect
+        practiceInProgress = false;
         $.ajax({
           url: qp_ajax_object.ajax_url,
           type: "POST",
