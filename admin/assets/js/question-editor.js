@@ -194,6 +194,12 @@ function updateSources() {
 
     // --- Bind Event Handlers ---
     subjectSelect.on('change', function() {
+        // Clear the current topic, source, and section selections
+        topicSelect.val('');
+        sourceSelect.val('');
+        sectionSelect.val('').empty().append('<option value="">— Select a source first —</option>').prop('disabled', true);
+
+        // Now update the dropdowns
         updateTopics();
         updateSources();
     });
@@ -209,46 +215,52 @@ function updateSources() {
     $('#add-new-question-block').on('click', function(e) {
         e.preventDefault();
 
-        // --- FIX START: Remember the original correct answer ---
         var firstBlock = $('.qp-question-block:first');
-        var originalCorrectOptionValue = firstBlock.find('input[name="questions[0][correct_option_id]"]:checked').val();
-        // --- FIX END ---
-
         var newBlock = firstBlock.clone().removeClass('status-publish status-draft status-reported').addClass('status-new');
 
-        // --- FIX: Clean up the cloned editor before appending ---
+        // --- Hard Reset All Fields in the Cloned Block ---
+        
+        // Destroy the cloned TinyMCE instance to prevent conflicts
         var editorWrapper = newBlock.find('.wp-editor-wrap');
         var textarea = newBlock.find('textarea.wp-editor-area');
         var oldEditorId = textarea.attr('id');
-
-        // Destroy the cloned tinymce instance
         if (tinymce.get(oldEditorId)) {
             tinymce.get(oldEditorId).remove();
         }
-        
-        // Remove the HTML elements created by TinyMCE
-        editorWrapper.find('.mce-container').remove();
+        editorWrapper.find('.mce-container, .mce-widget').remove(); // Remove all TinyMCE generated elements
         editorWrapper.removeClass('tmce-active').addClass('html-active');
-        textarea.show();
-
-        // Reset values
+        textarea.show().val(''); // Clear the textarea content
+        
         newBlock.find('textarea.wp-editor-area').val(''); // Clear only the main editor textarea
         newBlock.find('input[name$="[question_number_in_section]"]').val(''); // Specifically clear the Q.No input
         newBlock.find('input[type="checkbox"], input[type="radio"]').prop('checked', false);
-        newBlock.find('input[type="radio"]:first').prop('checked', true);
         newBlock.find('.question-id-input').val('0');
-        newBlock.find('.qp-question-title').text('Question (ID: New - Save group to add options)'); 
+        newBlock.find('.qp-question-title').text('Question (ID: New)');
+        newBlock.find('.qp-status-indicator').remove();
+                
+        
+        // **FIX 3**: Reset all options and ensure none are checked
+        newBlock.find('.qp-option-row').each(function(index) {
+            var $optionRow = $(this);
+            $optionRow.find('input[type="radio"]').prop('checked', false); // Ensure no option is checked
+            $optionRow.find('input[type="hidden"]').val('0'); // Reset hidden option ID
+            $optionRow.find('.option-text-input').val(''); // Clear the option text
+            $optionRow.find('.option-id-display').remove(); // Remove the DB ID display
+        });
 
-        // Hide the options and labels for this new, unsaved block
-        newBlock.find('.qp-options-and-labels-wrapper').hide();
+        // **FIX 1**: Reset all labels and the dropdown button text
+        newBlock.find('.qp-dropdown-panel input[type="checkbox"]').prop('checked', false);
+        newBlock.find('.qp-dropdown-toggle span:first-child').text('Select Labels');
+
+        // Hide the options for new questions until the group is saved
+        if (firstBlock.find('.qp-options-and-labels-wrapper').is(':visible')) {
+             newBlock.find('.qp-options-and-labels-wrapper').show();
+        } else {
+             newBlock.find('.qp-options-and-labels-wrapper').hide();
+        }
 
         $('#qp-question-blocks-container').append(newBlock);
         reindexQuestionBlocks();
-
-        // --- FIX START: Restore the original correct answer ---
-        if (originalCorrectOptionValue) {
-            firstBlock.find('input[name="questions[0][correct_option_id]"][value="' + originalCorrectOptionValue + '"]').prop('checked', true);
-        }
     });
 
     $('#qp-question-blocks-container').on('click', '.remove-question-block', function(e) {
