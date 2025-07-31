@@ -658,6 +658,10 @@ function qp_admin_enqueue_scripts($hook_suffix)
         });
     }
 
+    if ($hook_suffix === 'question-press_page_qp-organization') {
+        wp_enqueue_script('qp-organization-script', QP_PLUGIN_URL . 'admin/assets/js/organization-page.js', ['jquery'], '1.0.0', true);
+    }
+
     if ($hook_suffix === 'question-press_page_qp-settings') {
         wp_enqueue_script('qp-settings-script', QP_PLUGIN_URL . 'admin/assets/js/settings-page.js', ['jquery'], '1.0.0', true);
     }
@@ -2802,6 +2806,10 @@ function qp_admin_head_styles_for_list_table()
             .qp-multi-select-list label:hover {
                 background-color: #f1f1f1;
             }
+
+            .qp-organization-table .column-name { width: 35%; }
+            .qp-organization-table .column-description { width: 50%; }
+            .qp-organization-table .column-count { width: 15%; text-align: center; }
         </style>
     <?php
     }
