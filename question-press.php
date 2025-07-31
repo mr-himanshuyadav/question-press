@@ -20,7 +20,6 @@ define('QP_PLUGIN_URL', plugin_dir_url(QP_PLUGIN_FILE));
 
 require_once QP_PLUGIN_DIR . 'admin/class-qp-subjects-page.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-labels-page.php';
-require_once QP_PLUGIN_DIR . 'admin/class-qp-topics-page.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-exams-page.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-sources-page.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-import-page.php';
@@ -1301,7 +1300,6 @@ function qp_handle_form_submissions()
 
     if (isset($_GET['page']) && $_GET['page'] === 'qp-organization') {
         QP_Sources_Page::handle_forms();
-        QP_Topics_Page::handle_forms(); // Attention! Whether needed or not.
         QP_Subjects_Page::handle_forms();
         QP_Labels_Page::handle_forms();
         QP_Exams_Page::handle_forms();

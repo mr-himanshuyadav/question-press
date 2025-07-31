@@ -17,7 +17,17 @@ class QP_Import_Page
 
     private static function render_upload_form() {
         global $wpdb;
-        $all_labels = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}qp_labels ORDER BY label_name ASC");
+        $term_table = $wpdb->prefix . 'qp_terms';
+        $tax_table = $wpdb->prefix . 'qp_taxonomies';
+        $label_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'label'");
+        
+        $all_labels = [];
+        if ($label_tax_id) {
+            $all_labels = $wpdb->get_results($wpdb->prepare(
+                "SELECT term_id, name FROM {$term_table} WHERE taxonomy_id = %d ORDER BY name ASC",
+                $label_tax_id
+            ));
+        }
         ?>
         <div class="wrap">
             <h1 class="wp-heading-inline">Import Questions</h1>
@@ -42,8 +52,8 @@ class QP_Import_Page
                                         <div class="labels-group" style="padding: 10px; border: 1px solid #ddd; background: #fff; max-height: 150px; overflow-y: auto;">
                                             <?php if (!empty($all_labels)) : foreach ($all_labels as $label) : ?>
                                                 <label class="inline-checkbox" style="display: block; margin-bottom: 5px;">
-                                                    <input type="checkbox" name="labels_to_apply[]" value="<?php echo esc_attr($label->label_id); ?>">
-                                                    <?php echo esc_html($label->label_name); ?>
+                                                    <input type="checkbox" name="labels_to_apply[]" value="<?php echo esc_attr($label->term_id); ?>">
+                                                    <?php echo esc_html($label->name); ?>
                                                 </label>
                                             <?php endforeach; else : ?>
                                                 <p>No labels found. You can create them on the Labels page.</p>
