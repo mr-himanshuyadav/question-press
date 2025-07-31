@@ -1418,8 +1418,6 @@ function qp_handle_save_question_group()
             'question_text'              => wp_kses_post($question_text),
             'question_text_hash'         => md5(strtolower(trim(preg_replace('/\s+/', '', $question_text)))),
             'status'                     => $is_question_complete ? 'publish' : 'draft',
-            'source_id'                  => $source_id,
-            'section_id'                 => $section_id,
         ];
 
         // 2. Insert or Update the question
@@ -1515,7 +1513,7 @@ function qp_handle_save_question_group()
     if (!empty($questions_to_delete)) {
         $ids_placeholder = implode(',', array_map('absint', $questions_to_delete));
         $wpdb->query("DELETE FROM $o_table WHERE question_id IN ($ids_placeholder)");
-        $wpdb->query("DELETE FROM $ql_table WHERE question_id IN ($ids_placeholder)");
+        $wpdb->query("DELETE FROM $rel_table WHERE object_id IN ($ids_placeholder) AND object_type = 'question'");
         $wpdb->query("DELETE FROM $q_table WHERE question_id IN ($ids_placeholder)");
     }
 
@@ -1530,6 +1528,13 @@ function qp_handle_save_question_group()
     $redirect_url = $is_editing
         ? admin_url('admin.php?page=qp-edit-group&group_id=' . $group_id . '&message=1')
         : admin_url('admin.php?page=qp-edit-group&group_id=' . $group_id . '&message=2');
+
+    // Check if the request was made via AJAX
+    if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest') {
+        wp_send_json_success(['redirect_url' => $redirect_url]);
+    }
+    
+    // Fallback for non-AJAX submissions
     wp_safe_redirect($redirect_url);
     exit;
 }

@@ -286,6 +286,9 @@ foreach ($all_source_terms as $term) {
                 <a href="<?php echo esc_url($referer); ?>" class="page-title-action qp-back-button">&larr; Back to Previous Page</a>
             <?php endif; ?>
             <a href="<?php echo admin_url('admin.php?page=question-press'); ?>" class="page-title-action">All Questions</a>
+            <?php if ($is_editing) : ?>
+                <a href="<?php echo admin_url('admin.php?page=qp-question-editor'); ?>" class="page-title-action">Add New Question</a>
+            <?php endif; ?>
             <hr class="wp-header-end">
 
             <form method="post" action="">

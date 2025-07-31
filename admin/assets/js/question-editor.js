@@ -73,26 +73,32 @@ jQuery(document).ready(function($) {
         
         topicSelect.empty().prop('disabled', true);
 
-        if (selectedSubjectId && qp_editor_data.topics_by_subject[selectedSubjectId]) {
-            topicSelect.prop('disabled', false).append('<option value="">— Select a Topic —</option>');
-            $.each(qp_editor_data.topics_by_subject[selectedSubjectId], function(index, topic) {
-                var option = $('<option></option>').val(topic.id).text(topic.name);
-                // Prioritize previously selected value, then initial load value
-                if (topic.id == previouslySelectedTopicId || topic.id == qp_editor_data.current_topic_id) {
-                    option.prop('selected', true);
-                }
-                topicSelect.append(option);
-            });
-            // After initial load, clear current_topic_id to prevent interference
-            qp_editor_data.current_topic_id = '';
+        if (selectedSubjectId) {
+            // A subject IS selected, now check if it has topics.
+            if (qp_editor_data.topics_by_subject[selectedSubjectId]) {
+                topicSelect.prop('disabled', false).append('<option value="">— Select a Topic —</option>');
+                $.each(qp_editor_data.topics_by_subject[selectedSubjectId], function(index, topic) {
+                    var option = $('<option></option>').val(topic.id).text(topic.name);
+                    if (topic.id == previouslySelectedTopicId || topic.id == qp_editor_data.current_topic_id) {
+                        option.prop('selected', true);
+                    }
+                    topicSelect.append(option);
+                });
+                qp_editor_data.current_topic_id = '';
+            } else {
+                // The selected subject has no topics.
+                topicSelect.append('<option value="">— No topics for this subject —</option>');
+            }
         } else {
-            topicSelect.append('<option value="">— No topics for this subject —</option>');
+            // No subject is selected at all.
+            topicSelect.append('<option value="">— Select a Subject First —</option>');
         }
     }
 
 function updateSources() {
     var selectedSubjectId = subjectSelect.val();
     var previouslySelectedSourceId = sourceSelect.val() || qp_editor_data.current_source_id;
+    
 
     sourceSelect.empty().prop('disabled', true);
 
@@ -100,18 +106,21 @@ function updateSources() {
 
     if (selectedSubjectId && qp_editor_data.sources_by_subject[selectedSubjectId]) {
         sourceSelect.prop('disabled', false).append('<option value="">— Select a Source —</option>');
-        $.each(qp_editor_data.sources_by_subject[selectedSubjectId], function(index, source) {
-            var option = $('<option></option>').val(source.id).text(source.name);
+
+
+
+            $.each(qp_editor_data.sources_by_subject[selectedSubjectId], function(index, source) {
+                var option = $('<option></option>').val(source.id).text(source.name);
             if (source.id == previouslySelectedSourceId) {
                 option.prop('selected', true);
             }
-            sourceSelect.append(option);
+                sourceSelect.append(option);
             addedSourceIds[source.id] = true;
-        });
+            });
     } else {
         sourceSelect.append('<option value="">— No sources for this subject —</option>');
-    }
-
+        }
+        
     // --- Always add the current source if not present ---
     if (
         previouslySelectedSourceId &&
@@ -126,6 +135,8 @@ function updateSources() {
             sourceSelect.append(option);
         }
     }
+
+
 
     sourceSelect.trigger('change');
     qp_editor_data.current_source_id = '';
@@ -408,7 +419,7 @@ function updateSources() {
             });
             return; // Exit the function immediately
         }
-        
+
         var $button = $(this);
         var $form = $('form[method="post"]');
 
@@ -499,16 +510,37 @@ function updateSources() {
             allowOutsideClick: () => !Swal.isLoading()
         }).then((result) => {
             if (result.isConfirmed) {
-                Swal.fire({
-                    title: 'Success!',
-                    text: 'Your changes have been saved.',
-                    icon: 'success',
-                    timer: 2000,
-                    showConfirmButton: false
-                }).then(() => {
-                    // Reload the page to see the changes
-                    location.reload();
-                });
+                var groupId = $form.find('input[name="group_id"]').val();
+                var isEditing = groupId && groupId !== '0';
+
+                if (result.value && result.value.success) {
+                    if (isEditing) {
+                        // User was editing, just show a success message and reload.
+                        Swal.fire({
+                            title: 'Updated!',
+                            text: 'Your changes have been saved.',
+                            icon: 'success',
+                            timer: 1500,
+                            showConfirmButton: false
+                        }).then(() => {
+                            location.reload();
+                        });
+                    } else if (result.value.data.redirect_url) {
+                        // User was creating, show redirect message and go to the new URL.
+                        Swal.fire({
+                            title: 'Success!',
+                            text: 'Your changes have been saved. Redirecting to Step 2...',
+                            icon: 'success',
+                            timer: 1500,
+                            showConfirmButton: false
+                        }).then(() => {
+                            window.location.href = result.value.data.redirect_url;
+                        });
+                    }
+                } else {
+                    // Fallback for unexpected errors
+                    Swal.fire('Save Failed', 'Something went wrong. Please reload the page.', 'error');
+                }
             }
         });
     });
