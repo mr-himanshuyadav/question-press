@@ -212,6 +212,7 @@ function updateSources() {
 
 
     // --- Logic for adding/removing question blocks ---
+    // --- Logic for adding/removing question blocks ---
     $('#add-new-question-block').on('click', function(e) {
         e.preventDefault();
 
@@ -230,34 +231,32 @@ function updateSources() {
         editorWrapper.find('.mce-container, .mce-widget').remove(); // Remove all TinyMCE generated elements
         editorWrapper.removeClass('tmce-active').addClass('html-active');
         textarea.show().val(''); // Clear the textarea content
-        
-        newBlock.find('textarea.wp-editor-area').val(''); // Clear only the main editor textarea
-        newBlock.find('input[name$="[question_number_in_section]"]').val(''); // Specifically clear the Q.No input
-        newBlock.find('input[type="checkbox"], input[type="radio"]').prop('checked', false);
+
+        // **FIX**: Remove the previous question's labels from the editor header
+        newBlock.find('.qp-editor-labels-container').remove();
+
+        // Reset basic inputs
         newBlock.find('.question-id-input').val('0');
+        newBlock.find('input[name$="[question_number_in_section]"]').val('');
+        
+        // Reset the title, remove status indicators, and remove the old DB ID
         newBlock.find('.qp-question-title').text('Question (ID: New)');
         newBlock.find('.qp-status-indicator').remove();
-                
-        
-        // **FIX 3**: Reset all options and ensure none are checked
+        newBlock.find('.qp-question-db-id').remove(); // **FIX**: Removes the DB ID <small> tag
+
+        // Reset all options and ensure none are checked
         newBlock.find('.qp-option-row').each(function(index) {
             var $optionRow = $(this);
             $optionRow.find('input[type="radio"]').prop('checked', false); // Ensure no option is checked
             $optionRow.find('input[type="hidden"]').val('0'); // Reset hidden option ID
             $optionRow.find('.option-text-input').val(''); // Clear the option text
-            $optionRow.find('.option-id-display').remove(); // Remove the DB ID display
+            $optionRow.find('.option-id-display').remove(); // Remove the DB ID display for options
         });
 
-        // **FIX 1**: Reset all labels and the dropdown button text
+        // Reset all labels in the dropdown
         newBlock.find('.qp-dropdown-panel input[type="checkbox"]').prop('checked', false);
         newBlock.find('.qp-dropdown-toggle span:first-child').text('Select Labels');
-
-        // Hide the options for new questions until the group is saved
-        if (firstBlock.find('.qp-options-and-labels-wrapper').is(':visible')) {
-             newBlock.find('.qp-options-and-labels-wrapper').show();
-        } else {
              newBlock.find('.qp-options-and-labels-wrapper').hide();
-        }
 
         $('#qp-question-blocks-container').append(newBlock);
         reindexQuestionBlocks();

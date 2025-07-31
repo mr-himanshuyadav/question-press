@@ -380,7 +380,7 @@ foreach ($all_source_terms as $term) {
                                                 <span>
                                                     <span class="qp-question-title">Q<?php echo ($q_index + 1); ?>: Question (ID: <?php echo esc_html($question->custom_question_id); ?>)</span>
                                                     <?php if ($question->question_id > 0) : ?>
-                                                        <small style="font-weight: normal; font-size: 12px; color: #777;"> | DB ID: <?php echo esc_html($question->question_id); ?></small>
+                                                        <span class="qp-question-db-id"><small style="font-weight: normal; font-size: 12px; color: #777;"> | DB ID: <?php echo esc_html($question->question_id); ?></small></span>
                                                     <?php endif; ?>
                                                     <small style="font-weight: normal; font-size: 12px; color: #777; margin-left: 15px;">
                                                         <label for="question_number_in_section_<?php echo $q_index; ?>" style="vertical-align: middle;"><strong>Q. No:</strong></label>
