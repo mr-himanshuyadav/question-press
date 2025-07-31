@@ -232,7 +232,7 @@ function updateSources() {
         editorWrapper.removeClass('tmce-active').addClass('html-active');
         textarea.show().val(''); // Clear the textarea content
 
-        // **FIX**: Remove the previous question's labels from the editor header
+        // Remove the previous question's labels from the editor header
         newBlock.find('.qp-editor-labels-container').remove();
 
         // Reset basic inputs
@@ -242,7 +242,7 @@ function updateSources() {
         // Reset the title, remove status indicators, and remove the old DB ID
         newBlock.find('.qp-question-title').text('Question (ID: New)');
         newBlock.find('.qp-status-indicator').remove();
-        newBlock.find('.qp-question-db-id').remove(); // **FIX**: Removes the DB ID <small> tag
+        newBlock.find('.qp-question-db-id').remove();
 
         // Reset all options and ensure none are checked
         newBlock.find('.qp-option-row').each(function(index) {
