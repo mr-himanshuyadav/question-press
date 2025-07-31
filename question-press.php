@@ -707,15 +707,9 @@ function qp_admin_enqueue_scripts($hook_suffix)
 
         // Build the source-to-subject relationship map
         $source_subject_links = $wpdb->get_results(
-            "SELECT DISTINCT
-                parent_source.term_id as source_id,
-                subject_term.term_id as subject_id
-                FROM {$wpdb->prefix}qp_questions q
-                JOIN {$rel_table} subject_rel ON q.group_id = subject_rel.object_id AND subject_rel.object_type = 'group'
-                JOIN {$term_table} subject_term ON subject_rel.term_id = subject_term.term_id AND subject_term.parent = 0
-                JOIN {$rel_table} source_rel ON q.question_id = source_rel.object_id AND source_rel.object_type = 'question'
-                JOIN {$term_table} linked_source_term ON source_rel.term_id = linked_source_term.term_id
-                JOIN {$term_table} parent_source ON (CASE WHEN linked_source_term.parent = 0 THEN linked_source_term.term_id ELSE linked_source_term.parent END) = parent_source.term_id"
+            "SELECT object_id AS source_id, term_id AS subject_id
+             FROM {$rel_table}
+             WHERE object_type = 'source_subject_link'"
         );
 
         // Get all exams
