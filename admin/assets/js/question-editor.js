@@ -397,6 +397,18 @@ function updateSources() {
     // --- NEW: AJAX-powered Save Logic ---
     $('#qp-save-group-btn').on('click', function(e) {
         e.preventDefault();
+
+        var subjectId = $('#subject_id').val();
+        if (!subjectId) {
+            Swal.fire({
+                title: 'Subject Required',
+                text: 'You must select a subject before saving the question group.',
+                icon: 'error',
+                confirmButtonText: 'OK'
+            });
+            return; // Exit the function immediately
+        }
+        
         var $button = $(this);
         var $form = $('form[method="post"]');
 

@@ -537,6 +537,7 @@ foreach ($all_source_terms as $term) {
                                     <p>
                                         <label for="subject_id"><strong>Subject</strong></label>
                                         <select name="subject_id" id="subject_id" style="width: 100%;">
+                                            <option value="">— Select a Subject —</option>
                                             <?php foreach ($all_subjects as $subject) : ?>
                                                 <option value="<?php echo esc_attr($subject->subject_id); ?>" <?php selected($current_subject_id, $subject->subject_id); ?>>
                                                     <?php echo esc_html($subject->subject_name); ?>
