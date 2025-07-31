@@ -1104,7 +1104,6 @@ function qp_handle_form_submissions()
     QP_Export_Page::handle_export_submission();
     QP_Backup_Restore_Page::handle_forms();
     QP_Settings_Page::register_settings();
-    qp_handle_topic_forms();
     qp_handle_save_question_group();
     qp_run_v3_taxonomy_migration();
 }
@@ -3887,34 +3886,50 @@ function qp_get_question_data_ajax()
     $a_table = $wpdb->prefix . 'qp_user_attempts';
     $user_id = get_current_user_id();
 
-    // --- Fetch question data ---
     $question_data = $wpdb->get_row($wpdb->prepare(
-        "SELECT 
+        "SELECT
             q.question_id, q.custom_question_id, q.question_text, q.question_number_in_section,
             g.direction_text, g.direction_image_id,
             subject_term.name AS subject_name,
-            topic_term.name AS topic_name,
-            CASE 
-                WHEN linked_source_term.parent != 0 THEN parent_source_term.name 
-                ELSE linked_source_term.name 
-            END AS source_name,
-            CASE 
-                WHEN linked_source_term.parent != 0 THEN linked_source_term.name 
-                ELSE NULL 
-            END AS section_name
+            topic_term.name AS topic_name
             FROM {$q_table} q
             LEFT JOIN {$g_table} g ON q.group_id = g.group_id
             LEFT JOIN {$wpdb->prefix}qp_term_relationships subject_rel ON g.group_id = subject_rel.object_id AND subject_rel.object_type = 'group' AND subject_rel.term_id IN (SELECT term_id FROM {$wpdb->prefix}qp_terms WHERE parent = 0 AND taxonomy_id = (SELECT taxonomy_id FROM {$wpdb->prefix}qp_taxonomies WHERE taxonomy_name = 'subject'))
             LEFT JOIN {$wpdb->prefix}qp_terms subject_term ON subject_rel.term_id = subject_term.term_id
             LEFT JOIN {$wpdb->prefix}qp_term_relationships topic_rel ON q.question_id = topic_rel.object_id AND topic_rel.object_type = 'question' AND topic_rel.term_id IN (SELECT term_id FROM {$wpdb->prefix}qp_terms WHERE parent != 0 AND taxonomy_id = (SELECT taxonomy_id FROM {$wpdb->prefix}qp_taxonomies WHERE taxonomy_name = 'subject'))
             LEFT JOIN {$wpdb->prefix}qp_terms topic_term ON topic_rel.term_id = topic_term.term_id
-            LEFT JOIN {$wpdb->prefix}qp_term_relationships source_rel ON q.question_id = source_rel.object_id AND source_rel.object_type = 'question' AND source_rel.term_id IN (SELECT term_id FROM {$wpdb->prefix}qp_terms WHERE taxonomy_id = (SELECT taxonomy_id FROM {$wpdb->prefix}qp_taxonomies WHERE taxonomy_name = 'source'))
-            LEFT JOIN {$wpdb->prefix}qp_terms linked_source_term ON source_rel.term_id = linked_source_term.term_id
-            LEFT JOIN {$wpdb->prefix}qp_terms parent_source_term ON linked_source_term.parent = parent_source_term.term_id
             WHERE q.question_id = %d
             GROUP BY q.question_id",
         $question_id
     ), ARRAY_A);
+
+    // --- NEW: Build Source Hierarchy ---
+    $source_hierarchy = [];
+    $source_term_id = $wpdb->get_var($wpdb->prepare(
+        "SELECT r.term_id
+         FROM {$wpdb->prefix}qp_term_relationships r
+         JOIN {$wpdb->prefix}qp_terms t ON r.term_id = t.term_id
+         WHERE r.object_id = %d AND r.object_type = 'question'
+         AND t.taxonomy_id = (SELECT taxonomy_id FROM {$wpdb->prefix}qp_taxonomies WHERE taxonomy_name = 'source')
+         LIMIT 1",
+        $question_id
+    ));
+
+    if ($source_term_id) {
+        $current_term_id = $source_term_id;
+        // Loop up the tree to the root, with a safety limit of 10 levels
+        for ($i = 0; $i < 10; $i++) {
+            if (!$current_term_id) break;
+            $term = $wpdb->get_row($wpdb->prepare("SELECT name, parent FROM {$wpdb->prefix}qp_terms WHERE term_id = %d", $current_term_id));
+            if ($term) {
+                array_unshift($source_hierarchy, $term->name); // Add to the beginning of the array
+                $current_term_id = $term->parent;
+            } else {
+                break;
+            }
+        }
+    }
+    $question_data['source_hierarchy'] = $source_hierarchy;
 
     $previous_attempt_count = $wpdb->get_var($wpdb->prepare(
         "SELECT COUNT(*) FROM {$a_table} WHERE user_id = %d AND question_id = %d",

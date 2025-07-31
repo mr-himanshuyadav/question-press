@@ -1383,7 +1383,7 @@ $topicListContainer.append('<label><input type="checkbox" name="' + topicNameAtt
       directionEl.show();
     }
     $("#qp-question-subject").html(
-      "Subject: " +
+      "<strong>Subject: </strong>" +
         questionData.subject_name +
         (questionData.topic_name ? " / " + questionData.topic_name : "")
     );
@@ -1394,20 +1394,22 @@ $topicListContainer.append('<label><input type="checkbox" name="' + topicNameAtt
     var sourceDisplayArea = $("#qp-question-source");
     // Only try to populate the div if it actually exists in the HTML
     if (sourceDisplayArea.length) {
-      var sourceInfo = [];
-      if (questionData.source_name)
-        sourceInfo.push("<strong>Source:</strong> " + questionData.source_name);
-      if (questionData.section_name)
-        sourceInfo.push(
-          "<strong>Section:</strong> " + questionData.section_name
-        );
-      if (questionData.question_number_in_section)
-        sourceInfo.push(
-          "<strong>Q:</strong> " + questionData.question_number_in_section
-        );
+      var sourceInfoParts = [];
 
-      // Set the HTML content of the existing div
-      sourceDisplayArea.html(sourceInfo.join(" | "));
+      // Check if the new hierarchy data exists and is an array
+      if (questionData.source_hierarchy && Array.isArray(questionData.source_hierarchy) && questionData.source_hierarchy.length > 0) {
+        // Create the full hierarchy path with a bolded label
+        var hierarchyString = '<strong>Source:</strong> ' + questionData.source_hierarchy.join(" / ");
+        sourceInfoParts.push(hierarchyString);
+      }
+
+      // Append the question number if it exists, with a bolded label
+      if (questionData.question_number_in_section) {
+        sourceInfoParts.push("<strong>Q:</strong> " + questionData.question_number_in_section);
+      }
+      
+      // Set the HTML content, joining parts with a separator if both exist
+      sourceDisplayArea.html(sourceInfoParts.join(" | "));
     }
     $("#qp-question-text-area").html(questionData.question_text);
     $("#qp-report-btn").prop("disabled", previousState.reported);
