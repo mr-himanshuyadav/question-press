@@ -550,16 +550,25 @@ LIMIT {$per_page} OFFSET {$offset}";
 
     $action = $this->current_action();
     $labels_to_apply = isset($_REQUEST['labels_to_apply']) ? array_filter(array_map('absint', (array) $_REQUEST['labels_to_apply'])) : [];
+    $question_ids = [];
 
-    // Exit if no action is being performed
-    if ((!$action || $action === -1) && empty($labels_to_apply)) {
-        return;
+    // --- NEW: Differentiate between single-item actions and bulk actions ---
+    if ($action && isset($_GET['question_id'])) {
+        // This is a single-item action (e.g., clicking a "Delete" link)
+        $question_ids = [absint($_GET['question_id'])];
+        // Check the unique nonce for this specific action
+        if ($action === 'trash')   check_admin_referer('qp_trash_question_' . $question_ids[0]);
+        if ($action === 'untrash') check_admin_referer('qp_untrash_question_' . $question_ids[0]);
+        if ($action === 'delete')  check_admin_referer('qp_delete_question_' . $question_ids[0]);
+    } else {
+        // This is a bulk action (e.g., using the dropdown and Apply button)
+        if ((!$action || $action === -1) && empty($labels_to_apply)) {
+            return;
+        }
+        check_admin_referer('bulk-' . $this->_args['plural']);
+        $question_ids = isset($_REQUEST['question_ids']) ? array_map('absint', $_REQUEST['question_ids']) : [];
     }
 
-    // Security check
-    check_admin_referer('bulk-' . $this->_args['plural']);
-
-    $question_ids = isset($_REQUEST['question_ids']) ? array_map('absint', $_REQUEST['question_ids']) : [];
     if (empty($question_ids)) {
         return;
     }
@@ -569,7 +578,7 @@ LIMIT {$per_page} OFFSET {$offset}";
     $rel_table = $wpdb->prefix . 'qp_term_relationships';
     $ids_placeholder = implode(',', $question_ids);
 
-    // --- NEW: Handle applying labels ---
+    // --- Handle applying labels ---
     if (!empty($labels_to_apply)) {
         foreach ($question_ids as $question_id) {
             foreach ($labels_to_apply as $label_term_id) {
@@ -610,8 +619,6 @@ LIMIT {$per_page} OFFSET {$offset}";
     wp_safe_redirect(remove_query_arg(['action', 'action2', '_wpnonce', 'question_ids', 'labels_to_apply', 'bulk_edit_apply', 'bulk_edit_source', 'bulk_edit_section'], wp_get_referer()));
     exit;
 }
-
-    // Note: The logic for 'remove_label' actions and the custom bulk edit panel will be fixed in a later step.
 }
 
 
