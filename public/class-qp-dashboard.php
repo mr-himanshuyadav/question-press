@@ -173,13 +173,15 @@ class QP_Dashboard
                             $tax_table = $wpdb->prefix . 'qp_taxonomies';
                             $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'subject'");
                             
-                            $subjects = $wpdb->get_results($wpdb->prepare(
-                                "SELECT term_id, name FROM {$term_table} WHERE taxonomy_id = %d AND name != 'Uncategorized' AND parent = 0 ORDER BY name ASC",
-                                $subject_tax_id
-                            ));
+                            if ($subject_tax_id) {
+                                $subjects = $wpdb->get_results($wpdb->prepare(
+                                    "SELECT term_id, name FROM {$term_table} WHERE taxonomy_id = %d AND name != 'Uncategorized' AND parent = 0 ORDER BY name ASC",
+                                    $subject_tax_id
+                                ));
 
-                            foreach ($subjects as $subject) {
-                                echo '<option value="' . esc_attr($subject->term_id) . '">' . esc_html($subject->name) . '</option>';
+                                foreach ($subjects as $subject) {
+                                    echo '<option value="' . esc_attr($subject->term_id) . '">' . esc_html($subject->name) . '</option>';
+                                }
                             }
                             ?>
                         </select>
@@ -212,7 +214,6 @@ class QP_Dashboard
         global $wpdb;
         $user_id = get_current_user_id();
         $sessions_table = $wpdb->prefix . 'qp_user_sessions';
-        $subjects_table = $wpdb->prefix . 'qp_subjects';
 
         $options = get_option('qp_settings');
         $session_page_id = isset($options['session_page']) ? absint($options['session_page']) : 0;
@@ -336,25 +337,24 @@ class QP_Dashboard
 
                 $subjects_display = 'N/A';
                 if (isset($settings['practice_mode']) && $settings['practice_mode'] === 'Section Wise Practice' && !empty($settings['section_id'])) {
-                    // For Section Wise Practice, build the specific "Source / Topic / Section" string
-                    $section_id = absint($settings['section_id']);
-                    $topic_id = !empty($settings['topics']) ? absint($settings['topics'][0]) : 0;
-
-                    // Fetch the names from the database
-                    $section_info = $wpdb->get_row($wpdb->prepare(
-                        "SELECT sec.section_name, src.source_name
-                     FROM {$wpdb->prefix}qp_source_sections sec
-                     JOIN {$wpdb->prefix}qp_sources src ON sec.source_id = src.source_id
-                     WHERE sec.section_id = %d",
-                        $section_id
-                    ));
-
-                    $topic_name = $wpdb->get_var($wpdb->prepare("SELECT topic_name FROM {$wpdb->prefix}qp_topics WHERE topic_id = %d", $topic_id));
+                    // For Section Wise Practice, build the hierarchy from the new terms table
+                    $section_term_id = absint($settings['section_id']);
+                    $term_table = $wpdb->prefix . 'qp_terms';
 
                     $display_parts = [];
-                    if ($section_info && $section_info->source_name) $display_parts[] = esc_html($section_info->source_name);
-                    if ($topic_name) $display_parts[] = esc_html($topic_name);
-                    if ($section_info && $section_info->section_name) $display_parts[] = esc_html($section_info->section_name);
+                    $current_term_id = $section_term_id;
+
+                    // Trace the hierarchy up from the section to the source
+                    for ($i = 0; $i < 5; $i++) { // Safety loop to prevent infinite recursion
+                        $term = $wpdb->get_row($wpdb->prepare("SELECT name, parent FROM {$term_table} WHERE term_id = %d", $current_term_id));
+                        if ($term) {
+                            array_unshift($display_parts, esc_html($term->name));
+                            if ($term->parent == 0) break; // Stop when we reach the top-level source
+                            $current_term_id = $term->parent;
+                        } else {
+                            break; // Stop if a term is not found
+                        }
+                    }
 
                     if (!empty($display_parts)) {
                         $subjects_display = implode(' / ', $display_parts);
