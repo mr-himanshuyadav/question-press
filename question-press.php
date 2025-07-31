@@ -2475,13 +2475,19 @@ function qp_get_quick_edit_form_ajax()
                 }
                 break;
             case 'source':
-                // If it has a parent, it's a section. The parent is the source.
                 if ($term->parent != 0) {
+                    // This is a section or sub-section.
                     $current_section_id = $term->term_id;
-                    $current_source_id = $term->parent;
+                    $parent_id = $term->parent;
+                    // Loop upwards until we find the top-level parent (where parent = 0)
+                    while ($parent_id != 0) {
+                        $current_source_id = $parent_id; // This is a potential source
+                        $parent_id = $wpdb->get_var($wpdb->prepare("SELECT parent FROM $term_table WHERE term_id = %d", $current_source_id));
+                    }
                 } else {
-                    // Otherwise, it's a top-level source.
+                    // This is a top-level source itself.
                     $current_source_id = $term->term_id;
+                    $current_section_id = 0; // No section is selected in this case
                 }
                 break;
             case 'label':
@@ -2533,11 +2539,28 @@ function qp_get_quick_edit_form_ajax()
     $all_exams    = $wpdb->get_results($wpdb->prepare("SELECT term_id AS exam_id, name AS exam_name FROM {$term_table} WHERE taxonomy_id = %d", $exam_tax_id));
     $all_labels   = $wpdb->get_results($wpdb->prepare("SELECT term_id as label_id, name as label_name FROM {$term_table} WHERE taxonomy_id = %d", $label_tax_id));
 
-    // --- 2c: Fetch relationship links for dynamic dropdowns ---
+    // --- 2c: Combine sources and sections for hierarchical dropdown ---
+    $all_source_terms = [];
+    foreach ($all_sources as $source) {
+        $all_source_terms[] = (object)[
+            'id' => $source->source_id,
+            'name' => $source->source_name,
+            'parent_id' => 0
+        ];
+    }
+    foreach ($all_sections as $section) {
+        $all_source_terms[] = (object)[
+            'id' => $section->section_id,
+            'name' => $section->section_name,
+            'parent_id' => $section->source_id
+        ];
+    }
+
+    // --- 2d: Fetch relationship links for dynamic dropdowns ---
     $exam_subject_links   = $wpdb->get_results("SELECT object_id AS exam_id, term_id AS subject_id FROM {$rel_table} WHERE object_type = 'exam_subject_link'");
     $source_subject_links = $wpdb->get_results("SELECT object_id AS source_id, term_id AS subject_id FROM {$rel_table} WHERE object_type = 'source_subject_link'");
 
-    // --- 2d: Fetch question options ---
+    // --- 2e: Fetch question options ---
     $options = $wpdb->get_results($wpdb->prepare("SELECT option_id, option_text, is_correct FROM {$options_table} WHERE question_id = %d ORDER BY option_id ASC", $question_id));
 
     // =========================================================================
@@ -2579,7 +2602,6 @@ function qp_get_quick_edit_form_ajax()
     // Start output buffering to capture all the generated HTML into a variable.
     ob_start();
 ?>
-    <!-- This script block makes all our PHP data available to the client-side JavaScript -->
     <script>
         var qp_quick_edit_data = <?php echo wp_json_encode([
                                         // Data maps for dynamic dropdowns
@@ -2592,6 +2614,7 @@ function qp_get_quick_edit_form_ajax()
                                         'all_subjects'        => $all_subjects,
                                         'all_exams'           => $all_exams,
                                         'all_labels'          => $all_labels,
+                                        'all_source_terms'    => $all_source_terms,
 
                                         // The currently selected values for this question
                                         'current_subject_id'  => $current_subject_id,
@@ -2603,11 +2626,9 @@ function qp_get_quick_edit_form_ajax()
                                     ]); ?>;
     </script>
 
-    <!-- The main form container -->
     <form class="quick-edit-form-wrapper">
         <?php wp_nonce_field('qp_save_quick_edit_nonce', 'qp_save_quick_edit_nonce_field'); ?>
 
-        <!-- Display area for Direction and Question Text -->
         <div class="quick-edit-display-text">
             <?php if (!empty($question->direction_text)) : ?>
                 <div class="display-group">
@@ -2623,9 +2644,7 @@ function qp_get_quick_edit_form_ajax()
 
         <input type="hidden" name="question_id" value="<?php echo esc_attr($question_id); ?>">
 
-        <!-- Main form layout with two columns -->
         <div class="quick-edit-main-container">
-            <!-- Left Column: Correct Answer Options -->
             <div class="quick-edit-col-left">
                 <label><strong>Correct Answer</strong></label>
                 <div class="options-group">
@@ -2638,9 +2657,7 @@ function qp_get_quick_edit_form_ajax()
                 </div>
             </div>
 
-            <!-- Right Column: Taxonomy Dropdowns and PYQ Fields -->
             <div class="quick-edit-col-right">
-                <!-- Subject & Topic Row -->
                 <div class="form-row-flex">
                     <div class="form-group-half qe-right-dropdowns">
                         <label for="qe-subject-<?php echo esc_attr($question_id); ?>"><strong>Subject</strong></label>
@@ -2660,7 +2677,6 @@ function qp_get_quick_edit_form_ajax()
                     </div>
                 </div>
 
-                <!-- Source & Section Row -->
                 <div class="form-row-flex">
                     <div class="form-group-half qe-right-dropdowns">
                         <label for="qe-source-<?php echo esc_attr($question_id); ?>"><strong>Source</strong></label>
@@ -2676,7 +2692,6 @@ function qp_get_quick_edit_form_ajax()
                     </div>
                 </div>
 
-                <!-- PYQ (Previous Year Question) Row -->
                 <div class="form-row-flex qe-pyq-fields-wrapper" style="align-items: center;">
                     <div class="form-group-shrink">
                         <label class="inline-checkbox">
@@ -2700,7 +2715,6 @@ function qp_get_quick_edit_form_ajax()
                     </div>
                 </div>
 
-                <!-- Labels Row -->
                 <div class="form-row">
                     <label><strong>Labels</strong></label>
                     <div class="labels-group">
@@ -2715,14 +2729,12 @@ function qp_get_quick_edit_form_ajax()
             </div>
         </div>
 
-        <!-- Form Action Buttons -->
         <p class="submit inline-edit-save">
             <button type="button" class="button-secondary cancel">Cancel</button>
             <button type="button" class="button-primary save">Update</button>
         </p>
     </form>
 
-    <!-- CSS styles for the form -->
     <style>
         .quick-edit-display-text {
             background-color: #f6f7f7;
@@ -2866,8 +2878,6 @@ function qp_get_quick_edit_form_ajax()
     // Send the captured HTML back as a successful JSON response.
     wp_send_json_success(['form' => ob_get_clean()]);
 }
-
-// Don't forget to hook the function into WordPress's AJAX actions.
 add_action('wp_ajax_qp_get_quick_edit_form', 'qp_get_quick_edit_form_ajax');
 
 /**
@@ -2969,8 +2979,18 @@ function qp_save_quick_edit_data_ajax()
 
     // Step 7: Re-render the updated table row and send it back
     $list_table = new QP_Questions_List_Table();
-    // Pass the status from the form so prepare_items() can find the question
-    $_REQUEST['status'] = isset($_POST['question_status']) ? sanitize_key($_POST['question_status']) : 'publish';
+
+    // Re-populate the $_REQUEST superglobal with the filters sent from JavaScript
+    // This makes the prepare_items() function aware of the current page context.
+    $filters = ['status', 'filter_by_subject', 'filter_by_topic', 'filter_by_source', 'filter_by_label', 's'];
+    foreach ($filters as $filter) {
+        // We get the status from the original row data, not the filters at the top
+        if ($filter === 'status' && isset($_POST['status'])) {
+            $_REQUEST[$filter] = sanitize_key($_POST['status']);
+        } elseif (isset($_POST[$filter])) {
+            $_REQUEST[$filter] = $_POST[$filter];
+        }
+    }
     
     $list_table->prepare_items();
     $found_item = null;
@@ -2986,6 +3006,10 @@ function qp_save_quick_edit_data_ajax()
         $list_table->single_row($found_item);
         $row_html = ob_get_clean();
         wp_send_json_success(['row_html' => $row_html]);
+    } else {
+        // If the item is not found, it's because it no longer matches the active filters.
+        // Send back an empty row_html to signal the JavaScript to remove the row from the view.
+        wp_send_json_success(['row_html' => '']);
     }
 
     // Fallback error if the row could not be re-rendered
