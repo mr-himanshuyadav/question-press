@@ -221,11 +221,12 @@ function updateSources() {
         textarea.show();
 
         // Reset values
-        newBlock.find('textarea, input[type="text"]').val('');
+        newBlock.find('textarea.wp-editor-area').val(''); // Clear only the main editor textarea
+        newBlock.find('input[name$="[question_number_in_section]"]').val(''); // Specifically clear the Q.No input
         newBlock.find('input[type="checkbox"], input[type="radio"]').prop('checked', false);
         newBlock.find('input[type="radio"]:first').prop('checked', true);
         newBlock.find('.question-id-input').val('0');
-        newBlock.find('.hndle span').html('<span>Question (ID: New - Save group to add options)</span>');
+        newBlock.find('.qp-question-title').text('Question (ID: New - Save group to add options)'); 
 
         // Hide the options and labels for this new, unsaved block
         newBlock.find('.qp-options-and-labels-wrapper').hide();

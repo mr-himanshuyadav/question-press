@@ -375,7 +375,7 @@ foreach ($all_source_terms as $term) {
                                             </button>
                                             <h2 class="hndle">
                                                 <span>
-                                                    Q<?php echo ($q_index + 1); ?>: Question (ID: <?php echo esc_html($question->custom_question_id); ?>)
+                                                    <span class="qp-question-title">Q<?php echo ($q_index + 1); ?>: Question (ID: <?php echo esc_html($question->custom_question_id); ?>)</span>
                                                     <?php if ($question->question_id > 0) : ?>
                                                         <small style="font-weight: normal; font-size: 12px; color: #777;"> | DB ID: <?php echo esc_html($question->question_id); ?></small>
                                                     <?php endif; ?>
