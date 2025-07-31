@@ -1110,46 +1110,6 @@ function qp_handle_form_submissions()
 }
 add_action('admin_init', 'qp_handle_form_submissions');
 
-// Attention! Whether Needed or not.
-function qp_handle_topic_forms()
-{
-    global $wpdb;
-    $topics_table = $wpdb->prefix . 'qp_topics';
-
-    // Handle Add Topic
-    if (isset($_POST['add_topic']) && check_admin_referer('qp_add_topic_nonce')) {
-        $topic_name = sanitize_text_field($_POST['topic_name']);
-        $subject_id = absint($_POST['subject_id']);
-        if (!empty($topic_name) && $subject_id > 0) {
-            $wpdb->insert($topics_table, ['topic_name' => $topic_name, 'subject_id' => $subject_id]);
-        }
-        wp_safe_redirect(admin_url('admin.php?page=qp-topics'));
-        exit;
-    }
-
-    // Handle Update Topic
-    if (isset($_POST['update_topic']) && isset($_POST['topic_id']) && check_admin_referer('qp_update_topic_nonce')) {
-        $topic_id = absint($_POST['topic_id']);
-        $topic_name = sanitize_text_field($_POST['topic_name']);
-        $subject_id = absint($_POST['subject_id']);
-        if (!empty($topic_name) && $subject_id > 0) {
-            $wpdb->update($topics_table, ['topic_name' => $topic_name, 'subject_id' => $subject_id], ['topic_id' => $topic_id]);
-        }
-        wp_safe_redirect(admin_url('admin.php?page=qp-topics'));
-        exit;
-    }
-
-    // Handle Delete Topic
-    if (isset($_GET['action']) && $_GET['action'] === 'delete' && isset($_GET['topic_id'])) {
-        $topic_id = absint($_GET['topic_id']);
-        if (isset($_GET['_wpnonce']) && wp_verify_nonce($_GET['_wpnonce'], 'qp_delete_topic_' . $topic_id)) {
-            $wpdb->delete($topics_table, ['topic_id' => $topic_id]);
-        }
-        wp_safe_redirect(admin_url('admin.php?page=qp-topics'));
-        exit;
-    }
-}
-
 function qp_all_questions_page_cb()
 {
     $list_table = new QP_Questions_List_Table();
@@ -3292,7 +3252,13 @@ function qp_start_practice_session_ajax()
             $topic_ids_to_query = $session_settings['topics'];
             if (!empty($session_settings['subjects'])) {
                 $subject_ids_placeholder = implode(',', $session_settings['subjects']);
-                $topics_in_subjects = $wpdb->get_col("SELECT topic_id FROM {$wpdb->prefix}qp_topics WHERE subject_id IN ($subject_ids_placeholder)");  // Attention! Needs replacement with new methods
+                // Get all topic term_ids where parent is in the selected subject term_ids (new taxonomy system)
+                $topics_in_subjects = [];
+                if (!empty($subject_ids_placeholder)) {
+                    $topics_in_subjects = $wpdb->get_col(
+                        "SELECT term_id FROM {$wpdb->prefix}qp_terms WHERE parent IN ($subject_ids_placeholder)"
+                    );
+                }
                 $topic_ids_to_query = array_unique(array_merge($topic_ids_to_query, $topics_in_subjects));
             }
         } else {
@@ -3917,10 +3883,6 @@ function qp_get_question_data_ajax()
     global $wpdb;
     $q_table = $wpdb->prefix . 'qp_questions';
     $g_table = $wpdb->prefix . 'qp_question_groups';
-    $s_table = $wpdb->prefix . 'qp_subjects';
-    $t_table = $wpdb->prefix . 'qp_topics';
-    $src_table = $wpdb->prefix . 'qp_sources';
-    $sec_table = $wpdb->prefix . 'qp_source_sections';
     $o_table = $wpdb->prefix . 'qp_options';
     $a_table = $wpdb->prefix . 'qp_user_attempts';
     $user_id = get_current_user_id();
