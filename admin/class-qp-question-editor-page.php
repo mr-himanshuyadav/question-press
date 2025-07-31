@@ -97,18 +97,35 @@ class QP_Question_Editor_Page
                     $current_source_id = 0;
                     $current_section_id = 0;
                     if (!empty($source_terms)) {
-                        foreach ($source_terms as $term) {
-                            if ($term->parent != 0) { // This is a section
-                                $current_section_id = $term->term_id;
-                                $current_source_id = $term->parent;
-                                break;
-                            }
-                        }
-                        // If no section was found, the first term must be a top-level source
-                        if ($current_source_id == 0) {
-                            $current_source_id = $source_terms[0]->term_id;
-                        }
-                    }
+    // Find the assigned term (section or source)
+    $assigned_term = $source_terms[0]; // Assume only one is linked for this context
+    $current_section_id = 0;
+    $current_source_id = 0;
+
+    // Walk up the tree to find the root parent (source)
+    $term_id = $assigned_term->term_id;
+    $parent_id = $assigned_term->parent;
+
+    // If this is a top-level source
+    if ($parent_id == 0) {
+        $current_source_id = $term_id;
+    } else {
+        // Walk up to the root parent
+        $current_section_id = $term_id;
+        while ($parent_id != 0) {
+            $parent_term = $wpdb->get_row($wpdb->prepare(
+                "SELECT term_id, parent FROM {$term_table} WHERE term_id = %d",
+                $parent_id
+            ));
+            if ($parent_term) {
+                $current_source_id = $parent_term->term_id;
+                $parent_id = $parent_term->parent;
+            } else {
+                break;
+            }
+        }
+    }
+}
 
                     // Get the current topic for the first question
                     $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'subject'");
@@ -154,10 +171,23 @@ class QP_Question_Editor_Page
         $all_topics = $wpdb->get_results($wpdb->prepare("SELECT term_id AS topic_id, name AS topic_name, parent AS subject_id FROM {$term_table} WHERE taxonomy_id = %d AND parent != 0 ORDER BY name ASC", $subject_tax_id));
         $all_labels = $wpdb->get_results($wpdb->prepare("SELECT term_id AS label_id, name AS label_name FROM {$term_table} WHERE taxonomy_id = %d ORDER BY name ASC", $label_tax_id));
         $all_exams = $wpdb->get_results($wpdb->prepare("SELECT term_id AS exam_id, name AS exam_name FROM {$term_table} WHERE taxonomy_id = %d ORDER BY name ASC", $exam_tax_id));
-        $all_sources = $wpdb->get_results($wpdb->prepare("SELECT term_id AS source_id, name AS source_name FROM {$term_table} WHERE taxonomy_id = %d AND parent = 0 ORDER BY name ASC", $source_tax_id));
-        $all_sections = $wpdb->get_results($wpdb->prepare("SELECT term_id AS section_id, name AS section_name, parent AS source_id FROM {$term_table} WHERE taxonomy_id = %d AND parent != 0 ORDER BY name ASC", $source_tax_id));
+        // Fetch ALL terms for the source taxonomy to build the hierarchy in JS
+        $all_source_terms = $wpdb->get_results($wpdb->prepare("SELECT term_id as id, name, parent as parent_id FROM {$term_table} WHERE taxonomy_id = %d ORDER BY name ASC", $source_tax_id));
 
-        // Prepare topics, sources, and sections data for JavaScript
+        // --- NEW: Efficiently create all necessary maps from the single $all_source_terms query ---
+        $all_parent_sources = []; // For the "Source" dropdown
+        $all_sources_map = [];    // For building the sources_by_subject map
+
+        foreach ($all_source_terms as $term) {
+            if ($term->parent_id == 0) {
+                // This is a top-level source
+                $all_parent_sources[] = $term;
+                $all_sources_map[$term->id] = $term->name;
+            }
+        }
+        // --- END NEW LOGIC ---
+
+        // Prepare topics data for JavaScript
         $topics_by_subject = [];
         foreach ($all_topics as $topic) {
             $topics_by_subject[$topic->subject_id][] = ['id' => $topic->topic_id, 'name' => $topic->topic_name];
@@ -166,46 +196,43 @@ class QP_Question_Editor_Page
         // --- FIX: Correctly build the sources_by_subject map by querying direct relationships ---
         $rel_table = $wpdb->prefix . 'qp_term_relationships';
         $source_subject_links = $wpdb->get_results(
-            "SELECT 
-                rel.object_id AS source_id, 
-                rel.term_id AS subject_id
-             FROM {$rel_table} rel
-             WHERE rel.object_type = 'source_subject_link'"
-        );
+    "SELECT 
+        rel.term_id AS subject_id, 
+        rel.object_id AS source_id,
+        t.name AS source_name
+     FROM {$rel_table} rel
+     JOIN {$term_table} t ON rel.object_id = t.term_id
+     WHERE rel.object_type = 'source_subject_link'"
+);
 
-        $all_sources_map = [];
-        foreach ($all_sources as $source) {
-            $all_sources_map[$source->source_id] = $source->source_name;
-        }
-
-        $sources_by_subject = [];
-        foreach ($source_subject_links as $link) {
-            // Ensure the source still exists before adding it to the map
-            if (isset($all_sources_map[$link->source_id])) {
-                $sources_by_subject[$link->subject_id][] = [
-                    'id'   => $link->source_id,
-                    'name' => $all_sources_map[$link->source_id]
-                ];
-            }
-        }
-        $sections_by_source = [];
-        foreach ($all_sections as $section) {
-            $sections_by_source[$section->source_id][] = ['id' => $section->section_id, 'name' => $section->section_name];
-        }
+$sources_by_subject = [];
+foreach ($source_subject_links as $link) {
+    $sources_by_subject[$link->subject_id][] = [
+        'id'   => $link->source_id,
+        'name' => $link->source_name
+    ];
+}
+$sections_by_source = [];
+foreach ($all_source_terms as $term) {
+    if ($term->parent_id > 0) {
+        $sections_by_source[$term->parent_id][] = ['id' => $term->id, 'name' => $term->name];
+    }
+}
 
         $exam_subject_links = $wpdb->get_results("SELECT object_id AS exam_id, term_id AS subject_id FROM {$rel_table} WHERE object_type = 'exam_subject_link'");
 
         // Pass all necessary data to our JavaScript file
         wp_localize_script('qp-editor-script', 'qp_editor_data', [
-            'topics_by_subject'   => $topics_by_subject,
-            'sources_by_subject'  => $sources_by_subject,
-            'sections_by_source'  => $sections_by_source,
-            'all_exams'           => $all_exams, // Pass all exams
-            'exam_subject_links'  => $exam_subject_links, // Pass the link data
-            'current_topic_id'    => $current_topic_id,
-            'current_source_id'   => $current_source_id,
-            'current_section_id'  => $current_section_id,
-        ]);
+    'topics_by_subject'   => $topics_by_subject,
+    'sources_by_subject'  => $sources_by_subject,
+    'sections_by_source'  => $sections_by_source,
+    'all_exams'           => $all_exams,
+    'exam_subject_links'  => $exam_subject_links,
+    'current_topic_id'    => $current_topic_id,
+    'current_source_id'   => $current_source_id,
+    'current_section_id'  => $current_section_id,
+    'all_source_terms'    => $all_source_terms,
+]);
 
         if (isset($_GET['message'])) {
             $message = $_GET['message'] === '1' ? 'Question(s) updated successfully.' : 'Question(s) saved successfully.';
@@ -532,9 +559,9 @@ class QP_Question_Editor_Page
                                         <label for="source_id"><strong>Source</strong></label>
                                         <select name="source_id" id="source_id" style="width: 100%;">
                                             <option value="">— Select a Source —</option>
-                                            <?php foreach ($all_sources as $source) : ?>
-                                                <option value="<?php echo esc_attr($source->source_id); ?>" <?php selected($current_source_id, $source->source_id); ?>>
-                                                    <?php echo esc_html($source->source_name); ?>
+                                            <?php foreach ($all_parent_sources as $source) : ?>
+                                                <option value="<?php echo esc_attr($source->id); ?>" <?php selected($current_source_id, $source->id); ?>>
+                                                    <?php echo esc_html($source->name); ?>
                                                 </option>
                                             <?php endforeach; ?>
                                         </select>

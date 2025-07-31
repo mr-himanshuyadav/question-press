@@ -204,16 +204,18 @@ class QP_Sources_Page {
                                     <?php
                                         // A simple function to recursively display options
                                         function qp_source_dropdown_options($terms, $parent_id = 0, $level = 0, $selected = 0) {
-                                            $padding = str_repeat('&nbsp;&nbsp;&nbsp;', $level);
+                                            // Use a more visually distinct prefix for indentation
+                                            $prefix = str_repeat('— ', $level);
                                             foreach ($terms as $term) {
                                                 if ($term->parent == $parent_id) {
                                                     printf(
                                                         '<option value="%s" %s>%s%s</option>',
                                                         esc_attr($term->term_id),
                                                         selected($selected, $term->term_id, false),
-                                                        $padding,
+                                                        $prefix, // Use the new prefix here
                                                         esc_html($term->name)
                                                     );
+                                                    // The recursive call remains the same
                                                     qp_source_dropdown_options($terms, $term->term_id, $level + 1, $selected);
                                                 }
                                             }

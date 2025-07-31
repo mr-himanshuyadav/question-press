@@ -59,6 +59,12 @@ jQuery(document).ready(function($) {
         initialFormState = getCurrentState();
     });
 
+    // --- Initial population on page load ---
+    updateTopics();
+    updateSources();
+    updateSections();
+    togglePyqFields();
+
     // --- Function to update Topic dropdown based on Subject ---
     function updateTopics() {
         var selectedSubjectId = subjectSelect.val();
@@ -84,56 +90,85 @@ jQuery(document).ready(function($) {
         }
     }
 
-    // --- NEW: Function to update Source dropdown based on Subject ---
-    function updateSources() {
-        var selectedSubjectId = subjectSelect.val();
-        // Capture the currently selected source before clearing
-        var previouslySelectedSourceId = sourceSelect.val();
+function updateSources() {
+    var selectedSubjectId = subjectSelect.val();
+    var previouslySelectedSourceId = sourceSelect.val() || qp_editor_data.current_source_id;
 
-        sourceSelect.empty().prop('disabled', true);
+    sourceSelect.empty().prop('disabled', true);
 
-        if (selectedSubjectId && qp_editor_data.sources_by_subject[selectedSubjectId]) {
-            sourceSelect.prop('disabled', false).append('<option value="">— Select a Source —</option>');
-            $.each(qp_editor_data.sources_by_subject[selectedSubjectId], function(index, source) {
-                var option = $('<option></option>').val(source.id).text(source.name);
-                // Prioritize previously selected value, then initial load value
-                if (source.id == previouslySelectedSourceId || source.id == qp_editor_data.current_source_id) {
-                    option.prop('selected', true);
-                }
-                sourceSelect.append(option);
-            });
-            // After initial load, clear current_source_id to prevent interference
-            qp_editor_data.current_source_id = '';
-        } else {
-            sourceSelect.append('<option value="">— No sources for this subject —</option>');
-        }
-        // Trigger an update on the sections dropdown as well
-        sourceSelect.trigger('change');
+    var addedSourceIds = {};
+
+    if (selectedSubjectId && qp_editor_data.sources_by_subject[selectedSubjectId]) {
+        sourceSelect.prop('disabled', false).append('<option value="">— Select a Source —</option>');
+        $.each(qp_editor_data.sources_by_subject[selectedSubjectId], function(index, source) {
+            var option = $('<option></option>').val(source.id).text(source.name);
+            if (source.id == previouslySelectedSourceId) {
+                option.prop('selected', true);
+            }
+            sourceSelect.append(option);
+            addedSourceIds[source.id] = true;
+        });
+    } else {
+        sourceSelect.append('<option value="">— No sources for this subject —</option>');
     }
+
+    // --- Always add the current source if not present ---
+    if (
+        previouslySelectedSourceId &&
+        !addedSourceIds[previouslySelectedSourceId] &&
+        qp_editor_data.all_source_terms
+    ) {
+        var found = qp_editor_data.all_source_terms.find(function(term) {
+            return term.id == previouslySelectedSourceId;
+        });
+        if (found) {
+            var option = $('<option></option>').val(found.id).text(found.name).prop('selected', true);
+            sourceSelect.append(option);
+        }
+    }
+
+    sourceSelect.trigger('change');
+    qp_editor_data.current_source_id = '';
+}
 
 
     // --- Function to update Section dropdown based on Source ---
     function updateSections() {
         var selectedSourceId = sourceSelect.val();
-        // Capture the currently selected section before clearing
-        var previouslySelectedSectionId = sectionSelect.val();
+        // Use the saved value from the initial page load if it exists
+        var previouslySelectedSectionId = sectionSelect.val() || qp_editor_data.current_section_id;
 
         sectionSelect.empty().prop('disabled', true);
 
-        if (selectedSourceId && qp_editor_data.sections_by_source[selectedSourceId]) {
-            sectionSelect.prop('disabled', false).append('<option value="">— Select a Section —</option>');
-            $.each(qp_editor_data.sections_by_source[selectedSourceId], function(index, section) {
-                var option = $('<option></option>').val(section.id).text(section.name);
-                // Prioritize previously selected value, then initial load value
-                if (section.id == previouslySelectedSectionId || section.id == qp_editor_data.current_section_id) {
-                    option.prop('selected', true);
+        // Helper function to recursively build the dropdown options
+        function buildTermHierarchy(parentElement, terms, parentId, level, selectedId) {
+            var prefix = '— '.repeat(level);
+            terms.forEach(function(term) {
+                if (term.parent_id == parentId) {
+                    var option = $('<option></option>')
+                        .val(term.id)
+                        .text(prefix + term.name);
+                    
+                    // Set the 'selected' property if this term matches the one to be selected
+                    if (term.id == selectedId) {
+                        option.prop('selected', true);
+                    }
+                    parentElement.append(option);
+                    // Recursive call for children of the current term
+                    buildTermHierarchy(parentElement, terms, term.id, level + 1, selectedId);
                 }
-                sectionSelect.append(option);
             });
-            // After initial load, clear current_section_id to prevent interference
+        }
+
+        if (selectedSourceId && qp_editor_data.all_source_terms) {
+            sectionSelect.prop('disabled', false).append('<option value="">— Select a Section —</option>');
+            // Start the recursive function to build the hierarchy under the selected source
+            buildTermHierarchy(sectionSelect, qp_editor_data.all_source_terms, selectedSourceId, 0, previouslySelectedSectionId);
+            
+            // Clear the initial value after it has been used to prevent conflicts
             qp_editor_data.current_section_id = '';
         } else {
-            sectionSelect.append('<option value="">— No sections for this source —</option>');
+            sectionSelect.append('<option value="">— Select a source first —</option>');
         }
     }
 
@@ -157,12 +192,6 @@ jQuery(document).ready(function($) {
     });
 
     isPyqCheckbox.on('change', togglePyqFields);
-
-    // --- Initial population on page load ---
-    updateTopics();
-    updateSources();
-    updateSections();
-    togglePyqFields();
 
 
     // --- Logic for adding/removing question blocks ---
