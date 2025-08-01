@@ -146,9 +146,18 @@ jQuery(document).ready(function($) {
 
                     var html = '<button class="qp-modal-close-btn">&times;</button>';
                     html += '<h4>' + data.subject_name + ' (ID: ' + data.custom_question_id + ')</h4>';
-                    if (data.direction_text) {
-                        html += '<div class="qp-direction">' + data.direction_text + '</div>';
+                    if (data.direction_text || data.direction_image_url) {
+                        html += '<div class="qp-direction">';
+                        if(data.direction_text) {
+                            html += '<div class="qp-direction-text-wrapper">' + data.direction_text + '</div>';
+                        }
+                        if(data.direction_image_url) {
+                            html += '<div class="qp-direction-image-wrapper"><img src="' + data.direction_image_url + '" style="max-width: 50%; max-height: 150px; display: block; margin: 10px auto 0 auto;" /></div>';
+                        }
+                        html += '</div>';
                     }
+
+
                     html += '<div class="question-text">' + data.question_text + '</div>';
                     
                     html += '<div class="qp-options-area qp-modal-options" style="margin-top: 1.5rem;">';

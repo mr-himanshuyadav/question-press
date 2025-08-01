@@ -572,9 +572,18 @@ wrapper.on('click', '.save', function(e) {
             var html = `<h4>${data.subject_name || ""} (ID: ${
               data.custom_question_id
             })</h4>`;
-            if (data.direction_text) {
-              html += `<div style="background: #f6f7f7; padding: 1rem; border-radius: 4px; margin-bottom: 1rem;">${data.direction_text}</div>`;
+
+            if (data.direction_text || data.direction_image_url) {
+              html += `<div style="background: #f6f7f7; padding: 1rem; border-radius: 4px; margin-bottom: 1rem;">`;
+              if(data.direction_text) {
+                html += '<div class="qp-direction-text-wrapper">' + data.direction_text + '</div>';
+              }
+              if(data.direction_image_url) {
+                html += '<div class="qp-direction-image-wrapper"><img src="' + data.direction_image_url + '" style="max-width: 50%; max-height: 150px; display: block; margin: 10px auto 0 auto;" /></div>';
+              }
+              html += `</div>`;
             }
+
             html += `<div class="question-text" style="margin-bottom: 1.5rem;">${data.question_text}</div>`;
             html += '<div class="qp-options-area">';
             data.options.forEach(function (opt) {
