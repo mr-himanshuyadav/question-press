@@ -32,12 +32,16 @@ class QP_Dashboard
 
         // Fetch Review Later questions (existing logic)
         $review_questions = $wpdb->get_results($wpdb->prepare(
-            "SELECT q.question_id, q.custom_question_id, q.question_text, s.subject_name 
-         FROM {$wpdb->prefix}qp_review_later rl
-         JOIN {$wpdb->prefix}qp_questions q ON rl.question_id = q.question_id
-         LEFT JOIN {$wpdb->prefix}qp_question_groups g ON q.group_id = g.group_id
-         LEFT JOIN {$wpdb->prefix}qp_subjects s ON g.subject_id = s.subject_id
-         WHERE rl.user_id = %d ORDER BY rl.review_id DESC",
+            "SELECT 
+                q.question_id, q.custom_question_id, q.question_text, 
+                subject_term.name as subject_name
+             FROM {$wpdb->prefix}qp_review_later rl
+             JOIN {$wpdb->prefix}qp_questions q ON rl.question_id = q.question_id
+             LEFT JOIN {$wpdb->prefix}qp_question_groups g ON q.group_id = g.group_id
+             LEFT JOIN {$wpdb->prefix}qp_term_relationships subject_rel ON g.group_id = subject_rel.object_id AND subject_rel.object_type = 'group' AND subject_rel.term_id IN (SELECT term_id FROM {$wpdb->prefix}qp_terms WHERE parent = 0 AND taxonomy_id = (SELECT taxonomy_id FROM {$wpdb->prefix}qp_taxonomies WHERE taxonomy_name = 'subject'))
+             LEFT JOIN {$wpdb->prefix}qp_terms subject_term ON subject_rel.term_id = subject_term.term_id
+             WHERE rl.user_id = %d 
+             ORDER BY rl.review_id DESC",
             $user_id
         ));
 
@@ -164,9 +168,19 @@ class QP_Dashboard
                             <option value="">— Select a Subject —</option>
                             <?php
                             global $wpdb;
-                            $subjects = $wpdb->get_results("SELECT subject_id, subject_name FROM {$wpdb->prefix}qp_subjects WHERE subject_name != 'Uncategorized' ORDER BY subject_name ASC");
-                            foreach ($subjects as $subject) {
-                                echo '<option value="' . esc_attr($subject->subject_id) . '">' . esc_html($subject->subject_name) . '</option>';
+                            $term_table = $wpdb->prefix . 'qp_terms';
+                            $tax_table = $wpdb->prefix . 'qp_taxonomies';
+                            $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'subject'");
+                            
+                            if ($subject_tax_id) {
+                                $subjects = $wpdb->get_results($wpdb->prepare(
+                                    "SELECT term_id, name FROM {$term_table} WHERE taxonomy_id = %d AND name != 'Uncategorized' AND parent = 0 ORDER BY name ASC",
+                                    $subject_tax_id
+                                ));
+
+                                foreach ($subjects as $subject) {
+                                    echo '<option value="' . esc_attr($subject->term_id) . '">' . esc_html($subject->name) . '</option>';
+                                }
                             }
                             ?>
                         </select>
@@ -199,7 +213,6 @@ class QP_Dashboard
         global $wpdb;
         $user_id = get_current_user_id();
         $sessions_table = $wpdb->prefix . 'qp_user_sessions';
-        $subjects_table = $wpdb->prefix . 'qp_subjects';
 
         $options = get_option('qp_settings');
         $session_page_id = isset($options['session_page']) ? absint($options['session_page']) : 0;
@@ -250,11 +263,14 @@ class QP_Dashboard
             $unique_qids = array_unique(array_map('absint', $all_session_qids));
             $ids_placeholder = implode(',', $unique_qids);
             $subject_results = $wpdb->get_results(
-                "SELECT q.question_id, s.subject_name
-             FROM {$wpdb->prefix}qp_questions q
-             JOIN {$wpdb->prefix}qp_question_groups g ON q.group_id = g.group_id
-             JOIN {$wpdb->prefix}qp_subjects s ON g.subject_id = s.subject_id
-             WHERE q.question_id IN ($ids_placeholder)"
+                "SELECT 
+                    q.question_id, 
+                    subject_term.name as subject_name
+                 FROM {$wpdb->prefix}qp_questions q
+                 JOIN {$wpdb->prefix}qp_question_groups g ON q.group_id = g.group_id
+                 JOIN {$wpdb->prefix}qp_term_relationships subject_rel ON g.group_id = subject_rel.object_id AND subject_rel.object_type = 'group' AND subject_rel.term_id IN (SELECT term_id FROM {$wpdb->prefix}qp_terms WHERE parent = 0 AND taxonomy_id = (SELECT taxonomy_id FROM {$wpdb->prefix}qp_taxonomies WHERE taxonomy_name = 'subject'))
+                 JOIN {$wpdb->prefix}qp_terms subject_term ON subject_rel.term_id = subject_term.term_id
+                 WHERE q.question_id IN ($ids_placeholder)"
             );
             foreach ($subject_results as $res) {
                 $subjects_by_question[$res->question_id] = $res->subject_name;
@@ -339,25 +355,24 @@ class QP_Dashboard
 
                 $subjects_display = 'N/A';
                 if (isset($settings['practice_mode']) && $settings['practice_mode'] === 'Section Wise Practice' && !empty($settings['section_id'])) {
-                    // For Section Wise Practice, build the specific "Source / Topic / Section" string
-                    $section_id = absint($settings['section_id']);
-                    $topic_id = !empty($settings['topics']) ? absint($settings['topics'][0]) : 0;
-
-                    // Fetch the names from the database
-                    $section_info = $wpdb->get_row($wpdb->prepare(
-                        "SELECT sec.section_name, src.source_name
-                     FROM {$wpdb->prefix}qp_source_sections sec
-                     JOIN {$wpdb->prefix}qp_sources src ON sec.source_id = src.source_id
-                     WHERE sec.section_id = %d",
-                        $section_id
-                    ));
-
-                    $topic_name = $wpdb->get_var($wpdb->prepare("SELECT topic_name FROM {$wpdb->prefix}qp_topics WHERE topic_id = %d", $topic_id));
+                    // For Section Wise Practice, build the hierarchy from the new terms table
+                    $section_term_id = absint($settings['section_id']);
+                    $term_table = $wpdb->prefix . 'qp_terms';
 
                     $display_parts = [];
-                    if ($section_info && $section_info->source_name) $display_parts[] = esc_html($section_info->source_name);
-                    if ($topic_name) $display_parts[] = esc_html($topic_name);
-                    if ($section_info && $section_info->section_name) $display_parts[] = esc_html($section_info->section_name);
+                    $current_term_id = $section_term_id;
+
+                    // Trace the hierarchy up from the section to the source
+                    for ($i = 0; $i < 5; $i++) { // Safety loop to prevent infinite recursion
+                        $term = $wpdb->get_row($wpdb->prepare("SELECT name, parent FROM {$term_table} WHERE term_id = %d", $current_term_id));
+                        if ($term) {
+                            array_unshift($display_parts, esc_html($term->name));
+                            if ($term->parent == 0) break; // Stop when we reach the top-level source
+                            $current_term_id = $term->parent;
+                        } else {
+                            break; // Stop if a term is not found
+                        }
+                    }
 
                     if (!empty($display_parts)) {
                         $subjects_display = implode(' / ', $display_parts);

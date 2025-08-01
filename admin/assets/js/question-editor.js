@@ -59,6 +59,12 @@ jQuery(document).ready(function($) {
         initialFormState = getCurrentState();
     });
 
+    // --- Initial population on page load ---
+    updateTopics();
+    updateSources();
+    updateSections();
+    togglePyqFields();
+
     // --- Function to update Topic dropdown based on Subject ---
     function updateTopics() {
         var selectedSubjectId = subjectSelect.val();
@@ -67,89 +73,151 @@ jQuery(document).ready(function($) {
         
         topicSelect.empty().prop('disabled', true);
 
-        if (selectedSubjectId && qp_editor_data.topics_by_subject[selectedSubjectId]) {
-            topicSelect.prop('disabled', false).append('<option value="">— Select a Topic —</option>');
-            $.each(qp_editor_data.topics_by_subject[selectedSubjectId], function(index, topic) {
-                var option = $('<option></option>').val(topic.id).text(topic.name);
-                // Prioritize previously selected value, then initial load value
-                if (topic.id == previouslySelectedTopicId || topic.id == qp_editor_data.current_topic_id) {
-                    option.prop('selected', true);
-                }
-                topicSelect.append(option);
-            });
-            // After initial load, clear current_topic_id to prevent interference
-            qp_editor_data.current_topic_id = '';
+        if (selectedSubjectId) {
+            // A subject IS selected, now check if it has topics.
+            if (qp_editor_data.topics_by_subject[selectedSubjectId]) {
+                topicSelect.prop('disabled', false).append('<option value="">— Select a Topic —</option>');
+                $.each(qp_editor_data.topics_by_subject[selectedSubjectId], function(index, topic) {
+                    var option = $('<option></option>').val(topic.id).text(topic.name);
+                    if (topic.id == previouslySelectedTopicId || topic.id == qp_editor_data.current_topic_id) {
+                        option.prop('selected', true);
+                    }
+                    topicSelect.append(option);
+                });
+                qp_editor_data.current_topic_id = '';
+            } else {
+                // The selected subject has no topics.
+                topicSelect.append('<option value="">— No topics for this subject —</option>');
+            }
         } else {
-            topicSelect.append('<option value="">— No topics for this subject —</option>');
+            // No subject is selected at all.
+            topicSelect.append('<option value="">— Select a Subject First —</option>');
         }
     }
 
-    // --- NEW: Function to update Source dropdown based on Subject ---
-    function updateSources() {
-        var selectedSubjectId = subjectSelect.val();
-        // Capture the currently selected source before clearing
-        var previouslySelectedSourceId = sourceSelect.val();
+function updateSources() {
+    var selectedSubjectId = subjectSelect.val();
+    var previouslySelectedSourceId = sourceSelect.val() || qp_editor_data.current_source_id;
+    
 
-        sourceSelect.empty().prop('disabled', true);
+    sourceSelect.empty().prop('disabled', true);
 
-        if (selectedSubjectId && qp_editor_data.sources_by_subject[selectedSubjectId]) {
-            sourceSelect.prop('disabled', false).append('<option value="">— Select a Source —</option>');
+    var addedSourceIds = {};
+
+    if (selectedSubjectId && qp_editor_data.sources_by_subject[selectedSubjectId]) {
+        sourceSelect.prop('disabled', false).append('<option value="">— Select a Source —</option>');
+
+
+
             $.each(qp_editor_data.sources_by_subject[selectedSubjectId], function(index, source) {
                 var option = $('<option></option>').val(source.id).text(source.name);
-                // Prioritize previously selected value, then initial load value
-                if (source.id == previouslySelectedSourceId || source.id == qp_editor_data.current_source_id) {
-                    option.prop('selected', true);
-                }
+            if (source.id == previouslySelectedSourceId) {
+                option.prop('selected', true);
+            }
                 sourceSelect.append(option);
+            addedSourceIds[source.id] = true;
             });
-            // After initial load, clear current_source_id to prevent interference
-            qp_editor_data.current_source_id = '';
-        } else {
-            sourceSelect.append('<option value="">— No sources for this subject —</option>');
+    } else {
+        sourceSelect.append('<option value="">— No sources for this subject —</option>');
         }
-        // Trigger an update on the sections dropdown as well
-        sourceSelect.trigger('change');
+        
+    // --- Always add the current source if not present ---
+    if (
+        previouslySelectedSourceId &&
+        !addedSourceIds[previouslySelectedSourceId] &&
+        qp_editor_data.all_source_terms
+    ) {
+        var found = qp_editor_data.all_source_terms.find(function(term) {
+            return term.id == previouslySelectedSourceId;
+        });
+        if (found) {
+            var option = $('<option></option>').val(found.id).text(found.name).prop('selected', true);
+            sourceSelect.append(option);
+        }
     }
+
+
+
+    sourceSelect.trigger('change');
+    qp_editor_data.current_source_id = '';
+}
 
 
     // --- Function to update Section dropdown based on Source ---
     function updateSections() {
         var selectedSourceId = sourceSelect.val();
-        // Capture the currently selected section before clearing
-        var previouslySelectedSectionId = sectionSelect.val();
+        // Use the saved value from the initial page load if it exists
+        var previouslySelectedSectionId = sectionSelect.val() || qp_editor_data.current_section_id;
 
         sectionSelect.empty().prop('disabled', true);
 
-        if (selectedSourceId && qp_editor_data.sections_by_source[selectedSourceId]) {
-            sectionSelect.prop('disabled', false).append('<option value="">— Select a Section —</option>');
-            $.each(qp_editor_data.sections_by_source[selectedSourceId], function(index, section) {
-                var option = $('<option></option>').val(section.id).text(section.name);
-                // Prioritize previously selected value, then initial load value
-                if (section.id == previouslySelectedSectionId || section.id == qp_editor_data.current_section_id) {
-                    option.prop('selected', true);
+        // Helper function to recursively build the dropdown options
+        function buildTermHierarchy(parentElement, terms, parentId, level, selectedId) {
+            var prefix = '— '.repeat(level);
+            terms.forEach(function(term) {
+                if (term.parent_id == parentId) {
+                    var option = $('<option></option>')
+                        .val(term.id)
+                        .text(prefix + term.name);
+                    
+                    // Set the 'selected' property if this term matches the one to be selected
+                    if (term.id == selectedId) {
+                        option.prop('selected', true);
+                    }
+                    parentElement.append(option);
+                    // Recursive call for children of the current term
+                    buildTermHierarchy(parentElement, terms, term.id, level + 1, selectedId);
                 }
-                sectionSelect.append(option);
             });
-            // After initial load, clear current_section_id to prevent interference
+        }
+
+        if (selectedSourceId && qp_editor_data.all_source_terms) {
+            sectionSelect.prop('disabled', false).append('<option value="">— Select a Section —</option>');
+            // Start the recursive function to build the hierarchy under the selected source
+            buildTermHierarchy(sectionSelect, qp_editor_data.all_source_terms, selectedSourceId, 0, previouslySelectedSectionId);
+            
+            // Clear the initial value after it has been used to prevent conflicts
             qp_editor_data.current_section_id = '';
         } else {
-            sectionSelect.append('<option value="">— No sections for this source —</option>');
+            sectionSelect.append('<option value="">— Select a source first —</option>');
         }
     }
 
     // --- Function to toggle PYQ fields ---
     function togglePyqFields() {
+        var $form = $(this).closest(".qp-question-editor-form-wrapper");
+        var $examSelect = $form.find('select[name="exam_id"]');
+        var $yearInput = $form.find('input[name="pyq_year"]');
         if (isPyqCheckbox.is(':checked')) {
             pyqFieldsWrapper.slideDown();
         } else {
             pyqFieldsWrapper.slideUp();
+            $examSelect.val('');
+            $yearInput.val('');
         }
+
+        qp_editor_data.current_exam_id = null; // Reset current exam ID
+        qp_editor_data.current_pyq_year = null; // Reset current year
     }
 
     // --- Bind Event Handlers ---
     subjectSelect.on('change', function() {
+        // Clear the current topic, source, and section selections
+        topicSelect.val('');
+        sourceSelect.val('');
+        sectionSelect.val('').empty().append('<option value="">— Select a source first —</option>').prop('disabled', true);
+
+        // Now update the dropdowns
         updateTopics();
         updateSources();
+        
+        var $form = $(this).closest(".qp-question-editor-form-wrapper");
+        var $examSelect = $form.find('select[name="exam_id"]');
+        var $yearInput = $form.find('input[name="pyq_year"]');
+        $examSelect.val('');
+        $yearInput.val('');
+        qp_editor_data.current_exam_id = null; // Reset current exam ID
+        qp_editor_data.current_pyq_year = null; // Reset current year
     });
 
     sourceSelect.on('change', function() {
@@ -158,56 +226,56 @@ jQuery(document).ready(function($) {
 
     isPyqCheckbox.on('change', togglePyqFields);
 
-    // --- Initial population on page load ---
-    updateTopics();
-    updateSources();
-    updateSections();
-    togglePyqFields();
 
-
+    // --- Logic for adding/removing question blocks ---
     // --- Logic for adding/removing question blocks ---
     $('#add-new-question-block').on('click', function(e) {
         e.preventDefault();
 
-        // --- FIX START: Remember the original correct answer ---
         var firstBlock = $('.qp-question-block:first');
-        var originalCorrectOptionValue = firstBlock.find('input[name="questions[0][correct_option_id]"]:checked').val();
-        // --- FIX END ---
-
         var newBlock = firstBlock.clone().removeClass('status-publish status-draft status-reported').addClass('status-new');
 
-        // --- FIX: Clean up the cloned editor before appending ---
+        // --- Hard Reset All Fields in the Cloned Block ---
+        
+        // Destroy the cloned TinyMCE instance to prevent conflicts
         var editorWrapper = newBlock.find('.wp-editor-wrap');
         var textarea = newBlock.find('textarea.wp-editor-area');
         var oldEditorId = textarea.attr('id');
-
-        // Destroy the cloned tinymce instance
         if (tinymce.get(oldEditorId)) {
             tinymce.get(oldEditorId).remove();
         }
-        
-        // Remove the HTML elements created by TinyMCE
-        editorWrapper.find('.mce-container').remove();
+        editorWrapper.find('.mce-container, .mce-widget').remove(); // Remove all TinyMCE generated elements
         editorWrapper.removeClass('tmce-active').addClass('html-active');
-        textarea.show();
+        textarea.show().val(''); // Clear the textarea content
 
-        // Reset values
-        newBlock.find('textarea, input[type="text"]').val('');
-        newBlock.find('input[type="checkbox"], input[type="radio"]').prop('checked', false);
-        newBlock.find('input[type="radio"]:first').prop('checked', true);
+        // Remove the previous question's labels from the editor header
+        newBlock.find('.qp-editor-labels-container').remove();
+
+        // Reset basic inputs
         newBlock.find('.question-id-input').val('0');
-        newBlock.find('.hndle span').html('<span>Question (ID: New - Save group to add options)</span>');
+        newBlock.find('input[name$="[question_number_in_section]"]').val('');
+        
+        // Reset the title, remove status indicators, and remove the old DB ID
+        newBlock.find('.qp-question-title').text('Question (ID: New)');
+        newBlock.find('.qp-status-indicator').remove();
+        newBlock.find('.qp-question-db-id').remove();
 
-        // Hide the options and labels for this new, unsaved block
-        newBlock.find('.qp-options-and-labels-wrapper').hide();
+        // Reset all options and ensure none are checked
+        newBlock.find('.qp-option-row').each(function(index) {
+            var $optionRow = $(this);
+            $optionRow.find('input[type="radio"]').prop('checked', false); // Ensure no option is checked
+            $optionRow.find('input[type="hidden"]').val('0'); // Reset hidden option ID
+            $optionRow.find('.option-text-input').val(''); // Clear the option text
+            $optionRow.find('.option-id-display').remove(); // Remove the DB ID display for options
+        });
+
+        // Reset all labels in the dropdown
+        newBlock.find('.qp-dropdown-panel input[type="checkbox"]').prop('checked', false);
+        newBlock.find('.qp-dropdown-toggle span:first-child').text('Select Labels');
+             newBlock.find('.qp-options-and-labels-wrapper').hide();
 
         $('#qp-question-blocks-container').append(newBlock);
         reindexQuestionBlocks();
-
-        // --- FIX START: Restore the original correct answer ---
-        if (originalCorrectOptionValue) {
-            firstBlock.find('input[name="questions[0][correct_option_id]"][value="' + originalCorrectOptionValue + '"]').prop('checked', true);
-        }
     });
 
     $('#qp-question-blocks-container').on('click', '.remove-question-block', function(e) {
@@ -367,6 +435,18 @@ jQuery(document).ready(function($) {
     // --- NEW: AJAX-powered Save Logic ---
     $('#qp-save-group-btn').on('click', function(e) {
         e.preventDefault();
+
+        var subjectId = $('#subject_id').val();
+        if (!subjectId) {
+            Swal.fire({
+                title: 'Subject Required',
+                text: 'You must select a subject before saving the question group.',
+                icon: 'error',
+                confirmButtonText: 'OK'
+            });
+            return; // Exit the function immediately
+        }
+
         var $button = $(this);
         var $form = $('form[method="post"]');
 
@@ -457,16 +537,37 @@ jQuery(document).ready(function($) {
             allowOutsideClick: () => !Swal.isLoading()
         }).then((result) => {
             if (result.isConfirmed) {
-                Swal.fire({
-                    title: 'Success!',
-                    text: 'Your changes have been saved.',
-                    icon: 'success',
-                    timer: 2000,
-                    showConfirmButton: false
-                }).then(() => {
-                    // Reload the page to see the changes
-                    location.reload();
-                });
+                var groupId = $form.find('input[name="group_id"]').val();
+                var isEditing = groupId && groupId !== '0';
+
+                if (result.value && result.value.success) {
+                    if (isEditing) {
+                        // User was editing, just show a success message and reload.
+                        Swal.fire({
+                            title: 'Updated!',
+                            text: 'Your changes have been saved.',
+                            icon: 'success',
+                            timer: 1500,
+                            showConfirmButton: false
+                        }).then(() => {
+                            location.reload();
+                        });
+                    } else if (result.value.data.redirect_url) {
+                        // User was creating, show redirect message and go to the new URL.
+                        Swal.fire({
+                            title: 'Success!',
+                            text: 'Your changes have been saved. Redirecting to Step 2...',
+                            icon: 'success',
+                            timer: 1500,
+                            showConfirmButton: false
+                        }).then(() => {
+                            window.location.href = result.value.data.redirect_url;
+                        });
+                    }
+                } else {
+                    // Fallback for unexpected errors
+                    Swal.fire('Save Failed', 'Something went wrong. Please reload the page.', 'error');
+                }
             }
         });
     });
@@ -543,7 +644,7 @@ jQuery(document).ready(function($) {
     // Update button text on change
     $container.on('change', '.qp-dropdown-panel input[type="checkbox"]', function() {
         var $panel = $(this).closest('.qp-dropdown-panel');
-        var $buttonSpan = $panel.prev('.qp-dropdown-toggle').find('span');
+        var $buttonSpan = $panel.prev('.qp-dropdown-toggle').find('span:first-child');
         var count = $panel.find('input:checked').length;
 
         if (count > 0) {

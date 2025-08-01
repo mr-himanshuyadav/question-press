@@ -43,18 +43,27 @@ class QP_Question_Editor_Page
             $g_table = $wpdb->prefix . 'qp_question_groups';
             $q_table = $wpdb->prefix . 'qp_questions';
             $o_table = $wpdb->prefix . 'qp_options';
-            $ql_table = $wpdb->prefix . 'qp_question_labels';
-            $l_table = $wpdb->prefix . 'qp_labels';
+            $rel_table = $wpdb->prefix . 'qp_term_relationships';
+            $term_table = $wpdb->prefix . 'qp_terms';
+            $tax_table = $wpdb->prefix . 'qp_taxonomies';
 
             $group_data = $wpdb->get_row($wpdb->prepare("SELECT * FROM $g_table WHERE group_id = %d", $group_id));
             if ($group_data) {
                 // --- UPDATED: Load all group-level data, including new PYQ fields ---
                 $direction_text = $group_data->direction_text;
                 $direction_image_id = $group_data->direction_image_id;
-                $current_subject_id = $group_data->subject_id;
                 $is_pyq_group = !empty($group_data->is_pyq);
-                $current_exam_id = $group_data->exam_id ?? 0;
                 $current_pyq_year = $group_data->pyq_year ?? '';
+
+                // --- NEW: Fetch current term relationships from the new system ---
+                $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'subject'");
+                $exam_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'exam'");
+
+                // Get the current subject for the group
+                $current_subject_id = $wpdb->get_var($wpdb->prepare("SELECT term_id FROM {$rel_table} WHERE object_id = %d AND object_type = 'group' AND term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id = %d)", $group_id, $subject_tax_id));
+
+                // Get the current exam for the group
+                $current_exam_id = $wpdb->get_var($wpdb->prepare("SELECT term_id FROM {$rel_table} WHERE object_id = %d AND object_type = 'group' AND term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id = %d)", $group_id, $exam_tax_id));
 
 
                 $questions_in_group = $wpdb->get_results($wpdb->prepare(
@@ -75,14 +84,68 @@ class QP_Question_Editor_Page
                     $group_status = $questions_in_group[0]->status;
                     // --- Get details from the FIRST question to populate metaboxes that are shared ---
                     $first_q = $questions_in_group[0];
-                    $current_topic_id = $first_q->topic_id ?? 0;
-                    $current_source_id = $first_q->source_id ?? 0;
-                    $current_section_id = $first_q->section_id ?? 0;
+                    $source_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'source'");
+
+                    // Get all source/section terms linked to the first question
+                    $source_terms = $wpdb->get_results($wpdb->prepare(
+                        "SELECT t.term_id, t.parent FROM {$term_table} t JOIN {$rel_table} r ON t.term_id = r.term_id WHERE r.object_id = %d AND r.object_type = 'question' AND t.taxonomy_id = %d",
+                        $first_q->question_id,
+                        $source_tax_id
+                    ));
+
+                    // Determine which is the source and which is the section
+                    $current_source_id = 0;
+                    $current_section_id = 0;
+                    if (!empty($source_terms)) {
+    // Find the assigned term (section or source)
+    $assigned_term = $source_terms[0]; // Assume only one is linked for this context
+    $current_section_id = 0;
+    $current_source_id = 0;
+
+    // Walk up the tree to find the root parent (source)
+    $term_id = $assigned_term->term_id;
+    $parent_id = $assigned_term->parent;
+
+    // If this is a top-level source
+    if ($parent_id == 0) {
+        $current_source_id = $term_id;
+    } else {
+        // Walk up to the root parent
+        $current_section_id = $term_id;
+        while ($parent_id != 0) {
+            $parent_term = $wpdb->get_row($wpdb->prepare(
+                "SELECT term_id, parent FROM {$term_table} WHERE term_id = %d",
+                $parent_id
+            ));
+            if ($parent_term) {
+                $current_source_id = $parent_term->term_id;
+                $parent_id = $parent_term->parent;
+            } else {
+                break;
+            }
+        }
+    }
+}
+
+                    // Get the current topic for the first question
+                    $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'subject'");
+                    $current_topic_id = $wpdb->get_var($wpdb->prepare("SELECT term_id FROM {$rel_table} WHERE object_id = %d AND object_type = 'question' AND term_id IN (SELECT term_id FROM {$term_table} WHERE parent != 0 AND taxonomy_id = %d)", $first_q->question_id, $subject_tax_id));
 
 
                     foreach ($questions_in_group as $q) {
                         $q->options = $wpdb->get_results($wpdb->prepare("SELECT * FROM $o_table WHERE question_id = %d ORDER BY option_id ASC", $q->question_id));
-                        $q->labels = $wpdb->get_results($wpdb->prepare("SELECT l.label_id, l.label_name, l.label_color FROM {$ql_table} ql JOIN {$l_table} l ON ql.label_id = l.label_id WHERE ql.question_id = %d", $q->question_id));
+
+                        // --- NEW: Fetch labels from the new taxonomy system ---
+                        $label_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'label'");
+                        $q->labels = $wpdb->get_results($wpdb->prepare(
+                            "SELECT t.term_id AS label_id, t.name AS label_name, m.meta_value AS label_color 
+                            FROM {$term_table} t 
+                            JOIN {$rel_table} r ON t.term_id = r.term_id 
+                            LEFT JOIN {$wpdb->prefix}qp_term_meta m ON t.term_id = m.term_id AND m.meta_key = 'color' 
+                            WHERE r.object_id = %d AND r.object_type = 'question' AND t.taxonomy_id = %d",
+                            $q->question_id,
+                            $label_tax_id
+                        ));
                     }
                 }
             }
@@ -93,41 +156,85 @@ class QP_Question_Editor_Page
             $questions_in_group[] = (object)['question_id' => 0, 'custom_question_id' => 'New', 'question_text' => '', 'options' => [], 'labels' => []];
         }
 
-        // --- Fetch ALL data needed for the form dropdowns ---
-        $all_subjects = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}qp_subjects ORDER BY subject_name ASC");
-        $all_topics = $wpdb->get_results("SELECT topic_id, topic_name, subject_id FROM {$wpdb->prefix}qp_topics ORDER BY topic_name ASC");
-        $all_labels = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}qp_labels ORDER BY label_name ASC");
-        $all_exams = $wpdb->get_results("SELECT exam_id, exam_name FROM {$wpdb->prefix}qp_exams ORDER BY exam_name ASC");
-        $all_sources = $wpdb->get_results("SELECT source_id, source_name, subject_id FROM {$wpdb->prefix}qp_sources ORDER BY source_name ASC");
-        $all_sections = $wpdb->get_results("SELECT section_id, section_name, source_id FROM {$wpdb->prefix}qp_source_sections ORDER BY section_name ASC");
+        // --- Fetch ALL data needed for the form dropdowns from the new taxonomy system ---
+        $term_table = $wpdb->prefix . 'qp_terms';
+        $tax_table = $wpdb->prefix . 'qp_taxonomies';
 
+        // Get taxonomy IDs
+        $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'subject'");
+        $label_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'label'");
+        $exam_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'exam'");
+        $source_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'source'");
 
-        // Prepare topics, sources, and sections data for JavaScript
+        // Fetch terms for each taxonomy
+        $all_subjects = $wpdb->get_results($wpdb->prepare("SELECT term_id AS subject_id, name AS subject_name FROM {$term_table} WHERE taxonomy_id = %d AND parent = 0 ORDER BY name ASC", $subject_tax_id));
+        $all_topics = $wpdb->get_results($wpdb->prepare("SELECT term_id AS topic_id, name AS topic_name, parent AS subject_id FROM {$term_table} WHERE taxonomy_id = %d AND parent != 0 ORDER BY name ASC", $subject_tax_id));
+        $all_labels = $wpdb->get_results($wpdb->prepare("SELECT term_id AS label_id, name AS label_name FROM {$term_table} WHERE taxonomy_id = %d ORDER BY name ASC", $label_tax_id));
+        $all_exams = $wpdb->get_results($wpdb->prepare("SELECT term_id AS exam_id, name AS exam_name FROM {$term_table} WHERE taxonomy_id = %d ORDER BY name ASC", $exam_tax_id));
+        // Fetch ALL terms for the source taxonomy to build the hierarchy in JS
+        $all_source_terms = $wpdb->get_results($wpdb->prepare("SELECT term_id as id, name, parent as parent_id FROM {$term_table} WHERE taxonomy_id = %d ORDER BY name ASC", $source_tax_id));
+
+        // --- NEW: Efficiently create all necessary maps from the single $all_source_terms query ---
+        $all_parent_sources = []; // For the "Source" dropdown
+        $all_sources_map = [];    // For building the sources_by_subject map
+
+        foreach ($all_source_terms as $term) {
+            if ($term->parent_id == 0) {
+                // This is a top-level source
+                $all_parent_sources[] = $term;
+                $all_sources_map[$term->id] = $term->name;
+            }
+        }
+        // --- END NEW LOGIC ---
+
+        // Prepare topics data for JavaScript
         $topics_by_subject = [];
         foreach ($all_topics as $topic) {
             $topics_by_subject[$topic->subject_id][] = ['id' => $topic->topic_id, 'name' => $topic->topic_name];
         }
-        $sources_by_subject = [];
-        foreach ($all_sources as $source) {
-            // Assuming each source has a subject_id property from the query
-            if (isset($source->subject_id)) {
-                $sources_by_subject[$source->subject_id][] = ['id' => $source->source_id, 'name' => $source->source_name];
-            }
-        }
-        $sections_by_source = [];
-        foreach ($all_sections as $section) {
-            $sections_by_source[$section->source_id][] = ['id' => $section->section_id, 'name' => $section->section_name];
-        }
+
+        // --- FIX: Correctly build the sources_by_subject map by querying direct relationships ---
+        $rel_table = $wpdb->prefix . 'qp_term_relationships';
+        $source_subject_links = $wpdb->get_results(
+    "SELECT 
+        rel.term_id AS subject_id, 
+        rel.object_id AS source_id,
+        t.name AS source_name
+     FROM {$rel_table} rel
+     JOIN {$term_table} t ON rel.object_id = t.term_id
+     WHERE rel.object_type = 'source_subject_link'"
+);
+
+$sources_by_subject = [];
+foreach ($source_subject_links as $link) {
+    $sources_by_subject[$link->subject_id][] = [
+        'id'   => $link->source_id,
+        'name' => $link->source_name
+    ];
+}
+$sections_by_source = [];
+foreach ($all_source_terms as $term) {
+    if ($term->parent_id > 0) {
+        $sections_by_source[$term->parent_id][] = ['id' => $term->id, 'name' => $term->name];
+    }
+}
+
+        $exam_subject_links = $wpdb->get_results("SELECT object_id AS exam_id, term_id AS subject_id FROM {$rel_table} WHERE object_type = 'exam_subject_link'");
 
         // Pass all necessary data to our JavaScript file
         wp_localize_script('qp-editor-script', 'qp_editor_data', [
-            'topics_by_subject'   => $topics_by_subject,
-            'sources_by_subject'  => $sources_by_subject, // <-- Add this line
-            'sections_by_source'  => $sections_by_source,
-            'current_topic_id'    => $current_topic_id,
-            'current_source_id'   => $current_source_id, // <-- Add this line
-            'current_section_id'  => $current_section_id,
-        ]);
+    'topics_by_subject'   => $topics_by_subject,
+    'sources_by_subject'  => $sources_by_subject,
+    'sections_by_source'  => $sections_by_source,
+    'all_exams'           => $all_exams,
+    'exam_subject_links'  => $exam_subject_links,
+    'current_topic_id'    => $current_topic_id,
+    'current_source_id'   => $current_source_id,
+    'current_section_id'  => $current_section_id,
+    'all_source_terms'    => $all_source_terms,
+    'current_pyq_year'    => $current_pyq_year,
+    'current_exam_id'     => $current_exam_id,
+]);
 
         if (isset($_GET['message'])) {
             $message = $_GET['message'] === '1' ? 'Question(s) updated successfully.' : 'Question(s) saved successfully.';
@@ -181,9 +288,12 @@ class QP_Question_Editor_Page
                 <a href="<?php echo esc_url($referer); ?>" class="page-title-action qp-back-button">&larr; Back to Previous Page</a>
             <?php endif; ?>
             <a href="<?php echo admin_url('admin.php?page=question-press'); ?>" class="page-title-action">All Questions</a>
+            <?php if ($is_editing) : ?>
+                <a href="<?php echo admin_url('admin.php?page=qp-question-editor'); ?>" class="page-title-action">Add New Question</a>
+            <?php endif; ?>
             <hr class="wp-header-end">
 
-            <form method="post" action="">
+            <form method="post" action="" class='qp-question-editor-form-wrapper'>
                 <?php wp_nonce_field('qp_save_question_group_nonce'); ?>
                 <input type="hidden" name="group_id" value="<?php echo esc_attr($group_id); ?>">
 
@@ -201,10 +311,10 @@ class QP_Question_Editor_Page
                     <div id="post-body" class="metabox-holder columns-2">
                         <div id="post-body-content">
                             <?php if ($is_editing && $has_draft_question) : ?>
-                                    <div class="notice notice-warning inline" style="margin: 0; margin-bottom: 5px;">
-                                        <p><strong>Draft Status:</strong> This group contains one or more questions that are still drafts (missing a correct answer). Draft questions will not appear on the frontend until they are completed and published.</p>
-                                    </div>
-                                <?php endif; ?>
+                                <div class="notice notice-warning inline" style="margin: 0; margin-bottom: 5px;">
+                                    <p><strong>Draft Status:</strong> This group contains one or more questions that are still drafts (missing a correct answer). Draft questions will not appear on the frontend until they are completed and published.</p>
+                                </div>
+                            <?php endif; ?>
                             <div class="postbox">
                                 <h2 class="hndle">
                                     <span>
@@ -249,20 +359,20 @@ class QP_Question_Editor_Page
 
                             <div id="qp-question-blocks-container">
                                 <?php foreach ($questions_in_group as $q_index => $question) :
-    $current_label_ids = wp_list_pluck($question->labels, 'label_id');
-    
-    // Set the correct initial status class
-    if ($question->question_id > 0) {
-        $status_class = 'status-' . ($question->status ?? 'draft');
-    } else {
-        $status_class = 'status-new';
-    }
+                                    $current_label_ids = wp_list_pluck($question->labels, 'label_id');
 
-    // Prioritize 'reported' status for highlighting
-    if (isset($reports_by_question[$question->question_id])) {
-        $status_class = 'status-reported';
-    }
-?>
+                                    // Set the correct initial status class
+                                    if ($question->question_id > 0) {
+                                        $status_class = 'status-' . ($question->status ?? 'draft');
+                                    } else {
+                                        $status_class = 'status-new';
+                                    }
+
+                                    // Prioritize 'reported' status for highlighting
+                                    if (isset($reports_by_question[$question->question_id])) {
+                                        $status_class = 'status-reported';
+                                    }
+                                ?>
                                     <div class="postbox qp-question-block <?php echo esc_attr($status_class); ?>">
                                         <div class="postbox-header">
                                             <button type="button" class="qp-toggle-question-block" title="Toggle visibility">
@@ -270,9 +380,9 @@ class QP_Question_Editor_Page
                                             </button>
                                             <h2 class="hndle">
                                                 <span>
-                                                    Q<?php echo ($q_index + 1); ?>: Question (ID: <?php echo esc_html($question->custom_question_id); ?>)
+                                                    <span class="qp-question-title">Q<?php echo ($q_index + 1); ?>: Question (ID: <?php echo esc_html($question->custom_question_id); ?>)</span>
                                                     <?php if ($question->question_id > 0) : ?>
-                                                        <small style="font-weight: normal; font-size: 12px; color: #777;"> | DB ID: <?php echo esc_html($question->question_id); ?></small>
+                                                        <span class="qp-question-db-id"><small style="font-weight: normal; font-size: 12px; color: #777;"> | DB ID: <?php echo esc_html($question->question_id); ?></small></span>
                                                     <?php endif; ?>
                                                     <small style="font-weight: normal; font-size: 12px; color: #777; margin-left: 15px;">
                                                         <label for="question_number_in_section_<?php echo $q_index; ?>" style="vertical-align: middle;"><strong>Q. No:</strong></label>
@@ -388,11 +498,32 @@ class QP_Question_Editor_Page
 
                         <div id="postbox-container-1" class="postbox-container">
                             <div class="postbox">
-                                <h2 class="hndle"><span>Publish</span></h2>
-                                <div id="major-publishing-actions">
+                                <div id="major-publishing-actions" style="text-align: center;">
                                     <button type="button" name="save_group" class="button button-primary button-large" id="qp-save-group-btn"><?php echo $is_editing ? 'Update Group' : 'Save Draft & Add Options'; ?></button>
                                 </div>
 
+                            </div>
+                            <div class="postbox">
+                                <h2 class="hndle"><span>Organize</span></h2>
+                                <div class="inside">
+                                    <p>
+                                        <label for="subject_id"><strong>Subject </strong><span style="color: red">*</span></label>
+                                        <select name="subject_id" id="subject_id" style="width: 100%;">
+                                            <option value="">— Select a Subject —</option>
+                                            <?php foreach ($all_subjects as $subject) : ?>
+                                                <option value="<?php echo esc_attr($subject->subject_id); ?>" <?php selected($current_subject_id, $subject->subject_id); ?>>
+                                                    <?php echo esc_html($subject->subject_name); ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </p>
+                                    <p>
+                                        <label for="topic_id"><strong>Topic</strong></label>
+                                        <select name="topic_id" id="topic_id" style="width: 100%;" disabled>
+                                            <option value="">— Select a subject first —</option>
+                                        </select>
+                                    </p>
+                                </div>
                             </div>
                             <div class="postbox">
                                 <h2 class="hndle"><span>PYQ Details</span></h2>
@@ -427,36 +558,15 @@ class QP_Question_Editor_Page
                                 </div>
                             </div>
                             <div class="postbox">
-                                <h2 class="hndle"><span>Organize</span></h2>
-                                <div class="inside">
-                                    <p>
-                                        <label for="subject_id"><strong>Subject</strong></label>
-                                        <select name="subject_id" id="subject_id" style="width: 100%;">
-                                            <?php foreach ($all_subjects as $subject) : ?>
-                                                <option value="<?php echo esc_attr($subject->subject_id); ?>" <?php selected($current_subject_id, $subject->subject_id); ?>>
-                                                    <?php echo esc_html($subject->subject_name); ?>
-                                                </option>
-                                            <?php endforeach; ?>
-                                        </select>
-                                    </p>
-                                    <p>
-                                        <label for="topic_id"><strong>Topic</strong></label>
-                                        <select name="topic_id" id="topic_id" style="width: 100%;" disabled>
-                                            <option value="">— Select a subject first —</option>
-                                        </select>
-                                    </p>
-                                </div>
-                            </div>
-                            <div class="postbox">
                                 <h2 class="hndle"><span>Source Details</span></h2>
                                 <div class="inside">
                                     <p>
                                         <label for="source_id"><strong>Source</strong></label>
                                         <select name="source_id" id="source_id" style="width: 100%;">
                                             <option value="">— Select a Source —</option>
-                                            <?php foreach ($all_sources as $source) : ?>
-                                                <option value="<?php echo esc_attr($source->source_id); ?>" <?php selected($current_source_id, $source->source_id); ?>>
-                                                    <?php echo esc_html($source->source_name); ?>
+                                            <?php foreach ($all_parent_sources as $source) : ?>
+                                                <option value="<?php echo esc_attr($source->id); ?>" <?php selected($current_source_id, $source->id); ?>>
+                                                    <?php echo esc_html($source->name); ?>
                                                 </option>
                                             <?php endforeach; ?>
                                         </select>
@@ -754,9 +864,11 @@ class QP_Question_Editor_Page
                 height: auto;
                 width: auto;
             }
-            .qp-question-block .hndle, .postbox .hndle {
-        cursor: default;
-    }
+
+            .qp-question-block .hndle,
+            .postbox .hndle {
+                cursor: default;
+            }
         </style>
 <?php
     }

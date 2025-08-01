@@ -66,78 +66,88 @@ class QP_Questions_List_Table extends WP_List_Table
         $actions['trash'] = 'Move to Trash';
 
         // Add "Remove Label" action only when filtering by a label
-        if (!empty($_REQUEST['filter_by_label'])) {
-            $label_ids = array_map('absint', (array)$_REQUEST['filter_by_label']);
+        // Add "Remove Label" action only when filtering by a label
+    if (!empty($_REQUEST['filter_by_label'])) {
+    $label_ids = array_map('absint', (array)$_REQUEST['filter_by_label']);
 
-            if (!empty($label_ids)) {
-                $labels_table = $wpdb->prefix . 'qp_labels';
-                $ids_placeholder = implode(',', array_fill(0, count($label_ids), '%d'));
+    if (!empty($label_ids)) {
+        // UPDATED: Query the new terms table
+        $terms_table = $wpdb->prefix . 'qp_terms';
+        $ids_placeholder = implode(',', array_fill(0, count($label_ids), '%d'));
 
-                $selected_labels = $wpdb->get_results($wpdb->prepare("SELECT label_id, label_name FROM {$labels_table} WHERE label_id IN ({$ids_placeholder})", $label_ids));
+        $selected_labels = $wpdb->get_results($wpdb->prepare("SELECT term_id, name FROM {$terms_table} WHERE term_id IN ({$ids_placeholder})", $label_ids));
 
-                if ($selected_labels) {
-                    $actions['remove_label_group_start'] = '--- Remove Labels ---';
-                    foreach ($selected_labels as $label) {
-                        $actions['remove_label_' . $label->label_id] = 'Remove "' . esc_html($label->label_name) . '" label';
-                    }
-                }
+        if ($selected_labels) {
+            $actions['remove_label_group_start'] = '--- Remove Labels ---';
+            foreach ($selected_labels as $label) {
+                $actions['remove_label_' . $label->term_id] = 'Remove "' . esc_html($label->name) . '" label';
             }
         }
+    }
+}
 
         return $actions;
     }
 
     /**
-     * NEW: Overriding the parent bulk_actions method to insert our custom controls.
-     * This creates the side-by-side dropdowns with a single Apply button.
-     */
-    protected function bulk_actions($which = '')
-    {
-        if (is_null($this->_actions)) {
-            $this->_actions = $this->get_bulk_actions();
-            // Remove visual separators from the <select> dropdown
-            $this->_actions = array_filter($this->_actions, function ($key) {
-                return strpos($key, '_group_start') === false;
-            }, ARRAY_FILTER_USE_KEY);
-        }
-        if (empty($this->_actions)) {
-            return;
-        }
+ * NEW: Overriding the parent bulk_actions method to insert our custom controls.
+ * This creates the side-by-side dropdowns with a single Apply button.
+ */
+protected function bulk_actions($which = '')
+{
+    if (is_null($this->_actions)) {
+        $this->_actions = $this->get_bulk_actions();
+        // Remove visual separators from the <select> dropdown
+        $this->_actions = array_filter($this->_actions, function ($key) {
+            return strpos($key, '_group_start') === false;
+        }, ARRAY_FILTER_USE_KEY);
+    }
+    if (empty($this->_actions)) {
+        return;
+    }
 
-        echo '<label for="bulk-action-selector-' . esc_attr($which) . '" class="screen-reader-text">' . __('Select bulk action') . '</label>';
-        echo '<select name="action" id="bulk-action-selector-' . esc_attr($which) . '">';
-        echo '<option value="-1">' . __('Bulk Actions') . '</option>';
+    echo '<label for="bulk-action-selector-' . esc_attr($which) . '" class="screen-reader-text">' . __('Select bulk action') . '</label>';
+    echo '<select name="action" id="bulk-action-selector-' . esc_attr($which) . '">';
+    echo '<option value="-1">' . __('Bulk Actions') . '</option>';
 
-        foreach ($this->get_bulk_actions() as $name => $title) {
-            $class = 'edit' === $name ? 'hide-if-no-js' : '';
-            // Use an <optgroup> for visual separation
-            if (strpos($name, '_group_start') !== false) {
-                echo '<optgroup label="' . esc_attr($title) . '">';
-                continue;
-            }
-            echo "\n" . '<option value="' . esc_attr($name) . '" class="' . $class . '">' . $title . '</option>';
+    foreach ($this->get_bulk_actions() as $name => $title) {
+        $class = 'edit' === $name ? 'hide-if-no-js' : '';
+        // Use an <optgroup> for visual separation
+        if (strpos($name, '_group_start') !== false) {
+            echo '<optgroup label="' . esc_attr($title) . '">';
+            continue;
+        }
+        echo "\n" . '<option value="' . esc_attr($name) . '" class="' . $class . '">' . $title . '</option>';
+    }
+    echo '</select>';
+
+    // --- ADDING OUR CUSTOM MULTI-LABEL DROPDOWN (with corrected query) ---
+    global $wpdb;
+    $term_table = $wpdb->prefix . 'qp_terms';
+    $tax_table = $wpdb->prefix . 'qp_taxonomies';
+    $label_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'label'");
+
+    $labels = $wpdb->get_results($wpdb->prepare(
+        "SELECT term_id, name FROM {$term_table} WHERE taxonomy_id = %d ORDER BY name ASC",
+        $label_tax_id
+    ));
+
+    if ($labels) {
+        echo '<span style="margin-left: 5px;"></span>'; // Add a small gap
+        echo '<label for="labels_to_apply" class="screen-reader-text">Add labels to selected questions</label>';
+        echo '<select name="labels_to_apply[]" id="labels_to_apply" multiple="multiple" style="min-width: 180px;">';
+        echo '<option value="">— Add Labels —</option>';
+        foreach ($labels as $label) {
+            printf('<option value="%s">%s</option>', esc_attr($label->term_id), esc_html($label->name));
         }
         echo '</select>';
-
-        // --- ADDING OUR CUSTOM MULTI-LABEL DROPDOWN ---
-        global $wpdb;
-        $labels = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}qp_labels ORDER BY label_name ASC");
-        if ($labels) {
-            echo '<span style="margin-left: 5px;"></span>'; // Add a small gap
-            echo '<label for="labels_to_apply" class="screen-reader-text">Add labels to selected questions</label>';
-            echo '<select name="labels_to_apply[]" id="labels_to_apply" multiple="multiple" style="min-width: 180px;">';
-            echo '<option value="">— Add Labels —</option>';
-            foreach ($labels as $label) {
-                echo sprintf('<option value="%s">%s</option>', esc_attr($label->label_id), esc_html($label->label_name));
-            }
-            echo '</select>';
-        }
-
-        // --- END CUSTOM DROPDOWN ---
-
-        submit_button(__('Apply'), 'action', '', false, array('id' => 'doaction' . ('top' === $which ? '' : '2'), 'style' => 'margin-left: 5px;'));
-        echo "\n";
     }
+
+    // --- END CUSTOM DROPDOWN ---
+
+    submit_button(__('Apply'), 'action', '', false, array('id' => 'doaction' . ('top' === $which ? '' : '2'), 'style' => 'margin-left: 5px;'));
+    echo "\n";
+}
 
     protected function get_views()
     {
@@ -169,108 +179,108 @@ class QP_Questions_List_Table extends WP_List_Table
     }
 
     protected function extra_tablenav($which)
-    {
-        if ($which == "top") {
-            global $wpdb;
+{
+    if ($which == "top") {
+        global $wpdb;
 
-            // --- ROW 1: Standard Filters ---
-            echo '<div class="alignleft actions">';
+        // --- ROW 1: Standard Filters (No changes needed here, it is correct) ---
+        echo '<div class="alignleft actions">';
 
+        $term_table = $wpdb->prefix . 'qp_terms';
+        $tax_table = $wpdb->prefix . 'qp_taxonomies';
+        $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'subject'");
 
+        $subjects = $wpdb->get_results($wpdb->prepare(
+            "SELECT term_id, name FROM {$term_table} WHERE taxonomy_id = %d AND parent = 0 ORDER BY name ASC",
+            $subject_tax_id
+        ));
 
-
-
-
-            $subjects = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}qp_subjects ORDER BY subject_name ASC");
-            $current_subject = isset($_REQUEST['filter_by_subject']) ? absint($_REQUEST['filter_by_subject']) : '';
-            echo '<select name="filter_by_subject" id="qp_filter_by_subject" style="margin-right: 5px;">';
-            echo '<option value="">All Subjects</option>';
-            foreach ($subjects as $subject) {
-                printf('<option value="%s" %s>%s</option>', esc_attr($subject->subject_id), selected($current_subject, $subject->subject_id, false), esc_html($subject->subject_name));
-            }
-            echo '</select>';
-
-            // NEW: Topic Filter (initially hidden/disabled)
-            $current_topic = isset($_REQUEST['filter_by_topic']) ? absint($_REQUEST['filter_by_topic']) : '';
-            echo '<select name="filter_by_topic" id="qp_filter_by_topic" style="margin-right: 5px; display: none;">';
-            echo '<option value="">All Topics</option>';
-            echo '</select>';
-
-            // We will control its visibility with JavaScript
-            $current_source_or_section = isset($_REQUEST['filter_by_source']) ? esc_attr($_REQUEST['filter_by_source']) : '';
-            echo '<select name="filter_by_source" id="qp_filter_by_source_section" style="margin-right: 5px; display: none;">';
-            echo '<option value="">All Sources / Sections</option>';
-            echo '</select>';
-
-            $labels = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}qp_labels ORDER BY label_name ASC");
-            $current_labels = isset($_REQUEST['filter_by_label']) ? array_map('absint', (array)$_REQUEST['filter_by_label']) : [];
-            echo '<select name="filter_by_label[]" multiple="multiple" id="qp_label_filter_select" style="min-width: 200px; margin-right: 5px;">';
-            echo '<option value="" ' . (empty($current_labels) ? 'selected' : '') . '>Filter by Label(s)</option>';
-            foreach ($labels as $label) {
-                printf('<option value="%s" %s>%s</option>', esc_attr($label->label_id), selected(in_array($label->label_id, $current_labels), true, false), esc_html($label->label_name));
-            }
-            echo '</select>';
-
-            submit_button('Filter', 'button', 'filter_action', false, ['id' => 'post-query-submit']);
-            echo '</div>';
-
-            // --- ROW 2: Bulk Edit Controls ---
-
-            echo '<div id="qp-bulk-edit-panel" class="alignleft actions" style="display: none; clear: both; margin-top: 10px; padding: 10px; border: 1px solid #cce7f6; background-color: #f6f7f7;">';
-
-            $all_exams = $wpdb->get_results("SELECT exam_id, exam_name FROM {$wpdb->prefix}qp_exams ORDER BY exam_name ASC");
-            $all_sources = $wpdb->get_results("SELECT source_id, source_name FROM {$wpdb->prefix}qp_sources ORDER BY source_name ASC");
-            $all_sections = $wpdb->get_results("SELECT section_id, section_name FROM {$wpdb->prefix}qp_source_sections ORDER BY section_name ASC");
-            $all_topics = $wpdb->get_results("SELECT topic_id, topic_name FROM {$wpdb->prefix}qp_topics ORDER BY topic_name ASC");
-
-            echo '<span style="font-weight: bold; margin-right: 5px;">Bulk Edit:</span>';
-
-            // --- NEW ORDER ---
-
-            // THE FIX: Add a variable to hold the disabled state for the source dropdown
-            $is_subject_filtered = !empty($_REQUEST['filter_by_subject']);
-            $source_disabled_attr = $is_subject_filtered ? '' : ' disabled="disabled"';
-
-            // Source Dropdown (Now first)
-            // Add the disabled attribute we just created
-            echo '<select name="bulk_edit_source" id="bulk_edit_source" style="margin-right: 5px;max-width: 18rem;"' . $source_disabled_attr . '>';
-            echo '<option value="">— Change Source —</option>';
-            foreach ($all_sources as $source) {
-                printf('<option value="%s">%s</option>', esc_attr($source->source_id), esc_html($source->source_name));
-            }
-            echo '</select>';
-
-            // Section Dropdown (Now second)
-            echo '<select name="bulk_edit_section" id="bulk_edit_section" style="margin-right: 5px;" disabled="disabled">'; // Add disabled here too
-            // THE FIX: Change the default instructional text
-            echo '<option value="">— Select Source First —</option>';
-            foreach ($all_sections as $section) {
-                printf('<option value="%s">%s</option>', esc_attr($section->section_id), esc_html($section->section_name));
-            }
-            echo '</select>';
-
-            // NEW: Topic Dropdown
-            echo '<select name="bulk_edit_topic" id="bulk_edit_topic" style="margin-right: 5px;" disabled="disabled">';
-            echo '<option value="">— Change Topic —</option>';
-            foreach ($all_topics as $topic) {
-                printf('<option value="%s">%s</option>', esc_attr($topic->topic_id), esc_html($topic->topic_name));
-            }
-            echo '</select>';
-
-
-            // Exam Dropdown (Now last)
-            echo '<select name="bulk_edit_exam" id="bulk_edit_exam" style="margin-right: 5px; max-width: 20rem;" disabled="disabled">';
-            echo '<option value="">— Select Subject to edit exam —</option>';
-            foreach ($all_exams as $exam) {
-                printf('<option value="%s">%s</option>', esc_attr($exam->exam_id), esc_html($exam->exam_name));
-            }
-            echo '</select>';
-
-            submit_button('Apply Changes', 'primary', 'bulk_edit_apply', false);
-
-            echo '</div>';
+        $current_subject = isset($_REQUEST['filter_by_subject']) ? absint($_REQUEST['filter_by_subject']) : '';
+        echo '<select name="filter_by_subject" id="qp_filter_by_subject" style="margin-right: 5px;">';
+        echo '<option value="">All Subjects</option>';
+        foreach ($subjects as $subject) {
+            printf('<option value="%s" %s>%s</option>', esc_attr($subject->term_id), selected($current_subject, $subject->term_id, false), esc_html($subject->name));
         }
+        echo '</select>';
+
+        $current_topic = isset($_REQUEST['filter_by_topic']) ? absint($_REQUEST['filter_by_topic']) : '';
+        echo '<select name="filter_by_topic" id="qp_filter_by_topic" style="margin-right: 5px; display: none;">';
+        echo '<option value="">All Topics</option>';
+        echo '</select>';
+
+        $current_source_or_section = isset($_REQUEST['filter_by_source']) ? esc_attr($_REQUEST['filter_by_source']) : '';
+        echo '<select name="filter_by_source" id="qp_filter_by_source_section" style="margin-right: 5px; display: none;">';
+        echo '<option value="">All Sources / Sections</option>';
+        echo '</select>';
+
+        $label_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'label'");
+        $labels = $wpdb->get_results($wpdb->prepare(
+            "SELECT term_id, name FROM {$term_table} WHERE taxonomy_id = %d ORDER BY name ASC",
+            $label_tax_id
+        ));
+
+        $current_labels = isset($_REQUEST['filter_by_label']) ? array_map('absint', (array)$_REQUEST['filter_by_label']) : [];
+        echo '<select name="filter_by_label[]" multiple="multiple" id="qp_label_filter_select" style="min-width: 200px; margin-right: 5px;">';
+        echo '<option value="" ' . (empty($current_labels) ? 'selected' : '') . '>Filter by Label(s)</option>';
+        foreach ($labels as $label) {
+            printf('<option value="%s" %s>%s</option>', esc_attr($label->term_id), selected(in_array($label->term_id, $current_labels), true, false), esc_html($label->name));
+        }
+        echo '</select>';
+
+        submit_button('Filter', 'button', 'filter_action', false, ['id' => 'post-query-submit']);
+        echo '</div>';
+
+        // --- ROW 2: Bulk Edit Controls (THIS IS THE CORRECTED PART) ---
+
+        echo '<div id="qp-bulk-edit-panel" class="alignleft actions" style="display: none; clear: both; margin-top: 10px; padding: 10px; border: 1px solid #cce7f6; background-color: #f6f7f7;">';
+
+        // NEW, CORRECTED QUERIES
+        $exam_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'exam'");
+        $all_exams = $wpdb->get_results($wpdb->prepare("SELECT term_id, name FROM {$term_table} WHERE taxonomy_id = %d ORDER BY name ASC", $exam_tax_id));
+
+        $source_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'source'");
+        $all_sources = $wpdb->get_results($wpdb->prepare("SELECT term_id, name FROM {$term_table} WHERE taxonomy_id = %d AND parent = 0 ORDER BY name ASC", $source_tax_id));
+        $all_sections = $wpdb->get_results($wpdb->prepare("SELECT term_id, name FROM {$term_table} WHERE taxonomy_id = %d AND parent != 0 ORDER BY name ASC", $source_tax_id));
+
+        // Note: Topics are children of subjects, so they are fetched dynamically via JavaScript based on the filtered subject.
+        // We will leave the initial dropdown empty and let the existing JS handle populating it based on the subject filter.
+
+        echo '<span style="font-weight: bold; margin-right: 5px;">Bulk Edit:</span>';
+
+        // Source Dropdown
+        echo '<select name="bulk_edit_source" id="bulk_edit_source" style="margin-right: 5px;max-width: 18rem;">';
+        echo '<option value="">— Change Source —</option>';
+        foreach ($all_sources as $source) {
+            printf('<option value="%s">%s</option>', esc_attr($source->term_id), esc_html($source->name));
+        }
+        echo '</select>';
+
+        // Section Dropdown
+        echo '<select name="bulk_edit_section" id="bulk_edit_section" style="margin-right: 5px;" disabled="disabled">';
+        echo '<option value="">— Select Source First —</option>';
+        foreach ($all_sections as $section) {
+            printf('<option value="%s">%s</option>', esc_attr($section->term_id), esc_html($section->name));
+        }
+        echo '</select>';
+
+        // Topic Dropdown (Initially empty, populated by JS)
+        echo '<select name="bulk_edit_topic" id="bulk_edit_topic" style="margin-right: 5px;" disabled="disabled">';
+        echo '<option value="">— Select Subject to see Topics —</option>';
+        echo '</select>';
+
+        // Exam Dropdown
+        echo '<select name="bulk_edit_exam" id="bulk_edit_exam" style="margin-right: 5px; max-width: 20rem;" disabled="disabled">';
+        echo '<option value="">— Select Subject to edit exam —</option>';
+        foreach ($all_exams as $exam) {
+            printf('<option value="%s">%s</option>', esc_attr($exam->term_id), esc_html($exam->name));
+        }
+        echo '</select>';
+
+        submit_button('Apply Changes', 'primary', 'bulk_edit_apply', false);
+
+        echo '</div>';
     }
+}
 
     public function search_box($text, $input_id)
     {
@@ -302,99 +312,141 @@ class QP_Questions_List_Table extends WP_List_Table
         $orderby = isset($_GET['orderby']) ? sanitize_key($_GET['orderby']) : 'custom_question_id';
         $order = isset($_GET['order']) ? sanitize_key($_GET['order']) : 'desc';
 
+        // Define new table names
         $q_table = $wpdb->prefix . 'qp_questions';
         $g_table = $wpdb->prefix . 'qp_question_groups';
-        $s_table = $wpdb->prefix . 'qp_subjects';
-        $ql_table = $wpdb->prefix . 'qp_question_labels';
-        $src_table = $wpdb->prefix . 'qp_sources';
-        $sec_table = $wpdb->prefix . 'qp_source_sections';
-        $t_table = $wpdb->prefix . 'qp_topics';
-        $e_table = $wpdb->prefix . 'qp_exams';
+        $rel_table = $wpdb->prefix . 'qp_term_relationships';
+        $term_table = $wpdb->prefix . 'qp_terms';
+        $tax_table = $wpdb->prefix . 'qp_taxonomies';
 
+        // Base query structure
+        $query_from = "FROM {$q_table} q";
+        $query_joins = " LEFT JOIN {$g_table} g ON q.group_id = g.group_id";
         $where_conditions = [];
-        $id_query_from = "FROM {$q_table} q";
-        $id_query_joins = " LEFT JOIN {$g_table} g ON q.group_id = g.group_id";
 
+        // Status filter (remains the same)
         $current_status = isset($_REQUEST['status']) ? sanitize_key($_REQUEST['status']) : 'publish';
-        if ($current_status === 'trash') {
-            $where_conditions[] = "q.status = 'trash'";
-        } elseif ($current_status === 'draft') {
-            $where_conditions[] = "q.status = 'draft'";
-        } else {
-            // Default to 'publish' view, which also covers 'all'
-            $where_conditions[] = "q.status = 'publish'";
+        $where_conditions[] = $wpdb->prepare("q.status = %s", $current_status);
+
+        $joins_added = []; // Helper to prevent duplicate joins
+
+        // Status filter (remains the same)
+        $current_status = isset($_REQUEST['status']) ? sanitize_key($_REQUEST['status']) : 'publish';
+        $where_conditions[] = $wpdb->prepare("q.status = %s", $current_status);
+
+        // Handle Subject Filter
+        if (!empty($_REQUEST['filter_by_subject'])) {
+            if (!in_array('subject_rel', $joins_added)) {
+                $query_joins .= " JOIN {$rel_table} subject_rel ON g.group_id = subject_rel.object_id AND subject_rel.object_type = 'group'";
+                $joins_added[] = 'subject_rel';
+            }
+            $where_conditions[] = $wpdb->prepare("subject_rel.term_id = %d", absint($_REQUEST['filter_by_subject']));
         }
 
-        // Handle the new Topic filter
+        // Handle Topic Filter
         if (!empty($_REQUEST['filter_by_topic'])) {
-            $where_conditions[] = $wpdb->prepare("q.topic_id = %d", absint($_REQUEST['filter_by_topic']));
+            if (!in_array('topic_rel', $joins_added)) {
+                $query_joins .= " JOIN {$rel_table} topic_rel ON q.question_id = topic_rel.object_id AND topic_rel.object_type = 'question'";
+                $joins_added[] = 'topic_rel';
+            }
+            $where_conditions[] = $wpdb->prepare("topic_rel.term_id = %d", absint($_REQUEST['filter_by_topic']));
         }
 
-        // Handle the new Source/Section filter
+        // Handle Source/Section Filter
         if (!empty($_REQUEST['filter_by_source'])) {
             $filter_value = sanitize_text_field($_REQUEST['filter_by_source']);
-
-            // Check if the filter is for a whole source (e.g., "source_15")
+            $term_id_to_filter = 0;
             if (strpos($filter_value, 'source_') === 0) {
-                $source_id = absint(str_replace('source_', '', $filter_value));
-                if ($source_id > 0) {
-                    $where_conditions[] = $wpdb->prepare("q.source_id = %d", $source_id);
-                }
+                $term_id_to_filter = absint(str_replace('source_', '', $filter_value));
+            } elseif (strpos($filter_value, 'section_') === 0) {
+                $term_id_to_filter = absint(str_replace('section_', '', $filter_value));
             }
-            // Check if the filter is for a specific section (e.g., "section_22")
-            elseif (strpos($filter_value, 'section_') === 0) {
-                $section_id = absint(str_replace('section_', '', $filter_value));
-                if ($section_id > 0) {
-                    $where_conditions[] = $wpdb->prepare("q.section_id = %d", $section_id);
+
+            if ($term_id_to_filter > 0) {
+                if (!in_array('source_rel', $joins_added)) {
+                    $query_joins .= " JOIN {$rel_table} source_rel ON q.question_id = source_rel.object_id AND source_rel.object_type = 'question'";
+                    $joins_added[] = 'source_rel';
                 }
+                $where_conditions[] = $wpdb->prepare("source_rel.term_id = %d", $term_id_to_filter);
             }
         }
 
+        // Handle Search Filter (remains the same as old logic)
         if (!empty($_REQUEST['s'])) {
             $search_term = '%' . $wpdb->esc_like(stripslashes($_REQUEST['s'])) . '%';
             $where_conditions[] = $wpdb->prepare("(q.question_text LIKE %s OR q.custom_question_id LIKE %s)", $search_term, $search_term);
         }
 
+        // Handle Label Filter
         $selected_label_ids = isset($_REQUEST['filter_by_label']) ? array_filter(array_map('absint', (array)$_REQUEST['filter_by_label'])) : [];
         if (!empty($selected_label_ids)) {
-            foreach ($selected_label_ids as $index => $label_id) {
-                $alias = "ql" . $index;
-                $id_query_joins .= " JOIN {$ql_table} AS {$alias} ON q.question_id = {$alias}.question_id";
-                $where_conditions[] = $wpdb->prepare("{$alias}.label_id = %d", $label_id);
+            $label_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'label'");
+
+            // This subquery ensures that we only get questions that have ALL of the selected labels.
+            $question_ids_with_all_labels = $wpdb->get_col($wpdb->prepare(
+                "SELECT r.object_id
+         FROM {$rel_table} r
+         JOIN {$term_table} t ON r.term_id = t.term_id
+         WHERE r.object_type = 'question' AND t.taxonomy_id = %d AND r.term_id IN (" . implode(',', $selected_label_ids) . ")
+         GROUP BY r.object_id
+         HAVING COUNT(DISTINCT r.term_id) = %d",
+                $label_tax_id,
+                count($selected_label_ids)
+            ));
+
+            if (empty($question_ids_with_all_labels)) {
+                // If no questions match, we can add a condition that will always be false to return no results.
+                $where_conditions[] = "1=0";
+            } else {
+                $ids_placeholder = implode(',', $question_ids_with_all_labels);
+                $where_conditions[] = "q.question_id IN ({$ids_placeholder})";
             }
         }
 
         $where_clause = ' WHERE ' . implode(' AND ', $where_conditions);
-        $id_query = "SELECT DISTINCT q.question_id {$id_query_from} {$id_query_joins} {$where_clause}";
-        $matching_question_ids = $wpdb->get_col($id_query);
 
-        $total_items = count($matching_question_ids);
+        // Get the total number of items
+        $total_items_query = "SELECT COUNT(DISTINCT q.question_id) {$query_from} {$query_joins} {$where_clause}";
+        $total_items = $wpdb->get_var($total_items_query);
 
-        if (empty($matching_question_ids)) {
-            $this->items = [];
-        } else {
-            $ids_placeholder = implode(',', $matching_question_ids);
-            $data_query = "SELECT q.*, s.subject_name, t.topic_name, g.group_id, g.direction_text, g.direction_image_id, g.is_pyq,
-                        g.pyq_year, e.exam_name,
-                        src.source_name, sec.section_name
-            FROM {$q_table} q
-            LEFT JOIN {$g_table} g ON q.group_id = g.group_id
-            LEFT JOIN {$s_table} s ON g.subject_id = s.subject_id
-            LEFT JOIN {$src_table} src ON q.source_id = src.source_id
-            LEFT JOIN {$sec_table} sec ON q.section_id = sec.section_id
-            LEFT JOIN {$t_table} t ON q.topic_id = t.topic_id
-            LEFT JOIN {$e_table} e ON g.exam_id = e.exam_id
-            WHERE q.question_id IN ({$ids_placeholder})
-            ORDER BY {$orderby} {$order}
-            LIMIT {$per_page} OFFSET {$offset}";
+        // Fetch the actual data for the current page
+        $data_query = "SELECT 
+    q.*, 
+    g.group_id, g.direction_text, g.direction_image_id, g.is_pyq, g.pyq_year,
+    subject_term.name AS subject_name,
+    topic_term.name AS topic_name,
+    exam_term.name AS exam_name,
+    source_rel.term_id AS linked_source_term_id
+FROM {$q_table} q
+LEFT JOIN {$g_table} g ON q.group_id = g.group_id
+LEFT JOIN {$rel_table} subject_rel ON g.group_id = subject_rel.object_id AND subject_rel.object_type = 'group' AND subject_rel.term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id = (SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'subject'))
+LEFT JOIN {$term_table} subject_term ON subject_rel.term_id = subject_term.term_id
+LEFT JOIN {$rel_table} topic_rel ON q.question_id = topic_rel.object_id AND topic_rel.object_type = 'question' AND topic_rel.term_id IN (SELECT term_id FROM {$term_table} WHERE parent != 0 AND taxonomy_id = (SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'subject'))
+LEFT JOIN {$term_table} topic_term ON topic_rel.term_id = topic_term.term_id
+LEFT JOIN {$rel_table} exam_rel ON g.group_id = exam_rel.object_id AND exam_rel.object_type = 'group' AND exam_rel.term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id = (SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'exam'))
+LEFT JOIN {$term_table} exam_term ON exam_rel.term_id = exam_term.term_id
+LEFT JOIN {$rel_table} source_rel ON q.question_id = source_rel.object_id AND source_rel.object_type = 'question' AND source_rel.term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id = (SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'source'))
+{$where_clause}
+GROUP BY q.question_id
+ORDER BY {$orderby} {$order}
+LIMIT {$per_page} OFFSET {$offset}";
 
-            $this->items = $wpdb->get_results($data_query, ARRAY_A);
-        }
+        $this->items = $wpdb->get_results($data_query, ARRAY_A);
 
+        // Fetch labels for the questions on the current page
         $question_ids_on_page = wp_list_pluck($this->items, 'question_id');
         if (!empty($question_ids_on_page)) {
             $labels_placeholder = implode(',', $question_ids_on_page);
-            $labels_results = $wpdb->get_results("SELECT ql.question_id, l.label_name, l.label_color FROM {$ql_table} ql JOIN {$wpdb->prefix}qp_labels l ON ql.label_id = l.label_id WHERE ql.question_id IN ({$labels_placeholder})");
+            $labels_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'label'");
+
+            $labels_results = $wpdb->get_results($wpdb->prepare(
+                "SELECT r.object_id as question_id, t.name as label_name, m.meta_value as label_color
+         FROM {$rel_table} r
+         JOIN {$term_table} t ON r.term_id = t.term_id
+         LEFT JOIN {$wpdb->prefix}qp_term_meta m ON t.term_id = m.term_id AND m.meta_key = 'color'
+         WHERE r.object_id IN ({$labels_placeholder}) AND r.object_type = 'question' AND t.taxonomy_id = %d",
+                $labels_tax_id
+            ));
 
             $labels_by_question_id = [];
             foreach ($labels_results as $label) {
@@ -436,124 +488,138 @@ class QP_Questions_List_Table extends WP_List_Table
      * UPDATED: Process all bulk actions, now correctly handling nonces for single-item actions.
      */
     public function process_bulk_action()
-    {
-        $action = $this->current_action();
+{
+    // --- NEW: Handle Custom Bulk Edit First ---
+    if (isset($_REQUEST['bulk_edit_apply'])) {
+        check_admin_referer('bulk-questions'); // This nonce is automatically added by WP
+        $question_ids = isset($_REQUEST['question_ids']) ? array_map('absint', $_REQUEST['question_ids']) : [];
 
-        // --- Handle Custom Bulk Edit First ---
-        if (isset($_REQUEST['bulk_edit_apply'])) {
-            check_admin_referer('bulk-questions', '_wpnonce');
-            $question_ids = isset($_REQUEST['question_ids']) ? array_map('absint', $_REQUEST['question_ids']) : [];
-
-            if (!empty($question_ids)) {
-                global $wpdb;
-                $q_table = $wpdb->prefix . 'qp_questions';
-
-                $source_id  = !empty($_REQUEST['bulk_edit_source']) ? absint($_REQUEST['bulk_edit_source']) : null;
-                $section_id = !empty($_REQUEST['bulk_edit_section']) ? absint($_REQUEST['bulk_edit_section']) : null;
-                $topic_id   = !empty($_REQUEST['bulk_edit_topic']) ? absint($_REQUEST['bulk_edit_topic']) : null;
-
-                $question_set_clauses = [];
-                $query_params = [];
-
-                if ($source_id) {
-                    $question_set_clauses[] = "source_id = %d";
-                    $query_params[] = $source_id;
-                }
-                if ($section_id) {
-                    $question_set_clauses[] = "section_id = %d";
-                    $query_params[] = $section_id;
-                }
-
-                if ($topic_id) {
-                    $question_set_clauses[] = "topic_id = %d";
-                    $query_params[] = $topic_id;
-                }
-
-                if (!empty($question_set_clauses)) {
-                    $ids_placeholder = implode(',', $question_ids);
-                    $query = "UPDATE {$q_table} SET " . implode(', ', $question_set_clauses) . " WHERE question_id IN ({$ids_placeholder})";
-                    $wpdb->query($wpdb->prepare($query, $query_params));
-                }
-            }
-        }
-
-        // --- Handle Standard Bulk Actions & Label Application ---
-        $labels_to_apply = isset($_REQUEST['labels_to_apply']) ? array_filter(array_map('absint', (array) $_REQUEST['labels_to_apply'])) : [];
-
-        if ((!$action || $action === -1) && empty($labels_to_apply) && !isset($_REQUEST['bulk_edit_apply'])) {
-            return;
-        }
-
-        $nonce = $_REQUEST['_wpnonce'] ?? '';
-        if (!isset($_REQUEST['bulk_edit_apply'])) {
-            if (isset($_REQUEST['question_id']) && !isset($_REQUEST['question_ids'])) {
-                if (!wp_verify_nonce($nonce, 'qp_' . $action . '_question_' . absint($_REQUEST['question_id']))) {
-                    wp_die('Security check failed for single item action.');
-                }
-            } elseif (!wp_verify_nonce($nonce, 'bulk-' . $this->_args['plural'])) {
-                wp_die('Security check failed for bulk action.');
-            }
-        }
-
-        $question_ids = isset($_REQUEST['question_ids']) ? array_map('absint', (array) $_REQUEST['question_ids']) : (isset($_REQUEST['question_id']) ? [absint($_REQUEST['question_id'])] : []);
-
-        if (empty(array_filter($question_ids))) {
-            wp_safe_redirect(remove_query_arg(['action', 'action2', '_wpnonce', 'question_ids', 'labels_to_apply', 'bulk_edit_apply', 'bulk_edit_source', 'bulk_edit_section'], wp_get_referer()));
-            exit;
-        }
-
-        global $wpdb;
-
-        if (!empty($labels_to_apply)) {
-            $ql_table = $wpdb->prefix . 'qp_question_labels';
-            foreach ($question_ids as $question_id) {
-                foreach ($labels_to_apply as $label_id) {
-                    $wpdb->query($wpdb->prepare("INSERT IGNORE INTO {$ql_table} (question_id, label_id) VALUES (%d, %d)", $question_id, $label_id));
-                }
-            }
-        }
-
-        if ($action && $action !== -1) {
+        if (!empty($question_ids)) {
+            global $wpdb;
+            $rel_table = $wpdb->prefix . 'qp_term_relationships';
+            $term_table = $wpdb->prefix . 'qp_terms';
+            $tax_table = $wpdb->prefix . 'qp_taxonomies';
             $q_table = $wpdb->prefix . 'qp_questions';
             $ids_placeholder = implode(',', $question_ids);
 
-            if ('trash' === $action) {
-                $wpdb->query("UPDATE {$q_table} SET status = 'trash' WHERE question_id IN ({$ids_placeholder})");
+            // Handle Topic Change
+            if (!empty($_REQUEST['bulk_edit_topic'])) {
+                $topic_term_id = absint($_REQUEST['bulk_edit_topic']);
+                $topic_tax_id = $wpdb->get_var($wpdb->prepare("SELECT taxonomy_id FROM $term_table WHERE term_id = %d", $topic_term_id));
+                // First, delete existing topic relationships for these questions
+                $wpdb->query($wpdb->prepare("DELETE FROM {$rel_table} WHERE object_id IN ({$ids_placeholder}) AND object_type = 'question' AND term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id = %d)", $topic_tax_id));
+                // Then, insert the new ones
+                foreach ($question_ids as $qid) {
+                    $wpdb->insert($rel_table, ['object_id' => $qid, 'term_id' => $topic_term_id, 'object_type' => 'question']);
+                }
             }
-            if ('untrash' === $action) {
-                $wpdb->query("UPDATE {$q_table} SET status = 'publish' WHERE question_id IN ({$ids_placeholder})");
-            }
-            if ('delete' === $action) {
-                $g_table = $wpdb->prefix . 'qp_question_groups';
-                $group_ids = $wpdb->get_col("SELECT DISTINCT group_id FROM {$q_table} WHERE question_id IN ({$ids_placeholder})");
-                $group_ids = array_filter($group_ids);
 
-                $wpdb->query("DELETE FROM {$wpdb->prefix}qp_options WHERE question_id IN ({$ids_placeholder})");
-                $wpdb->query("DELETE FROM {$wpdb->prefix}qp_question_labels WHERE question_id IN ({$ids_placeholder})");
-                $wpdb->query("DELETE FROM {$q_table} WHERE question_id IN ({$ids_placeholder})");
+            // Handle Source/Section Change
+            $source_term_id = !empty($_REQUEST['bulk_edit_source']) ? absint($_REQUEST['bulk_edit_source']) : null;
+            $section_term_id = !empty($_REQUEST['bulk_edit_section']) ? absint($_REQUEST['bulk_edit_section']) : null;
+            $term_to_apply = $section_term_id ?: $source_term_id; // Prefer the more specific section
+
+            if ($term_to_apply) {
+                $source_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'source'");
+                 // First, delete existing source/section relationships for these questions
+                $wpdb->query($wpdb->prepare("DELETE FROM {$rel_table} WHERE object_id IN ({$ids_placeholder}) AND object_type = 'question' AND term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id = %d)", $source_tax_id));
+                // Then, insert the new one
+                foreach ($question_ids as $qid) {
+                    $wpdb->insert($rel_table, ['object_id' => $qid, 'term_id' => $term_to_apply, 'object_type' => 'question']);
+                }
+            }
+
+            // Handle Exam Change
+            if (!empty($_REQUEST['bulk_edit_exam'])) {
+                $exam_term_id = absint($_REQUEST['bulk_edit_exam']);
+                $exam_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'exam'");
+                $group_ids = $wpdb->get_col("SELECT DISTINCT group_id FROM {$q_table} WHERE question_id IN ({$ids_placeholder})");
 
                 if (!empty($group_ids)) {
-                    foreach ($group_ids as $group_id) {
-                        $remaining = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$q_table} WHERE group_id = %d", $group_id));
-                        if ($remaining == 0) {
-                            $wpdb->delete($g_table, ['group_id' => $group_id]);
-                        }
+                    $group_ids_placeholder = implode(',', $group_ids);
+                     // First, delete existing exam relationships for these groups
+                    $wpdb->query($wpdb->prepare("DELETE FROM {$rel_table} WHERE object_id IN ({$group_ids_placeholder}) AND object_type = 'group' AND term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id = %d)", $exam_tax_id));
+                    // Then, insert the new ones
+                    foreach ($group_ids as $gid) {
+                        $wpdb->insert($rel_table, ['object_id' => $gid, 'term_id' => $exam_term_id, 'object_type' => 'group']);
                     }
                 }
             }
-            if (strpos($action, 'remove_label_') === 0) {
-                $ql_table = $wpdb->prefix . 'qp_question_labels';
-                $label_id_to_remove = absint(str_replace('remove_label_', '', $action));
-                if ($label_id_to_remove > 0) {
-                    $wpdb->query("DELETE FROM {$ql_table} WHERE label_id = {$label_id_to_remove} AND question_id IN ({$ids_placeholder})");
-                }
+        }
+    }
+
+    $action = $this->current_action();
+    $labels_to_apply = isset($_REQUEST['labels_to_apply']) ? array_filter(array_map('absint', (array) $_REQUEST['labels_to_apply'])) : [];
+    $question_ids = [];
+
+    // --- NEW: Differentiate between single-item actions and bulk actions ---
+    if ($action && isset($_GET['question_id'])) {
+        // This is a single-item action (e.g., clicking a "Delete" link)
+        $question_ids = [absint($_GET['question_id'])];
+        // Check the unique nonce for this specific action
+        if ($action === 'trash')   check_admin_referer('qp_trash_question_' . $question_ids[0]);
+        if ($action === 'untrash') check_admin_referer('qp_untrash_question_' . $question_ids[0]);
+        if ($action === 'delete')  check_admin_referer('qp_delete_question_' . $question_ids[0]);
+    } else {
+        // This is a bulk action (e.g., using the dropdown and Apply button)
+        if ((!$action || $action === -1) && empty($labels_to_apply)) {
+            return;
+        }
+        check_admin_referer('bulk-' . $this->_args['plural']);
+        $question_ids = isset($_REQUEST['question_ids']) ? array_map('absint', $_REQUEST['question_ids']) : [];
+    }
+
+    if (empty($question_ids)) {
+        return;
+    }
+
+    global $wpdb;
+    $q_table = $wpdb->prefix . 'qp_questions';
+    $rel_table = $wpdb->prefix . 'qp_term_relationships';
+    $ids_placeholder = implode(',', $question_ids);
+
+    // --- Handle applying labels ---
+    if (!empty($labels_to_apply)) {
+        foreach ($question_ids as $question_id) {
+            foreach ($labels_to_apply as $label_term_id) {
+                $wpdb->query($wpdb->prepare(
+                    "INSERT IGNORE INTO {$rel_table} (object_id, term_id, object_type) VALUES (%d, %d, 'question')",
+                    $question_id,
+                    $label_term_id
+                ));
             }
         }
-
-        // --- Redirect to preserve state ---
-        wp_safe_redirect(remove_query_arg(['action', 'action2', '_wpnonce', 'question_ids', 'labels_to_apply', 'bulk_edit_apply', 'bulk_edit_source', 'bulk_edit_section'], wp_get_referer()));
-        exit;
     }
+
+    // Handle standard bulk actions
+    if ('trash' === $action) {
+        $wpdb->query("UPDATE {$q_table} SET status = 'trash' WHERE question_id IN ({$ids_placeholder})");
+    }
+    if ('untrash' === $action) {
+        $wpdb->query("UPDATE {$q_table} SET status = 'publish' WHERE question_id IN ({$ids_placeholder})");
+    }
+    if ('delete' === $action) {
+        $wpdb->query("DELETE FROM {$wpdb->prefix}qp_options WHERE question_id IN ({$ids_placeholder})");
+        $wpdb->query("DELETE FROM {$rel_table} WHERE object_id IN ({$ids_placeholder}) AND object_type = 'question'");
+        $wpdb->query("DELETE FROM {$q_table} WHERE question_id IN ({$ids_placeholder})");
+    }
+
+    if (strpos($action, 'remove_label_') === 0) {
+    // UPDATED: Target the new relationships table
+    $label_term_id_to_remove = absint(str_replace('remove_label_', '', $action));
+    if ($label_term_id_to_remove > 0) {
+        $wpdb->query(
+            $wpdb->prepare(
+                "DELETE FROM {$rel_table} WHERE object_id IN ({$ids_placeholder}) AND object_type = 'question' AND term_id = %d",
+                $label_term_id_to_remove
+            )
+        );
+    }
+
+    wp_safe_redirect(remove_query_arg(['action', 'action2', '_wpnonce', 'question_ids', 'labels_to_apply', 'bulk_edit_apply', 'bulk_edit_source', 'bulk_edit_section'], wp_get_referer()));
+    exit;
+}
+}
 
 
     /**
@@ -579,19 +645,20 @@ class QP_Questions_List_Table extends WP_List_Table
                 </div>
             </td>
         </tr>
-<?php
+    <?php
     }
 
-    public function display_view_modal() {
+    public function display_view_modal()
+    {
     ?>
-    <div id="qp-view-modal-backdrop" style="display: none;">
-        <div id="qp-view-modal-content">
-            <button class="qp-modal-close-btn">&times;</button>
-            <div id="qp-view-modal-body"></div>
+        <div id="qp-view-modal-backdrop" style="display: none;">
+            <div id="qp-view-modal-content">
+                <button class="qp-modal-close-btn">&times;</button>
+                <div id="qp-view-modal-body"></div>
+            </div>
         </div>
-    </div>
-    <?php
-}
+<?php
+    }
 
     public function column_cb($item)
     {
@@ -661,10 +728,11 @@ class QP_Questions_List_Table extends WP_List_Table
             $actions = [
                 'edit' => sprintf('<a href="admin.php?page=qp-edit-group&action=edit&group_id=%s">Edit</a>', $group_id),
                 'inline hide-if-no-js' => sprintf(
-                    '<a href="#" class="editinline" data-question-id="%d" data-nonce="%s">Quick Edit</a>',
-                    $item['question_id'],
-                    $quick_edit_nonce
-                ),
+    '<a href="#" class="editinline" data-question-id="%d" data-nonce="%s" data-status="%s">Quick Edit</a>',
+    $item['question_id'],
+    $quick_edit_nonce,
+    esc_attr($item['status'])
+),
                 'view' => sprintf(
                     '<a href="#" class="view-question" data-question-id="%d">View</a>',
                     $item['question_id']
@@ -740,20 +808,51 @@ class QP_Questions_List_Table extends WP_List_Table
 
     public function column_source($item)
     {
+        if (empty($item['linked_source_term_id'])) {
+            return ''; // Return empty if no source is linked
+        }
+
+        global $wpdb;
+        $term_table = $wpdb->prefix . 'qp_terms';
+
+        $term_id = absint($item['linked_source_term_id']);
+        $lineage = [];
+
+        // Trace up the tree to the root, with a safety limit
+        for ($i = 0; $i < 10; $i++) {
+            if (!$term_id) break;
+            $term = $wpdb->get_row($wpdb->prepare("SELECT term_id, name, parent FROM {$term_table} WHERE term_id = %d", $term_id));
+            if ($term) {
+                array_unshift($lineage, $term); // Add to the beginning of the array to maintain order
+                $term_id = $term->parent;
+            } else {
+                break; // Stop if a term is not found
+            }
+        }
+
+        $source_name = '';
+        $section_name = '';
+
+        if (!empty($lineage)) {
+            // The root (first item in the lineage) is the main source
+            $source_name = $lineage[0]->name;
+            // The second item in the lineage is the first child (the section)
+            if (count($lineage) > 1) {
+                $section_name = $lineage[1]->name;
+            }
+        }
+
         $source_info = [];
-        // NEW ORDER: Question Number is first
         if (!empty($item['question_number_in_section'])) {
             $source_info[] = '<strong>No:</strong> ' . esc_html($item['question_number_in_section']);
         }
 
-        // NEW ORDER: Section is second
-        if (!empty($item['section_name'])) {
-            $source_info[] = '<strong>Section:</strong> ' . esc_html($item['section_name']);
+        if (!empty($section_name)) {
+            $source_info[] = '<strong>Section:</strong> ' . esc_html($section_name);
         }
 
-        // NEW ORDER: Source is last
-        if (!empty($item['source_name'])) {
-            $source_info[] = '<strong>Source:</strong> ' . esc_html($item['source_name']);
+        if (!empty($source_name)) {
+            $source_info[] = '<strong>Source:</strong> ' . esc_html($source_name);
         }
         return implode('<br>', $source_info);
     }

@@ -177,34 +177,52 @@ class QP_Rest_Api {
 
     public static function get_subjects() {
         global $wpdb;
-        $results = $wpdb->get_results("SELECT subject_id, subject_name FROM {$wpdb->prefix}qp_subjects ORDER BY subject_name ASC");
+        $tax_table = $wpdb->prefix . 'qp_taxonomies';
+        $term_table = $wpdb->prefix . 'qp_terms';
+
+        $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'subject'");
+
+        if (!$subject_tax_id) {
+            return new WP_REST_Response([], 200);
+        }
+
+        $results = $wpdb->get_results($wpdb->prepare(
+            "SELECT term_id AS subject_id, name AS subject_name FROM {$term_table} WHERE taxonomy_id = %d AND parent = 0 ORDER BY name ASC",
+            $subject_tax_id
+        ));
         return new WP_REST_Response($results, 200);
-    }
+    }   
     
     public static function start_session_and_get_questions(WP_REST_Request $request) {
         $subject_id = $request->get_param('subject_id') ?? 'all';
         $pyq_only = $request->get_param('pyq_only') ?? false;
-        
+
         global $wpdb;
-        $q_table = $wpdb->prefix . 'qp_questions'; $g_table = $wpdb->prefix . 'qp_question_groups';
-        $where_clauses = ["q.status = 'publish'"]; $query_args = [];
-        
+        $q_table = $wpdb->prefix . 'qp_questions';
+        $g_table = $wpdb->prefix . 'qp_question_groups';
+        $rel_table = $wpdb->prefix . 'qp_term_relationships';
+        $where_clauses = ["q.status = 'publish'"];
+        $query_args = [];
+        $joins = " LEFT JOIN {$g_table} g ON q.group_id = g.group_id";
+
         if ($subject_id !== 'all') {
-            $where_clauses[] = "g.subject_id = %d";
+            $joins .= " JOIN {$rel_table} subject_rel ON g.group_id = subject_rel.object_id AND subject_rel.object_type = 'group'";
+            $where_clauses[] = "subject_rel.term_id = %d";
             $query_args[] = absint($subject_id);
         }
+
         if ($pyq_only) {
-            $where_clauses[] = "q.is_pyq = 1";
+            $where_clauses[] = "g.is_pyq = 1";
         }
-        
+
         $where_sql = implode(' AND ', $where_clauses);
-        $query = "SELECT q.question_id FROM {$q_table} q LEFT JOIN {$g_table} g ON q.group_id = g.group_id WHERE {$where_sql} ORDER BY RAND()";
+        $query = "SELECT q.question_id FROM {$q_table} q {$joins} WHERE {$where_sql} ORDER BY RAND()";
         $question_ids = $wpdb->get_col($wpdb->prepare($query, $query_args));
 
         if (empty($question_ids)) {
             return new WP_Error('no_questions_found', 'No questions found matching your criteria.', ['status' => 404]);
         }
-        
+
         return new WP_REST_Response(['question_ids' => $question_ids], 200);
     }
 
@@ -218,15 +236,17 @@ class QP_Rest_Api {
         global $wpdb;
         $q_table = $wpdb->prefix . 'qp_questions';
         $g_table = $wpdb->prefix . 'qp_question_groups';
-        $s_table = $wpdb->prefix . 'qp_subjects';
         $o_table = $wpdb->prefix . 'qp_options';
+        $rel_table = $wpdb->prefix . 'qp_term_relationships';
+        $term_table = $wpdb->prefix . 'qp_terms';
 
-        // Query by the custom_question_id column
         $question_data = $wpdb->get_row($wpdb->prepare(
-            "SELECT q.question_id, q.custom_question_id, q.question_text, g.direction_text, g.direction_image_id, s.subject_name 
+            "SELECT q.question_id, q.custom_question_id, q.question_text, g.direction_text, g.direction_image_id, 
+                    subject_term.name AS subject_name
              FROM {$q_table} q 
              LEFT JOIN {$g_table} g ON q.group_id = g.group_id
-             LEFT JOIN {$s_table} s ON g.subject_id = s.subject_id
+             LEFT JOIN {$rel_table} subject_rel ON g.group_id = subject_rel.object_id AND subject_rel.object_type = 'group'
+             LEFT JOIN {$term_table} subject_term ON subject_rel.term_id = subject_term.term_id
              WHERE q.custom_question_id = %d AND q.status = 'publish'",
             $custom_question_id
         ), ARRAY_A);
@@ -235,7 +255,7 @@ class QP_Rest_Api {
             return new WP_Error('rest_question_not_found', 'Question not found.', ['status' => 404]);
         }
 
-        $question_id = $question_data['question_id']; // Get the internal ID for fetching options
+        $question_id = $question_data['question_id'];
 
         $question_data['direction_image_url'] = $question_data['direction_image_id'] ? wp_get_attachment_url($question_data['direction_image_id']) : null;
         unset($question_data['direction_image_id']);
@@ -330,54 +350,114 @@ class QP_Rest_Api {
 
     public static function get_topics() {
         global $wpdb;
-        $results = $wpdb->get_results("SELECT topic_id, topic_name, subject_id FROM {$wpdb->prefix}qp_topics ORDER BY topic_name ASC");
+        $tax_table = $wpdb->prefix . 'qp_taxonomies';
+        $term_table = $wpdb->prefix . 'qp_terms';
+
+        $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'subject'");
+
+        if (!$subject_tax_id) {
+            return new WP_REST_Response([], 200);
+        }
+
+        $results = $wpdb->get_results($wpdb->prepare(
+            "SELECT term_id AS topic_id, name AS topic_name, parent AS subject_id FROM {$term_table} WHERE taxonomy_id = %d AND parent != 0 ORDER BY name ASC",
+            $subject_tax_id
+        ));
         return new WP_REST_Response($results, 200);
     }
 
     public static function get_exams() {
         global $wpdb;
-        $results = $wpdb->get_results("SELECT exam_id, exam_name FROM {$wpdb->prefix}qp_exams ORDER BY exam_name ASC");
+        $tax_table = $wpdb->prefix . 'qp_taxonomies';
+        $term_table = $wpdb->prefix . 'qp_terms';
+
+        $exam_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'exam'");
+
+        if (!$exam_tax_id) {
+            return new WP_REST_Response([], 200); // Return empty if taxonomy doesn't exist
+        }
+
+        $results = $wpdb->get_results($wpdb->prepare(
+            "SELECT term_id as exam_id, name as exam_name FROM {$term_table} WHERE taxonomy_id = %d ORDER BY name ASC",
+            $exam_tax_id
+        ));
+
         return new WP_REST_Response($results, 200);
     }
 
     public static function get_sources() {
         global $wpdb;
-        $results = $wpdb->get_results("SELECT source_id, source_name, subject_id FROM {$wpdb->prefix}qp_sources ORDER BY source_name ASC");
+        $tax_table = $wpdb->prefix . 'qp_taxonomies';
+        $term_table = $wpdb->prefix . 'qp_terms';
+
+        $source_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'source'");
+
+        if (!$source_tax_id) {
+            return new WP_REST_Response([], 200);
+        }
+
+        $results = $wpdb->get_results($wpdb->prepare(
+            "SELECT term_id AS source_id, name AS source_name, parent AS parent_id FROM {$term_table} WHERE taxonomy_id = %d ORDER BY name ASC",
+            $source_tax_id
+        ));
         return new WP_REST_Response($results, 200);
     }
 
     public static function get_labels() {
         global $wpdb;
-        $results = $wpdb->get_results("SELECT label_id, label_name, label_color FROM {$wpdb->prefix}qp_labels ORDER BY label_name ASC");
+        $tax_table = $wpdb->prefix . 'qp_taxonomies';
+        $term_table = $wpdb->prefix . 'qp_terms';
+        $meta_table = $wpdb->prefix . 'qp_term_meta';
+
+        $label_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'label'");
+
+        if (!$label_tax_id) {
+            return new WP_REST_Response([], 200);
+        }
+
+        $results = $wpdb->get_results($wpdb->prepare(
+            "SELECT t.term_id as label_id, t.name as label_name, m.meta_value as label_color
+             FROM {$term_table} t
+             LEFT JOIN {$meta_table} m ON t.term_id = m.term_id AND m.meta_key = 'color'
+             WHERE t.taxonomy_id = %d 
+             ORDER BY t.name ASC",
+            $label_tax_id
+        ));
+
         return new WP_REST_Response($results, 200);
     }
 
     public static function add_question_group(WP_REST_Request $request) {
         global $wpdb;
-
-        // Get all data sent from the app
         $data = $request->get_json_params();
 
-        // Basic validation
         if (!isset($data['subject_id']) || !isset($data['questions']) || !is_array($data['questions'])) {
             return new WP_Error('rest_invalid_request', 'Missing required fields: subject_id and questions are required.', ['status' => 400]);
         }
 
+        $g_table = $wpdb->prefix . 'qp_question_groups';
+        $q_table = $wpdb->prefix . 'qp_questions';
+        $o_table = $wpdb->prefix . 'qp_options';
+        $rel_table = $wpdb->prefix . 'qp_term_relationships';
+
         // --- Create the Question Group ---
-        $wpdb->insert(
-            "{$wpdb->prefix}qp_question_groups",
-            [
-                'subject_id' => absint($data['subject_id']),
-                'direction_text' => isset($data['direction_text']) ? sanitize_textarea_field($data['direction_text']) : null,
-                'is_pyq' => isset($data['is_pyq']) ? (int)$data['is_pyq'] : 0,
-                'exam_id' => isset($data['exam_id']) ? absint($data['exam_id']) : null,
-                'pyq_year' => isset($data['pyq_year']) ? sanitize_text_field($data['pyq_year']) : null,
-            ]
-        );
+        $wpdb->insert($g_table, [
+            'direction_text' => isset($data['direction_text']) ? sanitize_textarea_field($data['direction_text']) : null,
+            'is_pyq' => isset($data['is_pyq']) ? 1 : 0,
+            'pyq_year' => isset($data['pyq_year']) ? sanitize_text_field($data['pyq_year']) : null,
+        ]);
         $group_id = $wpdb->insert_id;
 
         if (!$group_id) {
             return new WP_Error('db_error', 'Could not create the question group.', ['status' => 500]);
+        }
+
+        // Link group to subject
+        $wpdb->insert($rel_table, ['object_id' => $group_id, 'term_id' => absint($data['subject_id']), 'object_type' => 'group']);
+
+        // Link group to exam if PYQ
+        if (isset($data['is_pyq']) && !empty($data['exam_id'])) {
+            $wpdb->insert($rel_table, ['object_id' => $group_id, 'term_id' => absint($data['exam_id']), 'object_type' => 'group']);
         }
 
         // --- Loop Through and Create Each Question ---
@@ -386,46 +466,46 @@ class QP_Rest_Api {
             $hash = md5(strtolower(trim(preg_replace('/\s+/', '', $question_text))));
             $next_custom_id = get_option('qp_next_custom_question_id', 1000);
 
-            $wpdb->insert(
-                "{$wpdb->prefix}qp_questions",
-                [
-                    'group_id' => $group_id,
-                    'custom_question_id' => $next_custom_id,
-                    'question_text' => $question_text,
-                    'question_text_hash' => $hash,
-                    'topic_id' => isset($data['topic_id']) ? absint($data['topic_id']) : null,
-                    'source_id' => isset($data['source_id']) ? absint($data['source_id']) : null,
-                    'section_id' => isset($data['section_id']) ? absint($data['section_id']) : null,
-                    'status' => 'publish' // Assume questions from app are ready
-                ]
-            );
+            $wpdb->insert($q_table, [
+                'group_id' => $group_id,
+                'custom_question_id' => $next_custom_id,
+                'question_text' => $question_text,
+                'question_text_hash' => $hash,
+                'status' => 'publish'
+            ]);
             $question_id = $wpdb->insert_id;
             update_option('qp_next_custom_question_id', $next_custom_id + 1);
 
-            // --- Add Options ---
+            // Link question to topic, source, and section
+            if (!empty($data['topic_id'])) {
+                $wpdb->insert($rel_table, ['object_id' => $question_id, 'term_id' => absint($data['topic_id']), 'object_type' => 'question']);
+            }
+            if (!empty($data['source_id'])) {
+                $wpdb->insert($rel_table, ['object_id' => $question_id, 'term_id' => absint($data['source_id']), 'object_type' => 'question']);
+            }
+             if (!empty($data['section_id'])) {
+                $wpdb->insert($rel_table, ['object_id' => $question_id, 'term_id' => absint($data['section_id']), 'object_type' => 'question']);
+            }
+
+            // Add Options
             if (isset($question_data['options']) && is_array($question_data['options'])) {
                 foreach ($question_data['options'] as $option) {
-                    $wpdb->insert(
-                        "{$wpdb->prefix}qp_options",
-                        [
-                            'question_id' => $question_id,
-                            'option_text' => sanitize_text_field($option['option_text']),
-                            'is_correct' => (int)$option['is_correct']
-                        ]
-                    );
+                    $wpdb->insert($o_table, [
+                        'question_id' => $question_id,
+                        'option_text' => sanitize_text_field($option['option_text']),
+                        'is_correct' => (int)$option['is_correct']
+                    ]);
                 }
             }
 
-            // --- Add Labels ---
+            // Add Labels by creating relationships
             if (isset($question_data['labels']) && is_array($question_data['labels'])) {
                 foreach ($question_data['labels'] as $label_id) {
-                    $wpdb->insert(
-                        "{$wpdb->prefix}qp_question_labels",
-                        [
-                            'question_id' => $question_id,
-                            'label_id' => absint($label_id)
-                        ]
-                    );
+                    $wpdb->insert($rel_table, [
+                        'object_id' => $question_id,
+                        'term_id' => absint($label_id),
+                        'object_type' => 'question'
+                    ]);
                 }
             }
         }

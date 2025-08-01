@@ -404,8 +404,8 @@ jQuery(document).ready(function($) {
 
     subjectSelect.on('change', function() {
         var subjectId = $(this).val();
-        sourceSelect.val('');
-        resultsContainer.html('');
+        sourceSelect.val(''); // Reset source selection
+        resultsContainer.html(''); // Clear previous results
 
         if (!subjectId) {
             sourceSelect.html('<option value="">— Select a Subject First —</option>').prop('disabled', true);
@@ -418,14 +418,15 @@ jQuery(document).ready(function($) {
             data: {
                 action: 'get_sources_for_subject_progress',
                 nonce: qp_ajax_object.nonce,
-                subject_id: subjectId
+                subject_id: subjectId // The PHP handler now expects 'subject_id' which is the term_id
             },
             beforeSend: function() {
                 sourceSelect.html('<option value="">Loading Sources...</option>').prop('disabled', true);
             },
             success: function(response) {
-                if (response.success && response.data.sources.length > 0) {
+                if (response.success && response.data.sources && response.data.sources.length > 0) {
                     var optionsHtml = '<option value="">— Select a Source —</option>';
+                    // The new AJAX handler returns an array of objects with source_id and source_name
                     $.each(response.data.sources, function(index, source) {
                         optionsHtml += `<option value="${source.source_id}">${source.source_name}</option>`;
                     });
@@ -433,12 +434,16 @@ jQuery(document).ready(function($) {
                 } else {
                     sourceSelect.html('<option value="">— No Sources Found —</option>').prop('disabled', true);
                 }
+            },
+            error: function() {
+                sourceSelect.html('<option value="">— Error Loading —</option>').prop('disabled', true);
             }
         });
     });
 
     sourceSelect.on('change', function() {
         var sourceId = $(this).val();
+        var subjectId = subjectSelect.val(); // Get the selected subject ID
         if (!sourceId) {
             resultsContainer.html('');
             return;
@@ -450,6 +455,7 @@ jQuery(document).ready(function($) {
             data: {
                 action: 'get_progress_data',
                 nonce: qp_ajax_object.nonce,
+                subject_id: subjectId, // Add this line
                 source_id: sourceId,
                 exclude_incorrect: $('#qp-exclude-incorrect-cb').is(':checked')
             },
@@ -475,36 +481,24 @@ jQuery(document).ready(function($) {
 
     // --- Collapsible Progress Sections Logic ---
     wrapper.on('click', '.qp-topic-toggle', function() {
-        var $clickedTopic = $(this);
-        var topicId = $clickedTopic.data('topic-id');
+        var $clickedItem = $(this);
+        var topicId = $clickedItem.data('topic-id');
         var $sectionsContainer = wrapper.find('.qp-topic-sections-container[data-parent-topic="' + topicId + '"]');
-        var $sections = $sectionsContainer.find('.qp-progress-item');
 
-        // --- Accordion Logic ---
-        var $otherOpenTopic = $('.qp-topic-toggle.is-open').not($clickedTopic);
-        if ($otherOpenTopic.length > 0) {
-            var otherTopicId = $otherOpenTopic.data('topic-id');
-            var $otherSectionsContainer = wrapper.find('.qp-topic-sections-container[data-parent-topic="' + otherTopicId + '"]');
-            var $otherSections = $otherSectionsContainer.find('.qp-progress-item');
+        // Toggle the arrow icon and the active group highlight
+        $clickedItem.toggleClass('is-open is-active-group');
 
-            // Close the other topic's sections and remove all highlight classes
-            $otherSectionsContainer.slideUp(200);
-            $otherOpenTopic.removeClass('is-open is-active-group');
-            $otherSections.removeClass('is-active-group');
-        }
-        // --- End of Accordion Logic ---
-
-        // Toggle the clicked topic
+        // Toggle the visibility of the direct children container
         $sectionsContainer.slideToggle(200);
-        $clickedTopic.toggleClass('is-open');
 
-        // --- NEW: Apply/Remove highlight to the entire group ---
-        if ($clickedTopic.hasClass('is-open')) {
-            $clickedTopic.addClass('is-active-group');
-            $sections.addClass('is-active-group');
+        // Apply active group class to children when opening
+        if ($clickedItem.hasClass('is-open')) {
+            $sectionsContainer.find('.qp-progress-item').addClass('is-active-group');
         } else {
-            $clickedTopic.removeClass('is-active-group');
-            $sections.removeClass('is-active-group');
+            // When closing, also close any nested children and remove their active states
+            $sectionsContainer.find('.qp-topic-sections-container').slideUp(200);
+            $sectionsContainer.find('.qp-topic-toggle').removeClass('is-open is-active-group');
+            $sectionsContainer.find('.qp-progress-item').removeClass('is-active-group');
         }
     });
 });

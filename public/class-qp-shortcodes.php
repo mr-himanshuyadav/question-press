@@ -133,16 +133,14 @@ class QP_Shortcodes
     public static function render_revision_mode_form()
     {
         global $wpdb;
-
-        // Fetch all subjects that have at least one question associated with them
-        $subjects = $wpdb->get_results(
-            "SELECT DISTINCT s.subject_id, s.subject_name
-         FROM {$wpdb->prefix}qp_subjects s
-         JOIN {$wpdb->prefix}qp_question_groups g ON s.subject_id = g.subject_id
-         JOIN {$wpdb->prefix}qp_questions q ON g.group_id = q.group_id
-         WHERE s.subject_name != 'Uncategorized'
-         ORDER BY s.subject_name ASC"
-        );
+        $term_table = $wpdb->prefix . 'qp_terms';
+        $tax_table = $wpdb->prefix . 'qp_taxonomies';
+        $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'subject'");
+        
+        $subjects = $wpdb->get_results($wpdb->prepare(
+            "SELECT term_id AS subject_id, name AS subject_name FROM {$term_table} WHERE taxonomy_id = %d AND name != 'Uncategorized' AND parent = 0 ORDER BY name ASC",
+            $subject_tax_id
+        ));
 
         ob_start();
     ?>
@@ -234,16 +232,14 @@ class QP_Shortcodes
     public static function render_mock_test_form()
     {
         global $wpdb;
-
-        // Fetch all subjects that have at least one question associated with them
-        $subjects = $wpdb->get_results(
-            "SELECT DISTINCT s.subject_id, s.subject_name
-     FROM {$wpdb->prefix}qp_subjects s
-     JOIN {$wpdb->prefix}qp_question_groups g ON s.subject_id = g.subject_id
-     JOIN {$wpdb->prefix}qp_questions q ON g.group_id = q.group_id
-     WHERE s.subject_name != 'Uncategorized'
-     ORDER BY s.subject_name ASC"
-        );
+        $term_table = $wpdb->prefix . 'qp_terms';
+        $tax_table = $wpdb->prefix . 'qp_taxonomies';
+        $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'subject'");
+        
+        $subjects = $wpdb->get_results($wpdb->prepare(
+            "SELECT term_id AS subject_id, name AS subject_name FROM {$term_table} WHERE taxonomy_id = %d AND name != 'Uncategorized' AND parent = 0 ORDER BY name ASC",
+            $subject_tax_id
+        ));
 
         ob_start();
     ?>
@@ -567,13 +563,14 @@ class QP_Shortcodes
     public static function render_settings_form()
     {
         global $wpdb;
-        $subjects = $wpdb->get_results(
-            "SELECT DISTINCT s.subject_id, s.subject_name
-     FROM {$wpdb->prefix}qp_subjects s
-     JOIN {$wpdb->prefix}qp_question_groups g ON s.subject_id = g.subject_id
-     WHERE s.subject_name != 'Uncategorized'
-     ORDER BY s.subject_name ASC"
-        );
+        $term_table = $wpdb->prefix . 'qp_terms';
+        $tax_table = $wpdb->prefix . 'qp_taxonomies';
+        $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'subject'");
+        
+        $subjects = $wpdb->get_results($wpdb->prepare(
+            "SELECT term_id AS subject_id, name AS subject_name FROM {$term_table} WHERE taxonomy_id = %d AND name != 'Uncategorized' AND parent = 0 ORDER BY name ASC",
+            $subject_tax_id
+        ));
 
         // Get the dynamic URL for the dashboard page
         $options = get_option('qp_settings');
@@ -960,49 +957,59 @@ class QP_Shortcodes
         $options = get_option('qp_settings');
         $dashboard_page_url = isset($options['dashboard_page']) ? get_permalink($options['dashboard_page']) : home_url('/');
 
-        // --- NEW: Extract marking scheme from settings ---
         $settings = json_decode($session->settings_snapshot, true);
         $marks_correct = $settings['marks_correct'] ?? 1;
         $marks_incorrect = $settings['marks_incorrect'] ?? 0;
 
         $accuracy = ($session->total_attempted > 0) ? ($session->correct_count / $session->total_attempted) * 100 : 0;
-
-        // --- Calculate Average Time Per Question ---
         $avg_time_per_question = 'N/A';
         if ($session->total_attempted > 0 && isset($session->total_active_seconds)) {
             $avg_seconds = round($session->total_active_seconds / $session->total_attempted);
-            // Format seconds into H:i:s
             $avg_time_per_question = sprintf('%02d:%02d', floor($avg_seconds / 60), $avg_seconds % 60);
         }
 
-        // NEW: Get all unique topics for this session's questions
-        $session_question_ids = json_decode($session->question_ids_snapshot);
-        // NEW: Get all unique topics for the questions ATTEMPTED in this session
+        // CORRECTED: Get topics from the new taxonomy system
         $topics_in_session = $wpdb->get_col($wpdb->prepare("
-            SELECT DISTINCT t.topic_name
-            FROM {$wpdb->prefix}qp_topics t
-            JOIN {$wpdb->prefix}qp_questions q ON t.topic_id = q.topic_id
-            JOIN {$wpdb->prefix}qp_user_attempts a ON q.question_id = a.question_id
-            WHERE a.session_id = %d
-            ORDER BY t.topic_name ASC
+            SELECT DISTINCT t.name
+            FROM {$wpdb->prefix}qp_terms t
+            JOIN {$wpdb->prefix}qp_term_relationships r ON t.term_id = r.term_id
+            JOIN {$wpdb->prefix}qp_user_attempts a ON r.object_id = a.question_id
+            WHERE a.session_id = %d 
+              AND r.object_type = 'question' 
+              AND t.parent != 0 
+              AND t.taxonomy_id = (SELECT taxonomy_id FROM {$wpdb->prefix}qp_taxonomies WHERE taxonomy_name = 'subject')
+            ORDER BY t.name ASC
         ", $session_id));
 
-        // -- START: Replacement Code --
+        // CORRECTED: Main query for fetching all attempt data with correct joins
         $attempts_raw = $wpdb->get_results($wpdb->prepare(
             "SELECT 
-        a.question_id, a.selected_option_id, a.is_correct, a.mock_status,
-        q.question_text, q.custom_question_id, q.question_number_in_section,
-        g.direction_text, s.subject_name, t.topic_name,
-        src.source_name, sec.section_name
-     FROM {$wpdb->prefix}qp_user_attempts a
-     JOIN {$wpdb->prefix}qp_questions q ON a.question_id = q.question_id
-     LEFT JOIN {$wpdb->prefix}qp_question_groups g ON q.group_id = g.group_id
-     LEFT JOIN {$wpdb->prefix}qp_subjects s ON g.subject_id = s.subject_id
-     LEFT JOIN {$wpdb->prefix}qp_topics t ON q.topic_id = t.topic_id
-     LEFT JOIN {$wpdb->prefix}qp_sources src ON q.source_id = src.source_id
-     LEFT JOIN {$wpdb->prefix}qp_source_sections sec ON q.section_id = sec.section_id
-     WHERE a.session_id = %d
-     ORDER BY a.attempt_id ASC",
+                a.question_id, a.selected_option_id, a.is_correct, a.mock_status,
+                q.question_text, q.custom_question_id, q.question_number_in_section,
+                g.direction_text,
+                subject_term.name AS subject_name,
+                topic_term.name AS topic_name,
+                CASE 
+                    WHEN linked_source_term.parent != 0 THEN parent_source_term.name 
+                    ELSE linked_source_term.name 
+                END AS source_name,
+                CASE 
+                    WHEN linked_source_term.parent != 0 THEN linked_source_term.name 
+                    ELSE NULL 
+                END AS section_name
+            FROM {$wpdb->prefix}qp_user_attempts a
+            JOIN {$wpdb->prefix}qp_questions q ON a.question_id = q.question_id
+            LEFT JOIN {$wpdb->prefix}qp_question_groups g ON q.group_id = g.group_id
+            LEFT JOIN {$wpdb->prefix}qp_term_relationships subject_rel ON g.group_id = subject_rel.object_id AND subject_rel.object_type = 'group' AND subject_rel.term_id IN (SELECT term_id FROM {$wpdb->prefix}qp_terms WHERE parent = 0 AND taxonomy_id = (SELECT taxonomy_id FROM {$wpdb->prefix}qp_taxonomies WHERE taxonomy_name = 'subject'))
+            LEFT JOIN {$wpdb->prefix}qp_terms subject_term ON subject_rel.term_id = subject_term.term_id
+            LEFT JOIN {$wpdb->prefix}qp_term_relationships topic_rel ON q.question_id = topic_rel.object_id AND topic_rel.object_type = 'question' AND topic_rel.term_id IN (SELECT term_id FROM {$wpdb->prefix}qp_terms WHERE parent != 0 AND taxonomy_id = (SELECT taxonomy_id FROM {$wpdb->prefix}qp_taxonomies WHERE taxonomy_name = 'subject'))
+            LEFT JOIN {$wpdb->prefix}qp_terms topic_term ON topic_rel.term_id = topic_term.term_id
+            LEFT JOIN {$wpdb->prefix}qp_term_relationships source_rel ON q.question_id = source_rel.object_id AND source_rel.object_type = 'question' AND source_rel.term_id IN (SELECT term_id FROM {$wpdb->prefix}qp_terms WHERE taxonomy_id = (SELECT taxonomy_id FROM {$wpdb->prefix}qp_taxonomies WHERE taxonomy_name = 'source'))
+            LEFT JOIN {$wpdb->prefix}qp_terms linked_source_term ON source_rel.term_id = linked_source_term.term_id
+            LEFT JOIN {$wpdb->prefix}qp_terms parent_source_term ON linked_source_term.parent = parent_source_term.term_id
+            WHERE a.session_id = %d
+            GROUP BY a.attempt_id
+            ORDER BY a.attempt_id ASC",
             $session_id
         ));
 
@@ -1016,7 +1023,6 @@ class QP_Shortcodes
             }
         }
 
-        // Combine attempts with their options
         $attempts = [];
         foreach ($attempts_raw as $attempt) {
             $attempt->options = $all_options[$attempt->question_id] ?? [];
@@ -1035,16 +1041,14 @@ class QP_Shortcodes
 
         ob_start();
         echo '<div id="qp-practice-app-wrapper">';
-        // --- Determine Session Mode ---
         $is_mock_test = isset($settings['practice_mode']) && $settings['practice_mode'] === 'mock_test';
-        // Get a list of all open reports for the current user to disable buttons
         $reported_qids_for_user = $wpdb->get_col($wpdb->prepare(
             "SELECT DISTINCT question_id FROM {$wpdb->prefix}qp_question_reports WHERE user_id = %d AND status = 'open'",
             $user_id
         ));
 
         $mode_class = 'mode-normal';
-        $mode = 'Practice'; // A generic default
+        $mode = 'Practice';
 
         if ($is_mock_test) {
             $mode_class = 'mode-mock-test';
@@ -1106,8 +1110,7 @@ class QP_Shortcodes
                         <div class="label">Incorrect<?php if (isset($settings['marks_correct'])) echo ' (' . esc_html($marks_incorrect) . '/Q)'; ?></div>
                     </div>
 
-                    <?php // --- NEW: Conditional Stat Display ---
-                    if (isset($settings['practice_mode']) && $settings['practice_mode'] === 'mock_test') : ?>
+                    <?php if (isset($settings['practice_mode']) && $settings['practice_mode'] === 'mock_test') : ?>
                         <div class="stat">
                             <div class="value"><?php echo (int)$session->skipped_count; ?></div>
                             <div class="label">Unattempted</div>
@@ -1139,7 +1142,7 @@ class QP_Shortcodes
                     if (isset($settings['practice_mode']) && $settings['practice_mode'] === 'mock_test') {
                         if ($attempt->mock_status === 'not_viewed' || $attempt->mock_status === 'viewed' || $attempt->mock_status === 'marked_for_review') {
                             $answer_display_text = 'Unattempted';
-                            $answer_class = 'unattempted'; // Apply our new CSS class
+                            $answer_class = 'unattempted';
                         }
                     }
                 ?>
@@ -1173,7 +1176,6 @@ class QP_Shortcodes
                         if ($mode === 'Section Wise Practice' && $user_can_view_source):
                             $source_parts = [];
                             if ($attempt->source_name) $source_parts[] = esc_html($attempt->source_name);
-                            // CHANGE #1: The line for topic_name has been removed from here.
                             if ($attempt->section_name) $source_parts[] = esc_html($attempt->section_name);
                             if ($attempt->question_number_in_section) $source_parts[] = 'Q. ' . esc_html($attempt->question_number_in_section);
                         ?>
@@ -1225,7 +1227,6 @@ class QP_Shortcodes
                 <?php endforeach; ?>
             </div>
         </div>
-
         <div id="qp-report-modal-backdrop" style="display: none;">
             <div id="qp-report-modal-content">
                 <button class="qp-modal-close-btn">&times;</button>

@@ -2806,10 +2806,14 @@ ul.qp-review-list li {
     font-size: 16px;
     font-weight: 700;
 }
+
+.qp-progress-item.subject-level .qp-progress-label strong {
+    font-size: 18px;
+    font-weight: 700;
+}
 /* Topic Level (Medium) */
 .qp-progress-item.topic-level {
     padding: 10px 15px;
-    margin-left: 20px;
     background-color: #fafafa;
 }
 .qp-progress-item.topic-level .qp-progress-label {
@@ -2818,7 +2822,6 @@ ul.qp-review-list li {
 /* Section Level (Smallest) */
 .qp-progress-item.section-level {
     padding: 8px 15px;
-    margin-left: 40px;
     background-color: #fff;
 }
 .qp-progress-item.section-level .qp-progress-label {

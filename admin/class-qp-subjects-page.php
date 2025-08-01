@@ -1,70 +1,144 @@
 <?php
 if (!defined('ABSPATH')) exit;
 
+// Ensure the new list table class is included
+require_once QP_PLUGIN_DIR . 'admin/class-qp-terms-list-table.php';
+
 class QP_Subjects_Page {
 
     public static function handle_forms() {
+        // Handle bulk actions first
+        if (isset($_GET['tab']) && $_GET['tab'] === 'subjects') {
+            $list_table = new QP_Terms_List_Table('subject', 'Subject/Topic', 'subjects');
+            $list_table->process_bulk_action();
+        }
+        
         if ((!isset($_POST['action']) && !isset($_GET['action'])) || !isset($_GET['tab']) || $_GET['tab'] !== 'subjects') {
             return;
         }
         global $wpdb;
-        $table_name = $wpdb->prefix . 'qp_subjects';
+        $term_table = $wpdb->prefix . 'qp_terms';
+        $tax_table = $wpdb->prefix . 'qp_taxonomies';
+        $rel_table = $wpdb->prefix . 'qp_term_relationships';
+        $meta_table = $wpdb->prefix . 'qp_term_meta';
+
+        $source_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'subject'");
+        if (!$source_tax_id) return;
 
         // Add/Update Handler
-        if (isset($_POST['action']) && ($_POST['action'] === 'add_subject' || $_POST['action'] === 'update_subject') && check_admin_referer('qp_add_edit_subject_nonce')) {
-            $subject_name = sanitize_text_field($_POST['subject_name']);
-            $description = sanitize_textarea_field($_POST['subject_description']);
+        if (isset($_POST['action']) && ($_POST['action'] === 'add_term' || $_POST['action'] === 'update_term') && check_admin_referer('qp_add_edit_subject_nonce')) {
+            $term_name = sanitize_text_field($_POST['term_name']);
+            $description = sanitize_textarea_field($_POST['term_description']);
+            $parent = absint($_POST['parent']);
 
-            if (empty($subject_name)) {
-                QP_Sources_Page::set_message('Subject name cannot be empty.', 'error');
+            if (empty($term_name)) {
+                self::set_message('Name cannot be empty.', 'error');
             } else {
-                $data = ['subject_name' => $subject_name, 'description' => $description];
-                if ($_POST['action'] === 'update_subject') {
-                    $subject_id = absint($_POST['subject_id']);
-                    if (strtolower($wpdb->get_var($wpdb->prepare("SELECT subject_name FROM $table_name WHERE subject_id = %d", $subject_id))) === 'uncategorized') {
-                        unset($data['subject_name']); // Don't allow changing the 'Uncategorized' name
-                    }
-                    $wpdb->update($table_name, $data, ['subject_id' => $subject_id]);
-                    QP_Sources_Page::set_message('Subject updated.', 'updated');
+                $data = ['name' => $term_name, 'slug' => sanitize_title($term_name), 'parent' => $parent, 'taxonomy_id' => $source_tax_id];
+                $term_id = 0;
+
+                if ($_POST['action'] === 'update_term') {
+                    $term_id = absint($_POST['term_id']);
+                    $wpdb->update($term_table, $data, ['term_id' => $term_id]);
+                    self::set_message('Subject/Topic updated.', 'updated');
                 } else {
-                    $wpdb->insert($table_name, $data);
-                    QP_Sources_Page::set_message('Subject added.', 'updated');
+                    $wpdb->insert($term_table, $data);
+                    $term_id = $wpdb->insert_id;
+                    self::set_message('Subject/Topic added.', 'updated');
+                }
+                if ($term_id > 0) {
+                    qp_update_term_meta($term_id, 'description', $description);
                 }
             }
-            QP_Sources_Page::redirect_to_tab('subjects');
+            self::redirect_to_tab('subjects');
+        }
+
+        // Merge Handler
+        if (isset($_POST['action']) && $_POST['action'] === 'perform_merge' && check_admin_referer('qp_perform_merge_nonce')) {
+            $destination_term_id = absint($_POST['destination_term_id']);
+            $source_term_ids = array_map('absint', $_POST['source_term_ids']);
+            $final_name = sanitize_text_field($_POST['term_name']);
+            $final_parent = absint($_POST['parent']);
+            $final_description = sanitize_textarea_field($_POST['term_description']);
+
+            // Remove the destination from the list of sources to avoid deleting it
+            $source_term_ids = array_diff($source_term_ids, [$destination_term_id]);
+            $ids_placeholder = implode(',', $source_term_ids);
+
+            // Re-assign relationships from source terms to the destination term
+            $wpdb->query($wpdb->prepare(
+                "UPDATE $rel_table SET term_id = %d WHERE term_id IN ($ids_placeholder)",
+                $destination_term_id
+            ));
+            
+            // Update the destination term with the new details
+            $wpdb->update($term_table, 
+                ['name' => $final_name, 'slug' => sanitize_title($final_name), 'parent' => $final_parent], 
+                ['term_id' => $destination_term_id]
+            );
+            qp_update_term_meta($destination_term_id, 'description', $final_description);
+
+            // Delete the now-empty source terms and their meta
+            $wpdb->query("DELETE FROM $term_table WHERE term_id IN ($ids_placeholder)");
+            $wpdb->query("DELETE FROM $meta_table WHERE term_id IN ($ids_placeholder)");
+            
+            self::set_message(count($source_term_ids) . ' item(s) were successfully merged into "' . esc_html($final_name) . '".', 'updated');
+            self::redirect_to_tab('subjects');
         }
 
         // Delete Handler
-        if (isset($_GET['action']) && $_GET['action'] === 'delete' && isset($_GET['subject_id']) && check_admin_referer('qp_delete_subject_' . absint($_GET['subject_id']))) {
-            $subject_id = absint($_GET['subject_id']);
-            if (strtolower($wpdb->get_var($wpdb->prepare("SELECT subject_name FROM $table_name WHERE subject_id = %d", $subject_id))) === 'uncategorized') {
-                QP_Sources_Page::set_message('The "Uncategorized" subject cannot be deleted.', 'error');
-            } else {
-                $usage_count = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$wpdb->prefix}qp_question_groups WHERE subject_id = %d", $subject_id));
-                if ($usage_count > 0) {
-                    QP_Sources_Page::set_message("This subject cannot be deleted because it is in use by {$usage_count} question group(s).", 'error');
-                } else {
-                    $wpdb->delete($table_name, ['subject_id' => $subject_id]);
-                    QP_Sources_Page::set_message('Subject deleted successfully.', 'updated');
-                }
+        if (isset($_GET['action']) && $_GET['action'] === 'delete' && isset($_GET['term_id']) && check_admin_referer('qp_delete_subject_' . absint($_GET['term_id']))) {
+            $term_id = absint($_GET['term_id']);
+            $error_messages = [];
+
+            // Check 1: Prevent deletion if it has child terms (sections/sub-sections)
+            $child_count = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $term_table WHERE parent = %d", $term_id));
+            if ($child_count > 0) {
+                $error_messages[] = "it has {$child_count} sub-section(s) associated with it";
             }
-            QP_Sources_Page::redirect_to_tab('subjects');
+
+            // Check 2: Prevent deletion if it's directly linked to questions
+            $usage_count = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $rel_table WHERE term_id = %d AND object_type = 'question'", $term_id));
+            if ($usage_count > 0) {
+                $error_messages[] = "it is linked to {$usage_count} question(s)";
+            }
+            
+            if (!empty($error_messages)) {
+                $message = "Cannot delete this item because " . implode(', and ', $error_messages) . ".";
+                self::set_message($message, 'error');
+            } else {
+                $wpdb->delete($term_table, ['term_id' => $term_id]);
+                $wpdb->delete($meta_table, ['term_id' => $term_id]);
+                self::set_message('Subject/Topic deleted successfully.', 'updated');
+            }
+            self::redirect_to_tab('subjects');
         }
     }
 
     public static function render() {
         global $wpdb;
-        $table_name = $wpdb->prefix . 'qp_subjects';
-        $subject_to_edit = null;
+        $term_table = $wpdb->prefix . 'qp_terms';
+        $tax_table = $wpdb->prefix . 'qp_taxonomies';
+        
+        $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'subject'");
+        
+        $term_to_edit = null;
+        $edit_description = '';
 
-        if (isset($_GET['action']) && $_GET['action'] === 'edit' && isset($_GET['subject_id'])) {
-            $subject_id = absint($_GET['subject_id']);
-            if (isset($_GET['_wpnonce']) && wp_verify_nonce($_GET['_wpnonce'], 'qp_edit_subject_' . $subject_id)) {
-                $subject_to_edit = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table_name WHERE subject_id = %d", $subject_id));
+        if (isset($_GET['action']) && $_GET['action'] === 'edit' && isset($_GET['term_id'])) {
+            $term_id = absint($_GET['term_id']);
+            if (isset($_GET['_wpnonce']) && wp_verify_nonce($_GET['_wpnonce'], 'qp_edit_subject_' . $term_id)) {
+                $term_to_edit = $wpdb->get_row($wpdb->prepare("SELECT * FROM $term_table WHERE term_id = %d", $term_id));
+                if ($term_to_edit) {
+                    $edit_description = qp_get_term_meta($term_id, 'description', true);
+                }
             }
         }
         
-        $subjects = $wpdb->get_results("SELECT * FROM $table_name ORDER BY subject_name ASC");
+        $parent_subjects = $wpdb->get_results($wpdb->prepare("SELECT term_id, name FROM $term_table WHERE taxonomy_id = %d AND parent = 0 ORDER BY name ASC", $subject_tax_id));
+
+        $list_table = new QP_Terms_List_Table('subject', 'Subject/Topic', 'subjects');
+        $list_table->prepare_items();
         
         if (isset($_SESSION['qp_admin_message'])) {
             echo '<div id="message" class="notice notice-' . esc_attr($_SESSION['qp_admin_message_type']) . ' is-dismissible"><p>' . esc_html($_SESSION['qp_admin_message']) . '</p></div>';
@@ -75,30 +149,40 @@ class QP_Subjects_Page {
             <div id="col-left">
                 <div class="col-wrap">
                     <div class="form-wrap">
-                        <h2><?php echo $subject_to_edit ? 'Edit Subject' : 'Add New Subject'; ?></h2>
+                        <h2><?php echo $term_to_edit ? 'Edit Subject/Topic' : 'Add New Subject/Topic'; ?></h2>
                         <form method="post" action="admin.php?page=qp-organization&tab=subjects">
                             <?php wp_nonce_field('qp_add_edit_subject_nonce'); ?>
-                            <input type="hidden" name="action" value="<?php echo $subject_to_edit ? 'update_subject' : 'add_subject'; ?>">
-                            <?php if ($subject_to_edit) : ?>
-                                <input type="hidden" name="subject_id" value="<?php echo esc_attr($subject_to_edit->subject_id); ?>">
+                            <input type="hidden" name="action" value="<?php echo $term_to_edit ? 'update_term' : 'add_term'; ?>">
+                            <?php if ($term_to_edit) : ?>
+                                <input type="hidden" name="term_id" value="<?php echo esc_attr($term_to_edit->term_id); ?>">
                             <?php endif; ?>
                             
                             <div class="form-field form-required">
-                                <label for="subject-name">Name</label>
-                                <input name="subject_name" id="subject-name" type="text" value="<?php echo $subject_to_edit ? esc_attr($subject_to_edit->subject_name) : ''; ?>" size="40" required <?php echo ($subject_to_edit && strtolower($subject_to_edit->subject_name) === 'uncategorized') ? 'readonly' : ''; ?>>
-                                <?php if ($subject_to_edit && strtolower($subject_to_edit->subject_name) === 'uncategorized'): ?>
-                                <p>The "Uncategorized" name cannot be changed.</p>
-                                <?php endif; ?>
+                                <label for="term-name">Name</label>
+                                <input name="term_name" id="term-name" type="text" value="<?php echo $term_to_edit ? esc_attr($term_to_edit->name) : ''; ?>" size="40" required <?php echo ($term_to_edit && strtolower($term_to_edit->name) === 'uncategorized') ? 'readonly' : ''; ?>>
                             </div>
 
                             <div class="form-field">
-                                <label for="subject-description">Description</label>
-                                <textarea name="subject_description" id="subject-description" rows="3" cols="40"><?php echo $subject_to_edit && isset($subject_to_edit->description) ? esc_textarea($subject_to_edit->description) : ''; ?></textarea>
+                                <label for="parent-subject">Parent Subject</label>
+                                <select name="parent" id="parent-subject">
+                                    <option value="0">— None —</option>
+                                    <?php foreach ($parent_subjects as $subject) : ?>
+                                        <option value="<?php echo esc_attr($subject->term_id); ?>" <?php selected($term_to_edit ? $term_to_edit->parent : 0, $subject->term_id); ?>>
+                                            <?php echo esc_html($subject->name); ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <p>Assign a parent term to create a hierarchy. For example, "Optics" would have "Physics" as its parent.</p>
+                            </div>
+
+                            <div class="form-field">
+                                <label for="term-description">Description</label>
+                                <textarea name="term_description" id="term-description" rows="3" cols="40"><?php echo esc_textarea($edit_description); ?></textarea>
                             </div>
 
                             <p class="submit">
-                                <input type="submit" class="button button-primary" value="<?php echo $subject_to_edit ? 'Update Subject' : 'Add New Subject'; ?>">
-                                <?php if ($subject_to_edit) : ?>
+                                <input type="submit" class="button button-primary" value="<?php echo $term_to_edit ? 'Update Item' : 'Add New Item'; ?>">
+                                <?php if ($term_to_edit) : ?>
                                     <a href="admin.php?page=qp-organization&tab=subjects" class="button button-secondary">Cancel Edit</a>
                                 <?php endif; ?>
                             </p>
@@ -108,42 +192,26 @@ class QP_Subjects_Page {
             </div>
             <div id="col-right">
                 <div class="col-wrap">
-                    <table class="wp-list-table widefat fixed striped">
-                        <thead>
-                            <tr>
-                                <th>Name</th>
-                                <th>Description</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php if (!empty($subjects)) : foreach ($subjects as $subject) : ?>
-                                <tr>
-                                    <td><?php echo esc_html($subject->subject_name); ?></td>
-                                    <td><?php echo isset($subject->description) ? esc_html($subject->description) : ''; ?></td>
-                                    <td>
-                                        <?php
-                                            $edit_nonce = wp_create_nonce('qp_edit_subject_' . $subject->subject_id);
-                                            $edit_link = sprintf('<a href="?page=qp-organization&tab=subjects&action=edit&subject_id=%s&_wpnonce=%s">Edit</a>', $subject->subject_id, $edit_nonce);
-
-                                            if (strtolower($subject->subject_name) !== 'uncategorized') {
-                                                $delete_nonce = wp_create_nonce('qp_delete_subject_' . $subject->subject_id);
-                                                $delete_link = sprintf('<a href="?page=qp-organization&tab=subjects&action=delete&subject_id=%s&_wpnonce=%s" style="color:#a00;">Delete</a>', $subject->subject_id, $delete_nonce);
-                                                echo $edit_link . ' | ' . $delete_link;
-                                            } else {
-                                                echo $edit_link;
-                                            }
-                                        ?>
-                                    </td>
-                                </tr>
-                            <?php endforeach; else : ?>
-                                <tr class="no-items"><td colspan="3">No subjects found.</td></tr>
-                            <?php endif; ?>
-                        </tbody>
-                    </table>
+                    <form method="get">
+                        <input type="hidden" name="page" value="<?php echo esc_attr($_REQUEST['page']); ?>" />
+                        <input type="hidden" name="tab" value="subjects" />
+                        <?php $list_table->display(); ?>
+                    </form>
                 </div>
             </div>
         </div>
         <?php
+    }
+
+    public static function set_message($message, $type) {
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            $_SESSION['qp_admin_message'] = $message;
+            $_SESSION['qp_admin_message_type'] = $type;
+        }
+    }
+
+    public static function redirect_to_tab($tab) {
+        wp_safe_redirect(admin_url('admin.php?page=qp-organization&tab=' . $tab));
+        exit;
     }
 }
