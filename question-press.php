@@ -4663,7 +4663,7 @@ function qp_finalize_and_end_session($session_id, $new_status = 'completed', $en
         'not_viewed_count' => $not_viewed_count,
         'settings' => $settings,
     ];
-}
+}}
 
 /**
  * AJAX handler to delete an empty/unterminated session record.
