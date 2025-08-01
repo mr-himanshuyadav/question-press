@@ -4917,7 +4917,13 @@ add_action('wp_ajax_qp_start_review_session', 'qp_start_review_session_ajax');
  */
 function qp_get_single_question_for_review_ajax()
 {
-    check_ajax_referer('qp_practice_nonce', 'nonce');
+    if (
+        !(check_ajax_referer('qp_practice_nonce', 'nonce', false) ||
+          check_ajax_referer('qp_get_quick_edit_form_nonce', 'nonce', false))
+    ) {
+        wp_send_json_error(['message' => 'Security check failed.']);
+    }
+
     if (!is_user_logged_in()) {
         wp_send_json_error(['message' => 'Not logged in.']);
     }
@@ -4929,10 +4935,10 @@ function qp_get_single_question_for_review_ajax()
 
     global $wpdb;
 
-    // Fetch question details using the new taxonomy system
+    // FIX 2: Use the more robust and correct query from other parts of the plugin.
     $question_data = $wpdb->get_row($wpdb->prepare(
         "SELECT q.question_text, q.custom_question_id, g.direction_text, 
-                (SELECT t.name FROM {$wpdb->prefix}qp_terms t JOIN {$wpdb->prefix}qp_term_relationships r ON t.term_id = r.term_id WHERE r.object_id = g.group_id AND r.object_type = 'group' AND t.parent = 0) as subject_name
+                (SELECT t.name FROM {$wpdb->prefix}qp_terms t JOIN {$wpdb->prefix}qp_term_relationships r ON t.term_id = r.term_id WHERE r.object_id = g.group_id AND r.object_type = 'group' AND t.taxonomy_id = (SELECT taxonomy_id FROM {$wpdb->prefix}qp_taxonomies WHERE taxonomy_name = 'subject') AND t.parent = 0) as subject_name
          FROM {$wpdb->prefix}qp_questions q
          LEFT JOIN {$wpdb->prefix}qp_question_groups g ON q.group_id = g.group_id
          WHERE q.question_id = %d",

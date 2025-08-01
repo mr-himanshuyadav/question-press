@@ -106,7 +106,7 @@ jQuery(document).ready(function ($) {
   }
 
   // Delegated event handler for when the SUBJECT dropdown changes
-  wrapper.on("change", ".qe-subject-select", function () {
+wrapper.on("change", ".qe-subject-select", function () {
     // The `qp_quick_edit_data` object is available globally in this scope
     // because it's loaded in a <script> tag within the form HTML.
     if (typeof qp_quick_edit_data === "undefined") return;
@@ -115,52 +115,61 @@ jQuery(document).ready(function ($) {
     var $form = $(this).closest(".quick-edit-form-wrapper");
     var $topicSelect = $form.find(".qe-topic-select");
     var $sourceSelect = $form.find(".qe-source-select");
+    var $sectionSelect = $form.find(".qe-section-select"); // <-- Added this line
     var $examSelect = $form.find(".qe-exam-select");
+
+    // --- NEW: Reset source and section dropdowns ---
+    $sourceSelect.val('');
+    $sectionSelect.val('').empty().append('<option value="">— Select a source first —</option>').prop('disabled', true);
+    // --- END NEW ---
 
     // 1. Update Topics dropdown based on the selected Subject
     updateDropdown(
-      $topicSelect,
-      qp_quick_edit_data.topics_by_subject[subjectId],
-      qp_quick_edit_data.current_topic_id,
-      "— Select a Topic —"
+        $topicSelect,
+        qp_quick_edit_data.topics_by_subject[subjectId],
+        qp_quick_edit_data.current_topic_id,
+        "— Select a Topic —"
     );
 
     // 2. Update Sources dropdown based on the selected Subject
     updateDropdown(
-      $sourceSelect,
-      qp_quick_edit_data.sources_by_subject[subjectId],
-      qp_quick_edit_data.current_source_id,
-      "— Select a Source —"
+        $sourceSelect,
+        qp_quick_edit_data.sources_by_subject[subjectId],
+        qp_quick_edit_data.current_source_id,
+        "— Select a Source —"
     );
     // Trigger change on the source select to populate sections
     $sourceSelect.trigger("change");
 
+    // Reset to not retain source state when subject changes.
+    qp_quick_edit_data.current_source_id = null;
+
     // 3. Update Exams dropdown based on the selected Subject
     var linkedExamIds = qp_quick_edit_data.exam_subject_links
-      .filter(function (link) {
-        return link.subject_id == subjectId;
-      })
-      .map(function (link) {
-        return link.exam_id;
-      });
+        .filter(function (link) {
+            return link.subject_id == subjectId;
+        })
+        .map(function (link) {
+            return link.exam_id;
+        });
 
     var availableExams = qp_quick_edit_data.all_exams
-      .filter(function (exam) {
-        // Ensure exam.exam_id is converted to a string for includes() to work reliably
-        return linkedExamIds.includes(String(exam.exam_id));
-      })
-      .map(function (exam) {
-        // Remap properties to match what updateDropdown expects
-        return { id: exam.exam_id, name: exam.exam_name };
-      });
+        .filter(function (exam) {
+            // Ensure exam.exam_id is converted to a string for includes() to work reliably
+            return linkedExamIds.includes(String(exam.exam_id));
+        })
+        .map(function (exam) {
+            // Remap properties to match what updateDropdown expects
+            return { id: exam.exam_id, name: exam.exam_name };
+        });
 
     updateDropdown(
-      $examSelect,
-      availableExams,
-      qp_quick_edit_data.current_exam_id,
-      "— Select an Exam —"
+        $examSelect,
+        availableExams,
+        qp_quick_edit_data.current_exam_id,
+        "— Select an Exam —"
     );
-  });
+});
 
   // Delegated event handler for when the SOURCE dropdown changes
   wrapper.on("change", ".qe-source-select", function () {
