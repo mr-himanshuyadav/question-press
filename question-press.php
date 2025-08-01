@@ -1934,17 +1934,38 @@ function qp_get_local_backups_html()
     $upload_dir = wp_upload_dir();
     $backup_dir = trailingslashit($upload_dir['basedir']) . 'qp-backups';
     $backup_url_base = trailingslashit($upload_dir['baseurl']) . 'qp-backups';
-    $backups = file_exists($backup_dir) ? array_reverse(array_diff(scandir($backup_dir), ['..', '.'])) : [];
+    $backups = file_exists($backup_dir) ? array_diff(scandir($backup_dir), ['..', '.']) : [];
+
+    // --- NEW SORTING LOGIC ---
+    $sorted_backups = [];
+    if (!empty($backups)) {
+        $files_with_time = [];
+        foreach ($backups as $backup_file) {
+            $file_path = trailingslashit($backup_dir) . $backup_file;
+            if (is_dir($file_path)) continue;
+            $files_with_time[$backup_file] = filemtime($file_path);
+        }
+
+        // Sort by time descending, then by name ascending for tie-breaking
+        uksort($files_with_time, function($a, $b) use ($files_with_time) {
+            if ($files_with_time[$a] == $files_with_time[$b]) {
+                return strcmp($a, $b); // Sort by name if times are identical
+            }
+            // Primary sort by modification time, descending
+            return $files_with_time[$b] <=> $files_with_time[$a];
+        });
+        $sorted_backups = array_keys($files_with_time);
+    }
+    // --- END NEW SORTING LOGIC ---
 
     ob_start();
 
-    if (empty($backups)) {
+    if (empty($sorted_backups)) { // Use the new sorted array
         echo '<tr class="no-items"><td class="colspanchange" colspan="4">No local backups found.</td></tr>';
     } else {
-        foreach ($backups as $backup_file) {
+        foreach ($sorted_backups as $backup_file) { // Iterate over the new sorted array
             $file_path = trailingslashit($backup_dir) . $backup_file;
             $file_url = trailingslashit($backup_url_base) . $backup_file;
-            if (is_dir($file_path)) continue;
 
             $file_size = size_format(filesize($file_path));
             $file_timestamp_gmt = filemtime($file_path);
