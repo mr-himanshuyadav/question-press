@@ -3,7 +3,7 @@
 /**
  * Plugin Name:       Question Press
  * Description:       A complete plugin for creating, managing, and practicing questions.
- * Version:           3.3.1
+ * Version:           3.3.2
  * Author:            Himanshu
  */
 
@@ -491,7 +491,6 @@ function qp_render_merge_terms_page()
     if (!isset($_REQUEST['term_ids']) || !is_array($_REQUEST['term_ids']) || count($_REQUEST['term_ids']) < 2) {
         wp_die('Please select at least two items to merge.');
     }
-
     // Further security checks can be added here later
 
     $term_ids_to_merge = array_map('absint', $_REQUEST['term_ids']);
@@ -506,42 +505,50 @@ function qp_render_merge_terms_page()
     $master_term = $terms_to_merge[0];
     $master_description = qp_get_term_meta($master_term->term_id, 'description', true);
 
-    // Get all possible parent terms for the dropdown
+    // Get all possible parent terms for the dropdown (excluding the ones being merged)
     $parent_terms = $wpdb->get_results($wpdb->prepare(
         "SELECT term_id, name FROM $term_table WHERE taxonomy_id = %d AND parent = 0 AND term_id NOT IN ({$ids_placeholder}) ORDER BY name ASC",
         $master_term->taxonomy_id
     ));
 
+    // --- NEW: Fetch all children for all terms being merged ---
+    $all_children = $wpdb->get_results("SELECT term_id, name, parent FROM {$term_table} WHERE parent IN ({$ids_placeholder}) ORDER BY name ASC");
+    $children_by_parent = [];
+    foreach ($all_children as $child) {
+        $children_by_parent[$child->parent][] = $child;
+    }
 ?>
     <div class="wrap">
         <h1>Merge <?php echo esc_html($taxonomy_label); ?>s</h1>
-        <p>You are about to merge the following items into a single item. The other items will be deleted, and all associated questions will be reassigned to the final, merged item.</p>
-
-        <ul style="list-style:disc; padding-left:20px;">
-            <?php foreach ($terms_to_merge as $term) : ?>
-                <li><strong><?php echo esc_html($term->name); ?></strong> (ID: <?php echo esc_html($term->term_id); ?>)</li>
-            <?php endforeach; ?>
-        </ul>
+        <p>You are about to merge multiple items. All questions associated with the source items will be reassigned to the final destination item.</p>
 
         <form method="post" action="admin.php?page=qp-organization&tab=<?php echo esc_attr($taxonomy_name); ?>s">
             <?php wp_nonce_field('qp_perform_merge_nonce'); ?>
             <input type="hidden" name="action" value="perform_merge">
-            <input type="hidden" name="taxonomy" value="<?php echo esc_attr($taxonomy_name); ?>">
-            <input type="hidden" name="destination_term_id" value="<?php echo esc_attr($master_term->term_id); ?>">
             <?php foreach ($term_ids_to_merge as $term_id) : ?>
                 <input type="hidden" name="source_term_ids[]" value="<?php echo esc_attr($term_id); ?>">
             <?php endforeach; ?>
 
-            <h2>Final Merged Item Details</h2>
-            <p>Review and edit the details for the final merged item below.</p>
+            <h2>Step 1: Choose the Destination Item</h2>
+            <p>Select which item you want to merge the others into. Its details will be used as the default for the final merged item.</p>
+            <fieldset style="margin-bottom: 2rem;">
+                <?php foreach ($terms_to_merge as $index => $term) : ?>
+                    <label style="display: block; margin-bottom: 5px;">
+                        <input type="radio" name="destination_term_id" value="<?php echo esc_attr($term->term_id); ?>" <?php checked($index, 0); ?>>
+                        <strong><?php echo esc_html($term->name); ?></strong> (ID: <?php echo esc_html($term->term_id); ?>)
+                    </label>
+                <?php endforeach; ?>
+            </fieldset>
 
+            <h2>Step 2: Final Merged Item Details</h2>
+            <p>Review and edit the details for the final merged item below.</p>
             <table class="form-table">
                 <tr class="form-field form-required">
-                    <th scope="row"><label for="term-name">Name</label></th>
+                    <th scope="row"><label for="term-name">Final Name</label></th>
                     <td><input name="term_name" id="term-name" type="text" value="<?php echo esc_attr($master_term->name); ?>" size="40" required></td>
                 </tr>
                 <tr class="form-field">
-                    <th scope="row"><label for="parent-term">Parent</label></th>
+                    <th scope="row"><label for="parent-term">Final Parent</label></th>
                     <td>
                         <select name="parent" id="parent-term">
                             <option value="0">— None —</option>
@@ -554,17 +561,85 @@ function qp_render_merge_terms_page()
                     </td>
                 </tr>
                 <tr class="form-field">
-                    <th scope="row"><label for="term-description">Description</label></th>
+                    <th scope="row"><label for="term-description">Final Description</label></th>
                     <td><textarea name="term_description" id="term-description" rows="5" cols="50"><?php echo esc_textarea($master_description); ?></textarea></td>
                 </tr>
             </table>
 
-            <p class="submit">
+            <h2 style="margin-top: 2rem;">Step 3: Merge Child Items</h2>
+            <p>For each child item (e.g., a section), choose where its questions should be moved. You can merge them into an existing child of the destination, or move them to the top-level destination item.</p>
+
+            <table class="wp-list-table widefat striped" id="child-merge-table" style="margin-top: 1rem;">
+                <thead>
+                    <tr>
+                        <th>Child Item to Merge</th>
+                        <th>Parent</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    </tbody>
+            </table>
+
+            <p class="submit" style="margin-top: 2rem;">
                 <input type="submit" class="button button-primary button-large" value="Confirm Merge">
                 <a href="javascript:history.back()" class="button button-secondary">Cancel</a>
             </p>
         </form>
     </div>
+    <script>
+        jQuery(document).ready(function($) {
+            var allTerms = <?php echo json_encode($terms_to_merge); ?>;
+            var allChildren = <?php echo json_encode($children_by_parent); ?>;
+
+            function populateMergeTable() {
+                var destinationId = $('input[name="destination_term_id"]:checked').val();
+                var $tableBody = $('#child-merge-table tbody').empty();
+                var destinationChildren = allChildren[destinationId] || [];
+
+                allTerms.forEach(function(parentTerm) {
+                    if (parentTerm.term_id == destinationId) return; // Skip destination parent
+
+                    var sourceChildren = allChildren[parentTerm.term_id] || [];
+                    if (sourceChildren.length === 0) return;
+
+                    sourceChildren.forEach(function(child) {
+                        var row = '<tr>';
+                        row += '<td><strong>' + child.name + '</strong> (ID: ' + child.term_id + ')</td>';
+                        row += '<td>' + parentTerm.name + '</td>';
+                        row += '<td>';
+                        row += '<select name="child_merges[' + child.term_id + ']" style="width: 100%;">';
+                        // Option 1: Merge to parent destination
+                        row += '<option value="' + destinationId + '">Merge into: ' + $('input[name="term_name"]').val() + ' (Parent)</option>';
+                        // Option 2: Merge into existing children of destination
+                        destinationChildren.forEach(function(destChild) {
+                            row += '<option value="' + destChild.term_id + '">Merge into: ' + destChild.name + '</option>';
+                        });
+                        row += '</select>';
+                        row += '</td></tr>';
+                        $tableBody.append(row);
+                    });
+                });
+                 if ($tableBody.children().length === 0) {
+                    $tableBody.append('<tr><td colspan="3">No child items to merge for the selected sources.</td></tr>');
+                }
+            }
+
+            // Update form defaults and merge table when the destination changes
+            $('input[name="destination_term_id"]').on('change', function() {
+                var selectedId = $(this).val();
+                var selectedTerm = allTerms.find(term => term.term_id == selectedId);
+                if (selectedTerm) {
+                    $('#term-name').val(selectedTerm.name);
+                    // You would need an AJAX call to get the description if it's not pre-loaded
+                }
+                populateMergeTable();
+            });
+
+            // Initial population
+            populateMergeTable();
+        });
+    </script>
 <?php
 }
 

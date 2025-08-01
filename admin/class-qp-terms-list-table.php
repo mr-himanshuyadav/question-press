@@ -36,36 +36,119 @@ class QP_Terms_List_Table extends WP_List_Table {
         return ['merge' => 'Merge'];
     }
 
-    public function process_bulk_action() {
-        $action = $this->current_action();
+    public function process_bulk_action()
+{
+    $action = $this->current_action();
 
-        if ('merge' === $action) {
-            check_admin_referer('bulk-' . $this->_args['plural']);
+    // --- Merge Page Redirect Logic ---
+    if ('merge' === $action && !isset($_POST['action2'])) { // action2 is used by the merge page form itself
+        check_admin_referer('bulk-' . $this->_args['plural']);
+        $term_ids = isset($_REQUEST['term_ids']) ? array_map('absint', $_REQUEST['term_ids']) : [];
+        if (count($term_ids) < 2) {
+            wp_die('Please select at least two items to merge.');
+        }
+        $redirect_url = admin_url('admin.php?page=qp-merge-terms');
+        $redirect_url = add_query_arg([
+            'taxonomy' => $this->taxonomy,
+            'taxonomy_label' => $this->taxonomy_label,
+            'term_ids' => $term_ids,
+        ], $redirect_url);
+        wp_safe_redirect($redirect_url);
+        exit;
+    }
 
-            $term_ids = isset($_REQUEST['term_ids']) ? array_map('absint', $_REQUEST['term_ids']) : [];
+    // --- NEW: Centralized Merge Processing Logic ---
+    if (isset($_POST['action']) && $_POST['action'] === 'perform_merge') {
+        check_admin_referer('qp_perform_merge_nonce');
 
-            if (count($term_ids) < 2) {
-                // Not a real redirect, but stops execution and shows a message
-                wp_die('Please select at least two items to merge.');
+        global $wpdb;
+        $term_table = $wpdb->prefix . 'qp_terms';
+        $meta_table = $wpdb->prefix . 'qp_term_meta';
+        $rel_table = $wpdb->prefix . 'qp_term_relationships';
+
+        $destination_term_id = absint($_POST['destination_term_id']);
+        $source_term_ids = array_map('absint', $_POST['source_term_ids']);
+        $final_name = sanitize_text_field($_POST['term_name']);
+        $final_parent = absint($_POST['parent']);
+        $final_description = sanitize_textarea_field($_POST['term_description']);
+        $child_merges = isset($_POST['child_merges']) ? (array)$_POST['child_merges'] : [];
+
+        // --- 1. Handle explicit child merges from the form ---
+        if (!empty($child_merges)) {
+            foreach ($child_merges as $source_child_id => $dest_child_id) {
+                // This recursively merges the selected children and all their descendants
+                $this->recursively_merge_terms(absint($source_child_id), absint($dest_child_id));
             }
+        }
 
-            // Build the URL for our hidden merge page
-            $redirect_url = admin_url('admin.php?page=qp-merge-terms');
+        // --- 2. Handle the top-level parent merge ---
+        $source_term_ids_to_merge = array_diff($source_term_ids, [$destination_term_id]);
+        foreach($source_term_ids_to_merge as $source_term_id) {
+            $this->recursively_merge_terms($source_term_id, $destination_term_id);
+        }
 
-            // Add the necessary parameters for the merge page to use
-            $redirect_url = add_query_arg(
-                [
-                    'taxonomy' => $this->taxonomy,
-                    'taxonomy_label' => $this->taxonomy_label,
-                    'term_ids' => $term_ids,
-                ],
-                $redirect_url
-            );
+        // --- 3. Update the final destination term with the new details ---
+        $wpdb->update($term_table,
+            ['name' => $final_name, 'slug' => sanitize_title($final_name), 'parent' => $final_parent],
+            ['term_id' => $destination_term_id]
+        );
+        qp_update_term_meta($destination_term_id, 'description', $final_description);
 
-            wp_safe_redirect($redirect_url);
-            exit;
+        // Set success message and redirect
+        QP_Sources_Page::set_message(count($source_term_ids_to_merge) . ' item(s) were successfully merged into "' . esc_html($final_name) . '".', 'updated');
+        QP_Sources_Page::redirect_to_tab($this->tab_slug); // Use the tab_slug property for correct redirection
+    }
+}
+
+/**
+ * NEW: Recursive helper function to merge a source term into a destination term.
+ * This handles reassignment of questions, merging/re-parenting of children, and deletion.
+ *
+ * @param int $source_term_id      The ID of the term to merge and delete.
+ * @param int $destination_term_id The ID of the term to merge into.
+ */
+private function recursively_merge_terms($source_term_id, $destination_term_id) {
+    global $wpdb;
+    $term_table = $wpdb->prefix . 'qp_terms';
+    $meta_table = $wpdb->prefix . 'qp_term_meta';
+    $rel_table = $wpdb->prefix . 'qp_term_relationships';
+
+    if ($source_term_id === $destination_term_id) {
+        return; // Cannot merge a term into itself.
+    }
+
+    // 1. Reassign questions from the source term to the destination term.
+    $wpdb->query($wpdb->prepare(
+        "UPDATE $rel_table SET term_id = %d WHERE term_id = %d AND object_type = 'question'",
+        $destination_term_id,
+        $source_term_id
+    ));
+
+    // 2. Get children of both source and destination to compare them.
+    $source_children = $wpdb->get_results($wpdb->prepare("SELECT term_id, name FROM $term_table WHERE parent = %d", $source_term_id), OBJECT_K);
+    $dest_children = $wpdb->get_results($wpdb->prepare("SELECT term_id, name FROM $term_table WHERE parent = %d", $destination_term_id), OBJECT_K);
+
+    $dest_children_names = array_map('strtolower', wp_list_pluck($dest_children, 'name'));
+
+    // 3. Loop through source children to decide their fate.
+    foreach ($source_children as $source_child) {
+        $found_in_dest = array_search(strtolower($source_child->name), $dest_children_names);
+
+        if ($found_in_dest !== false) {
+            // A child with the same name exists in the destination. Merge them recursively.
+            $dest_child_key = array_keys($dest_children)[$found_in_dest];
+            $dest_child_id = $dest_children[$dest_child_key]->term_id;
+            $this->recursively_merge_terms($source_child->term_id, $dest_child_id);
+        } else {
+            // This child is unique. Re-parent it to the destination term.
+            $wpdb->update($term_table, ['parent' => $destination_term_id], ['term_id' => $source_child->term_id]);
         }
     }
+
+    // 4. After re-assigning questions and handling children, delete the now-empty source term.
+    $wpdb->delete($term_table, ['term_id' => $source_term_id]);
+    $wpdb->delete($meta_table, ['term_id' => $source_term_id]);
+}
 
     public function prepare_items() {
         global $wpdb;
