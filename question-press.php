@@ -41,104 +41,6 @@ function qp_activate_plugin()
     $charset_collate = $wpdb->get_charset_collate();
     require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
 
-    // Table: Subjects (Deleter After Update)
-    $table_subjects = $wpdb->prefix . 'qp_subjects';
-    $sql_subjects = "CREATE TABLE $table_subjects (
-        subject_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
-        subject_name VARCHAR(255) NOT NULL,
-        description TEXT,
-        PRIMARY KEY (subject_id)
-    ) $charset_collate;";
-    dbDelta($sql_subjects);
-    if ($wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $table_subjects WHERE subject_name = %s", 'Uncategorized')) == 0) {
-        $wpdb->insert($table_subjects, ['subject_name' => 'Uncategorized', 'description' => 'Default subject for questions without an assigned one.']);
-    }
-
-    // Table: Topics (Delete After Update)
-    $table_topics = $wpdb->prefix . 'qp_topics';
-    $sql_topics = "CREATE TABLE $table_topics (
-        topic_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
-        topic_name VARCHAR(255) NOT NULL,
-        subject_id BIGINT(20) UNSIGNED NOT NULL,
-        PRIMARY KEY (topic_id),
-        KEY subject_id (subject_id)
-    ) $charset_collate;";
-    dbDelta($sql_topics);
-
-    // Table: Exams (Delete After Update)
-    $table_exams = $wpdb->prefix . 'qp_exams';
-    $sql_exams = "CREATE TABLE $table_exams (
-    exam_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
-    exam_name VARCHAR(255) NOT NULL,
-    PRIMARY KEY (exam_id)
-    ) $charset_collate;";
-    dbDelta($sql_exams);
-
-    // Pivot Table: Exam-Subject relationship (Delete After Update)
-    $table_exam_subjects = $wpdb->prefix . 'qp_exam_subjects';
-    $sql_exam_subjects = "CREATE TABLE $table_exam_subjects (
-        exam_id BIGINT(20) UNSIGNED NOT NULL,
-        subject_id BIGINT(20) UNSIGNED NOT NULL,
-        PRIMARY KEY (exam_id, subject_id),
-        KEY subject_id (subject_id)
-    ) $charset_collate;";
-    dbDelta($sql_exam_subjects);
-
-    // Table: Sources (Delete After Update)
-    $table_sources = $wpdb->prefix . 'qp_sources';
-    $sql_sources = "CREATE TABLE $table_sources (
-    source_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
-    subject_id BIGINT(20) UNSIGNED DEFAULT NULL,
-    source_type VARCHAR(50) NOT NULL DEFAULT 'book',
-    source_name VARCHAR(255) NOT NULL,
-    description TEXT,
-    PRIMARY KEY (source_id),
-    KEY subject_id (subject_id)
-    ) $charset_collate;";
-    dbDelta($sql_sources);
-
-    // Table: Source Sections (Delete After Update)
-    $table_source_sections = $wpdb->prefix . 'qp_source_sections';
-    $sql_source_sections = "CREATE TABLE $table_source_sections (
-        section_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
-        source_id BIGINT(20) UNSIGNED NOT NULL,
-        parent BIGINT(20) UNSIGNED NOT NULL DEFAULT 0,
-        section_name VARCHAR(255) NOT NULL,
-        PRIMARY KEY (section_id),
-        KEY source_id (source_id),
-        KEY parent (parent)
-    ) $charset_collate;";
-    dbDelta($sql_source_sections);
-
-
-    // Table: Labels (Delete After Update)
-    $table_labels = $wpdb->prefix . 'qp_labels';
-    $sql_labels = "CREATE TABLE $table_labels (
-        label_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
-        label_name VARCHAR(255) NOT NULL,
-        label_color VARCHAR(7) NOT NULL DEFAULT '#cccccc',
-        is_default BOOLEAN NOT NULL DEFAULT 0,
-        description TEXT,
-        PRIMARY KEY (label_id)
-    ) $charset_collate;";
-    dbDelta($sql_labels);
-
-    // Create default labels in BOTH old and new systems for compatibility
-    $default_labels = [
-        ['label_name' => 'Wrong Answer', 'label_color' => '#ff5733', 'is_default' => 1, 'description' => 'Reported by users for having an incorrect answer key.'],
-        ['label_name' => 'No Answer', 'label_color' => '#ffc300', 'is_default' => 1, 'description' => 'Reported by users because the question has no correct option provided.'],
-        ['label_name' => 'Incorrect Formatting', 'label_color' => '#900c3f', 'is_default' => 1, 'description' => 'Reported by users for formatting or display issues.'],
-        ['label_name' => 'Wrong Subject', 'label_color' => '#581845', 'is_default' => 1, 'description' => 'Reported by users for being in the wrong subject category.'],
-        ['label_name' => 'Duplicate', 'label_color' => '#c70039', 'is_default' => 1, 'description' => 'Automatically marked as a duplicate of another question during import.']
-    ];
-
-    foreach ($default_labels as $label) {
-        // Old table
-        if ($wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $table_labels WHERE label_name = %s", $label['label_name'])) == 0) {
-            $wpdb->insert($table_labels, $label);
-        }
-    }
-
     // Table: Groups (Migrate some columns from question table here & Remove some columns after update)
     $table_groups = $wpdb->prefix . 'qp_question_groups';
     $sql_groups = "CREATE TABLE $table_groups (
@@ -193,16 +95,6 @@ function qp_activate_plugin()
         KEY question_id (question_id)
     ) $charset_collate;";
     dbDelta($sql_options);
-
-    // Table: Question Labels (Delete after Update)
-    $table_question_labels = $wpdb->prefix . 'qp_question_labels';
-    $sql_question_labels = "CREATE TABLE $table_question_labels (
-        question_id BIGINT(20) UNSIGNED NOT NULL,
-        label_id BIGINT(20) UNSIGNED NOT NULL,
-        PRIMARY KEY (question_id, label_id),
-        KEY label_id (label_id)
-    ) $charset_collate;";
-    dbDelta($sql_question_labels);
 
     // Table: User Sessions
     $table_sessions = $wpdb->prefix . 'qp_user_sessions';
