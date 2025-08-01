@@ -3,7 +3,7 @@
 /**
  * Plugin Name:       Question Press
  * Description:       A complete plugin for creating, managing, and practicing questions.
- * Version:           3.3.0
+ * Version:           3.3.1
  * Author:            Himanshu
  */
 
@@ -4561,7 +4561,19 @@ function qp_finalize_and_end_session($session_id, $new_status = 'completed', $en
     if ($total_answered_attempts === 0) {
         $wpdb->delete($sessions_table, ['session_id' => $session_id]);
         $wpdb->delete($attempts_table, ['session_id' => $session_id]); // Also clear any skipped/expired attempts
-        return null; // Indicate that the session was empty and deleted
+        return null; // Indicate that the session was empty
+    $correct_option_id = isset($data['correct_option_id']) ? absint($data['correct_option_id']) : 0;
+    if ($correct_option_id) {
+        // Get the original correct option ID before making changes
+        $original_correct_option_id = $wpdb->get_var($wpdb->prepare("SELECT option_id FROM {$wpdb->prefix}qp_options WHERE question_id = %d AND is_correct = 1", $question_id));
+
+        $wpdb->update("{$wpdb->prefix}qp_options", ['is_correct' => 0], ['question_id' => $question_id]);
+        $wpdb->update("{$wpdb->prefix}qp_options", ['is_correct' => 1], ['option_id' => $correct_option_id, 'question_id' => $question_id]);
+
+        // If the correct answer has changed, trigger re-evaluation
+        if ($original_correct_option_id != $correct_option_id) {
+            qp_re_evaluate_question_attempts($question_id, $correct_option_id);
+        }
     }
 
     // If we are here, it means there were attempts, so we proceed to finalize.
