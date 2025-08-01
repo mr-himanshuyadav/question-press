@@ -900,23 +900,34 @@ class QP_Shortcodes
         <div id="qp-start-session-overlay">
             <div class="qp-start-session-content">
                 <h3>Your session is ready.</h3>
-                <p>Click the button below to begin in an immersive, fullscreen environment.</p><button id="qp-fullscreen-start-btn" class="qp-button qp-button-primary">Start & Enter Fullscreen</button>
+                <p>Click the button below to start the session.</p><button id="qp-fullscreen-start-btn" class="qp-button qp-button-primary">START</button>
             </div>
         </div>
         <div id="qp-rough-work-overlay" style="display: none;">
-            <div class="qp-rough-work-controls">
-                <button id="qp-tool-pencil" class="qp-tool-btn active" title="Pencil"><span class="dashicons dashicons-edit"></span></button>
-                <button id="qp-tool-eraser" class="qp-tool-btn" title="Eraser"><span class="dashicons dashicons-editor-removeformatting"></span></button>
-                <div class="qp-color-swatches">
-                    <button class="qp-color-btn active" data-color="#171717ff" style="background-color: #171717ff;" title="Black"></button>
-                    <button class="qp-color-btn" data-color="#ca0808ff" style="background-color: #ca0808ff;" title="Red"></button>
-                    <button class="qp-color-btn" data-color="#002daaff" style="background-color: #002daaff;" title="Blue"></button>
+            <div id="qp-rough-work-popup" class="qp-draggable-popup">
+                <div class="qp-popup-header">
+                    <div class="qp-rough-work-controls">
+                        <button id="qp-tool-pencil" class="qp-tool-btn active" title="Pencil"><span class="dashicons dashicons-edit"></span></button>
+                        <button id="qp-tool-eraser" class="qp-tool-btn" title="Eraser"><span class="dashicons dashicons-editor-removeformatting"></span></button>
+
+                        <button id="qp-undo-btn" class="qp-tool-btn" title="Undo" disabled><span class="dashicons dashicons-undo"></span></button>
+    <button id="qp-redo-btn" class="qp-tool-btn" title="Redo" disabled><span class="dashicons dashicons-redo"></span></button>
+                        <div class="qp-color-swatches">
+                            <button class="qp-color-btn active" data-color="#171717ff" style="background-color: #171717ff;" title="Black"></button>
+                            <button class="qp-color-btn" data-color="#ca0808ff" style="background-color: #ca0808ff;" title="Red"></button>
+                            <button class="qp-color-btn" data-color="#002daaff" style="background-color: #002daaff;" title="Blue"></button>
+                        </div>
+                        <input type="range" min="10" max="100" value="30" class="qp-canvas-slider" id="qp-canvas-opacity-slider" title="Change Transparency">
+                        <button id="qp-clear-canvas-btn" class="qp-button qp-button-secondary">Clear</button>
+                    </div>
+                    <button id="qp-close-canvas-btn" class="qp-popup-close-btn" title="Close">&times;</button>
                 </div>
-                <input type="range" min="10" max="100" value="30" class="qp-canvas-slider" id="qp-canvas-opacity-slider" title="Change Transparency">
-                <button id="qp-clear-canvas-btn" class="qp-button qp-button-secondary">Clear</button>
-                <button id="qp-close-canvas-btn" class="qp-button qp-button-danger">Close</button>
+                <div class="qp-popup-content">
+                    <canvas id="qp-rough-work-canvas"></canvas>
+                </div>
+                <div class="qp-popup-resize-handle"><span></span></div>
             </div>
-            <canvas id="qp-rough-work-canvas"></canvas>
+        </div>
         </div>
     <?php
         return ob_get_clean();

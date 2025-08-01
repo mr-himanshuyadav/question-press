@@ -8,16 +8,6 @@ jQuery(document).ready(function ($) {
     "#qp-palette-docked .qp-palette-grid, #qp-palette-sliding .qp-palette-grid"
   );
   var unattemptedCounts = {};
-  // --- FINAL: Enhanced & Responsive Rough Work Canvas ---
-    var canvasOverlay = $('#qp-rough-work-overlay');
-    var canvasEl = $('#qp-rough-work-canvas');
-    var canvas = canvasEl[0]; // Get the raw DOM element
-    var ctx;
-    var isDrawing = false;
-    var lastX = 0;
-    var lastY = 0;
-    var currentTool = 'pencil'; // 'pencil' or 'eraser'
-    var brushSize = 2; // Default brush size
 
   // --- Fetch unattempted counts if the setting is enabled ---
 if (typeof qp_practice_settings !== 'undefined' && qp_practice_settings.show_counts) {
@@ -2251,118 +2241,235 @@ $("#qp-next-btn").prop("disabled", !isSectionWise);
     }
   });
 
-  function resizeCanvas() {
+  // --- FINAL: Draggable, Resizable, Touch-Enabled Rough Work Popup with Undo/Redo ---
+    var overlay = $('#qp-rough-work-overlay');
+    var popup = $('#qp-rough-work-popup');
+    var header = popup.find('.qp-popup-header');
+    var resizeHandle = popup.find('.qp-popup-resize-handle');
+    var canvasEl = $('#qp-rough-work-canvas');
+    var canvas = canvasEl[0]; // The VISIBLE canvas
+    var ctx; // The VISIBLE canvas context
+
+    // --- NEW: Off-screen canvas for persistent drawing ---
+    var masterCanvas = document.createElement('canvas');
+    var masterCtx = masterCanvas.getContext('2d');
+    masterCanvas.width = 2000; // A large fixed size
+    masterCanvas.height = 2000;
+
+    var isDrawing = false, isDragging = false, isResizing = false;
+    var lastX, lastY, initialX, initialY, initialWidth, initialHeight;
+    var currentTool = 'pencil';
+
+    var undoStack = [];
+    var redoStack = [];
+    var undoBtn = $('#qp-undo-btn');
+    var redoBtn = $('#qp-redo-btn');
+
+    function getEventCoords(e) {
+        var evt = (e.originalEvent && e.originalEvent.touches) ? e.originalEvent.touches[0] : e;
+        return { x: evt.clientX, y: evt.clientY };
+    }
+
+    function updateVisibleCanvas() {
+        if (ctx) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(masterCanvas, 0, 0);
+        }
+    }
+
+    function saveCanvasState() {
+        redoStack = [];
+        undoStack.push(masterCanvas.toDataURL());
+        updateUndoRedoButtons();
+    }
+
+    function updateUndoRedoButtons() {
+        undoBtn.prop('disabled', undoStack.length <= 1);
+        redoBtn.prop('disabled', redoStack.length === 0);
+    }
+
+    function restoreCanvasState(popStack, pushStack) {
+        if (popStack.length > 0) {
+            pushStack.push(masterCanvas.toDataURL());
+            var restoreData = popStack.pop();
+            
+            var img = new Image();
+            img.onload = function() {
+                masterCtx.clearRect(0, 0, masterCanvas.width, masterCanvas.height);
+                masterCtx.drawImage(img, 0, 0);
+                updateVisibleCanvas(); // Update the view
+            };
+            img.src = restoreData;
+            updateUndoRedoButtons();
+        }
+    }
+
+    undoBtn.on('click', function() { restoreCanvasState(undoStack, redoStack); });
+    redoBtn.on('click', function() { restoreCanvasState(redoStack, undoStack); });
+
+    function resizeCanvas() {
         if (canvas) {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-            if (ctx) {
-                // Re-apply settings after resize
-                ctx.strokeStyle = $('.qp-color-btn.active').data('color');
-                ctx.lineWidth = brushSize;
-                ctx.lineJoin = 'round';
-                ctx.lineCap = 'round';
-            }
+            var contentArea = popup.find('.qp-popup-content');
+            canvas.width = contentArea.width();
+            canvas.height = contentArea.height();
+            updateVisibleCanvas(); // Redraw from master canvas after resize
         }
     }
 
     function draw(e) {
         if (!isDrawing) return;
+        var coords = getEventCoords(e);
+        var rect = canvas.getBoundingClientRect();
+        var currentX = coords.x - rect.left;
+        var currentY = coords.y - rect.top;
 
-        // Set tool properties before drawing
         if (currentTool === 'eraser') {
-            ctx.globalCompositeOperation = 'destination-out'; // Erase mode
-            ctx.lineWidth = 20; // Use a larger fixed size for the eraser
+            masterCtx.globalCompositeOperation = 'destination-out';
+            masterCtx.lineWidth = 20;
         } else {
-            ctx.globalCompositeOperation = 'source-over'; // Normal drawing mode
-            ctx.strokeStyle = $('.qp-color-btn.active').data('color');
-            ctx.lineWidth = brushSize;
+            masterCtx.globalCompositeOperation = 'source-over';
+            masterCtx.strokeStyle = $('.qp-color-btn.active').data('color');
+            masterCtx.lineWidth = 2;
         }
         
-        ctx.beginPath();
-        ctx.moveTo(lastX, lastY);
-
-        var rect = canvas.getBoundingClientRect();
-        var currentX = (e.offsetX || (e.touches && e.touches[0].clientX - rect.left));
-        var currentY = (e.offsetY || (e.touches && e.touches[0].clientY - rect.top));
-
-        ctx.lineTo(currentX, currentY);
-        ctx.stroke();
+        masterCtx.beginPath();
+        masterCtx.moveTo(lastX, lastY);
+        masterCtx.lineTo(currentX, currentY);
+        masterCtx.stroke();
         [lastX, lastY] = [currentX, currentY];
+        
+        updateVisibleCanvas(); // Update the view after drawing on master
+        e.preventDefault();
     }
 
-    // Show Canvas
+    // Show Popup and Overlay
     wrapper.on('click', '#qp-rough-work-btn', function() {
+        var savedOpacityValue = localStorage.getItem('qpCanvasOpacityValue');
+        var initialSliderValue = savedOpacityValue ? parseFloat(savedOpacityValue) : 90;
+        var popupOpacity = 0.3 + ((initialSliderValue / 100) * 0.7);
+        var overlayOpacity = 0.1 + ((initialSliderValue / 100) * 0.5);
+        popup.css('background-color', `rgba(255, 255, 255, ${popupOpacity})`);
+        overlay.css('background-color', `rgba(0, 0, 0, ${overlayOpacity})`);
+        $('#qp-canvas-opacity-slider').val(initialSliderValue);
+        popup.css({ 'top': '50%', 'left': '50%', 'transform': 'translate(-50%, -50%)' });
+        overlay.fadeIn(200);
+        var offset = popup.offset();
+        popup.css({ top: offset.top, left: offset.left, transform: 'none' });
 
-      // --- NEW: Admin Bar Detection ---
-        var adminBarHeight = 0;
-        if ($('body').hasClass('admin-bar')) {
-            adminBarHeight = $('#wpadminbar').height();
-        }
-        canvasOverlay.find('.qp-rough-work-controls').css('top', (adminBarHeight + 10) + 'px');
-        canvasOverlay.fadeIn(200);
-        if (!ctx) { // Initialize only once
+        if (!ctx) {
             ctx = canvas.getContext('2d');
-            resizeCanvas(); // Sets initial size and properties
-            window.addEventListener('resize', resizeCanvas);
-
-            // Mouse Events
-            canvasEl.on('mousedown', (e) => {
-                isDrawing = true;
-                [lastX, lastY] = [e.offsetX, e.offsetY];
-            });
-            canvasEl.on('mousemove', draw);
-            canvasEl.on('mouseup mouseout', () => isDrawing = false);
-
-            // Touch Events
-            canvasEl.on('touchstart', (e) => {
-                isDrawing = true;
-                const touch = e.originalEvent.touches[0];
-                var rect = canvas.getBoundingClientRect();
-                [lastX, lastY] = [touch.clientX - rect.left, touch.clientY - rect.top];
-                e.preventDefault();
-            });
-            canvasEl.on('touchmove', (e) => {
-                draw(e.originalEvent);
-                e.preventDefault();
-            });
-            canvasEl.on('touchend', () => isDrawing = false);
+            masterCtx.lineJoin = 'round';
+            masterCtx.lineCap = 'round';
+            resizeCanvas();
+            if (undoStack.length === 0) {
+                 undoStack = [masterCanvas.toDataURL()];
+                 updateUndoRedoButtons();
+            }
         }
     });
+
+
+    // Dragging, Resizing, and Drawing events (unchanged)
+    function onInteractionMove(e) {
+        if (isDragging) {
+            var coords = getEventCoords(e);
+            popup.offset({ top: coords.y - initialY, left: coords.x - initialX });
+        }
+        if (isResizing) {
+            var coords = getEventCoords(e);
+            var controlsWidth = popup.find('.qp-rough-work-controls').outerWidth();
+            var titleWidth = popup.find('.qp-popup-title').outerWidth();
+            var closeBtnWidth = popup.find('.qp-popup-close-btn').outerWidth();
+            var minWidth = controlsWidth + titleWidth + closeBtnWidth + 40;
+            var newWidth = initialWidth + (coords.x - initialX);
+            var newHeight = initialHeight + (coords.y - initialY);
+            if (newWidth < minWidth) newWidth = minWidth;
+            popup.width(newWidth);
+            popup.height(newHeight);
+            resizeCanvas();
+        }
+    }
     
-    // Tool selection (Pencil/Eraser)
-    wrapper.on('click', '.qp-tool-btn', function() {
+    function onInteractionEnd() {
+        if(isResizing) saveCanvasState();
+        isDragging = isResizing = false;
+        $(document).off('mousemove touchmove', onInteractionMove);
+        $(document).off('mouseup touchend', onInteractionEnd);
+    }
+    
+    header.on('mousedown touchstart', function(e) {
+        if ($(e.target).closest('.qp-rough-work-controls, .qp-popup-close-btn').length) return;
+        isDragging = true;
+        var coords = getEventCoords(e);
+        initialX = coords.x - popup.offset().left;
+        initialY = coords.y - popup.offset().top;
+        $(document).on('mousemove touchmove', onInteractionMove);
+        $(document).on('mouseup touchend', onInteractionEnd);
+        e.preventDefault();
+    });
+
+    resizeHandle.on('mousedown touchstart', function(e) {
+        isResizing = true;
+        var coords = getEventCoords(e);
+        initialX = coords.x;
+        initialY = coords.y;
+        initialWidth = popup.width();
+        initialHeight = popup.height();
+        $(document).on('mousemove touchmove', onInteractionMove);
+        $(document).on('mouseup touchend', onInteractionEnd);
+        e.preventDefault();
+    });
+
+    // --- Updated Drawing Events ---
+    canvasEl.on('mousedown touchstart', function(e) {
+        isDrawing = true;
+        saveCanvasState();
+        var coords = getEventCoords(e);
+        var rect = canvas.getBoundingClientRect();
+        [lastX, lastY] = [coords.x - rect.left, coords.y - rect.top];
+        e.preventDefault();
+    });
+    canvasEl.on('mouseup touchend', function() { isDrawing = false; });
+    canvasEl.on('mousemove touchmove', draw);
+    
+    // Tool selection, color, etc. (unchanged)
+    popup.on('click', '.qp-tool-btn', function() {
+        if($(this).is('#qp-undo-btn, #qp-redo-btn')) return;
         $('.qp-tool-btn').removeClass('active');
         $(this).addClass('active');
         currentTool = $(this).attr('id') === 'qp-tool-eraser' ? 'eraser' : 'pencil';
         canvasEl.removeClass('cursor-pencil cursor-eraser').addClass('cursor-' + currentTool);
     });
-    
-    // Color selection
-    wrapper.on('click', '.qp-color-btn', function() {
+    popup.on('click', '.qp-color-btn', function() {
         $('.qp-color-btn').removeClass('active');
         $(this).addClass('active');
-        // Automatically switch to pencil tool when a color is chosen
-        $('.qp-tool-btn').removeClass('active');
-        $('#qp-tool-pencil').addClass('active');
-        currentTool = 'pencil';
-        canvasEl.removeClass('cursor-pencil cursor-eraser').addClass('cursor-pencil');
+        $('#qp-tool-pencil').click();
     });
 
-    // Handle Transparency Slider
-    wrapper.on('input', '#qp-canvas-opacity-slider', function() {
-        var opacity = $(this).val() / 100;
-        canvasEl.css('background-color', `rgba(240, 242, 245, ${opacity})`);
+    // --- REFINED: Opacity Slider Logic with localStorage ---
+    popup.on('input', '#qp-canvas-opacity-slider', function() {
+        var sliderValue = $(this).val(); // Get value from 0-100
+        
+        // Save the raw slider value to localStorage
+        localStorage.setItem('qpCanvasOpacityValue', sliderValue);
+
+        var popupOpacity = 0.3 + ((sliderValue / 100) * 0.7);
+        popup.css('background-color', `rgba(255, 255, 255, ${popupOpacity})`);
+        
+        var overlayOpacity = 0.1 + ((sliderValue / 100) * 0.5);
+        overlay.css('background-color', `rgba(0, 0, 0, ${overlayOpacity})`);
     });
 
-    // Close Canvas
-    wrapper.on('click', '#qp-close-canvas-btn', function() {
-        canvasOverlay.fadeOut(200);
+    // Close and Clear (unchanged)
+    popup.on('click', '#qp-close-canvas-btn', function() {
+        overlay.fadeOut(200);
     });
-
-    // Clear Canvas
-    wrapper.on('click', '#qp-clear-canvas-btn', function() {
+    // --- Updated Clear Button ---
+    popup.on('click', '#qp-clear-canvas-btn', function() {
         if (ctx) {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            saveCanvasState();
+            masterCtx.clearRect(0, 0, masterCanvas.width, masterCanvas.height);
+            updateVisibleCanvas();
         }
     });
 

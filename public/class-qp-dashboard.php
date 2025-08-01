@@ -14,15 +14,14 @@ class QP_Dashboard
         $current_user = wp_get_current_user();
         $user_id = $current_user->ID;
 
-        // --- **THE FIX**: Calculate Lifetime User Stats ---
-        $sessions_table = $wpdb->prefix . 'qp_user_sessions';
+        $attempts_table = $wpdb->prefix . 'qp_user_attempts';
         $stats = $wpdb->get_row($wpdb->prepare(
             "SELECT 
-            SUM(total_attempted) as total_attempted,
-            SUM(correct_count) as total_correct,
-            SUM(incorrect_count) as total_incorrect
-         FROM {$sessions_table} 
-         WHERE user_id = %d AND status = 'completed'",
+                COUNT(CASE WHEN status = 'answered' THEN 1 END) as total_attempted,
+                COUNT(CASE WHEN is_correct = 1 THEN 1 END) as total_correct,
+                COUNT(CASE WHEN is_correct = 0 THEN 1 END) as total_incorrect
+             FROM {$attempts_table} 
+             WHERE user_id = %d",
             $user_id
         ));
 
@@ -116,8 +115,8 @@ class QP_Dashboard
             <div id="review" class="qp-tab-content">
                 <div class="qp-practice-card">
                     <div class="qp-card-content">
-                        <h4 id="qp-incorrect-practice-heading" 
-                            data-never-correct-count="<?php echo (int)$never_correct_count; ?>" 
+                        <h4 id="qp-incorrect-practice-heading"
+                            data-never-correct-count="<?php echo (int)$never_correct_count; ?>"
                             data-total-incorrect-count="<?php echo (int)$total_incorrect_count; ?>">
                             Practice Your Mistakes (<span><?php echo (int)$never_correct_count; ?></span>)
                         </h4>
@@ -193,7 +192,7 @@ class QP_Dashboard
                         </select>
                     </div>
                 </div>
-                 <div class="qp-form-group" style="text-align: left; margin-bottom: 1.5rem;">
+                <div class="qp-form-group" style="text-align: left; margin-bottom: 1.5rem;">
                     <label class="qp-custom-checkbox">
                         <input type="checkbox" id="qp-exclude-incorrect-cb" name="exclude_incorrect_attempts" value="1">
                         <span></span>
@@ -201,7 +200,7 @@ class QP_Dashboard
                     </label>
                 </div>
                 <div id="qp-progress-results-container">
-                    </div>
+                </div>
             </div>
         </div>
 <?php
@@ -229,6 +228,25 @@ class QP_Dashboard
         // --- RESTORED: Fetch Active Sessions ---
         $active_sessions = $wpdb->get_results($wpdb->prepare("SELECT * FROM $sessions_table WHERE user_id = %d AND status IN ('active', 'mock_test') ORDER BY start_time DESC", $user_id));
         $session_history = $wpdb->get_results($wpdb->prepare("SELECT * FROM $sessions_table WHERE user_id = %d AND status IN ('completed', 'abandoned', 'paused') ORDER BY start_time DESC", $user_id));
+
+        $session_ids_history = wp_list_pluck($session_history, 'session_id');
+        $accuracy_stats = [];
+        if (!empty($session_ids_history)) {
+            $ids_placeholder = implode(',', array_map('absint', $session_ids_history));
+            $attempts_table = $wpdb->prefix . 'qp_user_attempts';
+            $results = $wpdb->get_results(
+                "SELECT session_id, 
+                    COUNT(CASE WHEN is_correct = 1 THEN 1 END) as correct,
+                    COUNT(CASE WHEN is_correct = 0 THEN 1 END) as incorrect
+             FROM {$attempts_table}
+             WHERE session_id IN ({$ids_placeholder}) AND status = 'answered'
+             GROUP BY session_id"
+            );
+            foreach ($results as $result) {
+                $total_attempted = $result->correct + $result->incorrect;
+                $accuracy_stats[$result->session_id] = ($total_attempted > 0) ? round(($result->correct / $total_attempted) * 100, 2) . '%' : 'N/A';
+            }
+        }
 
         // Pre-fetch all subjects for all questions in the user's history to optimize queries
         $all_session_qids = [];
@@ -374,7 +392,7 @@ class QP_Dashboard
                     }
                 }
 
-                $accuracy = ($session->total_attempted > 0) ? round(($session->correct_count / $session->total_attempted) * 100, 2) . '%' : 'N/A';
+                $accuracy = $accuracy_stats[$session->session_id] ?? 'N/A';
 
                 // START: Replace this block
                 $status_display = 'Completed'; // Default status
@@ -399,7 +417,7 @@ class QP_Dashboard
                 }
                 // END: Replacement block
 
-                
+
 
                 echo '<tr>
                 <td data-label="Date">' . date_format(date_create($session->start_time), 'M j, Y, g:i a') . '</td>

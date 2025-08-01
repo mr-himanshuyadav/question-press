@@ -218,6 +218,7 @@ class QP_Settings_Page
         echo '<span>Check this box to permanently delete all questions, subjects, labels, and user history when the plugin is uninstalled. This action cannot be undone.</span></label>';
     }
 
+
     public static function render_api_key_field()
     {
         $key = get_option('qp_jwt_secret_key');

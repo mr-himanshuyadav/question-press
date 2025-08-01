@@ -491,7 +491,12 @@ body {
 }
 
 #qp-practice-app-wrapper .qp-direction img {
-    max-width: 80%;
+    max-width: 50%;
+    max-height: 150px;
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+    object-fit: contain; /* Ensures the image scales correctly without distortion */
 }
 
 /* --- Question Meta & Counter Styles --- */
@@ -745,7 +750,6 @@ body.palette-overlay-open #qp-palette-sliding {
     align-items: center;
     padding: 1rem;
     border-bottom: 1px solid var(--qp-border-color);
-    background-color: #fff;
     flex-shrink: 0;
 }
 
@@ -1206,6 +1210,7 @@ body.palette-overlay-open #qp-palette-sliding {
 /* --- Practice Screen Content --- */
 .qp-question-area {
     margin-bottom: 1.2rem;
+    margin-top: 1.2rem;
 }
 
 .qp-question-area .question-text {
@@ -1527,123 +1532,186 @@ body.palette-overlay-open #qp-palette-sliding {
     gap: 10px; /* Add space between header buttons */
 }
 
-#qp-rough-work-overlay {
+/* --- NEW: Draggable & Resizable Popup Window Styles --- */
+.qp-draggable-popup {
     position: fixed;
-    top: 0px;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    z-index: 2000; /* Ensure it's on top of everything */
-}
-
-#qp-rough-work-canvas {
-    width: 100%;
-    height: 100%;
-    cursor: crosshair;
-    /* EDIT THIS VALUE to change the default transparency (e.g., 0.7 for 70%) */
-    background-color: rgba(240, 242, 245, 0.3); 
-}
-
-#qp-rough-work-canvas.cursor-pencil {
-    /* Hotspot is at the tip of the pencil (0, 23) */
-    cursor: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAAXNSR0IArs4c6QAAANlJREFUOBFjZICC/58xGDAwMTCQATMDM2NglQpgrhIMzIBoABdZCSi+A8S/gfg/EW8A4kGgHIgN+YH4LxA/AOKfQPwFiC2huA/EFUD8F4ifAfFXUFNBEgM21dYCq2EGEnYg/g3EnwLxF0AsA8X3gTgLFP8FxE8B8XcgFgHFf0DsAcX/gXgLFP8FxM9A/AuI/wLxLyB2QMX/gTgLFP8DxGeg+D8Qv57i30D8E4ifAPFPQHwCij8C8Reg+A8Q/wXir0DsAcVnoPinpXkZEN4C4jdgZIApBAD20Tz3pSgZVQAAAABJRU5ErkJggg==) 0 23, auto;
-}
-
-#qp-rough-work-canvas.cursor-eraser {
-    /* Hotspot is in the center of the eraser (12, 12) */
-    cursor: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAAXNSR0IArs4c6QAAADNJREFUOE9jZKAQMFKon4F4NxA/AeL/QPwfiAOB+C8QCwDxbyAWAeL/QPwFigEBAgwA3aYDBa2s2KQAAAAASUVORK5CYII=) 12 12, auto;
-}
-
-.qp-tool-btn {
-    background: #f0f0f1;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 600px;
+    height: 450px;
+    min-width: 400px;
+    min-height: 300px;
+    z-index: 9999;
+    /* CHANGE: Use a transparent background color instead of opacity */
+    background-color: rgba(255, 255, 255, 0.9); /* Default 90% opaque white */
     border: 1px solid #ccc;
-    padding: 8px;
-    cursor: pointer;
-    border-radius: 5px;
-    line-height: 1;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
 }
 
-.qp-tool-btn.active {
-    background-color: #2271b1;
-    color: white;
-    border-color: #1d5f96;
-}
-
-.qp-canvas-slider {
-    -webkit-appearance: none; /* Override default look */
-    appearance: none;
-    width: 130px; /* Specific width for the slider */
-    height: 8px; /* Thickness of the slider track */
-    background: #ddd; /* Track color */
-    outline: none;
-    opacity: 0.7;
-    transition: opacity .2s;
-    border-radius: 5px;
-}
-
-.qp-canvas-slider:hover {
-    opacity: 1; /* Full opacity on hover */
-}
-
-/* Style for the slider thumb (the draggable handle) */
-.qp-canvas-slider::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 20px;
-    height: 20px;
-    background: #2271b1; /* Same blue as primary buttons */
-    cursor: pointer;
-    border-radius: 50%;
-    border: 2px solid white;
-}
-
-.qp-canvas-slider::-moz-range-thumb {
-    width: 20px;
-    height: 20px;
-    background: #2271b1;
-    cursor: pointer;
-    border-radius: 50%;
-    border: 2px solid white;
+.qp-popup-header {
+    display: flex;
+    align-items: center;
+    padding: 5px 10px;
+    background-color: #f6f7f7;
+    border-bottom: 1px solid #ddd;
+    cursor: move;
+    user-select: none;
+    border-radius: 8px 8px 0 0;
 }
 
 .qp-rough-work-controls {
-    position: absolute;
-    right: 20px;
-    z-index: 2001;
-    background-color: #fff;
-    padding: 10px;
+    position: static; /* Override absolute positioning */
+    background-color: transparent;
+    box-shadow: none;
+    padding: 0;
+    gap: 8px;
+}
+#qp-clear-canvas-btn{
+    padding: 6px 15px;
+}
+
+.qp-popup-content {
+    flex-grow: 1;
+    position: relative;
+    overflow: hidden;
+}
+
+/* --- NEW: Draggable & Resizable Popup Window Styles --- */
+#qp-rough-work-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 9998;
+    background-color: rgba(0, 0, 0, 0.4);
+    display: none; /* Initially hidden */
+}
+
+.qp-draggable-popup {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 600px;
+    height: 450px;
+    /* CHANGE: Set a base min-width */
+    min-width: 500px; 
+    min-height: 300px;
+    z-index: 9999;
+    background-color: rgba(255, 255, 255, 0.9);
+    border: 1px solid #ccc;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.2);
     border-radius: 8px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
     display: flex;
-    flex-wrap: wrap; /* Allows controls to wrap onto the next line */
-    gap: 10px;
+    flex-direction: column;
+}
+
+.qp-popup-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 5px 10px;
+    background-color: #f6f7f7;
+    border-bottom: 1px solid #ddd;
+    cursor: move;
+    user-select: none;
+    border-radius: 8px 8px 0 0;
+}
+
+.qp-popup-content {
+    flex-grow: 1;
+    position: relative;
+    overflow: hidden;
+}
+
+#qp-rough-work-canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    cursor: crosshair;
+}
+
+.qp-popup-resize-handle {
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    display: flex;
+    padding: 3px;
+    cursor: se-resize;
+    z-index: 10000; 
+}
+.qp-popup-resize-handle span{
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10' fill='%23555'%3E%3Cpath d='M 10 0 L 0 10 L 0 8 L 8 0 L 10 0 Z M 10 4 L 4 10 L 2 10 L 10 2 Z M 10 8 L 8 10 L 6 10 L 10 6 Z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: center;
+}
+
+/* --- Corrected Toolbar & Custom Cursor CSS --- */
+.qp-rough-work-controls {
+    position: static;
+    background-color: transparent;
+    box-shadow: none;
+    padding: 0;
+    display: flex;
+    gap: 8px;
     align-items: center;
 }
 
-.qp-color-swatches {
-    display: flex;
-    gap: 5px;
-    border: none;
-    padding: 4px;
+.qp-popup-close-btn {
+    background: none; border: none; font-size: 30px;
+    line-height: 1; cursor: pointer; color: #551e1e;
+    padding: 0 5px; margin-left: 10px; outline: none;
+}
+.qp-popup-close-btn:hover { color: #4c0909; }
+
+.qp-tool-btn {
+    background: #f0f0f1; border: 1px solid #ccc; padding: 6px;
+    cursor: pointer; border-radius: 5px; line-height: 1;
+}
+.qp-tool-btn.active {
+    background-color: #2271b1; color: white; border-color: #1d5f96;
 }
 
+.qp-tool-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+.qp-color-swatches { display: flex; gap: 5px; border: none; padding: 0; }
 .qp-color-btn {
-    width: 26px;
-    height: 26px;
-    border: 2px solid #fff;
-    cursor: pointer;
-    border-radius: 50%;
-    transition: transform 0.2s;
-    outline:none;   
+    width: 24px; height: 24px; border: 2px solid #fff;
+    cursor: pointer; border-radius: 50%; transition: transform 0.2s;
+    outline:none; box-shadow: 0 0 0 1px #ccc;
+}
+.qp-color-btn:hover { transform: scale(1.1); }
+.qp-color-btn.active { box-shadow: 0 0 0 2px #fff, 0 0 0 4px #2271b1; }
+
+.qp-canvas-slider {
+    -webkit-appearance: none; appearance: none; width: 100px;
+    height: 6px; background: #ddd; outline: none;
+    opacity: 0.7; transition: opacity .2s; border-radius: 5px;
+}
+.qp-canvas-slider:hover { opacity: 1; }
+.qp-canvas-slider::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none; width: 18px;
+    height: 18px; background: #2271b1; cursor: pointer;
+    border-radius: 50%; border: 2px solid white;
+}
+.qp-canvas-slider::-moz-range-thumb {
+    width: 18px; height: 18px; background: #2271b1;
+    cursor: pointer; border-radius: 50%; border: 2px solid white;
 }
 
-.qp-color-btn:hover {
-    transform: scale(1.1);
-}
-
-.qp-color-btn.active {
-    border-color: #2271b1;
-    box-shadow: 0 0 0 2px #fff, 0 0 0 4px #2271b1;
+#qp-rough-work-canvas.cursor-eraser {
+    cursor: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAAXNSR0IArs4c6QAAADNJREFUOE9jZKAQMFKon4F4NxA/AeL/QPwfiAOB+C8QCwDxbyAWAeL/QPwFigEBAgwA3aYDBa2s2KQAAAAASUVORK5CYII=) 12 12, auto;
 }
 
 .qp-start-session-content {
@@ -1651,10 +1719,14 @@ body.palette-overlay-open #qp-palette-sliding {
     padding: 2rem 3rem;
     border-radius: var(--qp-radius);
     box-shadow: var(--qp-shadow);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
 }
 
 .qp-start-session-content h3 {
-    font-size: 22px;
+    font-size: 1.3em;
     margin-top: 0;
 }
 
