@@ -130,6 +130,7 @@ wrapper.on("change", ".qe-subject-select", function () {
         qp_quick_edit_data.current_topic_id,
         "— Select a Topic —"
     );
+    qp_quick_edit_data.current_topic_id = null; // Reset current topic ID after use
 
     // 2. Update Sources dropdown based on the selected Subject
     updateDropdown(
@@ -138,11 +139,8 @@ wrapper.on("change", ".qe-subject-select", function () {
         qp_quick_edit_data.current_source_id,
         "— Select a Source —"
     );
-    // Trigger change on the source select to populate sections
-    $sourceSelect.trigger("change");
-
-    // Reset to not retain source state when subject changes.
-    qp_quick_edit_data.current_source_id = null;
+    $sourceSelect.trigger("change"); // Trigger change to populate sections
+    qp_quick_edit_data.current_source_id = null; // Reset current source ID after use
 
     // 3. Update Exams dropdown based on the selected Subject
     var linkedExamIds = qp_quick_edit_data.exam_subject_links
@@ -169,6 +167,7 @@ wrapper.on("change", ".qe-subject-select", function () {
         qp_quick_edit_data.current_exam_id,
         "— Select an Exam —"
     );
+    qp_quick_edit_data.current_exam_id = null; // Reset current exam ID after use
 });
 
   // Delegated event handler for when the SOURCE dropdown changes
@@ -236,12 +235,21 @@ wrapper.on("change", ".qe-subject-select", function () {
     var $pyqFields = $(this)
       .closest(".qe-pyq-fields-wrapper")
       .find(".qe-pyq-fields");
+    var $form = $(this).closest(".quick-edit-form-wrapper");
+    var $examSelect = $form.find(".qe-exam-select");
+    var $yearInput = $form.find('input[name="pyq_year"]');
     if ($(this).is(":checked")) {
       $pyqFields.slideDown();
+      // Optionally: do not reset on check, only on uncheck
     } else {
       $pyqFields.slideUp();
+      // Reset exam and year when unchecked
+      $examSelect.val('');
+      $yearInput.val('');
     }
-  });
+    qp_quick_edit_data.current_exam_id = ''; // Reset current exam ID
+    qp_quick_edit_data.current_year = ''; // Reset current year
+});
 
   // =========================================================================
   // Quick Edit Form - Actions (Save, Cancel)

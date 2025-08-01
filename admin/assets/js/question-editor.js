@@ -185,11 +185,19 @@ function updateSources() {
 
     // --- Function to toggle PYQ fields ---
     function togglePyqFields() {
+        var $form = $(this).closest(".qp-question-editor-form-wrapper");
+        var $examSelect = $form.find('select[name="exam_id"]');
+        var $yearInput = $form.find('input[name="pyq_year"]');
         if (isPyqCheckbox.is(':checked')) {
             pyqFieldsWrapper.slideDown();
         } else {
             pyqFieldsWrapper.slideUp();
+            $examSelect.val('');
+            $yearInput.val('');
         }
+
+        qp_editor_data.current_exam_id = null; // Reset current exam ID
+        qp_editor_data.current_pyq_year = null; // Reset current year
     }
 
     // --- Bind Event Handlers ---
@@ -202,6 +210,14 @@ function updateSources() {
         // Now update the dropdowns
         updateTopics();
         updateSources();
+        
+        var $form = $(this).closest(".qp-question-editor-form-wrapper");
+        var $examSelect = $form.find('select[name="exam_id"]');
+        var $yearInput = $form.find('input[name="pyq_year"]');
+        $examSelect.val('');
+        $yearInput.val('');
+        qp_editor_data.current_exam_id = null; // Reset current exam ID
+        qp_editor_data.current_pyq_year = null; // Reset current year
     });
 
     sourceSelect.on('change', function() {

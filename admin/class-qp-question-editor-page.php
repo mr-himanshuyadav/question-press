@@ -232,6 +232,8 @@ foreach ($all_source_terms as $term) {
     'current_source_id'   => $current_source_id,
     'current_section_id'  => $current_section_id,
     'all_source_terms'    => $all_source_terms,
+    'current_pyq_year'    => $current_pyq_year,
+    'current_exam_id'     => $current_exam_id,
 ]);
 
         if (isset($_GET['message'])) {
@@ -291,7 +293,7 @@ foreach ($all_source_terms as $term) {
             <?php endif; ?>
             <hr class="wp-header-end">
 
-            <form method="post" action="">
+            <form method="post" action="" class='qp-question-editor-form-wrapper'>
                 <?php wp_nonce_field('qp_save_question_group_nonce'); ?>
                 <input type="hidden" name="group_id" value="<?php echo esc_attr($group_id); ?>">
 
@@ -496,11 +498,32 @@ foreach ($all_source_terms as $term) {
 
                         <div id="postbox-container-1" class="postbox-container">
                             <div class="postbox">
-                                <h2 class="hndle"><span>Publish</span></h2>
-                                <div id="major-publishing-actions">
+                                <div id="major-publishing-actions" style="text-align: center;">
                                     <button type="button" name="save_group" class="button button-primary button-large" id="qp-save-group-btn"><?php echo $is_editing ? 'Update Group' : 'Save Draft & Add Options'; ?></button>
                                 </div>
 
+                            </div>
+                            <div class="postbox">
+                                <h2 class="hndle"><span>Organize</span></h2>
+                                <div class="inside">
+                                    <p>
+                                        <label for="subject_id"><strong>Subject </strong><span style="color: red">*</span></label>
+                                        <select name="subject_id" id="subject_id" style="width: 100%;">
+                                            <option value="">— Select a Subject —</option>
+                                            <?php foreach ($all_subjects as $subject) : ?>
+                                                <option value="<?php echo esc_attr($subject->subject_id); ?>" <?php selected($current_subject_id, $subject->subject_id); ?>>
+                                                    <?php echo esc_html($subject->subject_name); ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </p>
+                                    <p>
+                                        <label for="topic_id"><strong>Topic</strong></label>
+                                        <select name="topic_id" id="topic_id" style="width: 100%;" disabled>
+                                            <option value="">— Select a subject first —</option>
+                                        </select>
+                                    </p>
+                                </div>
                             </div>
                             <div class="postbox">
                                 <h2 class="hndle"><span>PYQ Details</span></h2>
@@ -532,28 +555,6 @@ foreach ($all_source_terms as $term) {
                                         </div>
 
                                     </div>
-                                </div>
-                            </div>
-                            <div class="postbox">
-                                <h2 class="hndle"><span>Organize</span></h2>
-                                <div class="inside">
-                                    <p>
-                                        <label for="subject_id"><strong>Subject</strong></label>
-                                        <select name="subject_id" id="subject_id" style="width: 100%;">
-                                            <option value="">— Select a Subject —</option>
-                                            <?php foreach ($all_subjects as $subject) : ?>
-                                                <option value="<?php echo esc_attr($subject->subject_id); ?>" <?php selected($current_subject_id, $subject->subject_id); ?>>
-                                                    <?php echo esc_html($subject->subject_name); ?>
-                                                </option>
-                                            <?php endforeach; ?>
-                                        </select>
-                                    </p>
-                                    <p>
-                                        <label for="topic_id"><strong>Topic</strong></label>
-                                        <select name="topic_id" id="topic_id" style="width: 100%;" disabled>
-                                            <option value="">— Select a subject first —</option>
-                                        </select>
-                                    </p>
                                 </div>
                             </div>
                             <div class="postbox">

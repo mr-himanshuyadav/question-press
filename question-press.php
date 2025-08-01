@@ -132,24 +132,10 @@ function qp_activate_plugin()
         ['label_name' => 'Duplicate', 'label_color' => '#c70039', 'is_default' => 1, 'description' => 'Automatically marked as a duplicate of another question during import.']
     ];
 
-    $label_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$wpdb->prefix}qp_taxonomies WHERE taxonomy_name = 'label'");
-
     foreach ($default_labels as $label) {
         // Old table
         if ($wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $table_labels WHERE label_name = %s", $label['label_name'])) == 0) {
             $wpdb->insert($table_labels, $label);
-        }
-        // New taxonomy system
-        if ($label_tax_id) {
-            $term_exists = $wpdb->get_var($wpdb->prepare("SELECT term_id FROM {$wpdb->prefix}qp_terms WHERE name = %s AND taxonomy_id = %d", $label['label_name'], $label_tax_id));
-            if (!$term_exists) {
-                $wpdb->insert($wpdb->prefix . 'qp_terms', ['taxonomy_id' => $label_tax_id, 'name' => $label['label_name'], 'slug' => sanitize_title($label['label_name'])]);
-                $new_term_id = $wpdb->insert_id;
-                // Add meta for the new term
-                $wpdb->insert($wpdb->prefix . 'qp_term_meta', ['term_id' => $new_term_id, 'meta_key' => 'color', 'meta_value' => $label['label_color']]);
-                $wpdb->insert($wpdb->prefix . 'qp_term_meta', ['term_id' => $new_term_id, 'meta_key' => 'description', 'meta_value' => $label['description']]);
-                $wpdb->insert($wpdb->prefix . 'qp_term_meta', ['term_id' => $new_term_id, 'meta_key' => 'is_default', 'meta_value' => '1']);
-            }
         }
     }
 
@@ -259,22 +245,22 @@ function qp_activate_plugin()
     // Table: User Attempts
     $table_attempts = $wpdb->prefix . 'qp_user_attempts';
     $sql_attempts = "CREATE TABLE $table_attempts (
-    attempt_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
-    session_id BIGINT(20) UNSIGNED NOT NULL,
-    user_id BIGINT(20) UNSIGNED NOT NULL,
-    question_id BIGINT(20) UNSIGNED NOT NULL,
-    selected_option_id BIGINT(20) UNSIGNED,
-    is_correct BOOLEAN,
-    status VARCHAR(20) NOT NULL DEFAULT 'answered',
-    mock_status VARCHAR(50) DEFAULT NULL,
-    remaining_time INT,
-    attempt_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY  (attempt_id),
-    UNIQUE KEY session_question (session_id, question_id),
-    KEY user_id (user_id),
-    KEY question_id (question_id),
-    KEY status (status),
-    KEY mock_status (mock_status)
+        attempt_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+        session_id BIGINT(20) UNSIGNED NOT NULL,
+        user_id BIGINT(20) UNSIGNED NOT NULL,
+        question_id BIGINT(20) UNSIGNED NOT NULL,
+        selected_option_id BIGINT(20) UNSIGNED,
+        is_correct BOOLEAN,
+        status VARCHAR(20) NOT NULL DEFAULT 'answered',
+        mock_status VARCHAR(50) DEFAULT NULL,
+        remaining_time INT,
+        attempt_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY  (attempt_id),
+        UNIQUE KEY session_question (session_id, question_id),
+        KEY user_id (user_id),
+        KEY question_id (question_id),
+        KEY status (status),
+        KEY mock_status (mock_status)
     ) $charset_collate;";
     dbDelta($sql_attempts);
 
@@ -411,11 +397,104 @@ function qp_activate_plugin()
     ) $charset_collate;";
     dbDelta($sql_term_meta);
 
+        $default_taxonomies = [
+        ['taxonomy_name' => 'subject', 'taxonomy_label' => 'Subjects', 'hierarchical' => 1],
+        ['taxonomy_name' => 'label', 'taxonomy_label' => 'Labels', 'hierarchical' => 0],
+        ['taxonomy_name' => 'exam', 'taxonomy_label' => 'Exams', 'hierarchical' => 0],
+        ['taxonomy_name' => 'source', 'taxonomy_label' => 'Sources', 'hierarchical' => 1],
+        ['taxonomy_name' => 'report_reason', 'taxonomy_label' => 'Report Reasons', 'hierarchical' => 0],
+        ];
+
+        foreach ($default_taxonomies as $tax) {
+            $exists = $wpdb->get_var($wpdb->prepare("SELECT taxonomy_id FROM $table_taxonomies WHERE taxonomy_name = %s", $tax['taxonomy_name']));
+            if (!$exists) {
+                $wpdb->insert($table_taxonomies, $tax);
+            }
+        }
+
+        // Get the taxonomy IDs for labels and report reasons
+        $label_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$wpdb->prefix}qp_taxonomies WHERE taxonomy_name = 'label'");
+        $reason_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$wpdb->prefix}qp_taxonomies WHERE taxonomy_name = 'report_reason'");
+
+        // Define and insert default labels
+        $default_labels = [
+            ['name' => 'Wrong Answer', 'color' => '#ff5733', 'description' => 'Reported by users for having an incorrect answer key.'],
+            ['name' => 'No Answer', 'color' => '#ffc300', 'description' => 'Reported by users because the question has no correct option provided.'],
+            ['name' => 'Incorrect Formatting', 'color' => '#900c3f', 'description' => 'Reported by users for formatting or display issues.'],
+            ['name' => 'Wrong Subject', 'color' => '#581845', 'description' => 'Reported by users for being in the wrong subject category.'],
+            ['name' => 'Duplicate', 'color' => '#c70039', 'description' => 'Automatically marked as a duplicate of another question during import.']
+        ];
+
+        if ($label_tax_id) {
+            foreach ($default_labels as $label) {
+                $term_id = qp_get_or_create_term($label['name'], $label_tax_id);
+                if ($term_id) {
+                    qp_update_term_meta($term_id, 'color', $label['color']);
+                    qp_update_term_meta($term_id, 'description', $label['description']);
+                    qp_update_term_meta($term_id, 'is_default', '1');
+                }
+            }
+        }
+
+        // Define and insert default report reasons
+        $default_reasons = ['Wrong Answer', 'Typo in question', 'Options are incorrect', 'Image is not loading', 'Question is confusing'];
+
+        if ($reason_tax_id) {
+            foreach ($default_reasons as $reason_text) {
+                $term_id = qp_get_or_create_term($reason_text, $reason_tax_id);
+                if ($term_id) {
+                    qp_update_term_meta($term_id, 'is_active', '1');
+                }
+            }
+        }
+
     // Set default options
     add_option('qp_next_custom_question_id', 1000, '', 'no');
     if (!get_option('qp_jwt_secret_key')) {
         add_option('qp_jwt_secret_key', wp_generate_password(64, true, true), '', 'no');
     }
+    
+    // Get the current settings, or an empty array if they don't exist.
+    $options = get_option('qp_settings', []);
+
+    // Define the pages that need to be created.
+    $pages_to_create = [
+        'practice_page'  => ['title' => 'Practice', 'content' => '[question_press_practice]'],
+        'dashboard_page' => ['title' => 'Dashboard', 'content' => '[question_press_dashboard]'],
+        'session_page'   => ['title' => 'Session', 'content' => '[question_press_session]'],
+        'review_page'    => ['title' => 'Review', 'content' => '[question_press_review]'],
+    ];
+
+    foreach ($pages_to_create as $option_key => $page_details) {
+        // Check if the page ID is already saved and if the page still exists.
+        $page_id = isset($options[$option_key]) ? $options[$option_key] : 0;
+        if (empty($page_id) || !get_post($page_id)) {
+            // Check if a page with this title already exists to avoid duplicates.
+            $existing_page = get_page_by_title($page_details['title'], 'OBJECT', 'page');
+
+            if ($existing_page) {
+                // If a page with the same title exists, use it.
+                $new_page_id = $existing_page->ID;
+            } else {
+                // If no page exists, create a new one.
+                $new_page_id = wp_insert_post([
+                    'post_title'   => wp_strip_all_tags($page_details['title']),
+                    'post_content' => $page_details['content'],
+                    'post_status'  => 'publish',
+                    'post_author'  => 1,
+                    'post_type'    => 'page',
+                ]);
+            }
+
+            // Save the new page ID to our settings.
+            if ($new_page_id) {
+                $options[$option_key] = $new_page_id;
+            }
+        }
+    }
+
+    // Save the updated settings with the new page IDs.
+    update_option('qp_settings', $options);
 }
 
 register_activation_hook(QP_PLUGIN_FILE, 'qp_activate_plugin');
@@ -453,6 +532,31 @@ function qp_admin_menu()
 }
 add_action('admin_menu', 'qp_admin_menu');
 
+/**
+ * Adds a "(Question Press)" indicator to the plugin's pages in the admin list.
+ *
+ * @param array   $post_states An array of post states.
+ * @param WP_Post $post        The current post object.
+ * @return array  The modified array of post states.
+ */
+function qp_add_page_indicator($post_states, $post) {
+    // Get the saved IDs of our plugin's pages
+    $qp_settings = get_option('qp_settings', []);
+    $qp_page_ids = [
+        $qp_settings['practice_page'] ?? 0,
+        $qp_settings['dashboard_page'] ?? 0,
+        $qp_settings['session_page'] ?? 0,
+        $qp_settings['review_page'] ?? 0,
+    ];
+
+    // Check if the current page's ID is one of our plugin's pages
+    if (in_array($post->ID, $qp_page_ids)) {
+        $post_states['question_press_page'] = 'Question Press';
+    }
+
+    return $post_states;
+}
+add_filter('display_post_states', 'qp_add_page_indicator', 10, 2);
 
 function qp_render_organization_page()
 {
@@ -4949,11 +5053,26 @@ function qp_get_single_question_for_review_ajax()
         wp_send_json_error(['message' => 'Question not found.']);
     }
 
+    // Apply nl2br to convert newlines to <br> tags for HTML display.
+    if (!empty($question_data['direction_text'])) {
+        $question_data['direction_text'] = wp_kses_post(nl2br($question_data['direction_text']));
+    }
+    if (!empty($question_data['question_text'])) {
+        $question_data['question_text'] = wp_kses_post(nl2br($question_data['question_text']));
+    }
+
     // Fetch options (this part remains the same)
     $options = $wpdb->get_results($wpdb->prepare(
         "SELECT option_id, option_text, is_correct FROM {$wpdb->prefix}qp_options WHERE question_id = %d ORDER BY option_id ASC",
         $question_id
     ), ARRAY_A);
+
+    foreach ($options as &$option) { // Use a reference to modify the array directly
+        if (!empty($option['option_text'])) {
+            $option['option_text'] = wp_kses_post(nl2br($option['option_text']));
+        }
+    }
+    unset($option);
 
     $question_data['options'] = $options;
 
