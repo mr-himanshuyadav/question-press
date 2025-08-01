@@ -3905,6 +3905,7 @@ function qp_get_progress_data_ajax()
     $term_table = $wpdb->prefix . 'qp_terms';
     $rel_table = $wpdb->prefix . 'qp_term_relationships';
     $attempts_table = $wpdb->prefix . 'qp_user_attempts';
+    $questions_table = $wpdb->prefix . 'qp_questions';
 
     // Get subject name for the top-level bar
     $subject_name = $wpdb->get_var($wpdb->prepare("SELECT name FROM {$term_table} WHERE term_id = %d", $subject_term_id));
@@ -3925,7 +3926,25 @@ function qp_get_progress_data_ajax()
     $all_term_ids = wp_list_pluck($descendant_terms, 'term_id');
     $terms_placeholder = implode(',', $all_term_ids);
 
-    // Get all questions linked to this source or any of its descendants
+    // Get all question groups linked to the selected subject
+    $group_ids_in_subject = $wpdb->get_col($wpdb->prepare(
+        "SELECT object_id FROM {$rel_table} WHERE term_id = %d AND object_type = 'group'",
+        $subject_term_id
+    ));
+
+    $total_questions_in_source_and_subject = 0;
+    if (!empty($group_ids_in_subject)) {
+        $group_ids_placeholder = implode(',', $group_ids_in_subject);
+
+        // Count questions that are in one of the subject's groups AND are linked to one of the source's terms
+        $total_questions_in_source_and_subject = $wpdb->get_var(
+            "SELECT COUNT(DISTINCT q.question_id)
+             FROM {$questions_table} q
+             JOIN {$rel_table} r ON q.question_id = r.object_id AND r.object_type = 'question'
+             WHERE q.group_id IN ({$group_ids_placeholder}) AND r.term_id IN ({$terms_placeholder})"
+        );
+    }
+
     $all_qids = $wpdb->get_col("SELECT DISTINCT object_id FROM {$rel_table} WHERE term_id IN ({$terms_placeholder}) AND object_type = 'question'");
 
     if (empty($all_qids)) {
@@ -3934,7 +3953,6 @@ function qp_get_progress_data_ajax()
     }
     $qids_placeholder = implode(',', $all_qids);
 
-    // Get user's completed attempts for these questions
     $exclude_incorrect = isset($_POST['exclude_incorrect']) && $_POST['exclude_incorrect'] === 'true';
     $attempt_status_clause = $exclude_incorrect ? "AND is_correct = 1" : "AND status = 'answered'";
     $completed_qids = $wpdb->get_col($wpdb->prepare(
@@ -3942,15 +3960,12 @@ function qp_get_progress_data_ajax()
         $user_id
     ));
 
-    // Get the term relationships for all relevant questions to build the progress map
     $question_term_map_raw = $wpdb->get_results("SELECT object_id, term_id FROM {$rel_table} WHERE object_id IN ($qids_placeholder) AND object_type = 'question'");
     $question_term_map = [];
     foreach ($question_term_map_raw as $row) {
         $question_term_map[$row->object_id][] = $row->term_id;
     }
 
-    // Build a hierarchical data structure
-    $term_tree = [];
     $terms_by_id = [];
     foreach ($descendant_terms as $term) {
         $term->children = [];
@@ -3963,9 +3978,8 @@ function qp_get_progress_data_ajax()
         if (isset($question_term_map[$qid])) {
             $is_completed = in_array($qid, $completed_qids);
 
-            // Increment counts up the tree for all associated terms of a question
             $term_ids_for_question = $question_term_map[$qid];
-            $processed_parents = []; // To avoid double counting when a question is in a section and topic
+            $processed_parents = [];
 
             foreach ($term_ids_for_question as $term_id) {
                 $current_term_id = $term_id;
@@ -3981,7 +3995,6 @@ function qp_get_progress_data_ajax()
         }
     }
 
-    // Build the tree structure for rendering
     $source_term_object = null;
     foreach ($terms_by_id as $term) {
         if ($term->term_id == $source_term_id) {
@@ -3992,30 +4005,31 @@ function qp_get_progress_data_ajax()
         }
     }
 
-    // Generate the HTML response
     ob_start();
 
-    // Render the main subject bar
-    $subject_percentage = $source_term_object->total > 0 ? round(($source_term_object->completed / $source_term_object->total) * 100) : 0;
+    // --- START OF FIX ---
+    // Calculate the correct completed count and percentage for the main subject bar
+    $completed_count_for_subject = $source_term_object ? $source_term_object->completed : 0;
+    $subject_percentage = $total_questions_in_source_and_subject > 0 ? round(($completed_count_for_subject / $total_questions_in_source_and_subject) * 100) : 0;
     ?>
     <div class="qp-progress-tree">
         <div class="qp-progress-item subject-level">
             <div class="qp-progress-bar-bg" style="width: <?php echo esc_attr($subject_percentage); ?>%;"></div>
             <div class="qp-progress-label">
                 <strong><?php echo esc_html($subject_name); ?></strong>
-                <span class="qp-progress-percentage"><?php echo esc_html($subject_percentage); ?>%</span>
+                <span class="qp-progress-percentage">
+                    <?php echo esc_html($subject_percentage); ?>% (<?php echo esc_html($completed_count_for_subject); ?>/<?php echo esc_html($total_questions_in_source_and_subject); ?>)
+                </span>
             </div>
         </div>
         <div class="qp-source-children-container" style="padding-left: 20px;">
             <?php
-            // Recursive function to render child topics and sections
+            // This recursive function does not need to be changed.
             function qp_render_progress_tree_recursive($terms)
             {
                 foreach ($terms as $term) {
                     $percentage = $term->total > 0 ? round(($term->completed / $term->total) * 100) : 0;
                     $has_children = !empty($term->children);
-                    // A topic is a child of a source (parent != source_term_id), a section is a child of a topic
-                    $is_topic = $term->parent != 0 && isset($term->children);
                     $level_class = $has_children ? 'topic-level qp-topic-toggle' : 'section-level';
 
                     echo '<div class="qp-progress-item ' . $level_class . '" data-topic-id="' . esc_attr($term->term_id) . '">';
@@ -4034,14 +4048,14 @@ function qp_get_progress_data_ajax()
                     }
                 }
             }
-            // Start rendering from the children of the main source
             if ($source_term_object && !empty($source_term_object->children)) {
                 qp_render_progress_tree_recursive($source_term_object->children);
             }
             ?>
         </div>
     </div>
-<?php
+    <?php
+    // --- END OF FIX ---
     $html = ob_get_clean();
 
     wp_send_json_success(['html' => $html]);
