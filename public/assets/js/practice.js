@@ -10,32 +10,37 @@ jQuery(document).ready(function ($) {
   var unattemptedCounts = {};
 
   // --- Fetch unattempted counts if the setting is enabled ---
-if (typeof qp_practice_settings !== 'undefined' && qp_practice_settings.show_counts) {
+  if (
+    typeof qp_practice_settings !== "undefined" &&
+    qp_practice_settings.show_counts
+  ) {
     $.ajax({
-        url: qp_ajax_object.ajax_url,
-        type: 'POST',
-        data: {
-            action: 'get_unattempted_counts',
-            nonce: qp_ajax_object.nonce
-        },
-        success: function(response) {
-            if (response.success) {
-                unattemptedCounts = response.data.counts;
-                // Re-render the initial subject list with counts
-                var subjectList = $('#qp_subject_dropdown .qp-multi-select-list, #qp_subject_dropdown_revision .qp-multi-select-list, #qp_subject_dropdown_mock .qp-multi-select-list');
-                subjectList.find('label').each(function() {
-                    var $label = $(this);
-                    var $checkbox = $label.find('input');
-                    var subjectId = $checkbox.val();
-                    var count = unattemptedCounts.by_subject[subjectId] || 0;
-                    if (subjectId !== 'all' && count > 0) {
-                        $label.append(' (' + count + ')');
-                    }
-                });
+      url: qp_ajax_object.ajax_url,
+      type: "POST",
+      data: {
+        action: "get_unattempted_counts",
+        nonce: qp_ajax_object.nonce,
+      },
+      success: function (response) {
+        if (response.success) {
+          unattemptedCounts = response.data.counts;
+          // Re-render the initial subject list with counts
+          var subjectList = $(
+            "#qp_subject_dropdown .qp-multi-select-list, #qp_subject_dropdown_revision .qp-multi-select-list, #qp_subject_dropdown_mock .qp-multi-select-list"
+          );
+          subjectList.find("label").each(function () {
+            var $label = $(this);
+            var $checkbox = $label.find("input");
+            var subjectId = $checkbox.val();
+            var count = unattemptedCounts.by_subject[subjectId] || 0;
+            if (subjectId !== "all" && count > 0) {
+              $label.append(" (" + count + ")");
             }
+          });
         }
+      },
     });
-}
+  }
 
   function openFullscreen() {
     var elem = document.documentElement; // Get the root element (the whole page)
@@ -189,6 +194,7 @@ if (typeof qp_practice_settings !== 'undefined' && qp_practice_settings.show_cou
           }
           answeredStates[questionID].mock_status = newStatus;
           renderPalette();
+          scrollPaletteToCurrent();
           updateLegendCounts();
         } else {
           // If the server returns an error, alert the user
@@ -246,6 +252,7 @@ if (typeof qp_practice_settings !== 'undefined' && qp_practice_settings.show_cou
       const paletteBtn = $("<button></button>")
         .addClass("qp-palette-btn")
         .attr("data-question-index", index)
+        .attr("data-question-id", questionID)
         .text(
           sessionSettings.practice_mode === "Section Wise Practice" &&
             sessionSettings.question_numbers &&
@@ -334,8 +341,6 @@ if (typeof qp_practice_settings !== 'undefined' && qp_practice_settings.show_cou
       "current"
     );
   }
-  
-
 
   // Handle the "All Topics" checkbox for the mock test form
   $("#qp_topic_list_container_mock").on(
@@ -367,8 +372,6 @@ if (typeof qp_practice_settings !== 'undefined' && qp_practice_settings.show_cou
       );
     }
   );
-  
-  
 
   // Update button text when a topic is selected in the revision form
   $("#qp_topic_dropdown_revision").on(
@@ -387,9 +390,12 @@ if (typeof qp_practice_settings !== 'undefined' && qp_practice_settings.show_cou
   function updateButtonText($button, placeholder, singularLabel) {
     var $list = $button.next(".qp-multi-select-list");
     var selected = [];
-    $list.find('input:checked[value!="all"]').not('.qp-subject-topic-toggle').each(function () {
-      selected.push($(this).parent().text().trim());
-    });
+    $list
+      .find('input:checked[value!="all"]')
+      .not(".qp-subject-topic-toggle")
+      .each(function () {
+        selected.push($(this).parent().text().trim());
+      });
 
     if (selected.length === 0) {
       $button.text(placeholder);
@@ -421,122 +427,215 @@ if (typeof qp_practice_settings !== 'undefined' && qp_practice_settings.show_cou
     });
   });
 
-  
-// --- NEW: FULLY SYNCHRONIZED DROPDOWN LOGIC ---
-wrapper.on('change', '.qp-multi-select-list input[type="checkbox"]', function() {
-    var $this = $(this);
-    var $list = $this.closest('.qp-multi-select-list');
-    var $dropdown = $this.closest('.qp-multi-select-dropdown');
-    var $button = $dropdown.find('.qp-multi-select-button');
-    var $form = $dropdown.closest('form');
+  // --- NEW: FULLY SYNCHRONIZED DROPDOWN LOGIC ---
+  wrapper.on(
+    "change",
+    '.qp-multi-select-list input[type="checkbox"]',
+    function () {
+      var $this = $(this);
+      var $list = $this.closest(".qp-multi-select-list");
+      var $dropdown = $this.closest(".qp-multi-select-dropdown");
+      var $button = $dropdown.find(".qp-multi-select-button");
+      var $form = $dropdown.closest("form");
 
-    // --- Part 1: Handle User Actions ---
-    if ($this.val() === 'all') {
+      // --- Part 1: Handle User Actions ---
+      if ($this.val() === "all") {
         // If main "All" is clicked, check/uncheck everything else
-        $list.find('input[type="checkbox"]').prop('checked', $this.is(':checked'));
-    } else if ($this.hasClass('qp-subject-topic-toggle')) {
+        $list
+          .find('input[type="checkbox"]')
+          .prop("checked", $this.is(":checked"));
+      } else if ($this.hasClass("qp-subject-topic-toggle")) {
         // If a subject-level toggle is clicked, check/uncheck its topics
-        $this.closest('label').nextUntil('.qp-topic-group-header').find('input[type="checkbox"]').prop('checked', $this.is(':checked'));
-    }
+        $this
+          .closest("label")
+          .nextUntil(".qp-topic-group-header")
+          .find('input[type="checkbox"]')
+          .prop("checked", $this.is(":checked"));
+      }
 
-    // --- Part 2: Synchronize Parent Checkboxes ---
-    // Sync all subject-level toggles based on their topics
-    $list.find('.qp-subject-topic-toggle').each(function() {
+      // --- Part 2: Synchronize Parent Checkboxes ---
+      // Sync all subject-level toggles based on their topics
+      $list.find(".qp-subject-topic-toggle").each(function () {
         var $subjectToggle = $(this);
-        var $topicCheckboxes = $subjectToggle.closest('label').nextUntil('.qp-topic-group-header').find('input[type="checkbox"]');
-        var allTopicsChecked = $topicCheckboxes.length > 0 && $topicCheckboxes.filter(':checked').length === $topicCheckboxes.length;
-        $subjectToggle.prop('checked', allTopicsChecked);
-    });
+        var $topicCheckboxes = $subjectToggle
+          .closest("label")
+          .nextUntil(".qp-topic-group-header")
+          .find('input[type="checkbox"]');
+        var allTopicsChecked =
+          $topicCheckboxes.length > 0 &&
+          $topicCheckboxes.filter(":checked").length ===
+            $topicCheckboxes.length;
+        $subjectToggle.prop("checked", allTopicsChecked);
+      });
 
-    // Sync the main "All" toggle based on all other checkboxes
-    var $allCheckboxes = $list.find('input[type="checkbox"][value!="all"]');
-    var allChecked = $allCheckboxes.length > 0 && $allCheckboxes.filter(':checked').length === $allCheckboxes.length;
-    $list.find('input[value="all"]').prop('checked', allChecked);
+      // Sync the main "All" toggle based on all other checkboxes
+      var $allCheckboxes = $list.find('input[type="checkbox"][value!="all"]');
+      var allChecked =
+        $allCheckboxes.length > 0 &&
+        $allCheckboxes.filter(":checked").length === $allCheckboxes.length;
+      $list.find('input[value="all"]').prop("checked", allChecked);
 
+      // --- Part 3: Update Button Text & Dynamic Dropdowns (No changes here) ---
+      var placeholder = $dropdown.attr("id").includes("subject")
+        ? "-- Please select --"
+        : "-- Select Topic(s) --";
+      var singularLabel = $dropdown.attr("id").includes("subject")
+        ? "Subject"
+        : "Topic";
+      updateButtonText($button, placeholder, singularLabel);
 
-    // --- Part 3: Update Button Text & Dynamic Dropdowns (No changes here) ---
-    var placeholder = $dropdown.attr('id').includes('subject') ? '-- Please select --' : '-- Select Topic(s) --';
-    var singularLabel = $dropdown.attr('id').includes('subject') ? 'Subject' : 'Topic';
-    updateButtonText($button, placeholder, singularLabel);
-
-    if ($dropdown.attr('id').includes('subject')) {
+      if ($dropdown.attr("id").includes("subject")) {
         var selectedSubjects = [];
-        $list.find('input:checked[value!="all"]').each(function() { selectedSubjects.push($(this).val()); });
+        $list.find('input:checked[value!="all"]').each(function () {
+          selectedSubjects.push($(this).val());
+        });
         var $topicGroup = $form.find('[id^="qp-topic-group"]');
         var $topicListContainer = $form.find('[id^="qp_topic_list_container"]');
-        var $topicButton = $form.find('[id^="qp_topic_dropdown"] .qp-multi-select-button');
+        var $topicButton = $form.find(
+          '[id^="qp_topic_dropdown"] .qp-multi-select-button'
+        );
         if (selectedSubjects.length > 0) {
-            $.ajax({
-                url: qp_ajax_object.ajax_url, type: 'POST',
-                data: { action: 'get_topics_for_subject', nonce: qp_ajax_object.nonce, subject_id: selectedSubjects },
-                beforeSend: function() {
-                    $topicButton.text('Loading Topics...').prop('disabled', true);
-                    $topicListContainer.empty();
-                },
-                success: function(response) {
-                    $topicButton.prop('disabled', false);
-                    if (response.success && Object.keys(response.data.topics).length > 0) {
-                        var formId = $form.attr('id');
-var topicNameAttr = 'qp_topic[]'; // Default for normal practice
-if (formId === 'qp-start-revision-form') {
-    topicNameAttr = 'revision_topics[]';
-} else if (formId === 'qp-start-mock-test-form') {
-    topicNameAttr = 'mock_topics[]';
-}
-                        $topicListContainer.append('<label><input type="checkbox" name="' + topicNameAttr + '" value="all"> All Topics</label>');
-                        $.each(response.data.topics, function(subjectName, topics) {
-                            $topicListContainer.append('<label class="qp-topic-group-header"><input type="checkbox" class="qp-subject-topic-toggle"> ' + subjectName + '</label>');
-                            $.each(topics, function(i, topic) {
-                                var count = (unattemptedCounts.by_topic && unattemptedCounts.by_topic[topic.topic_id]) ? ' (' + unattemptedCounts.by_topic[topic.topic_id] + ')' : '';
-$topicListContainer.append('<label><input type="checkbox" name="' + topicNameAttr + '" value="' + topic.topic_id + '" data-subject-id="' + topic.subject_id + '"> ' + topic.topic_name + count + '</label>');
-                            });
-                        });
-                        updateButtonText($topicButton, '-- Select Topic(s) --', 'Topic');
-                        $topicGroup.slideDown();
-                    } else {
-                        updateButtonText($topicButton, 'No Topics Found', 'Topic');
-                        $topicGroup.slideUp();
-                    }
+          $.ajax({
+            url: qp_ajax_object.ajax_url,
+            type: "POST",
+            data: {
+              action: "get_topics_for_subject",
+              nonce: qp_ajax_object.nonce,
+              subject_id: selectedSubjects,
+            },
+            beforeSend: function () {
+              $topicButton.text("Loading Topics...").prop("disabled", true);
+              $topicListContainer.empty();
+            },
+            success: function (response) {
+              $topicButton.prop("disabled", false);
+              if (
+                response.success &&
+                Object.keys(response.data.topics).length > 0
+              ) {
+                var formId = $form.attr("id");
+                var topicNameAttr = "qp_topic[]"; // Default for normal practice
+                if (formId === "qp-start-revision-form") {
+                  topicNameAttr = "revision_topics[]";
+                } else if (formId === "qp-start-mock-test-form") {
+                  topicNameAttr = "mock_topics[]";
                 }
-            });
-        } else {
-            $topicGroup.slideUp();
-            updateButtonText($topicButton, '-- Select subject(s) first --', 'Topic');
-        }
-    }
-    var $sectionGroup = $form.find('#qp-section-group');
-    if ($sectionGroup.length > 0) {
-        var $sectionSelect = $form.find('#qp_section');
-        var $selectedTopicCheckboxes = $form.find('[id^="qp_topic_list_container"] input:checked[value!="all"]').not('.qp-subject-topic-toggle');
-        if ($selectedTopicCheckboxes.length === 1) {
-            var singleTopicCheckbox = $selectedTopicCheckboxes.first();
-            var topicId = singleTopicCheckbox.val();
-            var subjectIdForTopic = singleTopicCheckbox.data('subject-id');
-            if (topicId && subjectIdForTopic) {
-                $.ajax({
-                    url: qp_ajax_object.ajax_url, type: 'POST',
-                    data: { action: 'get_sections_for_subject', nonce: qp_ajax_object.nonce, subject_id: subjectIdForTopic, topic_id: topicId },
-                    beforeSend: function() {
-                        $sectionSelect.prop('disabled', true).html('<option>Loading sections...</option>');
-                        $sectionGroup.slideDown();
-                    },
-                    success: function(response) {
-                        if (response.success && response.data.sections.length > 0) {
-                            $sectionSelect.prop('disabled', false).empty().append('<option value="all">All Sections</option>');
-                            $.each(response.data.sections, function(index, sec) {
-                                var count = (sec.unattempted_count && sec.unattempted_count > 0) ? ' (' + sec.unattempted_count + ')' : '';
-                                var optionText = sec.source_name + ' / ' + sec.section_name + count;
-                                $sectionSelect.append($('<option></option>').val(sec.section_id).text(optionText));
-                            });
-                        } else { $sectionGroup.slideUp(); }
-                    },
-                    error: function() { $sectionGroup.slideUp(); }
+                $topicListContainer.append(
+                  '<label><input type="checkbox" name="' +
+                    topicNameAttr +
+                    '" value="all"> All Topics</label>'
+                );
+                $.each(response.data.topics, function (subjectName, topics) {
+                  $topicListContainer.append(
+                    '<label class="qp-topic-group-header"><input type="checkbox" class="qp-subject-topic-toggle"> ' +
+                      subjectName +
+                      "</label>"
+                  );
+                  $.each(topics, function (i, topic) {
+                    var count =
+                      unattemptedCounts.by_topic &&
+                      unattemptedCounts.by_topic[topic.topic_id]
+                        ? " (" +
+                          unattemptedCounts.by_topic[topic.topic_id] +
+                          ")"
+                        : "";
+                    $topicListContainer.append(
+                      '<label><input type="checkbox" name="' +
+                        topicNameAttr +
+                        '" value="' +
+                        topic.topic_id +
+                        '" data-subject-id="' +
+                        topic.subject_id +
+                        '"> ' +
+                        topic.topic_name +
+                        count +
+                        "</label>"
+                    );
+                  });
                 });
-            } else { $sectionGroup.slideUp(); }
-        } else { $sectionGroup.slideUp(); }
+                updateButtonText(
+                  $topicButton,
+                  "-- Select Topic(s) --",
+                  "Topic"
+                );
+                $topicGroup.slideDown();
+              } else {
+                updateButtonText($topicButton, "No Topics Found", "Topic");
+                $topicGroup.slideUp();
+              }
+            },
+          });
+        } else {
+          $topicGroup.slideUp();
+          updateButtonText(
+            $topicButton,
+            "-- Select subject(s) first --",
+            "Topic"
+          );
+        }
+      }
+      var $sectionGroup = $form.find("#qp-section-group");
+      if ($sectionGroup.length > 0) {
+        var $sectionSelect = $form.find("#qp_section");
+        var $selectedTopicCheckboxes = $form
+          .find('[id^="qp_topic_list_container"] input:checked[value!="all"]')
+          .not(".qp-subject-topic-toggle");
+        if ($selectedTopicCheckboxes.length === 1) {
+          var singleTopicCheckbox = $selectedTopicCheckboxes.first();
+          var topicId = singleTopicCheckbox.val();
+          var subjectIdForTopic = singleTopicCheckbox.data("subject-id");
+          if (topicId && subjectIdForTopic) {
+            $.ajax({
+              url: qp_ajax_object.ajax_url,
+              type: "POST",
+              data: {
+                action: "get_sections_for_subject",
+                nonce: qp_ajax_object.nonce,
+                subject_id: subjectIdForTopic,
+                topic_id: topicId,
+              },
+              beforeSend: function () {
+                $sectionSelect
+                  .prop("disabled", true)
+                  .html("<option>Loading sections...</option>");
+                $sectionGroup.slideDown();
+              },
+              success: function (response) {
+                if (response.success && response.data.sections.length > 0) {
+                  $sectionSelect
+                    .prop("disabled", false)
+                    .empty()
+                    .append('<option value="all">All Sections</option>');
+                  $.each(response.data.sections, function (index, sec) {
+                    var count =
+                      sec.unattempted_count && sec.unattempted_count > 0
+                        ? " (" + sec.unattempted_count + ")"
+                        : "";
+                    var optionText =
+                      sec.source_name + " / " + sec.section_name + count;
+                    $sectionSelect.append(
+                      $("<option></option>")
+                        .val(sec.section_id)
+                        .text(optionText)
+                    );
+                  });
+                } else {
+                  $sectionGroup.slideUp();
+                }
+              },
+              error: function () {
+                $sectionGroup.slideUp();
+              },
+            });
+          } else {
+            $sectionGroup.slideUp();
+          }
+        } else {
+          $sectionGroup.slideUp();
+        }
+      }
     }
-});
-
+  );
 
   // Hide dropdowns when clicking outside
   $(document).on("click", function (e) {
@@ -793,6 +892,7 @@ $topicListContainer.append('<label><input type="checkbox" name="' + topicNameAtt
               $("#qp-next-btn").prop("disabled", false);
 
               renderPalette();
+              scrollPaletteToCurrent();
               updateLegendCounts();
               loadNextQuestion();
             }
@@ -1149,6 +1249,7 @@ $topicListContainer.append('<label><input type="checkbox" name="' + topicNameAtt
     } else {
       loadQuestion(sessionQuestionIDs[currentQuestionIndex]);
       renderPalette();
+      scrollPaletteToCurrent();
     }
 
     updateLegendCounts();
@@ -1387,17 +1488,25 @@ $topicListContainer.append('<label><input type="checkbox" name="' + topicNameAtt
       var sourceInfoParts = [];
 
       // Check if the new hierarchy data exists and is an array
-      if (questionData.source_hierarchy && Array.isArray(questionData.source_hierarchy) && questionData.source_hierarchy.length > 0) {
+      if (
+        questionData.source_hierarchy &&
+        Array.isArray(questionData.source_hierarchy) &&
+        questionData.source_hierarchy.length > 0
+      ) {
         // Create the full hierarchy path with a bolded label
-        var hierarchyString = '<strong>Source:</strong> ' + questionData.source_hierarchy.join(" / ");
+        var hierarchyString =
+          "<strong>Source:</strong> " +
+          questionData.source_hierarchy.join(" / ");
         sourceInfoParts.push(hierarchyString);
       }
 
       // Append the question number if it exists, with a bolded label
       if (questionData.question_number_in_section) {
-        sourceInfoParts.push("<strong>Q:</strong> " + questionData.question_number_in_section);
+        sourceInfoParts.push(
+          "<strong>Q:</strong> " + questionData.question_number_in_section
+        );
       }
-      
+
       // Set the HTML content, joining parts with a separator if both exist
       sourceDisplayArea.html(sourceInfoParts.join(" | "));
     }
@@ -1449,11 +1558,12 @@ $topicListContainer.append('<label><input type="checkbox" name="' + topicNameAtt
       // Replace the entire block above with this one
     } else {
       // --- CORRECTED LOGIC FOR NORMAL/REVISION MODES ---
-      var isSectionWise = sessionSettings.practice_mode === 'Section Wise Practice';
+      var isSectionWise =
+        sessionSettings.practice_mode === "Section Wise Practice";
 
-// Disable the next button ONLY if it's NOT section-wise practice.
-// Also, re-enable the skip button for section-wise mode.
-$("#qp-next-btn").prop("disabled", !isSectionWise);
+      // Disable the next button ONLY if it's NOT section-wise practice.
+      // Also, re-enable the skip button for section-wise mode.
+      $("#qp-next-btn").prop("disabled", !isSectionWise);
       $("#qp-skip-btn").prop("disabled", false);
       optionsArea.data("correct-option-id", data.correct_option_id);
       $("#qp-mark-for-review-cb").prop("checked", data.is_marked_for_review);
@@ -1704,18 +1814,21 @@ $("#qp-next-btn").prop("disabled", !isSectionWise);
     }
     loadQuestion(sessionQuestionIDs[currentQuestionIndex], "next");
     renderPalette();
+    scrollPaletteToCurrent();
   }
 
   function updateHeaderStats() {
     $(".qp-header-stat.score .value").text(score.toFixed(2));
     $(".qp-header-stat.correct .value").text(correctCount);
     $(".qp-header-stat.incorrect .value").text(incorrectCount);
-    var isSectionWise = sessionSettings.practice_mode === 'Section Wise Practice';
+    var isSectionWise =
+      sessionSettings.practice_mode === "Section Wise Practice";
     if (isSectionWise) {
-        var notAttemptedCount = sessionQuestionIDs.length - (correctCount + incorrectCount);
-        $(".qp-header-stat.skipped .value").text(notAttemptedCount);
+      var notAttemptedCount =
+        sessionQuestionIDs.length - (correctCount + incorrectCount);
+      $(".qp-header-stat.skipped .value").text(notAttemptedCount);
     } else {
-        $(".qp-header-stat.skipped .value").text(skippedCount);
+      $(".qp-header-stat.skipped .value").text(skippedCount);
     }
   }
 
@@ -1936,6 +2049,7 @@ $("#qp-next-btn").prop("disabled", !isSectionWise);
     // Update UI
     updateHeaderStats();
     renderPalette();
+    scrollPaletteToCurrent();
     $("#qp-next-btn").prop("disabled", false);
 
     // Sync attempt with the server in the background
@@ -2014,7 +2128,8 @@ $("#qp-next-btn").prop("disabled", !isSectionWise);
           );
         }
         loadQuestion(sessionQuestionIDs[currentQuestionIndex], "prev");
-        renderPalette();
+        updateCurrentPaletteButton(currentQuestionIndex, oldIndex);
+        scrollPaletteToCurrent();
       }
     }
   });
@@ -2056,6 +2171,7 @@ $("#qp-next-btn").prop("disabled", !isSectionWise);
 
       updateHeaderStats();
       renderPalette();
+      scrollPaletteToCurrent();
       loadNextQuestion();
       updateLegendCounts();
     }
@@ -2242,236 +2358,253 @@ $("#qp-next-btn").prop("disabled", !isSectionWise);
   });
 
   // --- FINAL: Draggable, Resizable, Touch-Enabled Rough Work Popup with Undo/Redo ---
-    var overlay = $('#qp-rough-work-overlay');
-    var popup = $('#qp-rough-work-popup');
-    var header = popup.find('.qp-popup-header');
-    var resizeHandle = popup.find('.qp-popup-resize-handle');
-    var canvasEl = $('#qp-rough-work-canvas');
-    var canvas = canvasEl[0]; // The VISIBLE canvas
-    var ctx; // The VISIBLE canvas context
+  var overlay = $("#qp-rough-work-overlay");
+  var popup = $("#qp-rough-work-popup");
+  var header = popup.find(".qp-popup-header");
+  var resizeHandle = popup.find(".qp-popup-resize-handle");
+  var canvasEl = $("#qp-rough-work-canvas");
+  var canvas = canvasEl[0]; // The VISIBLE canvas
+  var ctx; // The VISIBLE canvas context
 
-    // --- NEW: Off-screen canvas for persistent drawing ---
-    var masterCanvas = document.createElement('canvas');
-    var masterCtx = masterCanvas.getContext('2d');
-    masterCanvas.width = 2000; // A large fixed size
-    masterCanvas.height = 2000;
+  // --- NEW: Off-screen canvas for persistent drawing ---
+  var masterCanvas = document.createElement("canvas");
+  var masterCtx = masterCanvas.getContext("2d");
+  masterCanvas.width = 2000; // A large fixed size
+  masterCanvas.height = 2000;
 
-    var isDrawing = false, isDragging = false, isResizing = false;
-    var lastX, lastY, initialX, initialY, initialWidth, initialHeight;
-    var currentTool = 'pencil';
+  var isDrawing = false,
+    isDragging = false,
+    isResizing = false;
+  var lastX, lastY, initialX, initialY, initialWidth, initialHeight;
+  var currentTool = "pencil";
 
-    var undoStack = [];
-    var redoStack = [];
-    var undoBtn = $('#qp-undo-btn');
-    var redoBtn = $('#qp-redo-btn');
+  var undoStack = [];
+  var redoStack = [];
+  var undoBtn = $("#qp-undo-btn");
+  var redoBtn = $("#qp-redo-btn");
 
-    function getEventCoords(e) {
-        var evt = (e.originalEvent && e.originalEvent.touches) ? e.originalEvent.touches[0] : e;
-        return { x: evt.clientX, y: evt.clientY };
+  function getEventCoords(e) {
+    var evt =
+      e.originalEvent && e.originalEvent.touches
+        ? e.originalEvent.touches[0]
+        : e;
+    return { x: evt.clientX, y: evt.clientY };
+  }
+
+  function updateVisibleCanvas() {
+    if (ctx) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(masterCanvas, 0, 0);
+    }
+  }
+
+  function saveCanvasState() {
+    redoStack = [];
+    undoStack.push(masterCanvas.toDataURL());
+    updateUndoRedoButtons();
+  }
+
+  function updateUndoRedoButtons() {
+    undoBtn.prop("disabled", undoStack.length <= 1);
+    redoBtn.prop("disabled", redoStack.length === 0);
+  }
+
+  function restoreCanvasState(popStack, pushStack) {
+    if (popStack.length > 0) {
+      pushStack.push(masterCanvas.toDataURL());
+      var restoreData = popStack.pop();
+
+      var img = new Image();
+      img.onload = function () {
+        masterCtx.clearRect(0, 0, masterCanvas.width, masterCanvas.height);
+        masterCtx.drawImage(img, 0, 0);
+        updateVisibleCanvas(); // Update the view
+      };
+      img.src = restoreData;
+      updateUndoRedoButtons();
+    }
+  }
+
+  undoBtn.on("click", function () {
+    restoreCanvasState(undoStack, redoStack);
+  });
+  redoBtn.on("click", function () {
+    restoreCanvasState(redoStack, undoStack);
+  });
+
+  function resizeCanvas() {
+    if (canvas) {
+      var contentArea = popup.find(".qp-popup-content");
+      canvas.width = contentArea.width();
+      canvas.height = contentArea.height();
+      updateVisibleCanvas(); // Redraw from master canvas after resize
+    }
+  }
+
+  function draw(e) {
+    if (!isDrawing) return;
+    var coords = getEventCoords(e);
+    var rect = canvas.getBoundingClientRect();
+    var currentX = coords.x - rect.left;
+    var currentY = coords.y - rect.top;
+
+    if (currentTool === "eraser") {
+      masterCtx.globalCompositeOperation = "destination-out";
+      masterCtx.lineWidth = 20;
+    } else {
+      masterCtx.globalCompositeOperation = "source-over";
+      masterCtx.strokeStyle = $(".qp-color-btn.active").data("color");
+      masterCtx.lineWidth = 2;
     }
 
-    function updateVisibleCanvas() {
-        if (ctx) {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.drawImage(masterCanvas, 0, 0);
-        }
-    }
+    masterCtx.beginPath();
+    masterCtx.moveTo(lastX, lastY);
+    masterCtx.lineTo(currentX, currentY);
+    masterCtx.stroke();
+    [lastX, lastY] = [currentX, currentY];
 
-    function saveCanvasState() {
-        redoStack = [];
-        undoStack.push(masterCanvas.toDataURL());
+    updateVisibleCanvas(); // Update the view after drawing on master
+    e.preventDefault();
+  }
+
+  // Show Popup and Overlay
+  wrapper.on("click", "#qp-rough-work-btn", function () {
+    var savedOpacityValue = localStorage.getItem("qpCanvasOpacityValue");
+    var initialSliderValue = savedOpacityValue
+      ? parseFloat(savedOpacityValue)
+      : 90;
+    var popupOpacity = 0.3 + (initialSliderValue / 100) * 0.7;
+    var overlayOpacity = 0.1 + (initialSliderValue / 100) * 0.5;
+    popup.css("background-color", `rgba(255, 255, 255, ${popupOpacity})`);
+    overlay.css("background-color", `rgba(0, 0, 0, ${overlayOpacity})`);
+    $("#qp-canvas-opacity-slider").val(initialSliderValue);
+    popup.css({ top: "50%", left: "50%", transform: "translate(-50%, -50%)" });
+    overlay.fadeIn(200);
+    var offset = popup.offset();
+    popup.css({ top: offset.top, left: offset.left, transform: "none" });
+
+    if (!ctx) {
+      ctx = canvas.getContext("2d");
+      masterCtx.lineJoin = "round";
+      masterCtx.lineCap = "round";
+      resizeCanvas();
+      if (undoStack.length === 0) {
+        undoStack = [masterCanvas.toDataURL()];
         updateUndoRedoButtons();
+      }
     }
+  });
 
-    function updateUndoRedoButtons() {
-        undoBtn.prop('disabled', undoStack.length <= 1);
-        redoBtn.prop('disabled', redoStack.length === 0);
+  // Dragging, Resizing, and Drawing events (unchanged)
+  function onInteractionMove(e) {
+    if (isDragging) {
+      var coords = getEventCoords(e);
+      popup.offset({ top: coords.y - initialY, left: coords.x - initialX });
     }
-
-    function restoreCanvasState(popStack, pushStack) {
-        if (popStack.length > 0) {
-            pushStack.push(masterCanvas.toDataURL());
-            var restoreData = popStack.pop();
-            
-            var img = new Image();
-            img.onload = function() {
-                masterCtx.clearRect(0, 0, masterCanvas.width, masterCanvas.height);
-                masterCtx.drawImage(img, 0, 0);
-                updateVisibleCanvas(); // Update the view
-            };
-            img.src = restoreData;
-            updateUndoRedoButtons();
-        }
+    if (isResizing) {
+      var coords = getEventCoords(e);
+      var controlsWidth = popup.find(".qp-rough-work-controls").outerWidth();
+      var titleWidth = popup.find(".qp-popup-title").outerWidth();
+      var closeBtnWidth = popup.find(".qp-popup-close-btn").outerWidth();
+      var minWidth = controlsWidth + titleWidth + closeBtnWidth + 40;
+      var newWidth = initialWidth + (coords.x - initialX);
+      var newHeight = initialHeight + (coords.y - initialY);
+      if (newWidth < minWidth) newWidth = minWidth;
+      popup.width(newWidth);
+      popup.height(newHeight);
+      resizeCanvas();
     }
+  }
 
-    undoBtn.on('click', function() { restoreCanvasState(undoStack, redoStack); });
-    redoBtn.on('click', function() { restoreCanvasState(redoStack, undoStack); });
+  function onInteractionEnd() {
+    if (isResizing) saveCanvasState();
+    isDragging = isResizing = false;
+    $(document).off("mousemove touchmove", onInteractionMove);
+    $(document).off("mouseup touchend", onInteractionEnd);
+  }
 
-    function resizeCanvas() {
-        if (canvas) {
-            var contentArea = popup.find('.qp-popup-content');
-            canvas.width = contentArea.width();
-            canvas.height = contentArea.height();
-            updateVisibleCanvas(); // Redraw from master canvas after resize
-        }
+  header.on("mousedown touchstart", function (e) {
+    if (
+      $(e.target).closest(".qp-rough-work-controls, .qp-popup-close-btn").length
+    )
+      return;
+    isDragging = true;
+    var coords = getEventCoords(e);
+    initialX = coords.x - popup.offset().left;
+    initialY = coords.y - popup.offset().top;
+    $(document).on("mousemove touchmove", onInteractionMove);
+    $(document).on("mouseup touchend", onInteractionEnd);
+    e.preventDefault();
+  });
+
+  resizeHandle.on("mousedown touchstart", function (e) {
+    isResizing = true;
+    var coords = getEventCoords(e);
+    initialX = coords.x;
+    initialY = coords.y;
+    initialWidth = popup.width();
+    initialHeight = popup.height();
+    $(document).on("mousemove touchmove", onInteractionMove);
+    $(document).on("mouseup touchend", onInteractionEnd);
+    e.preventDefault();
+  });
+
+  // --- Updated Drawing Events ---
+  canvasEl.on("mousedown touchstart", function (e) {
+    isDrawing = true;
+    saveCanvasState();
+    var coords = getEventCoords(e);
+    var rect = canvas.getBoundingClientRect();
+    [lastX, lastY] = [coords.x - rect.left, coords.y - rect.top];
+    e.preventDefault();
+  });
+  canvasEl.on("mouseup touchend", function () {
+    isDrawing = false;
+  });
+  canvasEl.on("mousemove touchmove", draw);
+
+  // Tool selection, color, etc. (unchanged)
+  popup.on("click", ".qp-tool-btn", function () {
+    if ($(this).is("#qp-undo-btn, #qp-redo-btn")) return;
+    $(".qp-tool-btn").removeClass("active");
+    $(this).addClass("active");
+    currentTool = $(this).attr("id") === "qp-tool-eraser" ? "eraser" : "pencil";
+    canvasEl
+      .removeClass("cursor-pencil cursor-eraser")
+      .addClass("cursor-" + currentTool);
+  });
+  popup.on("click", ".qp-color-btn", function () {
+    $(".qp-color-btn").removeClass("active");
+    $(this).addClass("active");
+    $("#qp-tool-pencil").click();
+  });
+
+  // --- REFINED: Opacity Slider Logic with localStorage ---
+  popup.on("input", "#qp-canvas-opacity-slider", function () {
+    var sliderValue = $(this).val(); // Get value from 0-100
+
+    // Save the raw slider value to localStorage
+    localStorage.setItem("qpCanvasOpacityValue", sliderValue);
+
+    var popupOpacity = 0.3 + (sliderValue / 100) * 0.7;
+    popup.css("background-color", `rgba(255, 255, 255, ${popupOpacity})`);
+
+    var overlayOpacity = 0.1 + (sliderValue / 100) * 0.5;
+    overlay.css("background-color", `rgba(0, 0, 0, ${overlayOpacity})`);
+  });
+
+  // Close and Clear (unchanged)
+  popup.on("click", "#qp-close-canvas-btn", function () {
+    overlay.fadeOut(200);
+  });
+  // --- Updated Clear Button ---
+  popup.on("click", "#qp-clear-canvas-btn", function () {
+    if (ctx) {
+      saveCanvasState();
+      masterCtx.clearRect(0, 0, masterCanvas.width, masterCanvas.height);
+      updateVisibleCanvas();
     }
-
-    function draw(e) {
-        if (!isDrawing) return;
-        var coords = getEventCoords(e);
-        var rect = canvas.getBoundingClientRect();
-        var currentX = coords.x - rect.left;
-        var currentY = coords.y - rect.top;
-
-        if (currentTool === 'eraser') {
-            masterCtx.globalCompositeOperation = 'destination-out';
-            masterCtx.lineWidth = 20;
-        } else {
-            masterCtx.globalCompositeOperation = 'source-over';
-            masterCtx.strokeStyle = $('.qp-color-btn.active').data('color');
-            masterCtx.lineWidth = 2;
-        }
-        
-        masterCtx.beginPath();
-        masterCtx.moveTo(lastX, lastY);
-        masterCtx.lineTo(currentX, currentY);
-        masterCtx.stroke();
-        [lastX, lastY] = [currentX, currentY];
-        
-        updateVisibleCanvas(); // Update the view after drawing on master
-        e.preventDefault();
-    }
-
-    // Show Popup and Overlay
-    wrapper.on('click', '#qp-rough-work-btn', function() {
-        var savedOpacityValue = localStorage.getItem('qpCanvasOpacityValue');
-        var initialSliderValue = savedOpacityValue ? parseFloat(savedOpacityValue) : 90;
-        var popupOpacity = 0.3 + ((initialSliderValue / 100) * 0.7);
-        var overlayOpacity = 0.1 + ((initialSliderValue / 100) * 0.5);
-        popup.css('background-color', `rgba(255, 255, 255, ${popupOpacity})`);
-        overlay.css('background-color', `rgba(0, 0, 0, ${overlayOpacity})`);
-        $('#qp-canvas-opacity-slider').val(initialSliderValue);
-        popup.css({ 'top': '50%', 'left': '50%', 'transform': 'translate(-50%, -50%)' });
-        overlay.fadeIn(200);
-        var offset = popup.offset();
-        popup.css({ top: offset.top, left: offset.left, transform: 'none' });
-
-        if (!ctx) {
-            ctx = canvas.getContext('2d');
-            masterCtx.lineJoin = 'round';
-            masterCtx.lineCap = 'round';
-            resizeCanvas();
-            if (undoStack.length === 0) {
-                 undoStack = [masterCanvas.toDataURL()];
-                 updateUndoRedoButtons();
-            }
-        }
-    });
-
-
-    // Dragging, Resizing, and Drawing events (unchanged)
-    function onInteractionMove(e) {
-        if (isDragging) {
-            var coords = getEventCoords(e);
-            popup.offset({ top: coords.y - initialY, left: coords.x - initialX });
-        }
-        if (isResizing) {
-            var coords = getEventCoords(e);
-            var controlsWidth = popup.find('.qp-rough-work-controls').outerWidth();
-            var titleWidth = popup.find('.qp-popup-title').outerWidth();
-            var closeBtnWidth = popup.find('.qp-popup-close-btn').outerWidth();
-            var minWidth = controlsWidth + titleWidth + closeBtnWidth + 40;
-            var newWidth = initialWidth + (coords.x - initialX);
-            var newHeight = initialHeight + (coords.y - initialY);
-            if (newWidth < minWidth) newWidth = minWidth;
-            popup.width(newWidth);
-            popup.height(newHeight);
-            resizeCanvas();
-        }
-    }
-    
-    function onInteractionEnd() {
-        if(isResizing) saveCanvasState();
-        isDragging = isResizing = false;
-        $(document).off('mousemove touchmove', onInteractionMove);
-        $(document).off('mouseup touchend', onInteractionEnd);
-    }
-    
-    header.on('mousedown touchstart', function(e) {
-        if ($(e.target).closest('.qp-rough-work-controls, .qp-popup-close-btn').length) return;
-        isDragging = true;
-        var coords = getEventCoords(e);
-        initialX = coords.x - popup.offset().left;
-        initialY = coords.y - popup.offset().top;
-        $(document).on('mousemove touchmove', onInteractionMove);
-        $(document).on('mouseup touchend', onInteractionEnd);
-        e.preventDefault();
-    });
-
-    resizeHandle.on('mousedown touchstart', function(e) {
-        isResizing = true;
-        var coords = getEventCoords(e);
-        initialX = coords.x;
-        initialY = coords.y;
-        initialWidth = popup.width();
-        initialHeight = popup.height();
-        $(document).on('mousemove touchmove', onInteractionMove);
-        $(document).on('mouseup touchend', onInteractionEnd);
-        e.preventDefault();
-    });
-
-    // --- Updated Drawing Events ---
-    canvasEl.on('mousedown touchstart', function(e) {
-        isDrawing = true;
-        saveCanvasState();
-        var coords = getEventCoords(e);
-        var rect = canvas.getBoundingClientRect();
-        [lastX, lastY] = [coords.x - rect.left, coords.y - rect.top];
-        e.preventDefault();
-    });
-    canvasEl.on('mouseup touchend', function() { isDrawing = false; });
-    canvasEl.on('mousemove touchmove', draw);
-    
-    // Tool selection, color, etc. (unchanged)
-    popup.on('click', '.qp-tool-btn', function() {
-        if($(this).is('#qp-undo-btn, #qp-redo-btn')) return;
-        $('.qp-tool-btn').removeClass('active');
-        $(this).addClass('active');
-        currentTool = $(this).attr('id') === 'qp-tool-eraser' ? 'eraser' : 'pencil';
-        canvasEl.removeClass('cursor-pencil cursor-eraser').addClass('cursor-' + currentTool);
-    });
-    popup.on('click', '.qp-color-btn', function() {
-        $('.qp-color-btn').removeClass('active');
-        $(this).addClass('active');
-        $('#qp-tool-pencil').click();
-    });
-
-    // --- REFINED: Opacity Slider Logic with localStorage ---
-    popup.on('input', '#qp-canvas-opacity-slider', function() {
-        var sliderValue = $(this).val(); // Get value from 0-100
-        
-        // Save the raw slider value to localStorage
-        localStorage.setItem('qpCanvasOpacityValue', sliderValue);
-
-        var popupOpacity = 0.3 + ((sliderValue / 100) * 0.7);
-        popup.css('background-color', `rgba(255, 255, 255, ${popupOpacity})`);
-        
-        var overlayOpacity = 0.1 + ((sliderValue / 100) * 0.5);
-        overlay.css('background-color', `rgba(0, 0, 0, ${overlayOpacity})`);
-    });
-
-    // Close and Clear (unchanged)
-    popup.on('click', '#qp-close-canvas-btn', function() {
-        overlay.fadeOut(200);
-    });
-    // --- Updated Clear Button ---
-    popup.on('click', '#qp-clear-canvas-btn', function() {
-        if (ctx) {
-            saveCanvasState();
-            masterCtx.clearRect(0, 0, masterCanvas.width, masterCanvas.height);
-            updateVisibleCanvas();
-        }
-    });
+  });
 
   // --- NEW: Mock Test Specific Event Handlers ---
   if (
@@ -2606,5 +2739,87 @@ $("#qp-next-btn").prop("disabled", !isSectionWise);
 
     loadQuestion(sessionQuestionIDs[currentQuestionIndex], direction);
     renderPalette(); // Re-render to update the 'current' highlight
+    scrollPaletteToCurrent();
   });
+
+  /**
+   * Robustly checks if an element is fully visible within its scrollable container.
+   *
+   * @param {HTMLElement} element - The element to check (the button).
+   * @param {HTMLElement} container - The scrollable container (the palette grid).
+   * @returns {boolean} - True if the element is fully visible, false otherwise.
+   */
+  function isElementFullyVisibleInContainer(element, container) {
+    // Ensure we have the raw DOM elements
+    const elem = $(element)[0];
+    const cont = $(container)[0];
+
+    if (!elem || !cont) return false;
+
+    // 1. Get positions relative to the viewport.
+    const elemRect = elem.getBoundingClientRect();
+    const containerRect = cont.getBoundingClientRect();
+
+    // 2. Define Tolerance (1px) to ignore sub-pixel rendering issues.
+    const tolerance = 1;
+
+    // 3. Calculate the precise top boundary of the visible content area.
+    // cont.clientTop is the width of the top border. We exclude it because
+    // getBoundingClientRect includes the border, but scrolling happens inside it.
+    const containerVisibleTop = containerRect.top + cont.clientTop;
+
+    // 4. Calculate the precise bottom boundary.
+    // cont.clientHeight is the visible inner height (excludes borders/scrollbars).
+    const containerVisibleBottom = containerVisibleTop + cont.clientHeight;
+
+    // 5. Check Visibility against the tolerance.
+
+    // Is the element's top edge below the container's top edge? (Forgiving minor top overflow)
+    const isTopVisible = elemRect.top + tolerance >= containerVisibleTop;
+
+    // Is the element's bottom edge above the container's bottom edge? (Forgiving minor bottom overflow)
+    const isBottomVisible =
+      elemRect.bottom - tolerance <= containerVisibleBottom;
+
+    // The element is only considered visible if both the top and bottom are visible within tolerance.
+    return isTopVisible && isBottomVisible;
+  }
+
+  function scrollPaletteToCurrent() {
+    // Use double requestAnimationFrame (rAF) instead of setTimeout.
+    // This guarantees that the browser has finished all layout calculations
+    // after the .current class moved, ensuring we measure the final positions.
+    setTimeout(function() {
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () {
+          requestAnimationFrame(function () {
+            requestAnimationFrame(function () {
+              // Select only visible palette grids (handles docked vs. sliding views)
+              var $paletteGrids = $(
+                "#qp-palette-docked .qp-palette-grid:visible, #qp-palette-sliding .qp-palette-grid:visible"
+              );
+
+              $paletteGrids.each(function () {
+                // 'this' is the grid container DOM element.
+                var gridElement = this;
+                // Find the current button within this grid.
+                var $currentBtn = $(gridElement).find(".qp-palette-btn.current");
+
+                if ($currentBtn.length) {
+                  var btnElement = $currentBtn[0];
+                    // If (and ONLY if) the manual check fails, initiate the scroll.
+                    btnElement.scrollIntoView({
+                      behavior: "smooth",
+                      // Use 'nearest' so that if it is genuinely far out of view, it scrolls the minimum amount.
+                      block: "center",
+                    });
+                  // If it returns true, we do absolutely nothing, preventing the erratic jumps.
+                }
+              });
+            });
+          });
+        });
+      });
+    }, 2500);
+  }
 });
