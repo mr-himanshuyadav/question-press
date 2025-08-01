@@ -354,43 +354,23 @@ class QP_Dashboard
                 }
 
                 $subjects_display = 'N/A';
-                if (isset($settings['practice_mode']) && $settings['practice_mode'] === 'Section Wise Practice' && !empty($settings['section_id'])) {
-                    // For Section Wise Practice, build the hierarchy from the new terms table
-                    $section_term_id = absint($settings['section_id']);
-                    $term_table = $wpdb->prefix . 'qp_terms';
-
-                    $display_parts = [];
-                    $current_term_id = $section_term_id;
-
-                    // Trace the hierarchy up from the section to the source
-                    for ($i = 0; $i < 5; $i++) { // Safety loop to prevent infinite recursion
-                        $term = $wpdb->get_row($wpdb->prepare("SELECT name, parent FROM {$term_table} WHERE term_id = %d", $current_term_id));
-                        if ($term) {
-                            array_unshift($display_parts, esc_html($term->name));
-                            if ($term->parent == 0) break; // Stop when we reach the top-level source
-                            $current_term_id = $term->parent;
-                        } else {
-                            break; // Stop if a term is not found
-                        }
-                    }
-
-                    if (!empty($display_parts)) {
-                        $subjects_display = implode(' / ', $display_parts);
-                    }
+            if (is_array($session_qids) && !empty($session_qids)) {
+                if ($mode === 'Section Practice') {
+                    // For section practice, get the full source hierarchy.
+                    $first_question_id = $session_qids[0];
+                    $source_hierarchy = qp_get_source_hierarchy_for_question($first_question_id);
+                    $subjects_display = implode(' / ', $source_hierarchy);
                 } else {
-                    // Original logic for all other modes
+                    // For all other modes, get the unique parent subjects.
                     $session_subjects = [];
-                    if (is_array($session_qids)) {
-                        foreach ($session_qids as $qid) {
-                            if (isset($subjects_by_question[$qid])) {
-                                $session_subjects[$subjects_by_question[$qid]] = true;
-                            }
+                    foreach ($session_qids as $qid) {
+                        if (isset($subjects_by_question[$qid])) {
+                            $session_subjects[] = $subjects_by_question[$qid];
                         }
                     }
-                    if (!empty($session_subjects)) {
-                        $subjects_display = implode(', ', array_keys($session_subjects));
-                    }
+                    $subjects_display = !empty($session_subjects) ? implode(', ', array_unique($session_subjects)) : 'N/A';
                 }
+            }
 
                 $accuracy = $accuracy_stats[$session->session_id] ?? 'N/A';
 

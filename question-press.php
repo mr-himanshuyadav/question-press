@@ -2140,45 +2140,49 @@ function qp_delete_dir($dirPath)
 }
 
 /**
- * Helper function to get the source and section names for a given question.
+ * Helper function to get the full source hierarchy for a given question.
  *
  * @param int $question_id The ID of the question.
- * @return array An array containing 'source' and 'section' names.
+ * @return array An array containing the names of the source, section, etc., in order.
  */
 function qp_get_source_hierarchy_for_question($question_id)
 {
     global $wpdb;
-    $q_table = $wpdb->prefix . 'qp_questions';
+    $rel_table = $wpdb->prefix . 'qp_term_relationships';
     $term_table = $wpdb->prefix . 'qp_terms';
+    $tax_table = $wpdb->prefix . 'qp_taxonomies';
 
-    // First, get the source and section IDs from the question itself.
-    $source_ids = $wpdb->get_row($wpdb->prepare(
-        "SELECT source_id, section_id FROM {$q_table} WHERE question_id = %d",
+    // Find the most specific source term linked to the question.
+    $term_id = $wpdb->get_var($wpdb->prepare(
+        "SELECT r.term_id
+         FROM {$rel_table} r
+         JOIN {$term_table} t ON r.term_id = t.term_id
+         WHERE r.object_id = %d AND r.object_type = 'question'
+         AND t.taxonomy_id = (SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'source')
+         LIMIT 1",
         $question_id
     ));
 
-    if (!$source_ids) {
-        return ['source' => null, 'section' => null];
+    if (!$term_id) {
+        return []; // Return an empty array if no source is found
     }
 
-    $source_name = null;
-    $section_name = null;
+    $lineage = [];
+    $current_term_id = $term_id;
 
-    if ($source_ids->source_id) {
-        $source_name = $wpdb->get_var($wpdb->prepare(
-            "SELECT name FROM {$term_table} WHERE term_id = %d",
-            $source_ids->source_id
-        ));
+    // Loop up the hierarchy to trace back to the top-level parent (source).
+    for ($i = 0; $i < 10; $i++) { // Safety limit to prevent infinite loops
+        if (!$current_term_id) break;
+        $term = $wpdb->get_row($wpdb->prepare("SELECT name, parent FROM {$term_table} WHERE term_id = %d", $current_term_id));
+        if ($term) {
+            array_unshift($lineage, $term->name); // Add to the beginning of the array.
+            $current_term_id = $term->parent;
+        } else {
+            break;
+        }
     }
 
-    if ($source_ids->section_id) {
-        $section_name = $wpdb->get_var($wpdb->prepare(
-            "SELECT name FROM {$term_table} WHERE term_id = %d",
-            $source_ids->section_id
-        ));
-    }
-
-    return ['source' => $source_name, 'section' => $section_name];
+    return $lineage; // Return the simple array of names
 }
 
 /**
