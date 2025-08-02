@@ -420,13 +420,16 @@ $data_query = "SELECT
     source_rel.term_id AS linked_source_term_id
 FROM {$q_table} q
 LEFT JOIN {$g_table} g ON q.group_id = g.group_id
-LEFT JOIN {$rel_table} subject_rel ON g.group_id = subject_rel.object_id AND subject_rel.object_type = 'group' AND subject_rel.term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id = (SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'subject'))
-LEFT JOIN {$term_table} subject_term ON subject_rel.term_id = subject_term.term_id
-LEFT JOIN {$rel_table} topic_rel ON q.question_id = topic_rel.object_id AND topic_rel.object_type = 'question' AND topic_rel.term_id IN (SELECT term_id FROM {$term_table} WHERE parent != 0 AND taxonomy_id = (SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'subject'))
+-- Get the Topic linked to the GROUP
+LEFT JOIN {$rel_table} topic_rel ON g.group_id = topic_rel.object_id AND topic_rel.object_type = 'group' AND topic_rel.term_id IN (SELECT term_id FROM {$term_table} WHERE parent != 0 AND taxonomy_id = (SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'subject'))
 LEFT JOIN {$term_table} topic_term ON topic_rel.term_id = topic_term.term_id
+-- Get the Subject by finding the Topic's parent
+LEFT JOIN {$term_table} subject_term ON topic_term.parent = subject_term.term_id
+-- Get the Exam linked to the GROUP
 LEFT JOIN {$rel_table} exam_rel ON g.group_id = exam_rel.object_id AND exam_rel.object_type = 'group' AND exam_rel.term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id = (SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'exam'))
 LEFT JOIN {$term_table} exam_term ON exam_rel.term_id = exam_term.term_id
-LEFT JOIN {$rel_table} source_rel ON q.question_id = source_rel.object_id AND source_rel.object_type = 'question' AND source_rel.term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id = (SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'source'))
+-- Get the Source/Section linked to the GROUP
+LEFT JOIN {$rel_table} source_rel ON g.group_id = source_rel.object_id AND source_rel.object_type = 'group' AND source_rel.term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id = (SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'source'))
 {$where_clause}
 GROUP BY q.question_id
 ORDER BY {$orderby} {$order}
@@ -463,27 +466,27 @@ LIMIT {$per_page} OFFSET {$offset}";
     }
 
     public function column_subject_name($item)
-    {
-        $output = '';
+{
+    $output = '';
 
-        // Display the Subject
-        if (!empty($item['subject_name'])) {
-            $output .= '<strong>Subject:</strong> ' . esc_html($item['subject_name']);
-        } else {
-            $output .= '<strong>Subject:</strong> <em style="color:#a00;">None</em>';
-        }
-
-        $output .= '<br>'; // Add a line break
-
-        // Display the Topic
-        if (!empty($item['topic_name'])) {
-            $output .= '<strong>Topic:</strong> ' . esc_html($item['topic_name']);
-        } else {
-            $output .= '<strong>Topic:</strong> <em style="color:#888;">None</em>';
-        }
-
-        return $output;
+    // Display the Subject
+    if (!empty($item['subject_name'])) {
+        $output .= '<strong>Subject:</strong> ' . esc_html($item['subject_name']);
+    } else {
+        $output .= '<strong>Subject:</strong> <em style="color:#a00;">None</em>';
     }
+
+    $output .= '<br>'; // Add a line break
+
+    // Display the Topic
+    if (!empty($item['topic_name'])) {
+        $output .= '<strong>Topic:</strong> ' . esc_html($item['topic_name']);
+    } else {
+        $output .= '<strong>Topic:</strong> <em style="color:#888;">None</em>';
+    }
+
+    return $output;
+}
 
     /**
      * UPDATED: Process all bulk actions, now correctly handling nonces for single-item actions.
