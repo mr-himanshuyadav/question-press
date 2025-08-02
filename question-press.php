@@ -419,6 +419,8 @@ function qp_admin_menu()
 }
 add_action('admin_menu', 'qp_admin_menu');
 
+
+
 /**
  * Adds a "(Question Press)" indicator to the plugin's pages in the admin list.
  *
@@ -477,6 +479,27 @@ function qp_render_organization_page()
         </div>
     </div>
 <?php
+}
+/**
+ * Renders the page for migration tools.
+ */
+function qp_render_migration_tools_page() {
+    ?>
+    <div class="wrap">
+        <h1>Question Press Migration Tools</h1>
+        <div class="card" style="max-width: 600px; margin-top: 20px;">
+            <h2 class="title">V4 Relationship Migration</h2>
+            <p>This script will migrate Topic and Source/Section relationships from individual questions to their parent groups.</p>
+            <p><strong>Warning:</strong> This is a destructive operation. Please create a full backup of your database before proceeding.</p>
+            <?php
+            // Create a nonce for security
+            $nonce = wp_create_nonce('qp_v4_relationship_migration_nonce');
+            $migration_url = admin_url('admin.php?page=question-press&action=qp_v4_relationship_migration&_wpnonce=' . $nonce);
+            ?>
+            <a href="<?php echo esc_url($migration_url); ?>" class="button button-primary">Run V4 Relationship Migration</a>
+        </div>
+    </div>
+    <?php
 }
 
 function qp_render_merge_terms_page()
@@ -645,6 +668,7 @@ function qp_render_tools_page()
         'import' => ['label' => 'Import', 'callback' => ['QP_Import_Page', 'render']],
         'export'   => ['label' => 'Export', 'callback' => ['QP_Export_Page', 'render']],
         'backup_restore'   => ['label' => 'Backup & Restore', 'callback' => ['QP_Backup_Restore_Page', 'render']],
+        'migration' => ['label' => 'Migration', 'callback' => 'qp_render_migration_tools_page'], 
     ];
     $active_tab = isset($_GET['tab']) && array_key_exists($_GET['tab'], $tabs) ? $_GET['tab'] : 'import';
 ?>
@@ -836,9 +860,149 @@ function qp_regenerate_api_key_ajax()
 }
 add_action('wp_ajax_regenerate_api_key', 'qp_regenerate_api_key_ajax');
 
+/**
+ * Runs the relationship migration from questions to groups.
+ * This function should be triggered by an admin action, similar to the v3 migration.
+ */
+function qp_run_v4_relationship_migration() {
+    // Check if the trigger is present, user has permission, and nonce is valid
+    if (!isset($_GET['action']) || $_GET['action'] !== 'qp_v4_relationship_migration' || !current_user_can('manage_options')) {
+        return;
+    }
+    check_admin_referer('qp_v4_relationship_migration_nonce');
+
+    global $wpdb;
+    $messages = [];
+    $skipped_items = [];
+    $wpdb->query("START TRANSACTION;");
+
+    try {
+        // Step 1: Migrate Topic Relationships from Questions to Groups
+        // A group is now linked directly to a topic. The subject is inferred from the topic's parent.
+        $topic_migration_results = qp_migrate_taxonomy_relationships('subject', 'Topic');
+        $messages[] = "Step 1 (Topics): Migrated {$topic_migration_results['migrated']} relationships to groups. Deleted {$topic_migration_results['deleted']} old question relationships.";
+        if (!empty($topic_migration_results['skipped'])) {
+            $skipped_items = array_merge($skipped_items, $topic_migration_results['skipped']);
+        }
+
+        // Step 2: Migrate Source/Section Relationships from Questions to Groups
+        // A group is now linked to the most specific source term (e.g., a section over a source book).
+        $source_migration_results = qp_migrate_taxonomy_relationships('source', 'Source/Section');
+        $messages[] = "Step 2 (Sources): Migrated {$source_migration_results['migrated']} relationships to groups. Deleted {$source_migration_results['deleted']} old question relationships.";
+        if (!empty($source_migration_results['skipped'])) {
+            $skipped_items = array_merge($skipped_items, $source_migration_results['skipped']);
+        }
+
+        // Final Report
+        if (!empty($skipped_items)) {
+            $skipped_details = implode('<br> - ', $skipped_items);
+            $messages[] = "<strong>Migration Notices (For Review):</strong><br> - {$skipped_details}";
+        }
+
+        $wpdb->query("COMMIT;");
+        $_SESSION['qp_admin_message'] = '<strong>Relationship Migration Report:</strong><br> - ' . implode('<br> - ', $messages);
+        $_SESSION['qp_admin_message_type'] = 'success';
+
+    } catch (Exception $e) {
+        $wpdb->query("ROLLBACK;");
+        $_SESSION['qp_admin_message'] = 'An error occurred during migration: ' . $e->getMessage();
+        $_SESSION['qp_admin_message_type'] = 'error';
+    }
+
+    // Redirect to a safe page to show the message
+    wp_safe_redirect(admin_url('admin.php?page=question-press'));
+    exit;
+}
+
+/**
+ * Helper function to migrate term relationships from questions to their parent groups for a specific taxonomy.
+ *
+ * @param string $taxonomy_name The name of the taxonomy to process (e.g., 'subject' for topics, 'source' for sources/sections).
+ * @param string $log_prefix A prefix for logging messages (e.g., 'Topic', 'Source/Section').
+ * @return array A report of the migration containing counts and skipped items.
+ */
+function qp_migrate_taxonomy_relationships($taxonomy_name, $log_prefix) {
+    global $wpdb;
+    $rel_table = $wpdb->prefix . 'qp_term_relationships';
+    $term_table = $wpdb->prefix . 'qp_terms';
+    $tax_table = $wpdb->prefix . 'qp_taxonomies';
+    $q_table = $wpdb->prefix . 'qp_questions';
+
+    $migrated_count = 0;
+    $deleted_count = 0;
+    $skipped = [];
+
+    // Get the taxonomy ID for the given taxonomy name
+    $taxonomy_id = $wpdb->get_var($wpdb->prepare("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = %s", $taxonomy_name));
+    if (!$taxonomy_id) {
+        $skipped[] = "{$log_prefix} Migration: Taxonomy '{$taxonomy_name}' not found. Skipping.";
+        return ['migrated' => 0, 'deleted' => 0, 'skipped' => $skipped];
+    }
+
+    // 1. Find all unique group-term pairs by inspecting question relationships.
+    // For each group, we find the single, most representative term.
+    $group_to_term_map = [];
+    $question_relationships = $wpdb->get_results($wpdb->prepare("
+        SELECT q.group_id, r.term_id, t.parent
+        FROM {$q_table} q
+        JOIN {$rel_table} r ON q.question_id = r.object_id AND r.object_type = 'question'
+        JOIN {$term_table} t ON r.term_id = t.term_id
+        WHERE t.taxonomy_id = %d AND q.group_id > 0
+    ", $taxonomy_id));
+
+    foreach($question_relationships as $rel) {
+        // For topics (subject taxonomy), we only care about children (parent != 0)
+        if ($taxonomy_name === 'subject' && $rel->parent == 0) {
+            continue;
+        }
+        // For a group, we always want to store the most specific (deepest) term.
+        // A child term (parent != 0) is always more specific than a parent term.
+        if (!isset($group_to_term_map[$rel->group_id]) || $rel->parent != 0) {
+             $group_to_term_map[$rel->group_id] = $rel->term_id;
+        }
+    }
+
+    // 2. Insert the new group-level relationships.
+    foreach ($group_to_term_map as $group_id => $term_id) {
+         if ($group_id > 0 && $term_id > 0) {
+            // First, delete any existing relationship for this group and taxonomy to avoid conflicts
+            $wpdb->query($wpdb->prepare(
+                "DELETE r FROM {$rel_table} r
+                 JOIN {$term_table} t ON r.term_id = t.term_id
+                 WHERE r.object_id = %d AND r.object_type = 'group' AND t.taxonomy_id = %d",
+                 $group_id, $taxonomy_id
+            ));
+
+            // Now insert the new, correct relationship
+            $result = $wpdb->insert($rel_table, [
+                'object_id' => $group_id,
+                'term_id' => $term_id,
+                'object_type' => 'group'
+            ]);
+
+            if ($result) {
+                $migrated_count++;
+            }
+        } else {
+            $skipped[] = "{$log_prefix} Link: Skipped relationship for Group ID {$group_id} and Term ID {$term_id} due to invalid ID.";
+        }
+    }
+
+    // 3. Delete all old question-level relationships for this taxonomy.
+    $deleted_count = $wpdb->query($wpdb->prepare(
+        "DELETE r FROM {$rel_table} r
+         JOIN {$term_table} t ON r.term_id = t.term_id
+         WHERE r.object_type = 'question' AND t.taxonomy_id = %d",
+        $taxonomy_id
+    ));
+
+    return ['migrated' => $migrated_count, 'deleted' => $deleted_count, 'skipped' => $skipped];
+}
+
 // FORM & ACTION HANDLERS
 function qp_handle_form_submissions()
 {
+    qp_run_v4_relationship_migration();
     if (isset($_GET['page']) && $_GET['page'] === 'question-press') {
         $list_table = new QP_Questions_List_Table();
         $list_table->process_bulk_action();
@@ -854,7 +1018,6 @@ function qp_handle_form_submissions()
     QP_Backup_Restore_Page::handle_forms();
     QP_Settings_Page::register_settings();
     qp_handle_save_question_group();
-    qp_run_v3_taxonomy_migration();
 }
 add_action('admin_init', 'qp_handle_form_submissions');
 
