@@ -4901,16 +4901,28 @@ function qp_cleanup_abandoned_sessions()
     }
 
     // --- 2. Handle Abandoned 'active' sessions ---
-    $abandoned_session_ids = $wpdb->get_col($wpdb->prepare(
-        "SELECT session_id FROM {$sessions_table}
-         WHERE status IN ('active') AND last_activity < NOW() - INTERVAL %d MINUTE",
+    $abandoned_sessions = $wpdb->get_results($wpdb->prepare(
+        "SELECT session_id, settings_snapshot FROM {$sessions_table}
+         WHERE status = 'active' AND last_activity < NOW() - INTERVAL %d MINUTE",
         $timeout_minutes
     ));
 
-    if (!empty($abandoned_session_ids)) {
-        foreach ($abandoned_session_ids as $session_id) {
-            // Our updated function will delete if empty, or mark as abandoned if there are attempts.
-            qp_finalize_and_end_session($session_id, 'abandoned', 'abandoned_by_system');
+    if (!empty($abandoned_sessions)) {
+        foreach ($abandoned_sessions as $session) {
+            $settings = json_decode($session->settings_snapshot, true);
+            $is_section_practice = isset($settings['practice_mode']) && $settings['practice_mode'] === 'Section Wise Practice';
+
+            if ($is_section_practice) {
+                // For section practice, just pause the session instead of abandoning it.
+                $wpdb->update(
+                    $sessions_table,
+                    ['status' => 'paused'],
+                    ['session_id' => $session->session_id]
+                );
+            } else {
+                // For all other modes, use the standard abandon/delete logic.
+                qp_finalize_and_end_session($session->session_id, 'abandoned', 'abandoned_by_system');
+            }
         }
     }
 }

@@ -490,6 +490,7 @@ class QP_Shortcodes
 
         self::$session_data_for_script = $session_data;
 
+        $preloader_html = '<div id="qp-preloader"><div class="qp-spinner"></div></div>';
         return '<div id="qp-practice-app-wrapper">' . self::render_practice_ui() . '</div>';
     }
 

@@ -1169,8 +1169,12 @@ jQuery(document).ready(function ($) {
   }
 
   // Session Initialization
-  // Session Initialization
   if (typeof qp_session_data !== "undefined") {
+    // Hide preloader and show content after a delay
+    setTimeout(function() {
+        $('#qp-preloader').fadeOut(300, function() { $(this).remove(); });
+        $('.qp-practice-wrapper').addClass('loaded');
+    }, 400); // 350ms load time + 50ms buffer
     practiceInProgress = true;
     sessionID = qp_session_data.session_id;
     sessionQuestionIDs = qp_session_data.question_ids;

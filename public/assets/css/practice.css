@@ -48,6 +48,7 @@ body {
 
 }
 
+
 .qp-container {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     /* max-width: 800px; */
@@ -202,6 +203,48 @@ body {
 .qp-marks-group {
     display: flex;
     gap: 1rem;
+}
+
+/* --- NEW: Session Preloader Styles --- */
+#qp-preloader {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: #f0f2f5; /* Match the body background */
+    z-index: 9999;
+    transition: opacity 0.5s ease;
+}
+
+.qp-spinner {
+    border: 5px solid #f3f3f3; /* Light grey */
+    border-top: 5px solid var(--qp-primary-color); /* Blue */
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Initially hide the practice content */
+.qp-practice-wrapper {
+    visibility: hidden;
+    opacity: 0;
+    transition: opacity 0.5s ease;
+}
+
+/* State when content is loaded */
+.qp-practice-wrapper.loaded {
+    visibility: visible;
+    opacity: 1;
 }
 
 /* --- Final, Polished Multi-Select Dropdown Styles --- */
