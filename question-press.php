@@ -3,7 +3,7 @@
 /**
  * Plugin Name:       Question Press
  * Description:       A complete plugin for creating, managing, and practicing questions.
- * Version:           3.3.2
+ * Version:           3.3.3
  * Author:            Himanshu
  */
 
@@ -4047,47 +4047,32 @@ function qp_get_progress_data_ajax()
         <div class="qp-source-children-container" style="padding-left: 20px;">
             <?php
             // This recursive function does not need to be changed.
-            function qp_render_progress_tree_recursive($terms, $subject_term_id)
-{
-    foreach ($terms as $term) {
-        $percentage = $term->total > 0 ? round(($term->completed / $term->total) * 100) : 0;
-        $has_children = !empty($term->children);
-        $level_class = $has_children ? 'topic-level qp-topic-toggle' : 'section-level';
+             function qp_render_progress_tree_recursive($terms)
+            {
+                foreach ($terms as $term) {
+                    $percentage = $term->total > 0 ? round(($term->completed / $term->total) * 100) : 0;
+                    $has_children = !empty($term->children);
+                    $level_class = $has_children ? 'topic-level qp-topic-toggle' : 'section-level';
 
-        // Add the parent term's ID as a data attribute for context
-        echo '<div class="qp-progress-item ' . $level_class . '" data-term-id="' . esc_attr($term->term_id) . '" data-parent-id="' . esc_attr($term->parent) . '">';
-        echo '<div class="qp-progress-bar-bg" style="width: ' . esc_attr($percentage) . '%;"></div>';
-        echo '<div class="qp-progress-label">';
-        if ($has_children) {
-            echo '<span class="dashicons dashicons-arrow-right-alt2"></span>';
-        }
-        echo '<span>' . esc_html($term->name) . ' <span class="qp-progress-percentage">' . esc_html($percentage) . '% (' . $term->completed . '/' . $term->total . ')</span></span>';
-        
-        // --- THIS IS THE FIX ---
-        // If the term has no children and has questions, show the start button
-        if (!$has_children && $term->total > 0) {
-            echo '<button class="qp-button qp-button-primary qp-start-section-practice-btn" 
-                data-subject-id="' . esc_attr($subject_term_id) . '" 
-                data-section-id="' . esc_attr($term->term_id) . '">
-                Start Practice
-            </button>';
-        }
-        // --- END FIX ---
-        
-        echo '</div>'; // End qp-progress-label
-        echo '</div>'; // End qp-progress-item
+                    echo '<div class="qp-progress-item ' . $level_class . '" data-topic-id="' . esc_attr($term->term_id) . '">';
+                    echo '<div class="qp-progress-bar-bg" style="width: ' . esc_attr($percentage) . '%;"></div>';
+                    echo '<div class="qp-progress-label">';
+                    if ($has_children) {
+                        echo '<span class="dashicons dashicons-arrow-right-alt2"></span>';
+                    }
+                    echo esc_html($term->name) . ' <span class="qp-progress-percentage">' . esc_html($percentage) . '% (' . $term->completed . '/' . $term->total . ')</span></div>';
+                    echo '</div>';
 
-        if ($has_children) {
-            echo '<div class="qp-topic-sections-container" data-parent-topic="' . esc_attr($term->term_id) . '" style="display: none; padding-left: 20px;">';
-            // Pass the subject ID down in the recursive call
-            qp_render_progress_tree_recursive($term->children, $subject_term_id);
-            echo '</div>';
-        }
-    }
-}
-if ($source_term_object && !empty($source_term_object->children)) {
-    qp_render_progress_tree_recursive($source_term_object->children, $subject_term_id);
-}
+                    if ($has_children) {
+                        echo '<div class="qp-topic-sections-container" data-parent-topic="' . esc_attr($term->term_id) . '" style="display: none; padding-left: 20px;">';
+                        qp_render_progress_tree_recursive($term->children);
+                        echo '</div>';
+                    }
+                }
+            }
+            if ($source_term_object && !empty($source_term_object->children)) {
+                qp_render_progress_tree_recursive($source_term_object->children);
+            }
             ?>
         </div>
     </div>
