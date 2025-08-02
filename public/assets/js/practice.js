@@ -178,7 +178,7 @@ jQuery(document).ready(function ($) {
             title: "Time's Up!",
             text: "Your test will be submitted automatically.",
             icon: "warning",
-            timer: 10000,
+            timer: 5000,
             timerProgressBar: true,
             allowOutsideClick: false,
             allowEscapeKey: false,
@@ -227,14 +227,20 @@ jQuery(document).ready(function ($) {
           updateLegendCounts();
         } else {
           // If the server returns an error, alert the user
-          alert(
-            "Could not save your progress. Please check your connection and try again."
-          );
+          Swal.fire({
+            title: 'Error!',
+            text: 'Could not save your progress. Please check your connection and try again.',
+            icon: 'error'
+          });
         }
       },
       error: function () {
         // If the AJAX call itself fails, alert the user
-        alert("A network error occurred. Could not save progress.");
+        Swal.fire({
+            title: 'Network Error',
+            text: 'Could not save your progress. Please check your connection.',
+            icon: 'error'
+        });
       },
       complete: function () {
         // Re-enable the button regardless of success or failure
@@ -1011,7 +1017,11 @@ jQuery(document).ready(function ($) {
         }
       },
       error: function () {
-        alert("A server error occurred. Please try again later.");
+        Swal.fire({
+            title: 'Error!',
+            text: 'A server error occurred. Please try again later.',
+            icon: 'error'
+        });
         submitButton.val(originalButtonText).prop("disabled", false);
       },
     });
@@ -2289,7 +2299,11 @@ jQuery(document).ready(function ($) {
         }
       },
       error: function () {
-        alert("An error occurred while submitting the session.");
+        Swal.fire({
+            title: 'Submission Error!',
+            text: 'An error occurred while submitting the session. Please check your connection.',
+            icon: 'error'
+        });
       },
     });
   }

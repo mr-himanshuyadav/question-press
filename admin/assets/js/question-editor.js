@@ -291,7 +291,11 @@ function updateSources() {
             blockToRemove.remove();
             reindexQuestionBlocks();
         } else {
-            alert('You must have at least one question.');
+            Swal.fire({
+                title: 'Action Not Allowed',
+                text: 'You must have at least one question in a group.',
+                icon: 'warning'
+            });
         }
     });
 
