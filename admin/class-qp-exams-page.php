@@ -76,7 +76,8 @@ class QP_Exams_Page {
             ));
             
             if ($usage_count > 0) {
-                QP_Sources_Page::set_message("This exam cannot be deleted because it is in use by {$usage_count} question(s).", 'error');
+                $formatted_count = "<strong><span style='color:red;'>{$usage_count} question(s).</span></strong>";
+                QP_Sources_Page::set_message("This exam cannot be deleted because it is in use by {$formatted_count}", 'error');
             } else {
                 // Delete the term and its relationships (like linked subjects)
                 $wpdb->delete($term_table, ['term_id' => $term_id]);
@@ -139,7 +140,8 @@ class QP_Exams_Page {
         }
 
         if (isset($_SESSION['qp_admin_message'])) {
-            echo '<div id="message" class="notice notice-' . esc_attr($_SESSION['qp_admin_message_type']) . ' is-dismissible"><p>' . esc_html($_SESSION['qp_admin_message']) . '</p></div>';
+            $message = html_entity_decode($_SESSION['qp_admin_message']);
+            echo '<div id="message" class="notice notice-' . esc_attr($_SESSION['qp_admin_message_type']) . ' is-dismissible"><p>' . $message . '</p></div>';
             unset($_SESSION['qp_admin_message'], $_SESSION['qp_admin_message_type']);
         }
     ?>

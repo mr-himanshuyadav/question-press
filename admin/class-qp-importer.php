@@ -119,8 +119,27 @@ class QP_Importer {
             // --- Term Handling ---
             $subject_term_id = qp_get_or_create_term($group['subject'] ?? 'Uncategorized', $tax_ids['subject']);
             $exam_term_id = !empty($group['examName']) ? qp_get_or_create_term($group['examName'], $tax_ids['exam']) : null;
-            $source_term_id = !empty($group['sourceName']) ? qp_get_or_create_term($group['sourceName'], $tax_ids['source']) : null;
-            $section_term_id = ($source_term_id && !empty($group['sectionName'])) ? qp_get_or_create_term($group['sectionName'], $tax_ids['source'], $source_term_id) : null;
+
+            // Process the hierarchical source array
+            $source_hierarchy_ids = [];
+            $parent_id = 0;
+            if (isset($group['source']) && is_array($group['source'])) {
+                foreach ($group['source'] as $source_name) {
+                    $parent_id = qp_get_or_create_term($source_name, $tax_ids['source'], $parent_id);
+                    $source_hierarchy_ids[] = $parent_id;
+                }
+            }
+            $most_specific_source_id = end($source_hierarchy_ids) ?: null;
+            $top_level_source_id = $source_hierarchy_ids[0] ?? null; // Get the first ID, which is the parent source
+
+            // --- NEW: Automatically link the Source to the Subject ---
+            if ($subject_term_id && $top_level_source_id) {
+                $wpdb->insert($rel_table, [
+                    'object_id'   => $top_level_source_id,
+                    'term_id'     => $subject_term_id,
+                    'object_type' => 'source_subject_link'
+                ]);
+            }
             
             // --- Image Handling ---
             $direction_image_id = null;
@@ -149,6 +168,15 @@ class QP_Importer {
             }
             if ($exam_term_id && $group['isPYQ']) {
                 $wpdb->insert($rel_table, ['object_id' => $group_id, 'term_id' => $exam_term_id, 'object_type' => 'group']);
+                
+                // --- NEW: Automatically link the Exam to the Subject ---
+                if ($subject_term_id) {
+                    $wpdb->insert($rel_table, [
+                        'object_id'   => $exam_term_id, 
+                        'term_id'     => $subject_term_id, 
+                        'object_type' => 'exam_subject_link'
+                    ]);
+                }
             }
 
             foreach ($group['questions'] as $question) {
@@ -164,8 +192,6 @@ class QP_Importer {
                     'custom_question_id' => $next_custom_id,
                     'group_id' => $group_id,
                     'topic_id' => 0, // Legacy
-                    'source_id' => $source_term_id, // Store term_id here
-                    'section_id' => $section_term_id, // Store term_id here
                     'question_number_in_section' => $question['questionNumber'] ?? null,
                     'question_text' => $question_text,
                     'question_text_hash' => $hash,
@@ -179,10 +205,9 @@ class QP_Importer {
                 if ($topic_term_id) {
                     $wpdb->insert($rel_table, ['object_id' => $question_id, 'term_id' => $topic_term_id, 'object_type' => 'question']);
                 }
-                if ($section_term_id) { // Link question to the most specific source term (the section)
-                    $wpdb->insert($rel_table, ['object_id' => $question_id, 'term_id' => $section_term_id, 'object_type' => 'question']);
-                } elseif ($source_term_id) { // Fallback to parent source if no section
-                    $wpdb->insert($rel_table, ['object_id' => $question_id, 'term_id' => $source_term_id, 'object_type' => 'question']);
+                // Link question only to the most specific source term in the hierarchy
+                if ($most_specific_source_id) {
+                    $wpdb->insert($rel_table, ['object_id' => $question_id, 'term_id' => $most_specific_source_id, 'object_type' => 'question']);
                 }
 
                 // --- Add Options and Set Status ---

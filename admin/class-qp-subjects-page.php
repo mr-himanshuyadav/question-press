@@ -91,20 +91,61 @@ class QP_Subjects_Page {
             $term_id = absint($_GET['term_id']);
             $error_messages = [];
 
+            // NEW Check 1: Prevent deletion if it's linked to any sources
+    $linked_source_ids = $wpdb->get_col($wpdb->prepare("SELECT object_id FROM $rel_table WHERE term_id = %d AND object_type = 'source_subject_link'", $term_id));
+    if (!empty($linked_source_ids)) {
+    $source_count = count($linked_source_ids);
+    $ids_placeholder = implode(',', $linked_source_ids);
+    $source_names = $wpdb->get_col("SELECT name FROM $term_table WHERE term_id IN ($ids_placeholder)");
+    $formatted_count = "<strong><span style='color:red;'>{$source_count} source(s)</span></strong>";
+    // Wrap each name in a <strong> tag
+    $formatted_names = implode(', ', array_map(function($name) { return '<strong>' . esc_html($name) . '</strong>'; }, $source_names));
+    $error_messages[] = "{$formatted_count} are linked to it. Linked Source(s): " . $formatted_names . ".";
+}
+
+    // NEW Check 2: Prevent deletion if it's linked to any exams
+    $linked_exam_ids = $wpdb->get_col($wpdb->prepare("SELECT object_id FROM $rel_table WHERE term_id = %d AND object_type = 'exam_subject_link'", $term_id));
+if (!empty($linked_exam_ids)) {
+    $exam_count = count($linked_exam_ids);
+    $ids_placeholder = implode(',', $linked_exam_ids);
+    $exam_names = $wpdb->get_col("SELECT name FROM $term_table WHERE term_id IN ($ids_placeholder)");
+    $formatted_count = "<strong><span style='color:red;'>{$exam_count} exam(s)</span></strong>";
+    // Wrap each name in a <strong> tag
+    $formatted_names = implode(', ', array_map(function($name) { return '<strong>' . esc_html($name) . '</strong>'; }, $exam_names));
+    $error_messages[] = "{$formatted_count} are linked to it. Linked exam(s): " . $formatted_names . ".";
+}
+
             // Check 1: Prevent deletion if it has child terms (sections/sub-sections)
             $child_count = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $term_table WHERE parent = %d", $term_id));
             if ($child_count > 0) {
-                $error_messages[] = "it has {$child_count} sub-section(s) associated with it";
+                $formatted_count = "<strong><span style='color:red;'>{$child_count} topic(s)</span></strong>";
+                $error_messages[] = "{$formatted_count} are associated with it.";
             }
 
-            // Check 2: Prevent deletion if it's directly linked to questions
-            $usage_count = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $rel_table WHERE term_id = %d AND object_type = 'question'", $term_id));
-            if ($usage_count > 0) {
-                $error_messages[] = "it is linked to {$usage_count} question(s)";
+                        // Check 2: Prevent deletion if it or any of its children are linked to questions
+            $descendant_ids = [$term_id];
+            $current_parent_ids = [$term_id];
+            for ($i = 0; $i < 5; $i++) { // Safety break after 5 levels
+                if (empty($current_parent_ids)) break;
+                $ids_placeholder = implode(',', $current_parent_ids);
+                $child_ids = $wpdb->get_col("SELECT term_id FROM $term_table WHERE parent IN ($ids_placeholder)");
+                if (!empty($child_ids)) {
+                    $descendant_ids = array_merge($descendant_ids, $child_ids);
+                    $current_parent_ids = $child_ids;
+                } else {
+                    break;
+                }
             }
-            
+            $descendant_ids_placeholder = implode(',', array_unique($descendant_ids));
+            $usage_count = $wpdb->get_var("SELECT COUNT(DISTINCT object_id) FROM $rel_table WHERE object_type = 'question' AND term_id IN ($descendant_ids_placeholder)");
+
+            if ($usage_count > 0) {
+                $formatted_count = "<strong><span style='color:red;'>{$usage_count} question(s)</span></strong>";
+                $error_messages[] = "{$formatted_count} are linked to it (or its topics).";
+            }
+
             if (!empty($error_messages)) {
-                $message = "Cannot delete this item because " . implode(', and ', $error_messages) . ".";
+                $message = "This item cannot be deleted for the following reasons:<br>" . implode('<br>', $error_messages);
                 self::set_message($message, 'error');
             } else {
                 $wpdb->delete($term_table, ['term_id' => $term_id]);
@@ -141,7 +182,8 @@ class QP_Subjects_Page {
         $list_table->prepare_items();
         
         if (isset($_SESSION['qp_admin_message'])) {
-            echo '<div id="message" class="notice notice-' . esc_attr($_SESSION['qp_admin_message_type']) . ' is-dismissible"><p>' . esc_html($_SESSION['qp_admin_message']) . '</p></div>';
+            $message = html_entity_decode($_SESSION['qp_admin_message']);
+            echo '<div id="message" class="notice notice-' . esc_attr($_SESSION['qp_admin_message_type']) . ' is-dismissible"><p>' . $message . '</p></div>';
             unset($_SESSION['qp_admin_message'], $_SESSION['qp_admin_message_type']);
         }
         ?>

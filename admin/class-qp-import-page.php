@@ -15,12 +15,13 @@ class QP_Import_Page
         }
     }
 
-    private static function render_upload_form() {
+    private static function render_upload_form()
+    {
         global $wpdb;
         $term_table = $wpdb->prefix . 'qp_terms';
         $tax_table = $wpdb->prefix . 'qp_taxonomies';
         $label_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'label'");
-        
+
         $all_labels = [];
         if ($label_tax_id) {
             $all_labels = $wpdb->get_results($wpdb->prepare(
@@ -28,7 +29,7 @@ class QP_Import_Page
                 $label_tax_id
             ));
         }
-        ?>
+?>
         <div class="wrap">
             <h1 class="wp-heading-inline">Import Questions</h1>
             <hr class="wp-header-end">
@@ -51,11 +52,12 @@ class QP_Import_Page
                                     <td>
                                         <div class="labels-group" style="padding: 10px; border: 1px solid #ddd; background: #fff; max-height: 150px; overflow-y: auto;">
                                             <?php if (!empty($all_labels)) : foreach ($all_labels as $label) : ?>
-                                                <label class="inline-checkbox" style="display: block; margin-bottom: 5px;">
-                                                    <input type="checkbox" name="labels_to_apply[]" value="<?php echo esc_attr($label->term_id); ?>">
-                                                    <?php echo esc_html($label->name); ?>
-                                                </label>
-                                            <?php endforeach; else : ?>
+                                                    <label class="inline-checkbox" style="display: block; margin-bottom: 5px;">
+                                                        <input type="checkbox" name="labels_to_apply[]" value="<?php echo esc_attr($label->term_id); ?>">
+                                                        <?php echo esc_html($label->name); ?>
+                                                    </label>
+                                                <?php endforeach;
+                                            else : ?>
                                                 <p>No labels found. You can create them on the Labels page.</p>
                                             <?php endif; ?>
                                         </div>
@@ -81,46 +83,89 @@ class QP_Import_Page
 
             <div style="margin-top: 2rem;">
                 <details>
-                    <summary style="font-size: 1.2em; cursor: pointer; font-weight: bold;">View Required JSON Schema (v2.2)</summary>
+                    <summary style="font-size: 1.2em; cursor: pointer; font-weight: bold;">View Required JSON Schema (v3.1)</summary>
                     <div style="background: #fff; border: 1px solid #ddd; padding: 1rem; margin-top: 1rem;">
-                        <p>Your <code>questions.json</code> file must follow this structure. All PYQ-related fields are now at the group level.</p>
+                        <p>Your <code>questions.json</code> file must follow this structure. Note the new hierarchical format for sources.</p>
                         <pre style="background: #fdf6e3; color: #657b83; padding: 1rem; border-radius: 4px; white-space: pre-wrap; word-wrap: break-word;"><?php
-                            echo esc_html('{
-    "schemaVersion": "2.2",
-    "exportTimestamp": "2025-07-10T21:05:00Z",
+                                                                                                                                                            echo esc_html('{
+    "schemaVersion": "3.1",
+    "exportTimestamp": "2025-08-02T10:15:00Z",
     "questionGroups": [
         {
-            "groupId": "unique-id-for-group",
+            "groupId": "unique-group-id-1",
             "subject": "Physics",
-            "sourceName": "University Physics Vol. 3",
-            "sectionName": "Chapter 5: Interference",
+            "source": [
+                "University Physics Vol. 3",
+                "Chapter 5: Interference"
+            ],
             "isPYQ": true,
             "examName": "NEET",
             "pyqYear": "2022",
-            "Direction": { 
+            "Direction": {
                 "text": "The following questions relate to wave optics.",
                 "image": "optional_image_filename.png"
             },
             "questions": [
                 {
-                    "questionId": "unique-id-for-question-1",
+                    "questionId": "unique-question-id-1",
                     "topicName": "Wave Optics",
                     "questionText": "What is constructive interference?",
-                    "questionNumber": "5.1",
+                    "questionNumber": "5",
                     "options": [
-                        { "optionText": "When two waves cancel each other out.", "isCorrect": false },
-                        { "optionText": "When two waves add up to make a larger wave.", "isCorrect": true }
+                        { "optionText": "...", "isCorrect": true },
+                        { "optionText": "...", "isCorrect": false },
+                        { "optionText": "...", "isCorrect": false },
+                        { "optionText": "...", "isCorrect": false }
+                    ]
+                }
+            ]
+        },
+        {
+            "groupId": "unique-group-id-1",
+            "subject": "Physics",
+            "source": [
+                "University Physics Vol. 3",
+                "Chapter 5: Interference"
+            ],
+            "isPYQ": false,
+            "Direction": {
+                "text": null,
+                "image": null
+            },
+            "questions": [
+                {
+                    "questionId": "unique-question-id-1",
+                    "topicName": "Wave Optics",
+                    "questionText": "What is interference?",
+                    "questionNumber": "6",
+                    "options": [
+                        { "optionText": "...", "isCorrect": true },
+                        { "optionText": "...", "isCorrect": false },
+                        { "optionText": "...", "isCorrect": false },
+                        { "optionText": "...", "isCorrect": false }
+                    ]
+                },
+                {
+                    "questionId": "unique-question-id-1",
+                    "topicName": "Wave Optics",
+                    "questionText": "What is destructive interference?",
+                    "questionNumber": "7",
+                    "options": [
+                        { "optionText": "...", "isCorrect": false },
+                        { "optionText": "...", "isCorrect": true },
+                        { "optionText": "...", "isCorrect": false },
+                        { "optionText": "...", "isCorrect": false }
                     ]
                 }
             ]
         }
     ]
 }');
-                        ?></pre>
+                                                                                                                                                            ?></pre>
                     </div>
                 </details>
             </div>
         </div>
-        <?php
+<?php
     }
 }

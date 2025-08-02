@@ -91,6 +91,7 @@ class QP_Export_Page
                 WHERE rel_exam.object_type = 'group'
             ) AS exam ON g.group_id = exam.object_id
             WHERE rel.term_id IN ($ids_placeholder)
+            GROUP BY g.group_id
         ");
 
         if (empty($groups_data)) {
@@ -98,7 +99,6 @@ class QP_Export_Page
         }
 
         $final_question_groups = [];
-        // Pre-fetch all options for all questions for efficiency
         $all_options_raw = $wpdb->get_results("SELECT * FROM $o_table");
         $options_by_question = [];
         foreach ($all_options_raw as $opt) {
@@ -107,16 +107,16 @@ class QP_Export_Page
 
         foreach ($groups_data as $group) {
             $questions_in_group = $wpdb->get_results($wpdb->prepare("SELECT * FROM $q_table WHERE group_id = %d", $group->group_id));
-
             if (empty($questions_in_group)) continue;
 
+            // Use the first question to determine the source for the whole group.
+            $source_hierarchy_names = qp_get_source_hierarchy_for_question($questions_in_group[0]->question_id);
             $direction_image_name = $group->direction_image_id ? basename(get_attached_file($group->direction_image_id)) : null;
 
             $group_output = [
                 'groupId'       => 'db_group_' . $group->group_id,
                 'subject'       => $group->subject_name,
-                'sourceName'    => null,
-                'sectionName'   => null,
+                'source'        => $source_hierarchy_names, // Use the hierarchical array
                 'isPYQ'         => (bool)$group->is_pyq,
                 'examName'      => $group->exam_name,
                 'pyqYear'       => $group->pyq_year,
@@ -124,20 +124,9 @@ class QP_Export_Page
                 'questions'     => []
             ];
 
-            $first_question_processed = false;
-
             foreach ($questions_in_group as $question) {
-                // Get Topic
+                // Get Topic Name for the specific question
                 $topic_name = $wpdb->get_var($wpdb->prepare("SELECT t.name FROM $term_table t JOIN $rel_table r ON t.term_id = r.term_id WHERE r.object_id = %d AND r.object_type = 'question' AND t.parent != 0", $question->question_id));
-                
-                // Get Source & Section
-                $source_section_names = qp_get_source_hierarchy_for_question($question->question_id);
-
-                if (!$first_question_processed) {
-                    $group_output['sourceName'] = $source_section_names['source'];
-                    $group_output['sectionName'] = $source_section_names['section'];
-                    $first_question_processed = true;
-                }
                 
                 $options_array = [];
                 if (isset($options_by_question[$question->question_id])) {
@@ -148,7 +137,7 @@ class QP_Export_Page
 
                 $group_output['questions'][] = [
                     'questionId'        => 'db_question_' . $question->question_id,
-                    'topicName'         => $topic_name,
+                    'topicName'         => $topic_name, // Add topicName at the question level
                     'questionText'      => $question->question_text,
                     'questionNumber'    => $question->question_number_in_section,
                     'options'           => $options_array,
@@ -160,7 +149,7 @@ class QP_Export_Page
         $filename = 'qp-export-' . date('Y-m-d') . '.zip';
         $json_filename = 'questions.json';
         $final_json = [
-            'schemaVersion' => '2.2',
+            'schemaVersion' => '3.1', // Update the schema version
             'exportTimestamp' => date('c'),
             'sourceFile' => 'database_export',
             'questionGroups' => $final_question_groups

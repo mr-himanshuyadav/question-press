@@ -96,7 +96,8 @@ class QP_Labels_Page
             } else {
                 $usage_count = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $rel_table WHERE term_id = %d AND object_type = 'question'", $term_id));
                 if ($usage_count > 0) {
-                    QP_Sources_Page::set_message("This label cannot be deleted because it is in use by {$usage_count} question(s).", 'error');
+                    $formatted_count = "<strong><span style='color:red;'>{$usage_count} question(s).</span></strong>";
+                    QP_Sources_Page::set_message("This label cannot be deleted because it is in use by {$formatted_count}", 'error');
                 } else {
                     $wpdb->delete($term_table, ['term_id' => $term_id]);
                     $wpdb->delete($meta_table, ['term_id' => $term_id]);
@@ -150,7 +151,8 @@ class QP_Labels_Page
         $labels = $wpdb->get_results($labels_query);
 
         if (isset($_SESSION['qp_admin_message'])) {
-            echo '<div id="message" class="notice notice-' . esc_attr($_SESSION['qp_admin_message_type']) . ' is-dismissible"><p>' . esc_html($_SESSION['qp_admin_message']) . '</p></div>';
+            $message = html_entity_decode($_SESSION['qp_admin_message']);
+            echo '<div id="message" class="notice notice-' . esc_attr($_SESSION['qp_admin_message_type']) . ' is-dismissible"><p>' . $message . '</p></div>';
             unset($_SESSION['qp_admin_message'], $_SESSION['qp_admin_message_type']);
         }
 ?>
