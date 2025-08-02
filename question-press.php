@@ -1029,7 +1029,13 @@ function qp_all_questions_page_cb()
     <div class="wrap">
         <h1 class="wp-heading-inline">All Questions</h1>
         <a href="<?php echo admin_url('admin.php?page=qp-question-editor'); ?>" class="page-title-action">Add New</a>
-        <?php if (isset($_GET['message'])) {
+        <?php 
+        if (isset($_SESSION['qp_admin_message'])) {
+            $message = html_entity_decode($_SESSION['qp_admin_message']);
+            echo '<div id="message" class="notice notice-' . esc_attr($_SESSION['qp_admin_message_type']) . ' is-dismissible"><p>' . $message . '</p></div>';
+            unset($_SESSION['qp_admin_message'], $_SESSION['qp_admin_message_type']);
+        }
+        if (isset($_GET['message'])) {
             $messages = ['1' => 'Question(s) updated successfully.', '2' => 'Question(s) saved successfully.'];
             $message_id = absint($_GET['message']);
             if (isset($messages[$message_id])) {
