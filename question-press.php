@@ -4661,8 +4661,8 @@ function qp_finalize_and_end_session($session_id, $new_status = 'completed', $en
     if ($total_answered_attempts === 0) {
         $wpdb->delete($sessions_table, ['session_id' => $session_id]);
         $wpdb->delete($attempts_table, ['session_id' => $session_id]); // Also clear any skipped/expired attempts
-        return null; // Indicate that the session was empty
-    $correct_option_id = isset($data['correct_option_id']) ? absint($data['correct_option_id']) : 0;
+        return null; // Indicate that the session was empty and deleted
+    }
 
     // If we are here, it means there were attempts, so we proceed to finalize.
     $settings = json_decode($session->settings_snapshot, true);
@@ -4697,7 +4697,6 @@ function qp_finalize_and_end_session($session_id, $new_status = 'completed', $en
                 'mock_status' => 'not_viewed'
             ]);
         }
-        // Attention! Mock Test specific status not retained after mock test ends.
         $wpdb->query($wpdb->prepare("UPDATE {$attempts_table} SET status = 'skipped' WHERE session_id = %d AND mock_status IN ('viewed', 'marked_for_review')", $session_id));
     }
 
@@ -4751,7 +4750,7 @@ function qp_finalize_and_end_session($session_id, $new_status = 'completed', $en
         'not_viewed_count' => $not_viewed_count,
         'settings' => $settings,
     ];
-}}
+}
 
 /**
  * AJAX handler to delete an empty/unterminated session record.
