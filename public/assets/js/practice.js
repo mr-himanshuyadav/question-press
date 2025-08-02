@@ -193,7 +193,7 @@ jQuery(document).ready(function ($) {
             answeredStates[questionID] = {};
           }
           answeredStates[questionID].mock_status = newStatus;
-          renderPalette();
+          updatePaletteButton(questionID, newStatus);
           scrollPaletteToCurrent();
           updateLegendCounts();
         } else {
@@ -267,7 +267,10 @@ jQuery(document).ready(function ($) {
       }
       paletteGrids.append(paletteBtn);
     }
+    scrollPaletteToCurrent();
   }
+
+
 
   // Find and REPLACE the updateLegendCounts function
   function updateLegendCounts() {
@@ -891,7 +894,7 @@ jQuery(document).ready(function ($) {
                 .prop("disabled", true);
               $("#qp-next-btn").prop("disabled", false);
 
-              renderPalette();
+              updatePaletteButton(questionID, 'reported');
               scrollPaletteToCurrent();
               updateLegendCounts();
               loadNextQuestion();
@@ -1249,7 +1252,6 @@ jQuery(document).ready(function ($) {
     } else {
       loadQuestion(sessionQuestionIDs[currentQuestionIndex]);
       renderPalette();
-      scrollPaletteToCurrent();
     }
 
     updateLegendCounts();
@@ -1805,6 +1807,7 @@ jQuery(document).ready(function ($) {
       return;
     }
 
+    var oldIndex = currentQuestionIndex;
     // If we are not on the last question, it's safe to increment the index and load the next question.
     currentQuestionIndex++;
     if (isMockTest || isRevisionMode) {
@@ -1813,7 +1816,7 @@ jQuery(document).ready(function ($) {
       );
     }
     loadQuestion(sessionQuestionIDs[currentQuestionIndex], "next");
-    renderPalette();
+    updateCurrentPaletteButton(currentQuestionIndex, oldIndex);
     scrollPaletteToCurrent();
   }
 
@@ -2048,7 +2051,9 @@ jQuery(document).ready(function ($) {
 
     // Update UI
     updateHeaderStats();
-    renderPalette();
+    var questionID = sessionQuestionIDs[currentQuestionIndex];
+    var newStatus = answeredStates[questionID].is_correct ? 'correct' : 'incorrect';
+    updatePaletteButton(questionID, newStatus);
     scrollPaletteToCurrent();
     $("#qp-next-btn").prop("disabled", false);
 
@@ -2121,6 +2126,7 @@ jQuery(document).ready(function ($) {
       loadNextQuestion();
     } else {
       if (currentQuestionIndex > 0) {
+        var oldIndex = currentQuestionIndex;
         currentQuestionIndex--;
         if (isMockTest || isRevisionMode) {
           $("#qp-question-counter").text(
@@ -2170,7 +2176,8 @@ jQuery(document).ready(function ($) {
       answeredStates[questionID].remainingTime = remainingTime;
 
       updateHeaderStats();
-      renderPalette();
+      var questionID = sessionQuestionIDs[currentQuestionIndex];
+      updatePaletteButton(questionID, 'skipped');
       scrollPaletteToCurrent();
       loadNextQuestion();
       updateLegendCounts();
@@ -2729,6 +2736,7 @@ jQuery(document).ready(function ($) {
     }
 
     var direction = newIndex > currentQuestionIndex ? "next" : "prev";
+    var oldIndex = currentQuestionIndex;
     currentQuestionIndex = newIndex;
 
     if (isMockTest || isRevisionMode) {
@@ -2738,7 +2746,7 @@ jQuery(document).ready(function ($) {
     }
 
     loadQuestion(sessionQuestionIDs[currentQuestionIndex], direction);
-    renderPalette(); // Re-render to update the 'current' highlight
+    updateCurrentPaletteButton(currentQuestionIndex, oldIndex);
     scrollPaletteToCurrent();
   });
 
@@ -2790,9 +2798,6 @@ jQuery(document).ready(function ($) {
     // This guarantees that the browser has finished all layout calculations
     // after the .current class moved, ensuring we measure the final positions.
     setTimeout(function() {
-      requestAnimationFrame(function () {
-        requestAnimationFrame(function () {
-          requestAnimationFrame(function () {
             requestAnimationFrame(function () {
               // Select only visible palette grids (handles docked vs. sliding views)
               var $paletteGrids = $(
@@ -2816,10 +2821,7 @@ jQuery(document).ready(function ($) {
                   // If it returns true, we do absolutely nothing, preventing the erratic jumps.
                 }
               });
-            });
-          });
-        });
       });
-    }, 2500);
+    }, 250);
   }
 });
