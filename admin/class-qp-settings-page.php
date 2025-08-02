@@ -13,7 +13,7 @@ class QP_Settings_Page
         <div class="wrap">
             <h1>Question Press Settings</h1>
             <?php
-            // Display settings errors and messages (including our migration report)
+            // Display settings errors and messages
             if (isset($_SESSION['qp_admin_message'])) {
                 $message = html_entity_decode($_SESSION['qp_admin_message']);
                 echo '<div id="message" class="notice notice-' . esc_attr($_SESSION['qp_admin_message_type']) . ' is-dismissible"><p>' . $message . '</p></div>';
@@ -58,10 +58,6 @@ class QP_Settings_Page
 
 
         add_settings_field('qp_can_delete_history_roles', 'Roles That Can Delete History', [self::class, 'render_can_delete_history_roles_multiselect'], 'qp-settings-page', 'qp_data_settings_section');
-
-        // --- CORRECTED: Data Migration Section ---
-        add_settings_section('qp_migration_settings_section', 'Data Tools', [self::class, 'render_migration_section_text'], 'qp-settings-page');
-        add_settings_field('qp_unified_migration', 'Database Migration', [self::class, 'render_unified_migration_button'], 'qp-settings-page', 'qp_migration_settings_section');
 
         // API Section
         add_settings_section('qp_api_settings_section', 'REST API Documentation', [self::class, 'render_api_section_text'], 'qp-settings-page');
@@ -343,34 +339,6 @@ class QP_Settings_Page
         }
 
         return $new_input;
-    }
-
-    /**
-     * Renders the descriptive text for the data migration section.
-     */
-    public static function render_migration_section_text()
-    {
-        echo '<p>Use these tools to update your database to the latest schema. It is recommended to back up your database before running.</p>';
-    }
-
-    /**
-     * Renders the button for the unified data migration tool.
-     */
-    public static function render_unified_migration_button()
-    {
-        $v3_migration_url = add_query_arg(
-            [
-                'action' => 'qp_v3_taxonomy_migration',
-                '_wpnonce' => wp_create_nonce('qp_v3_taxonomy_migration_nonce'),
-            ],
-            admin_url('admin.php?page=qp-settings')
-        );
-    ?>
-        <a href="<?php echo esc_url($v3_migration_url); ?>" class="button button-primary">Run Taxonomy Migration (New)</a>
-        <p class="description">
-            Click this to migrate your old Subjects, Topics, Labels, and Exams into the new unified taxonomy system. This is safe to run multiple times.
-        </p>
-<?php
     }
 
     public static function render_review_page_dropdown()
