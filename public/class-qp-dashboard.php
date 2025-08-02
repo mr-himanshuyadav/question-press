@@ -171,7 +171,7 @@ class QP_Dashboard
                             $term_table = $wpdb->prefix . 'qp_terms';
                             $tax_table = $wpdb->prefix . 'qp_taxonomies';
                             $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'subject'");
-                            
+
                             if ($subject_tax_id) {
                                 $subjects = $wpdb->get_results($wpdb->prepare(
                                     "SELECT term_id, name FROM {$term_table} WHERE taxonomy_id = %d AND name != 'Uncategorized' AND parent = 0 ORDER BY name ASC",
@@ -302,14 +302,19 @@ class QP_Dashboard
                 }
 
                 echo '<div class="qp-active-session-card">
-                <div class="qp-card-details">
-                    <span class="qp-card-subject">' . esc_html($mode) . '</span>
-                    <span class="qp-card-date">Started: ' . date_format(date_create($session->start_time), 'M j, Y, g:i a') . '</span>
-                </div>
-                <div class="qp-card-actions">
-                    <button class="qp-button qp-button-danger qp-terminate-session-btn" data-session-id="' . esc_attr($session->session_id) . '">Terminate</button>
-                    <a href="' . esc_url(add_query_arg('session_id', $session->session_id, $session_page_url)) . '" class="qp-button qp-button-secondary">Continue</a>
-                </div>
+<div class="qp-card-details">
+    <span class="qp-card-subject">' . esc_html($mode) . '</span>
+    <span class="qp-card-date">Started: ' . date_format(date_create($session->start_time), 'M j, Y, g:i a') . '</span>
+</div>
+<div class="qp-card-actions">';
+                // --- THIS IS THE FIX ---
+                // Only show the Terminate button if it's NOT a Section Wise Practice session
+                if ($mode !== 'Section Practice') {
+                    echo '<button class="qp-button qp-button-danger qp-terminate-session-btn" data-session-id="' . esc_attr($session->session_id) . '">Terminate</button>';
+                }
+                // --- END FIX ---
+                echo '<a href="' . esc_url(add_query_arg('session_id', $session->session_id, $session_page_url)) . '" class="qp-button qp-button-secondary">Continue</a>
+</div>
               </div>';
             }
             echo '</div>';
@@ -354,23 +359,23 @@ class QP_Dashboard
                 }
 
                 $subjects_display = 'N/A';
-            if (is_array($session_qids) && !empty($session_qids)) {
-                if ($mode === 'Section Practice') {
-                    // For section practice, get the full source hierarchy.
-                    $first_question_id = $session_qids[0];
-                    $source_hierarchy = qp_get_source_hierarchy_for_question($first_question_id);
-                    $subjects_display = implode(' / ', $source_hierarchy);
-                } else {
-                    // For all other modes, get the unique parent subjects.
-                    $session_subjects = [];
-                    foreach ($session_qids as $qid) {
-                        if (isset($subjects_by_question[$qid])) {
-                            $session_subjects[] = $subjects_by_question[$qid];
+                if (is_array($session_qids) && !empty($session_qids)) {
+                    if ($mode === 'Section Practice') {
+                        // For section practice, get the full source hierarchy.
+                        $first_question_id = $session_qids[0];
+                        $source_hierarchy = qp_get_source_hierarchy_for_question($first_question_id);
+                        $subjects_display = implode(' / ', $source_hierarchy);
+                    } else {
+                        // For all other modes, get the unique parent subjects.
+                        $session_subjects = [];
+                        foreach ($session_qids as $qid) {
+                            if (isset($subjects_by_question[$qid])) {
+                                $session_subjects[] = $subjects_by_question[$qid];
+                            }
                         }
+                        $subjects_display = !empty($session_subjects) ? implode(', ', array_unique($session_subjects)) : 'N/A';
                     }
-                    $subjects_display = !empty($session_subjects) ? implode(', ', array_unique($session_subjects)) : 'N/A';
                 }
-            }
 
                 $accuracy = $accuracy_stats[$session->session_id] ?? 'N/A';
 

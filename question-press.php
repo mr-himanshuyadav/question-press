@@ -3,7 +3,7 @@
 /**
  * Plugin Name:       Question Press
  * Description:       A complete plugin for creating, managing, and practicing questions.
- * Version:           3.3.2
+ * Version:           3.3.3
  * Author:            Himanshu
  */
 
@@ -3087,6 +3087,7 @@ function qp_public_enqueue_scripts()
             'dashboard_page_url' => isset($options['dashboard_page']) ? get_permalink($options['dashboard_page']) : home_url('/'),
             'practice_page_url'  => isset($options['practice_page']) ? get_permalink($options['practice_page']) : home_url('/'),
             'review_page_url'    => isset($options['review_page']) ? get_permalink($options['review_page']) : home_url('/'),
+            'session_page_url'   => isset($options['session_page']) ? get_permalink($options['session_page']) : home_url('/'),
             'question_order_setting'   => isset($options['question_order']) ? $options['question_order'] : 'random',
             'can_delete_history' => $can_delete
         ];
@@ -3392,8 +3393,37 @@ function qp_start_practice_session_ajax()
 {
     check_ajax_referer('qp_practice_nonce', 'nonce');
 
-    $practice_mode = isset($_POST['practice_mode']) ? sanitize_key($_POST['practice_mode']) : 'normal';
     global $wpdb;
+    $user_id = get_current_user_id();
+    $sessions_table = $wpdb->prefix . 'qp_user_sessions';
+
+    // --- NEW: Duplicate Session Check ---
+    $is_section_practice = isset($_POST['qp_section']) && is_numeric($_POST['qp_section']);
+
+    if ($is_section_practice) {
+        $section_id = absint($_POST['qp_section']);
+
+        // Find any active or paused session for this user and this specific section
+        $existing_sessions = $wpdb->get_results($wpdb->prepare(
+            "SELECT session_id, settings_snapshot FROM {$sessions_table} WHERE user_id = %d AND status IN ('active', 'paused')",
+            $user_id
+        ));
+
+        foreach ($existing_sessions as $session) {
+            $settings = json_decode($session->settings_snapshot, true);
+            if (isset($settings['section_id']) && (int)$settings['section_id'] === $section_id) {
+                // A duplicate was found. Send back a specific error response.
+                wp_send_json_error([
+                    'code' => 'duplicate_session_exists',
+                    'message' => 'An active or paused session for this section already exists.',
+                    'session_id' => $session->session_id
+                ]);
+                return; // Stop execution
+            }
+        }
+    }
+
+    $practice_mode = isset($_POST['practice_mode']) ? sanitize_key($_POST['practice_mode']) : 'normal';
 
     // Get a list of all question IDs that have an open report.
     $reports_table = $wpdb->prefix . 'qp_question_reports';
@@ -4017,7 +4047,7 @@ function qp_get_progress_data_ajax()
         <div class="qp-source-children-container" style="padding-left: 20px;">
             <?php
             // This recursive function does not need to be changed.
-            function qp_render_progress_tree_recursive($terms)
+             function qp_render_progress_tree_recursive($terms)
             {
                 foreach ($terms as $term) {
                     $percentage = $term->total > 0 ? round(($term->completed / $term->total) * 100) : 0;
@@ -4661,19 +4691,7 @@ function qp_finalize_and_end_session($session_id, $new_status = 'completed', $en
     if ($total_answered_attempts === 0) {
         $wpdb->delete($sessions_table, ['session_id' => $session_id]);
         $wpdb->delete($attempts_table, ['session_id' => $session_id]); // Also clear any skipped/expired attempts
-        return null; // Indicate that the session was empty
-    $correct_option_id = isset($data['correct_option_id']) ? absint($data['correct_option_id']) : 0;
-    if ($correct_option_id) {
-        // Get the original correct option ID before making changes
-        $original_correct_option_id = $wpdb->get_var($wpdb->prepare("SELECT option_id FROM {$wpdb->prefix}qp_options WHERE question_id = %d AND is_correct = 1", $question_id));
-
-        $wpdb->update("{$wpdb->prefix}qp_options", ['is_correct' => 0], ['question_id' => $question_id]);
-        $wpdb->update("{$wpdb->prefix}qp_options", ['is_correct' => 1], ['option_id' => $correct_option_id, 'question_id' => $question_id]);
-
-        // If the correct answer has changed, trigger re-evaluation
-        if ($original_correct_option_id != $correct_option_id) {
-            qp_re_evaluate_question_attempts($question_id, $correct_option_id);
-        }
+        return null; // Indicate that the session was empty and deleted
     }
 
     // If we are here, it means there were attempts, so we proceed to finalize.
@@ -4709,7 +4727,6 @@ function qp_finalize_and_end_session($session_id, $new_status = 'completed', $en
                 'mock_status' => 'not_viewed'
             ]);
         }
-        // Attention! Mock Test specific status not retained after mock test ends.
         $wpdb->query($wpdb->prepare("UPDATE {$attempts_table} SET status = 'skipped' WHERE session_id = %d AND mock_status IN ('viewed', 'marked_for_review')", $session_id));
     }
 
@@ -4763,7 +4780,7 @@ function qp_finalize_and_end_session($session_id, $new_status = 'completed', $en
         'not_viewed_count' => $not_viewed_count,
         'settings' => $settings,
     ];
-}}
+}
 
 /**
  * AJAX handler to delete an empty/unterminated session record.
@@ -4914,16 +4931,28 @@ function qp_cleanup_abandoned_sessions()
     }
 
     // --- 2. Handle Abandoned 'active' sessions ---
-    $abandoned_session_ids = $wpdb->get_col($wpdb->prepare(
-        "SELECT session_id FROM {$sessions_table}
-         WHERE status IN ('active') AND last_activity < NOW() - INTERVAL %d MINUTE",
+    $abandoned_sessions = $wpdb->get_results($wpdb->prepare(
+        "SELECT session_id, settings_snapshot FROM {$sessions_table}
+         WHERE status = 'active' AND last_activity < NOW() - INTERVAL %d MINUTE",
         $timeout_minutes
     ));
 
-    if (!empty($abandoned_session_ids)) {
-        foreach ($abandoned_session_ids as $session_id) {
-            // Our updated function will delete if empty, or mark as abandoned if there are attempts.
-            qp_finalize_and_end_session($session_id, 'abandoned', 'abandoned_by_system');
+    if (!empty($abandoned_sessions)) {
+        foreach ($abandoned_sessions as $session) {
+            $settings = json_decode($session->settings_snapshot, true);
+            $is_section_practice = isset($settings['practice_mode']) && $settings['practice_mode'] === 'Section Wise Practice';
+
+            if ($is_section_practice) {
+                // For section practice, just pause the session instead of abandoning it.
+                $wpdb->update(
+                    $sessions_table,
+                    ['status' => 'paused'],
+                    ['session_id' => $session->session_id]
+                );
+            } else {
+                // For all other modes, use the standard abandon/delete logic.
+                qp_finalize_and_end_session($session->session_id, 'abandoned', 'abandoned_by_system');
+            }
         }
     }
 }
