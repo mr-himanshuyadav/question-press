@@ -410,8 +410,9 @@ protected function bulk_actions($which = '')
         $total_items = $wpdb->get_var($total_items_query);
 
         // Fetch the actual data for the current page
-        $data_query = "SELECT 
-    q.*, 
+        // Fetch the actual data for the current page
+$data_query = "SELECT
+    q.*,
     g.group_id, g.direction_text, g.direction_image_id, g.is_pyq, g.pyq_year,
     subject_term.name AS subject_name,
     topic_term.name AS topic_name,
@@ -674,19 +675,21 @@ LIMIT {$per_page} OFFSET {$offset}";
         $output = '';
 
         // Display Direction if it exists
-        if (!empty($item['direction_text'])) {
-            $direction_display = '<strong>Direction:</strong> ' . wp_trim_words(esc_html($item['direction_text']), 40, '...');
+if (!empty($item['direction_text'])) {
+    // Use wp_kses_post and nl2br to render HTML and respect line breaks
+    $direction_display = '<strong>Direction:</strong> ' . wp_kses_post(nl2br($item['direction_text']));
 
-            // Add an image indicator
-            if (!empty($item['direction_image_id'])) {
-                $direction_display .= ' <span style="background-color: #f0f0f1; color: #50575e; padding: 1px 5px; font-size: 10px; border-radius: 3px; font-weight: 600;">IMAGE</span>';
-            }
-            $output .= '<div style="padding-bottom: 8px;">' . $direction_display . '</div>';
-        }
+    // Add an image indicator
+    if (!empty($item['direction_image_id'])) {
+        $direction_display .= ' <span style="background-color: #f0f0f1; color: #50575e; padding: 1px 5px; font-size: 10px; border-radius: 3px; font-weight: 600;">IMAGE</span>';
+    }
+    $output .= '<div style="padding-bottom: 8px;">' . $direction_display . '</div>';
+}
 
-        // Remove any "Q#:" prefix before displaying the text
-        $clean_question_text = preg_replace('/^q\d+:\s*/i', '', $item['question_text']);
-        $output .= sprintf('<strong>%s</strong>', wp_trim_words(esc_html($clean_question_text), 50, '...'));
+// Remove any "Q#:" prefix before displaying the text
+$clean_question_text = preg_replace('/^q\d+:\s*/i', '', $item['question_text']);
+// Use wp_kses_post and nl2br here as well
+$output .= '<strong>' . wp_kses_post(nl2br($clean_question_text)) . '</strong>';
 
         // Display labels and the duplicate cross-reference
         if (!empty($item['labels'])) {
@@ -744,15 +747,17 @@ LIMIT {$per_page} OFFSET {$offset}";
         $row_text = '';
 
         // NEW: Display Direction and Image Indicator
-        if (!empty($item['direction_text'])) {
-            $direction_display = '<strong>Direction:</strong> ' . wp_trim_words(esc_html($item['direction_text']), 25, '...');
-            if (!empty($item['direction_image_id'])) {
-                $direction_display .= ' <span class="dashicons dashicons-format-image" title="Includes Image" style="color:#888; font-size: 16px; vertical-align: middle;"></span>';
-            }
-            $row_text .= '<div style="padding: 0px; background-color: #f6f7f7; margin-bottom: 8px; border-radius: 3px;">' . $direction_display . '</div>';
-        }
+if (!empty($item['direction_text'])) {
+    // Use wp_kses_post to allow HTML and nl2br for line breaks
+    $direction_display = '<strong>Direction:</strong> ' . wp_kses_post(nl2br($item['direction_text']));
+    if (!empty($item['direction_image_id'])) {
+        $direction_display .= ' <span class="dashicons dashicons-format-image" title="Includes Image" style="color:#888; font-size: 16px; vertical-align: middle;"></span>';
+    }
+    $row_text .= '<div style="padding: 0px; background-color: #f6f7f7; margin-bottom: 8px; border-radius: 3px;">' . $direction_display . '</div>';
+}
 
-        $row_text .= sprintf('<strong>%s</strong>', esc_html($item['question_text']));
+// Use wp_kses_post for the question text as well
+$row_text .= '<strong>' . wp_kses_post(nl2br($item['question_text'])) . '</strong>';
 
         // Display labels and the duplicate cross-reference
         if (!empty($item['labels'])) {

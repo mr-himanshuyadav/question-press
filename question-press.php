@@ -3,7 +3,7 @@
 /**
  * Plugin Name:       Question Press
  * Description:       A complete plugin for creating, managing, and practicing questions.
- * Version:           3.3.4
+ * Version:           3.3.5
  * Author:            Himanshu
  */
 
@@ -289,63 +289,63 @@ function qp_activate_plugin()
     ) $charset_collate;";
     dbDelta($sql_term_meta);
 
-        $default_taxonomies = [
+    $default_taxonomies = [
         ['taxonomy_name' => 'subject', 'taxonomy_label' => 'Subjects', 'hierarchical' => 1],
         ['taxonomy_name' => 'label', 'taxonomy_label' => 'Labels', 'hierarchical' => 0],
         ['taxonomy_name' => 'exam', 'taxonomy_label' => 'Exams', 'hierarchical' => 0],
         ['taxonomy_name' => 'source', 'taxonomy_label' => 'Sources', 'hierarchical' => 1],
         ['taxonomy_name' => 'report_reason', 'taxonomy_label' => 'Report Reasons', 'hierarchical' => 0],
-        ];
+    ];
 
-        foreach ($default_taxonomies as $tax) {
-            $exists = $wpdb->get_var($wpdb->prepare("SELECT taxonomy_id FROM $table_taxonomies WHERE taxonomy_name = %s", $tax['taxonomy_name']));
-            if (!$exists) {
-                $wpdb->insert($table_taxonomies, $tax);
+    foreach ($default_taxonomies as $tax) {
+        $exists = $wpdb->get_var($wpdb->prepare("SELECT taxonomy_id FROM $table_taxonomies WHERE taxonomy_name = %s", $tax['taxonomy_name']));
+        if (!$exists) {
+            $wpdb->insert($table_taxonomies, $tax);
+        }
+    }
+
+    // Get the taxonomy IDs for labels and report reasons
+    $label_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$wpdb->prefix}qp_taxonomies WHERE taxonomy_name = 'label'");
+    $reason_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$wpdb->prefix}qp_taxonomies WHERE taxonomy_name = 'report_reason'");
+
+    // Define and insert default labels
+    $default_labels = [
+        ['name' => 'Wrong Answer', 'color' => '#ff5733', 'description' => 'Reported by users for having an incorrect answer key.'],
+        ['name' => 'No Answer', 'color' => '#ffc300', 'description' => 'Reported by users because the question has no correct option provided.'],
+        ['name' => 'Incorrect Formatting', 'color' => '#900c3f', 'description' => 'Reported by users for formatting or display issues.'],
+        ['name' => 'Wrong Subject', 'color' => '#581845', 'description' => 'Reported by users for being in the wrong subject category.'],
+        ['name' => 'Duplicate', 'color' => '#c70039', 'description' => 'Automatically marked as a duplicate of another question during import.']
+    ];
+
+    if ($label_tax_id) {
+        foreach ($default_labels as $label) {
+            $term_id = qp_get_or_create_term($label['name'], $label_tax_id);
+            if ($term_id) {
+                qp_update_term_meta($term_id, 'color', $label['color']);
+                qp_update_term_meta($term_id, 'description', $label['description']);
+                qp_update_term_meta($term_id, 'is_default', '1');
             }
         }
+    }
 
-        // Get the taxonomy IDs for labels and report reasons
-        $label_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$wpdb->prefix}qp_taxonomies WHERE taxonomy_name = 'label'");
-        $reason_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$wpdb->prefix}qp_taxonomies WHERE taxonomy_name = 'report_reason'");
+    // Define and insert default report reasons
+    $default_reasons = ['Wrong Answer', 'Typo in question', 'Options are incorrect', 'Image is not loading', 'Question is confusing'];
 
-        // Define and insert default labels
-        $default_labels = [
-            ['name' => 'Wrong Answer', 'color' => '#ff5733', 'description' => 'Reported by users for having an incorrect answer key.'],
-            ['name' => 'No Answer', 'color' => '#ffc300', 'description' => 'Reported by users because the question has no correct option provided.'],
-            ['name' => 'Incorrect Formatting', 'color' => '#900c3f', 'description' => 'Reported by users for formatting or display issues.'],
-            ['name' => 'Wrong Subject', 'color' => '#581845', 'description' => 'Reported by users for being in the wrong subject category.'],
-            ['name' => 'Duplicate', 'color' => '#c70039', 'description' => 'Automatically marked as a duplicate of another question during import.']
-        ];
-
-        if ($label_tax_id) {
-            foreach ($default_labels as $label) {
-                $term_id = qp_get_or_create_term($label['name'], $label_tax_id);
-                if ($term_id) {
-                    qp_update_term_meta($term_id, 'color', $label['color']);
-                    qp_update_term_meta($term_id, 'description', $label['description']);
-                    qp_update_term_meta($term_id, 'is_default', '1');
-                }
+    if ($reason_tax_id) {
+        foreach ($default_reasons as $reason_text) {
+            $term_id = qp_get_or_create_term($reason_text, $reason_tax_id);
+            if ($term_id) {
+                qp_update_term_meta($term_id, 'is_active', '1');
             }
         }
-
-        // Define and insert default report reasons
-        $default_reasons = ['Wrong Answer', 'Typo in question', 'Options are incorrect', 'Image is not loading', 'Question is confusing'];
-
-        if ($reason_tax_id) {
-            foreach ($default_reasons as $reason_text) {
-                $term_id = qp_get_or_create_term($reason_text, $reason_tax_id);
-                if ($term_id) {
-                    qp_update_term_meta($term_id, 'is_active', '1');
-                }
-            }
-        }
+    }
 
     // Set default options
     add_option('qp_next_custom_question_id', 1000, '', 'no');
     if (!get_option('qp_jwt_secret_key')) {
         add_option('qp_jwt_secret_key', wp_generate_password(64, true, true), '', 'no');
     }
-    
+
     // Get the current settings, or an empty array if they don't exist.
     $options = get_option('qp_settings', []);
 
@@ -431,7 +431,8 @@ add_action('admin_menu', 'qp_admin_menu');
  * @param WP_Post $post        The current post object.
  * @return array  The modified array of post states.
  */
-function qp_add_page_indicator($post_states, $post) {
+function qp_add_page_indicator($post_states, $post)
+{
     // Get the saved IDs of our plugin's pages
     $qp_settings = get_option('qp_settings', []);
     $qp_page_ids = [
@@ -578,7 +579,7 @@ function qp_render_merge_terms_page()
                     </tr>
                 </thead>
                 <tbody>
-                    </tbody>
+                </tbody>
             </table>
 
             <p class="submit" style="margin-top: 2rem;">
@@ -620,7 +621,7 @@ function qp_render_merge_terms_page()
                         $tableBody.append(row);
                     });
                 });
-                 if ($tableBody.children().length === 0) {
+                if ($tableBody.children().length === 0) {
                     $tableBody.append('<tr><td colspan="3">No child items to merge for the selected sources.</td></tr>');
                 }
             }
@@ -750,6 +751,22 @@ function qp_admin_enqueue_scripts($hook_suffix)
         wp_enqueue_style('katex-css', 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css', [], '0.16.9');
         wp_enqueue_script('katex-js', 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js', [], '0.16.9', true);
         wp_enqueue_script('katex-auto-render', 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js', ['katex-js'], '0.16.9', true);
+
+        wp_add_inline_script('katex-auto-render', "
+        document.addEventListener('DOMContentLoaded', function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.getElementById('the-list'), {
+                    delimiters: [
+                        {left: '$$', right: '$$', display: true},
+                        {left: '$', right: '$', display: false},
+                        {left: '\\\\[', right: '\\\\]', display: true},
+                        {left: '\\\\(', right: '\\\\)', display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    ");
     }
 
     if ($hook_suffix === 'toplevel_page_question-press') {
@@ -1604,7 +1621,7 @@ function qp_handle_save_question_group()
     if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest') {
         wp_send_json_success(['redirect_url' => $redirect_url]);
     }
-    
+
     // Fallback for non-AJAX submissions
     wp_safe_redirect($redirect_url);
     exit;
@@ -1617,7 +1634,8 @@ function qp_handle_save_question_group()
  * @param int $question_id The ID of the question that was updated.
  * @param int $new_correct_option_id The ID of the new correct option.
  */
-function qp_re_evaluate_question_attempts($question_id, $new_correct_option_id) {
+function qp_re_evaluate_question_attempts($question_id, $new_correct_option_id)
+{
     global $wpdb;
     $attempts_table = $wpdb->prefix . 'qp_user_attempts';
     $sessions_table = $wpdb->prefix . 'qp_user_sessions';
@@ -1636,12 +1654,14 @@ function qp_re_evaluate_question_attempts($question_id, $new_correct_option_id) 
     // Set is_correct = 1 where the selected option matches the new correct option.
     $wpdb->query($wpdb->prepare(
         "UPDATE {$attempts_table} SET is_correct = 1 WHERE question_id = %d AND selected_option_id = %d",
-        $question_id, $new_correct_option_id
+        $question_id,
+        $new_correct_option_id
     ));
     // Set is_correct = 0 for all other attempts of this question.
     $wpdb->query($wpdb->prepare(
         "UPDATE {$attempts_table} SET is_correct = 0 WHERE question_id = %d AND selected_option_id != %d",
-        $question_id, $new_correct_option_id
+        $question_id,
+        $new_correct_option_id
     ));
 
     // 3. Loop through each affected session and recalculate its score.
@@ -1656,7 +1676,7 @@ function qp_re_evaluate_question_attempts($question_id, $new_correct_option_id) 
         // Recalculate counts directly from the attempts table for this session
         $correct_count = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$attempts_table} WHERE session_id = %d AND is_correct = 1", $session_id));
         $incorrect_count = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$attempts_table} WHERE session_id = %d AND is_correct = 0", $session_id));
-        
+
         $final_score = ($correct_count * $marks_correct) + ($incorrect_count * $marks_incorrect);
 
         // Update the session record with the new, accurate counts and score.
@@ -1947,7 +1967,7 @@ function qp_get_local_backups_html()
         }
 
         // Sort by time descending, then by name ascending for tie-breaking
-        uksort($files_with_time, function($a, $b) use ($files_with_time) {
+        uksort($files_with_time, function ($a, $b) use ($files_with_time) {
             if ($files_with_time[$a] == $files_with_time[$b]) {
                 return strcmp($a, $b); // Sort by name if times are identical
             }
@@ -2521,7 +2541,7 @@ function qp_get_quick_edit_form_ajax()
     // =========================================================================
     // Start output buffering to capture all the generated HTML into a variable.
     ob_start();
-?>
+    ?>
     <script>
         var qp_quick_edit_data = <?php echo wp_json_encode([
                                         // Data maps for dynamic dropdowns
@@ -2553,12 +2573,12 @@ function qp_get_quick_edit_form_ajax()
             <?php if (!empty($question->direction_text)) : ?>
                 <div class="display-group">
                     <strong>Direction:</strong>
-                    <p><?php echo esc_html(wp_trim_words($question->direction_text, 50, '...')); ?></p>
+                    <p><?php echo wp_kses_post(nl2br($question->direction_text)); ?></p>
                 </div>
             <?php endif; ?>
             <div class="display-group">
                 <strong>Question:</strong>
-                <p><?php echo esc_html(wp_trim_words($question->question_text, 50, '...')); ?></p>
+                <p><?php echo wp_kses_post(nl2br($question->question_text)); ?></p>
             </div>
         </div>
 
@@ -2794,7 +2814,7 @@ function qp_get_quick_edit_form_ajax()
             white-space: nowrap
         }
     </style>
-<?php
+    <?php
     // Send the captured HTML back as a successful JSON response.
     wp_send_json_success(['form' => ob_get_clean()]);
 }
@@ -2868,14 +2888,14 @@ function qp_save_quick_edit_data_ajax()
     // Collect all new term IDs to be linked to the question
     $term_ids_to_link = [];
     if (!empty($data['topic_id'])) $term_ids_to_link[] = absint($data['topic_id']);
-    
+
     // A question should be linked to its most specific source term (Section > Source)
     if (!empty($data['section_id'])) {
         $term_ids_to_link[] = absint($data['section_id']);
     } elseif (!empty($data['source_id'])) {
         $term_ids_to_link[] = absint($data['source_id']);
     }
-    
+
     // Add any selected labels
     if (!empty($data['labels']) && is_array($data['labels'])) {
         $term_ids_to_link = array_merge($term_ids_to_link, array_map('absint', $data['labels']));
@@ -2911,7 +2931,7 @@ function qp_save_quick_edit_data_ajax()
             $_REQUEST[$filter] = $_POST[$filter];
         }
     }
-    
+
     $list_table->prepare_items();
     $found_item = null;
     foreach ($list_table->items as $item) {
@@ -2970,9 +2990,18 @@ function qp_admin_head_styles_for_list_table()
                 background-color: #f1f1f1;
             }
 
-            .qp-organization-table .column-name { width: 35%; }
-            .qp-organization-table .column-description { width: 50%; }
-            .qp-organization-table .column-count { width: 15%; text-align: center; }
+            .qp-organization-table .column-name {
+                width: 35%;
+            }
+
+            .qp-organization-table .column-description {
+                width: 50%;
+            }
+
+            .qp-organization-table .column-count {
+                width: 15%;
+                text-align: center;
+            }
         </style>
     <?php
     }
@@ -4047,7 +4076,7 @@ function qp_get_progress_data_ajax()
         <div class="qp-source-children-container" style="padding-left: 20px;">
             <?php
             // This recursive function does not need to be changed.
-             function qp_render_progress_tree_recursive($terms)
+            function qp_render_progress_tree_recursive($terms)
             {
                 foreach ($terms as $term) {
                     $percentage = $term->total > 0 ? round(($term->completed / $term->total) * 100) : 0;
@@ -4076,7 +4105,7 @@ function qp_get_progress_data_ajax()
             ?>
         </div>
     </div>
-    <?php
+<?php
     // --- END OF FIX ---
     $html = ob_get_clean();
 
@@ -5070,7 +5099,7 @@ function qp_get_single_question_for_review_ajax()
 {
     if (
         !(check_ajax_referer('qp_practice_nonce', 'nonce', false) ||
-          check_ajax_referer('qp_get_quick_edit_form_nonce', 'nonce', false))
+            check_ajax_referer('qp_get_quick_edit_form_nonce', 'nonce', false))
     ) {
         wp_send_json_error(['message' => 'Security check failed.']);
     }

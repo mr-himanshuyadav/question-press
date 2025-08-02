@@ -37,24 +37,40 @@ jQuery(document).ready(function ($) {
     $postRow.addClass("inline-editor");
     $editRow.find(".inline-edit-col").html("<p>Loading form...</p>");
 
-    // AJAX call to fetch the form HTML from the server
-    $.ajax({
-      url: ajaxurl,
-      type: "POST",
-      data: {
+    
+
+// AJAX call to fetch the form HTML from the server
+$.ajax({
+    url: ajaxurl,
+    type: "POST",
+    data: {
         action: "qp_get_quick_edit_form",
         nonce: nonce,
         question_id: questionId,
-      },
-      success: function (response) {
+    },
+    success: function (response) {
         if (response.success) {
-          // Inject the form HTML
-          $editRow.find(".inline-edit-col").html(response.data.form);
+            // Inject the form HTML
+            $editRow.find(".inline-edit-col").html(response.data.form);
 
-          // IMPORTANT: Trigger the change event on the subject dropdown.
-          // This will cascade and populate all other dependent dropdowns
-          // with their correct initial values.
-          $editRow.find(".qe-subject-select").trigger("change");
+            // --- ADD THIS BLOCK TO RENDER LATEX ---
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement($editRow[0], {
+                    delimiters: [
+                        {left: '$$', right: '$$', display: true},
+                        {left: '$', right: '$', display: false},
+                        {left: '\\\\[', right: '\\\\]', display: true},
+                        {left: '\\\\(', right: '\\\\)', display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+            // --- END OF NEW BLOCK ---
+
+            // IMPORTANT: Trigger the change event on the subject dropdown.
+            // This will cascade and populate all other dependent dropdowns
+            // with their correct initial values.
+            $editRow.find(".qe-subject-select").trigger("change");
         } else {
           $editRow
             .find(".inline-edit-col")
