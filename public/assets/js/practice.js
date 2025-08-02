@@ -2523,23 +2523,41 @@ jQuery(document).ready(function ($) {
   // Dragging, Resizing, and Drawing events (unchanged)
   function onInteractionMove(e) {
     if (isDragging) {
-      var coords = getEventCoords(e);
-      popup.offset({ top: coords.y - initialY, left: coords.x - initialX });
+        var coords = getEventCoords(e);
+        
+        // --- THIS IS THE FIX ---
+        // Calculate the potential new top and left positions
+        var newTop = coords.y - initialY;
+        var newLeft = coords.x - initialX;
+
+        // Get window and popup dimensions
+        var windowWidth = $(window).width();
+        var windowHeight = $(window).height();
+        var popupWidth = popup.outerWidth();
+        var popupHeight = popup.outerHeight();
+
+        // Constrain the new position within the viewport boundaries
+        newTop = Math.max(0, Math.min(newTop, windowHeight - popupHeight));
+        newLeft = Math.max(0, Math.min(newLeft, windowWidth - popupWidth));
+
+        // Apply the constrained position
+        popup.offset({ top: newTop, left: newLeft });
+        // --- END FIX ---
     }
     if (isResizing) {
-      var coords = getEventCoords(e);
-      var controlsWidth = popup.find(".qp-rough-work-controls").outerWidth();
-      var titleWidth = popup.find(".qp-popup-title").outerWidth();
-      var closeBtnWidth = popup.find(".qp-popup-close-btn").outerWidth();
-      var minWidth = controlsWidth + titleWidth + closeBtnWidth + 40;
-      var newWidth = initialWidth + (coords.x - initialX);
-      var newHeight = initialHeight + (coords.y - initialY);
-      if (newWidth < minWidth) newWidth = minWidth;
-      popup.width(newWidth);
-      popup.height(newHeight);
-      resizeCanvas();
+        var coords = getEventCoords(e);
+        var controlsWidth = popup.find('.qp-rough-work-controls').outerWidth();
+        var titleWidth = popup.find('.qp-popup-title').outerWidth();
+        var closeBtnWidth = popup.find('.qp-popup-close-btn').outerWidth();
+        var minWidth = controlsWidth + titleWidth + closeBtnWidth + 40;
+        var newWidth = initialWidth + (coords.x - initialX);
+        var newHeight = initialHeight + (coords.y - initialY);
+        if (newWidth < minWidth) newWidth = minWidth;
+        popup.width(newWidth);
+        popup.height(newHeight);
+        resizeCanvas();
     }
-  }
+}
 
   function onInteractionEnd() {
     if (isResizing) saveCanvasState();
