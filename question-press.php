@@ -3087,6 +3087,7 @@ function qp_public_enqueue_scripts()
             'dashboard_page_url' => isset($options['dashboard_page']) ? get_permalink($options['dashboard_page']) : home_url('/'),
             'practice_page_url'  => isset($options['practice_page']) ? get_permalink($options['practice_page']) : home_url('/'),
             'review_page_url'    => isset($options['review_page']) ? get_permalink($options['review_page']) : home_url('/'),
+            'session_page_url'   => isset($options['session_page']) ? get_permalink($options['session_page']) : home_url('/'),
             'question_order_setting'   => isset($options['question_order']) ? $options['question_order'] : 'random',
             'can_delete_history' => $can_delete
         ];
@@ -3392,8 +3393,37 @@ function qp_start_practice_session_ajax()
 {
     check_ajax_referer('qp_practice_nonce', 'nonce');
 
-    $practice_mode = isset($_POST['practice_mode']) ? sanitize_key($_POST['practice_mode']) : 'normal';
     global $wpdb;
+    $user_id = get_current_user_id();
+    $sessions_table = $wpdb->prefix . 'qp_user_sessions';
+
+    // --- NEW: Duplicate Session Check ---
+    $is_section_practice = isset($_POST['qp_section']) && is_numeric($_POST['qp_section']);
+
+    if ($is_section_practice) {
+        $section_id = absint($_POST['qp_section']);
+
+        // Find any active or paused session for this user and this specific section
+        $existing_sessions = $wpdb->get_results($wpdb->prepare(
+            "SELECT session_id, settings_snapshot FROM {$sessions_table} WHERE user_id = %d AND status IN ('active', 'paused')",
+            $user_id
+        ));
+
+        foreach ($existing_sessions as $session) {
+            $settings = json_decode($session->settings_snapshot, true);
+            if (isset($settings['section_id']) && (int)$settings['section_id'] === $section_id) {
+                // A duplicate was found. Send back a specific error response.
+                wp_send_json_error([
+                    'code' => 'duplicate_session_exists',
+                    'message' => 'An active or paused session for this section already exists.',
+                    'session_id' => $session->session_id
+                ]);
+                return; // Stop execution
+            }
+        }
+    }
+
+    $practice_mode = isset($_POST['practice_mode']) ? sanitize_key($_POST['practice_mode']) : 'normal';
 
     // Get a list of all question IDs that have an open report.
     $reports_table = $wpdb->prefix . 'qp_question_reports';
@@ -4017,32 +4047,47 @@ function qp_get_progress_data_ajax()
         <div class="qp-source-children-container" style="padding-left: 20px;">
             <?php
             // This recursive function does not need to be changed.
-            function qp_render_progress_tree_recursive($terms)
-            {
-                foreach ($terms as $term) {
-                    $percentage = $term->total > 0 ? round(($term->completed / $term->total) * 100) : 0;
-                    $has_children = !empty($term->children);
-                    $level_class = $has_children ? 'topic-level qp-topic-toggle' : 'section-level';
+            function qp_render_progress_tree_recursive($terms, $subject_term_id)
+{
+    foreach ($terms as $term) {
+        $percentage = $term->total > 0 ? round(($term->completed / $term->total) * 100) : 0;
+        $has_children = !empty($term->children);
+        $level_class = $has_children ? 'topic-level qp-topic-toggle' : 'section-level';
 
-                    echo '<div class="qp-progress-item ' . $level_class . '" data-topic-id="' . esc_attr($term->term_id) . '">';
-                    echo '<div class="qp-progress-bar-bg" style="width: ' . esc_attr($percentage) . '%;"></div>';
-                    echo '<div class="qp-progress-label">';
-                    if ($has_children) {
-                        echo '<span class="dashicons dashicons-arrow-right-alt2"></span>';
-                    }
-                    echo esc_html($term->name) . ' <span class="qp-progress-percentage">' . esc_html($percentage) . '% (' . $term->completed . '/' . $term->total . ')</span></div>';
-                    echo '</div>';
+        // Add the parent term's ID as a data attribute for context
+        echo '<div class="qp-progress-item ' . $level_class . '" data-term-id="' . esc_attr($term->term_id) . '" data-parent-id="' . esc_attr($term->parent) . '">';
+        echo '<div class="qp-progress-bar-bg" style="width: ' . esc_attr($percentage) . '%;"></div>';
+        echo '<div class="qp-progress-label">';
+        if ($has_children) {
+            echo '<span class="dashicons dashicons-arrow-right-alt2"></span>';
+        }
+        echo '<span>' . esc_html($term->name) . ' <span class="qp-progress-percentage">' . esc_html($percentage) . '% (' . $term->completed . '/' . $term->total . ')</span></span>';
+        
+        // --- THIS IS THE FIX ---
+        // If the term has no children and has questions, show the start button
+        if (!$has_children && $term->total > 0) {
+            echo '<button class="qp-button qp-button-primary qp-start-section-practice-btn" 
+                data-subject-id="' . esc_attr($subject_term_id) . '" 
+                data-section-id="' . esc_attr($term->term_id) . '">
+                Start Practice
+            </button>';
+        }
+        // --- END FIX ---
+        
+        echo '</div>'; // End qp-progress-label
+        echo '</div>'; // End qp-progress-item
 
-                    if ($has_children) {
-                        echo '<div class="qp-topic-sections-container" data-parent-topic="' . esc_attr($term->term_id) . '" style="display: none; padding-left: 20px;">';
-                        qp_render_progress_tree_recursive($term->children);
-                        echo '</div>';
-                    }
-                }
-            }
-            if ($source_term_object && !empty($source_term_object->children)) {
-                qp_render_progress_tree_recursive($source_term_object->children);
-            }
+        if ($has_children) {
+            echo '<div class="qp-topic-sections-container" data-parent-topic="' . esc_attr($term->term_id) . '" style="display: none; padding-left: 20px;">';
+            // Pass the subject ID down in the recursive call
+            qp_render_progress_tree_recursive($term->children, $subject_term_id);
+            echo '</div>';
+        }
+    }
+}
+if ($source_term_object && !empty($source_term_object->children)) {
+    qp_render_progress_tree_recursive($source_term_object->children, $subject_term_id);
+}
             ?>
         </div>
     </div>

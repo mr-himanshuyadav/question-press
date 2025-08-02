@@ -228,18 +228,18 @@ jQuery(document).ready(function ($) {
         } else {
           // If the server returns an error, alert the user
           Swal.fire({
-            title: 'Error!',
-            text: 'Could not save your progress. Please check your connection and try again.',
-            icon: 'error'
+            title: "Error!",
+            text: "Could not save your progress. Please check your connection and try again.",
+            icon: "error",
           });
         }
       },
       error: function () {
         // If the AJAX call itself fails, alert the user
         Swal.fire({
-            title: 'Network Error',
-            text: 'Could not save your progress. Please check your connection.',
-            icon: 'error'
+          title: "Network Error",
+          text: "Could not save your progress. Please check your connection.",
+          icon: "error",
         });
       },
       complete: function () {
@@ -385,12 +385,8 @@ jQuery(document).ready(function ($) {
       var $this = $(this);
       var $list = $this.closest(".qp-multi-select-list");
       if ($this.is(":checked")) {
-        $list
-          .find('input[value!="all"]')
-          .prop("checked", false)
-          .prop("disabled", true);
-      } else {
-        $list.find('input[value!="all"]').prop("disabled", false);
+        // Now, it only unchecks the other options, it doesn't disable them.
+        $list.find('input[value!="all"]').prop("checked", false);
       }
     }
   );
@@ -457,7 +453,7 @@ jQuery(document).ready(function ($) {
       if ($dropdown.attr("id") === "qp_subject_dropdown") {
         updateButtonText($button, "-- Please select --", "Subject");
       } else {
-        updateButton.Text($button, "-- Please select --", "Topic");
+        updateButtonText($button, "-- Please select --", "Topic");
       }
     });
   });
@@ -1005,22 +1001,48 @@ jQuery(document).ready(function ($) {
         if (response.success && response.data.redirect_url) {
           window.location.href = response.data.redirect_url;
         } else {
-          Swal.fire({
-            title: "Could Not Start Session",
-            text:
-              response.data.message ||
-              "An unknown error occurred. Please try different options.",
-            icon: "warning",
-            confirmButtonText: "OK",
-          });
+          // --- THIS IS THE FIX ---
+          // Check for our specific duplicate session error code
+          if (
+            response.data &&
+            response.data.code === "duplicate_session_exists"
+          ) {
+            var resumeUrl = new URL(qp_ajax_object.session_page_url);
+            resumeUrl.searchParams.set("session_id", response.data.session_id);
+
+            Swal.fire({
+              title: "Session Already Active",
+              text: "You already have an active or paused session for this section. Would you like to resume it?",
+              icon: "info",
+              showCancelButton: true,
+              confirmButtonText: "Resume Session",
+              cancelButtonText: "OK",
+              // This creates the "Resume" button as a link
+              confirmButtonColor: "#2e7d32",
+              preConfirm: () => {
+                window.location.href = resumeUrl.href;
+              },
+            });
+          } else {
+            // Fallback for all other errors
+            Swal.fire({
+              title: "Could Not Start Session",
+              text:
+                response.data.message ||
+                "An unknown error occurred. Please try different options.",
+              icon: "warning",
+              confirmButtonText: "OK",
+            });
+          }
+          // --- END FIX ---
           submitButton.val(originalButtonText).prop("disabled", false);
         }
       },
       error: function () {
         Swal.fire({
-            title: 'Error!',
-            text: 'A server error occurred. Please try again later.',
-            icon: 'error'
+          title: "Error!",
+          text: "A server error occurred. Please try again later.",
+          icon: "error",
         });
         submitButton.val(originalButtonText).prop("disabled", false);
       },
@@ -1171,9 +1193,11 @@ jQuery(document).ready(function ($) {
   // Session Initialization
   if (typeof qp_session_data !== "undefined") {
     // Hide preloader and show content after a delay
-    setTimeout(function() {
-        $('#qp-preloader').fadeOut(300, function() { $(this).remove(); });
-        $('.qp-practice-wrapper').addClass('loaded');
+    setTimeout(function () {
+      $("#qp-preloader").fadeOut(300, function () {
+        $(this).remove();
+      });
+      $(".qp-practice-wrapper").addClass("loaded");
     }, 400); // 350ms load time + 50ms buffer
     practiceInProgress = true;
     sessionID = qp_session_data.session_id;
@@ -1827,7 +1851,35 @@ jQuery(document).ready(function ($) {
     );
     if (currentQuestionIndex >= sessionQuestionIDs.length - 1) {
       clearInterval(questionTimer);
-      // If so, ask the user if they want to finish.
+
+      // --- THIS IS THE FIX ---
+      // Check if this is a section-wise practice session
+      if (sessionSettings.practice_mode === "Section Wise Practice") {
+        // Count how many non-reported questions have NOT been answered
+        let unattemptedCount = 0;
+        sessionQuestionIDs.forEach(function (qid) {
+          const state = answeredStates[qid] || {};
+          // A question is unattempted if it's NOT reported AND has NOT been answered.
+          if (!state.reported && state.type !== "answered") {
+            unattemptedCount++;
+          }
+        });
+
+        if (unattemptedCount > 0) {
+          // If there are still questions to answer, show a warning and do not end the session.
+          Swal.fire({
+            title: "Session Not Complete",
+            text: `You must attempt all non-reported questions in a section practice. You still have ${unattemptedCount} question(s) left.`,
+            icon: "warning",
+            confirmButtonText: "OK",
+          });
+          // We return here to prevent the "Congratulations" message from showing.
+          return;
+        }
+      }
+      // --- END FIX ---
+
+      // If it's not a section practice, or if all questions are complete, show the standard completion message.
       Swal.fire({
         title: "Congratulations!",
         text: "You've completed all available questions.",
@@ -1839,12 +1891,9 @@ jQuery(document).ready(function ($) {
       }).then((result) => {
         if (result.isConfirmed) {
           practiceInProgress = false;
-          if (result.isConfirmed) {
-            endSession(false);
-          }
+          endSession(false);
         }
       });
-      // If the user clicks "Cancel", we simply do nothing. They remain on the last question, and the UI is still responsive.
       return;
     }
 
@@ -2304,9 +2353,9 @@ jQuery(document).ready(function ($) {
       },
       error: function () {
         Swal.fire({
-            title: 'Submission Error!',
-            text: 'An error occurred while submitting the session. Please check your connection.',
-            icon: 'error'
+          title: "Submission Error!",
+          text: "An error occurred while submitting the session. Please check your connection.",
+          icon: "error",
         });
       },
     });
@@ -2458,7 +2507,7 @@ jQuery(document).ready(function ($) {
 
       var img = new Image();
       img.onload = function () {
-        masterCtx.globalCompositeOperation = 'source-over';
+        masterCtx.globalCompositeOperation = "source-over";
         masterCtx.clearRect(0, 0, masterCanvas.width, masterCanvas.height);
         masterCtx.drawImage(img, 0, 0);
         updateVisibleCanvas(); // Update the view
@@ -2522,19 +2571,23 @@ jQuery(document).ready(function ($) {
     overlay.css("background-color", `rgba(0, 0, 0, ${overlayOpacity})`);
     $("#qp-canvas-opacity-slider").val(initialSliderValue);
     // Check for saved position in localStorage
-    var savedTop = localStorage.getItem('qpCanvasTop');
-    var savedLeft = localStorage.getItem('qpCanvasLeft');
+    var savedTop = localStorage.getItem("qpCanvasTop");
+    var savedLeft = localStorage.getItem("qpCanvasLeft");
 
     if (savedTop && savedLeft) {
-        // If a position is saved, apply it directly
-        popup.css({
-            'top': parseFloat(savedTop) + 'px',
-            'left': parseFloat(savedLeft) + 'px',
-            'transform': 'none' // Important to override the centering transform
-        });
+      // If a position is saved, apply it directly
+      popup.css({
+        top: parseFloat(savedTop) + "px",
+        left: parseFloat(savedLeft) + "px",
+        transform: "none", // Important to override the centering transform
+      });
     } else {
-        // Otherwise, open it in the center for the first time
-        popup.css({ 'top': '50%', 'left': '50%', 'transform': 'translate(-50%, -50%)' });
+      // Otherwise, open it in the center for the first time
+      popup.css({
+        top: "50%",
+        left: "50%",
+        transform: "translate(-50%, -50%)",
+      });
     }
     overlay.fadeIn(200);
     var offset = popup.offset();
@@ -2555,50 +2608,50 @@ jQuery(document).ready(function ($) {
   // Dragging, Resizing, and Drawing events (unchanged)
   function onInteractionMove(e) {
     if (isDragging) {
-        var coords = getEventCoords(e);
-        
-        // --- THIS IS THE FIX ---
-        // Calculate the potential new top and left positions
-        var newTop = coords.y - initialY;
-        var newLeft = coords.x - initialX;
+      var coords = getEventCoords(e);
 
-        // Get window and popup dimensions
-        var windowWidth = $(window).width();
-        var windowHeight = $(window).height();
-        var popupWidth = popup.outerWidth();
-        var popupHeight = popup.outerHeight();
+      // --- THIS IS THE FIX ---
+      // Calculate the potential new top and left positions
+      var newTop = coords.y - initialY;
+      var newLeft = coords.x - initialX;
 
-        // Constrain the new position within the viewport boundaries
-        newTop = Math.max(0, Math.min(newTop, windowHeight - popupHeight));
-        newLeft = Math.max(0, Math.min(newLeft, windowWidth - popupWidth));
+      // Get window and popup dimensions
+      var windowWidth = $(window).width();
+      var windowHeight = $(window).height();
+      var popupWidth = popup.outerWidth();
+      var popupHeight = popup.outerHeight();
 
-        // Apply the constrained position
-        popup.offset({ top: newTop, left: newLeft });
-        // --- END FIX ---
+      // Constrain the new position within the viewport boundaries
+      newTop = Math.max(0, Math.min(newTop, windowHeight - popupHeight));
+      newLeft = Math.max(0, Math.min(newLeft, windowWidth - popupWidth));
+
+      // Apply the constrained position
+      popup.offset({ top: newTop, left: newLeft });
+      // --- END FIX ---
     }
     if (isResizing) {
-        var coords = getEventCoords(e);
-        var controlsWidth = popup.find('.qp-rough-work-controls').outerWidth();
-        var titleWidth = popup.find('.qp-popup-title').outerWidth();
-        var closeBtnWidth = popup.find('.qp-popup-close-btn').outerWidth();
-        var minWidth = controlsWidth + titleWidth + closeBtnWidth + 40;
-        var newWidth = initialWidth + (coords.x - initialX);
-        var newHeight = initialHeight + (coords.y - initialY);
-        if (newWidth < minWidth) newWidth = minWidth;
-        popup.width(newWidth);
-        popup.height(newHeight);
-        resizeCanvas();
+      var coords = getEventCoords(e);
+      var controlsWidth = popup.find(".qp-rough-work-controls").outerWidth();
+      var titleWidth = popup.find(".qp-popup-title").outerWidth();
+      var closeBtnWidth = popup.find(".qp-popup-close-btn").outerWidth();
+      var minWidth = controlsWidth + titleWidth + closeBtnWidth + 40;
+      var newWidth = initialWidth + (coords.x - initialX);
+      var newHeight = initialHeight + (coords.y - initialY);
+      if (newWidth < minWidth) newWidth = minWidth;
+      popup.width(newWidth);
+      popup.height(newHeight);
+      resizeCanvas();
     }
-}
+  }
 
   function onInteractionEnd() {
     if (isDragging) {
-        // --- THIS IS THE FIX ---
-        // Save the final position to localStorage
-        var finalOffset = popup.offset();
-        localStorage.setItem('qpCanvasTop', finalOffset.top);
-        localStorage.setItem('qpCanvasLeft', finalOffset.left);
-        // --- END FIX ---
+      // --- THIS IS THE FIX ---
+      // Save the final position to localStorage
+      var finalOffset = popup.offset();
+      localStorage.setItem("qpCanvasTop", finalOffset.top);
+      localStorage.setItem("qpCanvasLeft", finalOffset.left);
+      // --- END FIX ---
     }
     if (isResizing) saveCanvasState();
     isDragging = isResizing = false;
