@@ -815,55 +815,50 @@ $row_text .= '<strong>' . wp_kses_post(nl2br($item['question_text'])) . '</stron
 
 
     public function column_source($item)
-    {
-        if (empty($item['linked_source_term_id'])) {
-            return ''; // Return empty if no source is linked
-        }
-
-        global $wpdb;
-        $term_table = $wpdb->prefix . 'qp_terms';
-
-        $term_id = absint($item['linked_source_term_id']);
-        $lineage = [];
-
-        // Trace up the tree to the root, with a safety limit
-        for ($i = 0; $i < 10; $i++) {
-            if (!$term_id) break;
-            $term = $wpdb->get_row($wpdb->prepare("SELECT term_id, name, parent FROM {$term_table} WHERE term_id = %d", $term_id));
-            if ($term) {
-                array_unshift($lineage, $term); // Add to the beginning of the array to maintain order
-                $term_id = $term->parent;
-            } else {
-                break; // Stop if a term is not found
-            }
-        }
-
-        $source_name = '';
-        $section_name = '';
-
-        if (!empty($lineage)) {
-            // The root (first item in the lineage) is the main source
-            $source_name = $lineage[0]->name;
-            // The second item in the lineage is the first child (the section)
-            if (count($lineage) > 1) {
-                $section_name = $lineage[1]->name;
-            }
-        }
-
-        $source_info = [];
-        if (!empty($item['question_number_in_section'])) {
-            $source_info[] = '<strong>No:</strong> ' . esc_html($item['question_number_in_section']);
-        }
-
-        if (!empty($section_name)) {
-            $source_info[] = '<strong>Section:</strong> ' . esc_html($section_name);
-        }
-
-        if (!empty($source_name)) {
-            $source_info[] = '<strong>Source:</strong> ' . esc_html($source_name);
-        }
-        return implode('<br>', $source_info);
+{
+    if (empty($item['linked_source_term_id'])) {
+        return '<em>None</em>'; // Return if no source is linked
     }
+
+    global $wpdb;
+    $term_table = $wpdb->prefix . 'qp_terms';
+
+    $term_id = absint($item['linked_source_term_id']);
+    $lineage_names = [];
+
+    // Trace up the tree to the root, with a safety limit of 10 levels
+    for ($i = 0; $i < 10; $i++) {
+        if (!$term_id || $term_id == 0) break; // Stop if we reach the top
+
+        $term = $wpdb->get_row($wpdb->prepare("SELECT name, parent FROM {$term_table} WHERE term_id = %d", $term_id));
+
+        if ($term) {
+            array_unshift($lineage_names, $term->name); // Add to the beginning of the array to maintain order
+            $term_id = $term->parent;
+        } else {
+            break; // Stop if a term is not found
+        }
+    }
+
+    $output_parts = [];
+
+    if (!empty($lineage_names)) {
+        // The first item is always the main source
+        $output_parts[] = '<strong>Source:</strong> ' . esc_html(array_shift($lineage_names));
+
+        // If there are remaining items, they constitute the section hierarchy
+        if (!empty($lineage_names)) {
+            $output_parts[] = '<strong>Section:</strong> ' . esc_html(implode(' / ', $lineage_names));
+        }
+    }
+
+    // Add the question number if it exists
+    if (!empty($item['question_number_in_section'])) {
+        $output_parts[] = '<strong>Q. No:</strong> ' . esc_html($item['question_number_in_section']);
+    }
+
+    return implode('<br>', $output_parts);
+}
 
     public function column_default($item, $column_name)
     {
