@@ -75,31 +75,25 @@ jQuery(document).ready(function ($) {
 
   // --- NEW: Fullscreen Button State and Tooltip Updater ---
   function updateFullscreenButton() {
-    var $btn = $("#qp-fullscreen-btn");
-    var $icon = $btn.find(".dashicons");
+      var $btn = $('#qp-fullscreen-btn');
+      var $icon = $btn.find('.dashicons');
 
-    if (document.fullscreenElement) {
-      $btn.attr("title", "Exit Fullscreen");
-      $icon
-        .removeClass("dashicons-fullscreen-alt")
-        .addClass("dashicons-fullscreen-exit-alt");
-    } else {
-      $btn.attr("title", "Enter Fullscreen");
-      $icon
-        .removeClass("dashicons-fullscreen-exit-alt")
-        .addClass("dashicons-fullscreen-alt");
-    }
+      // Check the browser's fullscreen status
+      if (document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement) {
+          $btn.attr('title', 'Exit Fullscreen');
+          $icon.removeClass('dashicons-fullscreen-alt').addClass('dashicons-fullscreen-exit-alt');
+      } else {
+          $btn.attr('title', 'Enter Fullscreen');
+          $icon.removeClass('dashicons-fullscreen-exit-alt').addClass('dashicons-fullscreen-alt');
+      }
   }
 
-  // Listen for the browser's fullscreen change event
-  $(document).on(
-    "fullscreenchange webkitfullscreenchange mozfullscreenchange MSFullscreenChange",
-    function () {
+  // Listen for any change in the browser's fullscreen state
+  $(document).on('fullscreenchange webkitfullscreenchange mozfullscreenchange MSFullscreenChange', function() {
       updateFullscreenButton();
-    }
-  );
+  });
 
-  // Initial state check in case the page loads in fullscreen
+  // Call the function once on load to set the correct initial state
   updateFullscreenButton();
 
   function startMockTestTimer(endTimeUTC) {
@@ -2685,19 +2679,34 @@ jQuery(document).ready(function ($) {
     e.preventDefault();
   });
 
-  // --- Updated Drawing Events ---
-  canvasEl.on("mousedown touchstart", function (e) {
-    isDrawing = true;
-    saveCanvasState();
-    var coords = getEventCoords(e);
-    var rect = canvas.getBoundingClientRect();
-    [lastX, lastY] = [coords.x - rect.left, coords.y - rect.top];
-    e.preventDefault();
-  });
-  canvasEl.on("mouseup touchend", function () {
-    isDrawing = false;
-  });
-  canvasEl.on("mousemove touchmove", draw);
+  // --- Corrected and Robust Drawing Events ---
+    canvasEl.on('mousedown touchstart', function(e) {
+        isDrawing = true;
+        saveCanvasState();
+        var coords = getEventCoords(e);
+        var rect = canvas.getBoundingClientRect();
+        [lastX, lastY] = [coords.x - rect.left, coords.y - rect.top];
+        e.preventDefault();
+    });
+
+    // Stop drawing if the mouse is released anywhere on the page
+    $(document).on('mouseup touchend', function() {
+        if (isDrawing) {
+            isDrawing = false;
+        }
+    });
+
+    // Reset the line start point when the mouse re-enters the canvas while drawing.
+    canvasEl.on('mouseenter', function(e) {
+        if (isDrawing) { // Only act if the mouse button is still held down
+            var coords = getEventCoords(e);
+            var rect = canvas.getBoundingClientRect();
+            // Update the last known coordinates to the new entry point.
+            [lastX, lastY] = [coords.x - rect.left, coords.y - rect.top];
+        }
+    });
+
+    canvasEl.on('mousemove touchmove', draw);
 
   // Tool selection, color, etc. (unchanged)
   popup.on("click", ".qp-tool-btn", function () {
@@ -2709,10 +2718,14 @@ jQuery(document).ready(function ($) {
       .removeClass("cursor-pencil cursor-eraser")
       .addClass("cursor-" + currentTool);
   });
+
   popup.on("click", ".qp-color-btn", function () {
     $(".qp-color-btn").removeClass("active");
     $(this).addClass("active");
     $("#qp-tool-pencil").click();
+    // Update the CSS variable for the border color
+    var activeColor = $(this).data('color');
+    document.documentElement.style.setProperty('--qp-drawing-color', activeColor);
   });
 
   // --- REFINED: Opacity Slider Logic with localStorage ---

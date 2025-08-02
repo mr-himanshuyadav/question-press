@@ -186,8 +186,8 @@ class QP_Shortcodes
             </div>
 
             <div class="qp-form-group">
-                <label for="qp_revision_questions_per_topic">Number of Questions from each Topic</label>
-                <input type="number" name="qp_revision_questions_per_topic" id="qp_revision_questions_per_topic" value="2" min="1">
+                <label for="qp_revision_questions_per_topic">Number of Questions from each Topic<span style="color:red">*</span></label>
+                <input type="number" name="qp_revision_questions_per_topic" id="qp_revision_questions_per_topic" value="2" min="1" max="20" required>
             </div>
 
             <div class="qp-form-group">
@@ -201,11 +201,11 @@ class QP_Shortcodes
             <div class="qp-form-group qp-marks-group" id="qp-revision-marks-group-wrapper" style="display: none;">
                 <div>
                     <label for="qp_revision_marks_correct">Marks for Correct Answer:</label>
-                    <input type="number" name="qp_marks_correct" id="qp_revision_marks_correct" value="4" step="0.01">
+                    <input type="number" name="qp_marks_correct" id="qp_revision_marks_correct" value="4" step="0.01"  min="0.01" max="10">
                 </div>
                 <div>
                     <label for="qp_revision_marks_incorrect">Penalty for Incorrect Answer:</label>
-                    <input type="number" name="qp_marks_incorrect" id="qp_revision_marks_incorrect" value="1" step="0.01" min="0">
+                    <input type="number" name="qp_marks_incorrect" id="qp_revision_marks_incorrect" value="1" step="0.01"  min="0" max="10">
                 </div>
             </div>
 
@@ -217,7 +217,7 @@ class QP_Shortcodes
                 </label>
                 <div id="qp-revision-timer-input-wrapper" style="display: none; margin-top: 15px;">
                     <label for="qp_revision_timer_seconds">Time in Seconds:</label>
-                    <input type="number" name="qp_timer_seconds" id="qp_revision_timer_seconds" value="60" min="10">
+                    <input type="number" name="qp_timer_seconds" id="qp_revision_timer_seconds" value="60" min="10" max="300">
                 </div>
             </div>
 
@@ -270,8 +270,8 @@ class QP_Shortcodes
             </div>
 
             <div class="qp-form-group">
-                <label for="qp_mock_num_questions">Number of Questions</label>
-                <input type="number" name="qp_mock_num_questions" id="qp_mock_num_questions" value="20" min="5">
+                <label for="qp_mock_num_questions">Number of Questions<span style="color:red">*</span></label>
+                <input type="number" name="qp_mock_num_questions" id="qp_mock_num_questions" value="20" min="5" max="200" required>
             </div>
 
             <div class="qp-form-group">
@@ -289,8 +289,8 @@ class QP_Shortcodes
             </div>
 
             <div class="qp-form-group">
-                <label for="qp_mock_timer_minutes">Total Time (in minutes)</label>
-                <input type="number" name="qp_mock_timer_minutes" id="qp_mock_timer_minutes" value="30" min="1">
+                <label for="qp_mock_timer_minutes">Total Time (in minutes)<span style="color:red">*</span></label>
+                <input type="number" name="qp_mock_timer_minutes" id="qp_mock_timer_minutes" value="30" min="1" max="180" required>
             </div>
 
             <div class="qp-form-group">
@@ -304,11 +304,11 @@ class QP_Shortcodes
             <div class="qp-form-group qp-marks-group" id="qp-mock-marks-group-wrapper" style="display: none;">
                 <div>
                     <label for="qp_mock_marks_correct">Marks for Correct Answer:</label>
-                    <input type="number" name="qp_marks_correct" id="qp_mock_marks_correct" value="4" step="0.01" disabled>
+                    <input type="number" name="qp_marks_correct" id="qp_mock_marks_correct" value="4" step="0.01" min="0.01" max="10" disabled>
                 </div>
                 <div>
                     <label for="qp_mock_marks_incorrect">Penalty for Incorrect Answer:</label>
-                    <input type="number" name="qp_marks_incorrect" id="qp_mock_marks_incorrect" value="1" step="0.01" min="0" disabled>
+                    <input type="number" name="qp_marks_incorrect" id="qp_mock_marks_incorrect" value="1" step="0.01" min="0" max="10" disabled>
                 </div>
             </div>
 
@@ -335,8 +335,6 @@ class QP_Shortcodes
         $pauses_table = $wpdb->prefix . 'qp_session_pauses';
         $session_data_from_db = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$sessions_table} WHERE session_id = %d", $session_id));
 
-        // **THE FIX**: This is the new, simplified error handling logic.
-        // **THE FIX**: This is the new, simplified error handling logic.
         if (!$session_data_from_db) {
             // Session does not exist at all.
             $options = get_option('qp_settings');
@@ -642,11 +640,11 @@ class QP_Shortcodes
                 <div class="qp-form-group qp-marks-group" id="qp-marks-group-wrapper" style="display: none;">
                     <div style="width: 48%">
                         <label for="qp_marks_correct">Correct Marks:</label>
-                        <input type="number" name="qp_marks_correct" id="qp_marks_correct" value="4" step="0.01" required>
+                        <input type="number" name="qp_marks_correct" id="qp_marks_correct" value="4" step="0.01"  min="0.01" max="10" required>
                     </div>
                     <div style="width: 48%">
                         <label for="qp_marks_incorrect">Negative Marks:</label>
-                        <input type="number" name="qp_marks_incorrect" id="qp_marks_incorrect" value="1" step="0.01" min="0" required>
+                        <input type="number" name="qp_marks_incorrect" id="qp_marks_incorrect" value="1" step="0.01" min="0"  max="10" required>
                     </div>
                 </div>
 
@@ -658,7 +656,7 @@ class QP_Shortcodes
                     </label>
                     <div id="qp-timer-input-wrapper" style="display: none; margin-top: 15px;">
                         <label for="qp_timer_seconds">Time in Seconds:</label>
-                        <input type="number" name="qp_timer_seconds" id="qp_timer_seconds" value="60" min="10">
+                        <input type="number" name="qp_timer_seconds" id="qp_timer_seconds" value="60" min="10" max="300">
                     </div>
                 </div>
 

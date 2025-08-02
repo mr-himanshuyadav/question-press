@@ -1568,16 +1568,17 @@ body.palette-overlay-open #qp-palette-sliding {
     transform: translate(-50%, -50%);
     width: 600px;
     height: 450px;
-    min-width: 400px;
+    min-width: 500px; 
     min-height: 300px;
     z-index: 9999;
-    /* CHANGE: Use a transparent background color instead of opacity */
-    background-color: rgba(255, 255, 255, 0.9); /* Default 90% opaque white */
-    border: 1px solid #ccc;
+    background-color: rgba(255, 255, 255, 0.9);
+    /* --- THIS IS THE FIX --- */
+    border: 1px solid transparent; /* Start with a transparent border */
     box-shadow: 0 5px 15px rgba(0,0,0,0.2);
     border-radius: 8px;
     display: flex;
     flex-direction: column;
+    transition: border-color 0.3s ease-in-out; /* Animate the color change */
 }
 
 .qp-popup-header {
@@ -1618,25 +1619,6 @@ body.palette-overlay-open #qp-palette-sliding {
     z-index: 9998;
     background-color: rgba(0, 0, 0, 0.4);
     display: none; /* Initially hidden */
-}
-
-.qp-draggable-popup {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 600px;
-    height: 450px;
-    /* CHANGE: Set a base min-width */
-    min-width: 500px; 
-    min-height: 300px;
-    z-index: 9999;
-    background-color: rgba(255, 255, 255, 0.9);
-    border: 1px solid #ccc;
-    box-shadow: 0 5px 15px rgba(0,0,0,0.2);
-    border-radius: 8px;
-    display: flex;
-    flex-direction: column;
 }
 
 .qp-popup-header {
