@@ -136,7 +136,7 @@ class QP_Shortcodes
         $term_table = $wpdb->prefix . 'qp_terms';
         $tax_table = $wpdb->prefix . 'qp_taxonomies';
         $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'subject'");
-        
+
         $subjects = $wpdb->get_results($wpdb->prepare(
             "SELECT term_id AS subject_id, name AS subject_name FROM {$term_table} WHERE taxonomy_id = %d AND name != 'Uncategorized' AND parent = 0 ORDER BY name ASC",
             $subject_tax_id
@@ -235,7 +235,7 @@ class QP_Shortcodes
         $term_table = $wpdb->prefix . 'qp_terms';
         $tax_table = $wpdb->prefix . 'qp_taxonomies';
         $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'subject'");
-        
+
         $subjects = $wpdb->get_results($wpdb->prepare(
             "SELECT term_id AS subject_id, name AS subject_name FROM {$term_table} WHERE taxonomy_id = %d AND name != 'Uncategorized' AND parent = 0 ORDER BY name ASC",
             $subject_tax_id
@@ -566,7 +566,7 @@ class QP_Shortcodes
         $term_table = $wpdb->prefix . 'qp_terms';
         $tax_table = $wpdb->prefix . 'qp_taxonomies';
         $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'subject'");
-        
+
         $subjects = $wpdb->get_results($wpdb->prepare(
             "SELECT term_id AS subject_id, name AS subject_name FROM {$term_table} WHERE taxonomy_id = %d AND name != 'Uncategorized' AND parent = 0 ORDER BY name ASC",
             $subject_tax_id
@@ -793,14 +793,17 @@ class QP_Shortcodes
                     <div class="qp-header-top-row">
                         <div class="qp-session-mode-indicator"><?php echo esc_html($mode_name); ?></div>
                         <div style="display: flex; flex-direction: row; gap: 5px;">
+                            <button id="qp-fullscreen-btn" class="qp-button qp-button-secondary" title="Enter Fullscreen" style="padding: 8px; line-height: 1;">
+                                <span class="dashicons dashicons-fullscreen-alt"></span>
+                            </button>
                             <button id="qp-palette-toggle-btn" title="Toggle Question Palette">
-                            <span class="dashicons dashicons-layout"></span>
-                        </button>
-                        <button id="qp-rough-work-btn" class="qp-button qp-button-secondary" title="Rough Work" style="padding: 8px; line-height: 1;">
-                            <span class="dashicons dashicons-edit"></span>
-                        </button>
+                                <span class="dashicons dashicons-layout"></span>
+                            </button>
+                            <button id="qp-rough-work-btn" class="qp-button qp-button-secondary" title="Rough Work" style="padding: 8px; line-height: 1;">
+                                <span class="dashicons dashicons-edit"></span>
+                            </button>
                         </div>
-                        
+
                     </div>
 
                     <?php if ($is_mock_test) : ?>
@@ -897,12 +900,6 @@ class QP_Shortcodes
                 </form>
             </div>
         </div>
-        <div id="qp-start-session-overlay">
-            <div class="qp-start-session-content">
-                <h3>Your session is ready.</h3>
-                <p>Click the button below to start the session.</p><button id="qp-fullscreen-start-btn" class="qp-button qp-button-primary">START</button>
-            </div>
-        </div>
         <div id="qp-rough-work-overlay" style="display: none;">
             <div id="qp-rough-work-popup" class="qp-draggable-popup">
                 <div class="qp-popup-header">
@@ -911,7 +908,7 @@ class QP_Shortcodes
                         <button id="qp-tool-eraser" class="qp-tool-btn" title="Eraser"><span class="dashicons dashicons-editor-removeformatting"></span></button>
 
                         <button id="qp-undo-btn" class="qp-tool-btn" title="Undo" disabled><span class="dashicons dashicons-undo"></span></button>
-    <button id="qp-redo-btn" class="qp-tool-btn" title="Redo" disabled><span class="dashicons dashicons-redo"></span></button>
+                        <button id="qp-redo-btn" class="qp-tool-btn" title="Redo" disabled><span class="dashicons dashicons-redo"></span></button>
                         <div class="qp-color-swatches">
                             <button class="qp-color-btn active" data-color="#171717ff" style="background-color: #171717ff;" title="Black"></button>
                             <button class="qp-color-btn" data-color="#ca0808ff" style="background-color: #ca0808ff;" title="Red"></button>
@@ -1080,9 +1077,9 @@ class QP_Shortcodes
                     <a href="<?php echo esc_url($dashboard_page_url); ?>" class="qp-button qp-button-secondary" style="align-self: center; padding: 12px 14px;">&laquo; Dashboard</a>
                 </div>
                 <div style="display: flex; align-items: center; gap: 15px; margin-top: 5px;">
-                        <span class="qp-session-mode-indicator" style="padding: 5px 12px; font-size: 12px;"><?php echo esc_html($mode); ?></span>
-                        <p style="margin: 0; color: #50575e; font-size: 14px;"><strong>Session ID:</strong> <?php echo esc_html($session_id); ?></p>
-                    </div>
+                    <span class="qp-session-mode-indicator" style="padding: 5px 12px; font-size: 12px;"><?php echo esc_html($mode); ?></span>
+                    <p style="margin: 0; color: #50575e; font-size: 14px;"><strong>Session ID:</strong> <?php echo esc_html($session_id); ?></p>
+                </div>
             </div>
 
             <div class="qp-summary-wrapper qp-review-summary">

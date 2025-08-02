@@ -73,6 +73,35 @@ jQuery(document).ready(function ($) {
     }
   }
 
+  // --- NEW: Fullscreen Button State and Tooltip Updater ---
+  function updateFullscreenButton() {
+    var $btn = $("#qp-fullscreen-btn");
+    var $icon = $btn.find(".dashicons");
+
+    if (document.fullscreenElement) {
+      $btn.attr("title", "Exit Fullscreen");
+      $icon
+        .removeClass("dashicons-fullscreen-alt")
+        .addClass("dashicons-fullscreen-exit-alt");
+    } else {
+      $btn.attr("title", "Enter Fullscreen");
+      $icon
+        .removeClass("dashicons-fullscreen-exit-alt")
+        .addClass("dashicons-fullscreen-alt");
+    }
+  }
+
+  // Listen for the browser's fullscreen change event
+  $(document).on(
+    "fullscreenchange webkitfullscreenchange mozfullscreenchange MSFullscreenChange",
+    function () {
+      updateFullscreenButton();
+    }
+  );
+
+  // Initial state check in case the page loads in fullscreen
+  updateFullscreenButton();
+
   function startMockTestTimer(endTimeUTC) {
     var timerEl = $("#qp-mock-test-timer");
     var warningMessage = $("#qp-timer-warning-message"); // Get the warning message element
@@ -267,10 +296,7 @@ jQuery(document).ready(function ($) {
       }
       paletteGrids.append(paletteBtn);
     }
-    scrollPaletteToCurrent();
   }
-
-
 
   // Find and REPLACE the updateLegendCounts function
   function updateLegendCounts() {
@@ -894,7 +920,7 @@ jQuery(document).ready(function ($) {
                 .prop("disabled", true);
               $("#qp-next-btn").prop("disabled", false);
 
-              updatePaletteButton(questionID, 'reported');
+              updatePaletteButton(questionID, "reported");
               scrollPaletteToCurrent();
               updateLegendCounts();
               loadNextQuestion();
@@ -1252,6 +1278,7 @@ jQuery(document).ready(function ($) {
     } else {
       loadQuestion(sessionQuestionIDs[currentQuestionIndex]);
       renderPalette();
+      scrollPaletteToCurrent();
     }
 
     updateLegendCounts();
@@ -2052,7 +2079,9 @@ jQuery(document).ready(function ($) {
     // Update UI
     updateHeaderStats();
     var questionID = sessionQuestionIDs[currentQuestionIndex];
-    var newStatus = answeredStates[questionID].is_correct ? 'correct' : 'incorrect';
+    var newStatus = answeredStates[questionID].is_correct
+      ? "correct"
+      : "incorrect";
     updatePaletteButton(questionID, newStatus);
     scrollPaletteToCurrent();
     $("#qp-next-btn").prop("disabled", false);
@@ -2177,7 +2206,7 @@ jQuery(document).ready(function ($) {
 
       updateHeaderStats();
       var questionID = sessionQuestionIDs[currentQuestionIndex];
-      updatePaletteButton(questionID, 'skipped');
+      updatePaletteButton(questionID, "skipped");
       scrollPaletteToCurrent();
       loadNextQuestion();
       updateLegendCounts();
@@ -2342,26 +2371,14 @@ jQuery(document).ready(function ($) {
     });
   });
 
-  // --- NEW: Handler for the Fullscreen Start Button ---
-  wrapper.on("click", "#qp-fullscreen-start-btn", function () {
-    // 1. Enter fullscreen
-    openFullscreen();
-
-    // 2. Hide the overlay
-    $("#qp-start-session-overlay").fadeOut(200);
-
-    // 3. Show the now-prepared practice wrapper
-    $(".qp-practice-wrapper").css("visibility", "visible");
-
-    // 4. Start the timer if it's enabled for the first question
-    if (sessionSettings.timer_enabled) {
-      var firstQuestionID = sessionQuestionIDs[0];
-      var firstQuestionState = answeredStates[firstQuestionID] || {};
-      if (!firstQuestionState.type) {
-        // Only start timer if first question isn't already answered/skipped
-        startTimer(sessionSettings.timer_seconds);
-      }
+  // --- NEW: On-Demand Fullscreen Button Handler ---
+  wrapper.on("click", "#qp-fullscreen-btn", function () {
+    if (document.fullscreenElement) {
+      closeFullscreen();
+    } else {
+      openFullscreen();
     }
+    scrollPaletteToCurrent();
   });
 
   // --- FINAL: Draggable, Resizable, Touch-Enabled Rough Work Popup with Undo/Redo ---
@@ -2797,31 +2814,33 @@ jQuery(document).ready(function ($) {
     // Use double requestAnimationFrame (rAF) instead of setTimeout.
     // This guarantees that the browser has finished all layout calculations
     // after the .current class moved, ensuring we measure the final positions.
-    setTimeout(function() {
-            requestAnimationFrame(function () {
-              // Select only visible palette grids (handles docked vs. sliding views)
-              var $paletteGrids = $(
-                "#qp-palette-docked .qp-palette-grid:visible, #qp-palette-sliding .qp-palette-grid:visible"
-              );
+    setTimeout(function () {
+      requestAnimationFrame(function () {
+        // Select only visible palette grids (handles docked vs. sliding views)
+        var $paletteGrids = $(
+          "#qp-palette-docked .qp-palette-grid:visible, #qp-palette-sliding .qp-palette-grid:visible"
+        );
 
-              $paletteGrids.each(function () {
-                // 'this' is the grid container DOM element.
-                var gridElement = this;
-                // Find the current button within this grid.
-                var $currentBtn = $(gridElement).find(".qp-palette-btn.current");
+        $paletteGrids.each(function () {
+          // 'this' is the grid container DOM element.
+          var gridElement = this;
+          // Find the current button within this grid.
+          var $currentBtn = $(gridElement).find(".qp-palette-btn.current");
 
-                if ($currentBtn.length) {
-                  var btnElement = $currentBtn[0];
-                    // If (and ONLY if) the manual check fails, initiate the scroll.
-                    btnElement.scrollIntoView({
-                      behavior: "smooth",
-                      // Use 'nearest' so that if it is genuinely far out of view, it scrolls the minimum amount.
-                      block: "center",
-                    });
-                  // If it returns true, we do absolutely nothing, preventing the erratic jumps.
-                }
+          if ($currentBtn.length) {
+            var btnElement = $currentBtn[0];
+            // If (and ONLY if) the manual check fails, initiate the scroll.
+            if (!isElementFullyVisibleInContainer(btnElement, gridElement)) {
+              // If (and ONLY if) the check fails, initiate the scroll.
+              btnElement.scrollIntoView({
+                behavior: "smooth",
+                block: "center",
               });
+            }
+            // If it returns true, we do absolutely nothing, preventing the erratic jumps.
+          }
+        });
       });
-    }, 250);
+    }, 200);
   }
 });

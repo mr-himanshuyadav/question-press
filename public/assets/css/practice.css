@@ -1511,22 +1511,6 @@ body.palette-overlay-open #qp-palette-sliding {
     background-color: #90a4ae;
 }
 
-/* --- Fullscreen Start Overlay Styles --- */
-#qp-start-session-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(240, 242, 245, 0.95);
-    /* Semi-transparent background */
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 2000;
-    /* Ensure it's on top */
-    text-align: center;
-}
 
 /* --- NEW: Rough Work Canvas Styles --- */
 #qp-header-top-row {
@@ -1715,41 +1699,20 @@ body.palette-overlay-open #qp-palette-sliding {
     cursor: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAAXNSR0IArs4c6QAAADNJREFUOE9jZKAQMFKon4F4NxA/AeL/QPwfiAOB+C8QCwDxbyAWAeL/QPwFigEBAgwA3aYDBa2s2KQAAAAASUVORK5CYII=) 12 12, auto;
 }
 
-.qp-start-session-content {
-    background: #fff;
-    padding: 2rem 3rem;
-    border-radius: var(--qp-radius);
-    box-shadow: var(--qp-shadow);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 20px;
+/* --- New On-Demand Fullscreen Button --- */
+#qp-fullscreen-btn {
+    display: none; /* Hidden by default on mobile */
 }
 
-.qp-start-session-content h3 {
-    font-size: 1.3em;
-    margin-top: 0;
-}
-
-/* Initially hide the main practice wrapper */
-.qp-practice-wrapper {
-    visibility: hidden;
-}
-
-/* --- NEW: Mobile-Specific Fullscreen Behavior --- */
-@media (max-width: 768px) {
-
-    /* Hide the fullscreen overlay completely on smaller screens */
-    #qp-start-session-overlay {
-        display: none;
-    }
-
-    /* Make the practice content visible by default on smaller screens */
-    .qp-practice-wrapper {
-        visibility: visible;
+/* Show the button only on larger screens */
+@media (min-width: 768px) {
+    #qp-fullscreen-btn {
+        display: flex; /* Or 'inline-flex' if needed */
+        align-items: center;
+        justify-content: center;
+        outline: none;
     }
 }
-
 
 
 /* --- Dashboard Screen --- */
