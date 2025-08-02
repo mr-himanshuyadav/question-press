@@ -2503,7 +2503,21 @@ jQuery(document).ready(function ($) {
     popup.css("background-color", `rgba(255, 255, 255, ${popupOpacity})`);
     overlay.css("background-color", `rgba(0, 0, 0, ${overlayOpacity})`);
     $("#qp-canvas-opacity-slider").val(initialSliderValue);
-    popup.css({ top: "50%", left: "50%", transform: "translate(-50%, -50%)" });
+    // Check for saved position in localStorage
+    var savedTop = localStorage.getItem('qpCanvasTop');
+    var savedLeft = localStorage.getItem('qpCanvasLeft');
+
+    if (savedTop && savedLeft) {
+        // If a position is saved, apply it directly
+        popup.css({
+            'top': parseFloat(savedTop) + 'px',
+            'left': parseFloat(savedLeft) + 'px',
+            'transform': 'none' // Important to override the centering transform
+        });
+    } else {
+        // Otherwise, open it in the center for the first time
+        popup.css({ 'top': '50%', 'left': '50%', 'transform': 'translate(-50%, -50%)' });
+    }
     overlay.fadeIn(200);
     var offset = popup.offset();
     popup.css({ top: offset.top, left: offset.left, transform: "none" });
@@ -2560,6 +2574,14 @@ jQuery(document).ready(function ($) {
 }
 
   function onInteractionEnd() {
+    if (isDragging) {
+        // --- THIS IS THE FIX ---
+        // Save the final position to localStorage
+        var finalOffset = popup.offset();
+        localStorage.setItem('qpCanvasTop', finalOffset.top);
+        localStorage.setItem('qpCanvasLeft', finalOffset.left);
+        // --- END FIX ---
+    }
     if (isResizing) saveCanvasState();
     isDragging = isResizing = false;
     $(document).off("mousemove touchmove", onInteractionMove);
