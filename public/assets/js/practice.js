@@ -2440,6 +2440,7 @@ jQuery(document).ready(function ($) {
 
       var img = new Image();
       img.onload = function () {
+        masterCtx.globalCompositeOperation = 'source-over';
         masterCtx.clearRect(0, 0, masterCanvas.width, masterCanvas.height);
         masterCtx.drawImage(img, 0, 0);
         updateVisibleCanvas(); // Update the view
