@@ -3298,68 +3298,71 @@ function qp_start_incorrect_practice_session_ajax()
     $user_id = get_current_user_id();
     $attempts_table = $wpdb->prefix . 'qp_user_attempts';
     $questions_table = $wpdb->prefix . 'qp_questions';
+    $reports_table = $wpdb->prefix . 'qp_question_reports';
 
-    // Decide which set of questions to fetch based on the checkbox
+    // Exclude questions with open reports
+    $reported_question_ids = $wpdb->get_col("SELECT DISTINCT question_id FROM {$reports_table} WHERE status = 'open'");
+    $exclude_sql = !empty($reported_question_ids) ? 'AND q.question_id NOT IN (' . implode(',', $reported_question_ids) . ')' : '';
+
     $include_all_incorrect = isset($_POST['include_all_incorrect']) && $_POST['include_all_incorrect'] === 'true';
-
     $question_ids = [];
 
     if ($include_all_incorrect) {
         // Mode 1: Get all questions the user has EVER answered incorrectly.
         $question_ids = $wpdb->get_col($wpdb->prepare(
-            "SELECT DISTINCT question_id FROM {$attempts_table} WHERE user_id = %d AND is_correct = 0",
+            "SELECT DISTINCT a.question_id 
+             FROM {$attempts_table} a
+             JOIN {$questions_table} q ON a.question_id = q.question_id
+             WHERE a.user_id = %d AND a.is_correct = 0 AND q.status = 'publish' {$exclude_sql}",
             $user_id
         ));
     } else {
         // Mode 2: Get questions the user has NEVER answered correctly.
-        // First, get all questions ever answered correctly by the user.
         $correctly_answered_qids = $wpdb->get_col($wpdb->prepare(
             "SELECT DISTINCT question_id FROM {$attempts_table} WHERE user_id = %d AND is_correct = 1",
             $user_id
         ));
+        $correctly_answered_placeholder = !empty($correctly_answered_qids) ? implode(',', $correctly_answered_qids) : '0';
 
-        // Then, get all questions the user has explicitly ANSWERED (not skipped).
-        $all_answered_qids = $wpdb->get_col($wpdb->prepare(
-            "SELECT DISTINCT question_id FROM {$attempts_table} WHERE user_id = %d AND status = 'answered'",
+        $question_ids = $wpdb->get_col($wpdb->prepare(
+            "SELECT DISTINCT a.question_id 
+             FROM {$attempts_table} a
+             JOIN {$questions_table} q ON a.question_id = q.question_id
+             WHERE a.user_id = %d AND a.status = 'answered' AND q.status = 'publish'
+             AND a.question_id NOT IN ({$correctly_answered_placeholder}) {$exclude_sql}",
             $user_id
         ));
-
-        // The questions to practice are those answered but never answered correctly.
-        $question_ids = array_diff($all_answered_qids, $correctly_answered_qids);
     }
 
     if (empty($question_ids)) {
         wp_send_json_error(['message' => 'No incorrect questions found to practice.']);
     }
 
-    // Randomize the order of questions
     shuffle($question_ids);
 
-    // Get the Session Page URL from settings
     $options = get_option('qp_settings');
     $session_page_id = isset($options['session_page']) ? absint($options['session_page']) : 0;
     if (!$session_page_id) {
         wp_send_json_error(['message' => 'The administrator has not configured a session page.']);
     }
 
-    // Create a special settings snapshot for this session
     $session_settings = [
-        'practice_mode'   => 'Incorrect Que. Practice', // Mode Name
+        'practice_mode'   => 'Incorrect Que. Practice',
+        'marks_correct'   => null,
+        'marks_incorrect' => null,
         'timer_enabled'   => false,
     ];
 
-    // Create the new session record
     $wpdb->insert($wpdb->prefix . 'qp_user_sessions', [
         'user_id'                 => $user_id,
         'status'                  => 'active',
         'start_time'              => current_time('mysql'),
         'last_activity'           => current_time('mysql'),
         'settings_snapshot'       => wp_json_encode($session_settings),
-        'question_ids_snapshot'   => wp_json_encode(array_values($question_ids)) // Re-index array
+        'question_ids_snapshot'   => wp_json_encode(array_values($question_ids))
     ]);
     $session_id = $wpdb->insert_id;
 
-    // Build the redirect URL and send it back
     $redirect_url = add_query_arg('session_id', $session_id, get_permalink($session_page_id));
     wp_send_json_success(['redirect_url' => $redirect_url]);
 }
