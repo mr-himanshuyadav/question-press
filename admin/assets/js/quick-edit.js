@@ -137,7 +137,13 @@ wrapper.on("change", ".qe-subject-select", function () {
 
     function buildTopicHierarchy(parentElement, allTerms, parentId, level, selectedId) {
         var prefix = '— '.repeat(level);
+        
+        // Find all direct children of the current parentId
         var children = allTerms.filter(term => term.parent == parentId);
+
+        // --- ADD THIS LINE TO SORT CHILDREN ALPHABETICALLY ---
+        children.sort((a, b) => a.name.localeCompare(b.name));
+
         children.forEach(function(term) {
             var option = $("<option></option>").val(term.id).text(prefix + term.name);
             if (term.id == selectedId) {
@@ -213,6 +219,9 @@ wrapper.on("change", ".qe-subject-select", function () {
         
         // Find all direct children of the current parentId
         var children = allTerms.filter(term => term.parent_id == parentId);
+
+        // --- ADD THIS LINE TO SORT CHILDREN ALPHABETICALLY ---
+        children.sort((a, b) => a.name.localeCompare(b.name));
 
         children.forEach(function(term) {
             var option = $("<option></option>")

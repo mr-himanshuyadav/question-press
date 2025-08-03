@@ -2624,80 +2624,94 @@ function qp_save_quick_edit_data_ajax()
 
     // Step 3: Get necessary IDs for processing
     $group_id = $wpdb->get_var($wpdb->prepare("SELECT group_id FROM $q_table WHERE question_id = %d", $question_id));
-    $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'subject'");
-    $exam_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'exam'");
 
-    // Step 4: Update Group-Level Data and Relationships
+    // Step 4: Update Group-Level Data (PYQ status)
     if ($group_id) {
-        // Update PYQ status and year directly on the group table
         $wpdb->update($g_table, [
             'is_pyq' => isset($data['is_pyq']) ? 1 : 0,
             'pyq_year' => (isset($data['is_pyq']) && !empty($data['pyq_year'])) ? sanitize_text_field($data['pyq_year']) : null
         ], ['group_id' => $group_id]);
+    }
+    
+    // Step 5: CONSOLIDATED Group and Question-Level Term Relationships
+    if ($group_id) {
+        // --- 5a: Handle ALL Group-Level Relationships ---
+        $group_taxonomies = ['subject', 'source', 'exam'];
+        $tax_ids_to_clear = [];
 
-        // Delete old subject and exam relationships for this group to prevent duplicates
-        $wpdb->query($wpdb->prepare(
-            "DELETE FROM {$rel_table} WHERE object_id = %d AND object_type = 'group' AND term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id IN (%d, %d))",
-            $group_id,
-            $subject_tax_id,
-            $exam_tax_id
-        ));
-
-        // Insert the new subject relationship for the group
-        if (!empty($data['subject_id'])) {
-            $wpdb->insert($rel_table, ['object_id' => $group_id, 'term_id' => absint($data['subject_id']), 'object_type' => 'group']);
+        foreach($group_taxonomies as $tax_name) {
+            $tax_id = $wpdb->get_var($wpdb->prepare("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = %s", $tax_name));
+            if ($tax_id) $tax_ids_to_clear[] = $tax_id;
         }
 
-        // Insert the new exam relationship if it's a PYQ and an exam is selected
+        // Delete all existing group relationships for these taxonomies in one query
+        if (!empty($tax_ids_to_clear)) {
+            $tax_ids_placeholder = implode(',', $tax_ids_to_clear);
+            $wpdb->query($wpdb->prepare(
+                "DELETE FROM {$rel_table} 
+                 WHERE object_id = %d AND object_type = 'group' 
+                 AND term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id IN ($tax_ids_placeholder))",
+                $group_id
+            ));
+        }
+
+        // Insert new relationships for the group
+        $group_terms_to_apply = [];
+        // Subject/Topic: Link the group to the most specific topic selected.
+        if (!empty($data['topic_id'])) $group_terms_to_apply[] = absint($data['topic_id']);
+        
+        // Source/Section: Link the group to the most specific term (section > source).
+        if (!empty($data['section_id'])) {
+             $group_terms_to_apply[] = absint($data['section_id']);
+        } elseif (!empty($data['source_id'])) {
+             $group_terms_to_apply[] = absint($data['source_id']);
+        }
+
+        // Exam: Link the group if it's a PYQ and an exam is selected
         if (isset($data['is_pyq']) && !empty($data['exam_id'])) {
-            $wpdb->insert($rel_table, ['object_id' => $group_id, 'term_id' => absint($data['exam_id']), 'object_type' => 'group']);
+            $group_terms_to_apply[] = absint($data['exam_id']);
+        }
+
+        // Insert all new group relationships
+        foreach (array_unique($group_terms_to_apply) as $term_id) {
+            if ($term_id > 0) {
+                 $wpdb->insert($rel_table, ['object_id' => $group_id, 'term_id' => $term_id, 'object_type' => 'group']);
+            }
         }
     }
 
-    // Step 5: Update Question-Level Relationships (Topic, Source/Section, Labels)
-    // Delete all existing term relationships for this specific question first.
-    $wpdb->delete($rel_table, ['object_id' => $question_id, 'object_type' => 'question']);
-
-    // Collect all new term IDs to be linked to the question
-    $term_ids_to_link = [];
-    if (!empty($data['topic_id'])) $term_ids_to_link[] = absint($data['topic_id']);
-
-    // A question should be linked to its most specific source term (Section > Source)
-    if (!empty($data['section_id'])) {
-        $term_ids_to_link[] = absint($data['section_id']);
-    } elseif (!empty($data['source_id'])) {
-        $term_ids_to_link[] = absint($data['source_id']);
+    // --- 5b: Handle Question-Level Relationships (Labels) ---
+    // (This part remains the same as it correctly targets the question)
+    $label_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'label'");
+    if($label_tax_id){
+        $wpdb->query($wpdb->prepare(
+            "DELETE FROM {$rel_table} 
+             WHERE object_id = %d AND object_type = 'question' 
+             AND term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id = %d)",
+            $question_id,
+            $label_tax_id
+        ));
     }
-
-    // Add any selected labels
+    
     if (!empty($data['labels']) && is_array($data['labels'])) {
-        $term_ids_to_link = array_merge($term_ids_to_link, array_map('absint', $data['labels']));
-    }
-
-    // Insert the new relationships
-    foreach (array_unique($term_ids_to_link) as $term_id) {
-        if ($term_id > 0) {
-            $wpdb->insert($rel_table, ['object_id' => $question_id, 'term_id' => $term_id, 'object_type' => 'question']);
+        foreach ($data['labels'] as $label_id) {
+             if (absint($label_id) > 0) {
+                $wpdb->insert($rel_table, ['object_id' => $question_id, 'term_id' => absint($label_id), 'object_type' => 'question']);
+            }
         }
     }
 
     // Step 6: Update the Correct Answer Option
     $correct_option_id = isset($data['correct_option_id']) ? absint($data['correct_option_id']) : 0;
     if ($correct_option_id > 0) {
-        // First, set all options for this question to incorrect
         $wpdb->update("{$wpdb->prefix}qp_options", ['is_correct' => 0], ['question_id' => $question_id]);
-        // Then, set the selected option as correct
         $wpdb->update("{$wpdb->prefix}qp_options", ['is_correct' => 1], ['option_id' => $correct_option_id, 'question_id' => $question_id]);
     }
 
     // Step 7: Re-render the updated table row and send it back
     $list_table = new QP_Questions_List_Table();
-
-    // Re-populate the $_REQUEST superglobal with the filters sent from JavaScript
-    // This makes the prepare_items() function aware of the current page context.
     $filters = ['status', 'filter_by_subject', 'filter_by_topic', 'filter_by_source', 'filter_by_label', 's'];
     foreach ($filters as $filter) {
-        // We get the status from the original row data, not the filters at the top
         if ($filter === 'status' && isset($_POST['status'])) {
             $_REQUEST[$filter] = sanitize_key($_POST['status']);
         } elseif (isset($_POST[$filter])) {
@@ -2720,12 +2734,9 @@ function qp_save_quick_edit_data_ajax()
         $row_html = ob_get_clean();
         wp_send_json_success(['row_html' => $row_html]);
     } else {
-        // If the item is not found, it's because it no longer matches the active filters.
-        // Send back an empty row_html to signal the JavaScript to remove the row from the view.
         wp_send_json_success(['row_html' => '']);
     }
 
-    // Fallback error if the row could not be re-rendered
     wp_send_json_error(['message' => 'Could not retrieve the updated row data. Please refresh the page.']);
 }
 add_action('wp_ajax_save_quick_edit_data', 'qp_save_quick_edit_data_ajax');
