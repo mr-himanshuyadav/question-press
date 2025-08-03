@@ -964,47 +964,39 @@ class QP_Shortcodes
             $avg_time_per_question = sprintf('%02d:%02d', floor($avg_seconds / 60), $avg_seconds % 60);
         }
 
-        // CORRECTED: Get topics from the new taxonomy system
-        $topics_in_session = $wpdb->get_col($wpdb->prepare("
-            SELECT DISTINCT t.name
-            FROM {$wpdb->prefix}qp_terms t
-            JOIN {$wpdb->prefix}qp_term_relationships r ON t.term_id = r.term_id
-            JOIN {$wpdb->prefix}qp_user_attempts a ON r.object_id = a.question_id
-            WHERE a.session_id = %d 
-              AND r.object_type = 'question' 
-              AND t.parent != 0 
-              AND t.taxonomy_id = (SELECT taxonomy_id FROM {$wpdb->prefix}qp_taxonomies WHERE taxonomy_name = 'subject')
-            ORDER BY t.name ASC
+        // Get all unique group IDs from the attempts in this session
+        $group_ids_in_session = $wpdb->get_col($wpdb->prepare("
+            SELECT DISTINCT q.group_id
+            FROM {$wpdb->prefix}qp_user_attempts a
+            JOIN {$wpdb->prefix}qp_questions q ON a.question_id = q.question_id
+            WHERE a.session_id = %d
         ", $session_id));
+        
+        $topics_in_session = [];
+        if (!empty($group_ids_in_session)) {
+            $group_ids_placeholder = implode(',', $group_ids_in_session);
+            // Get the names of the terms in the 'subject' taxonomy linked to those groups
+            $topics_in_session = $wpdb->get_col("
+                SELECT DISTINCT t.name
+                FROM {$wpdb->prefix}qp_terms t
+                JOIN {$wpdb->prefix}qp_term_relationships r ON t.term_id = r.term_id
+                WHERE r.object_id IN ($group_ids_placeholder)
+                  AND r.object_type = 'group'
+                  AND t.taxonomy_id = (SELECT taxonomy_id FROM {$wpdb->prefix}qp_taxonomies WHERE taxonomy_name = 'subject')
+                ORDER BY t.name ASC
+            ");
+        }
 
-        // CORRECTED: Main query for fetching all attempt data with correct joins
+        // --- NEW, CORRECTED QUERY TO FETCH ALL ATTEMPT DATA ---
         $attempts_raw = $wpdb->get_results($wpdb->prepare(
             "SELECT 
                 a.question_id, a.selected_option_id, a.is_correct, a.mock_status,
                 q.question_text, q.custom_question_id, q.question_number_in_section,
-                g.direction_text,
-                subject_term.name AS subject_name,
-                topic_term.name AS topic_name,
-                CASE 
-                    WHEN linked_source_term.parent != 0 THEN parent_source_term.name 
-                    ELSE linked_source_term.name 
-                END AS source_name,
-                CASE 
-                    WHEN linked_source_term.parent != 0 THEN linked_source_term.name 
-                    ELSE NULL 
-                END AS section_name
+                g.direction_text
             FROM {$wpdb->prefix}qp_user_attempts a
             JOIN {$wpdb->prefix}qp_questions q ON a.question_id = q.question_id
             LEFT JOIN {$wpdb->prefix}qp_question_groups g ON q.group_id = g.group_id
-            LEFT JOIN {$wpdb->prefix}qp_term_relationships subject_rel ON g.group_id = subject_rel.object_id AND subject_rel.object_type = 'group' AND subject_rel.term_id IN (SELECT term_id FROM {$wpdb->prefix}qp_terms WHERE parent = 0 AND taxonomy_id = (SELECT taxonomy_id FROM {$wpdb->prefix}qp_taxonomies WHERE taxonomy_name = 'subject'))
-            LEFT JOIN {$wpdb->prefix}qp_terms subject_term ON subject_rel.term_id = subject_term.term_id
-            LEFT JOIN {$wpdb->prefix}qp_term_relationships topic_rel ON q.question_id = topic_rel.object_id AND topic_rel.object_type = 'question' AND topic_rel.term_id IN (SELECT term_id FROM {$wpdb->prefix}qp_terms WHERE parent != 0 AND taxonomy_id = (SELECT taxonomy_id FROM {$wpdb->prefix}qp_taxonomies WHERE taxonomy_name = 'subject'))
-            LEFT JOIN {$wpdb->prefix}qp_terms topic_term ON topic_rel.term_id = topic_term.term_id
-            LEFT JOIN {$wpdb->prefix}qp_term_relationships source_rel ON q.question_id = source_rel.object_id AND source_rel.object_type = 'question' AND source_rel.term_id IN (SELECT term_id FROM {$wpdb->prefix}qp_terms WHERE taxonomy_id = (SELECT taxonomy_id FROM {$wpdb->prefix}qp_taxonomies WHERE taxonomy_name = 'source'))
-            LEFT JOIN {$wpdb->prefix}qp_terms linked_source_term ON source_rel.term_id = linked_source_term.term_id
-            LEFT JOIN {$wpdb->prefix}qp_terms parent_source_term ON linked_source_term.parent = parent_source_term.term_id
             WHERE a.session_id = %d
-            GROUP BY a.attempt_id
             ORDER BY a.attempt_id ASC",
             $session_id
         ));
@@ -1018,6 +1010,28 @@ class QP_Shortcodes
                 $all_options[$option->question_id][] = $option;
             }
         }
+        
+        // --- NEW: Fetch all lineage data in fewer queries for efficiency ---
+        $lineage_cache = [];
+        function get_term_lineage($term_id, &$lineage_cache, $wpdb) {
+            if (isset($lineage_cache[$term_id])) {
+                return $lineage_cache[$term_id];
+            }
+            $lineage = [];
+            $current_id = $term_id;
+            for ($i=0; $i<10; $i++) {
+                if (!$current_id) break;
+                $term = $wpdb->get_row($wpdb->prepare("SELECT name, parent FROM {$wpdb->prefix}qp_terms WHERE term_id = %d", $current_id));
+                if ($term) {
+                    array_unshift($lineage, $term->name);
+                    $current_id = $term->parent;
+                } else {
+                    break;
+                }
+            }
+            $lineage_cache[$term_id] = $lineage;
+            return $lineage;
+        }
 
         $attempts = [];
         foreach ($attempts_raw as $attempt) {
@@ -1025,16 +1039,21 @@ class QP_Shortcodes
             $attempt->selected_answer = '';
             $attempt->correct_answer = '';
             foreach ($attempt->options as $option) {
-                if ($option->is_correct) {
-                    $attempt->correct_answer = $option->option_text;
-                }
-                if ($option->option_id == $attempt->selected_option_id) {
-                    $attempt->selected_answer = $option->option_text;
-                }
+                if ($option->is_correct) $attempt->correct_answer = $option->option_text;
+                if ($option->option_id == $attempt->selected_option_id) $attempt->selected_answer = $option->option_text;
             }
+
+            // Get group and term relationships
+            $group_id = $wpdb->get_var($wpdb->prepare("SELECT group_id FROM {$wpdb->prefix}qp_questions WHERE question_id = %d", $attempt->question_id));
+            $subject_term_id = $wpdb->get_var($wpdb->prepare("SELECT term_id FROM {$wpdb->prefix}qp_term_relationships WHERE object_id = %d AND object_type = 'group' AND term_id IN (SELECT term_id FROM {$wpdb->prefix}qp_terms WHERE taxonomy_id = (SELECT taxonomy_id FROM {$wpdb->prefix}qp_taxonomies WHERE taxonomy_name = 'subject'))", $group_id));
+            $source_term_id = $wpdb->get_var($wpdb->prepare("SELECT term_id FROM {$wpdb->prefix}qp_term_relationships WHERE object_id = %d AND object_type = 'group' AND term_id IN (SELECT term_id FROM {$wpdb->prefix}qp_terms WHERE taxonomy_id = (SELECT taxonomy_id FROM {$wpdb->prefix}qp_taxonomies WHERE taxonomy_name = 'source'))", $group_id));
+
+            $attempt->subject_lineage = $subject_term_id ? get_term_lineage($subject_term_id, $lineage_cache, $wpdb) : [];
+            $attempt->source_lineage = $source_term_id ? get_term_lineage($source_term_id, $lineage_cache, $wpdb) : [];
+            
             $attempts[] = $attempt;
         }
-
+        
         ob_start();
         echo '<div id="qp-practice-app-wrapper">';
         $is_mock_test = isset($settings['practice_mode']) && $settings['practice_mode'] === 'mock_test';
@@ -1148,31 +1167,20 @@ class QP_Shortcodes
                                 <span><strong>ID: </strong><?php echo esc_html($attempt->custom_question_id); ?></span>
                                 <span>
                                     <strong>Topic: </strong>
-                                    <?php
-                                    $topic_display = esc_html($attempt->subject_name);
-                                    if (!empty($attempt->topic_name)) {
-                                        $topic_display .= ' / ' . esc_html($attempt->topic_name);
-                                    }
-                                    echo $topic_display; ?>
+                                    <?php echo esc_html(implode(' / ', $attempt->subject_lineage)); ?>
                                 </span>
                             </div>
                             <div class="meta-right">
-                                <?php
-                                $is_reported = in_array($attempt->question_id, $reported_qids_for_user);
-                                ?>
-                                <button class="qp-report-button qp-report-btn-review"
-                                    data-question-id="<?php echo esc_attr($attempt->question_id); ?>"
-                                    <?php echo $is_reported ? 'disabled' : ''; ?>>
+                                <?php $is_reported = in_array($attempt->question_id, $reported_qids_for_user); ?>
+                                <button class="qp-report-button qp-report-btn-review" data-question-id="<?php echo esc_attr($attempt->question_id); ?>" <?php echo $is_reported ? 'disabled' : ''; ?>>
                                     <span>&#9888;</span> <?php echo $is_reported ? 'Reported' : 'Report'; ?>
                                 </button>
                             </div>
                         </div>
                         <?php
                         $user_can_view_source = !empty(array_intersect((array)wp_get_current_user()->roles, (array)($options['show_source_meta_roles'] ?? [])));
-                        if ($mode === 'Section Wise Practice' && $user_can_view_source):
-                            $source_parts = [];
-                            if ($attempt->source_name) $source_parts[] = esc_html($attempt->source_name);
-                            if ($attempt->section_name) $source_parts[] = esc_html($attempt->section_name);
+                        if ($mode === 'Section Wise Practice' && $user_can_view_source && !empty($attempt->source_lineage)):
+                            $source_parts = $attempt->source_lineage;
                             if ($attempt->question_number_in_section) $source_parts[] = 'Q. ' . esc_html($attempt->question_number_in_section);
                         ?>
                             <div class="qp-review-source-meta">
