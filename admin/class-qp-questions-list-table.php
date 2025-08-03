@@ -402,12 +402,34 @@ if (!empty($_REQUEST['filter_by_source'])) {
     }
 
     if ($term_id_to_filter > 0) {
-        // This logic was already correct: it joins the group to the source/section term.
+        // --- NEW: Logic to get all descendant term IDs ---
+        $descendant_ids = [$term_id_to_filter];
+        $current_parent_ids = [$term_id_to_filter];
+        
+        // Loop to find children, grandchildren, etc. (with a safety limit of 10 levels)
+        for ($i = 0; $i < 10; $i++) { 
+            if (empty($current_parent_ids)) break;
+            $ids_placeholder = implode(',', $current_parent_ids);
+            $child_ids = $wpdb->get_col("SELECT term_id FROM $term_table WHERE parent IN ($ids_placeholder)");
+            if (!empty($child_ids)) {
+                $descendant_ids = array_merge($descendant_ids, $child_ids);
+                $current_parent_ids = $child_ids;
+            } else {
+                break; // No more children found
+            }
+        }
+        $all_term_ids_to_filter = array_unique($descendant_ids);
+        $term_ids_placeholder = implode(',', $all_term_ids_to_filter);
+        // --- END NEW LOGIC ---
+
         if (!in_array('source_rel', $joins_added)) {
+            // Join based on the group relationship
             $query_joins .= " JOIN {$rel_table} source_rel ON g.group_id = source_rel.object_id AND source_rel.object_type = 'group'";
             $joins_added[] = 'source_rel';
         }
-        $where_conditions[] = $wpdb->prepare("source_rel.term_id = %d", $term_id_to_filter);
+        
+        // Filter where the group is linked to the parent OR any of its descendants.
+        $where_conditions[] = "source_rel.term_id IN ($term_ids_placeholder)";
     }
 }
 

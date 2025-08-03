@@ -423,64 +423,59 @@ wrapper.on('click', '.save', function(e) {
 
     $topicFilter.on("change", function () {
     var topicId = $(this).val();
-    var subjectId = $subjectFilter.val(); 
-    
-    // MODIFICATION: Reset the source filter, but don't hide it.
-    $sourceFilter.val("");
+    var subjectId = $subjectFilter.val();
+    $sourceFilter.empty().append('<option value="">Loading Sources...</option>');
 
-    // Only proceed if a subject is selected. Topic is now optional for this logic.
-    if (subjectId) { // MODIFIED: Changed from topicId && subjectId
-        $.ajax({
-            url: qp_admin_filter_data.ajax_url,
-            type: "POST",
-            data: {
-                action: "get_sources_for_list_table_filter",
-                nonce: qp_admin_filter_data.nonce,
-                subject_id: subjectId, 
-                topic_id: topicId, // Pass the topicId, which might be empty
-            },
-            success: function (response) {
-                if (
-                response.success &&
-                response.data.sources &&
-                response.data.sources.length > 0
-                ) {
-                    $sourceFilter
-                        .empty()
-                        .append('<option value="">All Sources / Sections</option>');
-                    $.each(response.data.sources, function (index, source) {
-                        var sourceOption = $("<option></option>")
-                            .val("source_" + source.source_id)
-                            .text(source.source_name);
-                        if ("source_" + source.source_id == currentSource) {
-                            sourceOption.prop("selected", true);
+    if (!subjectId) {
+        $sourceFilter.html('<option value="">All Sources / Sections</option>');
+        return;
+    }
+
+    $.ajax({
+        url: qp_admin_filter_data.ajax_url,
+        type: "POST",
+        data: {
+            action: "get_sources_for_list_table_filter",
+            nonce: qp_admin_filter_data.nonce,
+            subject_id: subjectId,
+            topic_id: topicId,
+        },
+        success: function (response) {
+            $sourceFilter.empty().append('<option value="">All Sources / Sections</option>');
+            
+            if (response.success && response.data.sources && response.data.sources.length > 0) {
+                // Recursive function to build the dropdown options
+                function buildOptions(terms, level) {
+                    var prefix = '— '.repeat(level);
+                    terms.forEach(function(term) {
+                        var value = (term.parent == 0 ? 'source_' : 'section_') + term.term_id;
+                        var option = $("<option></option>")
+                            .val(value)
+                            .text(prefix + term.name);
+                        
+                        if (value === currentSource) {
+                            option.prop("selected", true);
                         }
-                        $sourceFilter.append(sourceOption);
-                        if (
-                            source.sections &&
-                            Object.keys(source.sections).length > 0
-                        ) {
-                            $.each(source.sections, function (idx, section) {
-                                var sectionOption = $("<option></option>")
-                                    .val("section_" + section.section_id)
-                                    .text("  - " + section.section_name);
-                                if ("section_" + section.section_id == currentSource) {
-                                    sectionOption.prop("selected", true);
-                                }
-                                $sourceFilter.append(sectionOption);
-                            });
+                        
+                        $sourceFilter.append(option);
+
+                        // If the term has children, recurse
+                        if (term.children && term.children.length > 0) {
+                            buildOptions(term.children, level + 1);
                         }
                     });
-                    // MODIFICATION: No longer need to .show() as it's always visible.
-                } else {
-                    // If no sources are found for the selection, show a relevant message.
-                    $sourceFilter
-                        .empty()
-                        .append('<option value="">No sources for this selection</option>');
                 }
-            },
-        });
-    }
+                
+                buildOptions(response.data.sources, 0);
+
+            } else {
+                $sourceFilter.append('<option value="">No sources for this selection</option>');
+            }
+        },
+        error: function() {
+            $sourceFilter.empty().append('<option value="">Error loading sources</option>');
+        }
+    });
 });
 
     // Bulk Edit Panel Logic

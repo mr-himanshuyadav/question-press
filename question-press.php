@@ -1183,74 +1183,78 @@ function qp_get_sources_for_list_table_filter_ajax()
     $tax_table = $wpdb->prefix . 'qp_taxonomies';
     $source_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'source'");
 
-    // --- MODIFICATION START ---
-    // This block correctly identifies the relevant group IDs.
-
+    // Step 1: Get the relevant group IDs based on subject/topic filter
     $term_ids_to_check = [];
     if ($topic_id > 0) {
-        // If a specific topic is selected, we only care about that one.
         $term_ids_to_check = [$topic_id];
     } else {
-        // If only a subject is selected, get all of its child topics.
         $term_ids_to_check = $wpdb->get_col($wpdb->prepare("SELECT term_id FROM $term_table WHERE parent = %d", $subject_id));
     }
-    
+
     $group_ids = [];
     if (!empty($term_ids_to_check)) {
         $term_ids_placeholder = implode(',', $term_ids_to_check);
-        // Find all groups linked to the relevant topics.
         $group_ids = $wpdb->get_col("SELECT object_id FROM $rel_table WHERE term_id IN ($term_ids_placeholder) AND object_type = 'group'");
     }
-    
-    // --- MODIFICATION END ---
-    
 
     if (empty($group_ids)) {
         wp_send_json_success(['sources' => []]);
         return;
     }
-
     $group_ids_placeholder = implode(',', $group_ids);
 
-    // 3. Find all source/section terms linked to this final list of groups.
-    $source_terms = $wpdb->get_results($wpdb->prepare(
-        "SELECT DISTINCT t.term_id, t.name, t.parent
-        FROM {$term_table} t
-        JOIN {$rel_table} r ON t.term_id = r.term_id
-        WHERE r.object_id IN ($group_ids_placeholder) AND r.object_type = 'group' AND t.taxonomy_id = %d
-        ORDER BY t.parent, t.name ASC",
+    // Step 2: Find all source/section terms linked to questions within those groups
+    $linked_term_ids = $wpdb->get_col($wpdb->prepare(
+        "SELECT DISTINCT t.term_id
+         FROM {$term_table} t
+         JOIN {$rel_table} r ON t.term_id = r.term_id
+         WHERE r.object_id IN ($group_ids_placeholder) AND r.object_type = 'group' AND t.taxonomy_id = %d",
         $source_tax_id
     ));
 
-    // 4. Group sections under their parent source (no change needed here).
-    $sources = [];
-    foreach ($source_terms as $term) {
-        if ($term->parent == 0) {
-            if (!isset($sources[$term->term_id])) {
-                $sources[$term->term_id] = [
-                    'source_id'   => $term->term_id,
-                    'source_name' => $term->name,
-                    'sections'    => []
-                ];
-            }
-        } else {
-            $parent_source_id = $term->parent;
-            if (!isset($sources[$parent_source_id])) {
-                $parent_name = $wpdb->get_var($wpdb->prepare("SELECT name FROM $term_table WHERE term_id = %d", $parent_source_id));
-                $sources[$parent_source_id] = [
-                    'source_id' => $parent_source_id,
-                    'source_name' => $parent_name,
-                    'sections' => []
-                ];
-            }
-            $sources[$parent_source_id]['sections'][$term->term_id] = [
-                'section_id'   => $term->term_id,
-                'section_name' => $term->name
-            ];
-        }
+    if (empty($linked_term_ids)) {
+        wp_send_json_success(['sources' => []]);
+        return;
     }
 
-    wp_send_json_success(['sources' => array_values($sources)]);
+    // Step 3: Fetch the full lineage (parents) for every linked term
+    $full_lineage_ids = [];
+    foreach ($linked_term_ids as $term_id) {
+        $current_id = $term_id;
+        for ($i = 0; $i < 10; $i++) { // Safety break
+            if (!$current_id || in_array($current_id, $full_lineage_ids)) break;
+            $full_lineage_ids[] = $current_id;
+            $current_id = $wpdb->get_var($wpdb->prepare("SELECT parent FROM $term_table WHERE term_id = %d", $current_id));
+        }
+    }
+    $all_relevant_term_ids = array_unique($full_lineage_ids);
+    $all_relevant_term_ids_placeholder = implode(',', $all_relevant_term_ids);
+
+    // Step 4: Fetch all details for the relevant terms
+    $all_terms_data = $wpdb->get_results("SELECT term_id, name, parent FROM $term_table WHERE term_id IN ($all_relevant_term_ids_placeholder)");
+
+    // Step 5: Build a hierarchical tree from the flat list
+    $terms_by_id = [];
+    foreach ($all_terms_data as $term) {
+        $terms_by_id[$term->term_id] = $term;
+        $term->children = [];
+    }
+
+    $tree = [];
+    foreach ($terms_by_id as $term_id => &$term) {
+        if ($term->parent != 0 && isset($terms_by_id[$term->parent])) {
+            $terms_by_id[$term->parent]->children[] = &$term;
+        } elseif ($term->parent == 0) {
+            $tree[] = &$term;
+        }
+    }
+    
+    // Sort the top-level sources by name
+    usort($tree, function($a, $b) {
+        return strcmp($a->name, $b->name);
+    });
+
+    wp_send_json_success(['sources' => $tree]);
 }
 add_action('wp_ajax_get_sources_for_list_table_filter', 'qp_get_sources_for_list_table_filter_ajax');
 
