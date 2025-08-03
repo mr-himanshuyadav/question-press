@@ -1538,41 +1538,32 @@ jQuery(document).ready(function ($) {
         );
       directionEl.show();
     }
-    $("#qp-question-subject").html(
-      "<strong>Subject: </strong>" +
-        questionData.subject_name +
-        (questionData.topic_name ? " / " + questionData.topic_name : "")
-    );
+    // --- NEW: Hierarchical Subject/Topic Display ---
+    if (questionData.subject_lineage && Array.isArray(questionData.subject_lineage) && questionData.subject_lineage.length > 0) {
+        $("#qp-question-subject").html(
+            "<strong>Topic: </strong>" + questionData.subject_lineage.join(' / ')
+        );
+    }
+
     $("#qp-question-id").text(
       "Question ID: " + questionData.custom_question_id
     );
-    // --- Source Metadata Display ---
+
+    // --- NEW: Hierarchical Source/Section Display ---
     var sourceDisplayArea = $("#qp-question-source");
-    // Only try to populate the div if it actually exists in the HTML
     if (sourceDisplayArea.length) {
       var sourceInfoParts = [];
-
-      // Check if the new hierarchy data exists and is an array
-      if (
-        questionData.source_hierarchy &&
-        Array.isArray(questionData.source_hierarchy) &&
-        questionData.source_hierarchy.length > 0
-      ) {
-        // Create the full hierarchy path with a bolded label
-        var hierarchyString =
-          "<strong>Source:</strong> " +
-          questionData.source_hierarchy.join(" / ");
-        sourceInfoParts.push(hierarchyString);
+      if (questionData.source_lineage && Array.isArray(questionData.source_lineage) && questionData.source_lineage.length > 0) {
+        var sourceString = "<strong>Source:</strong> " + questionData.source_lineage.join(' / ');
+        sourceInfoParts.push(sourceString);
       }
 
-      // Append the question number if it exists, with a bolded label
       if (questionData.question_number_in_section) {
         sourceInfoParts.push(
           "<strong>Q:</strong> " + questionData.question_number_in_section
         );
       }
-
-      // Set the HTML content, joining parts with a separator if both exist
+      
       sourceDisplayArea.html(sourceInfoParts.join(" | "));
     }
     $("#qp-question-text-area").html(questionData.question_text);

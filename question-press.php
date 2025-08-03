@@ -3789,52 +3789,53 @@ function qp_get_question_data_ajax()
     $g_table = $wpdb->prefix . 'qp_question_groups';
     $o_table = $wpdb->prefix . 'qp_options';
     $a_table = $wpdb->prefix . 'qp_user_attempts';
+    $rel_table = $wpdb->prefix . 'qp_term_relationships';
+    $term_table = $wpdb->prefix . 'qp_terms';
+    $tax_table = $wpdb->prefix . 'qp_taxonomies';
     $user_id = get_current_user_id();
 
+    // 1. Fetch the basic question data first
     $question_data = $wpdb->get_row($wpdb->prepare(
-        "SELECT
-            q.question_id, q.custom_question_id, q.question_text, q.question_number_in_section,
-            g.direction_text, g.direction_image_id,
-            subject_term.name AS subject_name,
-            topic_term.name AS topic_name
-            FROM {$q_table} q
-            LEFT JOIN {$g_table} g ON q.group_id = g.group_id
-            LEFT JOIN {$wpdb->prefix}qp_term_relationships subject_rel ON g.group_id = subject_rel.object_id AND subject_rel.object_type = 'group' AND subject_rel.term_id IN (SELECT term_id FROM {$wpdb->prefix}qp_terms WHERE parent = 0 AND taxonomy_id = (SELECT taxonomy_id FROM {$wpdb->prefix}qp_taxonomies WHERE taxonomy_name = 'subject'))
-            LEFT JOIN {$wpdb->prefix}qp_terms subject_term ON subject_rel.term_id = subject_term.term_id
-            LEFT JOIN {$wpdb->prefix}qp_term_relationships topic_rel ON q.question_id = topic_rel.object_id AND topic_rel.object_type = 'question' AND topic_rel.term_id IN (SELECT term_id FROM {$wpdb->prefix}qp_terms WHERE parent != 0 AND taxonomy_id = (SELECT taxonomy_id FROM {$wpdb->prefix}qp_taxonomies WHERE taxonomy_name = 'subject'))
-            LEFT JOIN {$wpdb->prefix}qp_terms topic_term ON topic_rel.term_id = topic_term.term_id
-            WHERE q.question_id = %d
-            GROUP BY q.question_id",
+        "SELECT q.question_id, q.custom_question_id, q.question_text, q.question_number_in_section, g.group_id, g.direction_text, g.direction_image_id
+         FROM {$q_table} q
+         LEFT JOIN {$g_table} g ON q.group_id = g.group_id
+         WHERE q.question_id = %d",
         $question_id
     ), ARRAY_A);
 
-    // --- NEW: Build Source Hierarchy ---
-    $source_hierarchy = [];
-    $source_term_id = $wpdb->get_var($wpdb->prepare(
-        "SELECT r.term_id
-         FROM {$wpdb->prefix}qp_term_relationships r
-         JOIN {$wpdb->prefix}qp_terms t ON r.term_id = t.term_id
-         WHERE r.object_id = %d AND r.object_type = 'question'
-         AND t.taxonomy_id = (SELECT taxonomy_id FROM {$wpdb->prefix}qp_taxonomies WHERE taxonomy_name = 'source')
-         LIMIT 1",
-        $question_id
-    ));
+    if (!$question_data) {
+        wp_send_json_error(['message' => 'Question not found.']);
+    }
 
-    if ($source_term_id) {
-        $current_term_id = $source_term_id;
-        // Loop up the tree to the root, with a safety limit of 10 levels
-        for ($i = 0; $i < 10; $i++) {
-            if (!$current_term_id) break;
-            $term = $wpdb->get_row($wpdb->prepare("SELECT name, parent FROM {$wpdb->prefix}qp_terms WHERE term_id = %d", $current_term_id));
+    $group_id = $question_data['group_id'];
+    
+    // Helper function to trace term lineage
+    function qp_get_term_lineage_names($term_id, $wpdb, $term_table) {
+        $lineage = [];
+        $current_id = $term_id;
+        for ($i=0; $i<10; $i++) { // Safety break
+            if (!$current_id) break;
+            $term = $wpdb->get_row($wpdb->prepare("SELECT name, parent FROM {$term_table} WHERE term_id = %d", $current_id));
             if ($term) {
-                array_unshift($source_hierarchy, $term->name); // Add to the beginning of the array
-                $current_term_id = $term->parent;
+                array_unshift($lineage, $term->name);
+                $current_id = $term->parent;
+                if ($current_id == 0) break;
             } else {
                 break;
             }
         }
+        return $lineage;
     }
-    $question_data['source_hierarchy'] = $source_hierarchy;
+
+    // 2. Get Subject/Topic Hierarchy
+    $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'subject'");
+    $subject_term_id = $wpdb->get_var($wpdb->prepare("SELECT term_id FROM {$rel_table} WHERE object_id = %d AND object_type = 'group' AND term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id = %d)", $group_id, $subject_tax_id));
+    $question_data['subject_lineage'] = $subject_term_id ? qp_get_term_lineage_names($subject_term_id, $wpdb, $term_table) : [];
+
+    // 3. Get Source/Section Hierarchy
+    $source_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'source'");
+    $source_term_id = $wpdb->get_var($wpdb->prepare("SELECT term_id FROM {$rel_table} WHERE object_id = %d AND object_type = 'group' AND term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id = %d)", $group_id, $source_tax_id));
+    $question_data['source_lineage'] = $source_term_id ? qp_get_term_lineage_names($source_term_id, $wpdb, $term_table) : [];
 
     $previous_attempt_count = $wpdb->get_var($wpdb->prepare(
         "SELECT COUNT(*) FROM {$a_table} WHERE user_id = %d AND question_id = %d",
