@@ -552,19 +552,31 @@ wrapper.on('click', '.save', function(e) {
     $bulkEditPanel.on("change", "#bulk_edit_source", function () {
       var selectedSource = $(this).val();
       var $sectionBulkEdit = $("#bulk_edit_section");
-      var availableSections = qp_bulk_edit_data.sections.filter(
-        (sec) => sec.source_id == selectedSource
-      );
-      $sectionBulkEdit
-        .html('<option value="">— Change Section —</option>')
-        .prop("disabled", availableSections.length === 0);
-      $.each(availableSections, (i, section) =>
-        $sectionBulkEdit.append(
-          $("<option></option>")
-            .val(section.section_id)
-            .text(section.section_name)
-        )
-      );
+
+      $sectionBulkEdit.empty().prop('disabled', true);
+
+      // Helper function to recursively build the dropdown
+      function buildTermHierarchy(parentElement, terms, parentId, level) {
+          var prefix = '— '.repeat(level);
+          terms.forEach(function(term) {
+              if (term.source_id == parentId) { // Check if it's a child of the current parent
+                  var option = $("<option></option>")
+                      .val(term.section_id)
+                      .text(prefix + term.section_name);
+                  parentElement.append(option);
+                  // Recursive call to find children of this term
+                  buildTermHierarchy(parentElement, terms, term.section_id, level + 1);
+              }
+          });
+      }
+
+      if (selectedSource && qp_bulk_edit_data.sections) {
+          $sectionBulkEdit.prop('disabled', false).html('<option value="">— Change Section —</option>');
+          // Start the recursive function
+          buildTermHierarchy($sectionBulkEdit, qp_bulk_edit_data.sections, selectedSource, 0);
+      } else {
+          $sectionBulkEdit.html('<option value="">— Select Source First —</option>');
+      }
     });
 
     $subjectFilter.on("change", manageBulkEditPanel);

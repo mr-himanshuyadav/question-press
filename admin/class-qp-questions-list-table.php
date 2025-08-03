@@ -547,7 +547,6 @@ LIMIT {$per_page} OFFSET {$offset}";
             $ids_placeholder = implode(',', $question_ids);
 
             // Handle Topic Change
-            // Handle Topic Change
             if (!empty($_REQUEST['bulk_edit_topic'])) {
                 $topic_term_id = absint($_REQUEST['bulk_edit_topic']);
                 $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'subject'");
@@ -582,11 +581,26 @@ LIMIT {$per_page} OFFSET {$offset}";
 
             if ($term_to_apply) {
                 $source_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'source'");
-                 // First, delete existing source/section relationships for these questions
-                $wpdb->query($wpdb->prepare("DELETE FROM {$rel_table} WHERE object_id IN ({$ids_placeholder}) AND object_type = 'question' AND term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id = %d)", $source_tax_id));
-                // Then, insert the new one
-                foreach ($question_ids as $qid) {
-                    $wpdb->insert($rel_table, ['object_id' => $qid, 'term_id' => $term_to_apply, 'object_type' => 'question']);
+                
+                // 1. Get the unique group IDs for the selected questions.
+                $group_ids = $wpdb->get_col("SELECT DISTINCT group_id FROM {$q_table} WHERE question_id IN ({$ids_placeholder})");
+
+                if (!empty($group_ids)) {
+                    $group_ids_placeholder = implode(',', $group_ids);
+
+                    // 2. Delete existing source/section relationships for these groups.
+                    $wpdb->query($wpdb->prepare(
+                        "DELETE FROM {$rel_table} 
+                         WHERE object_id IN ({$group_ids_placeholder}) 
+                         AND object_type = 'group' 
+                         AND term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id = %d)",
+                        $source_tax_id
+                    ));
+
+                    // 3. Insert the new relationship for each group.
+                    foreach ($group_ids as $gid) {
+                        $wpdb->insert($rel_table, ['object_id' => $gid, 'term_id' => $term_to_apply, 'object_type' => 'group']);
+                    }
                 }
             }
 
