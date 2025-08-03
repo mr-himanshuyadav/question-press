@@ -1271,22 +1271,17 @@ function qp_handle_save_question_group()
     // --- Get group-level data from the form ---
     $direction_text = isset($_POST['direction_text']) ? stripslashes($_POST['direction_text']) : '';
     $direction_image_id = absint($_POST['direction_image_id']);
-    $subject_id = absint($_POST['subject_id']);
-    $topic_id = isset($_POST['topic_id']) ? absint($_POST['topic_id']) : 0;
-    $source_id = isset($_POST['source_id']) ? absint($_POST['source_id']) : 0;
-    $section_id = isset($_POST['section_id']) ? absint($_POST['section_id']) : 0;
     $is_pyq = isset($_POST['is_pyq']) ? 1 : 0;
-    $exam_id = isset($_POST['exam_id']) ? absint($_POST['exam_id']) : 0;
     $pyq_year = isset($_POST['pyq_year']) ? sanitize_text_field($_POST['pyq_year']) : '';
-
     $questions_from_form = isset($_POST['questions']) ? (array) $_POST['questions'] : [];
 
-    if (empty($subject_id) || empty($questions_from_form)) {
+    if (empty($_POST['subject_id']) || empty($questions_from_form)) {
+        // A subject is required to save a group.
+        // Silently fail if no subject is selected to avoid errors on page load.
         return;
     }
 
     // --- Save Group Data ---
-    // Prepare data only for the existing columns in the groups table.
     $group_data = [
         'direction_text'     => wp_kses_post($direction_text),
         'direction_image_id' => $direction_image_id,
@@ -1301,40 +1296,61 @@ function qp_handle_save_question_group()
         $group_id = $wpdb->insert_id;
     }
 
-    // --- Handle Group-level Term Relationships ---
+    // --- CONSOLIDATED Group-Level Term Relationship Handling ---
     if ($group_id) {
         $rel_table = "{$wpdb->prefix}qp_term_relationships";
         $term_table = "{$wpdb->prefix}qp_terms";
         $tax_table = "{$wpdb->prefix}qp_taxonomies";
-
-        // Get taxonomy IDs for subject and exam
-        $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'subject'");
-        $exam_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'exam'");
-
-        // Delete all old subject and exam relationships for this group to prevent duplicates
-        $wpdb->query($wpdb->prepare(
-            "DELETE FROM {$rel_table} WHERE object_id = %d AND object_type = 'group' AND term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id IN (%d, %d))",
-            $group_id,
-            $subject_tax_id,
-            $exam_tax_id
-        ));
-
-        // Insert the new subject relationship
-        if ($subject_id > 0) {
-            $wpdb->insert($rel_table, ['object_id' => $group_id, 'term_id' => $subject_id, 'object_type' => 'group']);
+        
+        $group_taxonomies_to_manage = ['subject', 'source', 'exam'];
+        $tax_ids_to_clear = [];
+        foreach($group_taxonomies_to_manage as $tax_name) {
+            $tax_id = $wpdb->get_var($wpdb->prepare("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = %s", $tax_name));
+            if ($tax_id) $tax_ids_to_clear[] = $tax_id;
         }
 
-        // Insert the new exam relationship if it's a PYQ
-        if ($is_pyq && $exam_id > 0) {
-            $wpdb->insert($rel_table, ['object_id' => $group_id, 'term_id' => $exam_id, 'object_type' => 'group']);
+        // 1. Delete all existing relationships for this group across managed taxonomies
+        if (!empty($tax_ids_to_clear)) {
+             $tax_ids_placeholder = implode(',', $tax_ids_to_clear);
+             $wpdb->query($wpdb->prepare(
+                "DELETE FROM {$rel_table} WHERE object_id = %d AND object_type = 'group' AND term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id IN ($tax_ids_placeholder))",
+                $group_id
+            ));
+        }
+
+        // 2. Determine the new terms to apply
+        $terms_to_apply_to_group = [];
+        // Subject/Topic: Use the most specific topic selected, which represents the entire subject hierarchy.
+        if (!empty($_POST['topic_id'])) {
+            $terms_to_apply_to_group[] = absint($_POST['topic_id']);
+        } elseif (!empty($_POST['subject_id'])) {
+            // Fallback to parent subject if no topic is chosen
+            $terms_to_apply_to_group[] = absint($_POST['subject_id']);
+        }
+        
+        // Source/Section: Use the most specific term selected.
+        if (!empty($_POST['section_id'])) {
+            $terms_to_apply_to_group[] = absint($_POST['section_id']);
+        } elseif (!empty($_POST['source_id'])) {
+            $terms_to_apply_to_group[] = absint($_POST['source_id']);
+        }
+
+        // Exam: Apply if PYQ is checked and an exam is selected.
+        if ($is_pyq && !empty($_POST['exam_id'])) {
+            $terms_to_apply_to_group[] = absint($_POST['exam_id']);
+        }
+
+        // 3. Insert the new, clean relationships for the group
+        foreach (array_unique($terms_to_apply_to_group) as $term_id) {
+            if ($term_id > 0) {
+                 $wpdb->insert($rel_table, ['object_id' => $group_id, 'term_id' => $term_id, 'object_type' => 'group']);
+            }
         }
     }
 
-
-    // --- Process Individual Questions ---
+    // --- Process Individual Questions (and their Label relationships) ---
     $q_table = "{$wpdb->prefix}qp_questions";
     $o_table = "{$wpdb->prefix}qp_options";
-    $rel_table = "{$wpdb->prefix}qp_term_relationships";
     $existing_q_ids = $is_editing ? $wpdb->get_col($wpdb->prepare("SELECT question_id FROM $q_table WHERE group_id = %d", $group_id)) : [];
     $submitted_q_ids = [];
 
@@ -1343,103 +1359,42 @@ function qp_handle_save_question_group()
         if (empty(trim($question_text))) continue;
 
         $question_id = isset($q_data['question_id']) ? absint($q_data['question_id']) : 0;
-        $question_num = isset($q_data['question_number_in_section']) ? sanitize_text_field($q_data['question_number_in_section']) : '';
         $is_question_complete = !empty($q_data['correct_option_id']);
 
-        // 1. Prepare data for the questions table (no legacy columns)
         $question_db_data = [
-            'group_id'                   => $group_id,
-            'question_number_in_section' => $question_num,
-            'question_text'              => wp_kses_post($question_text),
-            'question_text_hash'         => md5(strtolower(trim(preg_replace('/\s+/', '', $question_text)))),
-            'status'                     => $is_question_complete ? 'publish' : 'draft',
+            'group_id' => $group_id,
+            'question_number_in_section' => isset($q_data['question_number_in_section']) ? sanitize_text_field($q_data['question_number_in_section']) : '',
+            'question_text' => wp_kses_post($question_text),
+            'question_text_hash' => md5(strtolower(trim(preg_replace('/\s+/', '', $question_text)))),
+            'status' => $is_question_complete ? 'publish' : 'draft',
         ];
 
-        // 2. Insert or Update the question
         if ($question_id > 0 && in_array($question_id, $existing_q_ids)) {
-            // It's an existing question, so we update it
             $wpdb->update($q_table, $question_db_data, ['question_id' => $question_id]);
         } else {
-            // It's a new question, so we insert it
             $next_custom_id = get_option('qp_next_custom_question_id', 1000);
             $question_db_data['custom_question_id'] = $next_custom_id;
-            $question_db_data['status'] = 'draft'; // New questions are always drafts initially
             $wpdb->insert($q_table, $question_db_data);
-            $question_id = $wpdb->insert_id; // Get the new ID
+            $question_id = $wpdb->insert_id;
             update_option('qp_next_custom_question_id', $next_custom_id + 1);
         }
         $submitted_q_ids[] = $question_id;
 
-        // 3. Handle ALL Term Relationships (Topic, Source/Section, Labels)
         if ($question_id > 0) {
-            $wpdb->delete($rel_table, ['object_id' => $question_id, 'object_type' => 'question']);
-
-            $term_ids_to_link = [];
-            if ($topic_id > 0) $term_ids_to_link[] = $topic_id;
-            if ($section_id > 0) $term_ids_to_link[] = $section_id;
-            elseif ($source_id > 0) $term_ids_to_link[] = $source_id;
-
+            // Handle Question-Level Relationships (LABELS ONLY)
+            $label_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'label'");
+            if ($label_tax_id) {
+                $wpdb->query($wpdb->prepare("DELETE FROM {$rel_table} WHERE object_id = %d AND object_type = 'question' AND term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id = %d)", $question_id, $label_tax_id));
+            }
             $labels = isset($q_data['labels']) ? array_map('absint', $q_data['labels']) : [];
-            $term_ids_to_link = array_merge($term_ids_to_link, $labels);
-
-            foreach (array_unique($term_ids_to_link) as $term_id) {
-                if ($term_id > 0) {
-                    $wpdb->insert($rel_table, ['object_id' => $question_id, 'term_id' => $term_id, 'object_type' => 'question']);
+            foreach ($labels as $label_id) {
+                if ($label_id > 0) {
+                    $wpdb->insert($rel_table, ['object_id' => $question_id, 'term_id' => $label_id, 'object_type' => 'question']);
                 }
             }
-        }
-
-        // --- Process Options & Labels ONLY IF EDITING ---
-        if ($is_editing) {
-            $submitted_option_ids = [];
-            $options_text = isset($q_data['options']) ? (array)$q_data['options'] : [];
-            $option_ids = isset($q_data['option_ids']) ? (array)$q_data['option_ids'] : [];
-            $correct_option_id_from_form = isset($q_data['correct_option_id']) ? $q_data['correct_option_id'] : null;
-
-            foreach ($options_text as $index => $option_text) {
-                $option_id = isset($option_ids[$index]) ? absint($option_ids[$index]) : 0;
-                $trimmed_option_text = trim(stripslashes($option_text));
-
-                if (empty($trimmed_option_text)) {
-                    continue;
-                }
-
-                $option_data = ['option_text' => sanitize_text_field($trimmed_option_text)];
-
-                if ($option_id > 0) {
-                    $wpdb->update($o_table, $option_data, ['option_id' => $option_id]);
-                    $submitted_option_ids[] = $option_id;
-                } else {
-                    $option_data['question_id'] = $question_id;
-                    $wpdb->insert($o_table, $option_data);
-                    $new_option_id = $wpdb->insert_id;
-                    $submitted_option_ids[] = $new_option_id;
-
-                    if ($correct_option_id_from_form === 'new_' . $index) {
-                        $correct_option_id_from_form = $new_option_id;
-                    }
-                }
-            }
-
-            $existing_db_option_ids = $wpdb->get_col($wpdb->prepare("SELECT option_id FROM $o_table WHERE question_id = %d", $question_id));
-            $options_to_delete = array_diff($existing_db_option_ids, $submitted_option_ids);
-            if (!empty($options_to_delete)) {
-                $ids_placeholder = implode(',', array_map('absint', $options_to_delete));
-                $wpdb->query("DELETE FROM $o_table WHERE option_id IN ($ids_placeholder)");
-            }
-
-            // Get the original correct option ID before the update
-            $original_correct_option_id = $wpdb->get_var($wpdb->prepare("SELECT option_id FROM {$o_table} WHERE question_id = %d AND is_correct = 1", $question_id));
-
-            $wpdb->update($o_table, ['is_correct' => 0], ['question_id' => $question_id]);
-            if ($correct_option_id_from_form) {
-                $wpdb->update($o_table, ['is_correct' => 1], ['option_id' => absint($correct_option_id_from_form), 'question_id' => $question_id]);
-            }
-
-            // If the correct answer has changed, trigger the re-evaluation.
-            if ($original_correct_option_id != $correct_option_id_from_form) {
-                qp_re_evaluate_question_attempts($question_id, absint($correct_option_id_from_form));
-            }
+            
+            // Handle Options (No changes needed here)
+            process_question_options($question_id, $q_data);
         }
     }
 
@@ -1452,24 +1407,21 @@ function qp_handle_save_question_group()
         $wpdb->query("DELETE FROM $q_table WHERE question_id IN ($ids_placeholder)");
     }
 
-    // --- Delete the group if it becomes empty ---
+    // --- Final Redirect ---
     if ($is_editing && empty($submitted_q_ids)) {
         $wpdb->delete("{$wpdb->prefix}qp_question_groups", ['group_id' => $group_id]);
         wp_safe_redirect(admin_url('admin.php?page=question-press&message=1'));
         exit;
     }
 
-    // --- Redirect on success ---
     $redirect_url = $is_editing
         ? admin_url('admin.php?page=qp-edit-group&group_id=' . $group_id . '&message=1')
         : admin_url('admin.php?page=qp-edit-group&group_id=' . $group_id . '&message=2');
-
-    // Check if the request was made via AJAX
+    
     if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest') {
         wp_send_json_success(['redirect_url' => $redirect_url]);
     }
 
-    // Fallback for non-AJAX submissions
     wp_safe_redirect($redirect_url);
     exit;
 }

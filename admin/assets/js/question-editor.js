@@ -64,7 +64,6 @@ jQuery(document).ready(function($) {
     updateSources();
     updateSections();
     togglePyqFields();
-
     // --- Function to update Topic dropdown based on Subject ---
     function updateTopics() {
         var selectedSubjectId = subjectSelect.val();
@@ -202,22 +201,55 @@ function updateSections() {
 
     // --- Bind Event Handlers ---
     subjectSelect.on('change', function() {
-        // Clear the current topic, source, and section selections
+        // Clear all dependent dropdowns first
         topicSelect.val('');
         sourceSelect.val('');
         sectionSelect.val('').empty().append('<option value="">— Select a source first —</option>').prop('disabled', true);
-
-        // Now update the dropdowns
+        
+        // Update the topic and source dropdowns (these functions are already correct from previous steps)
         updateTopics();
         updateSources();
         
-        var $form = $(this).closest(".qp-question-editor-form-wrapper");
-        var $examSelect = $form.find('select[name="exam_id"]');
-        var $yearInput = $form.find('input[name="pyq_year"]');
-        $examSelect.val('');
-        $yearInput.val('');
-        qp_editor_data.current_exam_id = null; // Reset current exam ID
-        qp_editor_data.current_pyq_year = null; // Reset current year
+        // --- START: Corrected Exam Filtering Logic ---
+        var selectedSubjectId = $(this).val();
+        var $examSelect = $('select[name="exam_id"]');
+        var previouslySelectedExamId = qp_editor_data.current_exam_id;
+        
+        $examSelect.empty().prop('disabled', true);
+
+        if (selectedSubjectId) {
+            // Find all exam IDs linked to the selected subject
+            var linkedExamIds = qp_editor_data.exam_subject_links
+                .filter(link => link.subject_id == selectedSubjectId)
+                .map(link => link.exam_id);
+                
+            // Filter the master list of all exams to get the available ones
+            var availableExams = qp_editor_data.all_exams
+                .filter(exam => linkedExamIds.includes(String(exam.exam_id)));
+
+            if (availableExams.length > 0) {
+                 $examSelect.prop('disabled', false).append('<option value="">— Select an Exam —</option>');
+                 availableExams.sort((a, b) => a.exam_name.localeCompare(b.exam_name));
+
+                 $.each(availableExams, function(index, exam) {
+                    var option = $('<option></option>').val(exam.exam_id).text(exam.exam_name);
+                    if (exam.exam_id == previouslySelectedExamId) {
+                        option.prop('selected', true);
+                    }
+                    $examSelect.append(option);
+                });
+            } else {
+                $examSelect.append('<option value="">— No exams for this subject —</option>');
+            }
+        } else {
+             $examSelect.append('<option value="">— Select a Subject First —</option>');
+        }
+       
+        // Reset PYQ year input and clear the global variables after use
+        $('input[name="pyq_year"]').val('');
+        qp_editor_data.current_exam_id = null;
+        qp_editor_data.current_pyq_year = null;
+        // --- END: Corrected Exam Filtering Logic ---
     });
 
     sourceSelect.on('change', function() {

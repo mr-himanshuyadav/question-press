@@ -37,6 +37,7 @@ class QP_Question_Editor_Page
         $current_pyq_year = '';
         $current_source_id = 0;
         $current_section_id = 0;
+        $has_draft_question = false;
 
 
         if ($is_editing) {
