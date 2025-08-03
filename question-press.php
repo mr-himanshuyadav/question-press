@@ -3014,54 +3014,45 @@ function qp_get_sections_for_subject_ajax()
     $term_table = $wpdb->prefix . 'qp_terms';
     $rel_table = $wpdb->prefix . 'qp_term_relationships';
     $tax_table = $wpdb->prefix . 'qp_taxonomies';
-    $questions_table = $wpdb->prefix . 'qp_questions';
     $attempts_table = $wpdb->prefix . 'qp_user_attempts';
-
     $source_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'source'");
 
-    // Find all question IDs linked to the selected topic
-    $question_ids_in_topic = $wpdb->get_col($wpdb->prepare(
-        "SELECT object_id FROM $rel_table WHERE term_id = %d AND object_type = 'question'",
-        $topic_id
-    ));
+    // 1. Find all groups linked to the selected topic.
+    $group_ids = $wpdb->get_col($wpdb->prepare("SELECT object_id FROM $rel_table WHERE term_id = %d AND object_type = 'group'", $topic_id));
 
-    if (empty($question_ids_in_topic)) {
+    if (empty($group_ids)) {
         wp_send_json_success(['sections' => []]);
+        return;
     }
+    $group_ids_placeholder = implode(',', $group_ids);
 
-    $qids_placeholder = implode(',', $question_ids_in_topic);
-
-    // Find all source/section terms linked to those questions
+    // 2. Find all source/section terms linked to those groups.
     $source_terms = $wpdb->get_results($wpdb->prepare(
         "SELECT DISTINCT t.term_id, t.name, t.parent 
          FROM {$term_table} t
          JOIN {$rel_table} r ON t.term_id = r.term_id
-         WHERE r.object_id IN ($qids_placeholder) AND r.object_type = 'question' AND t.taxonomy_id = %d
+         WHERE r.object_id IN ($group_ids_placeholder) AND r.object_type = 'group' AND t.taxonomy_id = %d
          ORDER BY t.parent, t.name ASC",
         $source_tax_id
     ));
 
-    // Get all question IDs the user has already attempted.
-    $attempted_q_ids = $wpdb->get_col($wpdb->prepare(
-        "SELECT DISTINCT question_id FROM {$attempts_table} WHERE user_id = %d AND status = 'answered'",
-        $user_id
-    ));
+    // 3. Get all question IDs the user has already attempted.
+    $attempted_q_ids = $wpdb->get_col($wpdb->prepare("SELECT DISTINCT question_id FROM {$attempts_table} WHERE user_id = %d AND status = 'answered'", $user_id));
     $attempted_q_ids_placeholder = !empty($attempted_q_ids) ? implode(',', array_map('absint', $attempted_q_ids)) : '0';
 
     $results = [];
     foreach ($source_terms as $term) {
-        // We are only interested in sections (terms with parents) for this dropdown
-        if ($term->parent > 0) {
+        if ($term->parent > 0) { // We are only interested in sections
             $parent_source_name = $wpdb->get_var($wpdb->prepare("SELECT name FROM $term_table WHERE term_id = %d", $term->parent));
 
             // Subquery to count unattempted questions in this specific section and topic
             $unattempted_count = $wpdb->get_var($wpdb->prepare(
-                "SELECT COUNT(q.question_id) 
-                 FROM {$questions_table} q
-                 JOIN {$rel_table} r_topic ON q.question_id = r_topic.object_id AND r_topic.object_type = 'question'
-                 JOIN {$rel_table} r_section ON q.question_id = r_section.object_id AND r_section.object_type = 'question'
-                 WHERE r_topic.term_id = %d 
-                 AND r_section.term_id = %d
+                "SELECT COUNT(q.question_id)
+                 FROM {$wpdb->prefix}qp_questions q
+                 JOIN {$rel_table} r_group_topic ON q.group_id = r_group_topic.object_id AND r_group_topic.object_type = 'group'
+                 JOIN {$rel_table} r_group_section ON q.group_id = r_group_section.object_id AND r_group_section.object_type = 'group'
+                 WHERE r_group_topic.term_id = %d 
+                 AND r_group_section.term_id = %d
                  AND q.question_id NOT IN ({$attempted_q_ids_placeholder})",
                 $topic_id,
                 $term->term_id

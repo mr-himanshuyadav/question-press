@@ -605,10 +605,13 @@ jQuery(document).ready(function ($) {
         var $selectedTopicCheckboxes = $form
           .find('[id^="qp_topic_list_container"] input:checked[value!="all"]')
           .not(".qp-subject-topic-toggle");
+
+        // Only show the section dropdown if exactly ONE topic is selected
         if ($selectedTopicCheckboxes.length === 1) {
           var singleTopicCheckbox = $selectedTopicCheckboxes.first();
           var topicId = singleTopicCheckbox.val();
-          var subjectIdForTopic = singleTopicCheckbox.data("subject-id");
+          var subjectIdForTopic = singleTopicCheckbox.data("subject-id"); // We need the parent subject
+
           if (topicId && subjectIdForTopic) {
             $.ajax({
               url: qp_ajax_object.ajax_url,
@@ -616,7 +619,7 @@ jQuery(document).ready(function ($) {
               data: {
                 action: "get_sections_for_subject",
                 nonce: qp_ajax_object.nonce,
-                subject_id: subjectIdForTopic,
+                subject_id: subjectIdForTopic, // Pass subject for context if needed
                 topic_id: topicId,
               },
               beforeSend: function () {
@@ -645,7 +648,7 @@ jQuery(document).ready(function ($) {
                     );
                   });
                 } else {
-                  $sectionGroup.slideUp();
+                  $sectionGroup.slideUp(); // Hide if no sections are found
                 }
               },
               error: function () {
@@ -656,6 +659,7 @@ jQuery(document).ready(function ($) {
             $sectionGroup.slideUp();
           }
         } else {
+          // If zero or more than one topic is selected, hide the section dropdown
           $sectionGroup.slideUp();
         }
       }
