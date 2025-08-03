@@ -334,42 +334,55 @@ protected function bulk_actions($which = '')
         $current_status = isset($_REQUEST['status']) ? sanitize_key($_REQUEST['status']) : 'publish';
         $where_conditions[] = $wpdb->prepare("q.status = %s", $current_status);
 
-        // Handle Subject Filter
-        if (!empty($_REQUEST['filter_by_subject'])) {
-            if (!in_array('subject_rel', $joins_added)) {
-                $query_joins .= " JOIN {$rel_table} subject_rel ON g.group_id = subject_rel.object_id AND subject_rel.object_type = 'group'";
-                $joins_added[] = 'subject_rel';
-            }
-            $where_conditions[] = $wpdb->prepare("subject_rel.term_id = %d", absint($_REQUEST['filter_by_subject']));
-        }
+        // In admin/class-qp-questions-list-table.php, inside prepare_items()
 
-        // Handle Topic Filter
-        if (!empty($_REQUEST['filter_by_topic'])) {
-            if (!in_array('topic_rel', $joins_added)) {
-                $query_joins .= " JOIN {$rel_table} topic_rel ON q.question_id = topic_rel.object_id AND topic_rel.object_type = 'question'";
-                $joins_added[] = 'topic_rel';
-            }
-            $where_conditions[] = $wpdb->prepare("topic_rel.term_id = %d", absint($_REQUEST['filter_by_topic']));
-        }
+// Handle Subject and Topic Filters
+$subject_id = !empty($_REQUEST['filter_by_subject']) ? absint($_REQUEST['filter_by_subject']) : 0;
+$topic_id = !empty($_REQUEST['filter_by_topic']) ? absint($_REQUEST['filter_by_topic']) : 0;
 
-        // Handle Source/Section Filter
-        if (!empty($_REQUEST['filter_by_source'])) {
-            $filter_value = sanitize_text_field($_REQUEST['filter_by_source']);
-            $term_id_to_filter = 0;
-            if (strpos($filter_value, 'source_') === 0) {
-                $term_id_to_filter = absint(str_replace('source_', '', $filter_value));
-            } elseif (strpos($filter_value, 'section_') === 0) {
-                $term_id_to_filter = absint(str_replace('section_', '', $filter_value));
-            }
+if ($topic_id) {
+    // If a specific topic is selected, filter by it directly. This is the most specific filter.
+    if (!in_array('topic_rel', $joins_added)) {
+        $query_joins .= " JOIN {$rel_table} topic_rel ON g.group_id = topic_rel.object_id AND topic_rel.object_type = 'group'";
+        $joins_added[] = 'topic_rel';
+    }
+    $where_conditions[] = $wpdb->prepare("topic_rel.term_id = %d", $topic_id);
+} elseif ($subject_id) {
+    // If only a subject is selected, find all topics under that subject and filter by those.
+    $child_topic_ids = $wpdb->get_col($wpdb->prepare("SELECT term_id FROM {$term_table} WHERE parent = %d", $subject_id));
 
-            if ($term_id_to_filter > 0) {
-                if (!in_array('source_rel', $joins_added)) {
-                    $query_joins .= " JOIN {$rel_table} source_rel ON q.question_id = source_rel.object_id AND source_rel.object_type = 'question'";
-                    $joins_added[] = 'source_rel';
-                }
-                $where_conditions[] = $wpdb->prepare("source_rel.term_id = %d", $term_id_to_filter);
-            }
+    if (!empty($child_topic_ids)) {
+        $ids_placeholder = implode(',', $child_topic_ids);
+        if (!in_array('topic_rel', $joins_added)) {
+            $query_joins .= " JOIN {$rel_table} topic_rel ON g.group_id = topic_rel.object_id AND topic_rel.object_type = 'group'";
+            $joins_added[] = 'topic_rel';
         }
+        $where_conditions[] = "topic_rel.term_id IN ($ids_placeholder)";
+    } else {
+        // If the subject has no topics, no questions can be found.
+        $where_conditions[] = "1=0"; // This will correctly return no results.
+    }
+}
+
+// Handle Source/Section Filter
+if (!empty($_REQUEST['filter_by_source'])) {
+    $filter_value = sanitize_text_field($_REQUEST['filter_by_source']);
+    $term_id_to_filter = 0;
+    if (strpos($filter_value, 'source_') === 0) {
+        $term_id_to_filter = absint(str_replace('source_', '', $filter_value));
+    } elseif (strpos($filter_value, 'section_') === 0) {
+        $term_id_to_filter = absint(str_replace('section_', '', $filter_value));
+    }
+
+    if ($term_id_to_filter > 0) {
+        // This logic was already correct: it joins the group to the source/section term.
+        if (!in_array('source_rel', $joins_added)) {
+            $query_joins .= " JOIN {$rel_table} source_rel ON g.group_id = source_rel.object_id AND source_rel.object_type = 'group'";
+            $joins_added[] = 'source_rel';
+        }
+        $where_conditions[] = $wpdb->prepare("source_rel.term_id = %d", $term_id_to_filter);
+    }
+}
 
         // Handle Search Filter (remains the same as old logic)
         if (!empty($_REQUEST['s'])) {
