@@ -385,11 +385,10 @@ wrapper.on('click', '.save', function(e) {
       .on("change", function () {
         var subjectId = $(this).val();
         $topicFilter.hide().val("");
-        
-        // MODIFICATION: Instead of hiding, we reset and will re-populate it.
-        $sourceFilter.val(""); 
+        $sourceFilter.val("").empty().append('<option value="">All Sources / Sections</option>'); // Reset source filter
 
         if (subjectId) {
+          // --- AJAX for Topics (existing logic) ---
           $.ajax({
             url: qp_admin_filter_data.ajax_url,
             type: "POST",
@@ -420,6 +419,39 @@ wrapper.on('click', '.save', function(e) {
               }
             },
           });
+          
+          // --- NEW: AJAX for Sources (moved here) ---
+          $.ajax({
+              url: qp_admin_filter_data.ajax_url,
+              type: "POST",
+              data: {
+                  action: "get_sources_for_list_table_filter",
+                  nonce: qp_admin_filter_data.nonce,
+                  subject_id: subjectId,
+                  topic_id: '', // Pass empty topic to get all for the subject
+              },
+              success: function (response) {
+                  if (response.success && response.data.sources && response.data.sources.length > 0) {
+                      // (The recursive function from the previous step goes here)
+                      function buildOptions(terms, level) {
+                          var prefix = '— '.repeat(level);
+                          terms.forEach(function(term) {
+                              var value = (term.parent == 0 ? 'source_' : 'section_') + term.term_id;
+                              var option = $("<option></option>").val(value).text(prefix + term.name);
+                              if (value === currentSource) {
+                                  option.prop("selected", true);
+                              }
+                              $sourceFilter.append(option);
+                              if (term.children && term.children.length > 0) {
+                                  buildOptions(term.children, level + 1);
+                              }
+                          });
+                      }
+                      buildOptions(response.data.sources, 0);
+                  }
+              }
+          });
+
         }
       })
       .trigger("change");
