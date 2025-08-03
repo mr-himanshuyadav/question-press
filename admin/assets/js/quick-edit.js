@@ -121,69 +121,80 @@ $.ajax({
     }
   }
 
-  // Delegated event handler for when the SUBJECT dropdown changes
+// Delegated event handler for when the SUBJECT dropdown changes
 wrapper.on("change", ".qe-subject-select", function () {
-    // The `qp_quick_edit_data` object is available globally in this scope
-    // because it's loaded in a <script> tag within the form HTML.
     if (typeof qp_quick_edit_data === "undefined") return;
 
     var subjectId = $(this).val();
     var $form = $(this).closest(".quick-edit-form-wrapper");
     var $topicSelect = $form.find(".qe-topic-select");
-    var $sourceSelect = $form.find(".qe-source-select");
-    var $sectionSelect = $form.find(".qe-section-select"); // <-- Added this line
-    var $examSelect = $form.find(".qe-exam-select");
+    
+    // --- START: Hierarchical Topic Dropdown Logic ---
+    $topicSelect.empty().prop("disabled", true);
 
-    // --- NEW: Reset source and section dropdowns ---
+    // Recursive helper function to build the indented options
+    function buildTopicHierarchy(parentElement, allTerms, parentId, level, selectedId) {
+        var prefix = '— '.repeat(level);
+        
+        // Find all direct children of the current parentId
+        var children = allTerms.filter(term => term.parent == parentId);
+
+        children.forEach(function(term) {
+            var option = $("<option></option>")
+                .val(term.id)
+                .text(prefix + term.name);
+
+            if (term.id == selectedId) {
+                option.prop("selected", true);
+            }
+            parentElement.append(option);
+            
+            // Recurse for grandchildren
+            buildTopicHierarchy(parentElement, allTerms, term.id, level + 1, selectedId);
+        });
+    }
+
+    if (subjectId) {
+        $topicSelect.prop("disabled", false).append('<option value="">— Select a Topic —</option>');
+        // Start the recursive build from the selected subject
+        buildTopicHierarchy($topicSelect, qp_quick_edit_data.all_subject_terms, subjectId, 0, qp_quick_edit_data.current_topic_id);
+    } else {
+        $topicSelect.append('<option value="">— Select a Subject First —</option>');
+    }
+    // --- END: Hierarchical Topic Dropdown Logic ---
+
+    // Clear the current_topic_id after it's been used for the initial load
+    qp_quick_edit_data.current_topic_id = null;
+
+    // The rest of the function (for sources and exams) remains the same as the previous step.
+    var $sourceSelect = $form.find(".qe-source-select");
+    var $sectionSelect = $form.find(".qe-section-select");
+    var $examSelect = $form.find(".qe-exam-select");
     $sourceSelect.val('');
     $sectionSelect.val('').empty().append('<option value="">— Select a source first —</option>').prop('disabled', true);
-    // --- END NEW ---
-
-    // 1. Update Topics dropdown based on the selected Subject
-    updateDropdown(
-        $topicSelect,
-        qp_quick_edit_data.topics_by_subject[subjectId],
-        qp_quick_edit_data.current_topic_id,
-        "— Select a Topic —"
-    );
-    qp_quick_edit_data.current_topic_id = null; // Reset current topic ID after use
-
-    // 2. Update Sources dropdown based on the selected Subject
+    
     updateDropdown(
         $sourceSelect,
         qp_quick_edit_data.sources_by_subject[subjectId],
         qp_quick_edit_data.current_source_id,
         "— Select a Source —"
     );
-    $sourceSelect.trigger("change"); // Trigger change to populate sections
-    qp_quick_edit_data.current_source_id = null; // Reset current source ID after use
+    $sourceSelect.trigger("change");
+    qp_quick_edit_data.current_source_id = null;
 
-    // 3. Update Exams dropdown based on the selected Subject
     var linkedExamIds = qp_quick_edit_data.exam_subject_links
-        .filter(function (link) {
-            return link.subject_id == subjectId;
-        })
-        .map(function (link) {
-            return link.exam_id;
-        });
-
+        .filter(link => link.subject_id == subjectId)
+        .map(link => link.exam_id);
     var availableExams = qp_quick_edit_data.all_exams
-        .filter(function (exam) {
-            // Ensure exam.exam_id is converted to a string for includes() to work reliably
-            return linkedExamIds.includes(String(exam.exam_id));
-        })
-        .map(function (exam) {
-            // Remap properties to match what updateDropdown expects
-            return { id: exam.exam_id, name: exam.exam_name };
-        });
-
+        .filter(exam => linkedExamIds.includes(String(exam.exam_id)))
+        .map(exam => ({ id: exam.exam_id, name: exam.exam_name }));
     updateDropdown(
         $examSelect,
         availableExams,
         qp_quick_edit_data.current_exam_id,
         "— Select an Exam —"
     );
-    qp_quick_edit_data.current_exam_id = null; // Reset current exam ID after use
+    qp_quick_edit_data.current_exam_id = null;
 });
 
   // Delegated event handler for when the SOURCE dropdown changes

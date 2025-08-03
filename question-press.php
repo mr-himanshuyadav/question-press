@@ -2193,21 +2193,20 @@ function qp_get_or_create_term($name, $taxonomy_id, $parent_id = 0)
     return (int) $wpdb->insert_id;
 }
 
+
+
 function qp_get_quick_edit_form_ajax()
 {
     // =========================================================================
     // Step 0: Initial Setup & Security
     // =========================================================================
-    // Ensure the request is valid and coming from the right place.
     check_ajax_referer('qp_get_quick_edit_form_nonce', 'nonce');
 
-    // Get the question ID from the AJAX request.
     $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
     if (!$question_id) {
         wp_send_json_error(['message' => 'No Question ID provided.']);
     }
 
-    // Set up global WordPress database object and table names for clarity.
     global $wpdb;
     $term_table = $wpdb->prefix . 'qp_terms';
     $tax_table = $wpdb->prefix . 'qp_taxonomies';
@@ -2217,200 +2216,103 @@ function qp_get_quick_edit_form_ajax()
     $options_table = $wpdb->prefix . 'qp_options';
 
     // =========================================================================
-    // Step 1: Fetch Current Data for the Specific Question
+    // Step 1: Fetch Current Data & Determine Subject/Topic Hierarchy
     // =========================================================================
-    // This step gathers all the currently associated data for the question being edited.
-
-    // --- 1a: Fetch basic question and group info ---
-    $question = $wpdb->get_row($wpdb->prepare(
-        "SELECT q.question_text, q.group_id, g.direction_text, g.is_pyq, g.pyq_year
-         FROM {$questions_table} q
-         LEFT JOIN {$groups_table} g ON q.group_id = g.group_id
-         WHERE q.question_id = %d",
-        $question_id
-    ));
-
+    $question = $wpdb->get_row($wpdb->prepare("SELECT q.question_text, q.group_id, g.direction_text, g.is_pyq, g.pyq_year FROM {$questions_table} q LEFT JOIN {$groups_table} g ON q.group_id = g.group_id WHERE q.question_id = %d", $question_id));
     if (!$question) {
         wp_send_json_error(['message' => 'Question not found.']);
     }
-
     $group_id = $question->group_id;
 
-    // --- 1b: Fetch all terms directly related to the QUESTION (Topic, Source/Section, Labels) ---
-    $question_terms_raw = $wpdb->get_results($wpdb->prepare(
-        "SELECT t.term_id, t.parent, tax.taxonomy_name
-         FROM {$rel_table} r
-         JOIN {$term_table} t ON r.term_id = t.term_id
-         JOIN {$tax_table} tax ON t.taxonomy_id = tax.taxonomy_id
-         WHERE r.object_id = %d AND r.object_type = 'question'",
-        $question_id
-    ));
+    // --- 1a: Find the most specific topic linked to the group and trace its lineage ---
+    $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'subject'");
+    $linked_topic_id = $wpdb->get_var($wpdb->prepare("SELECT term_id FROM {$rel_table} WHERE object_id = %d AND object_type = 'group' AND term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id = %d AND parent != 0)", $group_id, $subject_tax_id));
 
-    // Initialize variables to store the current term IDs.
     $current_topic_id = 0;
+    $current_subject_id = 0;
+
+    if ($linked_topic_id) {
+        $current_topic_id = $linked_topic_id;
+        $parent_id = $wpdb->get_var($wpdb->prepare("SELECT parent FROM $term_table WHERE term_id = %d", $linked_topic_id));
+        // Trace upwards to find the top-level subject (where parent = 0)
+        for ($i = 0; $i < 10; $i++) { // Safety break
+            if ($parent_id == 0) {
+                $current_subject_id = $wpdb->get_var($wpdb->prepare("SELECT term_id FROM $term_table WHERE term_id = %d", $linked_topic_id));
+                break;
+            }
+            $current_term = $wpdb->get_row($wpdb->prepare("SELECT term_id, parent FROM $term_table WHERE term_id = %d", $parent_id));
+            if (!$current_term) break;
+            $linked_topic_id = $current_term->term_id;
+            $parent_id = $current_term->parent;
+        }
+    } else {
+        // If no topic is linked, check for a direct subject link
+        $current_subject_id = $wpdb->get_var($wpdb->prepare("SELECT term_id FROM {$rel_table} WHERE object_id = %d AND object_type = 'group' AND term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id = %d AND parent = 0)", $group_id, $subject_tax_id));
+    }
+
+
+    // --- 1b: Fetch other term relationships (Source, Section, Labels, Exam) ---
+    // This part of the logic remains largely the same as before.
+    $question_terms_raw = $wpdb->get_results($wpdb->prepare("SELECT t.term_id, t.parent, tax.taxonomy_name FROM {$rel_table} r JOIN {$term_table} t ON r.term_id = t.term_id JOIN {$tax_table} tax ON t.taxonomy_id = tax.taxonomy_id WHERE r.object_id = %d AND r.object_type = 'question'", $question_id));
     $current_source_id = 0;
     $current_section_id = 0;
     $current_labels = [];
-
-    // Loop through the raw results and assign IDs based on their taxonomy and hierarchy.
     foreach ($question_terms_raw as $term) {
-        switch ($term->taxonomy_name) {
-            case 'subject':
-                // A term in the 'subject' taxonomy linked to a question is always a topic.
-                if ($term->parent != 0) {
-                    $current_topic_id = $term->term_id;
-                }
-                break;
-            case 'source':
-                if ($term->parent != 0) {
-                    // This is a section or sub-section.
-                    $current_section_id = $term->term_id;
-                    $parent_id = $term->parent;
-                    // Loop upwards until we find the top-level parent (where parent = 0)
-                    while ($parent_id != 0) {
-                        $current_source_id = $parent_id; // This is a potential source
-                        $parent_id = $wpdb->get_var($wpdb->prepare("SELECT parent FROM $term_table WHERE term_id = %d", $current_source_id));
-                    }
-                } else {
-                    // This is a top-level source itself.
-                    $current_source_id = $term->term_id;
-                    $current_section_id = 0; // No section is selected in this case
-                }
-                break;
-            case 'label':
-                $current_labels[] = $term->term_id;
-                break;
+        if ($term->taxonomy_name === 'source') {
+            if ($term->parent != 0) {
+                $current_section_id = $term->term_id;
+                $current_source_id = $term->parent; // Assume direct parent is the source for simplicity here
+            } else {
+                $current_source_id = $term->term_id;
+            }
+        } elseif ($term->taxonomy_name === 'label') {
+            $current_labels[] = $term->term_id;
         }
     }
+    $exam_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'exam'");
+    $current_exam_id = $wpdb->get_var($wpdb->prepare("SELECT term_id FROM {$rel_table} WHERE object_id = %d AND object_type = 'group' AND term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id = %d)", $group_id, $exam_tax_id));
 
-    // --- 1c: Fetch all terms related to the GROUP (Subject, Exam) ---
-    $current_subject_id = 0;
-    $current_exam_id = 0;
-
-    if ($group_id) {
-        $group_terms_raw = $wpdb->get_results($wpdb->prepare(
-            "SELECT t.term_id, tax.taxonomy_name
-             FROM {$rel_table} r
-             JOIN {$term_table} t ON r.term_id = t.term_id
-             JOIN {$tax_table} tax ON t.taxonomy_id = tax.taxonomy_id
-             WHERE r.object_id = %d AND r.object_type = 'group'",
-            $group_id
-        ));
-
-        foreach ($group_terms_raw as $term) {
-            if ($term->taxonomy_name === 'subject') {
-                $current_subject_id = $term->term_id;
-            }
-            if ($term->taxonomy_name === 'exam') {
-                $current_exam_id = $term->term_id;
-            }
-        }
-    }
 
     // =========================================================================
     // Step 2: Fetch All Possible Terms for Form Dropdowns
     // =========================================================================
-    // This step gathers all possible options that will populate the form's select fields.
-
-    // --- 2a: Get Taxonomy IDs for easier querying ---
-    $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'subject'");
-    $source_tax_id  = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'source'");
-    $exam_tax_id    = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'exam'");
-    $label_tax_id   = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'label'");
-
-    // --- 2b: Fetch all terms, categorized by type ---
     $all_subjects = $wpdb->get_results($wpdb->prepare("SELECT term_id AS subject_id, name AS subject_name FROM {$term_table} WHERE taxonomy_id = %d AND parent = 0", $subject_tax_id));
-    $all_topics   = $wpdb->get_results($wpdb->prepare("SELECT term_id AS topic_id, name AS topic_name, parent AS subject_id FROM {$term_table} WHERE taxonomy_id = %d AND parent != 0", $subject_tax_id));
-    $all_sources  = $wpdb->get_results($wpdb->prepare("SELECT term_id AS source_id, name AS source_name FROM {$term_table} WHERE taxonomy_id = %d AND parent = 0", $source_tax_id));
-    $all_sections = $wpdb->get_results($wpdb->prepare("SELECT term_id AS section_id, name AS section_name, parent AS source_id FROM {$term_table} WHERE taxonomy_id = %d AND parent != 0", $source_tax_id));
+    // Fetch ALL subjects and topics together for JS to build the hierarchy
+    $all_subject_terms = $wpdb->get_results($wpdb->prepare("SELECT term_id as id, name, parent FROM {$term_table} WHERE taxonomy_id = %d", $subject_tax_id));
+
+    $source_tax_id  = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'source'");
+    $all_source_terms = $wpdb->get_results($wpdb->prepare("SELECT term_id as id, name, parent as parent_id FROM {$term_table} WHERE taxonomy_id = %d", $source_tax_id));
+
     $all_exams    = $wpdb->get_results($wpdb->prepare("SELECT term_id AS exam_id, name AS exam_name FROM {$term_table} WHERE taxonomy_id = %d", $exam_tax_id));
+    $label_tax_id   = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'label'");
     $all_labels   = $wpdb->get_results($wpdb->prepare("SELECT term_id as label_id, name as label_name FROM {$term_table} WHERE taxonomy_id = %d", $label_tax_id));
 
-    // --- 2c: Combine sources and sections for hierarchical dropdown ---
-    $all_source_terms = [];
-    foreach ($all_sources as $source) {
-        $all_source_terms[] = (object)[
-            'id' => $source->source_id,
-            'name' => $source->source_name,
-            'parent_id' => 0
-        ];
-    }
-    foreach ($all_sections as $section) {
-        $all_source_terms[] = (object)[
-            'id' => $section->section_id,
-            'name' => $section->section_name,
-            'parent_id' => $section->source_id
-        ];
-    }
-
-    // --- 2d: Fetch relationship links for dynamic dropdowns ---
     $exam_subject_links   = $wpdb->get_results("SELECT object_id AS exam_id, term_id AS subject_id FROM {$rel_table} WHERE object_type = 'exam_subject_link'");
     $source_subject_links = $wpdb->get_results("SELECT object_id AS source_id, term_id AS subject_id FROM {$rel_table} WHERE object_type = 'source_subject_link'");
-
-    // --- 2e: Fetch question options ---
     $options = $wpdb->get_results($wpdb->prepare("SELECT option_id, option_text, is_correct FROM {$options_table} WHERE question_id = %d ORDER BY option_id ASC", $question_id));
 
     // =========================================================================
-    // Step 3: Prepare Data Maps for JavaScript
+    // Step 3 & 4: Prepare Data and Send Form HTML
     // =========================================================================
-    // These PHP arrays will be converted to JavaScript objects to power the dynamic form fields.
-
-    // Map topics to their parent subject ID.
-    $topics_by_subject = [];
-    foreach ($all_topics as $topic) {
-        $topics_by_subject[$topic->subject_id][] = ['id' => $topic->topic_id, 'name' => $topic->topic_name];
-    }
-
-    // Map sources to their associated subject ID using the pre-built links.
-    $all_sources_map = [];
-    foreach ($all_sources as $source) {
-        $all_sources_map[$source->source_id] = $source->source_name;
-    }
-    $sources_by_subject = [];
-    foreach ($source_subject_links as $link) {
-        // Ensure the source from the link still exists.
-        if (isset($all_sources_map[$link->source_id])) {
-            $sources_by_subject[$link->subject_id][] = [
-                'id'   => $link->source_id,
-                'name' => $all_sources_map[$link->source_id]
-            ];
-        }
-    }
-
-    // Map sections to their parent source ID.
-    $sections_by_source = [];
-    foreach ($all_sections as $section) {
-        $sections_by_source[$section->source_id][] = ['id' => $section->section_id, 'name' => $section->section_name];
-    }
-
-    // =========================================================================
-    // Step 4: Generate and Send the Form HTML
-    // =========================================================================
-    // Start output buffering to capture all the generated HTML into a variable.
     ob_start();
     ?>
     <script>
+        // This global object holds all the data our dynamic form needs.
         var qp_quick_edit_data = <?php echo wp_json_encode([
-                                        // Data maps for dynamic dropdowns
-                                        'topics_by_subject'   => $topics_by_subject,
-                                        'sources_by_subject'  => $sources_by_subject,
-                                        'sections_by_source'  => $sections_by_source,
-                                        'exam_subject_links'  => $exam_subject_links,
-
-                                        // All possible options for dropdowns
-                                        'all_subjects'        => $all_subjects,
-                                        'all_exams'           => $all_exams,
-                                        'all_labels'          => $all_labels,
-                                        'all_source_terms'    => $all_source_terms,
-
-                                        // The currently selected values for this question
-                                        'current_subject_id'  => $current_subject_id,
-                                        'current_topic_id'    => $current_topic_id,
-                                        'current_source_id'   => $current_source_id,
-                                        'current_section_id'  => $current_section_id,
-                                        'current_exam_id'     => $current_exam_id,
-                                        'current_labels'      => $current_labels,
-                                    ]); ?>;
+            'all_subjects'        => $all_subjects,
+            'all_subject_terms'   => $all_subject_terms, // Used to build topic hierarchy
+            'all_source_terms'    => $all_source_terms,
+            'all_exams'           => $all_exams,
+            'all_labels'          => $all_labels,
+            'exam_subject_links'  => $exam_subject_links,
+            'source_subject_links'=> $source_subject_links,
+            'current_subject_id'  => $current_subject_id,
+            'current_topic_id'    => $current_topic_id,
+            'current_source_id'   => $current_source_id,
+            'current_section_id'  => $current_section_id,
+            'current_exam_id'     => $current_exam_id,
+            'current_labels'      => $current_labels,
+        ]); ?>;
     </script>
 
     <form class="quick-edit-form-wrapper">
