@@ -3097,57 +3097,51 @@ function qp_get_unattempted_counts_ajax()
     $a_table = $wpdb->prefix . 'qp_user_attempts';
     $rel_table = $wpdb->prefix . 'qp_term_relationships';
     $term_table = $wpdb->prefix . 'qp_terms';
+    $tax_table = $wpdb->prefix . 'qp_taxonomies';
 
-    // 1. Get all question IDs the user has already attempted.
+    // 1. Get all question IDs the user has already answered.
     $attempted_q_ids = $wpdb->get_col($wpdb->prepare(
         "SELECT DISTINCT question_id FROM {$a_table} WHERE user_id = %d AND status = 'answered'",
         $user_id
     ));
     $attempted_q_ids_placeholder = !empty($attempted_q_ids) ? implode(',', array_map('absint', $attempted_q_ids)) : '0';
 
-    // 2. Get all unattempted questions and their term relationships
-    $results = $wpdb->get_results("
+    // 2. Get all unattempted questions and trace them to their parent subject.
+    $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'subject'");
+    
+    // This query joins from the unattempted question, up to its group, to its linked term (topic),
+    // and finally to that term's parent (subject).
+    $results = $wpdb->get_results($wpdb->prepare("
         SELECT 
-            r.term_id,
-            t.parent
+            t.term_id as topic_id,
+            t.parent as subject_id
         FROM {$q_table} q
-        JOIN {$rel_table} r ON q.question_id = r.object_id AND r.object_type = 'question'
+        JOIN {$rel_table} r ON q.group_id = r.object_id AND r.object_type = 'group'
         JOIN {$term_table} t ON r.term_id = t.term_id
-        WHERE q.status = 'publish' AND q.question_id NOT IN ({$attempted_q_ids_placeholder})
-    ");
+        WHERE q.status = 'publish' 
+          AND q.question_id NOT IN ({$attempted_q_ids_placeholder})
+          AND t.taxonomy_id = %d
+          AND t.parent != 0
+    ", $subject_tax_id));
 
-    // 3. Process the results into a structured array for the frontend.
+    // 3. Process the results into a structured count array for the frontend.
     $counts = [
         'by_subject' => [],
         'by_topic'   => [],
-        'by_section' => [],
     ];
 
-    $term_parents = [];
     foreach ($results as $row) {
-        $term_id = $row->term_id;
-        $parent_id = $row->parent;
-
-        // This is a topic or section, so it has a parent
-        if ($parent_id != 0) {
-            // Get the parent's parent (for sections under topics under sources)
-            if (!isset($term_parents[$parent_id])) {
-                $term_parents[$parent_id] = $wpdb->get_var($wpdb->prepare("SELECT parent FROM $term_table WHERE term_id = %d", $parent_id));
-            }
-            $grandparent_id = $term_parents[$parent_id];
-
-            // It's a topic (parent is a subject)
-            if ($grandparent_id == 0) {
-                if (!isset($counts['by_topic'][$term_id])) $counts['by_topic'][$term_id] = 0;
-                $counts['by_topic'][$term_id]++;
-
-                if (!isset($counts['by_subject'][$parent_id])) $counts['by_subject'][$parent_id] = 0;
-                $counts['by_subject'][$parent_id]++;
-            } else { // It's a section
-                if (!isset($counts['by_section'][$term_id])) $counts['by_section'][$term_id] = 0;
-                $counts['by_section'][$term_id]++;
-            }
+        // Increment count for the specific topic
+        if (!isset($counts['by_topic'][$row->topic_id])) {
+            $counts['by_topic'][$row->topic_id] = 0;
         }
+        $counts['by_topic'][$row->topic_id]++;
+
+        // Increment count for the parent subject
+        if (!isset($counts['by_subject'][$row->subject_id])) {
+            $counts['by_subject'][$row->subject_id] = 0;
+        }
+        $counts['by_subject'][$row->subject_id]++;
     }
 
     wp_send_json_success(['counts' => $counts]);
