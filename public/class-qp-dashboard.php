@@ -248,32 +248,45 @@ class QP_Dashboard
             }
         }
 
-        // Pre-fetch all subjects for all questions in the user's history to optimize queries
+        // --- NEW: Efficiently pre-fetch all necessary data to build subject lineage ---
         $all_session_qids = [];
-        $all_sessions_for_subjects = array_merge($active_sessions, $session_history); // Combine for one query
-        foreach ($all_sessions_for_subjects as $session) {
+        $all_sessions_for_lineage = array_merge($active_sessions, $session_history);
+        foreach ($all_sessions_for_lineage as $session) {
             $qids = json_decode($session->question_ids_snapshot, true);
             if (is_array($qids)) {
                 $all_session_qids = array_merge($all_session_qids, $qids);
             }
         }
 
-        $subjects_by_question = [];
+        $lineage_cache = []; // Cache for storing the root subject of a given term
+        $group_to_topic_map = []; // Map to store the linked topic for each group
+        $question_to_group_map = []; // Map to store the parent group for each question
+
         if (!empty($all_session_qids)) {
             $unique_qids = array_unique(array_map('absint', $all_session_qids));
-            $ids_placeholder = implode(',', $unique_qids);
-            $subject_results = $wpdb->get_results(
-                "SELECT 
-                    q.question_id, 
-                    subject_term.name as subject_name
-                 FROM {$wpdb->prefix}qp_questions q
-                 JOIN {$wpdb->prefix}qp_question_groups g ON q.group_id = g.group_id
-                 JOIN {$wpdb->prefix}qp_term_relationships subject_rel ON g.group_id = subject_rel.object_id AND subject_rel.object_type = 'group' AND subject_rel.term_id IN (SELECT term_id FROM {$wpdb->prefix}qp_terms WHERE parent = 0 AND taxonomy_id = (SELECT taxonomy_id FROM {$wpdb->prefix}qp_taxonomies WHERE taxonomy_name = 'subject'))
-                 JOIN {$wpdb->prefix}qp_terms subject_term ON subject_rel.term_id = subject_term.term_id
-                 WHERE q.question_id IN ($ids_placeholder)"
-            );
-            foreach ($subject_results as $res) {
-                $subjects_by_question[$res->question_id] = $res->subject_name;
+            $qids_placeholder = implode(',', $unique_qids);
+
+            $tax_table = $wpdb->prefix . 'qp_taxonomies';
+            $term_table = $wpdb->prefix . 'qp_terms';
+            $rel_table = $wpdb->prefix . 'qp_term_relationships';
+            $questions_table = $wpdb->prefix . 'qp_questions';
+            $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'subject'");
+
+            // 1. Map questions to their parent group
+            $q_to_g_results = $wpdb->get_results("SELECT question_id, group_id FROM {$questions_table} WHERE question_id IN ($qids_placeholder)");
+            foreach($q_to_g_results as $res) {
+                $question_to_group_map[$res->question_id] = $res->group_id;
+            }
+
+            // 2. Map groups to their specific topic
+            $g_to_t_results = $wpdb->get_results($wpdb->prepare(
+                "SELECT r.object_id, r.term_id 
+                 FROM {$rel_table} r JOIN {$term_table} t ON r.term_id = t.term_id
+                 WHERE r.object_type = 'group' AND t.taxonomy_id = %d", 
+                $subject_tax_id
+            ));
+            foreach($g_to_t_results as $res) {
+                 $group_to_topic_map[$res->object_id] = $res->term_id;
             }
         }
 
@@ -361,16 +374,36 @@ class QP_Dashboard
                 $subjects_display = 'N/A';
                 if (is_array($session_qids) && !empty($session_qids)) {
                     if ($mode === 'Section Practice') {
-                        // For section practice, get the full source hierarchy.
+                        // Section Wise Practice mode has its own specific display logic which is correct
                         $first_question_id = $session_qids[0];
                         $source_hierarchy = qp_get_source_hierarchy_for_question($first_question_id);
                         $subjects_display = implode(' / ', $source_hierarchy);
                     } else {
-                        // For all other modes, get the unique parent subjects.
+                        // --- NEW: Logic to find root subjects for all other modes ---
                         $session_subjects = [];
                         foreach ($session_qids as $qid) {
-                            if (isset($subjects_by_question[$qid])) {
-                                $session_subjects[] = $subjects_by_question[$qid];
+                            $gid = $question_to_group_map[$qid] ?? null;
+                            $topic_id = $gid ? ($group_to_topic_map[$gid] ?? null) : null;
+
+                            if ($topic_id) {
+                                // Check cache first
+                                if (isset($lineage_cache[$topic_id])) {
+                                    $session_subjects[] = $lineage_cache[$topic_id];
+                                } else {
+                                    // Not in cache, so trace the lineage
+                                    $current_term_id = $topic_id;
+                                    $root_subject_name = 'N/A';
+                                    for ($i = 0; $i < 10; $i++) { // Safety break
+                                        $term = $wpdb->get_row($wpdb->prepare("SELECT name, parent FROM $term_table WHERE term_id = %d", $current_term_id));
+                                        if (!$term || $term->parent == 0) {
+                                            $root_subject_name = $term ? $term->name : 'N/A';
+                                            break;
+                                        }
+                                        $current_term_id = $term->parent;
+                                    }
+                                    $lineage_cache[$topic_id] = $root_subject_name; // Cache the result
+                                    $session_subjects[] = $root_subject_name;
+                                }
                             }
                         }
                         $subjects_display = !empty($session_subjects) ? implode(', ', array_unique($session_subjects)) : 'N/A';
