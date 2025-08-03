@@ -3147,211 +3147,130 @@ function qp_start_practice_session_ajax()
     $user_id = get_current_user_id();
     $sessions_table = $wpdb->prefix . 'qp_user_sessions';
 
-    // --- NEW: Duplicate Session Check ---
-    $is_section_practice = isset($_POST['qp_section']) && is_numeric($_POST['qp_section']);
+    // --- Session Settings ---
+    $subjects_raw = isset($_POST['qp_subject']) && is_array($_POST['qp_subject']) ? $_POST['qp_subject'] : [];
+    $topics_raw = isset($_POST['qp_topic']) && is_array($_POST['qp_topic']) ? $_POST['qp_topic'] : [];
+    $section_id = isset($_POST['qp_section']) && is_numeric($_POST['qp_section']) ? absint($_POST['qp_section']) : 'all';
+    
+    $practice_mode = ($section_id !== 'all') ? 'Section Wise Practice' : 'normal';
 
-    if ($is_section_practice) {
-        $section_id = absint($_POST['qp_section']);
+    if ($practice_mode === 'normal' && empty($subjects_raw)) {
+        wp_send_json_error(['message' => 'Please select at least one subject.']);
+        return;
+    }
 
-        // Find any active or paused session for this user and this specific section
-        $existing_sessions = $wpdb->get_results($wpdb->prepare(
-            "SELECT session_id, settings_snapshot FROM {$sessions_table} WHERE user_id = %d AND status IN ('active', 'paused')",
-            $user_id
-        ));
+    $session_settings = [
+        'practice_mode'    => $practice_mode,
+        'subjects'         => $subjects_raw,
+        'topics'           => $topics_raw,
+        'section_id'       => $section_id,
+        'pyq_only'         => isset($_POST['qp_pyq_only']),
+        'include_attempted' => isset($_POST['qp_include_attempted']),
+        'marks_correct'    => isset($_POST['scoring_enabled']) ? floatval($_POST['qp_marks_correct']) : null,
+        'marks_incorrect'  => isset($_POST['scoring_enabled']) ? -abs(floatval($_POST['qp_marks_incorrect'])) : null,
+        'timer_enabled'    => isset($_POST['qp_timer_enabled']),
+        'timer_seconds'    => isset($_POST['qp_timer_seconds']) ? absint($_POST['qp_timer_seconds']) : 60
+    ];
 
+    // --- Duplicate Session Check for Section Practice ---
+    if ($practice_mode === 'Section Wise Practice') {
+        $existing_sessions = $wpdb->get_results($wpdb->prepare("SELECT session_id, settings_snapshot FROM {$sessions_table} WHERE user_id = %d AND status IN ('active', 'paused')", $user_id));
         foreach ($existing_sessions as $session) {
             $settings = json_decode($session->settings_snapshot, true);
             if (isset($settings['section_id']) && (int)$settings['section_id'] === $section_id) {
-                // A duplicate was found. Send back a specific error response.
-                wp_send_json_error([
-                    'code' => 'duplicate_session_exists',
-                    'message' => 'An active or paused session for this section already exists.',
-                    'session_id' => $session->session_id
-                ]);
-                return; // Stop execution
+                wp_send_json_error(['code' => 'duplicate_session_exists', 'message' => 'An active or paused session for this section already exists.', 'session_id' => $session->session_id]);
+                return;
             }
         }
     }
-
-    $practice_mode = isset($_POST['practice_mode']) ? sanitize_key($_POST['practice_mode']) : 'normal';
-
-    // Get a list of all question IDs that have an open report.
+    
+    // --- Table Names ---
+    $q_table = $wpdb->prefix . 'qp_questions';
+    $g_table = $wpdb->prefix . 'qp_question_groups';
+    $a_table = $wpdb->prefix . 'qp_user_attempts';
+    $rel_table = $wpdb->prefix . 'qp_term_relationships';
+    $term_table = $wpdb->prefix . 'qp_terms';
     $reports_table = $wpdb->prefix . 'qp_question_reports';
-    $reported_question_ids = $wpdb->get_col("SELECT DISTINCT question_id FROM {$reports_table} WHERE status = 'open'");
-    $exclude_sql = !empty($reported_question_ids) ? 'AND q.question_id NOT IN (' . implode(',', $reported_question_ids) . ')' : '';
 
-    if ($practice_mode === 'revision') {
-        $session_settings = [
-            'practice_mode'   => 'revision',
-            'selection_type'  => isset($_POST['revision_selection_type']) ? sanitize_key($_POST['revision_selection_type']) : 'auto',
-            'subjects'        => isset($_POST['revision_subjects']) ? array_map('absint', $_POST['revision_subjects']) : [],
-            'topics'          => isset($_POST['revision_topics']) ? array_map('absint', $_POST['revision_topics']) : [],
-            'questions_per'   => isset($_POST['qp_revision_questions_per_topic']) ? absint($_POST['qp_revision_questions_per_topic']) : 10,
-            'marks_correct'    => isset($_POST['scoring_enabled']) ? floatval($_POST['qp_marks_correct']) : null,
-            'marks_incorrect'  => isset($_POST['scoring_enabled']) ? -abs(floatval($_POST['qp_marks_incorrect'])) : null,
-            'timer_enabled'   => isset($_POST['qp_timer_enabled']),
-            'timer_seconds'   => isset($_POST['qp_timer_seconds']) ? absint($_POST['qp_timer_seconds']) : 60
-        ];
+    // --- Build Question Pool based on NEW Group Hierarchy ---
+    $joins = " FROM {$q_table} q JOIN {$g_table} g ON q.group_id = g.group_id";
+    $where_conditions = ["q.status = 'publish'"];
 
-        $user_id = get_current_user_id();
-        $attempts_table = $wpdb->prefix . 'qp_user_attempts';
-        $questions_table = $wpdb->prefix . 'qp_questions';
+    // 1. Determine the set of TOPIC term IDs to filter by.
+    $topic_term_ids_to_filter = [];
+    $subjects_selected = !empty($subjects_raw) && !in_array('all', $subjects_raw);
+    $topics_selected = !empty($topics_raw) && !in_array('all', $topics_raw);
 
-        $topic_ids_to_query = [];
-        if ($session_settings['selection_type'] === 'manual' && (!empty($session_settings['subjects']) || !empty($session_settings['topics']))) {
-            $topic_ids_to_query = $session_settings['topics'];
-            if (!empty($session_settings['subjects'])) {
-                $subject_ids_placeholder = implode(',', $session_settings['subjects']);
-                // Get all topic term_ids where parent is in the selected subject term_ids (new taxonomy system)
-                $topics_in_subjects = [];
-                if (!empty($subject_ids_placeholder)) {
-                    $topics_in_subjects = $wpdb->get_col(
-                        "SELECT term_id FROM {$wpdb->prefix}qp_terms WHERE parent IN ($subject_ids_placeholder)"
-                    );
-                }
-                $topic_ids_to_query = array_unique(array_merge($topic_ids_to_query, $topics_in_subjects));
-            }
-        } else {
-            $topic_ids_to_query = $wpdb->get_col($wpdb->prepare("SELECT DISTINCT q.topic_id FROM {$attempts_table} a JOIN {$questions_table} q ON a.question_id = q.question_id WHERE a.user_id = %d AND q.topic_id IS NOT NULL", $user_id));
-        }
-
-        if (empty($topic_ids_to_query)) {
-            wp_send_json_error(['html' => '<div class="qp-container"><p>No previously attempted questions found for the selected criteria. Try different options or a Normal Practice session.</p><button onclick="window.location.reload();" class="qp-button qp-button-secondary">Go Back</button></div>']);
-        }
-
-        $final_question_ids = [];
-        $questions_per_topic = $session_settings['questions_per'];
-
-        foreach ($topic_ids_to_query as $topic_id) {
-            // Apply the exclude filter to the revision query
-            $q_ids = $wpdb->get_col($wpdb->prepare("SELECT q.question_id FROM {$questions_table} q JOIN {$attempts_table} a ON q.question_id = a.question_id WHERE a.user_id = %d AND q.topic_id = %d {$exclude_sql} ORDER BY RAND() LIMIT %d", $user_id, $topic_id, $questions_per_topic)); // Attention! Change in query needed.
-            $final_question_ids = array_merge($final_question_ids, $q_ids);
-        }
-        $question_ids = array_unique($final_question_ids);
-        shuffle($question_ids);
-    } else {
-
-        // Attention! Change in query needed.
-        $subjects_raw = isset($_POST['qp_subject']) && is_array($_POST['qp_subject']) ? $_POST['qp_subject'] : [];
-        $topics_raw = isset($_POST['qp_topic']) && is_array($_POST['qp_topic']) ? $_POST['qp_topic'] : [];
-
-        if ($practice_mode === 'normal' && empty($subjects_raw)) {
-            wp_send_json_error(['message' => 'Please select at least one subject.']);
-        }
-
-        $section_id = isset($_POST['qp_section']) ? $_POST['qp_section'] : 'all';
-        $practice_mode = 'normal';
-        if ($section_id !== 'all' && is_numeric($section_id)) {
-            $practice_mode = 'Section Wise Practice';
-        }
-
-        $session_settings = [
-            'practice_mode'    => $practice_mode,
-            'subjects'         => $subjects_raw,
-            'topics'           => $topics_raw,
-            'section_id'       => $section_id,
-            'pyq_only'         => isset($_POST['qp_pyq_only']),
-            'include_attempted' => isset($_POST['qp_include_attempted']),
-            'marks_correct'    => isset($_POST['scoring_enabled']) ? floatval($_POST['qp_marks_correct']) : null,
-            'marks_incorrect'  => isset($_POST['scoring_enabled']) ? -abs(floatval($_POST['qp_marks_incorrect'])) : null,
-            'timer_enabled'    => isset($_POST['qp_timer_enabled']),
-            'timer_seconds'    => isset($_POST['qp_timer_seconds']) ? absint($_POST['qp_timer_seconds']) : 60
-        ];
-
-
-        $user_id = get_current_user_id();
-        $q_table = $wpdb->prefix . 'qp_questions';
-        $g_table = $wpdb->prefix . 'qp_question_groups';
-        $a_table = $wpdb->prefix . 'qp_user_attempts';
-
-        $user_id = get_current_user_id();
-        $q_table = $wpdb->prefix . 'qp_questions';
-        $g_table = $wpdb->prefix . 'qp_question_groups';
-        $a_table = $wpdb->prefix . 'qp_user_attempts';
-        $rel_table = $wpdb->prefix . 'qp_term_relationships';
-
-        $where_clauses = ["q.status = 'publish'"];
-        $query_params = [];
-        $joins = " LEFT JOIN {$g_table} g ON q.group_id = g.group_id";
-
-        // Handle Subject and Topic selection using the new taxonomy system
-        $term_ids_to_filter = [];
-        $subjects_selected = !empty($subjects_raw) && !in_array('all', $subjects_raw);
-        $topics_selected = !empty($topics_raw) && !in_array('all', $topics_raw);
-
-        if ($topics_selected) {
-            // If specific topics are chosen, they are the most specific filter.
-            $term_ids_to_filter = array_map('absint', $topics_raw);
-            $joins .= " JOIN {$rel_table} topic_rel ON q.question_id = topic_rel.object_id AND topic_rel.object_type = 'question'";
-            $ids_placeholder = implode(',', array_fill(0, count($term_ids_to_filter), '%d'));
-            $where_clauses[] = $wpdb->prepare("topic_rel.term_id IN ($ids_placeholder)", $term_ids_to_filter);
-        } elseif ($subjects_selected) {
-            // If only subjects are chosen, filter by them.
-            $term_ids_to_filter = array_map('absint', $subjects_raw);
-            $joins .= " JOIN {$rel_table} subject_rel ON g.group_id = subject_rel.object_id AND subject_rel.object_type = 'group'";
-            $ids_placeholder = implode(',', array_fill(0, count($term_ids_to_filter), '%d'));
-            $where_clauses[] = $wpdb->prepare("subject_rel.term_id IN ($ids_placeholder)", $term_ids_to_filter);
-        }
-
-        // Handle Section selection
-        if ($session_settings['section_id'] !== 'all' && is_numeric($session_settings['section_id'])) {
-            $joins .= " JOIN {$rel_table} section_rel ON q.question_id = section_rel.object_id AND section_rel.object_type = 'question'";
-            $where_clauses[] = $wpdb->prepare("section_rel.term_id = %d", absint($session_settings['section_id']));
-        }
-
-        if ($session_settings['pyq_only']) {
-            $where_clauses[] = "g.is_pyq = 1";
-        }
-
-        $base_where_sql = implode(' AND ', $where_clauses);
-        if (!$session_settings['include_attempted']) {
-            // **THE FIX**: Only exclude questions that were explicitly 'answered'.
-            $attempted_q_ids_sql = $wpdb->prepare("SELECT DISTINCT question_id FROM $a_table WHERE user_id = %d AND status = 'answered'", $user_id);
-            $base_where_sql .= " AND q.question_id NOT IN ($attempted_q_ids_sql)";
-        }
-
-        // **THE FIX**: This is the new, corrected ordering logic.
-        $options = get_option('qp_settings');
-        $admin_order_setting = isset($options['question_order']) ? $options['question_order'] : 'random';
-        $order_by_sql = '';
-
-        if ($session_settings['section_id'] !== 'all' && is_numeric($session_settings['section_id'])) {
-            // Force numerical incrementing order if a specific section is chosen
-            $order_by_sql = 'ORDER BY CAST(q.question_number_in_section AS UNSIGNED) ASC, q.custom_question_id ASC';
-        } else {
-            // Otherwise, use the admin setting
-            $order_by_sql = ($admin_order_setting === 'in_order') ? 'ORDER BY q.custom_question_id ASC' : 'ORDER BY RAND()';
-        }
-
-        $question_ids = [];
-        if ($practice_mode === 'Section Wise Practice') {
-            $query = "SELECT q.question_id, q.question_number_in_section FROM {$q_table} q {$joins} WHERE {$base_where_sql} {$exclude_sql} {$order_by_sql}";
-            $question_results = $wpdb->get_results($wpdb->prepare($query, $query_args));
-            if (!empty($question_results)) {
-                $question_ids = wp_list_pluck($question_results, 'question_id');
-                // Create a map of question IDs to their numbers and add it to the settings
-                $session_settings['question_numbers'] = wp_list_pluck($question_results, 'question_number_in_section', 'question_id');
-            }
-        } else {
-            // For all other modes, the original logic is fine
-            $query = "SELECT q.question_id FROM {$q_table} q {$joins} WHERE {$base_where_sql} {$exclude_sql} {$order_by_sql}";
-            $question_ids = $wpdb->get_col($wpdb->prepare($query, $query_args));
-        }
+    if ($topics_selected) {
+        $topic_term_ids_to_filter = array_map('absint', $topics_raw);
+    } elseif ($subjects_selected) {
+        $subject_ids_placeholder = implode(',', array_map('absint', $subjects_raw));
+        $topic_term_ids_to_filter = $wpdb->get_col("SELECT term_id FROM {$term_table} WHERE parent IN ($subject_ids_placeholder)");
+    }
+    
+    // 2. Find all groups linked to the selected topics (or all topics if no selection).
+    if (!empty($topic_term_ids_to_filter)) {
+        $topic_ids_placeholder = implode(',', $topic_term_ids_to_filter);
+        $where_conditions[] = "g.group_id IN (SELECT object_id FROM {$rel_table} WHERE object_type = 'group' AND term_id IN ($topic_ids_placeholder))";
     }
 
-    // --- COMMON SESSION CREATION LOGIC ---
+    // 3. Handle Section selection (which is a type of source term).
+    if ($practice_mode === 'Section Wise Practice') {
+        $where_conditions[] = $wpdb->prepare("g.group_id IN (SELECT object_id FROM {$rel_table} WHERE object_type = 'group' AND term_id = %d)", $section_id);
+    }
+    
+    // 4. Apply PYQ filter.
+    if ($session_settings['pyq_only']) {
+        $where_conditions[] = "g.is_pyq = 1";
+    }
+
+    // 5. Exclude previously attempted questions if specified.
+    if (!$session_settings['include_attempted']) {
+        $attempted_q_ids_sql = $wpdb->prepare("SELECT DISTINCT question_id FROM $a_table WHERE user_id = %d AND status = 'answered'", $user_id);
+        $where_conditions[] = "q.question_id NOT IN ($attempted_q_ids_sql)";
+    }
+
+    // 6. Exclude questions with open reports.
+    $reported_question_ids = $wpdb->get_col("SELECT DISTINCT question_id FROM {$reports_table} WHERE status = 'open'");
+    if (!empty($reported_question_ids)) {
+        $reported_ids_placeholder = implode(',', $reported_question_ids);
+        $where_conditions[] = "q.question_id NOT IN ($reported_ids_placeholder)";
+    }
+
+    // --- Determine Order and Finalize Query ---
+    $options = get_option('qp_settings');
+    $admin_order_setting = isset($options['question_order']) ? $options['question_order'] : 'random';
+    $order_by_sql = '';
+
+    if ($practice_mode === 'Section Wise Practice') {
+        $order_by_sql = 'ORDER BY CAST(q.question_number_in_section AS UNSIGNED) ASC, q.custom_question_id ASC';
+    } else {
+        $order_by_sql = ($admin_order_setting === 'in_order') ? 'ORDER BY q.custom_question_id ASC' : 'ORDER BY RAND()';
+    }
+
+    $where_sql = ' WHERE ' . implode(' AND ', $where_conditions);
+    $query = "SELECT q.question_id, q.question_number_in_section {$joins} {$where_sql} {$order_by_sql}";
+    
+    $question_results = $wpdb->get_results($query);
+    $question_ids = wp_list_pluck($question_results, 'question_id');
+
+    // --- Session Creation (Common Logic) ---
     if (empty($question_ids)) {
         wp_send_json_error(['message' => 'No questions were found for the selected criteria. Please try different options.']);
     }
 
-    $options = get_option('qp_settings');
     $session_page_id = isset($options['session_page']) ? absint($options['session_page']) : 0;
     if (!$session_page_id) {
         wp_send_json_error(['message' => 'The administrator has not configured a session page.']);
     }
 
-    $wpdb->insert($wpdb->prefix . 'qp_user_sessions', [
-        'user_id'                 => get_current_user_id(),
+    // Add question numbers to settings for section practice
+    if ($practice_mode === 'Section Wise Practice') {
+        $session_settings['question_numbers'] = wp_list_pluck($question_results, 'question_number_in_section', 'question_id');
+    }
+
+    $wpdb->insert($sessions_table, [
+        'user_id'                 => $user_id,
         'status'                  => 'active',
         'start_time'              => current_time('mysql'),
         'last_activity'           => current_time('mysql'),
