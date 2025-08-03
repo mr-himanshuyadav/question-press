@@ -209,9 +209,36 @@ protected function bulk_actions($which = '')
         echo '</select>';
 
         $current_source_or_section = isset($_REQUEST['filter_by_source']) ? esc_attr($_REQUEST['filter_by_source']) : '';
-        echo '<select name="filter_by_source" id="qp_filter_by_source_section" style="margin-right: 5px; display: none;">';
+        // MODIFICATION START: The inline style "display: none;" is removed and the dropdown is now populated.
+        echo '<select name="filter_by_source" id="qp_filter_by_source_section" style="margin-right: 5px;">';
         echo '<option value="">All Sources / Sections</option>';
+        
+        $source_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'source'");
+        if ($source_tax_id) {
+            $all_source_terms = $wpdb->get_results($wpdb->prepare("SELECT term_id, name, parent FROM $term_table WHERE taxonomy_id = %d ORDER BY name ASC", $source_tax_id));
+            
+            // Helper function to build the hierarchical dropdown
+            function qp_render_source_options($terms, $parent_id = 0, $level = 0, $current_selection = '') {
+                $prefix = str_repeat('&nbsp;&nbsp;', $level);
+                foreach ($terms as $term) {
+                    if ($term->parent == $parent_id) {
+                        $value = ($term->parent == 0 ? 'source_' : 'section_') . $term->term_id;
+                        printf(
+                            '<option value="%s" %s>%s%s</option>',
+                            esc_attr($value),
+                            selected($current_selection, $value, false),
+                            $prefix,
+                            esc_html($term->name)
+                        );
+                        qp_render_source_options($terms, $term->term_id, $level + 1, $current_selection);
+                    }
+                }
+            }
+            qp_render_source_options($all_source_terms, 0, 0, $current_source_or_section);
+        }
+        
         echo '</select>';
+        // MODIFICATION END
 
         $label_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'label'");
         $labels = $wpdb->get_results($wpdb->prepare(

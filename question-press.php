@@ -1169,45 +1169,63 @@ add_action('wp_ajax_get_topics_for_list_table_filter', 'qp_get_topics_for_list_t
 function qp_get_sources_for_list_table_filter_ajax()
 {
     check_ajax_referer('qp_admin_filter_nonce', 'nonce');
-    $topic_term_id = isset($_POST['topic_id']) ? absint($_POST['topic_id']) : 0;
+    $subject_id = isset($_POST['subject_id']) ? absint($_POST['subject_id']) : 0;
+    $topic_id = isset($_POST['topic_id']) ? absint($_POST['topic_id']) : 0;
 
-    if (!$topic_term_id) {
+    if (!$subject_id) {
         wp_send_json_success(['sources' => []]);
+        return;
     }
 
     global $wpdb;
     $term_table = $wpdb->prefix . 'qp_terms';
     $rel_table = $wpdb->prefix . 'qp_term_relationships';
     $tax_table = $wpdb->prefix . 'qp_taxonomies';
-
     $source_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'source'");
 
-    // Find all question IDs linked to the selected topic
-    $question_ids = $wpdb->get_col($wpdb->prepare(
-        "SELECT object_id FROM $rel_table WHERE term_id = %d AND object_type = 'question'",
-        $topic_term_id
-    ));
+    // --- MODIFICATION START ---
+    // This block correctly identifies the relevant group IDs.
 
-    if (empty($question_ids)) {
+    $term_ids_to_check = [];
+    if ($topic_id > 0) {
+        // If a specific topic is selected, we only care about that one.
+        $term_ids_to_check = [$topic_id];
+    } else {
+        // If only a subject is selected, get all of its child topics.
+        $term_ids_to_check = $wpdb->get_col($wpdb->prepare("SELECT term_id FROM $term_table WHERE parent = %d", $subject_id));
+    }
+    
+    $group_ids = [];
+    if (!empty($term_ids_to_check)) {
+        $term_ids_placeholder = implode(',', $term_ids_to_check);
+        // Find all groups linked to the relevant topics.
+        $group_ids = $wpdb->get_col("SELECT object_id FROM $rel_table WHERE term_id IN ($term_ids_placeholder) AND object_type = 'group'");
+    }
+    
+    // --- MODIFICATION END ---
+    
+
+    if (empty($group_ids)) {
         wp_send_json_success(['sources' => []]);
+        return;
     }
 
-    $ids_placeholder = implode(',', $question_ids);
+    $group_ids_placeholder = implode(',', $group_ids);
 
-    // Find all source/section terms linked to those questions
+    // 3. Find all source/section terms linked to this final list of groups.
     $source_terms = $wpdb->get_results($wpdb->prepare(
-        "SELECT DISTINCT t.term_id, t.name, t.parent 
-         FROM {$term_table} t
-         JOIN {$rel_table} r ON t.term_id = r.term_id
-         WHERE r.object_id IN ($ids_placeholder) AND r.object_type = 'question' AND t.taxonomy_id = %d
-         ORDER BY t.parent, t.name ASC",
+        "SELECT DISTINCT t.term_id, t.name, t.parent
+        FROM {$term_table} t
+        JOIN {$rel_table} r ON t.term_id = r.term_id
+        WHERE r.object_id IN ($group_ids_placeholder) AND r.object_type = 'group' AND t.taxonomy_id = %d
+        ORDER BY t.parent, t.name ASC",
         $source_tax_id
     ));
 
-    // Group sections under their parent source
+    // 4. Group sections under their parent source (no change needed here).
     $sources = [];
     foreach ($source_terms as $term) {
-        if ($term->parent == 0) { // This is a top-level source
+        if ($term->parent == 0) {
             if (!isset($sources[$term->term_id])) {
                 $sources[$term->term_id] = [
                     'source_id'   => $term->term_id,
@@ -1215,8 +1233,7 @@ function qp_get_sources_for_list_table_filter_ajax()
                     'sections'    => []
                 ];
             }
-        } else { // This is a section
-            // Find the parent source's name
+        } else {
             $parent_source_id = $term->parent;
             if (!isset($sources[$parent_source_id])) {
                 $parent_name = $wpdb->get_var($wpdb->prepare("SELECT name FROM $term_table WHERE term_id = %d", $parent_source_id));
