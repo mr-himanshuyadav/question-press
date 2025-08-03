@@ -2251,21 +2251,45 @@ function qp_get_quick_edit_form_ajax()
     }
 
 
-    // --- 1b: Fetch other term relationships (Source, Section, Labels, Exam) ---
-    // This part of the logic remains largely the same as before.
-    $question_terms_raw = $wpdb->get_results($wpdb->prepare("SELECT t.term_id, t.parent, tax.taxonomy_name FROM {$rel_table} r JOIN {$term_table} t ON r.term_id = t.term_id JOIN {$tax_table} tax ON t.taxonomy_id = tax.taxonomy_id WHERE r.object_id = %d AND r.object_type = 'question'", $question_id));
+    // --- 1b: Fetch group-level source/section and trace its lineage ---
+    $source_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'source'");
+    $linked_source_term_id = $wpdb->get_var($wpdb->prepare(
+        "SELECT term_id FROM {$rel_table} WHERE object_id = %d AND object_type = 'group' AND term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id = %d)",
+        $group_id,
+        $source_tax_id
+    ));
+
     $current_source_id = 0;
     $current_section_id = 0;
+
+    if ($linked_source_term_id) {
+        $term = $wpdb->get_row($wpdb->prepare("SELECT term_id, parent FROM $term_table WHERE term_id = %d", $linked_source_term_id));
+        if ($term && $term->parent != 0) {
+            // It's a section or subsection, so this is our selected "section"
+            $current_section_id = $term->term_id;
+            
+            // Now, find its top-level parent (the source)
+            $parent_id = $term->parent;
+            for ($i = 0; $i < 10; $i++) { // Safety break
+                $parent_term = $wpdb->get_row($wpdb->prepare("SELECT term_id, parent FROM $term_table WHERE term_id = %d", $parent_id));
+                if (!$parent_term || $parent_term->parent == 0) {
+                    $current_source_id = $parent_id;
+                    break;
+                }
+                $parent_id = $parent_term->parent;
+            }
+        } else if ($term) {
+            // It's a top-level source
+            $current_source_id = $term->term_id;
+        }
+    }
+
+    // --- 1c: Fetch other term relationships (Labels, Exam) ---
+    // (This part of the original function remains the same)
+    $question_terms_raw = $wpdb->get_results($wpdb->prepare("SELECT t.term_id, t.parent, tax.taxonomy_name FROM {$rel_table} r JOIN {$term_table} t ON r.term_id = t.term_id JOIN {$tax_table} tax ON t.taxonomy_id = tax.taxonomy_id WHERE r.object_id = %d AND r.object_type = 'question'", $question_id));
     $current_labels = [];
     foreach ($question_terms_raw as $term) {
-        if ($term->taxonomy_name === 'source') {
-            if ($term->parent != 0) {
-                $current_section_id = $term->term_id;
-                $current_source_id = $term->parent; // Assume direct parent is the source for simplicity here
-            } else {
-                $current_source_id = $term->term_id;
-            }
-        } elseif ($term->taxonomy_name === 'label') {
+        if ($term->taxonomy_name === 'label') {
             $current_labels[] = $term->term_id;
         }
     }
