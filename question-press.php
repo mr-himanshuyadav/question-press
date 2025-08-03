@@ -3611,63 +3611,77 @@ function qp_get_sources_for_subject_progress_ajax()
     $tax_table = $wpdb->prefix . 'qp_taxonomies';
     $source_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'source'");
 
-    // 1. Find all question groups linked to the selected subject term.
-    $group_ids = $wpdb->get_col($wpdb->prepare(
-        "SELECT object_id FROM $rel_table WHERE term_id = %d AND object_type = 'group'",
-        $subject_term_id
-    ));
+    // Step 1: Find all topics that are children of the selected subject.
+    $topic_ids = $wpdb->get_col($wpdb->prepare("SELECT term_id FROM $term_table WHERE parent = %d", $subject_term_id));
+
+    if (empty($topic_ids)) {
+        wp_send_json_success(['sources' => []]);
+        return;
+    }
+    $topic_ids_placeholder = implode(',', $topic_ids);
+
+    // Step 2: Find all question groups linked to those topics.
+    $group_ids = $wpdb->get_col("SELECT object_id FROM $rel_table WHERE term_id IN ($topic_ids_placeholder) AND object_type = 'group'");
 
     if (empty($group_ids)) {
         wp_send_json_success(['sources' => []]);
+        return;
     }
     $group_ids_placeholder = implode(',', $group_ids);
 
-    // 2. Find all source AND section terms linked to questions WITHIN those specific groups.
-    $related_terms = $wpdb->get_results($wpdb->prepare(
-        "SELECT DISTINCT t.term_id, t.parent 
-         FROM {$wpdb->prefix}qp_questions q
-         JOIN {$rel_table} r ON q.question_id = r.object_id AND r.object_type = 'question'
+    // Step 3: Find all source AND section terms linked to the relevant groups.
+    $all_linked_source_term_ids = $wpdb->get_col($wpdb->prepare(
+        "SELECT DISTINCT r.term_id
+         FROM {$rel_table} r
          JOIN {$term_table} t ON r.term_id = t.term_id
-         WHERE q.group_id IN ($group_ids_placeholder) AND t.taxonomy_id = %d",
+         WHERE r.object_id IN ($group_ids_placeholder) AND r.object_type = 'group' AND t.taxonomy_id = %d",
         $source_tax_id
     ));
 
-    if (empty($related_terms)) {
+    if (empty($all_linked_source_term_ids)) {
         wp_send_json_success(['sources' => []]);
+        return;
     }
 
-    // 3. Trace all terms back to their top-level parent (the source).
+    // Step 4: For each linked term, trace up to find its top-level parent (the source).
     $top_level_source_ids = [];
-    foreach ($related_terms as $term) {
-        if ($term->parent == 0) {
-            $top_level_source_ids[] = $term->term_id;
-        } else {
-            // This is a section or sub-section, trace to top-level parent
-            $current_term_id = $term->term_id;
-            $parent_id = $term->parent;
-            while ($parent_id != 0) {
-                $current_term_id = $parent_id;
-                $parent_id = $wpdb->get_var($wpdb->prepare("SELECT parent FROM $term_table WHERE term_id = %d", $current_term_id));
+    foreach ($all_linked_source_term_ids as $term_id) {
+        $current_id = $term_id;
+        for ($i = 0; $i < 10; $i++) { // Safety break to prevent infinite loops
+            $parent_id = $wpdb->get_var($wpdb->prepare("SELECT parent FROM $term_table WHERE term_id = %d", $current_id));
+            if ($parent_id == 0) {
+                $top_level_source_ids[] = $current_id;
+                break;
             }
-            $top_level_source_ids[] = $current_term_id;
+            $current_id = $parent_id;
         }
     }
 
-    $unique_source_ids = array_unique(array_filter($top_level_source_ids));
+    $unique_source_ids = array_unique($top_level_source_ids);
 
     if (empty($unique_source_ids)) {
         wp_send_json_success(['sources' => []]);
+        return;
     }
 
     $source_ids_placeholder = implode(',', $unique_source_ids);
 
-    // 4. Fetch the names of the unique, top-level sources.
-    $sources = $wpdb->get_results(
+    // Step 5: Fetch the names of the unique, top-level sources.
+    $source_terms = $wpdb->get_results(
         "SELECT term_id as source_id, name as source_name 
          FROM {$term_table} 
          WHERE term_id IN ($source_ids_placeholder)
          ORDER BY name ASC"
     );
+    
+    // Step 6: Format for the dropdown.
+    $sources = [];
+    foreach($source_terms as $term) {
+        $sources[] = [
+            'source_id' => $term->source_id,
+            'source_name' => $term->source_name
+        ];
+    }
 
     wp_send_json_success(['sources' => $sources]);
 }
@@ -3694,52 +3708,56 @@ function qp_get_progress_data_ajax()
     $attempts_table = $wpdb->prefix . 'qp_user_attempts';
     $questions_table = $wpdb->prefix . 'qp_questions';
 
-    // Get subject name for the top-level bar
-    $subject_name = $wpdb->get_var($wpdb->prepare("SELECT name FROM {$term_table} WHERE term_id = %d", $subject_term_id));
+    // Helper function to get all descendant term IDs for a given parent
+    function get_all_descendant_ids($parent_id, $wpdb, $term_table) {
+        $descendant_ids = [$parent_id];
+        $current_parent_ids = [$parent_id];
+        for ($i = 0; $i < 10; $i++) { // Safety break
+            if (empty($current_parent_ids)) break;
+            $ids_placeholder = implode(',', $current_parent_ids);
+            $child_ids = $wpdb->get_col("SELECT term_id FROM $term_table WHERE parent IN ($ids_placeholder)");
+            if (!empty($child_ids)) {
+                $descendant_ids = array_merge($descendant_ids, $child_ids);
+                $current_parent_ids = $child_ids;
+            } else {
+                break;
+            }
+        }
+        return array_unique($descendant_ids);
+    }
 
-    // Get all descendant terms for the selected source
-    $descendant_terms = $wpdb->get_results($wpdb->prepare(
-        "SELECT term_id, parent, name FROM {$term_table} WHERE term_id = %d OR parent = %d OR parent IN (SELECT term_id FROM {$term_table} WHERE parent = %d)",
-        $source_term_id,
-        $source_term_id,
-        $source_term_id
-    ));
+    // Step 1: Get all term IDs in both the selected subject and source hierarchies
+    $all_subject_term_ids = get_all_descendant_ids($subject_term_id, $wpdb, $term_table);
+    $all_source_term_ids = get_all_descendant_ids($source_term_id, $wpdb, $term_table);
 
-    if (empty($descendant_terms)) {
-        wp_send_json_success(['html' => '<p>No topics or sections found for this source.</p>']);
+    $subject_terms_placeholder = implode(',', $all_subject_term_ids);
+    $source_terms_placeholder = implode(',', $all_source_term_ids);
+
+    // Step 2: Find the intersection of groups linked to BOTH hierarchies
+    $relevant_group_ids = $wpdb->get_col("
+        SELECT DISTINCT r1.object_id
+        FROM {$rel_table} r1
+        INNER JOIN {$rel_table} r2 ON r1.object_id = r2.object_id AND r1.object_type = 'group' AND r2.object_type = 'group'
+        WHERE r1.term_id IN ($subject_terms_placeholder)
+          AND r2.term_id IN ($source_terms_placeholder)
+    ");
+
+    if (empty($relevant_group_ids)) {
+        wp_send_json_success(['html' => '<p>No questions found for this subject and source combination.</p>']);
         return;
     }
+    $group_ids_placeholder = implode(',', $relevant_group_ids);
 
-    $all_term_ids = wp_list_pluck($descendant_terms, 'term_id');
-    $terms_placeholder = implode(',', $all_term_ids);
+    // Step 3: Get all questions within those relevant groups
+    $all_qids_in_scope = $wpdb->get_col("SELECT question_id FROM {$questions_table} WHERE group_id IN ($group_ids_placeholder)");
 
-    // Get all question groups linked to the selected subject
-    $group_ids_in_subject = $wpdb->get_col($wpdb->prepare(
-        "SELECT object_id FROM {$rel_table} WHERE term_id = %d AND object_type = 'group'",
-        $subject_term_id
-    ));
-
-    $total_questions_in_source_and_subject = 0;
-    if (!empty($group_ids_in_subject)) {
-        $group_ids_placeholder = implode(',', $group_ids_in_subject);
-
-        // Count questions that are in one of the subject's groups AND are linked to one of the source's terms
-        $total_questions_in_source_and_subject = $wpdb->get_var(
-            "SELECT COUNT(DISTINCT q.question_id)
-             FROM {$questions_table} q
-             JOIN {$rel_table} r ON q.question_id = r.object_id AND r.object_type = 'question'
-             WHERE q.group_id IN ({$group_ids_placeholder}) AND r.term_id IN ({$terms_placeholder})"
-        );
-    }
-
-    $all_qids = $wpdb->get_col("SELECT DISTINCT object_id FROM {$rel_table} WHERE term_id IN ({$terms_placeholder}) AND object_type = 'question'");
-
-    if (empty($all_qids)) {
+    if (empty($all_qids_in_scope)) {
         wp_send_json_success(['html' => '<p>No questions found for this source.</p>']);
         return;
     }
-    $qids_placeholder = implode(',', $all_qids);
+    $qids_placeholder = implode(',', $all_qids_in_scope);
 
+    // Step 4: Get the user's completed questions within this specific scope
     $exclude_incorrect = isset($_POST['exclude_incorrect']) && $_POST['exclude_incorrect'] === 'true';
     $attempt_status_clause = $exclude_incorrect ? "AND is_correct = 1" : "AND status = 'answered'";
     $completed_qids = $wpdb->get_col($wpdb->prepare(
@@ -3747,30 +3765,36 @@ function qp_get_progress_data_ajax()
         $user_id
     ));
 
-    $question_term_map_raw = $wpdb->get_results("SELECT object_id, term_id FROM {$rel_table} WHERE object_id IN ($qids_placeholder) AND object_type = 'question'");
-    $question_term_map = [];
-    foreach ($question_term_map_raw as $row) {
-        $question_term_map[$row->object_id][] = $row->term_id;
+    // Step 5: Prepare data to build the hierarchical tree
+    $all_terms_data = $wpdb->get_results("SELECT term_id, name, parent FROM $term_table WHERE term_id IN ($source_terms_placeholder)");
+    $question_group_map = $wpdb->get_results("SELECT question_id, group_id FROM {$questions_table} WHERE question_id IN ($qids_placeholder)", OBJECT_K);
+    $group_term_map_raw = $wpdb->get_results("SELECT object_id, term_id FROM {$rel_table} WHERE object_id IN ($group_ids_placeholder) AND object_type = 'group' AND term_id IN ($source_terms_placeholder)");
+    
+    $group_term_map = [];
+    foreach ($group_term_map_raw as $row) {
+        $group_term_map[$row->object_id][] = $row->term_id;
     }
 
     $terms_by_id = [];
-    foreach ($descendant_terms as $term) {
+    foreach ($all_terms_data as $term) {
         $term->children = [];
         $term->total = 0;
         $term->completed = 0;
         $terms_by_id[$term->term_id] = $term;
     }
 
-    foreach ($all_qids as $qid) {
-        if (isset($question_term_map[$qid])) {
-            $is_completed = in_array($qid, $completed_qids);
+    // Populate counts by walking up the tree for each question
+    foreach ($all_qids_in_scope as $qid) {
+        $is_completed = in_array($qid, $completed_qids);
+        $gid = $question_group_map[$qid]->group_id;
 
-            $term_ids_for_question = $question_term_map[$qid];
+        if (isset($group_term_map[$gid])) {
+            $term_ids_for_group = $group_term_map[$gid];
             $processed_parents = [];
-
-            foreach ($term_ids_for_question as $term_id) {
-                $current_term_id = $term_id;
-                while (isset($terms_by_id[$current_term_id]) && !in_array($current_term_id, $processed_parents)) {
+            
+            foreach ($term_ids_for_group as $term_id) {
+                 $current_term_id = $term_id;
+                 while (isset($terms_by_id[$current_term_id]) && !in_array($current_term_id, $processed_parents)) {
                     $terms_by_id[$current_term_id]->total++;
                     if ($is_completed) {
                         $terms_by_id[$current_term_id]->completed++;
@@ -3782,6 +3806,7 @@ function qp_get_progress_data_ajax()
         }
     }
 
+    // Assemble the final tree structure
     $source_term_object = null;
     foreach ($terms_by_id as $term) {
         if ($term->term_id == $source_term_id) {
@@ -3793,11 +3818,8 @@ function qp_get_progress_data_ajax()
     }
 
     ob_start();
-
-    // --- START OF FIX ---
-    // Calculate the correct completed count and percentage for the main subject bar
-    $completed_count_for_subject = $source_term_object ? $source_term_object->completed : 0;
-    $subject_percentage = $total_questions_in_source_and_subject > 0 ? round(($completed_count_for_subject / $total_questions_in_source_and_subject) * 100) : 0;
+    $subject_name = $wpdb->get_var($wpdb->prepare("SELECT name FROM {$term_table} WHERE term_id = %d", $subject_term_id));
+    $subject_percentage = $source_term_object->total > 0 ? round(($source_term_object->completed / $source_term_object->total) * 100) : 0;
     ?>
     <div class="qp-progress-tree">
         <div class="qp-progress-item subject-level">
@@ -3805,15 +3827,16 @@ function qp_get_progress_data_ajax()
             <div class="qp-progress-label">
                 <strong><?php echo esc_html($subject_name); ?></strong>
                 <span class="qp-progress-percentage">
-                    <?php echo esc_html($subject_percentage); ?>% (<?php echo esc_html($completed_count_for_subject); ?>/<?php echo esc_html($total_questions_in_source_and_subject); ?>)
+                    <?php echo esc_html($subject_percentage); ?>% (<?php echo esc_html($source_term_object->completed); ?>/<?php echo esc_html($source_term_object->total); ?>)
                 </span>
             </div>
         </div>
         <div class="qp-source-children-container" style="padding-left: 20px;">
             <?php
-            // This recursive function does not need to be changed.
             function qp_render_progress_tree_recursive($terms)
             {
+                usort($terms, fn($a, $b) => strcmp($a->name, $b->name));
+
                 foreach ($terms as $term) {
                     $percentage = $term->total > 0 ? round(($term->completed / $term->total) * 100) : 0;
                     $has_children = !empty($term->children);
@@ -3841,10 +3864,8 @@ function qp_get_progress_data_ajax()
             ?>
         </div>
     </div>
-<?php
-    // --- END OF FIX ---
+    <?php
     $html = ob_get_clean();
-
     wp_send_json_success(['html' => $html]);
 }
 add_action('wp_ajax_get_progress_data', 'qp_get_progress_data_ajax');
