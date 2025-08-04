@@ -88,162 +88,162 @@ class QP_Importer {
     }
 
     private function process_data($data, $labels_to_apply = [], $temp_dir = '')
-    {
-        global $wpdb;
-        $tax_table = $wpdb->prefix . 'qp_taxonomies';
-        $term_table = $wpdb->prefix . 'qp_terms';
-        $rel_table = $wpdb->prefix . 'qp_term_relationships';
-        $groups_table = $wpdb->prefix . 'qp_question_groups';
-        $questions_table = $wpdb->prefix . 'qp_questions';
-        $options_table = $wpdb->prefix . 'qp_options';
+{
+    global $wpdb;
+    $tax_table = $wpdb->prefix . 'qp_taxonomies';
+    $term_table = $wpdb->prefix . 'qp_terms';
+    $rel_table = $wpdb->prefix . 'qp_term_relationships';
+    $groups_table = $wpdb->prefix . 'qp_question_groups';
+    $questions_table = $wpdb->prefix . 'qp_questions';
+    $options_table = $wpdb->prefix . 'qp_options';
 
-        // Cache taxonomy IDs
-        $tax_ids = [
-            'subject' => $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'subject'"),
-            'exam'    => $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'exam'"),
-            'source'  => $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'source'"),
-            'label'   => $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'label'"),
-        ];
+    // Cache taxonomy IDs
+    $tax_ids = [
+        'subject' => $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'subject'"),
+        'exam'    => $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'exam'"),
+        'source'  => $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'source'"),
+        'label'   => $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'label'"),
+    ];
 
-        $imported_count = 0;
-        $duplicate_count = 0;
-        $new_images_count = 0;
-        
-        $duplicate_term_id = $wpdb->get_var($wpdb->prepare("SELECT term_id FROM $term_table WHERE name = %s AND taxonomy_id = %d", 'Duplicate', $tax_ids['label']));
+    $imported_count = 0;
+    $duplicate_count = 0;
+    $new_images_count = 0;
+    
+    $duplicate_term_id = $wpdb->get_var($wpdb->prepare("SELECT term_id FROM $term_table WHERE name = %s AND taxonomy_id = %d", 'Duplicate', $tax_ids['label']));
 
-        if (!isset($data['questionGroups']) || !is_array($data['questionGroups'])) {
-            return ['imported' => 0, 'duplicates' => 0, 'new_images' => 0];
-        }
-
-        foreach ($data['questionGroups'] as $group) {
-            // --- Term Handling ---
-            $subject_term_id = qp_get_or_create_term($group['subject'] ?? 'Uncategorized', $tax_ids['subject']);
-            $exam_term_id = !empty($group['examName']) ? qp_get_or_create_term($group['examName'], $tax_ids['exam']) : null;
-
-            // Process the hierarchical source array
-            $source_hierarchy_ids = [];
-            $parent_id = 0;
-            if (isset($group['source']) && is_array($group['source'])) {
-                foreach ($group['source'] as $source_name) {
-                    $parent_id = qp_get_or_create_term($source_name, $tax_ids['source'], $parent_id);
-                    $source_hierarchy_ids[] = $parent_id;
-                }
-            }
-            $most_specific_source_id = end($source_hierarchy_ids) ?: null;
-            $top_level_source_id = $source_hierarchy_ids[0] ?? null; // Get the first ID, which is the parent source
-
-            // --- NEW: Automatically link the Source to the Subject ---
-            if ($subject_term_id && $top_level_source_id) {
-                $wpdb->insert($rel_table, [
-                    'object_id'   => $top_level_source_id,
-                    'term_id'     => $subject_term_id,
-                    'object_type' => 'source_subject_link'
-                ]);
-            }
-            
-            // --- Image Handling ---
-            $direction_image_id = null;
-            if (isset($group['Direction']['image'])) {
-                $image_result = $this->get_or_upload_image($group['Direction']['image'], $temp_dir);
-                if ($image_result) {
-                    $direction_image_id = $image_result['id'];
-                    if ($image_result['is_new']) $new_images_count++;
-                }
-            }
-
-            // --- Create Question Group ---
-            $wpdb->insert($groups_table, [
-                'direction_text' => isset($group['Direction']['text']) ? $group['Direction']['text'] : null,
-                'direction_image_id' => $direction_image_id,
-                'subject_id' => 0, // Legacy column, can be removed later
-                'is_pyq' => isset($group['isPYQ']) ? (int)$group['isPYQ'] : 0,
-                'exam_id' => 0, // Legacy
-                'pyq_year' => isset($group['pyqYear']) ? sanitize_text_field($group['pyqYear']) : null,
-            ]);
-            $group_id = $wpdb->insert_id;
-
-            // --- Create Group Relationships ---
-            if ($subject_term_id) {
-                $wpdb->insert($rel_table, ['object_id' => $group_id, 'term_id' => $subject_term_id, 'object_type' => 'group']);
-            }
-            if ($exam_term_id && $group['isPYQ']) {
-                $wpdb->insert($rel_table, ['object_id' => $group_id, 'term_id' => $exam_term_id, 'object_type' => 'group']);
-                
-                // --- NEW: Automatically link the Exam to the Subject ---
-                if ($subject_term_id) {
-                    $wpdb->insert($rel_table, [
-                        'object_id'   => $exam_term_id, 
-                        'term_id'     => $subject_term_id, 
-                        'object_type' => 'exam_subject_link'
-                    ]);
-                }
-            }
-
-            foreach ($group['questions'] as $question) {
-                $topic_term_id = !empty($question['topicName']) ? qp_get_or_create_term($question['topicName'], $tax_ids['subject'], $subject_term_id) : null;
-
-                $question_text = $question['questionText'];
-                $hash = md5(strtolower(trim(preg_replace('/\s+/', '', $question_text))));
-                $existing_question_id = $wpdb->get_var($wpdb->prepare("SELECT question_id FROM $questions_table WHERE question_text_hash = %s", $hash));
-                $next_custom_id = get_option('qp_next_custom_question_id', 1000);
-
-                // --- Create Question ---
-                $wpdb->insert($questions_table, [
-                    'custom_question_id' => $next_custom_id,
-                    'group_id' => $group_id,
-                    'topic_id' => 0, // Legacy
-                    'question_number_in_section' => $question['questionNumber'] ?? null,
-                    'question_text' => $question_text,
-                    'question_text_hash' => $hash,
-                    'duplicate_of' => $existing_question_id ?: null,
-                    'status' => 'draft'
-                ]);
-                $question_id = $wpdb->insert_id;
-                update_option('qp_next_custom_question_id', $next_custom_id + 1);
-
-                // --- Create Question Relationships ---
-                if ($topic_term_id) {
-                    $wpdb->insert($rel_table, ['object_id' => $question_id, 'term_id' => $topic_term_id, 'object_type' => 'question']);
-                }
-                // Link question only to the most specific source term in the hierarchy
-                if ($most_specific_source_id) {
-                    $wpdb->insert($rel_table, ['object_id' => $question_id, 'term_id' => $most_specific_source_id, 'object_type' => 'question']);
-                }
-
-                // --- Add Options and Set Status ---
-                $has_correct_answer = false;
-                if (!empty($question['options']) && is_array($question['options'])) {
-                    foreach ($question['options'] as $option) {
-                        $is_correct_val = !empty($option['isCorrect']);
-                        $wpdb->insert($options_table, [
-                            'question_id' => $question_id,
-                            'option_text' => $option['optionText'],
-                            'is_correct' => $is_correct_val ? 1 : 0
-                        ]);
-                        if ($is_correct_val) $has_correct_answer = true;
-                    }
-                }
-
-                if ($has_correct_answer) {
-                    $wpdb->update($questions_table, ['status' => 'publish'], ['question_id' => $question_id]);
-                }
-
-                // --- Handle Labels ---
-                if ($existing_question_id && $duplicate_term_id) {
-                    $wpdb->insert($rel_table, ['object_id' => $question_id, 'term_id' => $duplicate_term_id, 'object_type' => 'question']);
-                    $duplicate_count++;
-                }
-                $imported_count++;
-
-                if (!empty($labels_to_apply)) {
-                    foreach ($labels_to_apply as $label_term_id) {
-                        $wpdb->query($wpdb->prepare("INSERT IGNORE INTO $rel_table (object_id, term_id, object_type) VALUES (%d, %d, 'question')", $question_id, $label_term_id));
-                    }
-                }
-            }
-        }
-        return ['imported' => $imported_count, 'duplicates' => $duplicate_count, 'new_images' => $new_images_count];
+    if (!isset($data['questionGroups']) || !is_array($data['questionGroups'])) {
+        return ['imported' => 0, 'duplicates' => 0, 'new_images' => 0];
     }
+
+    foreach ($data['questionGroups'] as $group) {
+        // --- Term Handling ---
+        // **NEW**: Process hierarchical subject array
+        $subject_hierarchy_ids = [];
+        $parent_subject_id = 0;
+        if (isset($group['subject']) && is_array($group['subject'])) {
+            foreach ($group['subject'] as $subject_name) {
+                $parent_subject_id = qp_get_or_create_term($subject_name, $tax_ids['subject'], $parent_subject_id);
+                $subject_hierarchy_ids[] = $parent_subject_id;
+            }
+        }
+        $most_specific_subject_id = end($subject_hierarchy_ids) ?: null;
+        $top_level_subject_id = $subject_hierarchy_ids[0] ?? null;
+
+        $exam_term_id = !empty($group['examName']) ? qp_get_or_create_term($group['examName'], $tax_ids['exam']) : null;
+
+        // Process hierarchical source array
+        $source_hierarchy_ids = [];
+        $parent_source_id = 0;
+        if (isset($group['source']) && is_array($group['source'])) {
+            foreach ($group['source'] as $source_name) {
+                $parent_source_id = qp_get_or_create_term($source_name, $tax_ids['source'], $parent_source_id);
+                $source_hierarchy_ids[] = $parent_source_id;
+            }
+        }
+        $most_specific_source_id = end($source_hierarchy_ids) ?: null;
+        $top_level_source_id = $source_hierarchy_ids[0] ?? null;
+
+        // Automatically link the Source to the top-level Subject
+        if ($top_level_subject_id && $top_level_source_id) {
+            $wpdb->insert($rel_table, [
+                'object_id'   => $top_level_source_id,
+                'term_id'     => $top_level_subject_id,
+                'object_type' => 'source_subject_link'
+            ]);
+        }
+        
+        // --- Image Handling ---
+        $direction_image_id = null;
+        if (isset($group['Direction']['image'])) {
+            $image_result = $this->get_or_upload_image($group['Direction']['image'], $temp_dir);
+            if ($image_result) {
+                $direction_image_id = $image_result['id'];
+                if ($image_result['is_new']) $new_images_count++;
+            }
+        }
+
+        // --- Create Question Group ---
+        $wpdb->insert($groups_table, [
+            'direction_text' => isset($group['Direction']['text']) ? $group['Direction']['text'] : null,
+            'direction_image_id' => $direction_image_id,
+            'is_pyq' => isset($group['isPYQ']) ? (int)$group['isPYQ'] : 0,
+            'pyq_year' => isset($group['pyqYear']) ? sanitize_text_field($group['pyqYear']) : null,
+        ]);
+        $group_id = $wpdb->insert_id;
+
+        // --- Create Group Relationships ---
+        if ($most_specific_subject_id) {
+            $wpdb->insert($rel_table, ['object_id' => $group_id, 'term_id' => $most_specific_subject_id, 'object_type' => 'group']);
+        }
+        if ($most_specific_source_id) {
+            $wpdb->insert($rel_table, ['object_id' => $group_id, 'term_id' => $most_specific_source_id, 'object_type' => 'group']);
+        }
+        if ($exam_term_id && $group['isPYQ']) {
+            $wpdb->insert($rel_table, ['object_id' => $group_id, 'term_id' => $exam_term_id, 'object_type' => 'group']);
+            
+            // Automatically link the Exam to the top-level Subject
+            if ($top_level_subject_id) {
+                $wpdb->insert($rel_table, [
+                    'object_id'   => $exam_term_id, 
+                    'term_id'     => $top_level_subject_id, 
+                    'object_type' => 'exam_subject_link'
+                ]);
+            }
+        }
+
+        foreach ($group['questions'] as $question) {
+            $question_text = $question['questionText'];
+            $hash = md5(strtolower(trim(preg_replace('/\s+/', '', $question_text))));
+            $existing_question_id = $wpdb->get_var($wpdb->prepare("SELECT question_id FROM $questions_table WHERE question_text_hash = %s", $hash));
+            $next_custom_id = get_option('qp_next_custom_question_id', 1000);
+
+            // --- Create Question ---
+            $wpdb->insert($questions_table, [
+                'custom_question_id' => $next_custom_id,
+                'group_id' => $group_id,
+                'question_number_in_section' => $question['questionNumber'] ?? null,
+                'question_text' => $question_text,
+                'question_text_hash' => $hash,
+                'duplicate_of' => $existing_question_id ?: null,
+                'status' => 'draft'
+            ]);
+            $question_id = $wpdb->insert_id;
+            update_option('qp_next_custom_question_id', $next_custom_id + 1);
+
+            // --- Add Options and Set Status ---
+            $has_correct_answer = false;
+            if (!empty($question['options']) && is_array($question['options'])) {
+                foreach ($question['options'] as $option) {
+                    $is_correct_val = !empty($option['isCorrect']);
+                    $wpdb->insert($options_table, [
+                        'question_id' => $question_id,
+                        'option_text' => $option['optionText'],
+                        'is_correct' => $is_correct_val ? 1 : 0
+                    ]);
+                    if ($is_correct_val) $has_correct_answer = true;
+                }
+            }
+
+            if ($has_correct_answer) {
+                $wpdb->update($questions_table, ['status' => 'publish'], ['question_id' => $question_id]);
+            }
+
+            // --- Handle Labels ---
+            if ($existing_question_id && $duplicate_term_id) {
+                $wpdb->insert($rel_table, ['object_id' => $question_id, 'term_id' => $duplicate_term_id, 'object_type' => 'question']);
+                $duplicate_count++;
+            }
+            $imported_count++;
+
+            if (!empty($labels_to_apply)) {
+                foreach ($labels_to_apply as $label_term_id) {
+                    $wpdb->query($wpdb->prepare("INSERT IGNORE INTO $rel_table (object_id, term_id, object_type) VALUES (%d, %d, 'question')", $question_id, $label_term_id));
+                }
+            }
+        }
+    }
+    return ['imported' => $imported_count, 'duplicates' => $duplicate_count, 'new_images' => $new_images_count];
+}
 
     private function cleanup($dir) {
         if (!is_dir($dir)) return;

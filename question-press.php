@@ -3,7 +3,7 @@
 /**
  * Plugin Name:       Question Press
  * Description:       A complete plugin for creating, managing, and practicing questions.
- * Version:           3.3.5
+ * Version:           3.3.6
  * Author:            Himanshu
  */
 
@@ -859,6 +859,58 @@ function qp_regenerate_api_key_ajax()
     wp_send_json_success(['new_key' => $new_key]);
 }
 add_action('wp_ajax_regenerate_api_key', 'qp_regenerate_api_key_ajax');
+
+// Used on export page
+
+/**
+ * Helper function to get all descendant term IDs for a given parent, including the parent itself.
+ *
+ * @param int    $parent_id The starting term_id.
+ * @param object $wpdb      The WordPress database object.
+ * @param string $term_table The name of the terms table.
+ * @return array An array of term IDs.
+ */
+function get_all_descendant_ids($parent_id, $wpdb, $term_table) {
+    $descendant_ids = [$parent_id];
+    $current_parent_ids = [$parent_id];
+    for ($i = 0; $i < 10; $i++) { // Safety break
+        if (empty($current_parent_ids)) break;
+        $ids_placeholder = implode(',', $current_parent_ids);
+        $child_ids = $wpdb->get_col("SELECT term_id FROM $term_table WHERE parent IN ($ids_placeholder)");
+        if (!empty($child_ids)) {
+            $descendant_ids = array_merge($descendant_ids, $child_ids);
+            $current_parent_ids = $child_ids;
+        } else {
+            break;
+        }
+    }
+    return array_unique($descendant_ids);
+}
+
+// Used on export page
+/**
+ * Helper function to trace a term's lineage back to the root and return an array of names.
+ *
+ * @param int    $term_id      The starting term_id.
+ * @param object $wpdb         The WordPress database object.
+ * @param string $term_table   The name of the terms table.
+ * @return array An ordered array of names from parent to child.
+ */
+function qp_get_term_lineage_names($term_id, $wpdb, $term_table) {
+    $lineage = [];
+    $current_id = $term_id;
+    for ($i=0; $i<10; $i++) { // Safety break
+        if (!$current_id) break;
+        $term = $wpdb->get_row($wpdb->prepare("SELECT name, parent FROM {$term_table} WHERE term_id = %d", $current_id));
+        if ($term) {
+            array_unshift($lineage, $term->name);
+            $current_id = $term->parent;
+        } else {
+            break;
+        }
+    }
+    return $lineage;
+}
 
 /**
  * Runs the relationship migration from questions to groups.
