@@ -890,12 +890,13 @@ class QP_Shortcodes
             </div>
         </div>
         <div id="qp-report-modal-backdrop" style="display: none;">
-            <div id="qp-report-modal-content"><button class="qp-modal-close-btn">&times;</button>
+            <div id="qp-report-modal-content"><button class="qp-modal-close-btn" style="outline: none;">&times;</button>
                 <h3>Report an Issue</h3>
                 <p>Please select all issues that apply to the current question.</p>
                 <form id="qp-report-form">
                     <div id="qp-report-options-container"></div>
-                    <textarea id="qp-report-comment" name="report_comment" rows="3" placeholder="Optional: Add a comment to explain the issue..."></textarea>
+                    <label for="qp-report-comment" style="font-size: .8em;">Comment<span style="color: red;">*</span></label>
+                    <textarea id="qp-report-comment" name="report_comment" rows="3" placeholder="Add a comment to explain the issue..."></textarea>
                     <div class="qp-modal-footer"><button type="submit" class="qp-button qp-button-primary">Submit Report</button></div>
                 </form>
             </div>
@@ -1243,7 +1244,8 @@ class QP_Shortcodes
                 <form id="qp-report-form">
                     <input type="hidden" id="qp-report-question-id-field" value="">
                     <div id="qp-report-options-container"></div>
-                    <textarea id="qp-report-comment-review" name="report_comment" rows="3" placeholder="Optional: Add a comment to explain the issue..."></textarea>
+                    <label for="qp-report-comment-review"><span style="color: red;">*</span></label>
+                    <textarea id="qp-report-comment-review" name="report_comment" rows="3" placeholder="Add a comment to explain the issue..." required></textarea>
                     <div class="qp-modal-footer">
                         <button type="submit" class="qp-button qp-button-primary">Submit Report</button>
                     </div>

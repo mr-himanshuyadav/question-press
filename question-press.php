@@ -3961,11 +3961,21 @@ function qp_get_report_reasons_ajax()
     check_ajax_referer('qp_practice_nonce', 'nonce');
 
     global $wpdb;
-    $reasons_table = $wpdb->prefix . 'qp_report_reasons';
+    $tax_table = $wpdb->prefix . 'qp_taxonomies';
+    $term_table = $wpdb->prefix . 'qp_terms';
+    $meta_table = $wpdb->prefix . 'qp_term_meta';
 
-    $reasons = $wpdb->get_results(
-        "SELECT reason_id, reason_text FROM {$reasons_table} WHERE is_active = 1 ORDER BY reason_id ASC"
-    );
+    $reason_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'report_reason'");
+
+    // This query now correctly fetches only the ACTIVE reasons from the new taxonomy system
+    $reasons = $wpdb->get_results($wpdb->prepare(
+        "SELECT t.term_id as reason_id, t.name as reason_text
+         FROM {$term_table} t
+         LEFT JOIN {$meta_table} m ON t.term_id = m.term_id AND m.meta_key = 'is_active'
+         WHERE t.taxonomy_id = %d AND (m.meta_value = '1' OR m.meta_value IS NULL)
+         ORDER BY t.name ASC",
+        $reason_tax_id
+    ));
 
     wp_send_json_success(['reasons' => $reasons]);
 }
