@@ -15,7 +15,7 @@ class QP_Question_Editor_Page
             $reports_table = $wpdb->prefix . 'qp_question_reports';
             $term_table = $wpdb->prefix . 'qp_terms'; // Use the new terms table
             $open_reports = $wpdb->get_results($wpdb->prepare(
-                "SELECT r.question_id, t.name AS reason_text 
+                "SELECT r.question_id, r.comment, t.name AS reason_text 
                  FROM {$reports_table} r 
                  JOIN {$term_table} t ON r.reason_term_id = t.term_id
                  WHERE r.status = 'open' AND r.question_id IN (SELECT question_id FROM {$wpdb->prefix}qp_questions WHERE group_id = %d)",
@@ -348,6 +348,22 @@ class QP_Question_Editor_Page
                                             </div>
                                         </div>
                                         <div class="inside">
+                                            <?php
+            // Check if this specific question has any open reports with comments
+            $reports_for_this_question = array_filter($open_reports, function($report) use ($question) {
+                return $report->question_id == $question->question_id && !empty(trim($report->comment));
+            });
+
+            if (!empty($reports_for_this_question)):
+                foreach ($reports_for_this_question as $report):
+            ?>
+                <div class="notice notice-alt notice-warning" style="margin: 0 0 15px; padding: 10px; border-left-width: 4px;">
+                    <p style="margin: 0;"><strong>Reporter's Comment:</strong> <?php echo esc_html($report->comment); ?></p>
+                </div>
+            <?php
+                endforeach;
+            endif;
+            ?>
                                             <input type="hidden" name="questions[<?php echo $q_index; ?>][question_id]" class="question-id-input" value="<?php echo esc_attr($question->question_id); ?>">
                                             <?php if (!empty($question->labels)) : ?>
                                                 <div id="qp-labels-container-<?php echo $q_index; ?>" class="qp-editor-labels-container" data-editor-id="question_text_editor_<?php echo $q_index; ?>">
@@ -358,6 +374,7 @@ class QP_Question_Editor_Page
                                                     <?php endforeach; ?>
                                                 </div>
                                             <?php endif; ?>
+                                            
                                             <?php
                                             wp_editor(
                                                 $question->question_text, // The content
