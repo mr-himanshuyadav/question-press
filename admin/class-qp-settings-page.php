@@ -264,11 +264,11 @@ class QP_Settings_Page
 
         <div class="api-doc-section">
             <h4>Get Single Question</h4>
-            <p><strong>Endpoint:</strong> <code>GET /question/id/&lt;custom_id&gt;</code></p>
-            <p>Returns the full data for a single question using its custom ID. Requires authentication.</p>
+            <p><strong>Endpoint:</strong> <code>GET /question/id/&lt;question_id&gt;</code></p>
+            <p>Returns the full data for a single question using its question ID. Requires authentication.</p>
             <p><strong>Headers:</strong> <code>Authorization: Bearer [YOUR_TOKEN]</code></p>
             <p><strong>Success Response (200):</strong></p>
-            <pre>{ "custom_question_id": "1001", "question_text": "...", "direction_text": "...", ... }</pre>
+            <pre>{ "question_id": "1001", "question_text": "...", "direction_text": "...", ... }</pre>
         </div>
         <style>
             .api-doc-section {

@@ -991,7 +991,7 @@ class QP_Shortcodes
         $attempts_raw = $wpdb->get_results($wpdb->prepare(
             "SELECT 
                 a.question_id, a.selected_option_id, a.is_correct, a.mock_status,
-                q.question_text, q.custom_question_id, q.question_number_in_section,
+                q.question_text, q.question_number_in_section,
                 g.group_id, g.direction_text
             FROM {$wpdb->prefix}qp_user_attempts a
             JOIN {$wpdb->prefix}qp_questions q ON a.question_id = q.question_id
@@ -1166,7 +1166,7 @@ class QP_Shortcodes
                     <div class="qp-review-question-item">
                         <div class="qp-review-question-meta" style="display: flex; justify-content: space-between; align-items: flex-start;">
                             <div class="meta-left" style="display: flex; flex-direction: column; gap: 5px;">
-                                <span><strong>ID: </strong><?php echo esc_html($attempt->custom_question_id); ?></span>
+                                <span><strong>ID: </strong><?php echo esc_html($attempt->question_id); ?></span>
                                 <span>
                                     <strong>Topic: </strong>
                                     <?php echo esc_html(implode(' / ', $attempt->subject_lineage)); ?>

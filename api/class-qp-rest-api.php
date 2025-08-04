@@ -76,19 +76,18 @@ class QP_Rest_Api {
             'permission_callback' => [self::class, 'check_auth_token']
         ]);
         
-        // UPDATED: Route now uses the custom ID
-        register_rest_route('questionpress/v1', '/question/id/(?P<custom_id>\d+)', [
-            'methods' => WP_REST_Server::READABLE, // GET
-            'callback' => [self::class, 'get_single_question_by_custom_id'],
-            'permission_callback' => [self::class, 'check_auth_token'],
-            'args' => [
-                'custom_id' => [
-                    'validate_callback' => function($param, $request, $key) {
-                        return is_numeric($param);
-                    }
-                ],
-            ],
-        ]);
+        register_rest_route('questionpress/v1', '/question/(?P<id>\d+)', [
+    'methods' => WP_REST_Server::READABLE, // GET
+    'callback' => [self::class, 'get_single_question_by_id'],
+    'permission_callback' => [self::class, 'check_auth_token'],
+    'args' => [
+        'id' => [
+            'validate_callback' => function($param, $request, $key) {
+                return is_numeric($param);
+            }
+        ],
+    ],
+]);
 
         // --- NEW: Session Management Endpoints (Protected) ---
         register_rest_route('questionpress/v1', '/session/create', [
@@ -230,8 +229,8 @@ class QP_Rest_Api {
     /**
      * UPDATED: Callback now fetches question by its custom ID.
      */
-    public static function get_single_question_by_custom_id(WP_REST_Request $request) {
-        $custom_question_id = (int) $request['custom_id'];
+    public static function get_single_question_by_id(WP_REST_Request $request) {
+        $question_db_id = (int) $request['id'];
 
         global $wpdb;
         $q_table = $wpdb->prefix . 'qp_questions';
@@ -242,7 +241,7 @@ class QP_Rest_Api {
         $tax_table = $wpdb->prefix . 'qp_taxonomies';
 
         $question_data = $wpdb->get_row($wpdb->prepare(
-            "SELECT q.question_id, q.custom_question_id, q.question_text, g.group_id, g.direction_text, g.direction_image_id
+            "SELECT q.question_id, q.question_text, g.group_id, g.direction_text, g.direction_image_id
              FROM {$q_table} q 
              LEFT JOIN {$g_table} g ON q.group_id = g.group_id
              WHERE q.custom_question_id = %d AND q.status = 'publish'",

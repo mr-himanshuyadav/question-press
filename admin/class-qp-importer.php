@@ -195,11 +195,9 @@ class QP_Importer {
             $question_text = $question['questionText'];
             $hash = md5(strtolower(trim(preg_replace('/\s+/', '', $question_text))));
             $existing_question_id = $wpdb->get_var($wpdb->prepare("SELECT question_id FROM $questions_table WHERE question_text_hash = %s", $hash));
-            $next_custom_id = get_option('qp_next_custom_question_id', 1000);
 
             // --- Create Question ---
             $wpdb->insert($questions_table, [
-                'custom_question_id' => $next_custom_id,
                 'group_id' => $group_id,
                 'question_number_in_section' => $question['questionNumber'] ?? null,
                 'question_text' => $question_text,
@@ -208,7 +206,6 @@ class QP_Importer {
                 'status' => 'draft'
             ]);
             $question_id = $wpdb->insert_id;
-            update_option('qp_next_custom_question_id', $next_custom_id + 1);
 
             // --- Add Options and Set Status ---
             $has_correct_answer = false;

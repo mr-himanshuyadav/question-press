@@ -24,7 +24,7 @@ class QP_Questions_List_Table extends WP_List_Table
     {
         return [
             'cb'                 => '<input type="checkbox" />',
-            'custom_question_id' => 'ID',
+            'question_id' => 'ID',
             'question_text'      => 'Question',
             'subject_name'       => 'Subject',
             'source'             => 'Source',
@@ -35,7 +35,7 @@ class QP_Questions_List_Table extends WP_List_Table
     public function get_sortable_columns()
     {
         return [
-            'custom_question_id' => ['custom_question_id', true],
+            'question_id' => ['question_id', true],
             'subject_name'       => ['subject_name', false],
         ];
     }
@@ -317,7 +317,7 @@ protected function bulk_actions($which = '')
 ?>
         <p class="search-box">
             <label class="screen-reader-text" for="<?php echo $input_id ?>"><?php echo $search_button_text; ?>:</label>
-            <input type="search" id="<?php echo $input_id ?>" name="s" value="<?php echo $search_query; ?>" placeholder="By ID or text" />
+            <input type="search" id="<?php echo $input_id ?>" name="s" value="<?php echo $search_query; ?>" placeholder="By DB ID or text" />
             <?php submit_button($search_button_text, 'button', 'search_submit', false, array('id' => 'search-submit')); ?>
         </p>
     <?php
@@ -330,13 +330,13 @@ protected function bulk_actions($which = '')
         $columns = $this->get_columns();
         $hidden = get_hidden_columns($this->screen);
         $sortable = $this->get_sortable_columns();
-        $this->_column_headers = [$columns, $hidden, $sortable, 'custom_question_id'];
+        $this->_column_headers = [$columns, $hidden, $sortable, 'question_id'];
 
         $per_page = $this->get_items_per_page('qp_questions_per_page', 20);
         $current_page = $this->get_pagenum();
         $offset = ($current_page - 1) * $per_page;
 
-        $orderby = isset($_GET['orderby']) ? sanitize_key($_GET['orderby']) : 'custom_question_id';
+        $orderby = isset($_GET['orderby']) ? sanitize_key($_GET['orderby']) : 'question_id';
         $order = isset($_GET['order']) ? sanitize_key($_GET['order']) : 'desc';
 
         // Define new table names
@@ -435,8 +435,15 @@ if (!empty($_REQUEST['filter_by_source'])) {
 
         // Handle Search Filter (remains the same as old logic)
         if (!empty($_REQUEST['s'])) {
-            $search_term = '%' . $wpdb->esc_like(stripslashes($_REQUEST['s'])) . '%';
-            $where_conditions[] = $wpdb->prepare("(q.question_text LIKE %s OR q.custom_question_id LIKE %s)", $search_term, $search_term);
+            $search_term = stripslashes($_REQUEST['s']);
+            if (is_numeric($search_term)) {
+                // If the search is a number, search the DB ID.
+                $where_conditions[] = $wpdb->prepare("q.question_id = %d", absint($search_term));
+            } else {
+                // Otherwise, search the question text.
+                $like_term = '%' . $wpdb->esc_like($search_term) . '%';
+                $where_conditions[] = $wpdb->prepare("q.question_text LIKE %s", $like_term);
+            }
         }
 
         // Handle Label Filter
@@ -794,9 +801,9 @@ $output .= '<strong>' . wp_kses_post(nl2br($clean_question_text)) . '</strong>';
                 $label_text = esc_html($label->label_name);
 
                 if ($label->label_name === 'Duplicate' && !empty($item['duplicate_of'])) {
-                    $original_custom_id = get_question_custom_id($item['duplicate_of']);
-                    if ($original_custom_id) {
-                        $label_text .= sprintf(' (of #%s)', esc_html($original_custom_id));
+                    $original_question_id = $item['duplicate_of'];
+                    if ($original_question_id) {
+                        $label_text .= sprintf(' (of #%s)', esc_html($original_question_id));
                     }
                 }
 
@@ -863,9 +870,9 @@ $row_text .= '<strong>' . wp_kses_post(nl2br($item['question_text'])) . '</stron
 
                 // If this is the "Duplicate" label and the data exists, create the link.
                 if ($label->label_name === 'Duplicate' && !empty($item['duplicate_of'])) {
-                    $original_custom_id = get_question_custom_id($item['duplicate_of']);
-                    if ($original_custom_id) {
-                        $label_text .= sprintf(' (of #%s)', esc_html($original_custom_id));
+                    $original_question_id = $item['duplicate_of'];
+                    if ($original_question_id) {
+                        $label_text .= sprintf(' (of #%s)', esc_html($original_question_id));
                     }
                 }
 

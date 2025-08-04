@@ -1546,7 +1546,7 @@ jQuery(document).ready(function ($) {
     }
 
     $("#qp-question-id").text(
-      "Question ID: " + questionData.custom_question_id
+      "Question ID: " + questionData.question_id
     );
 
     // --- NEW: Hierarchical Source/Section Display ---

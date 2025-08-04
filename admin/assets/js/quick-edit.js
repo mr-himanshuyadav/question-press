@@ -640,7 +640,7 @@ wrapper.on('click', '.save', function(e) {
           if (response.success) {
             var data = response.data;
             var html = `<h4>${data.subject_name || ""} (ID: ${
-              data.custom_question_id
+              data.question_id
             })</h4>`;
 
             if (data.direction_text || data.direction_image_url) {

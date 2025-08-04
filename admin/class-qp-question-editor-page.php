@@ -121,7 +121,7 @@ class QP_Question_Editor_Page
         }
 
         if (empty($questions_in_group)) {
-            $questions_in_group[] = (object)['question_id' => 0, 'custom_question_id' => 'New', 'question_text' => '', 'options' => [], 'labels' => []];
+            $questions_in_group[] = (object)['question_id' => 0, 'question_text' => '', 'options' => [], 'labels' => []];
         }
         
         // --- Fetch ALL data needed for the form dropdowns from the new taxonomy system ---
@@ -176,7 +176,7 @@ class QP_Question_Editor_Page
                             <p style="margin-top: 0;">The following questions have open reports. Resolving them will remove them from the "Needs Review" queue.</p>
                             <ul style="list-style: disc; padding-left: 20px; margin-bottom: 0;">
                                 <?php foreach ($reports_by_question as $qid => $reasons): ?>
-                                    <li><strong>Question #<?php echo esc_html(get_question_custom_id($qid)); ?>:</strong> <?php echo esc_html(implode(', ', array_unique($reasons))); ?></li>
+                                    <li><strong>Question #<?php echo esc_html($qid); ?>:</strong> <?php echo esc_html(implode(', ', array_unique($reasons))); ?></li>
                                 <?php endforeach; ?>
                             </ul>
                         </div>
@@ -301,10 +301,7 @@ class QP_Question_Editor_Page
                                             </button>
                                             <h2 class="hndle">
                                                 <span>
-                                                    <span class="qp-question-title">Q<?php echo ($q_index + 1); ?>: Question (ID: <?php echo esc_html($question->custom_question_id); ?>)</span>
-                                                    <?php if ($question->question_id > 0) : ?>
-                                                        <span class="qp-question-db-id"><small style="font-weight: normal; font-size: 12px; color: #777;"> | DB ID: <?php echo esc_html($question->question_id); ?></small></span>
-                                                    <?php endif; ?>
+                                                    <span class="qp-question-title">Q<?php echo ($q_index + 1); ?>: Question (ID: <?php echo $question->question_id > 0 ? esc_html($question->question_id) : 'New'; ?>)</span>
                                                     <small style="font-weight: normal; font-size: 12px; color: #777; margin-left: 15px;">
                                                         <label for="question_number_in_section_<?php echo $q_index; ?>" style="vertical-align: middle;"><strong>Q. No:</strong></label>
                                                         <input type="text" name="questions[<?php echo $q_index; ?>][question_number_in_section]" id="question_number_in_section_<?php echo $q_index; ?>" value="<?php echo esc_attr($question->question_number_in_section ?? ''); ?>" style="width: 80px; vertical-align: middle; margin-left: 5px; font-weight: normal;">

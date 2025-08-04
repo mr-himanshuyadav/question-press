@@ -50,7 +50,6 @@ function qp_activate_plugin()
         is_pyq BOOLEAN NOT NULL DEFAULT 0,
         pyq_year VARCHAR(4) DEFAULT NULL,
         PRIMARY KEY (group_id),
-        KEY subject_id (subject_id),
         KEY is_pyq (is_pyq)
     ) $charset_collate;";
     dbDelta($sql_groups);
@@ -59,7 +58,6 @@ function qp_activate_plugin()
     $table_questions = $wpdb->prefix . 'qp_questions';
     $sql_questions = "CREATE TABLE $table_questions (
         question_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
-        custom_question_id BIGINT(20) UNSIGNED,
         group_id BIGINT(20) UNSIGNED,
         question_number_in_section VARCHAR(20) DEFAULT NULL,
         question_text LONGTEXT NOT NULL,
@@ -69,11 +67,7 @@ function qp_activate_plugin()
         status VARCHAR(20) NOT NULL DEFAULT 'draft',
         last_modified DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         PRIMARY KEY (question_id),
-        UNIQUE KEY custom_question_id (custom_question_id),
         KEY group_id (group_id),
-        KEY topic_id (topic_id),
-        KEY source_id (source_id),
-        KEY section_id (section_id),
         KEY status (status),
         KEY question_text_hash (question_text_hash)
     ) $charset_collate;";
@@ -335,8 +329,7 @@ function qp_activate_plugin()
         }
     }
 
-    // Set default options
-    add_option('qp_next_custom_question_id', 1000, '', 'no');
+    // Set default options 
     if (!get_option('qp_jwt_secret_key')) {
         add_option('qp_jwt_secret_key', wp_generate_password(64, true, true), '', 'no');
     }
@@ -1178,12 +1171,6 @@ function qp_all_questions_page_cb()
     <?php
 }
 
-function get_question_custom_id($question_id)
-{
-    global $wpdb;
-    return $wpdb->get_var($wpdb->prepare("SELECT custom_question_id FROM {$wpdb->prefix}qp_questions WHERE question_id = %d", $question_id));
-}
-
 /**
  * AJAX handler for the admin list table.
  * Gets child topics for a given parent subject term.
@@ -1424,11 +1411,8 @@ function qp_handle_save_question_group()
         if ($question_id > 0 && in_array($question_id, $existing_q_ids)) {
             $wpdb->update($q_table, $question_db_data, ['question_id' => $question_id]);
         } else {
-            $next_custom_id = get_option('qp_next_custom_question_id', 1000);
-            $question_db_data['custom_question_id'] = $next_custom_id;
             $wpdb->insert($q_table, $question_db_data);
             $question_id = $wpdb->insert_id;
-            update_option('qp_next_custom_question_id', $next_custom_id + 1);
         }
         $submitted_q_ids[] = $question_id;
 
@@ -1649,7 +1633,6 @@ function qp_perform_backup($type = 'manual')
 
     $backup_data['plugin_settings'] = [
         'qp_settings' => get_option('qp_settings'),
-        'qp_next_custom_question_id' => get_option('qp_next_custom_question_id'),
     ];
 
     $json_data = json_encode($backup_data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
@@ -2039,7 +2022,6 @@ function qp_perform_restore($filename)
 
     if (isset($backup_data['plugin_settings'])) {
         update_option('qp_settings', $backup_data['plugin_settings']['qp_settings']);
-        update_option('qp_next_custom_question_id', $backup_data['plugin_settings']['qp_next_custom_question_id']);
     }
 
     $images_dir = trailingslashit($temp_extract_dir) . 'images';
@@ -3277,9 +3259,9 @@ function qp_start_practice_session_ajax()
     $order_by_sql = '';
 
     if ($practice_mode === 'Section Wise Practice') {
-        $order_by_sql = 'ORDER BY CAST(q.question_number_in_section AS UNSIGNED) ASC, q.custom_question_id ASC';
+        $order_by_sql = 'ORDER BY CAST(q.question_number_in_section AS UNSIGNED) ASC, q.question_id ASC';
     } else {
-        $order_by_sql = ($admin_order_setting === 'in_order') ? 'ORDER BY q.custom_question_id ASC' : 'ORDER BY RAND()';
+        $order_by_sql = ($admin_order_setting === 'in_order') ? 'ORDER BY q.question_id ASC' : 'ORDER BY RAND()';
     }
 
     $where_sql = ' WHERE ' . implode(' AND ', $where_conditions);
@@ -3860,7 +3842,7 @@ function qp_get_question_data_ajax()
 
     // 1. Fetch the basic question data first
     $question_data = $wpdb->get_row($wpdb->prepare(
-        "SELECT q.question_id, q.custom_question_id, q.question_text, q.question_number_in_section, g.group_id, g.direction_text, g.direction_image_id
+        "SELECT q.question_id, q.question_text, q.question_number_in_section, g.group_id, g.direction_text, g.direction_image_id
          FROM {$q_table} q
          LEFT JOIN {$g_table} g ON q.group_id = g.group_id
          WHERE q.question_id = %d",
@@ -3872,24 +3854,6 @@ function qp_get_question_data_ajax()
     }
 
     $group_id = $question_data['group_id'];
-
-    // Helper function to trace term lineage
-        function qp_get_term_lineage_names($term_id, $wpdb, $term_table){
-            $lineage = [];
-            $current_id = $term_id;
-            for ($i = 0; $i < 10; $i++) { // Safety break
-                if (!$current_id) break;
-                $term = $wpdb->get_row($wpdb->prepare("SELECT name, parent FROM {$term_table} WHERE term_id = %d", $current_id));
-                if ($term) {
-                    array_unshift($lineage, $term->name);
-                    $current_id = $term->parent;
-                    if ($current_id == 0) break;
-                } else {
-                    break;
-                }
-            }
-            return $lineage;
-        }
     
     // 2. Get Subject/Topic Hierarchy
     $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'subject'");
@@ -4029,10 +3993,9 @@ function qp_submit_question_report_ajax()
     }
 
     // Add a log entry for the admin panel
-    $custom_id = get_question_custom_id($question_id);
     $wpdb->insert("{$wpdb->prefix}qp_logs", [
         'log_type'    => 'User Report',
-        'log_message' => sprintf('User reported question #%s.', $custom_id),
+        'log_message' => sprintf('User reported question #%s.', $question_id),
         'log_data'    => wp_json_encode(['user_id' => $user_id, 'session_id' => $session_id, 'question_id' => $question_id, 'reasons' => $reasons])
     ]);
 
@@ -4289,7 +4252,7 @@ function qp_start_revision_session_ajax()
         if (!empty($available_qids)) {
             $ids_placeholder = implode(',', array_map('absint', $available_qids));
             // Correct the ORDER BY clause to prioritize the section (source term) first.
-            $order_by_sql = $choose_random ? "ORDER BY RAND()" : "ORDER BY r_source.term_id, CAST(q.question_number_in_section AS UNSIGNED) ASC, q.custom_question_id ASC";
+            $order_by_sql = $choose_random ? "ORDER BY RAND()" : "ORDER BY r_source.term_id, CAST(q.question_number_in_section AS UNSIGNED) ASC, q.question_id ASC";
 
             $q_ids = $wpdb->get_col($wpdb->prepare(
                 "SELECT q.question_id 
@@ -4833,6 +4796,7 @@ add_action('wp_ajax_qp_start_review_session', 'qp_start_review_session_ajax');
  */
 function qp_get_single_question_for_review_ajax()
 {
+    // Security check
     if (
         !(check_ajax_referer('qp_practice_nonce', 'nonce', false) ||
             check_ajax_referer('qp_get_quick_edit_form_nonce', 'nonce', false))
@@ -4851,15 +4815,24 @@ function qp_get_single_question_for_review_ajax()
 
     global $wpdb;
 
-    // FIX 2: Use the more robust and correct query from other parts of the plugin.
+    // **FIX START**: This new query correctly finds the group's topic and then traces back to the top-level subject.
     $question_data = $wpdb->get_row($wpdb->prepare(
-        "SELECT q.question_text, q.custom_question_id, g.direction_text, g.direction_image_id, 
-                (SELECT t.name FROM {$wpdb->prefix}qp_terms t JOIN {$wpdb->prefix}qp_term_relationships r ON t.term_id = r.term_id WHERE r.object_id = g.group_id AND r.object_type = 'group' AND t.taxonomy_id = (SELECT taxonomy_id FROM {$wpdb->prefix}qp_taxonomies WHERE taxonomy_name = 'subject') AND t.parent = 0) as subject_name
+        "SELECT 
+            q.question_id, 
+            q.question_text, 
+            g.direction_text, 
+            g.direction_image_id, 
+            parent_term.name AS subject_name
          FROM {$wpdb->prefix}qp_questions q
          LEFT JOIN {$wpdb->prefix}qp_question_groups g ON q.group_id = g.group_id
-         WHERE q.question_id = %d",
+         LEFT JOIN {$wpdb->prefix}qp_term_relationships r ON g.group_id = r.object_id AND r.object_type = 'group'
+         LEFT JOIN {$wpdb->prefix}qp_terms child_term ON r.term_id = child_term.term_id
+         LEFT JOIN {$wpdb->prefix}qp_terms parent_term ON child_term.parent = parent_term.term_id
+         WHERE q.question_id = %d 
+           AND parent_term.taxonomy_id = (SELECT taxonomy_id FROM {$wpdb->prefix}qp_taxonomies WHERE taxonomy_name = 'subject')",
         $question_id
     ), ARRAY_A);
+    // **FIX END**
 
     if (!$question_data) {
         wp_send_json_error(['message' => 'Question not found.']);
@@ -4880,13 +4853,13 @@ function qp_get_single_question_for_review_ajax()
         $question_data['question_text'] = wp_kses_post(nl2br($question_data['question_text']));
     }
 
-    // Fetch options (this part remains the same)
+    // Fetch options
     $options = $wpdb->get_results($wpdb->prepare(
         "SELECT option_id, option_text, is_correct FROM {$wpdb->prefix}qp_options WHERE question_id = %d ORDER BY option_id ASC",
         $question_id
     ), ARRAY_A);
 
-    foreach ($options as &$option) { // Use a reference to modify the array directly
+    foreach ($options as &$option) {
         if (!empty($option['option_text'])) {
             $option['option_text'] = wp_kses_post(nl2br($option['option_text']));
         }

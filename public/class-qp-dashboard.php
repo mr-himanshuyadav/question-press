@@ -33,7 +33,7 @@ class QP_Dashboard
         // Fetch Review Later questions (existing logic)
         $review_questions = $wpdb->get_results($wpdb->prepare(
             "SELECT 
-                q.question_id, q.custom_question_id, q.question_text, 
+                q.question_id, q.question_text, 
                 subject_term.name as subject_name
              FROM {$wpdb->prefix}qp_review_later rl
              JOIN {$wpdb->prefix}qp_questions q ON rl.question_id = q.question_id
@@ -142,7 +142,7 @@ class QP_Dashboard
                             <li data-question-id="<?php echo esc_attr($q->question_id); ?>">
                                 <div class="qp-review-list-q-text">
                                     <strong>Q<?php echo $index + 1; ?>:</strong> <?php echo wp_trim_words(esc_html($q->question_text), 25, '...'); ?>
-                                    <small>ID: <?php echo esc_html($q->custom_question_id); ?> | Subject: <?php echo esc_html($q->subject_name); ?></small>
+                                    <small>ID: <?php echo esc_html($q->question_id); ?> | Subject: <?php echo esc_html($q->subject_name); ?></small>
                                 </div>
                                 <div class="qp-review-list-actions">
                                     <button class="qp-review-list-view-btn">View</button>
