@@ -476,17 +476,6 @@ class QP_Rest_Api {
             $question_id = $wpdb->insert_id;
             update_option('qp_next_custom_question_id', $next_custom_id + 1);
 
-            // Link question to topic, source, and section
-            if (!empty($data['topic_id'])) {
-                $wpdb->insert($rel_table, ['object_id' => $question_id, 'term_id' => absint($data['topic_id']), 'object_type' => 'question']);
-            }
-            if (!empty($data['source_id'])) {
-                $wpdb->insert($rel_table, ['object_id' => $question_id, 'term_id' => absint($data['source_id']), 'object_type' => 'question']);
-            }
-             if (!empty($data['section_id'])) {
-                $wpdb->insert($rel_table, ['object_id' => $question_id, 'term_id' => absint($data['section_id']), 'object_type' => 'question']);
-            }
-
             // Add Options
             if (isset($question_data['options']) && is_array($question_data['options'])) {
                 foreach ($question_data['options'] as $option) {

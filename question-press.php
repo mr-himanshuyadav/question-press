@@ -4185,8 +4185,8 @@ function qp_start_revision_session_ajax()
             "SELECT q.question_id 
             FROM {$questions_table} q
             JOIN {$groups_table} g ON q.group_id = g.group_id
-            JOIN {$rel_table} r ON q.question_id = r.object_id
-            WHERE r.term_id = %d AND r.object_type = 'question' AND q.status = 'publish'
+            JOIN {$rel_table} r ON g.group_id = r.object_id
+            WHERE r.term_id = %d AND r.object_type = 'group' AND q.status = 'publish'
             {$pyq_filter_sql} {$exclude_reported_sql}",
             $topic_id
         ));
@@ -4207,10 +4207,16 @@ function qp_start_revision_session_ajax()
 
         if (!empty($available_qids)) {
             $ids_placeholder = implode(',', array_map('absint', $available_qids));
-            $order_by_sql = $choose_random ? "ORDER BY RAND()" : "ORDER BY CAST(q.question_number_in_section AS UNSIGNED) ASC, q.custom_question_id ASC";
+            // Correct the ORDER BY clause to prioritize the section (source term) first.
+            $order_by_sql = $choose_random ? "ORDER BY RAND()" : "ORDER BY r_source.term_id, CAST(q.question_number_in_section AS UNSIGNED) ASC, q.custom_question_id ASC";
 
             $q_ids = $wpdb->get_col($wpdb->prepare(
-                "SELECT q.question_id FROM {$questions_table} q WHERE q.question_id IN ($ids_placeholder) {$order_by_sql} LIMIT %d",
+                "SELECT q.question_id 
+                 FROM {$questions_table} q
+                 LEFT JOIN {$rel_table} r_source ON q.group_id = r_source.object_id AND r_source.object_type = 'group'
+                 WHERE q.question_id IN ($ids_placeholder) 
+                 {$order_by_sql} 
+                 LIMIT %d",
                 $questions_per_topic
             ));
             $final_question_ids = array_merge($final_question_ids, $q_ids);
