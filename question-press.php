@@ -173,26 +173,6 @@ function qp_activate_plugin()
     ) $charset_collate;";
     dbDelta($sql_review_later);
 
-    // Table: Report Reasons (Needs Attention for possiblity to migrate to terms table)
-    $table_report_reasons = $wpdb->prefix . 'qp_report_reasons';
-    $sql_report_reasons = "CREATE TABLE $table_report_reasons (
-        reason_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
-        reason_text VARCHAR(255) NOT NULL,
-        is_active BOOLEAN NOT NULL DEFAULT 1,
-        PRIMARY KEY (reason_id)
-    ) $charset_collate;";
-    dbDelta($sql_report_reasons);
-
-    // Add some default report reasons if the table is empty
-    if ($wpdb->get_var("SELECT COUNT(*) FROM $table_report_reasons") == 0) {
-        $default_reasons = ['Wrong Answer', 'Typo in question', 'Options are incorrect', 'Image is not loading', 'Question is confusing'];
-        foreach ($default_reasons as $reason) {
-            $wpdb->insert($table_report_reasons, ['reason_text' => $reason]);
-        }
-    }
-
-    // Attention! Need to migrate this from using report_reasons table to terms_table
-
     // Table: Question Reports (Needs Attention for better handling)
     $table_question_reports = $wpdb->prefix . 'qp_question_reports';
     $sql_question_reports = "CREATE TABLE $table_question_reports (
@@ -318,13 +298,23 @@ function qp_activate_plugin()
     }
 
     // Define and insert default report reasons
-    $default_reasons = ['Wrong Answer', 'Typo in question', 'Options are incorrect', 'Image is not loading', 'Question is confusing'];
+    $default_reasons = [
+        ['text' => 'Wrong Answer', 'type' => 'report'],
+        ['text' => 'Typo in question', 'type' => 'suggestion'],
+        ['text' => 'Options are incorrect', 'type' => 'report'],
+        ['text' => 'Image is not loading', 'type' => 'report'],
+        ['text' => 'Question is confusing', 'type' => 'suggestion'],
+        ['text' => 'Language Mistake', 'type' => 'suggestion'],
+        ['text' => 'No Answer Provided', 'type' => 'report'],
+        ['text' => 'Wrong Formatting', 'type' => 'suggestion']
+    ];
 
     if ($reason_tax_id) {
-        foreach ($default_reasons as $reason_text) {
-            $term_id = qp_get_or_create_term($reason_text, $reason_tax_id);
+        foreach ($default_reasons as $reason) {
+            $term_id = qp_get_or_create_term($reason['text'], $reason_tax_id);
             if ($term_id) {
                 qp_update_term_meta($term_id, 'is_active', '1');
+                qp_update_term_meta($term_id, 'type', $reason['type']); // Add the type meta
             }
         }
     }
@@ -4983,8 +4973,6 @@ function qp_pause_session_ajax()
 }
 add_action('wp_ajax_qp_pause_session', 'qp_pause_session_ajax');
 
-// Attention! Look if it is needed or not.
-
 function qp_handle_log_settings_forms()
 {
     if (!isset($_GET['page']) || $_GET['page'] !== 'qp-logs-reports' || !isset($_GET['tab']) || $_GET['tab'] !== 'log_settings') {
@@ -4992,26 +4980,42 @@ function qp_handle_log_settings_forms()
     }
 
     global $wpdb;
-    $table_name = $wpdb->prefix . 'qp_report_reasons';
+    $term_table = $wpdb->prefix . 'qp_terms';
 
     // Add/Update Reason
     if (isset($_POST['action']) && ($_POST['action'] === 'add_reason' || $_POST['action'] === 'update_reason') && check_admin_referer('qp_add_edit_reason_nonce')) {
         $reason_text = sanitize_text_field($_POST['reason_text']);
         $is_active = isset($_POST['is_active']) ? 1 : 0;
-        $data = ['reason_text' => $reason_text, 'is_active' => $is_active];
+        $taxonomy_id = absint($_POST['taxonomy_id']);
+        
+        $term_data = [
+            'name' => $reason_text,
+            'slug' => sanitize_title($reason_text),
+            'taxonomy_id' => $taxonomy_id,
+        ];
 
         if ($_POST['action'] === 'update_reason') {
-            $wpdb->update($table_name, $data, ['reason_id' => absint($_POST['reason_id'])]);
+            $term_id = absint($_POST['term_id']);
+            $wpdb->update($term_table, $term_data, ['term_id' => $term_id]);
         } else {
-            $wpdb->insert($table_name, $data);
+            $wpdb->insert($term_table, $term_data);
+            $term_id = $wpdb->insert_id;
         }
+
+        if ($term_id) {
+            qp_update_term_meta($term_id, 'is_active', $is_active);
+        }
+
         wp_safe_redirect(admin_url('admin.php?page=qp-logs-reports&tab=log_settings&message=1'));
         exit;
     }
 
     // Delete Reason
     if (isset($_GET['action']) && $_GET['action'] === 'delete' && isset($_GET['reason_id']) && check_admin_referer('qp_delete_reason_' . absint($_GET['reason_id']))) {
-        $wpdb->delete($table_name, ['reason_id' => absint($_GET['reason_id'])]);
+        $term_id_to_delete = absint($_GET['reason_id']);
+        // Also delete meta associated with the term
+        $wpdb->delete($wpdb->prefix . 'qp_term_meta', ['term_id' => $term_id_to_delete]);
+        $wpdb->delete($term_table, ['term_id' => $term_id_to_delete]);
         wp_safe_redirect(admin_url('admin.php?page=qp-logs-reports&tab=log_settings&message=2'));
         exit;
     }

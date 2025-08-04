@@ -74,9 +74,22 @@ class QP_Logs_Reports_Page {
 
     public static function render_log_settings_tab() {
     global $wpdb;
-    $reason_to_edit = null;
-    if (isset($_GET['action']) && $_GET['action'] === 'edit' && isset($_GET['reason_id'])) {
-        $reason_to_edit = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$wpdb->prefix}qp_report_reasons WHERE reason_id = %d", absint($_GET['reason_id'])));
+    $tax_table = $wpdb->prefix . 'qp_taxonomies';
+    $term_table = $wpdb->prefix . 'qp_terms';
+    $reason_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'report_reason'");
+
+    $term_to_edit = null;
+    $is_active_for_edit = 1; // Default to active for new items
+
+    if (isset($_GET['action']) && $_GET['action'] === 'edit' && isset($_GET['term_id'])) {
+        $term_id = absint($_GET['term_id']);
+        // Verify the nonce to ensure the request is legitimate
+        if (isset($_GET['_wpnonce']) && wp_verify_nonce($_GET['_wpnonce'], 'qp_edit_reason_' . $term_id)) {
+            $term_to_edit = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$term_table} WHERE term_id = %d", $term_id));
+            if ($term_to_edit) {
+                $is_active_for_edit = qp_get_term_meta($term_id, 'is_active', true);
+            }
+        }
     }
 
     $list_table = new QP_Log_Settings_List_Table();
@@ -86,26 +99,27 @@ class QP_Logs_Reports_Page {
         <div id="col-left">
             <div class="col-wrap">
                 <div class="form-wrap">
-                    <h2><?php echo $reason_to_edit ? 'Edit Reason' : 'Add New Reason'; ?></h2>
+                    <h2><?php echo $term_to_edit ? 'Edit Reason' : 'Add New Reason'; ?></h2>
                     <form method="post" action="admin.php?page=qp-logs-reports&tab=log_settings">
                         <?php wp_nonce_field('qp_add_edit_reason_nonce'); ?>
-                        <input type="hidden" name="action" value="<?php echo $reason_to_edit ? 'update_reason' : 'add_reason'; ?>">
-                        <?php if ($reason_to_edit): ?><input type="hidden" name="reason_id" value="<?php echo esc_attr($reason_to_edit->reason_id); ?>"><?php endif; ?>
+                        <input type="hidden" name="action" value="<?php echo $term_to_edit ? 'update_reason' : 'add_reason'; ?>">
+                        <input type="hidden" name="taxonomy_id" value="<?php echo esc_attr($reason_tax_id); ?>">
+                        <?php if ($term_to_edit): ?><input type="hidden" name="term_id" value="<?php echo esc_attr($term_to_edit->term_id); ?>"><?php endif; ?>
 
                         <div class="form-field form-required">
                             <label for="reason_text">Reason Text</label>
-                            <input name="reason_text" id="reason_text" type="text" value="<?php echo $reason_to_edit ? esc_attr($reason_to_edit->reason_text) : ''; ?>" size="40" required>
+                            <input name="reason_text" id="reason_text" type="text" value="<?php echo $term_to_edit ? esc_attr($term_to_edit->name) : ''; ?>" size="40" required>
                         </div>
                         <div class="form-field">
                             <label>
-                                <input name="is_active" type="checkbox" value="1" <?php checked($reason_to_edit ? $reason_to_edit->is_active : 1); ?>>
+                                <input name="is_active" type="checkbox" value="1" <?php checked($is_active_for_edit, 1); ?>>
                                 Active (Users can select this reason)
                             </label>
                         </div>
 
                         <p class="submit">
-                            <input type="submit" class="button button-primary" value="<?php echo $reason_to_edit ? 'Update Reason' : 'Add New Reason'; ?>">
-                            <?php if ($reason_to_edit): ?><a href="admin.php?page=qp-logs-reports&tab=log_settings" class="button button-secondary">Cancel</a><?php endif; ?>
+                            <input type="submit" class="button button-primary" value="<?php echo $term_to_edit ? 'Update Reason' : 'Add New Reason'; ?>">
+                            <?php if ($term_to_edit): ?><a href="admin.php?page=qp-logs-reports&tab=log_settings" class="button button-secondary">Cancel</a><?php endif; ?>
                         </p>
                     </form>
                 </div>
