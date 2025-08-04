@@ -779,38 +779,15 @@ jQuery(document).ready(function ($) {
       success: function (response) {
         if (response.success && response.data.reasons.length > 0) {
           reportContainer.empty(); // Clear loading message
-
-          // Separate reasons by type
-          var reports = response.data.reasons.filter(function(r) { return r.type === 'report' || !r.type; });
-          var suggestions = response.data.reasons.filter(function(r) { return r.type === 'suggestion'; });
-
-          // Function to create and append a reason's HTML
-          var appendReason = function(reason, typeClass) {
+          $.each(response.data.reasons, function (index, reason) {
             var checkboxHtml = `
-              <label class="qp-custom-checkbox ${typeClass}">
-                  <input type="checkbox" name="report_reasons[]" value="${reason.reason_id}">
-                  <span></span>
-                  ${reason.reason_text}
-              </label>`;
+                        <label class="qp-custom-checkbox">
+                            <input type="checkbox" name="report_reasons[]" value="${reason.reason_id}">
+                            <span></span>
+                            ${reason.reason_text}
+                        </label>`;
             reportContainer.append(checkboxHtml);
-          };
-
-          // Display Reports
-          if (reports.length > 0) {
-            reportContainer.append('<h4 class="qp-report-type-header">Reports (for errors)</h4>');
-            reports.forEach(function(reason) {
-              appendReason(reason, 'qp-report-reason-report');
-            });
-          }
-
-          // Display Suggestions
-          if (suggestions.length > 0) {
-            reportContainer.append('<h4 class="qp-report-type-header">Suggestions (for improvements)</h4>');
-            suggestions.forEach(function(reason) {
-              appendReason(reason, 'qp-report-reason-suggestion');
-            });
-          }
-
+          });
         } else {
           reportContainer.html(
             "<p>Could not load reporting options. Please try again later.</p>"
@@ -841,39 +818,16 @@ jQuery(document).ready(function ($) {
       data: { action: "get_report_reasons", nonce: qp_ajax_object.nonce },
       success: function (response) {
         if (response.success && response.data.reasons.length > 0) {
-          reportContainer.empty(); // Clear loading message
-
-          // Separate reasons by type
-          var reports = response.data.reasons.filter(function(r) { return r.type === 'report' || !r.type; });
-          var suggestions = response.data.reasons.filter(function(r) { return r.type === 'suggestion'; });
-
-          // Function to create and append a reason's HTML
-          var appendReason = function(reason, typeClass) {
+          reportContainer.empty();
+          $.each(response.data.reasons, function (index, reason) {
             var checkboxHtml = `
-              <label class="qp-custom-checkbox ${typeClass}">
-                  <input type="checkbox" name="report_reasons[]" value="${reason.reason_id}">
-                  <span></span>
-                  ${reason.reason_text}
-              </label>`;
+                        <label class="qp-custom-checkbox">
+                            <input type="checkbox" name="report_reasons[]" value="${reason.reason_id}">
+                            <span></span>
+                            ${reason.reason_text}
+                        </label>`;
             reportContainer.append(checkboxHtml);
-          };
-
-          // Display Reports
-          if (reports.length > 0) {
-            reportContainer.append('<h4 class="qp-report-type-header">Reports (for errors)</h4>');
-            reports.forEach(function(reason) {
-              appendReason(reason, 'qp-report-reason-report');
-            });
-          }
-
-          // Display Suggestions
-          if (suggestions.length > 0) {
-            reportContainer.append('<h4 class="qp-report-type-header">Suggestions (for improvements)</h4>');
-            suggestions.forEach(function(reason) {
-              appendReason(reason, 'qp-report-reason-suggestion');
-            });
-          }
-
+          });
         } else {
           reportContainer.html("<p>Could not load reporting options.</p>");
         }
