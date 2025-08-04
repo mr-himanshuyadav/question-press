@@ -84,13 +84,13 @@ class QP_Reports_List_Table extends WP_List_Table {
             SELECT
                 r.question_id,
                 q.question_text,
-                GROUP_CONCAT(DISTINCT rr.reason_text SEPARATOR ', ') as reasons,
+                GROUP_CONCAT(DISTINCT t.name SEPARATOR ', ') as reasons,
                 GROUP_CONCAT(DISTINCT u.display_name SEPARATOR ', ') as reporters,
                 MAX(r.report_date) as last_report_date,
                 (SELECT g.group_id FROM {$wpdb->prefix}qp_question_groups g WHERE g.group_id = q.group_id) as group_id
             FROM {$reports_table} r
             JOIN {$questions_table} q ON r.question_id = q.question_id
-            JOIN {$reasons_table} rr ON r.reason_id = rr.reason_id
+            JOIN {$wpdb->prefix}qp_terms t ON r.reason_term_id = t.term_id
             JOIN {$users_table} u ON r.user_id = u.ID
             {$where_sql}
             GROUP BY r.question_id

@@ -480,16 +480,16 @@ function qp_render_migration_tools_page() {
     ?>
     <div class="wrap">
         <h1>Question Press Migration Tools</h1>
+
         <div class="card" style="max-width: 600px; margin-top: 20px;">
-            <h2 class="title">V4 Relationship Migration</h2>
-            <p>This script will migrate Topic and Source/Section relationships from individual questions to their parent groups.</p>
-            <p><strong>Warning:</strong> This is a destructive operation. Please create a full backup of your database before proceeding.</p>
+            <h2 class="title">V5 Report System Migration</h2>
+            <p>This script will migrate your old report reasons into the new taxonomy system and update existing reports. This should only be run once.</p>
+            <p><strong>Warning:</strong> Create a full backup of your database before proceeding.</p>
             <?php
-            // Create a nonce for security
-            $nonce = wp_create_nonce('qp_v4_relationship_migration_nonce');
-            $migration_url = admin_url('admin.php?page=question-press&action=qp_v4_relationship_migration&_wpnonce=' . $nonce);
+            $v5_nonce = wp_create_nonce('qp_v5_report_migration_nonce');
+            $v5_migration_url = admin_url('admin.php?page=qp-tools&tab=migration&action=qp_v5_report_migration&_wpnonce=' . $v5_nonce);
             ?>
-            <a href="<?php echo esc_url($migration_url); ?>" class="button button-primary">Run V4 Relationship Migration</a>
+            <a href="<?php echo esc_url($v5_migration_url); ?>" class="button button-primary">Run Report System Migration</a>
         </div>
     </div>
     <?php
@@ -906,56 +906,85 @@ function qp_get_term_lineage_names($term_id, $wpdb, $term_table) {
 }
 
 /**
- * Runs the relationship migration from questions to groups.
- * This function should be triggered by an admin action, similar to the v3 migration.
+ * Migrates old report reasons to the taxonomy term system.
+ * This should be run once after updating the plugin.
  */
-function qp_run_v4_relationship_migration() {
-    // Check if the trigger is present, user has permission, and nonce is valid
-    if (!isset($_GET['action']) || $_GET['action'] !== 'qp_v4_relationship_migration' || !current_user_can('manage_options')) {
+function qp_run_v5_report_migration() {
+    // Check for the trigger, user permissions, and nonce
+    if (!isset($_GET['action']) || $_GET['action'] !== 'qp_v5_report_migration' || !current_user_can('manage_options')) {
         return;
     }
-    check_admin_referer('qp_v4_relationship_migration_nonce');
+    check_admin_referer('qp_v5_report_migration_nonce');
 
     global $wpdb;
     $messages = [];
-    $skipped_items = [];
     $wpdb->query("START TRANSACTION;");
 
     try {
-        // Step 1: Migrate Topic Relationships from Questions to Groups
-        // A group is now linked directly to a topic. The subject is inferred from the topic's parent.
-        $topic_migration_results = qp_migrate_taxonomy_relationships('subject', 'Topic');
-        $messages[] = "Step 1 (Topics): Migrated {$topic_migration_results['migrated']} relationships to groups. Deleted {$topic_migration_results['deleted']} old question relationships.";
-        if (!empty($topic_migration_results['skipped'])) {
-            $skipped_items = array_merge($skipped_items, $topic_migration_results['skipped']);
+        $old_reasons_table = $wpdb->prefix . 'qp_report_reasons';
+        $reports_table = $wpdb->prefix . 'qp_question_reports';
+        $tax_table = $wpdb->prefix . 'qp_taxonomies';
+        $term_table = $wpdb->prefix . 'qp_terms';
+
+        // 1. Get the taxonomy ID for 'report_reason'
+        $reason_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'report_reason'");
+        if (!$reason_tax_id) {
+            throw new Exception("'report_reason' taxonomy not found. Cannot migrate.");
         }
 
-        // Step 2: Migrate Source/Section Relationships from Questions to Groups
-        // A group is now linked to the most specific source term (e.g., a section over a source book).
-        $source_migration_results = qp_migrate_taxonomy_relationships('source', 'Source/Section');
-        $messages[] = "Step 2 (Sources): Migrated {$source_migration_results['migrated']} relationships to groups. Deleted {$source_migration_results['deleted']} old question relationships.";
-        if (!empty($source_migration_results['skipped'])) {
-            $skipped_items = array_merge($skipped_items, $source_migration_results['skipped']);
-        }
+        // 2. Get all reasons from the old table and create a mapping to new term IDs
+        $old_reasons = $wpdb->get_results("SELECT * FROM {$old_reasons_table}");
+        $id_map = [];
+        $migrated_reasons_count = 0;
 
-        // Final Report
-        if (!empty($skipped_items)) {
-            $skipped_details = implode('<br> - ', $skipped_items);
-            $messages[] = "<strong>Migration Notices (For Review):</strong><br> - {$skipped_details}";
+        foreach ($old_reasons as $reason) {
+            $new_term_id = qp_get_or_create_term($reason->reason_text, $reason_tax_id);
+            if ($new_term_id) {
+                $id_map[$reason->reason_id] = $new_term_id;
+                $migrated_reasons_count++;
+            }
+        }
+        $messages[] = "Migrated {$migrated_reasons_count} report reasons to the taxonomy system.";
+
+        // 3. Update the reports table to use the new term IDs and rename the column
+        $updated_reports_count = 0;
+        // Check if the old column exists before proceeding
+        $old_column_exists = $wpdb->get_results($wpdb->prepare("SHOW COLUMNS FROM {$reports_table} LIKE %s", 'reason_id'));
+
+        if (!empty($old_column_exists)) {
+            foreach ($id_map as $old_id => $new_id) {
+                // This query updates all reports that have the old reason ID to the new term ID.
+                $updated = $wpdb->update(
+                    $reports_table,
+                    ['reason_term_id' => $new_id], // Set the NEW term_id value in the existing column
+                    ['reason_id' => $old_id]  // WHERE the column has the OLD reason_id
+                );
+                if ($updated !== false) {
+                    $updated_reports_count += $updated;
+                }
+            }
+            $messages[] = "Updated {$updated_reports_count} report entries with new term IDs.";
+
+            // Rename the column from reason_id to reason_term_id to match the new schema
+            $wpdb->query("ALTER TABLE {$reports_table} CHANGE `reason_id` `reason_term_id` BIGINT(20) UNSIGNED NOT NULL");
+            $messages[] = "Renamed column `reason_id` to `reason_term_id` in the reports table.";
+        } else {
+            $messages[] = "Migration for report entries seems to have been completed already. No column to rename.";
         }
 
         $wpdb->query("COMMIT;");
-        $_SESSION['qp_admin_message'] = '<strong>Relationship Migration Report:</strong><br> - ' . implode('<br> - ', $messages);
-        $_SESSION['qp_admin_message_type'] = 'success';
+        // Use a transient for the success message
+        set_transient('qp_admin_message', '<strong>Report System Migration Complete:</strong><br> - ' . implode('<br> - ', $messages), 30);
+        set_transient('qp_admin_message_type', 'success', 30);
 
     } catch (Exception $e) {
         $wpdb->query("ROLLBACK;");
-        $_SESSION['qp_admin_message'] = 'An error occurred during migration: ' . $e->getMessage();
-        $_SESSION['qp_admin_message_type'] = 'error';
+        // Use a transient for the error message
+        set_transient('qp_admin_message', 'An error occurred during migration: ' . $e->getMessage(), 30);
+        set_transient('qp_admin_message_type', 'error', 30);
     }
 
-    // Redirect to a safe page to show the message
-    wp_safe_redirect(admin_url('admin.php?page=question-press'));
+    wp_safe_redirect(admin_url('admin.php?page=qp-tools&tab=migration'));
     exit;
 }
 
@@ -1047,12 +1076,7 @@ function qp_migrate_taxonomy_relationships($taxonomy_name, $log_prefix) {
 // FORM & ACTION HANDLERS
 function qp_handle_form_submissions()
 {
-    qp_run_v4_relationship_migration();
-    if (isset($_GET['page']) && $_GET['page'] === 'question-press') {
-        $list_table = new QP_Questions_List_Table();
-        $list_table->process_bulk_action();
-    }
-
+    qp_run_v5_report_migration();
     if (isset($_GET['page']) && $_GET['page'] === 'qp-organization') {
         QP_Sources_Page::handle_forms();
         QP_Subjects_Page::handle_forms();
@@ -3985,7 +4009,7 @@ function qp_submit_question_report_ajax()
             [
                 'question_id' => $question_id,
                 'user_id'     => $user_id,
-                'reason_id'   => $reason_id,
+                'reason_term_id'   => $reason_id,
                 'report_date' => current_time('mysql'),
                 'status'      => 'open'
             ]
