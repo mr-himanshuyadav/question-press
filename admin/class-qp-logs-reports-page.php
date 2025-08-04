@@ -80,6 +80,7 @@ class QP_Logs_Reports_Page {
 
     $term_to_edit = null;
     $is_active_for_edit = 1; // Default to active for new items
+    $type_for_edit = 'report'; // Default to 'report' for new items
 
     if (isset($_GET['action']) && $_GET['action'] === 'edit' && isset($_GET['term_id'])) {
         $term_id = absint($_GET['term_id']);
@@ -88,6 +89,7 @@ class QP_Logs_Reports_Page {
             $term_to_edit = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$term_table} WHERE term_id = %d", $term_id));
             if ($term_to_edit) {
                 $is_active_for_edit = qp_get_term_meta($term_id, 'is_active', true);
+                $type_for_edit = qp_get_term_meta($term_id, 'type', true) ?: 'report'; // Fetch the type, default to 'report' if not set
             }
         }
     }
@@ -110,6 +112,19 @@ class QP_Logs_Reports_Page {
                             <label for="reason_text">Reason Text</label>
                             <input name="reason_text" id="reason_text" type="text" value="<?php echo $term_to_edit ? esc_attr($term_to_edit->name) : ''; ?>" size="40" required>
                         </div>
+
+                        <div class="form-field">
+                            <label><strong>Type</strong></label>
+                            <label style="display: inline-block; margin-right: 15px;">
+                                <input name="reason_type" type="radio" value="report" <?php checked($type_for_edit, 'report'); ?>>
+                                Report (for errors)
+                            </label>
+                            <label style="display: inline-block;">
+                                <input name="reason_type" type="radio" value="suggestion" <?php checked($type_for_edit, 'suggestion'); ?>>
+                                Suggestion (for improvements)
+                            </label>
+                        </div>
+
                         <div class="form-field">
                             <label>
                                 <input name="is_active" type="checkbox" value="1" <?php checked($is_active_for_edit, 1); ?>>

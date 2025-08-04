@@ -180,6 +180,7 @@ function qp_activate_plugin()
         question_id BIGINT(20) UNSIGNED NOT NULL,
         user_id BIGINT(20) UNSIGNED NOT NULL,
         reason_term_id BIGINT(20) UNSIGNED NOT NULL,
+        comment TEXT,
         report_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         status VARCHAR(20) NOT NULL DEFAULT 'open',
         PRIMARY KEY (report_id),
@@ -4986,6 +4987,7 @@ function qp_handle_log_settings_forms()
     if (isset($_POST['action']) && ($_POST['action'] === 'add_reason' || $_POST['action'] === 'update_reason') && check_admin_referer('qp_add_edit_reason_nonce')) {
         $reason_text = sanitize_text_field($_POST['reason_text']);
         $is_active = isset($_POST['is_active']) ? 1 : 0;
+        $reason_type = isset($_POST['reason_type']) ? sanitize_key($_POST['reason_type']) : 'report'; // Get the new type
         $taxonomy_id = absint($_POST['taxonomy_id']);
         
         $term_data = [
@@ -5004,6 +5006,7 @@ function qp_handle_log_settings_forms()
 
         if ($term_id) {
             qp_update_term_meta($term_id, 'is_active', $is_active);
+            qp_update_term_meta($term_id, 'type', $reason_type); // Save the new type
         }
 
         wp_safe_redirect(admin_url('admin.php?page=qp-logs-reports&tab=log_settings&message=1'));
