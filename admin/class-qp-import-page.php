@@ -88,12 +88,16 @@ class QP_Import_Page
                         <p>Your <code>questions.json</code> file must follow this structure. Note the new hierarchical format for sources.</p>
                         <pre style="background: #fdf6e3; color: #657b83; padding: 1rem; border-radius: 4px; white-space: pre-wrap; word-wrap: break-word;"><?php
                                                                                                                                                             echo esc_html('{
-    "schemaVersion": "3.1",
+    "schemaVersion": "3.2",
     "exportTimestamp": "2025-08-02T10:15:00Z",
     "questionGroups": [
         {
             "groupId": "unique-group-id-1",
-            "subject": "Physics",
+            "subject": [
+                "Science",
+                "Physics",
+                "Wave Optics"
+            ],
             "source": [
                 "University Physics Vol. 3",
                 "Chapter 5: Interference"
@@ -108,52 +112,10 @@ class QP_Import_Page
             "questions": [
                 {
                     "questionId": "unique-question-id-1",
-                    "topicName": "Wave Optics",
                     "questionText": "What is constructive interference?",
                     "questionNumber": "5",
                     "options": [
                         { "optionText": "...", "isCorrect": true },
-                        { "optionText": "...", "isCorrect": false },
-                        { "optionText": "...", "isCorrect": false },
-                        { "optionText": "...", "isCorrect": false }
-                    ]
-                }
-            ]
-        },
-        {
-            "groupId": "unique-group-id-1",
-            "subject": "Physics",
-            "source": [
-                "University Physics Vol. 3",
-                "Chapter 5: Interference"
-            ],
-            "isPYQ": false,
-            "Direction": {
-                "text": null,
-                "image": null
-            },
-            "questions": [
-                {
-                    "questionId": "unique-question-id-1",
-                    "topicName": "Wave Optics",
-                    "questionText": "What is interference?",
-                    "questionNumber": "6",
-                    "options": [
-                        { "optionText": "...", "isCorrect": true },
-                        { "optionText": "...", "isCorrect": false },
-                        { "optionText": "...", "isCorrect": false },
-                        { "optionText": "...", "isCorrect": false }
-                    ]
-                },
-                {
-                    "questionId": "unique-question-id-1",
-                    "topicName": "Wave Optics",
-                    "questionText": "What is destructive interference?",
-                    "questionNumber": "7",
-                    "options": [
-                        { "optionText": "...", "isCorrect": false },
-                        { "optionText": "...", "isCorrect": true },
-                        { "optionText": "...", "isCorrect": false },
                         { "optionText": "...", "isCorrect": false }
                     ]
                 }
