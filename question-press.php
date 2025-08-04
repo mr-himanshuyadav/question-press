@@ -3387,34 +3387,46 @@ function qp_start_mock_test_session_ajax()
     $rel_table = $wpdb->prefix . 'qp_term_relationships';
     $reports_table = $wpdb->prefix . 'qp_question_reports';
 
-    // --- Build the initial query to get a pool of eligible questions ---
-    $where_clauses = ["q.status = 'publish'"];
+    // --- Build Question Pool based on NEW Group Hierarchy ---
+    $q_table = $wpdb->prefix . 'qp_questions';
+    $rel_table = $wpdb->prefix . 'qp_term_relationships';
+    $reports_table = $wpdb->prefix . 'qp_question_reports';
+
+    $where_conditions = ["q.status = 'publish'"];
     $query_params = [];
-    $joins = "LEFT JOIN {$g_table} g ON q.group_id = g.group_id";
 
-    $reported_question_ids = $wpdb->get_col("SELECT DISTINCT question_id FROM {$reports_table} WHERE status = 'open'");
-    if (!empty($reported_question_ids)) {
-        $ids_placeholder = implode(',', array_map('absint', $reported_question_ids));
-        $where_clauses[] = "q.question_id NOT IN ($ids_placeholder)";
-    }
-
+    // 1. Determine the set of TOPIC term IDs to filter by from the form.
+    $topic_term_ids_to_filter = [];
     $subjects_selected = !empty($subjects) && !in_array('all', $subjects);
     $topics_selected = !empty($topics) && !in_array('all', $topics);
 
     if ($topics_selected) {
-        $term_ids_to_filter = array_map('absint', $topics);
-        $joins .= " JOIN {$rel_table} topic_rel ON q.question_id = topic_rel.object_id AND topic_rel.object_type = 'question'";
-        $ids_placeholder = implode(',', array_fill(0, count($term_ids_to_filter), '%d'));
-        $where_clauses[] = $wpdb->prepare("topic_rel.term_id IN ($ids_placeholder)", $term_ids_to_filter);
+        $topic_term_ids_to_filter = array_map('absint', $topics);
     } elseif ($subjects_selected) {
-        $term_ids_to_filter = array_map('absint', $subjects);
-        $joins .= " JOIN {$rel_table} subject_rel ON g.group_id = subject_rel.object_id AND subject_rel.object_type = 'group'";
-        $ids_placeholder = implode(',', array_fill(0, count($term_ids_to_filter), '%d'));
-        $where_clauses[] = $wpdb->prepare("subject_rel.term_id IN ($ids_placeholder)", $term_ids_to_filter);
+        $subject_ids_placeholder = implode(',', array_map('absint', $subjects));
+        $topic_term_ids_to_filter = $wpdb->get_col("SELECT term_id FROM {$wpdb->prefix}qp_terms WHERE parent IN ($subject_ids_placeholder)");
+    }
+    
+    // 2. Find all Group IDs linked to those topics.
+    if (!empty($topic_term_ids_to_filter)) {
+        $topic_ids_placeholder = implode(',', $topic_term_ids_to_filter);
+        $group_ids_subquery = "SELECT object_id FROM {$rel_table} WHERE object_type = 'group' AND term_id IN ($topic_ids_placeholder)";
+        $where_conditions[] = "q.group_id IN ($group_ids_subquery)";
     }
 
-    $base_where_sql = implode(' AND ', $where_clauses);
-    $query = "SELECT q.question_id, (SELECT term_id FROM {$rel_table} WHERE object_id = q.question_id AND object_type = 'question' AND term_id IN (SELECT term_id FROM {$wpdb->prefix}qp_terms WHERE parent != 0) LIMIT 1) as topic_id FROM {$q_table} q {$joins} WHERE {$base_where_sql}";
+    // 3. Exclude reported questions.
+    $reported_question_ids = $wpdb->get_col("SELECT DISTINCT question_id FROM {$reports_table} WHERE status = 'open'");
+    if (!empty($reported_question_ids)) {
+        $ids_placeholder = implode(',', array_map('absint', $reported_question_ids));
+        $where_conditions[] = "q.question_id NOT IN ($ids_placeholder)";
+    }
+    
+    // 4. Construct the final query to get all question IDs from the filtered groups.
+    $base_where_sql = implode(' AND ', $where_conditions);
+    $query = "SELECT q.question_id, r_topic.term_id as topic_id 
+              FROM {$q_table} q 
+              LEFT JOIN {$rel_table} r_topic ON q.group_id = r_topic.object_id AND r_topic.object_type = 'group'
+              WHERE {$base_where_sql}";
 
     $question_pool = $wpdb->get_results($wpdb->prepare($query, $query_params));
 
@@ -3424,30 +3436,51 @@ function qp_start_mock_test_session_ajax()
 
     // --- Apply distribution logic ---
     $final_question_ids = [];
-    if ($distribution === 'equal' && $topics_selected) {
+    if ($distribution === 'equal' && ($topics_selected || $subjects_selected)) {
+        // 1. Group questions by their topic_id from the prepared question_pool
         $questions_by_topic = [];
         foreach ($question_pool as $q) {
-            if ($q->topic_id) { // Only consider questions that have a topic
+            if ($q->topic_id) {
                 $questions_by_topic[$q->topic_id][] = $q->question_id;
             }
         }
 
-        $num_topics = count($questions_by_topic);
-        $questions_per_topic = $num_topics > 0 ? floor($num_questions / $num_topics) : 0;
-        $remainder = $num_topics > 0 ? $num_questions % $num_topics : 0;
-
-        // Attention! Topic_ID variable seems redundant
+        // 2. Shuffle the questions within each topic group to ensure variety.
+        // THE FIX: Use pass-by-reference (&) to modify the actual array.
         foreach ($questions_by_topic as $topic_id => $q_ids) {
             shuffle($q_ids);
-            $num_to_take = $questions_per_topic;
-            if ($remainder > 0) {
-                $num_to_take++;
-                $remainder--;
+        }
+        unset($q_ids); // Unset the reference after the loop.
+
+        // 3. Perform a "round-robin" selection to ensure equal distribution
+        $topic_keys = array_keys($questions_by_topic);
+        $topic_index = 0;
+        while (count($final_question_ids) < $num_questions) {
+            if (empty($topic_keys)) {
+                break; // Stop if we've exhausted all available questions
             }
-            $final_question_ids = array_merge($final_question_ids, array_slice($q_ids, 0, $num_to_take));
+
+            // Get the current topic key
+            $current_topic_key = $topic_keys[$topic_index];
+
+            // If the current topic still has questions, take one and add it to the final list
+            if (!empty($questions_by_topic[$current_topic_key])) {
+                $final_question_ids[] = array_shift($questions_by_topic[$current_topic_key]);
+            } else {
+                // If this topic is out of questions, remove it from the cycle
+                unset($topic_keys[$topic_index]);
+                $topic_keys = array_values($topic_keys); // Re-index the array of keys
+                $topic_index--; // Adjust index to correctly point to the next topic in the modified array
+            }
+
+            // Move to the next topic or loop back to the beginning of the cycle
+            $topic_index++;
+            if ($topic_index >= count($topic_keys)) {
+                $topic_index = 0;
+            }
         }
     } else {
-        // Default to 'random'
+        // Default to 'random' distribution if not 'equal' or if no specific topics/subjects were selected
         shuffle($question_pool);
         $final_question_ids = array_slice(wp_list_pluck($question_pool, 'question_id'), 0, $num_questions);
     }
