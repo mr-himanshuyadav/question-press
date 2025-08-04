@@ -478,13 +478,30 @@ class QP_Shortcodes
 
         $session_data['attempt_history'] = $attempt_history;
 
+        // --- NEW: Fetch detailed report info, including the type ---
         $reports_table = $wpdb->prefix . 'qp_question_reports';
-        $reported_qids_for_user = $wpdb->get_col($wpdb->prepare(
-            "SELECT DISTINCT question_id FROM {$reports_table} WHERE user_id = %d AND status = 'open'",
-            $user_id
-        ));
+        $terms_table = $wpdb->prefix . 'qp_terms';
+        $meta_table = $wpdb->prefix . 'qp_term_meta';
 
-        $session_data['reported_ids'] = $reported_qids_for_user;
+        $reported_questions_raw = $wpdb->get_results($wpdb->prepare("
+            SELECT
+                r.question_id,
+                MAX(CASE WHEN m.meta_value = 'report' THEN 1 ELSE 0 END) as is_critical
+            FROM {$reports_table} r
+            JOIN {$terms_table} t ON r.reason_term_id = t.term_id
+            JOIN {$meta_table} m ON t.term_id = m.term_id AND m.meta_key = 'type'
+            WHERE r.user_id = %d AND r.status = 'open'
+            GROUP BY r.question_id
+        ", $user_id));
+
+        $reported_info = [];
+        foreach ($reported_questions_raw as $report) {
+            $reported_info[$report->question_id] = [
+                'type' => $report->is_critical ? 'report' : 'suggestion'
+            ];
+        }
+
+        $session_data['reported_info'] = $reported_info; // Send this detailed object instead of a simple array
 
         self::$session_data_for_script = $session_data;
 

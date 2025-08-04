@@ -1555,6 +1555,40 @@ body.palette-overlay-open #qp-palette-sliding {
     background-color: #90a4ae;
 }
 
+/* --- NEW: Report Modal Reason Grouping Styles --- */
+.qp-report-type-header {
+    margin-top: 1rem;
+    margin-bottom: 0.5rem;
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--qp-light-text);
+    padding-bottom: 5px;
+    border-bottom: 2px solid var(--qp-border-color);
+}
+
+#qp-report-options-container .qp-report-type-header:first-child {
+    margin-top: 0;
+}
+
+/* Style for Report (Error) reasons */
+#qp-report-options-container .qp-report-reason-report {
+    background-color: #f8d7da;
+    border-color: #f5c6cb;
+}
+#qp-report-options-container .qp-report-reason-report:hover {
+    
+}
+
+/* Style for Suggestion (Improvement) reasons */
+#qp-report-options-container .qp-report-reason-suggestion {
+    background-color: #f0f2f5; /* Darker white / light grey */
+    border-color: #dae0e8;
+}
+
+#qp-report-options-container .qp-report-reason-suggestion:hover {
+    background-color: #e4e9f0;
+}
 
 /* --- NEW: Rough Work Canvas Styles --- */
 #qp-header-top-row {
