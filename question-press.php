@@ -3793,8 +3793,6 @@ function qp_get_question_data_ajax()
         wp_send_json_error(['message' => 'Invalid Question ID.']);
     }
 
-    // Attention! Still old variable declrations found.
-
     global $wpdb;
     $q_table = $wpdb->prefix . 'qp_questions';
     $g_table = $wpdb->prefix . 'qp_question_groups';
@@ -3819,25 +3817,25 @@ function qp_get_question_data_ajax()
     }
 
     $group_id = $question_data['group_id'];
-    
-    // Helper function to trace term lineage
-    function qp_get_term_lineage_names($term_id, $wpdb, $term_table) {
-        $lineage = [];
-        $current_id = $term_id;
-        for ($i=0; $i<10; $i++) { // Safety break
-            if (!$current_id) break;
-            $term = $wpdb->get_row($wpdb->prepare("SELECT name, parent FROM {$term_table} WHERE term_id = %d", $current_id));
-            if ($term) {
-                array_unshift($lineage, $term->name);
-                $current_id = $term->parent;
-                if ($current_id == 0) break;
-            } else {
-                break;
-            }
-        }
-        return $lineage;
-    }
 
+    // Helper function to trace term lineage
+        function qp_get_term_lineage_names($term_id, $wpdb, $term_table){
+            $lineage = [];
+            $current_id = $term_id;
+            for ($i = 0; $i < 10; $i++) { // Safety break
+                if (!$current_id) break;
+                $term = $wpdb->get_row($wpdb->prepare("SELECT name, parent FROM {$term_table} WHERE term_id = %d", $current_id));
+                if ($term) {
+                    array_unshift($lineage, $term->name);
+                    $current_id = $term->parent;
+                    if ($current_id == 0) break;
+                } else {
+                    break;
+                }
+            }
+            return $lineage;
+        }
+    
     // 2. Get Subject/Topic Hierarchy
     $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'subject'");
     $subject_term_id = $wpdb->get_var($wpdb->prepare("SELECT term_id FROM {$rel_table} WHERE object_id = %d AND object_type = 'group' AND term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id = %d)", $group_id, $subject_tax_id));
@@ -3847,9 +3845,10 @@ function qp_get_question_data_ajax()
     $source_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'source'");
     $source_term_id = $wpdb->get_var($wpdb->prepare("SELECT term_id FROM {$rel_table} WHERE object_id = %d AND object_type = 'group' AND term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id = %d)", $group_id, $source_tax_id));
     $question_data['source_lineage'] = $source_term_id ? qp_get_term_lineage_names($source_term_id, $wpdb, $term_table) : [];
-
+    
+    $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
     $previous_attempt_count = $wpdb->get_var($wpdb->prepare(
-        "SELECT COUNT(*) FROM {$a_table} WHERE user_id = %d AND question_id = %d",
+        "SELECT COUNT(*) FROM {$a_table} WHERE user_id = %d AND question_id = %d AND session_id != %d",
         $user_id,
         $question_id,
         $session_id
@@ -3865,10 +3864,13 @@ function qp_get_question_data_ajax()
     $user_can_view = !empty(array_intersect((array)$user->roles, (array)$allowed_roles));
 
     if (!$user_can_view) {
-        unset($question_data['source_name'], $question_data['section_name'], $question_data['question_number_in_section']);
+        // Unset the source lineage if the user doesn't have permission.
+        unset($question_data['source_lineage']);
+        unset($question_data['question_number_in_section']);
     }
 
     $question_data['direction_image_url'] = $question_data['direction_image_id'] ? wp_get_attachment_url($question_data['direction_image_id']) : null;
+    unset($question_data['direction_image_id']); // Clean up data sent to frontend
 
     // Fetch the 'is_correct' status along with the options
     $options_from_db = $wpdb->get_results($wpdb->prepare("SELECT option_id, option_text, is_correct FROM {$o_table} WHERE question_id = %d", $question_id), ARRAY_A);
