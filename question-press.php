@@ -199,13 +199,13 @@ function qp_activate_plugin()
         report_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
         question_id BIGINT(20) UNSIGNED NOT NULL,
         user_id BIGINT(20) UNSIGNED NOT NULL,
-        reason_id BIGINT(20) UNSIGNED NOT NULL,
+        reason_term_id BIGINT(20) UNSIGNED NOT NULL,
         report_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         status VARCHAR(20) NOT NULL DEFAULT 'open',
         PRIMARY KEY (report_id),
         KEY question_id (question_id),
         KEY user_id (user_id),
-        KEY reason_id (reason_id),
+        KEY reason_term_id (reason_term_id),
         KEY status (status)
     ) $charset_collate;";
     dbDelta($sql_question_reports);
