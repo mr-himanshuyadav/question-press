@@ -13,12 +13,12 @@ class QP_Question_Editor_Page
         $open_reports = [];
         if ($is_editing) {
             $reports_table = $wpdb->prefix . 'qp_question_reports';
-            $reasons_table = $wpdb->prefix . 'qp_report_reasons';
+            $term_table = $wpdb->prefix . 'qp_terms'; // Use the new terms table
             $open_reports = $wpdb->get_results($wpdb->prepare(
-                "SELECT r.question_id, rr.reason_text 
-         FROM {$reports_table} r 
-         JOIN {$reasons_table} rr ON r.reason_id = rr.reason_id
-         WHERE r.status = 'open' AND r.question_id IN (SELECT question_id FROM {$wpdb->prefix}qp_questions WHERE group_id = %d)",
+                "SELECT r.question_id, t.name AS reason_text 
+                 FROM {$reports_table} r 
+                 JOIN {$term_table} t ON r.reason_term_id = t.term_id
+                 WHERE r.status = 'open' AND r.question_id IN (SELECT question_id FROM {$wpdb->prefix}qp_questions WHERE group_id = %d)",
                 $group_id
             ));
         }
