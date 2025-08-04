@@ -17,6 +17,14 @@ class QP_Logs_Reports_Page {
         <div class="wrap">
             <h1 class="wp-heading-inline">Reports</h1>
             <p>Review questions reported by users and manage the reasons available for reporting.</p>
+            <?php
+            // Display settings errors and messages from the session
+            if (isset($_SESSION['qp_admin_message'])) {
+                $message = html_entity_decode($_SESSION['qp_admin_message']);
+                echo '<div id="message" class="notice notice-' . esc_attr($_SESSION['qp_admin_message_type']) . ' is-dismissible"><p>' . $message . '</p></div>';
+                unset($_SESSION['qp_admin_message'], $_SESSION['qp_admin_message_type']);
+            }
+            ?>
             <hr class="wp-header-end">
 
             <nav class="nav-tab-wrapper wp-clearfix" aria-label="Secondary menu">
