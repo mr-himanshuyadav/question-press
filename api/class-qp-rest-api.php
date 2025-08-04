@@ -239,14 +239,12 @@ class QP_Rest_Api {
         $o_table = $wpdb->prefix . 'qp_options';
         $rel_table = $wpdb->prefix . 'qp_term_relationships';
         $term_table = $wpdb->prefix . 'qp_terms';
+        $tax_table = $wpdb->prefix . 'qp_taxonomies';
 
         $question_data = $wpdb->get_row($wpdb->prepare(
-            "SELECT q.question_id, q.custom_question_id, q.question_text, g.direction_text, g.direction_image_id, 
-                    subject_term.name AS subject_name
+            "SELECT q.question_id, q.custom_question_id, q.question_text, g.group_id, g.direction_text, g.direction_image_id
              FROM {$q_table} q 
              LEFT JOIN {$g_table} g ON q.group_id = g.group_id
-             LEFT JOIN {$rel_table} subject_rel ON g.group_id = subject_rel.object_id AND subject_rel.object_type = 'group'
-             LEFT JOIN {$term_table} subject_term ON subject_rel.term_id = subject_term.term_id
              WHERE q.custom_question_id = %d AND q.status = 'publish'",
             $custom_question_id
         ), ARRAY_A);
@@ -256,9 +254,22 @@ class QP_Rest_Api {
         }
 
         $question_id = $question_data['question_id'];
+        $group_id = $question_data['group_id'];
+
+        // Get Subject/Topic Hierarchy
+        $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'subject'");
+        $subject_term_id = $wpdb->get_var($wpdb->prepare("SELECT term_id FROM {$rel_table} WHERE object_id = %d AND object_type = 'group' AND term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id = %d)", $group_id, $subject_tax_id));
+        $question_data['subject_lineage'] = $subject_term_id ? qp_get_term_lineage_names($subject_term_id, $wpdb, $term_table) : [];
+        
+        // Get Source/Section Hierarchy
+        $source_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'source'");
+        $source_term_id = $wpdb->get_var($wpdb->prepare("SELECT term_id FROM {$rel_table} WHERE object_id = %d AND object_type = 'group' AND term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id = %d)", $group_id, $source_tax_id));
+        $question_data['source_lineage'] = $source_term_id ? qp_get_term_lineage_names($source_term_id, $wpdb, $term_table) : [];
+
 
         $question_data['direction_image_url'] = $question_data['direction_image_id'] ? wp_get_attachment_url($question_data['direction_image_id']) : null;
         unset($question_data['direction_image_id']);
+        unset($question_data['group_id']); // No need to expose group_id in API response
 
         $options = $wpdb->get_results($wpdb->prepare("SELECT option_id, option_text FROM {$o_table} WHERE question_id = %d ORDER BY RAND()", $question_id), ARRAY_A);
         $question_data['options'] = $options;

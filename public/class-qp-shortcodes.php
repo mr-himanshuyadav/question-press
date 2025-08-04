@@ -992,7 +992,7 @@ class QP_Shortcodes
             "SELECT 
                 a.question_id, a.selected_option_id, a.is_correct, a.mock_status,
                 q.question_text, q.custom_question_id, q.question_number_in_section,
-                g.direction_text
+                g.group_id, g.direction_text
             FROM {$wpdb->prefix}qp_user_attempts a
             JOIN {$wpdb->prefix}qp_questions q ON a.question_id = q.question_id
             LEFT JOIN {$wpdb->prefix}qp_question_groups g ON q.group_id = g.group_id
@@ -1013,24 +1013,26 @@ class QP_Shortcodes
         
         // --- NEW: Fetch all lineage data in fewer queries for efficiency ---
         $lineage_cache = [];
-        function get_term_lineage($term_id, &$lineage_cache, $wpdb) {
-            if (isset($lineage_cache[$term_id])) {
-                return $lineage_cache[$term_id];
-            }
-            $lineage = [];
-            $current_id = $term_id;
-            for ($i=0; $i<10; $i++) {
-                if (!$current_id) break;
-                $term = $wpdb->get_row($wpdb->prepare("SELECT name, parent FROM {$wpdb->prefix}qp_terms WHERE term_id = %d", $current_id));
-                if ($term) {
-                    array_unshift($lineage, $term->name);
-                    $current_id = $term->parent;
-                } else {
-                    break;
+        if (!function_exists('get_term_lineage')) {
+            function get_term_lineage($term_id, &$lineage_cache, $wpdb) {
+                if (isset($lineage_cache[$term_id])) {
+                    return $lineage_cache[$term_id];
                 }
+                $lineage = [];
+                $current_id = $term_id;
+                for ($i=0; $i<10; $i++) {
+                    if (!$current_id) break;
+                    $term = $wpdb->get_row($wpdb->prepare("SELECT name, parent FROM {$wpdb->prefix}qp_terms WHERE term_id = %d", $current_id));
+                    if ($term) {
+                        array_unshift($lineage, $term->name);
+                        $current_id = $term->parent;
+                    } else {
+                        break;
+                    }
+                }
+                $lineage_cache[$term_id] = $lineage;
+                return $lineage;
             }
-            $lineage_cache[$term_id] = $lineage;
-            return $lineage;
         }
 
         $attempts = [];
@@ -1044,7 +1046,7 @@ class QP_Shortcodes
             }
 
             // Get group and term relationships
-            $group_id = $wpdb->get_var($wpdb->prepare("SELECT group_id FROM {$wpdb->prefix}qp_questions WHERE question_id = %d", $attempt->question_id));
+            $group_id = $attempt->group_id;
             $subject_term_id = $wpdb->get_var($wpdb->prepare("SELECT term_id FROM {$wpdb->prefix}qp_term_relationships WHERE object_id = %d AND object_type = 'group' AND term_id IN (SELECT term_id FROM {$wpdb->prefix}qp_terms WHERE taxonomy_id = (SELECT taxonomy_id FROM {$wpdb->prefix}qp_taxonomies WHERE taxonomy_name = 'subject'))", $group_id));
             $source_term_id = $wpdb->get_var($wpdb->prepare("SELECT term_id FROM {$wpdb->prefix}qp_term_relationships WHERE object_id = %d AND object_type = 'group' AND term_id IN (SELECT term_id FROM {$wpdb->prefix}qp_terms WHERE taxonomy_id = (SELECT taxonomy_id FROM {$wpdb->prefix}qp_taxonomies WHERE taxonomy_name = 'source'))", $group_id));
 
