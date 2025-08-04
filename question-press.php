@@ -1530,32 +1530,6 @@ function process_question_options($question_id, $q_data)
     }
 }
 
-function process_question_taxonomy($question_id, $q_data)
-{
-    global $wpdb;
-    $rel_table = "{$wpdb->prefix}qp_term_relationships";
-    $wpdb->delete($rel_table, ['object_id' => $question_id, 'object_type' => 'question']);
-
-    $topic_term_id = isset($_POST['topic_id']) ? absint($_POST['topic_id']) : 0;
-    $source_term_id = isset($_POST['source_id']) ? absint($_POST['source_id']) : 0;
-    $section_term_id = isset($_POST['section_id']) ? absint($_POST['section_id']) : 0;
-
-    $term_ids_to_link = [];
-    if ($topic_term_id > 0) $term_ids_to_link[] = $topic_term_id;
-    if ($section_term_id > 0) {
-        $term_ids_to_link[] = $section_term_id;
-    } elseif ($source_term_id > 0) {
-        $term_ids_to_link[] = $source_term_id;
-    }
-    $label_term_ids = isset($q_data['labels']) ? array_map('absint', $q_data['labels']) : [];
-    $term_ids_to_link = array_merge($term_ids_to_link, $label_term_ids);
-    foreach (array_unique($term_ids_to_link) as $term_id) {
-        if ($term_id > 0) {
-            $wpdb->insert($rel_table, ['object_id' => $question_id, 'term_id' => $term_id, 'object_type' => 'question']);
-        }
-    }
-}
-
 /**
  * AJAX handler to create a new backup.
  */
