@@ -52,7 +52,6 @@ if (isset($options['delete_on_uninstall']) && $options['delete_on_uninstall'] ==
 
     // Delete plugin options from the options table
     delete_option('qp_settings');
-    delete_option('qp_next_custom_question_id');
     delete_option('qp_jwt_secret_key');
     delete_option('widget_qp_search_widget'); // Example of widget data
 }

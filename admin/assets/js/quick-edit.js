@@ -121,61 +121,77 @@ $.ajax({
     }
   }
 
-  // Delegated event handler for when the SUBJECT dropdown changes
+// Delegated event handler for when the SUBJECT dropdown changes
 wrapper.on("change", ".qe-subject-select", function () {
-    // The `qp_quick_edit_data` object is available globally in this scope
-    // because it's loaded in a <script> tag within the form HTML.
     if (typeof qp_quick_edit_data === "undefined") return;
 
     var subjectId = $(this).val();
     var $form = $(this).closest(".quick-edit-form-wrapper");
     var $topicSelect = $form.find(".qe-topic-select");
     var $sourceSelect = $form.find(".qe-source-select");
-    var $sectionSelect = $form.find(".qe-section-select"); // <-- Added this line
+    var $sectionSelect = $form.find(".qe-section-select");
     var $examSelect = $form.find(".qe-exam-select");
 
-    // --- NEW: Reset source and section dropdowns ---
+    // --- Hierarchical Topic Dropdown Logic (Correct from previous step) ---
+    $topicSelect.empty().prop("disabled", true);
+
+    function buildTopicHierarchy(parentElement, allTerms, parentId, level, selectedId) {
+        var prefix = '— '.repeat(level);
+        
+        // Find all direct children of the current parentId
+        var children = allTerms.filter(term => term.parent == parentId);
+
+        // --- ADD THIS LINE TO SORT CHILDREN ALPHABETICALLY ---
+        children.sort((a, b) => a.name.localeCompare(b.name));
+
+        children.forEach(function(term) {
+            var option = $("<option></option>").val(term.id).text(prefix + term.name);
+            if (term.id == selectedId) {
+                option.prop("selected", true);
+            }
+            parentElement.append(option);
+            buildTopicHierarchy(parentElement, allTerms, term.id, level + 1, selectedId);
+        });
+    }
+
+    if (subjectId) {
+        $topicSelect.prop("disabled", false).append('<option value="">— Select a Topic —</option>');
+        buildTopicHierarchy($topicSelect, qp_quick_edit_data.all_subject_terms, subjectId, 0, qp_quick_edit_data.current_topic_id);
+    } else {
+        $topicSelect.append('<option value="">— Select a Subject First —</option>');
+    }
+    qp_quick_edit_data.current_topic_id = null; // Reset after use
+
+    // --- START: Corrected Source and Exam Dropdown Logic ---
     $sourceSelect.val('');
     $sectionSelect.val('').empty().append('<option value="">— Select a source first —</option>').prop('disabled', true);
-    // --- END NEW ---
 
-    // 1. Update Topics dropdown based on the selected Subject
-    updateDropdown(
-        $topicSelect,
-        qp_quick_edit_data.topics_by_subject[subjectId],
-        qp_quick_edit_data.current_topic_id,
-        "— Select a Topic —"
-    );
-    qp_quick_edit_data.current_topic_id = null; // Reset current topic ID after use
+    // Filter available sources based on the selected subject
+    var linkedSourceIds = qp_quick_edit_data.source_subject_links
+        .filter(link => link.subject_id == subjectId)
+        .map(link => link.source_id);
 
-    // 2. Update Sources dropdown based on the selected Subject
+    var availableSources = qp_quick_edit_data.all_source_terms
+        .filter(term => term.parent_id == 0 && linkedSourceIds.includes(String(term.id)))
+        .map(term => ({ id: term.id, name: term.name }));
+
     updateDropdown(
         $sourceSelect,
-        qp_quick_edit_data.sources_by_subject[subjectId],
+        availableSources,
         qp_quick_edit_data.current_source_id,
         "— Select a Source —"
     );
-    $sourceSelect.trigger("change"); // Trigger change to populate sections
-    qp_quick_edit_data.current_source_id = null; // Reset current source ID after use
+    $sourceSelect.trigger("change"); // Trigger section update
+    qp_quick_edit_data.current_source_id = null; // Reset after use
 
-    // 3. Update Exams dropdown based on the selected Subject
+    // Filter available exams based on the selected subject
     var linkedExamIds = qp_quick_edit_data.exam_subject_links
-        .filter(function (link) {
-            return link.subject_id == subjectId;
-        })
-        .map(function (link) {
-            return link.exam_id;
-        });
+        .filter(link => link.subject_id == subjectId)
+        .map(link => link.exam_id);
 
     var availableExams = qp_quick_edit_data.all_exams
-        .filter(function (exam) {
-            // Ensure exam.exam_id is converted to a string for includes() to work reliably
-            return linkedExamIds.includes(String(exam.exam_id));
-        })
-        .map(function (exam) {
-            // Remap properties to match what updateDropdown expects
-            return { id: exam.exam_id, name: exam.exam_name };
-        });
+        .filter(exam => linkedExamIds.includes(String(exam.exam_id)))
+        .map(exam => ({ id: exam.exam_id, name: exam.exam_name }));
 
     updateDropdown(
         $examSelect,
@@ -183,7 +199,8 @@ wrapper.on("change", ".qe-subject-select", function () {
         qp_quick_edit_data.current_exam_id,
         "— Select an Exam —"
     );
-    qp_quick_edit_data.current_exam_id = null; // Reset current exam ID after use
+    qp_quick_edit_data.current_exam_id = null; // Reset after use
+    // --- END: Corrected Source and Exam Dropdown Logic ---
 });
 
   // Delegated event handler for when the SOURCE dropdown changes
@@ -194,56 +211,42 @@ wrapper.on("change", ".qe-subject-select", function () {
     var $form = $(this).closest(".quick-edit-form-wrapper");
     var $sectionSelect = $form.find(".qe-section-select");
 
-    // --- NEW HIERARCHICAL LOGIC ---
     $sectionSelect.empty().prop("disabled", true);
 
-    function buildTermHierarchy(
-      parentElement,
-      terms,
-      parentId,
-      level,
-      selectedId
-    ) {
-      var prefix = "— ".repeat(level);
-      terms.forEach(function (term) {
-        if (term.parent_id == parentId) {
-          var option = $("<option></option>")
-            .val(term.id)
-            .text(prefix + term.name);
+    // Recursive helper function to build the indented options
+    function buildTermHierarchy(parentElement, allTerms, parentId, level, selectedId) {
+        var prefix = '— '.repeat(level);
+        
+        // Find all direct children of the current parentId
+        var children = allTerms.filter(term => term.parent_id == parentId);
 
-          if (term.id == selectedId) {
-            option.prop("selected", true);
-          }
-          parentElement.append(option);
-          buildTermHierarchy(
-            parentElement,
-            terms,
-            term.id,
-            level + 1,
-            selectedId
-          );
-        }
-      });
+        // --- ADD THIS LINE TO SORT CHILDREN ALPHABETICALLY ---
+        children.sort((a, b) => a.name.localeCompare(b.name));
+
+        children.forEach(function(term) {
+            var option = $("<option></option>")
+                .val(term.id)
+                .text(prefix + term.name);
+
+            if (term.id == selectedId) {
+                option.prop("selected", true);
+            }
+            parentElement.append(option);
+            
+            // Recurse for grandchildren
+            buildTermHierarchy(parentElement, allTerms, term.id, level + 1, selectedId);
+        });
     }
 
-    if (sourceId && qp_quick_edit_data.all_source_terms) {
-      $sectionSelect
-        .prop("disabled", false)
-        .append('<option value="">— Select a Section —</option>');
-      buildTermHierarchy(
-        $sectionSelect,
-        qp_quick_edit_data.all_source_terms,
-        sourceId,
-        0,
-        qp_quick_edit_data.current_section_id
-      );
-      qp_quick_edit_data.current_section_id = ""; // Clear after use
+    if (sourceId) {
+        $sectionSelect.prop("disabled", false).append('<option value="">— Select a Section —</option>');
+        // Start the recursive build from the selected source
+        buildTermHierarchy($sectionSelect, qp_quick_edit_data.all_source_terms, sourceId, 0, qp_quick_edit_data.current_section_id);
     } else {
-      $sectionSelect.append(
-        '<option value="">— Select a source first —</option>'
-      );
+        $sectionSelect.append('<option value="">— Select a source first —</option>');
     }
-    // --- END NEW LOGIC ---
+    // Clear the current_section_id after it's been used for the initial load
+    qp_quick_edit_data.current_section_id = ""; 
   });
 
   // Delegated event handler for the PYQ checkbox
@@ -382,9 +385,10 @@ wrapper.on('click', '.save', function(e) {
       .on("change", function () {
         var subjectId = $(this).val();
         $topicFilter.hide().val("");
-        $sourceFilter.hide().val("");
+        $sourceFilter.val("").empty().append('<option value="">All Sources / Sections</option>'); // Reset source filter
 
         if (subjectId) {
+          // --- AJAX for Topics (existing logic) ---
           $.ajax({
             url: qp_admin_filter_data.ajax_url,
             type: "POST",
@@ -415,61 +419,99 @@ wrapper.on('click', '.save', function(e) {
               }
             },
           });
+          
+          // --- NEW: AJAX for Sources (moved here) ---
+          $.ajax({
+              url: qp_admin_filter_data.ajax_url,
+              type: "POST",
+              data: {
+                  action: "get_sources_for_list_table_filter",
+                  nonce: qp_admin_filter_data.nonce,
+                  subject_id: subjectId,
+                  topic_id: '', // Pass empty topic to get all for the subject
+              },
+              success: function (response) {
+                  if (response.success && response.data.sources && response.data.sources.length > 0) {
+                      // (The recursive function from the previous step goes here)
+                      function buildOptions(terms, level) {
+                          var prefix = '— '.repeat(level);
+                          terms.forEach(function(term) {
+                              var value = (term.parent == 0 ? 'source_' : 'section_') + term.term_id;
+                              var option = $("<option></option>").val(value).text(prefix + term.name);
+                              if (value === currentSource) {
+                                  option.prop("selected", true);
+                              }
+                              $sourceFilter.append(option);
+                              if (term.children && term.children.length > 0) {
+                                  buildOptions(term.children, level + 1);
+                              }
+                          });
+                      }
+                      buildOptions(response.data.sources, 0);
+                  }
+              }
+          });
+
         }
       })
       .trigger("change");
 
     $topicFilter.on("change", function () {
-      var topicId = $(this).val();
-      $sourceFilter.hide().val("");
+    var topicId = $(this).val();
+    var subjectId = $subjectFilter.val();
+    $sourceFilter.empty().append('<option value="">Loading Sources...</option>');
 
-      if (topicId) {
-        $.ajax({
-          url: qp_admin_filter_data.ajax_url,
-          type: "POST",
-          data: {
+    if (!subjectId) {
+        $sourceFilter.html('<option value="">All Sources / Sections</option>');
+        return;
+    }
+
+    $.ajax({
+        url: qp_admin_filter_data.ajax_url,
+        type: "POST",
+        data: {
             action: "get_sources_for_list_table_filter",
             nonce: qp_admin_filter_data.nonce,
+            subject_id: subjectId,
             topic_id: topicId,
-          },
-          success: function (response) {
-            if (
-              response.success &&
-              response.data.sources &&
-              response.data.sources.length > 0
-            ) {
-              $sourceFilter
-                .empty()
-                .append('<option value="">All Sources / Sections</option>');
-              $.each(response.data.sources, function (index, source) {
-                var sourceOption = $("<option></option>")
-                  .val("source_" + source.source_id)
-                  .text(source.source_name);
-                if ("source_" + source.source_id == currentSource) {
-                  sourceOption.prop("selected", true);
+        },
+        success: function (response) {
+            $sourceFilter.empty().append('<option value="">All Sources / Sections</option>');
+            
+            if (response.success && response.data.sources && response.data.sources.length > 0) {
+                // Recursive function to build the dropdown options
+                function buildOptions(terms, level) {
+                    var prefix = '— '.repeat(level);
+                    terms.forEach(function(term) {
+                        var value = (term.parent == 0 ? 'source_' : 'section_') + term.term_id;
+                        var option = $("<option></option>")
+                            .val(value)
+                            .text(prefix + term.name);
+                        
+                        if (value === currentSource) {
+                            option.prop("selected", true);
+                        }
+                        
+                        $sourceFilter.append(option);
+
+                        // If the term has children, recurse
+                        if (term.children && term.children.length > 0) {
+                            buildOptions(term.children, level + 1);
+                        }
+                    });
                 }
-                $sourceFilter.append(sourceOption);
-                if (
-                  source.sections &&
-                  Object.keys(source.sections).length > 0
-                ) {
-                  $.each(source.sections, function (idx, section) {
-                    var sectionOption = $("<option></option>")
-                      .val("section_" + section.section_id)
-                      .text("  - " + section.section_name);
-                    if ("section_" + section.section_id == currentSource) {
-                      sectionOption.prop("selected", true);
-                    }
-                    $sourceFilter.append(sectionOption);
-                  });
-                }
-              });
-              $sourceFilter.show();
+                
+                buildOptions(response.data.sources, 0);
+
+            } else {
+                $sourceFilter.append('<option value="">No sources for this selection</option>');
             }
-          },
-        });
-      }
+        },
+        error: function() {
+            $sourceFilter.empty().append('<option value="">Error loading sources</option>');
+        }
     });
+});
 
     // Bulk Edit Panel Logic
     var $bulkEditPanel = $("#qp-bulk-edit-panel");
@@ -540,19 +582,31 @@ wrapper.on('click', '.save', function(e) {
     $bulkEditPanel.on("change", "#bulk_edit_source", function () {
       var selectedSource = $(this).val();
       var $sectionBulkEdit = $("#bulk_edit_section");
-      var availableSections = qp_bulk_edit_data.sections.filter(
-        (sec) => sec.source_id == selectedSource
-      );
-      $sectionBulkEdit
-        .html('<option value="">— Change Section —</option>')
-        .prop("disabled", availableSections.length === 0);
-      $.each(availableSections, (i, section) =>
-        $sectionBulkEdit.append(
-          $("<option></option>")
-            .val(section.section_id)
-            .text(section.section_name)
-        )
-      );
+
+      $sectionBulkEdit.empty().prop('disabled', true);
+
+      // Helper function to recursively build the dropdown
+      function buildTermHierarchy(parentElement, terms, parentId, level) {
+          var prefix = '— '.repeat(level);
+          terms.forEach(function(term) {
+              if (term.source_id == parentId) { // Check if it's a child of the current parent
+                  var option = $("<option></option>")
+                      .val(term.section_id)
+                      .text(prefix + term.section_name);
+                  parentElement.append(option);
+                  // Recursive call to find children of this term
+                  buildTermHierarchy(parentElement, terms, term.section_id, level + 1);
+              }
+          });
+      }
+
+      if (selectedSource && qp_bulk_edit_data.sections) {
+          $sectionBulkEdit.prop('disabled', false).html('<option value="">— Change Section —</option>');
+          // Start the recursive function
+          buildTermHierarchy($sectionBulkEdit, qp_bulk_edit_data.sections, selectedSource, 0);
+      } else {
+          $sectionBulkEdit.html('<option value="">— Select Source First —</option>');
+      }
     });
 
     $subjectFilter.on("change", manageBulkEditPanel);
@@ -586,7 +640,7 @@ wrapper.on('click', '.save', function(e) {
           if (response.success) {
             var data = response.data;
             var html = `<h4>${data.subject_name || ""} (ID: ${
-              data.custom_question_id
+              data.question_id
             })</h4>`;
 
             if (data.direction_text || data.direction_image_url) {

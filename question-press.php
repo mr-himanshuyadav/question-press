@@ -3,7 +3,7 @@
 /**
  * Plugin Name:       Question Press
  * Description:       A complete plugin for creating, managing, and practicing questions.
- * Version:           3.3.5
+ * Version:           3.3.6
  * Author:            Himanshu
  */
 
@@ -50,7 +50,6 @@ function qp_activate_plugin()
         is_pyq BOOLEAN NOT NULL DEFAULT 0,
         pyq_year VARCHAR(4) DEFAULT NULL,
         PRIMARY KEY (group_id),
-        KEY subject_id (subject_id),
         KEY is_pyq (is_pyq)
     ) $charset_collate;";
     dbDelta($sql_groups);
@@ -59,7 +58,6 @@ function qp_activate_plugin()
     $table_questions = $wpdb->prefix . 'qp_questions';
     $sql_questions = "CREATE TABLE $table_questions (
         question_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
-        custom_question_id BIGINT(20) UNSIGNED,
         group_id BIGINT(20) UNSIGNED,
         question_number_in_section VARCHAR(20) DEFAULT NULL,
         question_text LONGTEXT NOT NULL,
@@ -69,11 +67,7 @@ function qp_activate_plugin()
         status VARCHAR(20) NOT NULL DEFAULT 'draft',
         last_modified DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         PRIMARY KEY (question_id),
-        UNIQUE KEY custom_question_id (custom_question_id),
         KEY group_id (group_id),
-        KEY topic_id (topic_id),
-        KEY source_id (source_id),
-        KEY section_id (section_id),
         KEY status (status),
         KEY question_text_hash (question_text_hash)
     ) $charset_collate;";
@@ -335,8 +329,7 @@ function qp_activate_plugin()
         }
     }
 
-    // Set default options
-    add_option('qp_next_custom_question_id', 1000, '', 'no');
+    // Set default options 
     if (!get_option('qp_jwt_secret_key')) {
         add_option('qp_jwt_secret_key', wp_generate_password(64, true, true), '', 'no');
     }
@@ -419,6 +412,8 @@ function qp_admin_menu()
 }
 add_action('admin_menu', 'qp_admin_menu');
 
+
+
 /**
  * Adds a "(Question Press)" indicator to the plugin's pages in the admin list.
  *
@@ -477,6 +472,27 @@ function qp_render_organization_page()
         </div>
     </div>
 <?php
+}
+/**
+ * Renders the page for migration tools.
+ */
+function qp_render_migration_tools_page() {
+    ?>
+    <div class="wrap">
+        <h1>Question Press Migration Tools</h1>
+        <div class="card" style="max-width: 600px; margin-top: 20px;">
+            <h2 class="title">V4 Relationship Migration</h2>
+            <p>This script will migrate Topic and Source/Section relationships from individual questions to their parent groups.</p>
+            <p><strong>Warning:</strong> This is a destructive operation. Please create a full backup of your database before proceeding.</p>
+            <?php
+            // Create a nonce for security
+            $nonce = wp_create_nonce('qp_v4_relationship_migration_nonce');
+            $migration_url = admin_url('admin.php?page=question-press&action=qp_v4_relationship_migration&_wpnonce=' . $nonce);
+            ?>
+            <a href="<?php echo esc_url($migration_url); ?>" class="button button-primary">Run V4 Relationship Migration</a>
+        </div>
+    </div>
+    <?php
 }
 
 function qp_render_merge_terms_page()
@@ -645,6 +661,7 @@ function qp_render_tools_page()
         'import' => ['label' => 'Import', 'callback' => ['QP_Import_Page', 'render']],
         'export'   => ['label' => 'Export', 'callback' => ['QP_Export_Page', 'render']],
         'backup_restore'   => ['label' => 'Backup & Restore', 'callback' => ['QP_Backup_Restore_Page', 'render']],
+        'migration' => ['label' => 'Migration', 'callback' => 'qp_render_migration_tools_page'], 
     ];
     $active_tab = isset($_GET['tab']) && array_key_exists($_GET['tab'], $tabs) ? $_GET['tab'] : 'import';
 ?>
@@ -836,9 +853,201 @@ function qp_regenerate_api_key_ajax()
 }
 add_action('wp_ajax_regenerate_api_key', 'qp_regenerate_api_key_ajax');
 
+// Used on export page
+
+/**
+ * Helper function to get all descendant term IDs for a given parent, including the parent itself.
+ *
+ * @param int    $parent_id The starting term_id.
+ * @param object $wpdb      The WordPress database object.
+ * @param string $term_table The name of the terms table.
+ * @return array An array of term IDs.
+ */
+function get_all_descendant_ids($parent_id, $wpdb, $term_table) {
+    $descendant_ids = [$parent_id];
+    $current_parent_ids = [$parent_id];
+    for ($i = 0; $i < 10; $i++) { // Safety break
+        if (empty($current_parent_ids)) break;
+        $ids_placeholder = implode(',', $current_parent_ids);
+        $child_ids = $wpdb->get_col("SELECT term_id FROM $term_table WHERE parent IN ($ids_placeholder)");
+        if (!empty($child_ids)) {
+            $descendant_ids = array_merge($descendant_ids, $child_ids);
+            $current_parent_ids = $child_ids;
+        } else {
+            break;
+        }
+    }
+    return array_unique($descendant_ids);
+}
+
+// Used on export page
+/**
+ * Helper function to trace a term's lineage back to the root and return an array of names.
+ *
+ * @param int    $term_id      The starting term_id.
+ * @param object $wpdb         The WordPress database object.
+ * @param string $term_table   The name of the terms table.
+ * @return array An ordered array of names from parent to child.
+ */
+function qp_get_term_lineage_names($term_id, $wpdb, $term_table) {
+    $lineage = [];
+    $current_id = $term_id;
+    for ($i=0; $i<10; $i++) { // Safety break
+        if (!$current_id) break;
+        $term = $wpdb->get_row($wpdb->prepare("SELECT name, parent FROM {$term_table} WHERE term_id = %d", $current_id));
+        if ($term) {
+            array_unshift($lineage, $term->name);
+            $current_id = $term->parent;
+        } else {
+            break;
+        }
+    }
+    return $lineage;
+}
+
+/**
+ * Runs the relationship migration from questions to groups.
+ * This function should be triggered by an admin action, similar to the v3 migration.
+ */
+function qp_run_v4_relationship_migration() {
+    // Check if the trigger is present, user has permission, and nonce is valid
+    if (!isset($_GET['action']) || $_GET['action'] !== 'qp_v4_relationship_migration' || !current_user_can('manage_options')) {
+        return;
+    }
+    check_admin_referer('qp_v4_relationship_migration_nonce');
+
+    global $wpdb;
+    $messages = [];
+    $skipped_items = [];
+    $wpdb->query("START TRANSACTION;");
+
+    try {
+        // Step 1: Migrate Topic Relationships from Questions to Groups
+        // A group is now linked directly to a topic. The subject is inferred from the topic's parent.
+        $topic_migration_results = qp_migrate_taxonomy_relationships('subject', 'Topic');
+        $messages[] = "Step 1 (Topics): Migrated {$topic_migration_results['migrated']} relationships to groups. Deleted {$topic_migration_results['deleted']} old question relationships.";
+        if (!empty($topic_migration_results['skipped'])) {
+            $skipped_items = array_merge($skipped_items, $topic_migration_results['skipped']);
+        }
+
+        // Step 2: Migrate Source/Section Relationships from Questions to Groups
+        // A group is now linked to the most specific source term (e.g., a section over a source book).
+        $source_migration_results = qp_migrate_taxonomy_relationships('source', 'Source/Section');
+        $messages[] = "Step 2 (Sources): Migrated {$source_migration_results['migrated']} relationships to groups. Deleted {$source_migration_results['deleted']} old question relationships.";
+        if (!empty($source_migration_results['skipped'])) {
+            $skipped_items = array_merge($skipped_items, $source_migration_results['skipped']);
+        }
+
+        // Final Report
+        if (!empty($skipped_items)) {
+            $skipped_details = implode('<br> - ', $skipped_items);
+            $messages[] = "<strong>Migration Notices (For Review):</strong><br> - {$skipped_details}";
+        }
+
+        $wpdb->query("COMMIT;");
+        $_SESSION['qp_admin_message'] = '<strong>Relationship Migration Report:</strong><br> - ' . implode('<br> - ', $messages);
+        $_SESSION['qp_admin_message_type'] = 'success';
+
+    } catch (Exception $e) {
+        $wpdb->query("ROLLBACK;");
+        $_SESSION['qp_admin_message'] = 'An error occurred during migration: ' . $e->getMessage();
+        $_SESSION['qp_admin_message_type'] = 'error';
+    }
+
+    // Redirect to a safe page to show the message
+    wp_safe_redirect(admin_url('admin.php?page=question-press'));
+    exit;
+}
+
+/**
+ * Helper function to migrate term relationships from questions to their parent groups for a specific taxonomy.
+ *
+ * @param string $taxonomy_name The name of the taxonomy to process (e.g., 'subject' for topics, 'source' for sources/sections).
+ * @param string $log_prefix A prefix for logging messages (e.g., 'Topic', 'Source/Section').
+ * @return array A report of the migration containing counts and skipped items.
+ */
+function qp_migrate_taxonomy_relationships($taxonomy_name, $log_prefix) {
+    global $wpdb;
+    $rel_table = $wpdb->prefix . 'qp_term_relationships';
+    $term_table = $wpdb->prefix . 'qp_terms';
+    $tax_table = $wpdb->prefix . 'qp_taxonomies';
+    $q_table = $wpdb->prefix . 'qp_questions';
+
+    $migrated_count = 0;
+    $deleted_count = 0;
+    $skipped = [];
+
+    // Get the taxonomy ID for the given taxonomy name
+    $taxonomy_id = $wpdb->get_var($wpdb->prepare("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = %s", $taxonomy_name));
+    if (!$taxonomy_id) {
+        $skipped[] = "{$log_prefix} Migration: Taxonomy '{$taxonomy_name}' not found. Skipping.";
+        return ['migrated' => 0, 'deleted' => 0, 'skipped' => $skipped];
+    }
+
+    // 1. Find all unique group-term pairs by inspecting question relationships.
+    // For each group, we find the single, most representative term.
+    $group_to_term_map = [];
+    $question_relationships = $wpdb->get_results($wpdb->prepare("
+        SELECT q.group_id, r.term_id, t.parent
+        FROM {$q_table} q
+        JOIN {$rel_table} r ON q.question_id = r.object_id AND r.object_type = 'question'
+        JOIN {$term_table} t ON r.term_id = t.term_id
+        WHERE t.taxonomy_id = %d AND q.group_id > 0
+    ", $taxonomy_id));
+
+    foreach($question_relationships as $rel) {
+        // For topics (subject taxonomy), we only care about children (parent != 0)
+        if ($taxonomy_name === 'subject' && $rel->parent == 0) {
+            continue;
+        }
+        // For a group, we always want to store the most specific (deepest) term.
+        // A child term (parent != 0) is always more specific than a parent term.
+        if (!isset($group_to_term_map[$rel->group_id]) || $rel->parent != 0) {
+             $group_to_term_map[$rel->group_id] = $rel->term_id;
+        }
+    }
+
+    // 2. Insert the new group-level relationships.
+    foreach ($group_to_term_map as $group_id => $term_id) {
+         if ($group_id > 0 && $term_id > 0) {
+            // First, delete any existing relationship for this group and taxonomy to avoid conflicts
+            $wpdb->query($wpdb->prepare(
+                "DELETE r FROM {$rel_table} r
+                 JOIN {$term_table} t ON r.term_id = t.term_id
+                 WHERE r.object_id = %d AND r.object_type = 'group' AND t.taxonomy_id = %d",
+                 $group_id, $taxonomy_id
+            ));
+
+            // Now insert the new, correct relationship
+            $result = $wpdb->insert($rel_table, [
+                'object_id' => $group_id,
+                'term_id' => $term_id,
+                'object_type' => 'group'
+            ]);
+
+            if ($result) {
+                $migrated_count++;
+            }
+        } else {
+            $skipped[] = "{$log_prefix} Link: Skipped relationship for Group ID {$group_id} and Term ID {$term_id} due to invalid ID.";
+        }
+    }
+
+    // 3. Delete all old question-level relationships for this taxonomy.
+    $deleted_count = $wpdb->query($wpdb->prepare(
+        "DELETE r FROM {$rel_table} r
+         JOIN {$term_table} t ON r.term_id = t.term_id
+         WHERE r.object_type = 'question' AND t.taxonomy_id = %d",
+        $taxonomy_id
+    ));
+
+    return ['migrated' => $migrated_count, 'deleted' => $deleted_count, 'skipped' => $skipped];
+}
+
 // FORM & ACTION HANDLERS
 function qp_handle_form_submissions()
 {
+    qp_run_v4_relationship_migration();
     if (isset($_GET['page']) && $_GET['page'] === 'question-press') {
         $list_table = new QP_Questions_List_Table();
         $list_table->process_bulk_action();
@@ -854,7 +1063,6 @@ function qp_handle_form_submissions()
     QP_Backup_Restore_Page::handle_forms();
     QP_Settings_Page::register_settings();
     qp_handle_save_question_group();
-    qp_run_v3_taxonomy_migration();
 }
 add_action('admin_init', 'qp_handle_form_submissions');
 
@@ -866,7 +1074,13 @@ function qp_all_questions_page_cb()
     <div class="wrap">
         <h1 class="wp-heading-inline">All Questions</h1>
         <a href="<?php echo admin_url('admin.php?page=qp-question-editor'); ?>" class="page-title-action">Add New</a>
-        <?php if (isset($_GET['message'])) {
+        <?php 
+        if (isset($_SESSION['qp_admin_message'])) {
+            $message = html_entity_decode($_SESSION['qp_admin_message']);
+            echo '<div id="message" class="notice notice-' . esc_attr($_SESSION['qp_admin_message_type']) . ' is-dismissible"><p>' . $message . '</p></div>';
+            unset($_SESSION['qp_admin_message'], $_SESSION['qp_admin_message_type']);
+        }
+        if (isset($_GET['message'])) {
             $messages = ['1' => 'Question(s) updated successfully.', '2' => 'Question(s) saved successfully.'];
             $message_id = absint($_GET['message']);
             if (isset($messages[$message_id])) {
@@ -957,12 +1171,6 @@ function qp_all_questions_page_cb()
     <?php
 }
 
-function get_question_custom_id($question_id)
-{
-    global $wpdb;
-    return $wpdb->get_var($wpdb->prepare("SELECT custom_question_id FROM {$wpdb->prefix}qp_questions WHERE question_id = %d", $question_id));
-}
-
 /**
  * AJAX handler for the admin list table.
  * Gets child topics for a given parent subject term.
@@ -1000,71 +1208,92 @@ add_action('wp_ajax_get_topics_for_list_table_filter', 'qp_get_topics_for_list_t
 function qp_get_sources_for_list_table_filter_ajax()
 {
     check_ajax_referer('qp_admin_filter_nonce', 'nonce');
-    $topic_term_id = isset($_POST['topic_id']) ? absint($_POST['topic_id']) : 0;
+    $subject_id = isset($_POST['subject_id']) ? absint($_POST['subject_id']) : 0;
+    $topic_id = isset($_POST['topic_id']) ? absint($_POST['topic_id']) : 0;
 
-    if (!$topic_term_id) {
+    if (!$subject_id) {
         wp_send_json_success(['sources' => []]);
+        return;
     }
 
     global $wpdb;
     $term_table = $wpdb->prefix . 'qp_terms';
     $rel_table = $wpdb->prefix . 'qp_term_relationships';
     $tax_table = $wpdb->prefix . 'qp_taxonomies';
-
     $source_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'source'");
 
-    // Find all question IDs linked to the selected topic
-    $question_ids = $wpdb->get_col($wpdb->prepare(
-        "SELECT object_id FROM $rel_table WHERE term_id = %d AND object_type = 'question'",
-        $topic_term_id
-    ));
-
-    if (empty($question_ids)) {
-        wp_send_json_success(['sources' => []]);
+    // Step 1: Get the relevant group IDs based on subject/topic filter
+    $term_ids_to_check = [];
+    if ($topic_id > 0) {
+        $term_ids_to_check = [$topic_id];
+    } else {
+        $term_ids_to_check = $wpdb->get_col($wpdb->prepare("SELECT term_id FROM $term_table WHERE parent = %d", $subject_id));
     }
 
-    $ids_placeholder = implode(',', $question_ids);
+    $group_ids = [];
+    if (!empty($term_ids_to_check)) {
+        $term_ids_placeholder = implode(',', $term_ids_to_check);
+        $group_ids = $wpdb->get_col("SELECT object_id FROM $rel_table WHERE term_id IN ($term_ids_placeholder) AND object_type = 'group'");
+    }
 
-    // Find all source/section terms linked to those questions
-    $source_terms = $wpdb->get_results($wpdb->prepare(
-        "SELECT DISTINCT t.term_id, t.name, t.parent 
+    if (empty($group_ids)) {
+        wp_send_json_success(['sources' => []]);
+        return;
+    }
+    $group_ids_placeholder = implode(',', $group_ids);
+
+    // Step 2: Find all source/section terms linked to questions within those groups
+    $linked_term_ids = $wpdb->get_col($wpdb->prepare(
+        "SELECT DISTINCT t.term_id
          FROM {$term_table} t
          JOIN {$rel_table} r ON t.term_id = r.term_id
-         WHERE r.object_id IN ($ids_placeholder) AND r.object_type = 'question' AND t.taxonomy_id = %d
-         ORDER BY t.parent, t.name ASC",
+         WHERE r.object_id IN ($group_ids_placeholder) AND r.object_type = 'group' AND t.taxonomy_id = %d",
         $source_tax_id
     ));
 
-    // Group sections under their parent source
-    $sources = [];
-    foreach ($source_terms as $term) {
-        if ($term->parent == 0) { // This is a top-level source
-            if (!isset($sources[$term->term_id])) {
-                $sources[$term->term_id] = [
-                    'source_id'   => $term->term_id,
-                    'source_name' => $term->name,
-                    'sections'    => []
-                ];
-            }
-        } else { // This is a section
-            // Find the parent source's name
-            $parent_source_id = $term->parent;
-            if (!isset($sources[$parent_source_id])) {
-                $parent_name = $wpdb->get_var($wpdb->prepare("SELECT name FROM $term_table WHERE term_id = %d", $parent_source_id));
-                $sources[$parent_source_id] = [
-                    'source_id' => $parent_source_id,
-                    'source_name' => $parent_name,
-                    'sections' => []
-                ];
-            }
-            $sources[$parent_source_id]['sections'][$term->term_id] = [
-                'section_id'   => $term->term_id,
-                'section_name' => $term->name
-            ];
-        }
+    if (empty($linked_term_ids)) {
+        wp_send_json_success(['sources' => []]);
+        return;
     }
 
-    wp_send_json_success(['sources' => array_values($sources)]);
+    // Step 3: Fetch the full lineage (parents) for every linked term
+    $full_lineage_ids = [];
+    foreach ($linked_term_ids as $term_id) {
+        $current_id = $term_id;
+        for ($i = 0; $i < 10; $i++) { // Safety break
+            if (!$current_id || in_array($current_id, $full_lineage_ids)) break;
+            $full_lineage_ids[] = $current_id;
+            $current_id = $wpdb->get_var($wpdb->prepare("SELECT parent FROM $term_table WHERE term_id = %d", $current_id));
+        }
+    }
+    $all_relevant_term_ids = array_unique($full_lineage_ids);
+    $all_relevant_term_ids_placeholder = implode(',', $all_relevant_term_ids);
+
+    // Step 4: Fetch all details for the relevant terms
+    $all_terms_data = $wpdb->get_results("SELECT term_id, name, parent FROM $term_table WHERE term_id IN ($all_relevant_term_ids_placeholder)");
+
+    // Step 5: Build a hierarchical tree from the flat list
+    $terms_by_id = [];
+    foreach ($all_terms_data as $term) {
+        $terms_by_id[$term->term_id] = $term;
+        $term->children = [];
+    }
+
+    $tree = [];
+    foreach ($terms_by_id as $term_id => &$term) {
+        if ($term->parent != 0 && isset($terms_by_id[$term->parent])) {
+            $terms_by_id[$term->parent]->children[] = &$term;
+        } elseif ($term->parent == 0) {
+            $tree[] = &$term;
+        }
+    }
+    
+    // Sort the top-level sources by name
+    usort($tree, function($a, $b) {
+        return strcmp($a->name, $b->name);
+    });
+
+    wp_send_json_success(['sources' => $tree]);
 }
 add_action('wp_ajax_get_sources_for_list_table_filter', 'qp_get_sources_for_list_table_filter_ajax');
 
@@ -1081,22 +1310,17 @@ function qp_handle_save_question_group()
     // --- Get group-level data from the form ---
     $direction_text = isset($_POST['direction_text']) ? stripslashes($_POST['direction_text']) : '';
     $direction_image_id = absint($_POST['direction_image_id']);
-    $subject_id = absint($_POST['subject_id']);
-    $topic_id = isset($_POST['topic_id']) ? absint($_POST['topic_id']) : 0;
-    $source_id = isset($_POST['source_id']) ? absint($_POST['source_id']) : 0;
-    $section_id = isset($_POST['section_id']) ? absint($_POST['section_id']) : 0;
     $is_pyq = isset($_POST['is_pyq']) ? 1 : 0;
-    $exam_id = isset($_POST['exam_id']) ? absint($_POST['exam_id']) : 0;
     $pyq_year = isset($_POST['pyq_year']) ? sanitize_text_field($_POST['pyq_year']) : '';
-
     $questions_from_form = isset($_POST['questions']) ? (array) $_POST['questions'] : [];
 
-    if (empty($subject_id) || empty($questions_from_form)) {
+    if (empty($_POST['subject_id']) || empty($questions_from_form)) {
+        // A subject is required to save a group.
+        // Silently fail if no subject is selected to avoid errors on page load.
         return;
     }
 
     // --- Save Group Data ---
-    // Prepare data only for the existing columns in the groups table.
     $group_data = [
         'direction_text'     => wp_kses_post($direction_text),
         'direction_image_id' => $direction_image_id,
@@ -1111,40 +1335,61 @@ function qp_handle_save_question_group()
         $group_id = $wpdb->insert_id;
     }
 
-    // --- Handle Group-level Term Relationships ---
+    // --- CONSOLIDATED Group-Level Term Relationship Handling ---
     if ($group_id) {
         $rel_table = "{$wpdb->prefix}qp_term_relationships";
         $term_table = "{$wpdb->prefix}qp_terms";
         $tax_table = "{$wpdb->prefix}qp_taxonomies";
-
-        // Get taxonomy IDs for subject and exam
-        $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'subject'");
-        $exam_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'exam'");
-
-        // Delete all old subject and exam relationships for this group to prevent duplicates
-        $wpdb->query($wpdb->prepare(
-            "DELETE FROM {$rel_table} WHERE object_id = %d AND object_type = 'group' AND term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id IN (%d, %d))",
-            $group_id,
-            $subject_tax_id,
-            $exam_tax_id
-        ));
-
-        // Insert the new subject relationship
-        if ($subject_id > 0) {
-            $wpdb->insert($rel_table, ['object_id' => $group_id, 'term_id' => $subject_id, 'object_type' => 'group']);
+        
+        $group_taxonomies_to_manage = ['subject', 'source', 'exam'];
+        $tax_ids_to_clear = [];
+        foreach($group_taxonomies_to_manage as $tax_name) {
+            $tax_id = $wpdb->get_var($wpdb->prepare("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = %s", $tax_name));
+            if ($tax_id) $tax_ids_to_clear[] = $tax_id;
         }
 
-        // Insert the new exam relationship if it's a PYQ
-        if ($is_pyq && $exam_id > 0) {
-            $wpdb->insert($rel_table, ['object_id' => $group_id, 'term_id' => $exam_id, 'object_type' => 'group']);
+        // 1. Delete all existing relationships for this group across managed taxonomies
+        if (!empty($tax_ids_to_clear)) {
+             $tax_ids_placeholder = implode(',', $tax_ids_to_clear);
+             $wpdb->query($wpdb->prepare(
+                "DELETE FROM {$rel_table} WHERE object_id = %d AND object_type = 'group' AND term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id IN ($tax_ids_placeholder))",
+                $group_id
+            ));
+        }
+
+        // 2. Determine the new terms to apply
+        $terms_to_apply_to_group = [];
+        // Subject/Topic: Use the most specific topic selected, which represents the entire subject hierarchy.
+        if (!empty($_POST['topic_id'])) {
+            $terms_to_apply_to_group[] = absint($_POST['topic_id']);
+        } elseif (!empty($_POST['subject_id'])) {
+            // Fallback to parent subject if no topic is chosen
+            $terms_to_apply_to_group[] = absint($_POST['subject_id']);
+        }
+        
+        // Source/Section: Use the most specific term selected.
+        if (!empty($_POST['section_id'])) {
+            $terms_to_apply_to_group[] = absint($_POST['section_id']);
+        } elseif (!empty($_POST['source_id'])) {
+            $terms_to_apply_to_group[] = absint($_POST['source_id']);
+        }
+
+        // Exam: Apply if PYQ is checked and an exam is selected.
+        if ($is_pyq && !empty($_POST['exam_id'])) {
+            $terms_to_apply_to_group[] = absint($_POST['exam_id']);
+        }
+
+        // 3. Insert the new, clean relationships for the group
+        foreach (array_unique($terms_to_apply_to_group) as $term_id) {
+            if ($term_id > 0) {
+                 $wpdb->insert($rel_table, ['object_id' => $group_id, 'term_id' => $term_id, 'object_type' => 'group']);
+            }
         }
     }
 
-
-    // --- Process Individual Questions ---
+    // --- Process Individual Questions (and their Label relationships) ---
     $q_table = "{$wpdb->prefix}qp_questions";
     $o_table = "{$wpdb->prefix}qp_options";
-    $rel_table = "{$wpdb->prefix}qp_term_relationships";
     $existing_q_ids = $is_editing ? $wpdb->get_col($wpdb->prepare("SELECT question_id FROM $q_table WHERE group_id = %d", $group_id)) : [];
     $submitted_q_ids = [];
 
@@ -1153,103 +1398,39 @@ function qp_handle_save_question_group()
         if (empty(trim($question_text))) continue;
 
         $question_id = isset($q_data['question_id']) ? absint($q_data['question_id']) : 0;
-        $question_num = isset($q_data['question_number_in_section']) ? sanitize_text_field($q_data['question_number_in_section']) : '';
         $is_question_complete = !empty($q_data['correct_option_id']);
 
-        // 1. Prepare data for the questions table (no legacy columns)
         $question_db_data = [
-            'group_id'                   => $group_id,
-            'question_number_in_section' => $question_num,
-            'question_text'              => wp_kses_post($question_text),
-            'question_text_hash'         => md5(strtolower(trim(preg_replace('/\s+/', '', $question_text)))),
-            'status'                     => $is_question_complete ? 'publish' : 'draft',
+            'group_id' => $group_id,
+            'question_number_in_section' => isset($q_data['question_number_in_section']) ? sanitize_text_field($q_data['question_number_in_section']) : '',
+            'question_text' => wp_kses_post($question_text),
+            'question_text_hash' => md5(strtolower(trim(preg_replace('/\s+/', '', $question_text)))),
+            'status' => $is_question_complete ? 'publish' : 'draft',
         ];
 
-        // 2. Insert or Update the question
         if ($question_id > 0 && in_array($question_id, $existing_q_ids)) {
-            // It's an existing question, so we update it
             $wpdb->update($q_table, $question_db_data, ['question_id' => $question_id]);
         } else {
-            // It's a new question, so we insert it
-            $next_custom_id = get_option('qp_next_custom_question_id', 1000);
-            $question_db_data['custom_question_id'] = $next_custom_id;
-            $question_db_data['status'] = 'draft'; // New questions are always drafts initially
             $wpdb->insert($q_table, $question_db_data);
-            $question_id = $wpdb->insert_id; // Get the new ID
-            update_option('qp_next_custom_question_id', $next_custom_id + 1);
+            $question_id = $wpdb->insert_id;
         }
         $submitted_q_ids[] = $question_id;
 
-        // 3. Handle ALL Term Relationships (Topic, Source/Section, Labels)
         if ($question_id > 0) {
-            $wpdb->delete($rel_table, ['object_id' => $question_id, 'object_type' => 'question']);
-
-            $term_ids_to_link = [];
-            if ($topic_id > 0) $term_ids_to_link[] = $topic_id;
-            if ($section_id > 0) $term_ids_to_link[] = $section_id;
-            elseif ($source_id > 0) $term_ids_to_link[] = $source_id;
-
+            // Handle Question-Level Relationships (LABELS ONLY)
+            $label_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'label'");
+            if ($label_tax_id) {
+                $wpdb->query($wpdb->prepare("DELETE FROM {$rel_table} WHERE object_id = %d AND object_type = 'question' AND term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id = %d)", $question_id, $label_tax_id));
+            }
             $labels = isset($q_data['labels']) ? array_map('absint', $q_data['labels']) : [];
-            $term_ids_to_link = array_merge($term_ids_to_link, $labels);
-
-            foreach (array_unique($term_ids_to_link) as $term_id) {
-                if ($term_id > 0) {
-                    $wpdb->insert($rel_table, ['object_id' => $question_id, 'term_id' => $term_id, 'object_type' => 'question']);
+            foreach ($labels as $label_id) {
+                if ($label_id > 0) {
+                    $wpdb->insert($rel_table, ['object_id' => $question_id, 'term_id' => $label_id, 'object_type' => 'question']);
                 }
             }
-        }
-
-        // --- Process Options & Labels ONLY IF EDITING ---
-        if ($is_editing) {
-            $submitted_option_ids = [];
-            $options_text = isset($q_data['options']) ? (array)$q_data['options'] : [];
-            $option_ids = isset($q_data['option_ids']) ? (array)$q_data['option_ids'] : [];
-            $correct_option_id_from_form = isset($q_data['correct_option_id']) ? $q_data['correct_option_id'] : null;
-
-            foreach ($options_text as $index => $option_text) {
-                $option_id = isset($option_ids[$index]) ? absint($option_ids[$index]) : 0;
-                $trimmed_option_text = trim(stripslashes($option_text));
-
-                if (empty($trimmed_option_text)) {
-                    continue;
-                }
-
-                $option_data = ['option_text' => sanitize_text_field($trimmed_option_text)];
-
-                if ($option_id > 0) {
-                    $wpdb->update($o_table, $option_data, ['option_id' => $option_id]);
-                    $submitted_option_ids[] = $option_id;
-                } else {
-                    $option_data['question_id'] = $question_id;
-                    $wpdb->insert($o_table, $option_data);
-                    $new_option_id = $wpdb->insert_id;
-                    $submitted_option_ids[] = $new_option_id;
-
-                    if ($correct_option_id_from_form === 'new_' . $index) {
-                        $correct_option_id_from_form = $new_option_id;
-                    }
-                }
-            }
-
-            $existing_db_option_ids = $wpdb->get_col($wpdb->prepare("SELECT option_id FROM $o_table WHERE question_id = %d", $question_id));
-            $options_to_delete = array_diff($existing_db_option_ids, $submitted_option_ids);
-            if (!empty($options_to_delete)) {
-                $ids_placeholder = implode(',', array_map('absint', $options_to_delete));
-                $wpdb->query("DELETE FROM $o_table WHERE option_id IN ($ids_placeholder)");
-            }
-
-            // Get the original correct option ID before the update
-            $original_correct_option_id = $wpdb->get_var($wpdb->prepare("SELECT option_id FROM {$o_table} WHERE question_id = %d AND is_correct = 1", $question_id));
-
-            $wpdb->update($o_table, ['is_correct' => 0], ['question_id' => $question_id]);
-            if ($correct_option_id_from_form) {
-                $wpdb->update($o_table, ['is_correct' => 1], ['option_id' => absint($correct_option_id_from_form), 'question_id' => $question_id]);
-            }
-
-            // If the correct answer has changed, trigger the re-evaluation.
-            if ($original_correct_option_id != $correct_option_id_from_form) {
-                qp_re_evaluate_question_attempts($question_id, absint($correct_option_id_from_form));
-            }
+            
+            // Handle Options (No changes needed here)
+            process_question_options($question_id, $q_data);
         }
     }
 
@@ -1262,24 +1443,21 @@ function qp_handle_save_question_group()
         $wpdb->query("DELETE FROM $q_table WHERE question_id IN ($ids_placeholder)");
     }
 
-    // --- Delete the group if it becomes empty ---
+    // --- Final Redirect ---
     if ($is_editing && empty($submitted_q_ids)) {
         $wpdb->delete("{$wpdb->prefix}qp_question_groups", ['group_id' => $group_id]);
         wp_safe_redirect(admin_url('admin.php?page=question-press&message=1'));
         exit;
     }
 
-    // --- Redirect on success ---
     $redirect_url = $is_editing
         ? admin_url('admin.php?page=qp-edit-group&group_id=' . $group_id . '&message=1')
         : admin_url('admin.php?page=qp-edit-group&group_id=' . $group_id . '&message=2');
-
-    // Check if the request was made via AJAX
+    
     if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest') {
         wp_send_json_success(['redirect_url' => $redirect_url]);
     }
 
-    // Fallback for non-AJAX submissions
     wp_safe_redirect($redirect_url);
     exit;
 }
@@ -1388,32 +1566,6 @@ function process_question_options($question_id, $q_data)
     }
 }
 
-function process_question_taxonomy($question_id, $q_data)
-{
-    global $wpdb;
-    $rel_table = "{$wpdb->prefix}qp_term_relationships";
-    $wpdb->delete($rel_table, ['object_id' => $question_id, 'object_type' => 'question']);
-
-    $topic_term_id = isset($_POST['topic_id']) ? absint($_POST['topic_id']) : 0;
-    $source_term_id = isset($_POST['source_id']) ? absint($_POST['source_id']) : 0;
-    $section_term_id = isset($_POST['section_id']) ? absint($_POST['section_id']) : 0;
-
-    $term_ids_to_link = [];
-    if ($topic_term_id > 0) $term_ids_to_link[] = $topic_term_id;
-    if ($section_term_id > 0) {
-        $term_ids_to_link[] = $section_term_id;
-    } elseif ($source_term_id > 0) {
-        $term_ids_to_link[] = $source_term_id;
-    }
-    $label_term_ids = isset($q_data['labels']) ? array_map('absint', $q_data['labels']) : [];
-    $term_ids_to_link = array_merge($term_ids_to_link, $label_term_ids);
-    foreach (array_unique($term_ids_to_link) as $term_id) {
-        if ($term_id > 0) {
-            $wpdb->insert($rel_table, ['object_id' => $question_id, 'term_id' => $term_id, 'object_type' => 'question']);
-        }
-    }
-}
-
 /**
  * AJAX handler to create a new backup.
  */
@@ -1481,7 +1633,6 @@ function qp_perform_backup($type = 'manual')
 
     $backup_data['plugin_settings'] = [
         'qp_settings' => get_option('qp_settings'),
-        'qp_next_custom_question_id' => get_option('qp_next_custom_question_id'),
     ];
 
     $json_data = json_encode($backup_data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
@@ -1871,7 +2022,6 @@ function qp_perform_restore($filename)
 
     if (isset($backup_data['plugin_settings'])) {
         update_option('qp_settings', $backup_data['plugin_settings']['qp_settings']);
-        update_option('qp_next_custom_question_id', $backup_data['plugin_settings']['qp_next_custom_question_id']);
     }
 
     $images_dir = trailingslashit($temp_extract_dir) . 'images';
@@ -1924,26 +2074,34 @@ function qp_get_source_hierarchy_for_question($question_id)
     $rel_table = $wpdb->prefix . 'qp_term_relationships';
     $term_table = $wpdb->prefix . 'qp_terms';
     $tax_table = $wpdb->prefix . 'qp_taxonomies';
+    $questions_table = $wpdb->prefix . 'qp_questions';
 
-    // Find the most specific source term linked to the question.
+    // Step 1: Get the group_id for the given question.
+    $group_id = $wpdb->get_var($wpdb->prepare("SELECT group_id FROM {$questions_table} WHERE question_id = %d", $question_id));
+
+    if (!$group_id) {
+        return [];
+    }
+
+    // Step 2: Find the most specific source term linked to the GROUP.
     $term_id = $wpdb->get_var($wpdb->prepare(
         "SELECT r.term_id
          FROM {$rel_table} r
          JOIN {$term_table} t ON r.term_id = t.term_id
-         WHERE r.object_id = %d AND r.object_type = 'question'
+         WHERE r.object_id = %d AND r.object_type = 'group'
          AND t.taxonomy_id = (SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'source')
          LIMIT 1",
-        $question_id
+        $group_id
     ));
 
     if (!$term_id) {
-        return []; // Return an empty array if no source is found
+        return []; // Return an empty array if no source is found for the group
     }
 
     $lineage = [];
     $current_term_id = $term_id;
 
-    // Loop up the hierarchy to trace back to the top-level parent (source).
+    // Step 3: Loop up the hierarchy to trace back to the top-level parent (source).
     for ($i = 0; $i < 10; $i++) { // Safety limit to prevent infinite loops
         if (!$current_term_id) break;
         $term = $wpdb->get_row($wpdb->prepare("SELECT name, parent FROM {$term_table} WHERE term_id = %d", $current_term_id));
@@ -2003,21 +2161,20 @@ function qp_get_or_create_term($name, $taxonomy_id, $parent_id = 0)
     return (int) $wpdb->insert_id;
 }
 
+
+
 function qp_get_quick_edit_form_ajax()
 {
     // =========================================================================
     // Step 0: Initial Setup & Security
     // =========================================================================
-    // Ensure the request is valid and coming from the right place.
     check_ajax_referer('qp_get_quick_edit_form_nonce', 'nonce');
 
-    // Get the question ID from the AJAX request.
     $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
     if (!$question_id) {
         wp_send_json_error(['message' => 'No Question ID provided.']);
     }
 
-    // Set up global WordPress database object and table names for clarity.
     global $wpdb;
     $term_table = $wpdb->prefix . 'qp_terms';
     $tax_table = $wpdb->prefix . 'qp_taxonomies';
@@ -2027,200 +2184,127 @@ function qp_get_quick_edit_form_ajax()
     $options_table = $wpdb->prefix . 'qp_options';
 
     // =========================================================================
-    // Step 1: Fetch Current Data for the Specific Question
+    // Step 1: Fetch Current Data & Determine Subject/Topic Hierarchy
     // =========================================================================
-    // This step gathers all the currently associated data for the question being edited.
-
-    // --- 1a: Fetch basic question and group info ---
-    $question = $wpdb->get_row($wpdb->prepare(
-        "SELECT q.question_text, q.group_id, g.direction_text, g.is_pyq, g.pyq_year
-         FROM {$questions_table} q
-         LEFT JOIN {$groups_table} g ON q.group_id = g.group_id
-         WHERE q.question_id = %d",
-        $question_id
-    ));
-
+    $question = $wpdb->get_row($wpdb->prepare("SELECT q.question_text, q.group_id, g.direction_text, g.is_pyq, g.pyq_year FROM {$questions_table} q LEFT JOIN {$groups_table} g ON q.group_id = g.group_id WHERE q.question_id = %d", $question_id));
     if (!$question) {
         wp_send_json_error(['message' => 'Question not found.']);
     }
-
     $group_id = $question->group_id;
 
-    // --- 1b: Fetch all terms directly related to the QUESTION (Topic, Source/Section, Labels) ---
-    $question_terms_raw = $wpdb->get_results($wpdb->prepare(
-        "SELECT t.term_id, t.parent, tax.taxonomy_name
-         FROM {$rel_table} r
-         JOIN {$term_table} t ON r.term_id = t.term_id
-         JOIN {$tax_table} tax ON t.taxonomy_id = tax.taxonomy_id
-         WHERE r.object_id = %d AND r.object_type = 'question'",
-        $question_id
+    // --- 1a: Find the most specific topic linked to the group and trace its lineage ---
+    $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'subject'");
+    $linked_topic_id = $wpdb->get_var($wpdb->prepare("SELECT term_id FROM {$rel_table} WHERE object_id = %d AND object_type = 'group' AND term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id = %d AND parent != 0)", $group_id, $subject_tax_id));
+
+    $current_topic_id = 0;
+    $current_subject_id = 0;
+
+    if ($linked_topic_id) {
+        $current_topic_id = $linked_topic_id;
+        $parent_id = $wpdb->get_var($wpdb->prepare("SELECT parent FROM $term_table WHERE term_id = %d", $linked_topic_id));
+        // Trace upwards to find the top-level subject (where parent = 0)
+        for ($i = 0; $i < 10; $i++) { // Safety break
+            if ($parent_id == 0) {
+                $current_subject_id = $wpdb->get_var($wpdb->prepare("SELECT term_id FROM $term_table WHERE term_id = %d", $linked_topic_id));
+                break;
+            }
+            $current_term = $wpdb->get_row($wpdb->prepare("SELECT term_id, parent FROM $term_table WHERE term_id = %d", $parent_id));
+            if (!$current_term) break;
+            $linked_topic_id = $current_term->term_id;
+            $parent_id = $current_term->parent;
+        }
+    } else {
+        // If no topic is linked, check for a direct subject link
+        $current_subject_id = $wpdb->get_var($wpdb->prepare("SELECT term_id FROM {$rel_table} WHERE object_id = %d AND object_type = 'group' AND term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id = %d AND parent = 0)", $group_id, $subject_tax_id));
+    }
+
+
+    // --- 1b: Fetch group-level source/section and trace its lineage ---
+    $source_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'source'");
+    $linked_source_term_id = $wpdb->get_var($wpdb->prepare(
+        "SELECT term_id FROM {$rel_table} WHERE object_id = %d AND object_type = 'group' AND term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id = %d)",
+        $group_id,
+        $source_tax_id
     ));
 
-    // Initialize variables to store the current term IDs.
-    $current_topic_id = 0;
     $current_source_id = 0;
     $current_section_id = 0;
+
+    if ($linked_source_term_id) {
+        $term = $wpdb->get_row($wpdb->prepare("SELECT term_id, parent FROM $term_table WHERE term_id = %d", $linked_source_term_id));
+        if ($term && $term->parent != 0) {
+            // It's a section or subsection, so this is our selected "section"
+            $current_section_id = $term->term_id;
+            
+            // Now, find its top-level parent (the source)
+            $parent_id = $term->parent;
+            for ($i = 0; $i < 10; $i++) { // Safety break
+                $parent_term = $wpdb->get_row($wpdb->prepare("SELECT term_id, parent FROM $term_table WHERE term_id = %d", $parent_id));
+                if (!$parent_term || $parent_term->parent == 0) {
+                    $current_source_id = $parent_id;
+                    break;
+                }
+                $parent_id = $parent_term->parent;
+            }
+        } else if ($term) {
+            // It's a top-level source
+            $current_source_id = $term->term_id;
+        }
+    }
+
+    // --- 1c: Fetch other term relationships (Labels, Exam) ---
+    // (This part of the original function remains the same)
+    $question_terms_raw = $wpdb->get_results($wpdb->prepare("SELECT t.term_id, t.parent, tax.taxonomy_name FROM {$rel_table} r JOIN {$term_table} t ON r.term_id = t.term_id JOIN {$tax_table} tax ON t.taxonomy_id = tax.taxonomy_id WHERE r.object_id = %d AND r.object_type = 'question'", $question_id));
     $current_labels = [];
-
-    // Loop through the raw results and assign IDs based on their taxonomy and hierarchy.
     foreach ($question_terms_raw as $term) {
-        switch ($term->taxonomy_name) {
-            case 'subject':
-                // A term in the 'subject' taxonomy linked to a question is always a topic.
-                if ($term->parent != 0) {
-                    $current_topic_id = $term->term_id;
-                }
-                break;
-            case 'source':
-                if ($term->parent != 0) {
-                    // This is a section or sub-section.
-                    $current_section_id = $term->term_id;
-                    $parent_id = $term->parent;
-                    // Loop upwards until we find the top-level parent (where parent = 0)
-                    while ($parent_id != 0) {
-                        $current_source_id = $parent_id; // This is a potential source
-                        $parent_id = $wpdb->get_var($wpdb->prepare("SELECT parent FROM $term_table WHERE term_id = %d", $current_source_id));
-                    }
-                } else {
-                    // This is a top-level source itself.
-                    $current_source_id = $term->term_id;
-                    $current_section_id = 0; // No section is selected in this case
-                }
-                break;
-            case 'label':
-                $current_labels[] = $term->term_id;
-                break;
+        if ($term->taxonomy_name === 'label') {
+            $current_labels[] = $term->term_id;
         }
     }
+    $exam_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'exam'");
+    $current_exam_id = $wpdb->get_var($wpdb->prepare("SELECT term_id FROM {$rel_table} WHERE object_id = %d AND object_type = 'group' AND term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id = %d)", $group_id, $exam_tax_id));
 
-    // --- 1c: Fetch all terms related to the GROUP (Subject, Exam) ---
-    $current_subject_id = 0;
-    $current_exam_id = 0;
-
-    if ($group_id) {
-        $group_terms_raw = $wpdb->get_results($wpdb->prepare(
-            "SELECT t.term_id, tax.taxonomy_name
-             FROM {$rel_table} r
-             JOIN {$term_table} t ON r.term_id = t.term_id
-             JOIN {$tax_table} tax ON t.taxonomy_id = tax.taxonomy_id
-             WHERE r.object_id = %d AND r.object_type = 'group'",
-            $group_id
-        ));
-
-        foreach ($group_terms_raw as $term) {
-            if ($term->taxonomy_name === 'subject') {
-                $current_subject_id = $term->term_id;
-            }
-            if ($term->taxonomy_name === 'exam') {
-                $current_exam_id = $term->term_id;
-            }
-        }
-    }
 
     // =========================================================================
     // Step 2: Fetch All Possible Terms for Form Dropdowns
     // =========================================================================
-    // This step gathers all possible options that will populate the form's select fields.
-
-    // --- 2a: Get Taxonomy IDs for easier querying ---
-    $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'subject'");
-    $source_tax_id  = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'source'");
-    $exam_tax_id    = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'exam'");
-    $label_tax_id   = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'label'");
-
-    // --- 2b: Fetch all terms, categorized by type ---
     $all_subjects = $wpdb->get_results($wpdb->prepare("SELECT term_id AS subject_id, name AS subject_name FROM {$term_table} WHERE taxonomy_id = %d AND parent = 0", $subject_tax_id));
-    $all_topics   = $wpdb->get_results($wpdb->prepare("SELECT term_id AS topic_id, name AS topic_name, parent AS subject_id FROM {$term_table} WHERE taxonomy_id = %d AND parent != 0", $subject_tax_id));
-    $all_sources  = $wpdb->get_results($wpdb->prepare("SELECT term_id AS source_id, name AS source_name FROM {$term_table} WHERE taxonomy_id = %d AND parent = 0", $source_tax_id));
-    $all_sections = $wpdb->get_results($wpdb->prepare("SELECT term_id AS section_id, name AS section_name, parent AS source_id FROM {$term_table} WHERE taxonomy_id = %d AND parent != 0", $source_tax_id));
+    // Fetch ALL subjects and topics together for JS to build the hierarchy
+    $all_subject_terms = $wpdb->get_results($wpdb->prepare("SELECT term_id as id, name, parent FROM {$term_table} WHERE taxonomy_id = %d", $subject_tax_id));
+
+    $source_tax_id  = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'source'");
+    $all_source_terms = $wpdb->get_results($wpdb->prepare("SELECT term_id as id, name, parent as parent_id FROM {$term_table} WHERE taxonomy_id = %d", $source_tax_id));
+
     $all_exams    = $wpdb->get_results($wpdb->prepare("SELECT term_id AS exam_id, name AS exam_name FROM {$term_table} WHERE taxonomy_id = %d", $exam_tax_id));
+    $label_tax_id   = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'label'");
     $all_labels   = $wpdb->get_results($wpdb->prepare("SELECT term_id as label_id, name as label_name FROM {$term_table} WHERE taxonomy_id = %d", $label_tax_id));
 
-    // --- 2c: Combine sources and sections for hierarchical dropdown ---
-    $all_source_terms = [];
-    foreach ($all_sources as $source) {
-        $all_source_terms[] = (object)[
-            'id' => $source->source_id,
-            'name' => $source->source_name,
-            'parent_id' => 0
-        ];
-    }
-    foreach ($all_sections as $section) {
-        $all_source_terms[] = (object)[
-            'id' => $section->section_id,
-            'name' => $section->section_name,
-            'parent_id' => $section->source_id
-        ];
-    }
-
-    // --- 2d: Fetch relationship links for dynamic dropdowns ---
     $exam_subject_links   = $wpdb->get_results("SELECT object_id AS exam_id, term_id AS subject_id FROM {$rel_table} WHERE object_type = 'exam_subject_link'");
     $source_subject_links = $wpdb->get_results("SELECT object_id AS source_id, term_id AS subject_id FROM {$rel_table} WHERE object_type = 'source_subject_link'");
-
-    // --- 2e: Fetch question options ---
     $options = $wpdb->get_results($wpdb->prepare("SELECT option_id, option_text, is_correct FROM {$options_table} WHERE question_id = %d ORDER BY option_id ASC", $question_id));
 
     // =========================================================================
-    // Step 3: Prepare Data Maps for JavaScript
+    // Step 3 & 4: Prepare Data and Send Form HTML
     // =========================================================================
-    // These PHP arrays will be converted to JavaScript objects to power the dynamic form fields.
-
-    // Map topics to their parent subject ID.
-    $topics_by_subject = [];
-    foreach ($all_topics as $topic) {
-        $topics_by_subject[$topic->subject_id][] = ['id' => $topic->topic_id, 'name' => $topic->topic_name];
-    }
-
-    // Map sources to their associated subject ID using the pre-built links.
-    $all_sources_map = [];
-    foreach ($all_sources as $source) {
-        $all_sources_map[$source->source_id] = $source->source_name;
-    }
-    $sources_by_subject = [];
-    foreach ($source_subject_links as $link) {
-        // Ensure the source from the link still exists.
-        if (isset($all_sources_map[$link->source_id])) {
-            $sources_by_subject[$link->subject_id][] = [
-                'id'   => $link->source_id,
-                'name' => $all_sources_map[$link->source_id]
-            ];
-        }
-    }
-
-    // Map sections to their parent source ID.
-    $sections_by_source = [];
-    foreach ($all_sections as $section) {
-        $sections_by_source[$section->source_id][] = ['id' => $section->section_id, 'name' => $section->section_name];
-    }
-
-    // =========================================================================
-    // Step 4: Generate and Send the Form HTML
-    // =========================================================================
-    // Start output buffering to capture all the generated HTML into a variable.
     ob_start();
     ?>
     <script>
+        // This global object holds all the data our dynamic form needs.
         var qp_quick_edit_data = <?php echo wp_json_encode([
-                                        // Data maps for dynamic dropdowns
-                                        'topics_by_subject'   => $topics_by_subject,
-                                        'sources_by_subject'  => $sources_by_subject,
-                                        'sections_by_source'  => $sections_by_source,
-                                        'exam_subject_links'  => $exam_subject_links,
-
-                                        // All possible options for dropdowns
-                                        'all_subjects'        => $all_subjects,
-                                        'all_exams'           => $all_exams,
-                                        'all_labels'          => $all_labels,
-                                        'all_source_terms'    => $all_source_terms,
-
-                                        // The currently selected values for this question
-                                        'current_subject_id'  => $current_subject_id,
-                                        'current_topic_id'    => $current_topic_id,
-                                        'current_source_id'   => $current_source_id,
-                                        'current_section_id'  => $current_section_id,
-                                        'current_exam_id'     => $current_exam_id,
-                                        'current_labels'      => $current_labels,
-                                    ]); ?>;
+            'all_subjects'        => $all_subjects,
+            'all_subject_terms'   => $all_subject_terms, // Used to build topic hierarchy
+            'all_source_terms'    => $all_source_terms,
+            'all_exams'           => $all_exams,
+            'all_labels'          => $all_labels,
+            'exam_subject_links'  => $exam_subject_links,
+            'source_subject_links'=> $source_subject_links,
+            'current_subject_id'  => $current_subject_id,
+            'current_topic_id'    => $current_topic_id,
+            'current_source_id'   => $current_source_id,
+            'current_section_id'  => $current_section_id,
+            'current_exam_id'     => $current_exam_id,
+            'current_labels'      => $current_labels,
+        ]); ?>;
     </script>
 
     <form class="quick-edit-form-wrapper">
@@ -2508,80 +2592,94 @@ function qp_save_quick_edit_data_ajax()
 
     // Step 3: Get necessary IDs for processing
     $group_id = $wpdb->get_var($wpdb->prepare("SELECT group_id FROM $q_table WHERE question_id = %d", $question_id));
-    $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'subject'");
-    $exam_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'exam'");
 
-    // Step 4: Update Group-Level Data and Relationships
+    // Step 4: Update Group-Level Data (PYQ status)
     if ($group_id) {
-        // Update PYQ status and year directly on the group table
         $wpdb->update($g_table, [
             'is_pyq' => isset($data['is_pyq']) ? 1 : 0,
             'pyq_year' => (isset($data['is_pyq']) && !empty($data['pyq_year'])) ? sanitize_text_field($data['pyq_year']) : null
         ], ['group_id' => $group_id]);
+    }
+    
+    // Step 5: CONSOLIDATED Group and Question-Level Term Relationships
+    if ($group_id) {
+        // --- 5a: Handle ALL Group-Level Relationships ---
+        $group_taxonomies = ['subject', 'source', 'exam'];
+        $tax_ids_to_clear = [];
 
-        // Delete old subject and exam relationships for this group to prevent duplicates
-        $wpdb->query($wpdb->prepare(
-            "DELETE FROM {$rel_table} WHERE object_id = %d AND object_type = 'group' AND term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id IN (%d, %d))",
-            $group_id,
-            $subject_tax_id,
-            $exam_tax_id
-        ));
-
-        // Insert the new subject relationship for the group
-        if (!empty($data['subject_id'])) {
-            $wpdb->insert($rel_table, ['object_id' => $group_id, 'term_id' => absint($data['subject_id']), 'object_type' => 'group']);
+        foreach($group_taxonomies as $tax_name) {
+            $tax_id = $wpdb->get_var($wpdb->prepare("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = %s", $tax_name));
+            if ($tax_id) $tax_ids_to_clear[] = $tax_id;
         }
 
-        // Insert the new exam relationship if it's a PYQ and an exam is selected
+        // Delete all existing group relationships for these taxonomies in one query
+        if (!empty($tax_ids_to_clear)) {
+            $tax_ids_placeholder = implode(',', $tax_ids_to_clear);
+            $wpdb->query($wpdb->prepare(
+                "DELETE FROM {$rel_table} 
+                 WHERE object_id = %d AND object_type = 'group' 
+                 AND term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id IN ($tax_ids_placeholder))",
+                $group_id
+            ));
+        }
+
+        // Insert new relationships for the group
+        $group_terms_to_apply = [];
+        // Subject/Topic: Link the group to the most specific topic selected.
+        if (!empty($data['topic_id'])) $group_terms_to_apply[] = absint($data['topic_id']);
+        
+        // Source/Section: Link the group to the most specific term (section > source).
+        if (!empty($data['section_id'])) {
+             $group_terms_to_apply[] = absint($data['section_id']);
+        } elseif (!empty($data['source_id'])) {
+             $group_terms_to_apply[] = absint($data['source_id']);
+        }
+
+        // Exam: Link the group if it's a PYQ and an exam is selected
         if (isset($data['is_pyq']) && !empty($data['exam_id'])) {
-            $wpdb->insert($rel_table, ['object_id' => $group_id, 'term_id' => absint($data['exam_id']), 'object_type' => 'group']);
+            $group_terms_to_apply[] = absint($data['exam_id']);
+        }
+
+        // Insert all new group relationships
+        foreach (array_unique($group_terms_to_apply) as $term_id) {
+            if ($term_id > 0) {
+                 $wpdb->insert($rel_table, ['object_id' => $group_id, 'term_id' => $term_id, 'object_type' => 'group']);
+            }
         }
     }
 
-    // Step 5: Update Question-Level Relationships (Topic, Source/Section, Labels)
-    // Delete all existing term relationships for this specific question first.
-    $wpdb->delete($rel_table, ['object_id' => $question_id, 'object_type' => 'question']);
-
-    // Collect all new term IDs to be linked to the question
-    $term_ids_to_link = [];
-    if (!empty($data['topic_id'])) $term_ids_to_link[] = absint($data['topic_id']);
-
-    // A question should be linked to its most specific source term (Section > Source)
-    if (!empty($data['section_id'])) {
-        $term_ids_to_link[] = absint($data['section_id']);
-    } elseif (!empty($data['source_id'])) {
-        $term_ids_to_link[] = absint($data['source_id']);
+    // --- 5b: Handle Question-Level Relationships (Labels) ---
+    // (This part remains the same as it correctly targets the question)
+    $label_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'label'");
+    if($label_tax_id){
+        $wpdb->query($wpdb->prepare(
+            "DELETE FROM {$rel_table} 
+             WHERE object_id = %d AND object_type = 'question' 
+             AND term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id = %d)",
+            $question_id,
+            $label_tax_id
+        ));
     }
-
-    // Add any selected labels
+    
     if (!empty($data['labels']) && is_array($data['labels'])) {
-        $term_ids_to_link = array_merge($term_ids_to_link, array_map('absint', $data['labels']));
-    }
-
-    // Insert the new relationships
-    foreach (array_unique($term_ids_to_link) as $term_id) {
-        if ($term_id > 0) {
-            $wpdb->insert($rel_table, ['object_id' => $question_id, 'term_id' => $term_id, 'object_type' => 'question']);
+        foreach ($data['labels'] as $label_id) {
+             if (absint($label_id) > 0) {
+                $wpdb->insert($rel_table, ['object_id' => $question_id, 'term_id' => absint($label_id), 'object_type' => 'question']);
+            }
         }
     }
 
     // Step 6: Update the Correct Answer Option
     $correct_option_id = isset($data['correct_option_id']) ? absint($data['correct_option_id']) : 0;
     if ($correct_option_id > 0) {
-        // First, set all options for this question to incorrect
         $wpdb->update("{$wpdb->prefix}qp_options", ['is_correct' => 0], ['question_id' => $question_id]);
-        // Then, set the selected option as correct
         $wpdb->update("{$wpdb->prefix}qp_options", ['is_correct' => 1], ['option_id' => $correct_option_id, 'question_id' => $question_id]);
     }
 
     // Step 7: Re-render the updated table row and send it back
     $list_table = new QP_Questions_List_Table();
-
-    // Re-populate the $_REQUEST superglobal with the filters sent from JavaScript
-    // This makes the prepare_items() function aware of the current page context.
     $filters = ['status', 'filter_by_subject', 'filter_by_topic', 'filter_by_source', 'filter_by_label', 's'];
     foreach ($filters as $filter) {
-        // We get the status from the original row data, not the filters at the top
         if ($filter === 'status' && isset($_POST['status'])) {
             $_REQUEST[$filter] = sanitize_key($_POST['status']);
         } elseif (isset($_POST[$filter])) {
@@ -2604,12 +2702,9 @@ function qp_save_quick_edit_data_ajax()
         $row_html = ob_get_clean();
         wp_send_json_success(['row_html' => $row_html]);
     } else {
-        // If the item is not found, it's because it no longer matches the active filters.
-        // Send back an empty row_html to signal the JavaScript to remove the row from the view.
         wp_send_json_success(['row_html' => '']);
     }
 
-    // Fallback error if the row could not be re-rendered
     wp_send_json_error(['message' => 'Could not retrieve the updated row data. Please refresh the page.']);
 }
 add_action('wp_ajax_save_quick_edit_data', 'qp_save_quick_edit_data_ajax');
@@ -2935,54 +3030,45 @@ function qp_get_sections_for_subject_ajax()
     $term_table = $wpdb->prefix . 'qp_terms';
     $rel_table = $wpdb->prefix . 'qp_term_relationships';
     $tax_table = $wpdb->prefix . 'qp_taxonomies';
-    $questions_table = $wpdb->prefix . 'qp_questions';
     $attempts_table = $wpdb->prefix . 'qp_user_attempts';
-
     $source_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'source'");
 
-    // Find all question IDs linked to the selected topic
-    $question_ids_in_topic = $wpdb->get_col($wpdb->prepare(
-        "SELECT object_id FROM $rel_table WHERE term_id = %d AND object_type = 'question'",
-        $topic_id
-    ));
+    // 1. Find all groups linked to the selected topic.
+    $group_ids = $wpdb->get_col($wpdb->prepare("SELECT object_id FROM $rel_table WHERE term_id = %d AND object_type = 'group'", $topic_id));
 
-    if (empty($question_ids_in_topic)) {
+    if (empty($group_ids)) {
         wp_send_json_success(['sections' => []]);
+        return;
     }
+    $group_ids_placeholder = implode(',', $group_ids);
 
-    $qids_placeholder = implode(',', $question_ids_in_topic);
-
-    // Find all source/section terms linked to those questions
+    // 2. Find all source/section terms linked to those groups.
     $source_terms = $wpdb->get_results($wpdb->prepare(
         "SELECT DISTINCT t.term_id, t.name, t.parent 
          FROM {$term_table} t
          JOIN {$rel_table} r ON t.term_id = r.term_id
-         WHERE r.object_id IN ($qids_placeholder) AND r.object_type = 'question' AND t.taxonomy_id = %d
+         WHERE r.object_id IN ($group_ids_placeholder) AND r.object_type = 'group' AND t.taxonomy_id = %d
          ORDER BY t.parent, t.name ASC",
         $source_tax_id
     ));
 
-    // Get all question IDs the user has already attempted.
-    $attempted_q_ids = $wpdb->get_col($wpdb->prepare(
-        "SELECT DISTINCT question_id FROM {$attempts_table} WHERE user_id = %d AND status = 'answered'",
-        $user_id
-    ));
+    // 3. Get all question IDs the user has already attempted.
+    $attempted_q_ids = $wpdb->get_col($wpdb->prepare("SELECT DISTINCT question_id FROM {$attempts_table} WHERE user_id = %d AND status = 'answered'", $user_id));
     $attempted_q_ids_placeholder = !empty($attempted_q_ids) ? implode(',', array_map('absint', $attempted_q_ids)) : '0';
 
     $results = [];
     foreach ($source_terms as $term) {
-        // We are only interested in sections (terms with parents) for this dropdown
-        if ($term->parent > 0) {
+        if ($term->parent > 0) { // We are only interested in sections
             $parent_source_name = $wpdb->get_var($wpdb->prepare("SELECT name FROM $term_table WHERE term_id = %d", $term->parent));
 
             // Subquery to count unattempted questions in this specific section and topic
             $unattempted_count = $wpdb->get_var($wpdb->prepare(
-                "SELECT COUNT(q.question_id) 
-                 FROM {$questions_table} q
-                 JOIN {$rel_table} r_topic ON q.question_id = r_topic.object_id AND r_topic.object_type = 'question'
-                 JOIN {$rel_table} r_section ON q.question_id = r_section.object_id AND r_section.object_type = 'question'
-                 WHERE r_topic.term_id = %d 
-                 AND r_section.term_id = %d
+                "SELECT COUNT(q.question_id)
+                 FROM {$wpdb->prefix}qp_questions q
+                 JOIN {$rel_table} r_group_topic ON q.group_id = r_group_topic.object_id AND r_group_topic.object_type = 'group'
+                 JOIN {$rel_table} r_group_section ON q.group_id = r_group_section.object_id AND r_group_section.object_type = 'group'
+                 WHERE r_group_topic.term_id = %d 
+                 AND r_group_section.term_id = %d
                  AND q.question_id NOT IN ({$attempted_q_ids_placeholder})",
                 $topic_id,
                 $term->term_id
@@ -3018,57 +3104,51 @@ function qp_get_unattempted_counts_ajax()
     $a_table = $wpdb->prefix . 'qp_user_attempts';
     $rel_table = $wpdb->prefix . 'qp_term_relationships';
     $term_table = $wpdb->prefix . 'qp_terms';
+    $tax_table = $wpdb->prefix . 'qp_taxonomies';
 
-    // 1. Get all question IDs the user has already attempted.
+    // 1. Get all question IDs the user has already answered.
     $attempted_q_ids = $wpdb->get_col($wpdb->prepare(
         "SELECT DISTINCT question_id FROM {$a_table} WHERE user_id = %d AND status = 'answered'",
         $user_id
     ));
     $attempted_q_ids_placeholder = !empty($attempted_q_ids) ? implode(',', array_map('absint', $attempted_q_ids)) : '0';
 
-    // 2. Get all unattempted questions and their term relationships
-    $results = $wpdb->get_results("
+    // 2. Get all unattempted questions and trace them to their parent subject.
+    $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'subject'");
+    
+    // This query joins from the unattempted question, up to its group, to its linked term (topic),
+    // and finally to that term's parent (subject).
+    $results = $wpdb->get_results($wpdb->prepare("
         SELECT 
-            r.term_id,
-            t.parent
+            t.term_id as topic_id,
+            t.parent as subject_id
         FROM {$q_table} q
-        JOIN {$rel_table} r ON q.question_id = r.object_id AND r.object_type = 'question'
+        JOIN {$rel_table} r ON q.group_id = r.object_id AND r.object_type = 'group'
         JOIN {$term_table} t ON r.term_id = t.term_id
-        WHERE q.status = 'publish' AND q.question_id NOT IN ({$attempted_q_ids_placeholder})
-    ");
+        WHERE q.status = 'publish' 
+          AND q.question_id NOT IN ({$attempted_q_ids_placeholder})
+          AND t.taxonomy_id = %d
+          AND t.parent != 0
+    ", $subject_tax_id));
 
-    // 3. Process the results into a structured array for the frontend.
+    // 3. Process the results into a structured count array for the frontend.
     $counts = [
         'by_subject' => [],
         'by_topic'   => [],
-        'by_section' => [],
     ];
 
-    $term_parents = [];
     foreach ($results as $row) {
-        $term_id = $row->term_id;
-        $parent_id = $row->parent;
-
-        // This is a topic or section, so it has a parent
-        if ($parent_id != 0) {
-            // Get the parent's parent (for sections under topics under sources)
-            if (!isset($term_parents[$parent_id])) {
-                $term_parents[$parent_id] = $wpdb->get_var($wpdb->prepare("SELECT parent FROM $term_table WHERE term_id = %d", $parent_id));
-            }
-            $grandparent_id = $term_parents[$parent_id];
-
-            // It's a topic (parent is a subject)
-            if ($grandparent_id == 0) {
-                if (!isset($counts['by_topic'][$term_id])) $counts['by_topic'][$term_id] = 0;
-                $counts['by_topic'][$term_id]++;
-
-                if (!isset($counts['by_subject'][$parent_id])) $counts['by_subject'][$parent_id] = 0;
-                $counts['by_subject'][$parent_id]++;
-            } else { // It's a section
-                if (!isset($counts['by_section'][$term_id])) $counts['by_section'][$term_id] = 0;
-                $counts['by_section'][$term_id]++;
-            }
+        // Increment count for the specific topic
+        if (!isset($counts['by_topic'][$row->topic_id])) {
+            $counts['by_topic'][$row->topic_id] = 0;
         }
+        $counts['by_topic'][$row->topic_id]++;
+
+        // Increment count for the parent subject
+        if (!isset($counts['by_subject'][$row->subject_id])) {
+            $counts['by_subject'][$row->subject_id] = 0;
+        }
+        $counts['by_subject'][$row->subject_id]++;
     }
 
     wp_send_json_success(['counts' => $counts]);
@@ -3083,211 +3163,130 @@ function qp_start_practice_session_ajax()
     $user_id = get_current_user_id();
     $sessions_table = $wpdb->prefix . 'qp_user_sessions';
 
-    // --- NEW: Duplicate Session Check ---
-    $is_section_practice = isset($_POST['qp_section']) && is_numeric($_POST['qp_section']);
+    // --- Session Settings ---
+    $subjects_raw = isset($_POST['qp_subject']) && is_array($_POST['qp_subject']) ? $_POST['qp_subject'] : [];
+    $topics_raw = isset($_POST['qp_topic']) && is_array($_POST['qp_topic']) ? $_POST['qp_topic'] : [];
+    $section_id = isset($_POST['qp_section']) && is_numeric($_POST['qp_section']) ? absint($_POST['qp_section']) : 'all';
+    
+    $practice_mode = ($section_id !== 'all') ? 'Section Wise Practice' : 'normal';
 
-    if ($is_section_practice) {
-        $section_id = absint($_POST['qp_section']);
+    if ($practice_mode === 'normal' && empty($subjects_raw)) {
+        wp_send_json_error(['message' => 'Please select at least one subject.']);
+        return;
+    }
 
-        // Find any active or paused session for this user and this specific section
-        $existing_sessions = $wpdb->get_results($wpdb->prepare(
-            "SELECT session_id, settings_snapshot FROM {$sessions_table} WHERE user_id = %d AND status IN ('active', 'paused')",
-            $user_id
-        ));
+    $session_settings = [
+        'practice_mode'    => $practice_mode,
+        'subjects'         => $subjects_raw,
+        'topics'           => $topics_raw,
+        'section_id'       => $section_id,
+        'pyq_only'         => isset($_POST['qp_pyq_only']),
+        'include_attempted' => isset($_POST['qp_include_attempted']),
+        'marks_correct'    => isset($_POST['scoring_enabled']) ? floatval($_POST['qp_marks_correct']) : null,
+        'marks_incorrect'  => isset($_POST['scoring_enabled']) ? -abs(floatval($_POST['qp_marks_incorrect'])) : null,
+        'timer_enabled'    => isset($_POST['qp_timer_enabled']),
+        'timer_seconds'    => isset($_POST['qp_timer_seconds']) ? absint($_POST['qp_timer_seconds']) : 60
+    ];
 
+    // --- Duplicate Session Check for Section Practice ---
+    if ($practice_mode === 'Section Wise Practice') {
+        $existing_sessions = $wpdb->get_results($wpdb->prepare("SELECT session_id, settings_snapshot FROM {$sessions_table} WHERE user_id = %d AND status IN ('active', 'paused')", $user_id));
         foreach ($existing_sessions as $session) {
             $settings = json_decode($session->settings_snapshot, true);
             if (isset($settings['section_id']) && (int)$settings['section_id'] === $section_id) {
-                // A duplicate was found. Send back a specific error response.
-                wp_send_json_error([
-                    'code' => 'duplicate_session_exists',
-                    'message' => 'An active or paused session for this section already exists.',
-                    'session_id' => $session->session_id
-                ]);
-                return; // Stop execution
+                wp_send_json_error(['code' => 'duplicate_session_exists', 'message' => 'An active or paused session for this section already exists.', 'session_id' => $session->session_id]);
+                return;
             }
         }
     }
-
-    $practice_mode = isset($_POST['practice_mode']) ? sanitize_key($_POST['practice_mode']) : 'normal';
-
-    // Get a list of all question IDs that have an open report.
+    
+    // --- Table Names ---
+    $q_table = $wpdb->prefix . 'qp_questions';
+    $g_table = $wpdb->prefix . 'qp_question_groups';
+    $a_table = $wpdb->prefix . 'qp_user_attempts';
+    $rel_table = $wpdb->prefix . 'qp_term_relationships';
+    $term_table = $wpdb->prefix . 'qp_terms';
     $reports_table = $wpdb->prefix . 'qp_question_reports';
-    $reported_question_ids = $wpdb->get_col("SELECT DISTINCT question_id FROM {$reports_table} WHERE status = 'open'");
-    $exclude_sql = !empty($reported_question_ids) ? 'AND q.question_id NOT IN (' . implode(',', $reported_question_ids) . ')' : '';
 
-    if ($practice_mode === 'revision') {
-        $session_settings = [
-            'practice_mode'   => 'revision',
-            'selection_type'  => isset($_POST['revision_selection_type']) ? sanitize_key($_POST['revision_selection_type']) : 'auto',
-            'subjects'        => isset($_POST['revision_subjects']) ? array_map('absint', $_POST['revision_subjects']) : [],
-            'topics'          => isset($_POST['revision_topics']) ? array_map('absint', $_POST['revision_topics']) : [],
-            'questions_per'   => isset($_POST['qp_revision_questions_per_topic']) ? absint($_POST['qp_revision_questions_per_topic']) : 10,
-            'marks_correct'    => isset($_POST['scoring_enabled']) ? floatval($_POST['qp_marks_correct']) : null,
-            'marks_incorrect'  => isset($_POST['scoring_enabled']) ? -abs(floatval($_POST['qp_marks_incorrect'])) : null,
-            'timer_enabled'   => isset($_POST['qp_timer_enabled']),
-            'timer_seconds'   => isset($_POST['qp_timer_seconds']) ? absint($_POST['qp_timer_seconds']) : 60
-        ];
+    // --- Build Question Pool based on NEW Group Hierarchy ---
+    $joins = " FROM {$q_table} q JOIN {$g_table} g ON q.group_id = g.group_id";
+    $where_conditions = ["q.status = 'publish'"];
 
-        $user_id = get_current_user_id();
-        $attempts_table = $wpdb->prefix . 'qp_user_attempts';
-        $questions_table = $wpdb->prefix . 'qp_questions';
+    // 1. Determine the set of TOPIC term IDs to filter by.
+    $topic_term_ids_to_filter = [];
+    $subjects_selected = !empty($subjects_raw) && !in_array('all', $subjects_raw);
+    $topics_selected = !empty($topics_raw) && !in_array('all', $topics_raw);
 
-        $topic_ids_to_query = [];
-        if ($session_settings['selection_type'] === 'manual' && (!empty($session_settings['subjects']) || !empty($session_settings['topics']))) {
-            $topic_ids_to_query = $session_settings['topics'];
-            if (!empty($session_settings['subjects'])) {
-                $subject_ids_placeholder = implode(',', $session_settings['subjects']);
-                // Get all topic term_ids where parent is in the selected subject term_ids (new taxonomy system)
-                $topics_in_subjects = [];
-                if (!empty($subject_ids_placeholder)) {
-                    $topics_in_subjects = $wpdb->get_col(
-                        "SELECT term_id FROM {$wpdb->prefix}qp_terms WHERE parent IN ($subject_ids_placeholder)"
-                    );
-                }
-                $topic_ids_to_query = array_unique(array_merge($topic_ids_to_query, $topics_in_subjects));
-            }
-        } else {
-            $topic_ids_to_query = $wpdb->get_col($wpdb->prepare("SELECT DISTINCT q.topic_id FROM {$attempts_table} a JOIN {$questions_table} q ON a.question_id = q.question_id WHERE a.user_id = %d AND q.topic_id IS NOT NULL", $user_id));
-        }
-
-        if (empty($topic_ids_to_query)) {
-            wp_send_json_error(['html' => '<div class="qp-container"><p>No previously attempted questions found for the selected criteria. Try different options or a Normal Practice session.</p><button onclick="window.location.reload();" class="qp-button qp-button-secondary">Go Back</button></div>']);
-        }
-
-        $final_question_ids = [];
-        $questions_per_topic = $session_settings['questions_per'];
-
-        foreach ($topic_ids_to_query as $topic_id) {
-            // Apply the exclude filter to the revision query
-            $q_ids = $wpdb->get_col($wpdb->prepare("SELECT q.question_id FROM {$questions_table} q JOIN {$attempts_table} a ON q.question_id = a.question_id WHERE a.user_id = %d AND q.topic_id = %d {$exclude_sql} ORDER BY RAND() LIMIT %d", $user_id, $topic_id, $questions_per_topic)); // Attention! Change in query needed.
-            $final_question_ids = array_merge($final_question_ids, $q_ids);
-        }
-        $question_ids = array_unique($final_question_ids);
-        shuffle($question_ids);
-    } else {
-
-        // Attention! Change in query needed.
-        $subjects_raw = isset($_POST['qp_subject']) && is_array($_POST['qp_subject']) ? $_POST['qp_subject'] : [];
-        $topics_raw = isset($_POST['qp_topic']) && is_array($_POST['qp_topic']) ? $_POST['qp_topic'] : [];
-
-        if ($practice_mode === 'normal' && empty($subjects_raw)) {
-            wp_send_json_error(['message' => 'Please select at least one subject.']);
-        }
-
-        $section_id = isset($_POST['qp_section']) ? $_POST['qp_section'] : 'all';
-        $practice_mode = 'normal';
-        if ($section_id !== 'all' && is_numeric($section_id)) {
-            $practice_mode = 'Section Wise Practice';
-        }
-
-        $session_settings = [
-            'practice_mode'    => $practice_mode,
-            'subjects'         => $subjects_raw,
-            'topics'           => $topics_raw,
-            'section_id'       => $section_id,
-            'pyq_only'         => isset($_POST['qp_pyq_only']),
-            'include_attempted' => isset($_POST['qp_include_attempted']),
-            'marks_correct'    => isset($_POST['scoring_enabled']) ? floatval($_POST['qp_marks_correct']) : null,
-            'marks_incorrect'  => isset($_POST['scoring_enabled']) ? -abs(floatval($_POST['qp_marks_incorrect'])) : null,
-            'timer_enabled'    => isset($_POST['qp_timer_enabled']),
-            'timer_seconds'    => isset($_POST['qp_timer_seconds']) ? absint($_POST['qp_timer_seconds']) : 60
-        ];
-
-
-        $user_id = get_current_user_id();
-        $q_table = $wpdb->prefix . 'qp_questions';
-        $g_table = $wpdb->prefix . 'qp_question_groups';
-        $a_table = $wpdb->prefix . 'qp_user_attempts';
-
-        $user_id = get_current_user_id();
-        $q_table = $wpdb->prefix . 'qp_questions';
-        $g_table = $wpdb->prefix . 'qp_question_groups';
-        $a_table = $wpdb->prefix . 'qp_user_attempts';
-        $rel_table = $wpdb->prefix . 'qp_term_relationships';
-
-        $where_clauses = ["q.status = 'publish'"];
-        $query_params = [];
-        $joins = " LEFT JOIN {$g_table} g ON q.group_id = g.group_id";
-
-        // Handle Subject and Topic selection using the new taxonomy system
-        $term_ids_to_filter = [];
-        $subjects_selected = !empty($subjects_raw) && !in_array('all', $subjects_raw);
-        $topics_selected = !empty($topics_raw) && !in_array('all', $topics_raw);
-
-        if ($topics_selected) {
-            // If specific topics are chosen, they are the most specific filter.
-            $term_ids_to_filter = array_map('absint', $topics_raw);
-            $joins .= " JOIN {$rel_table} topic_rel ON q.question_id = topic_rel.object_id AND topic_rel.object_type = 'question'";
-            $ids_placeholder = implode(',', array_fill(0, count($term_ids_to_filter), '%d'));
-            $where_clauses[] = $wpdb->prepare("topic_rel.term_id IN ($ids_placeholder)", $term_ids_to_filter);
-        } elseif ($subjects_selected) {
-            // If only subjects are chosen, filter by them.
-            $term_ids_to_filter = array_map('absint', $subjects_raw);
-            $joins .= " JOIN {$rel_table} subject_rel ON g.group_id = subject_rel.object_id AND subject_rel.object_type = 'group'";
-            $ids_placeholder = implode(',', array_fill(0, count($term_ids_to_filter), '%d'));
-            $where_clauses[] = $wpdb->prepare("subject_rel.term_id IN ($ids_placeholder)", $term_ids_to_filter);
-        }
-
-        // Handle Section selection
-        if ($session_settings['section_id'] !== 'all' && is_numeric($session_settings['section_id'])) {
-            $joins .= " JOIN {$rel_table} section_rel ON q.question_id = section_rel.object_id AND section_rel.object_type = 'question'";
-            $where_clauses[] = $wpdb->prepare("section_rel.term_id = %d", absint($session_settings['section_id']));
-        }
-
-        if ($session_settings['pyq_only']) {
-            $where_clauses[] = "g.is_pyq = 1";
-        }
-
-        $base_where_sql = implode(' AND ', $where_clauses);
-        if (!$session_settings['include_attempted']) {
-            // **THE FIX**: Only exclude questions that were explicitly 'answered'.
-            $attempted_q_ids_sql = $wpdb->prepare("SELECT DISTINCT question_id FROM $a_table WHERE user_id = %d AND status = 'answered'", $user_id);
-            $base_where_sql .= " AND q.question_id NOT IN ($attempted_q_ids_sql)";
-        }
-
-        // **THE FIX**: This is the new, corrected ordering logic.
-        $options = get_option('qp_settings');
-        $admin_order_setting = isset($options['question_order']) ? $options['question_order'] : 'random';
-        $order_by_sql = '';
-
-        if ($session_settings['section_id'] !== 'all' && is_numeric($session_settings['section_id'])) {
-            // Force numerical incrementing order if a specific section is chosen
-            $order_by_sql = 'ORDER BY CAST(q.question_number_in_section AS UNSIGNED) ASC, q.custom_question_id ASC';
-        } else {
-            // Otherwise, use the admin setting
-            $order_by_sql = ($admin_order_setting === 'in_order') ? 'ORDER BY q.custom_question_id ASC' : 'ORDER BY RAND()';
-        }
-
-        $question_ids = [];
-        if ($practice_mode === 'Section Wise Practice') {
-            $query = "SELECT q.question_id, q.question_number_in_section FROM {$q_table} q {$joins} WHERE {$base_where_sql} {$exclude_sql} {$order_by_sql}";
-            $question_results = $wpdb->get_results($wpdb->prepare($query, $query_args));
-            if (!empty($question_results)) {
-                $question_ids = wp_list_pluck($question_results, 'question_id');
-                // Create a map of question IDs to their numbers and add it to the settings
-                $session_settings['question_numbers'] = wp_list_pluck($question_results, 'question_number_in_section', 'question_id');
-            }
-        } else {
-            // For all other modes, the original logic is fine
-            $query = "SELECT q.question_id FROM {$q_table} q {$joins} WHERE {$base_where_sql} {$exclude_sql} {$order_by_sql}";
-            $question_ids = $wpdb->get_col($wpdb->prepare($query, $query_args));
-        }
+    if ($topics_selected) {
+        $topic_term_ids_to_filter = array_map('absint', $topics_raw);
+    } elseif ($subjects_selected) {
+        $subject_ids_placeholder = implode(',', array_map('absint', $subjects_raw));
+        $topic_term_ids_to_filter = $wpdb->get_col("SELECT term_id FROM {$term_table} WHERE parent IN ($subject_ids_placeholder)");
+    }
+    
+    // 2. Find all groups linked to the selected topics (or all topics if no selection).
+    if (!empty($topic_term_ids_to_filter)) {
+        $topic_ids_placeholder = implode(',', $topic_term_ids_to_filter);
+        $where_conditions[] = "g.group_id IN (SELECT object_id FROM {$rel_table} WHERE object_type = 'group' AND term_id IN ($topic_ids_placeholder))";
     }
 
-    // --- COMMON SESSION CREATION LOGIC ---
+    // 3. Handle Section selection (which is a type of source term).
+    if ($practice_mode === 'Section Wise Practice') {
+        $where_conditions[] = $wpdb->prepare("g.group_id IN (SELECT object_id FROM {$rel_table} WHERE object_type = 'group' AND term_id = %d)", $section_id);
+    }
+    
+    // 4. Apply PYQ filter.
+    if ($session_settings['pyq_only']) {
+        $where_conditions[] = "g.is_pyq = 1";
+    }
+
+    // 5. Exclude previously attempted questions if specified.
+    if (!$session_settings['include_attempted']) {
+        $attempted_q_ids_sql = $wpdb->prepare("SELECT DISTINCT question_id FROM $a_table WHERE user_id = %d AND status = 'answered'", $user_id);
+        $where_conditions[] = "q.question_id NOT IN ($attempted_q_ids_sql)";
+    }
+
+    // 6. Exclude questions with open reports.
+    $reported_question_ids = $wpdb->get_col("SELECT DISTINCT question_id FROM {$reports_table} WHERE status = 'open'");
+    if (!empty($reported_question_ids)) {
+        $reported_ids_placeholder = implode(',', $reported_question_ids);
+        $where_conditions[] = "q.question_id NOT IN ($reported_ids_placeholder)";
+    }
+
+    // --- Determine Order and Finalize Query ---
+    $options = get_option('qp_settings');
+    $admin_order_setting = isset($options['question_order']) ? $options['question_order'] : 'random';
+    $order_by_sql = '';
+
+    if ($practice_mode === 'Section Wise Practice') {
+        $order_by_sql = 'ORDER BY CAST(q.question_number_in_section AS UNSIGNED) ASC, q.question_id ASC';
+    } else {
+        $order_by_sql = ($admin_order_setting === 'in_order') ? 'ORDER BY q.question_id ASC' : 'ORDER BY RAND()';
+    }
+
+    $where_sql = ' WHERE ' . implode(' AND ', $where_conditions);
+    $query = "SELECT q.question_id, q.question_number_in_section {$joins} {$where_sql} {$order_by_sql}";
+    
+    $question_results = $wpdb->get_results($query);
+    $question_ids = wp_list_pluck($question_results, 'question_id');
+
+    // --- Session Creation (Common Logic) ---
     if (empty($question_ids)) {
         wp_send_json_error(['message' => 'No questions were found for the selected criteria. Please try different options.']);
     }
 
-    $options = get_option('qp_settings');
     $session_page_id = isset($options['session_page']) ? absint($options['session_page']) : 0;
     if (!$session_page_id) {
         wp_send_json_error(['message' => 'The administrator has not configured a session page.']);
     }
 
-    $wpdb->insert($wpdb->prefix . 'qp_user_sessions', [
-        'user_id'                 => get_current_user_id(),
+    // Add question numbers to settings for section practice
+    if ($practice_mode === 'Section Wise Practice') {
+        $session_settings['question_numbers'] = wp_list_pluck($question_results, 'question_number_in_section', 'question_id');
+    }
+
+    $wpdb->insert($sessions_table, [
+        'user_id'                 => $user_id,
         'status'                  => 'active',
         'start_time'              => current_time('mysql'),
         'last_activity'           => current_time('mysql'),
@@ -3315,68 +3314,71 @@ function qp_start_incorrect_practice_session_ajax()
     $user_id = get_current_user_id();
     $attempts_table = $wpdb->prefix . 'qp_user_attempts';
     $questions_table = $wpdb->prefix . 'qp_questions';
+    $reports_table = $wpdb->prefix . 'qp_question_reports';
 
-    // Decide which set of questions to fetch based on the checkbox
+    // Exclude questions with open reports
+    $reported_question_ids = $wpdb->get_col("SELECT DISTINCT question_id FROM {$reports_table} WHERE status = 'open'");
+    $exclude_sql = !empty($reported_question_ids) ? 'AND q.question_id NOT IN (' . implode(',', $reported_question_ids) . ')' : '';
+
     $include_all_incorrect = isset($_POST['include_all_incorrect']) && $_POST['include_all_incorrect'] === 'true';
-
     $question_ids = [];
 
     if ($include_all_incorrect) {
         // Mode 1: Get all questions the user has EVER answered incorrectly.
         $question_ids = $wpdb->get_col($wpdb->prepare(
-            "SELECT DISTINCT question_id FROM {$attempts_table} WHERE user_id = %d AND is_correct = 0",
+            "SELECT DISTINCT a.question_id 
+             FROM {$attempts_table} a
+             JOIN {$questions_table} q ON a.question_id = q.question_id
+             WHERE a.user_id = %d AND a.is_correct = 0 AND q.status = 'publish' {$exclude_sql}",
             $user_id
         ));
     } else {
         // Mode 2: Get questions the user has NEVER answered correctly.
-        // First, get all questions ever answered correctly by the user.
         $correctly_answered_qids = $wpdb->get_col($wpdb->prepare(
             "SELECT DISTINCT question_id FROM {$attempts_table} WHERE user_id = %d AND is_correct = 1",
             $user_id
         ));
+        $correctly_answered_placeholder = !empty($correctly_answered_qids) ? implode(',', $correctly_answered_qids) : '0';
 
-        // Then, get all questions the user has explicitly ANSWERED (not skipped).
-        $all_answered_qids = $wpdb->get_col($wpdb->prepare(
-            "SELECT DISTINCT question_id FROM {$attempts_table} WHERE user_id = %d AND status = 'answered'",
+        $question_ids = $wpdb->get_col($wpdb->prepare(
+            "SELECT DISTINCT a.question_id 
+             FROM {$attempts_table} a
+             JOIN {$questions_table} q ON a.question_id = q.question_id
+             WHERE a.user_id = %d AND a.status = 'answered' AND q.status = 'publish'
+             AND a.question_id NOT IN ({$correctly_answered_placeholder}) {$exclude_sql}",
             $user_id
         ));
-
-        // The questions to practice are those answered but never answered correctly.
-        $question_ids = array_diff($all_answered_qids, $correctly_answered_qids);
     }
 
     if (empty($question_ids)) {
         wp_send_json_error(['message' => 'No incorrect questions found to practice.']);
     }
 
-    // Randomize the order of questions
     shuffle($question_ids);
 
-    // Get the Session Page URL from settings
     $options = get_option('qp_settings');
     $session_page_id = isset($options['session_page']) ? absint($options['session_page']) : 0;
     if (!$session_page_id) {
         wp_send_json_error(['message' => 'The administrator has not configured a session page.']);
     }
 
-    // Create a special settings snapshot for this session
     $session_settings = [
-        'practice_mode'   => 'Incorrect Que. Practice', // Mode Name
+        'practice_mode'   => 'Incorrect Que. Practice',
+        'marks_correct'   => null,
+        'marks_incorrect' => null,
         'timer_enabled'   => false,
     ];
 
-    // Create the new session record
     $wpdb->insert($wpdb->prefix . 'qp_user_sessions', [
         'user_id'                 => $user_id,
         'status'                  => 'active',
         'start_time'              => current_time('mysql'),
         'last_activity'           => current_time('mysql'),
         'settings_snapshot'       => wp_json_encode($session_settings),
-        'question_ids_snapshot'   => wp_json_encode(array_values($question_ids)) // Re-index array
+        'question_ids_snapshot'   => wp_json_encode(array_values($question_ids))
     ]);
     $session_id = $wpdb->insert_id;
 
-    // Build the redirect URL and send it back
     $redirect_url = add_query_arg('session_id', $session_id, get_permalink($session_page_id));
     wp_send_json_success(['redirect_url' => $redirect_url]);
 }
@@ -3417,12 +3419,14 @@ function qp_start_mock_test_session_ajax()
     $q_table = $wpdb->prefix . 'qp_questions';
     $g_table = $wpdb->prefix . 'qp_question_groups';
     $rel_table = $wpdb->prefix . 'qp_term_relationships';
+    $term_table = $wpdb->prefix . 'qp_terms';
+    $tax_table = $wpdb->prefix . 'qp_taxonomies';
     $reports_table = $wpdb->prefix . 'qp_question_reports';
 
     // --- Build the initial query to get a pool of eligible questions ---
     $where_clauses = ["q.status = 'publish'"];
     $query_params = [];
-    $joins = "LEFT JOIN {$g_table} g ON q.group_id = g.group_id";
+    $joins = "FROM {$q_table} q JOIN {$g_table} g ON q.group_id = g.group_id";
 
     $reported_question_ids = $wpdb->get_col("SELECT DISTINCT question_id FROM {$reports_table} WHERE status = 'open'");
     if (!empty($reported_question_ids)) {
@@ -3433,20 +3437,28 @@ function qp_start_mock_test_session_ajax()
     $subjects_selected = !empty($subjects) && !in_array('all', $subjects);
     $topics_selected = !empty($topics) && !in_array('all', $topics);
 
+    // **FIX START**: Correctly join through the group to find the topic.
+    $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'subject'");
+    // This join finds the topic (a term with a parent in the 'subject' taxonomy) linked to the group.
+    $joins .= " LEFT JOIN {$rel_table} topic_rel ON g.group_id = topic_rel.object_id AND topic_rel.object_type = 'group'";
+    $joins .= " LEFT JOIN {$term_table} topic_term ON topic_rel.term_id = topic_term.term_id AND topic_term.taxonomy_id = " . (int)$subject_tax_id . " AND topic_term.parent != 0";
+
     if ($topics_selected) {
         $term_ids_to_filter = array_map('absint', $topics);
-        $joins .= " JOIN {$rel_table} topic_rel ON q.question_id = topic_rel.object_id AND topic_rel.object_type = 'question'";
         $ids_placeholder = implode(',', array_fill(0, count($term_ids_to_filter), '%d'));
-        $where_clauses[] = $wpdb->prepare("topic_rel.term_id IN ($ids_placeholder)", $term_ids_to_filter);
+        // Filter by the topic_id we found in the join.
+        $where_clauses[] = $wpdb->prepare("topic_term.term_id IN ($ids_placeholder)", $term_ids_to_filter);
     } elseif ($subjects_selected) {
         $term_ids_to_filter = array_map('absint', $subjects);
-        $joins .= " JOIN {$rel_table} subject_rel ON g.group_id = subject_rel.object_id AND subject_rel.object_type = 'group'";
         $ids_placeholder = implode(',', array_fill(0, count($term_ids_to_filter), '%d'));
-        $where_clauses[] = $wpdb->prepare("subject_rel.term_id IN ($ids_placeholder)", $term_ids_to_filter);
+        // Filter by the topic's parent (which is the subject).
+        $where_clauses[] = $wpdb->prepare("topic_term.parent IN ($ids_placeholder)", $term_ids_to_filter);
     }
 
     $base_where_sql = implode(' AND ', $where_clauses);
-    $query = "SELECT q.question_id, (SELECT term_id FROM {$rel_table} WHERE object_id = q.question_id AND object_type = 'question' AND term_id IN (SELECT term_id FROM {$wpdb->prefix}qp_terms WHERE parent != 0) LIMIT 1) as topic_id FROM {$q_table} q {$joins} WHERE {$base_where_sql}";
+    // The corrected query now selects the topic_id directly from the join.
+    $query = "SELECT q.question_id, topic_term.term_id as topic_id {$joins} WHERE {$base_where_sql}";
+    // **FIX END**
 
     $question_pool = $wpdb->get_results($wpdb->prepare($query, $query_params));
 
@@ -3456,7 +3468,7 @@ function qp_start_mock_test_session_ajax()
 
     // --- Apply distribution logic ---
     $final_question_ids = [];
-    if ($distribution === 'equal' && $topics_selected) {
+    if ($distribution === 'equal' && ($topics_selected || $subjects_selected)) { // Ensure there's a topic context
         $questions_by_topic = [];
         foreach ($question_pool as $q) {
             if ($q->topic_id) { // Only consider questions that have a topic
@@ -3468,7 +3480,6 @@ function qp_start_mock_test_session_ajax()
         $questions_per_topic = $num_topics > 0 ? floor($num_questions / $num_topics) : 0;
         $remainder = $num_topics > 0 ? $num_questions % $num_topics : 0;
 
-        // Attention! Topic_ID variable seems redundant
         foreach ($questions_by_topic as $topic_id => $q_ids) {
             shuffle($q_ids);
             $num_to_take = $questions_per_topic;
@@ -3479,9 +3490,29 @@ function qp_start_mock_test_session_ajax()
             $final_question_ids = array_merge($final_question_ids, array_slice($q_ids, 0, $num_to_take));
         }
     } else {
-        // Default to 'random'
-        shuffle($question_pool);
-        $final_question_ids = array_slice(wp_list_pluck($question_pool, 'question_id'), 0, $num_questions);
+        if (!empty($questions_by_topic)) {
+            // Step 1: Pick one question from each topic first
+            foreach ($questions_by_topic as $topic_id => $q_ids) {
+                if (count($final_question_ids) < $num_questions) {
+                    $random_key = array_rand($q_ids);
+                    $final_question_ids[] = $q_ids[$random_key];
+                } else {
+                    break; // Stop if we've already reached the desired number of questions
+                }
+            }
+
+            // Step 2: Fill the remaining slots randomly from the entire pool
+            $remaining_needed = $num_questions - count($final_question_ids);
+            if ($remaining_needed > 0) {
+                $remaining_pool = array_diff(wp_list_pluck($question_pool, 'question_id'), $final_question_ids);
+                shuffle($remaining_pool);
+                $final_question_ids = array_merge($final_question_ids, array_slice($remaining_pool, 0, $remaining_needed));
+            }
+        } else {
+            // Fallback for questions with no topics
+            shuffle($question_pool);
+            $final_question_ids = array_slice(wp_list_pluck($question_pool, 'question_id'), 0, $num_questions);
+        }
     }
 
     if (empty($final_question_ids)) {
@@ -3532,63 +3563,77 @@ function qp_get_sources_for_subject_progress_ajax()
     $tax_table = $wpdb->prefix . 'qp_taxonomies';
     $source_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'source'");
 
-    // 1. Find all question groups linked to the selected subject term.
-    $group_ids = $wpdb->get_col($wpdb->prepare(
-        "SELECT object_id FROM $rel_table WHERE term_id = %d AND object_type = 'group'",
-        $subject_term_id
-    ));
+    // Step 1: Find all topics that are children of the selected subject.
+    $topic_ids = $wpdb->get_col($wpdb->prepare("SELECT term_id FROM $term_table WHERE parent = %d", $subject_term_id));
+
+    if (empty($topic_ids)) {
+        wp_send_json_success(['sources' => []]);
+        return;
+    }
+    $topic_ids_placeholder = implode(',', $topic_ids);
+
+    // Step 2: Find all question groups linked to those topics.
+    $group_ids = $wpdb->get_col("SELECT object_id FROM $rel_table WHERE term_id IN ($topic_ids_placeholder) AND object_type = 'group'");
 
     if (empty($group_ids)) {
         wp_send_json_success(['sources' => []]);
+        return;
     }
     $group_ids_placeholder = implode(',', $group_ids);
 
-    // 2. Find all source AND section terms linked to questions WITHIN those specific groups.
-    $related_terms = $wpdb->get_results($wpdb->prepare(
-        "SELECT DISTINCT t.term_id, t.parent 
-         FROM {$wpdb->prefix}qp_questions q
-         JOIN {$rel_table} r ON q.question_id = r.object_id AND r.object_type = 'question'
+    // Step 3: Find all source AND section terms linked to the relevant groups.
+    $all_linked_source_term_ids = $wpdb->get_col($wpdb->prepare(
+        "SELECT DISTINCT r.term_id
+         FROM {$rel_table} r
          JOIN {$term_table} t ON r.term_id = t.term_id
-         WHERE q.group_id IN ($group_ids_placeholder) AND t.taxonomy_id = %d",
+         WHERE r.object_id IN ($group_ids_placeholder) AND r.object_type = 'group' AND t.taxonomy_id = %d",
         $source_tax_id
     ));
 
-    if (empty($related_terms)) {
+    if (empty($all_linked_source_term_ids)) {
         wp_send_json_success(['sources' => []]);
+        return;
     }
 
-    // 3. Trace all terms back to their top-level parent (the source).
+    // Step 4: For each linked term, trace up to find its top-level parent (the source).
     $top_level_source_ids = [];
-    foreach ($related_terms as $term) {
-        if ($term->parent == 0) {
-            $top_level_source_ids[] = $term->term_id;
-        } else {
-            // This is a section or sub-section, trace to top-level parent
-            $current_term_id = $term->term_id;
-            $parent_id = $term->parent;
-            while ($parent_id != 0) {
-                $current_term_id = $parent_id;
-                $parent_id = $wpdb->get_var($wpdb->prepare("SELECT parent FROM $term_table WHERE term_id = %d", $current_term_id));
+    foreach ($all_linked_source_term_ids as $term_id) {
+        $current_id = $term_id;
+        for ($i = 0; $i < 10; $i++) { // Safety break to prevent infinite loops
+            $parent_id = $wpdb->get_var($wpdb->prepare("SELECT parent FROM $term_table WHERE term_id = %d", $current_id));
+            if ($parent_id == 0) {
+                $top_level_source_ids[] = $current_id;
+                break;
             }
-            $top_level_source_ids[] = $current_term_id;
+            $current_id = $parent_id;
         }
     }
 
-    $unique_source_ids = array_unique(array_filter($top_level_source_ids));
+    $unique_source_ids = array_unique($top_level_source_ids);
 
     if (empty($unique_source_ids)) {
         wp_send_json_success(['sources' => []]);
+        return;
     }
 
     $source_ids_placeholder = implode(',', $unique_source_ids);
 
-    // 4. Fetch the names of the unique, top-level sources.
-    $sources = $wpdb->get_results(
+    // Step 5: Fetch the names of the unique, top-level sources.
+    $source_terms = $wpdb->get_results(
         "SELECT term_id as source_id, name as source_name 
          FROM {$term_table} 
          WHERE term_id IN ($source_ids_placeholder)
          ORDER BY name ASC"
     );
+    
+    // Step 6: Format for the dropdown.
+    $sources = [];
+    foreach($source_terms as $term) {
+        $sources[] = [
+            'source_id' => $term->source_id,
+            'source_name' => $term->source_name
+        ];
+    }
 
     wp_send_json_success(['sources' => $sources]);
 }
@@ -3615,52 +3660,56 @@ function qp_get_progress_data_ajax()
     $attempts_table = $wpdb->prefix . 'qp_user_attempts';
     $questions_table = $wpdb->prefix . 'qp_questions';
 
-    // Get subject name for the top-level bar
-    $subject_name = $wpdb->get_var($wpdb->prepare("SELECT name FROM {$term_table} WHERE term_id = %d", $subject_term_id));
+    // Helper function to get all descendant term IDs for a given parent
+    function get_all_descendant_ids($parent_id, $wpdb, $term_table) {
+        $descendant_ids = [$parent_id];
+        $current_parent_ids = [$parent_id];
+        for ($i = 0; $i < 10; $i++) { // Safety break
+            if (empty($current_parent_ids)) break;
+            $ids_placeholder = implode(',', $current_parent_ids);
+            $child_ids = $wpdb->get_col("SELECT term_id FROM $term_table WHERE parent IN ($ids_placeholder)");
+            if (!empty($child_ids)) {
+                $descendant_ids = array_merge($descendant_ids, $child_ids);
+                $current_parent_ids = $child_ids;
+            } else {
+                break;
+            }
+        }
+        return array_unique($descendant_ids);
+    }
 
-    // Get all descendant terms for the selected source
-    $descendant_terms = $wpdb->get_results($wpdb->prepare(
-        "SELECT term_id, parent, name FROM {$term_table} WHERE term_id = %d OR parent = %d OR parent IN (SELECT term_id FROM {$term_table} WHERE parent = %d)",
-        $source_term_id,
-        $source_term_id,
-        $source_term_id
-    ));
+    // Step 1: Get all term IDs in both the selected subject and source hierarchies
+    $all_subject_term_ids = get_all_descendant_ids($subject_term_id, $wpdb, $term_table);
+    $all_source_term_ids = get_all_descendant_ids($source_term_id, $wpdb, $term_table);
 
-    if (empty($descendant_terms)) {
-        wp_send_json_success(['html' => '<p>No topics or sections found for this source.</p>']);
+    $subject_terms_placeholder = implode(',', $all_subject_term_ids);
+    $source_terms_placeholder = implode(',', $all_source_term_ids);
+
+    // Step 2: Find the intersection of groups linked to BOTH hierarchies
+    $relevant_group_ids = $wpdb->get_col("
+        SELECT DISTINCT r1.object_id
+        FROM {$rel_table} r1
+        INNER JOIN {$rel_table} r2 ON r1.object_id = r2.object_id AND r1.object_type = 'group' AND r2.object_type = 'group'
+        WHERE r1.term_id IN ($subject_terms_placeholder)
+          AND r2.term_id IN ($source_terms_placeholder)
+    ");
+
+    if (empty($relevant_group_ids)) {
+        wp_send_json_success(['html' => '<p>No questions found for this subject and source combination.</p>']);
         return;
     }
+    $group_ids_placeholder = implode(',', $relevant_group_ids);
 
-    $all_term_ids = wp_list_pluck($descendant_terms, 'term_id');
-    $terms_placeholder = implode(',', $all_term_ids);
+    // Step 3: Get all questions within those relevant groups
+    $all_qids_in_scope = $wpdb->get_col("SELECT question_id FROM {$questions_table} WHERE group_id IN ($group_ids_placeholder)");
 
-    // Get all question groups linked to the selected subject
-    $group_ids_in_subject = $wpdb->get_col($wpdb->prepare(
-        "SELECT object_id FROM {$rel_table} WHERE term_id = %d AND object_type = 'group'",
-        $subject_term_id
-    ));
-
-    $total_questions_in_source_and_subject = 0;
-    if (!empty($group_ids_in_subject)) {
-        $group_ids_placeholder = implode(',', $group_ids_in_subject);
-
-        // Count questions that are in one of the subject's groups AND are linked to one of the source's terms
-        $total_questions_in_source_and_subject = $wpdb->get_var(
-            "SELECT COUNT(DISTINCT q.question_id)
-             FROM {$questions_table} q
-             JOIN {$rel_table} r ON q.question_id = r.object_id AND r.object_type = 'question'
-             WHERE q.group_id IN ({$group_ids_placeholder}) AND r.term_id IN ({$terms_placeholder})"
-        );
-    }
-
-    $all_qids = $wpdb->get_col("SELECT DISTINCT object_id FROM {$rel_table} WHERE term_id IN ({$terms_placeholder}) AND object_type = 'question'");
-
-    if (empty($all_qids)) {
+    if (empty($all_qids_in_scope)) {
         wp_send_json_success(['html' => '<p>No questions found for this source.</p>']);
         return;
     }
-    $qids_placeholder = implode(',', $all_qids);
+    $qids_placeholder = implode(',', $all_qids_in_scope);
 
+    // Step 4: Get the user's completed questions within this specific scope
     $exclude_incorrect = isset($_POST['exclude_incorrect']) && $_POST['exclude_incorrect'] === 'true';
     $attempt_status_clause = $exclude_incorrect ? "AND is_correct = 1" : "AND status = 'answered'";
     $completed_qids = $wpdb->get_col($wpdb->prepare(
@@ -3668,30 +3717,36 @@ function qp_get_progress_data_ajax()
         $user_id
     ));
 
-    $question_term_map_raw = $wpdb->get_results("SELECT object_id, term_id FROM {$rel_table} WHERE object_id IN ($qids_placeholder) AND object_type = 'question'");
-    $question_term_map = [];
-    foreach ($question_term_map_raw as $row) {
-        $question_term_map[$row->object_id][] = $row->term_id;
+    // Step 5: Prepare data to build the hierarchical tree
+    $all_terms_data = $wpdb->get_results("SELECT term_id, name, parent FROM $term_table WHERE term_id IN ($source_terms_placeholder)");
+    $question_group_map = $wpdb->get_results("SELECT question_id, group_id FROM {$questions_table} WHERE question_id IN ($qids_placeholder)", OBJECT_K);
+    $group_term_map_raw = $wpdb->get_results("SELECT object_id, term_id FROM {$rel_table} WHERE object_id IN ($group_ids_placeholder) AND object_type = 'group' AND term_id IN ($source_terms_placeholder)");
+    
+    $group_term_map = [];
+    foreach ($group_term_map_raw as $row) {
+        $group_term_map[$row->object_id][] = $row->term_id;
     }
 
     $terms_by_id = [];
-    foreach ($descendant_terms as $term) {
+    foreach ($all_terms_data as $term) {
         $term->children = [];
         $term->total = 0;
         $term->completed = 0;
         $terms_by_id[$term->term_id] = $term;
     }
 
-    foreach ($all_qids as $qid) {
-        if (isset($question_term_map[$qid])) {
-            $is_completed = in_array($qid, $completed_qids);
+    // Populate counts by walking up the tree for each question
+    foreach ($all_qids_in_scope as $qid) {
+        $is_completed = in_array($qid, $completed_qids);
+        $gid = $question_group_map[$qid]->group_id;
 
-            $term_ids_for_question = $question_term_map[$qid];
+        if (isset($group_term_map[$gid])) {
+            $term_ids_for_group = $group_term_map[$gid];
             $processed_parents = [];
-
-            foreach ($term_ids_for_question as $term_id) {
-                $current_term_id = $term_id;
-                while (isset($terms_by_id[$current_term_id]) && !in_array($current_term_id, $processed_parents)) {
+            
+            foreach ($term_ids_for_group as $term_id) {
+                 $current_term_id = $term_id;
+                 while (isset($terms_by_id[$current_term_id]) && !in_array($current_term_id, $processed_parents)) {
                     $terms_by_id[$current_term_id]->total++;
                     if ($is_completed) {
                         $terms_by_id[$current_term_id]->completed++;
@@ -3703,6 +3758,7 @@ function qp_get_progress_data_ajax()
         }
     }
 
+    // Assemble the final tree structure
     $source_term_object = null;
     foreach ($terms_by_id as $term) {
         if ($term->term_id == $source_term_id) {
@@ -3714,11 +3770,8 @@ function qp_get_progress_data_ajax()
     }
 
     ob_start();
-
-    // --- START OF FIX ---
-    // Calculate the correct completed count and percentage for the main subject bar
-    $completed_count_for_subject = $source_term_object ? $source_term_object->completed : 0;
-    $subject_percentage = $total_questions_in_source_and_subject > 0 ? round(($completed_count_for_subject / $total_questions_in_source_and_subject) * 100) : 0;
+    $subject_name = $wpdb->get_var($wpdb->prepare("SELECT name FROM {$term_table} WHERE term_id = %d", $subject_term_id));
+    $subject_percentage = $source_term_object->total > 0 ? round(($source_term_object->completed / $source_term_object->total) * 100) : 0;
     ?>
     <div class="qp-progress-tree">
         <div class="qp-progress-item subject-level">
@@ -3726,15 +3779,16 @@ function qp_get_progress_data_ajax()
             <div class="qp-progress-label">
                 <strong><?php echo esc_html($subject_name); ?></strong>
                 <span class="qp-progress-percentage">
-                    <?php echo esc_html($subject_percentage); ?>% (<?php echo esc_html($completed_count_for_subject); ?>/<?php echo esc_html($total_questions_in_source_and_subject); ?>)
+                    <?php echo esc_html($subject_percentage); ?>% (<?php echo esc_html($source_term_object->completed); ?>/<?php echo esc_html($source_term_object->total); ?>)
                 </span>
             </div>
         </div>
         <div class="qp-source-children-container" style="padding-left: 20px;">
             <?php
-            // This recursive function does not need to be changed.
             function qp_render_progress_tree_recursive($terms)
             {
+                usort($terms, fn($a, $b) => strcmp($a->name, $b->name));
+
                 foreach ($terms as $term) {
                     $percentage = $term->total > 0 ? round(($term->completed / $term->total) * 100) : 0;
                     $has_children = !empty($term->children);
@@ -3762,10 +3816,8 @@ function qp_get_progress_data_ajax()
             ?>
         </div>
     </div>
-<?php
-    // --- END OF FIX ---
+    <?php
     $html = ob_get_clean();
-
     wp_send_json_success(['html' => $html]);
 }
 add_action('wp_ajax_get_progress_data', 'qp_get_progress_data_ajax');
@@ -3778,62 +3830,44 @@ function qp_get_question_data_ajax()
         wp_send_json_error(['message' => 'Invalid Question ID.']);
     }
 
-    // Attention! Still old variable declrations found.
-
     global $wpdb;
     $q_table = $wpdb->prefix . 'qp_questions';
     $g_table = $wpdb->prefix . 'qp_question_groups';
     $o_table = $wpdb->prefix . 'qp_options';
     $a_table = $wpdb->prefix . 'qp_user_attempts';
+    $rel_table = $wpdb->prefix . 'qp_term_relationships';
+    $term_table = $wpdb->prefix . 'qp_terms';
+    $tax_table = $wpdb->prefix . 'qp_taxonomies';
     $user_id = get_current_user_id();
 
+    // 1. Fetch the basic question data first
     $question_data = $wpdb->get_row($wpdb->prepare(
-        "SELECT
-            q.question_id, q.custom_question_id, q.question_text, q.question_number_in_section,
-            g.direction_text, g.direction_image_id,
-            subject_term.name AS subject_name,
-            topic_term.name AS topic_name
-            FROM {$q_table} q
-            LEFT JOIN {$g_table} g ON q.group_id = g.group_id
-            LEFT JOIN {$wpdb->prefix}qp_term_relationships subject_rel ON g.group_id = subject_rel.object_id AND subject_rel.object_type = 'group' AND subject_rel.term_id IN (SELECT term_id FROM {$wpdb->prefix}qp_terms WHERE parent = 0 AND taxonomy_id = (SELECT taxonomy_id FROM {$wpdb->prefix}qp_taxonomies WHERE taxonomy_name = 'subject'))
-            LEFT JOIN {$wpdb->prefix}qp_terms subject_term ON subject_rel.term_id = subject_term.term_id
-            LEFT JOIN {$wpdb->prefix}qp_term_relationships topic_rel ON q.question_id = topic_rel.object_id AND topic_rel.object_type = 'question' AND topic_rel.term_id IN (SELECT term_id FROM {$wpdb->prefix}qp_terms WHERE parent != 0 AND taxonomy_id = (SELECT taxonomy_id FROM {$wpdb->prefix}qp_taxonomies WHERE taxonomy_name = 'subject'))
-            LEFT JOIN {$wpdb->prefix}qp_terms topic_term ON topic_rel.term_id = topic_term.term_id
-            WHERE q.question_id = %d
-            GROUP BY q.question_id",
+        "SELECT q.question_id, q.question_text, q.question_number_in_section, g.group_id, g.direction_text, g.direction_image_id
+         FROM {$q_table} q
+         LEFT JOIN {$g_table} g ON q.group_id = g.group_id
+         WHERE q.question_id = %d",
         $question_id
     ), ARRAY_A);
 
-    // --- NEW: Build Source Hierarchy ---
-    $source_hierarchy = [];
-    $source_term_id = $wpdb->get_var($wpdb->prepare(
-        "SELECT r.term_id
-         FROM {$wpdb->prefix}qp_term_relationships r
-         JOIN {$wpdb->prefix}qp_terms t ON r.term_id = t.term_id
-         WHERE r.object_id = %d AND r.object_type = 'question'
-         AND t.taxonomy_id = (SELECT taxonomy_id FROM {$wpdb->prefix}qp_taxonomies WHERE taxonomy_name = 'source')
-         LIMIT 1",
-        $question_id
-    ));
-
-    if ($source_term_id) {
-        $current_term_id = $source_term_id;
-        // Loop up the tree to the root, with a safety limit of 10 levels
-        for ($i = 0; $i < 10; $i++) {
-            if (!$current_term_id) break;
-            $term = $wpdb->get_row($wpdb->prepare("SELECT name, parent FROM {$wpdb->prefix}qp_terms WHERE term_id = %d", $current_term_id));
-            if ($term) {
-                array_unshift($source_hierarchy, $term->name); // Add to the beginning of the array
-                $current_term_id = $term->parent;
-            } else {
-                break;
-            }
-        }
+    if (!$question_data) {
+        wp_send_json_error(['message' => 'Question not found.']);
     }
-    $question_data['source_hierarchy'] = $source_hierarchy;
 
+    $group_id = $question_data['group_id'];
+    
+    // 2. Get Subject/Topic Hierarchy
+    $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'subject'");
+    $subject_term_id = $wpdb->get_var($wpdb->prepare("SELECT term_id FROM {$rel_table} WHERE object_id = %d AND object_type = 'group' AND term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id = %d)", $group_id, $subject_tax_id));
+    $question_data['subject_lineage'] = $subject_term_id ? qp_get_term_lineage_names($subject_term_id, $wpdb, $term_table) : [];
+
+    // 3. Get Source/Section Hierarchy
+    $source_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'source'");
+    $source_term_id = $wpdb->get_var($wpdb->prepare("SELECT term_id FROM {$rel_table} WHERE object_id = %d AND object_type = 'group' AND term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id = %d)", $group_id, $source_tax_id));
+    $question_data['source_lineage'] = $source_term_id ? qp_get_term_lineage_names($source_term_id, $wpdb, $term_table) : [];
+    
+    $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
     $previous_attempt_count = $wpdb->get_var($wpdb->prepare(
-        "SELECT COUNT(*) FROM {$a_table} WHERE user_id = %d AND question_id = %d",
+        "SELECT COUNT(*) FROM {$a_table} WHERE user_id = %d AND question_id = %d AND session_id != %d",
         $user_id,
         $question_id,
         $session_id
@@ -3849,10 +3883,13 @@ function qp_get_question_data_ajax()
     $user_can_view = !empty(array_intersect((array)$user->roles, (array)$allowed_roles));
 
     if (!$user_can_view) {
-        unset($question_data['source_name'], $question_data['section_name'], $question_data['question_number_in_section']);
+        // Unset the source lineage if the user doesn't have permission.
+        unset($question_data['source_lineage']);
+        unset($question_data['question_number_in_section']);
     }
 
     $question_data['direction_image_url'] = $question_data['direction_image_id'] ? wp_get_attachment_url($question_data['direction_image_id']) : null;
+    unset($question_data['direction_image_id']); // Clean up data sent to frontend
 
     // Fetch the 'is_correct' status along with the options
     $options_from_db = $wpdb->get_results($wpdb->prepare("SELECT option_id, option_text, is_correct FROM {$o_table} WHERE question_id = %d", $question_id), ARRAY_A);
@@ -3956,10 +3993,9 @@ function qp_submit_question_report_ajax()
     }
 
     // Add a log entry for the admin panel
-    $custom_id = get_question_custom_id($question_id);
     $wpdb->insert("{$wpdb->prefix}qp_logs", [
         'log_type'    => 'User Report',
-        'log_message' => sprintf('User reported question #%s.', $custom_id),
+        'log_message' => sprintf('User reported question #%s.', $question_id),
         'log_data'    => wp_json_encode(['user_id' => $user_id, 'session_id' => $session_id, 'question_id' => $question_id, 'reasons' => $reasons])
     ]);
 
@@ -4193,8 +4229,8 @@ function qp_start_revision_session_ajax()
             "SELECT q.question_id 
             FROM {$questions_table} q
             JOIN {$groups_table} g ON q.group_id = g.group_id
-            JOIN {$rel_table} r ON q.question_id = r.object_id
-            WHERE r.term_id = %d AND r.object_type = 'question' AND q.status = 'publish'
+            JOIN {$rel_table} r ON g.group_id = r.object_id
+            WHERE r.term_id = %d AND r.object_type = 'group' AND q.status = 'publish'
             {$pyq_filter_sql} {$exclude_reported_sql}",
             $topic_id
         ));
@@ -4215,10 +4251,16 @@ function qp_start_revision_session_ajax()
 
         if (!empty($available_qids)) {
             $ids_placeholder = implode(',', array_map('absint', $available_qids));
-            $order_by_sql = $choose_random ? "ORDER BY RAND()" : "ORDER BY CAST(q.question_number_in_section AS UNSIGNED) ASC, q.custom_question_id ASC";
+            // Correct the ORDER BY clause to prioritize the section (source term) first.
+            $order_by_sql = $choose_random ? "ORDER BY RAND()" : "ORDER BY r_source.term_id, CAST(q.question_number_in_section AS UNSIGNED) ASC, q.question_id ASC";
 
             $q_ids = $wpdb->get_col($wpdb->prepare(
-                "SELECT q.question_id FROM {$questions_table} q WHERE q.question_id IN ($ids_placeholder) {$order_by_sql} LIMIT %d",
+                "SELECT q.question_id 
+                 FROM {$questions_table} q
+                 LEFT JOIN {$rel_table} r_source ON q.group_id = r_source.object_id AND r_source.object_type = 'group'
+                 WHERE q.question_id IN ($ids_placeholder) 
+                 {$order_by_sql} 
+                 LIMIT %d",
                 $questions_per_topic
             ));
             $final_question_ids = array_merge($final_question_ids, $q_ids);
@@ -4754,6 +4796,7 @@ add_action('wp_ajax_qp_start_review_session', 'qp_start_review_session_ajax');
  */
 function qp_get_single_question_for_review_ajax()
 {
+    // Security check
     if (
         !(check_ajax_referer('qp_practice_nonce', 'nonce', false) ||
             check_ajax_referer('qp_get_quick_edit_form_nonce', 'nonce', false))
@@ -4772,15 +4815,24 @@ function qp_get_single_question_for_review_ajax()
 
     global $wpdb;
 
-    // FIX 2: Use the more robust and correct query from other parts of the plugin.
+    // **FIX START**: This new query correctly finds the group's topic and then traces back to the top-level subject.
     $question_data = $wpdb->get_row($wpdb->prepare(
-        "SELECT q.question_text, q.custom_question_id, g.direction_text, g.direction_image_id, 
-                (SELECT t.name FROM {$wpdb->prefix}qp_terms t JOIN {$wpdb->prefix}qp_term_relationships r ON t.term_id = r.term_id WHERE r.object_id = g.group_id AND r.object_type = 'group' AND t.taxonomy_id = (SELECT taxonomy_id FROM {$wpdb->prefix}qp_taxonomies WHERE taxonomy_name = 'subject') AND t.parent = 0) as subject_name
+        "SELECT 
+            q.question_id, 
+            q.question_text, 
+            g.direction_text, 
+            g.direction_image_id, 
+            parent_term.name AS subject_name
          FROM {$wpdb->prefix}qp_questions q
          LEFT JOIN {$wpdb->prefix}qp_question_groups g ON q.group_id = g.group_id
-         WHERE q.question_id = %d",
+         LEFT JOIN {$wpdb->prefix}qp_term_relationships r ON g.group_id = r.object_id AND r.object_type = 'group'
+         LEFT JOIN {$wpdb->prefix}qp_terms child_term ON r.term_id = child_term.term_id
+         LEFT JOIN {$wpdb->prefix}qp_terms parent_term ON child_term.parent = parent_term.term_id
+         WHERE q.question_id = %d 
+           AND parent_term.taxonomy_id = (SELECT taxonomy_id FROM {$wpdb->prefix}qp_taxonomies WHERE taxonomy_name = 'subject')",
         $question_id
     ), ARRAY_A);
+    // **FIX END**
 
     if (!$question_data) {
         wp_send_json_error(['message' => 'Question not found.']);
@@ -4801,13 +4853,13 @@ function qp_get_single_question_for_review_ajax()
         $question_data['question_text'] = wp_kses_post(nl2br($question_data['question_text']));
     }
 
-    // Fetch options (this part remains the same)
+    // Fetch options
     $options = $wpdb->get_results($wpdb->prepare(
         "SELECT option_id, option_text, is_correct FROM {$wpdb->prefix}qp_options WHERE question_id = %d ORDER BY option_id ASC",
         $question_id
     ), ARRAY_A);
 
-    foreach ($options as &$option) { // Use a reference to modify the array directly
+    foreach ($options as &$option) {
         if (!empty($option['option_text'])) {
             $option['option_text'] = wp_kses_post(nl2br($option['option_text']));
         }

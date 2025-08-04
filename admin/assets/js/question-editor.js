@@ -64,124 +64,123 @@ jQuery(document).ready(function($) {
     updateSources();
     updateSections();
     togglePyqFields();
-
     // --- Function to update Topic dropdown based on Subject ---
     function updateTopics() {
         var selectedSubjectId = subjectSelect.val();
-        // Capture the currently selected topic before clearing
-        var previouslySelectedTopicId = topicSelect.val();
         
         topicSelect.empty().prop('disabled', true);
 
+        // Recursive helper function to build the indented options
+        function buildTopicHierarchy(parentElement, allTerms, parentId, level, selectedId) {
+            var prefix = '— '.repeat(level);
+            
+            // Find all direct children of the current parentId and sort them
+            var children = allTerms.filter(term => term.parent == parentId);
+            children.sort((a, b) => a.name.localeCompare(b.name));
+
+            children.forEach(function(term) {
+                var option = $("<option></option>")
+                    .val(term.id)
+                    .text(prefix + term.name);
+
+                if (term.id == selectedId) {
+                    option.prop("selected", true);
+                }
+                parentElement.append(option);
+                
+                // Recurse for grandchildren
+                buildTopicHierarchy(parentElement, allTerms, term.id, level + 1, selectedId);
+            });
+        }
+
         if (selectedSubjectId) {
-            // A subject IS selected, now check if it has topics.
-            if (qp_editor_data.topics_by_subject[selectedSubjectId]) {
-                topicSelect.prop('disabled', false).append('<option value="">— Select a Topic —</option>');
-                $.each(qp_editor_data.topics_by_subject[selectedSubjectId], function(index, topic) {
-                    var option = $('<option></option>').val(topic.id).text(topic.name);
-                    if (topic.id == previouslySelectedTopicId || topic.id == qp_editor_data.current_topic_id) {
-                        option.prop('selected', true);
-                    }
-                    topicSelect.append(option);
-                });
-                qp_editor_data.current_topic_id = '';
-            } else {
-                // The selected subject has no topics.
-                topicSelect.append('<option value="">— No topics for this subject —</option>');
-            }
+            topicSelect.prop("disabled", false).append('<option value="">— Select a Topic —</option>');
+            // Start the recursive build from the selected subject, using all subject terms
+            buildTopicHierarchy(topicSelect, qp_editor_data.all_subject_terms, selectedSubjectId, 0, qp_editor_data.current_topic_id);
         } else {
-            // No subject is selected at all.
             topicSelect.append('<option value="">— Select a Subject First —</option>');
         }
+        // Clear the global variable after it's been used to set the initial state
+        qp_editor_data.current_topic_id = '';
     }
 
+// --- Function to update Source dropdown based on Subject ---
 function updateSources() {
     var selectedSubjectId = subjectSelect.val();
     var previouslySelectedSourceId = sourceSelect.val() || qp_editor_data.current_source_id;
     
-
     sourceSelect.empty().prop('disabled', true);
 
-    var addedSourceIds = {};
+    if (selectedSubjectId) {
+        // Find all top-level source IDs linked to the selected subject
+        var linkedSourceIds = qp_editor_data.source_subject_links
+            .filter(link => link.subject_id == selectedSubjectId)
+            .map(link => link.source_id);
 
-    if (selectedSubjectId && qp_editor_data.sources_by_subject[selectedSubjectId]) {
-        sourceSelect.prop('disabled', false).append('<option value="">— Select a Source —</option>');
+        // Filter all source terms to get only the linked, top-level ones
+        var availableSources = qp_editor_data.all_source_terms
+            .filter(term => term.parent_id == 0 && linkedSourceIds.includes(String(term.id)));
 
-
-
-            $.each(qp_editor_data.sources_by_subject[selectedSubjectId], function(index, source) {
+        if (availableSources.length > 0) {
+            sourceSelect.prop('disabled', false).append('<option value="">— Select a Source —</option>');
+            availableSources.sort((a, b) => a.name.localeCompare(b.name)); // Sort them alphabetically
+            
+            $.each(availableSources, function(index, source) {
                 var option = $('<option></option>').val(source.id).text(source.name);
-            if (source.id == previouslySelectedSourceId) {
-                option.prop('selected', true);
-            }
+                if (source.id == previouslySelectedSourceId) {
+                    option.prop('selected', true);
+                }
                 sourceSelect.append(option);
-            addedSourceIds[source.id] = true;
             });
+        } else {
+             sourceSelect.append('<option value="">— No sources for this subject —</option>');
+        }
     } else {
-        sourceSelect.append('<option value="">— No sources for this subject —</option>');
-        }
-        
-    // --- Always add the current source if not present ---
-    if (
-        previouslySelectedSourceId &&
-        !addedSourceIds[previouslySelectedSourceId] &&
-        qp_editor_data.all_source_terms
-    ) {
-        var found = qp_editor_data.all_source_terms.find(function(term) {
-            return term.id == previouslySelectedSourceId;
-        });
-        if (found) {
-            var option = $('<option></option>').val(found.id).text(found.name).prop('selected', true);
-            sourceSelect.append(option);
-        }
+        sourceSelect.append('<option value="">— Select a Subject First —</option>');
     }
-
-
-
-    sourceSelect.trigger('change');
-    qp_editor_data.current_source_id = '';
+        
+    sourceSelect.trigger('change'); // IMPORTANT: This will trigger updateSections()
+    qp_editor_data.current_source_id = ''; // Clear after use
 }
 
 
-    // --- Function to update Section dropdown based on Source ---
-    function updateSections() {
-        var selectedSourceId = sourceSelect.val();
-        // Use the saved value from the initial page load if it exists
-        var previouslySelectedSectionId = sectionSelect.val() || qp_editor_data.current_section_id;
+// --- Function to update Section dropdown based on Source ---
+function updateSections() {
+    var selectedSourceId = sourceSelect.val();
+    var previouslySelectedSectionId = sectionSelect.val() || qp_editor_data.current_section_id;
 
-        sectionSelect.empty().prop('disabled', true);
+    sectionSelect.empty().prop('disabled', true);
 
-        // Helper function to recursively build the dropdown options
-        function buildTermHierarchy(parentElement, terms, parentId, level, selectedId) {
-            var prefix = '— '.repeat(level);
-            terms.forEach(function(term) {
-                if (term.parent_id == parentId) {
-                    var option = $('<option></option>')
-                        .val(term.id)
-                        .text(prefix + term.name);
-                    
-                    // Set the 'selected' property if this term matches the one to be selected
-                    if (term.id == selectedId) {
-                        option.prop('selected', true);
-                    }
-                    parentElement.append(option);
-                    // Recursive call for children of the current term
-                    buildTermHierarchy(parentElement, terms, term.id, level + 1, selectedId);
-                }
-            });
-        }
+    // Recursive helper function to build the indented options
+    function buildTermHierarchy(parentElement, terms, parentId, level, selectedId) {
+        var prefix = '— '.repeat(level);
+        
+        var children = terms.filter(term => term.parent_id == parentId);
+        children.sort((a, b) => a.name.localeCompare(b.name)); // Sort alphabetically
 
-        if (selectedSourceId && qp_editor_data.all_source_terms) {
-            sectionSelect.prop('disabled', false).append('<option value="">— Select a Section —</option>');
-            // Start the recursive function to build the hierarchy under the selected source
-            buildTermHierarchy(sectionSelect, qp_editor_data.all_source_terms, selectedSourceId, 0, previouslySelectedSectionId);
+        children.forEach(function(term) {
+            var option = $('<option></option>')
+                .val(term.id)
+                .text(prefix + term.name);
             
-            // Clear the initial value after it has been used to prevent conflicts
-            qp_editor_data.current_section_id = '';
-        } else {
-            sectionSelect.append('<option value="">— Select a source first —</option>');
-        }
+            if (term.id == selectedId) {
+                option.prop('selected', true);
+            }
+            parentElement.append(option);
+            
+            // Recursive call for children of the current term
+            buildTermHierarchy(parentElement, terms, term.id, level + 1, selectedId);
+        });
     }
+
+    if (selectedSourceId && qp_editor_data.all_source_terms) {
+        sectionSelect.prop('disabled', false).append('<option value="">— Select a Section —</option>');
+        buildTermHierarchy(sectionSelect, qp_editor_data.all_source_terms, selectedSourceId, 0, previouslySelectedSectionId);
+    } else {
+        sectionSelect.append('<option value="">— Select a source first —</option>');
+    }
+    qp_editor_data.current_section_id = ''; // Clear after use
+}
 
     // --- Function to toggle PYQ fields ---
     function togglePyqFields() {
@@ -202,22 +201,55 @@ function updateSources() {
 
     // --- Bind Event Handlers ---
     subjectSelect.on('change', function() {
-        // Clear the current topic, source, and section selections
+        // Clear all dependent dropdowns first
         topicSelect.val('');
         sourceSelect.val('');
         sectionSelect.val('').empty().append('<option value="">— Select a source first —</option>').prop('disabled', true);
-
-        // Now update the dropdowns
+        
+        // Update the topic and source dropdowns (these functions are already correct from previous steps)
         updateTopics();
         updateSources();
         
-        var $form = $(this).closest(".qp-question-editor-form-wrapper");
-        var $examSelect = $form.find('select[name="exam_id"]');
-        var $yearInput = $form.find('input[name="pyq_year"]');
-        $examSelect.val('');
-        $yearInput.val('');
-        qp_editor_data.current_exam_id = null; // Reset current exam ID
-        qp_editor_data.current_pyq_year = null; // Reset current year
+        // --- START: Corrected Exam Filtering Logic ---
+        var selectedSubjectId = $(this).val();
+        var $examSelect = $('select[name="exam_id"]');
+        var previouslySelectedExamId = qp_editor_data.current_exam_id;
+        
+        $examSelect.empty().prop('disabled', true);
+
+        if (selectedSubjectId) {
+            // Find all exam IDs linked to the selected subject
+            var linkedExamIds = qp_editor_data.exam_subject_links
+                .filter(link => link.subject_id == selectedSubjectId)
+                .map(link => link.exam_id);
+                
+            // Filter the master list of all exams to get the available ones
+            var availableExams = qp_editor_data.all_exams
+                .filter(exam => linkedExamIds.includes(String(exam.exam_id)));
+
+            if (availableExams.length > 0) {
+                 $examSelect.prop('disabled', false).append('<option value="">— Select an Exam —</option>');
+                 availableExams.sort((a, b) => a.exam_name.localeCompare(b.exam_name));
+
+                 $.each(availableExams, function(index, exam) {
+                    var option = $('<option></option>').val(exam.exam_id).text(exam.exam_name);
+                    if (exam.exam_id == previouslySelectedExamId) {
+                        option.prop('selected', true);
+                    }
+                    $examSelect.append(option);
+                });
+            } else {
+                $examSelect.append('<option value="">— No exams for this subject —</option>');
+            }
+        } else {
+             $examSelect.append('<option value="">— Select a Subject First —</option>');
+        }
+       
+        // Reset PYQ year input and clear the global variables after use
+        $('input[name="pyq_year"]').val('');
+        qp_editor_data.current_exam_id = null;
+        qp_editor_data.current_pyq_year = null;
+        // --- END: Corrected Exam Filtering Logic ---
     });
 
     sourceSelect.on('change', function() {

@@ -145,7 +145,7 @@ jQuery(document).ready(function($) {
                     var correctOptionId = null;
 
                     var html = '<button class="qp-modal-close-btn">&times;</button>';
-                    html += '<h4>' + data.subject_name + ' (ID: ' + data.custom_question_id + ')</h4>';
+                    html += '<h4>' + data.subject_name + ' (ID: ' + data.question_id + ')</h4>';
                     if (data.direction_text || data.direction_image_url) {
                         html += '<div class="qp-direction">';
                         if(data.direction_text) {

@@ -73,7 +73,7 @@ class QP_Reports_List_Table extends WP_List_Table {
 
         if (!empty($_REQUEST['s'])) {
             $search = '%' . $wpdb->esc_like($_REQUEST['s']) . '%';
-            $where_clauses[] = "(q.question_text LIKE %s OR q.custom_question_id LIKE %s)";
+            $where_clauses[] = "(q.question_text LIKE %s OR q.question_id LIKE %s)";
             $params[] = $search;
             $params[] = $search;
         }
@@ -84,7 +84,6 @@ class QP_Reports_List_Table extends WP_List_Table {
             SELECT
                 r.question_id,
                 q.question_text,
-                q.custom_question_id,
                 GROUP_CONCAT(DISTINCT rr.reason_text SEPARATOR ', ') as reasons,
                 GROUP_CONCAT(DISTINCT u.display_name SEPARATOR ', ') as reporters,
                 MAX(r.report_date) as last_report_date,
@@ -106,7 +105,7 @@ class QP_Reports_List_Table extends WP_List_Table {
     }
 
     public function column_question_text($item) {
-        return sprintf('<strong>#%s:</strong> %s', esc_html($item['custom_question_id']), esc_html(wp_trim_words($item['question_text'], 40, '...')));
+        return sprintf('<strong>#%s:</strong> %s', esc_html($item['question_id']), esc_html(wp_trim_words($item['question_text'], 40, '...')));
     }
 
     public function column_report_details($item) {
