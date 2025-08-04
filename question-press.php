@@ -2066,26 +2066,34 @@ function qp_get_source_hierarchy_for_question($question_id)
     $rel_table = $wpdb->prefix . 'qp_term_relationships';
     $term_table = $wpdb->prefix . 'qp_terms';
     $tax_table = $wpdb->prefix . 'qp_taxonomies';
+    $questions_table = $wpdb->prefix . 'qp_questions';
 
-    // Find the most specific source term linked to the question.
+    // Step 1: Get the group_id for the given question.
+    $group_id = $wpdb->get_var($wpdb->prepare("SELECT group_id FROM {$questions_table} WHERE question_id = %d", $question_id));
+
+    if (!$group_id) {
+        return [];
+    }
+
+    // Step 2: Find the most specific source term linked to the GROUP.
     $term_id = $wpdb->get_var($wpdb->prepare(
         "SELECT r.term_id
          FROM {$rel_table} r
          JOIN {$term_table} t ON r.term_id = t.term_id
-         WHERE r.object_id = %d AND r.object_type = 'question'
+         WHERE r.object_id = %d AND r.object_type = 'group'
          AND t.taxonomy_id = (SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'source')
          LIMIT 1",
-        $question_id
+        $group_id
     ));
 
     if (!$term_id) {
-        return []; // Return an empty array if no source is found
+        return []; // Return an empty array if no source is found for the group
     }
 
     $lineage = [];
     $current_term_id = $term_id;
 
-    // Loop up the hierarchy to trace back to the top-level parent (source).
+    // Step 3: Loop up the hierarchy to trace back to the top-level parent (source).
     for ($i = 0; $i < 10; $i++) { // Safety limit to prevent infinite loops
         if (!$current_term_id) break;
         $term = $wpdb->get_row($wpdb->prepare("SELECT name, parent FROM {$term_table} WHERE term_id = %d", $current_term_id));
