@@ -4987,7 +4987,7 @@ function qp_handle_log_settings_forms()
     if (isset($_POST['action']) && ($_POST['action'] === 'add_reason' || $_POST['action'] === 'update_reason') && check_admin_referer('qp_add_edit_reason_nonce')) {
         $reason_text = sanitize_text_field($_POST['reason_text']);
         $is_active = isset($_POST['is_active']) ? 1 : 0;
-        $reason_type = isset($_POST['reason_type']) ? sanitize_key($_POST['reason_type']) : 'report'; // Get the new type
+        $reason_type = isset($_POST['reason_type']) ? sanitize_key($_POST['reason_type']) : 'report';
         $taxonomy_id = absint($_POST['taxonomy_id']);
         
         $term_data = [
@@ -5006,7 +5006,7 @@ function qp_handle_log_settings_forms()
 
         if ($term_id) {
             qp_update_term_meta($term_id, 'is_active', $is_active);
-            qp_update_term_meta($term_id, 'type', $reason_type); // Save the new type
+            qp_update_term_meta($term_id, 'type', $reason_type);
         }
 
         wp_safe_redirect(admin_url('admin.php?page=qp-logs-reports&tab=log_settings&message=1'));
@@ -5016,10 +5016,26 @@ function qp_handle_log_settings_forms()
     // Delete Reason
     if (isset($_GET['action']) && $_GET['action'] === 'delete' && isset($_GET['reason_id']) && check_admin_referer('qp_delete_reason_' . absint($_GET['reason_id']))) {
         $term_id_to_delete = absint($_GET['reason_id']);
-        // Also delete meta associated with the term
-        $wpdb->delete($wpdb->prefix . 'qp_term_meta', ['term_id' => $term_id_to_delete]);
-        $wpdb->delete($term_table, ['term_id' => $term_id_to_delete]);
-        wp_safe_redirect(admin_url('admin.php?page=qp-logs-reports&tab=log_settings&message=2'));
+        $reports_table = $wpdb->prefix . 'qp_question_reports';
+
+        // Check if the reason is in use by any reports
+        $usage_count = $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$reports_table} WHERE reason_term_id = %d",
+            $term_id_to_delete
+        ));
+
+        if ($usage_count > 0) {
+            // If it's in use, set an error message and redirect
+            $message = sprintf('This reason cannot be deleted because it is currently used in %d report(s).', $usage_count);
+            QP_Sources_Page::set_message($message, 'error');
+        } else {
+            // If not in use, proceed with deletion
+            $wpdb->delete($wpdb->prefix . 'qp_term_meta', ['term_id' => $term_id_to_delete]);
+            $wpdb->delete($term_table, ['term_id' => $term_id_to_delete]);
+            QP_Sources_Page::set_message('Reason deleted successfully.', 'updated');
+        }
+
+        wp_safe_redirect(admin_url('admin.php?page=qp-logs-reports&tab=log_settings'));
         exit;
     }
 }
