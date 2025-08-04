@@ -867,6 +867,8 @@ jQuery(document).ready(function ($) {
       return;
     }
 
+    var reportComment = form.find('textarea[name="report_comment"]').val();
+
     $.ajax({
       url: qp_ajax_object.ajax_url,
       type: "POST",
@@ -876,6 +878,7 @@ jQuery(document).ready(function ($) {
         question_id: questionID,
         session_id: sessionID,
         reasons: selectedReasons,
+        comment: reportComment,
       },
       beforeSend: function () {
         submitButton.text("Submitting...").prop("disabled", true);

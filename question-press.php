@@ -3985,6 +3985,7 @@ function qp_submit_question_report_ajax()
     $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
     $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
     $reasons = isset($_POST['reasons']) && is_array($_POST['reasons']) ? array_map('absint', $_POST['reasons']) : [];
+    $comment = isset($_POST['comment']) ? sanitize_textarea_field($_POST['comment']) : '';
     $user_id = get_current_user_id();
 
     if (empty($question_id) || empty($reasons)) {
@@ -3998,11 +3999,12 @@ function qp_submit_question_report_ajax()
         $wpdb->insert(
             $reports_table,
             [
-                'question_id' => $question_id,
-                'user_id'     => $user_id,
-                'reason_term_id'   => $reason_id,
-                'report_date' => current_time('mysql'),
-                'status'      => 'open'
+                'question_id'    => $question_id,
+                'user_id'        => $user_id,
+                'reason_term_id' => $reason_id, // Use the correct column name
+                'comment'        => $comment,   // Add the comment
+                'report_date'    => current_time('mysql'),
+                'status'         => 'open'
             ]
         );
     }
@@ -4011,7 +4013,7 @@ function qp_submit_question_report_ajax()
     $wpdb->insert("{$wpdb->prefix}qp_logs", [
         'log_type'    => 'User Report',
         'log_message' => sprintf('User reported question #%s.', $question_id),
-        'log_data'    => wp_json_encode(['user_id' => $user_id, 'session_id' => $session_id, 'question_id' => $question_id, 'reasons' => $reasons])
+        'log_data'    => wp_json_encode(['user_id' => $user_id, 'session_id' => $session_id, 'question_id' => $question_id, 'reasons' => $reasons, 'comment' => $comment])
     ]);
 
     wp_send_json_success(['message' => 'Report submitted.']);

@@ -2951,6 +2951,26 @@ hr.qp-divider {
     /* This is the key property for centering */
 }
 
+/* --- NEW: Report Modal Textarea Styles --- */
+#qp-report-modal-content textarea {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 10px;
+    border: 1px solid var(--qp-border-color);
+    border-radius: 4px;
+    font-family: inherit;
+    font-size: 14px;
+    margin-bottom: 1.5rem;
+    resize: vertical;
+    min-height: 70px;;
+}
+
+#qp-report-modal-content textarea:focus {
+    border-color: var(--qp-primary-color);
+    box-shadow: 0 0 0 1px var(--qp-primary-color);
+    outline: none;
+}
+
 #qp-report-modal-content {
     background: #fff;
     padding: 2rem;

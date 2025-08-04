@@ -62,7 +62,7 @@ class QP_Question_Editor_Page
                 // --- NEW HIERARCHICAL TERM LOOKUP ---
                 // Find the most specific topic/subject term linked to the group
                 $linked_subject_term_id = $wpdb->get_var($wpdb->prepare("SELECT term_id FROM {$rel_table} WHERE object_id = %d AND object_type = 'group' AND term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id = %d)", $group_id, $subject_tax_id));
-                
+
                 $current_topic_id = $linked_subject_term_id; // The most specific child is the "topic"
                 $current_subject_id = 0; // This will be the top-level parent
 
@@ -90,7 +90,7 @@ class QP_Question_Editor_Page
 
                 if ($linked_source_term_id) {
                     $parent_id = $wpdb->get_var($wpdb->prepare("SELECT parent FROM $term_table WHERE term_id = %d", $linked_source_term_id));
-                     if ($parent_id == 0) {
+                    if ($parent_id == 0) {
                         $current_source_id = $linked_source_term_id;
                     } else {
                         for ($i = 0; $i < 10; $i++) {
@@ -103,7 +103,7 @@ class QP_Question_Editor_Page
                         }
                     }
                 }
-                
+
                 // Get the current exam for the group (existing logic is correct)
                 $current_exam_id = $wpdb->get_var($wpdb->prepare("SELECT term_id FROM {$rel_table} WHERE object_id = %d AND object_type = 'group' AND term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id = %d)", $group_id, $exam_tax_id));
 
@@ -123,7 +123,7 @@ class QP_Question_Editor_Page
         if (empty($questions_in_group)) {
             $questions_in_group[] = (object)['question_id' => 0, 'question_text' => '', 'options' => [], 'labels' => []];
         }
-        
+
         // --- Fetch ALL data needed for the form dropdowns from the new taxonomy system ---
         $term_table = $wpdb->prefix . 'qp_terms';
         $tax_table = $wpdb->prefix . 'qp_taxonomies';
@@ -142,7 +142,7 @@ class QP_Question_Editor_Page
 
         $source_subject_links = $wpdb->get_results("SELECT object_id AS source_id, term_id AS subject_id FROM {$rel_table} WHERE object_type = 'source_subject_link'");
         $exam_subject_links = $wpdb->get_results("SELECT object_id AS exam_id, term_id AS subject_id FROM {$rel_table} WHERE object_type = 'exam_subject_link'");
-        
+
         // Pass all necessary data to our JavaScript file
         wp_localize_script('qp-editor-script', 'qp_editor_data', [
             'all_subject_terms'   => $all_subject_terms,
@@ -296,8 +296,8 @@ class QP_Question_Editor_Page
                                 ?>
                                     <div class="postbox qp-question-block <?php echo esc_attr($status_class); ?>">
                                         <div class="postbox-header">
-                                            <button type="button" class="qp-toggle-question-block" title="Toggle visibility">
-                                                <span class="dashicons dashicons-arrow-down-alt2"></span>
+                                            <button type="button" class="qp-toggle-question-block" title="Toggle visibility" style="padding: 0;">
+                                                <span class="dashicons dashicons-arrow-down-alt2" style="margin-left: 5px;"></span>
                                             </button>
                                             <h2 class="hndle">
                                                 <span>
@@ -349,21 +349,21 @@ class QP_Question_Editor_Page
                                         </div>
                                         <div class="inside">
                                             <?php
-            // Check if this specific question has any open reports with comments
-            $reports_for_this_question = array_filter($open_reports, function($report) use ($question) {
-                return $report->question_id == $question->question_id && !empty(trim($report->comment));
-            });
+                                            // Check if this specific question has any open reports with comments
+                                            $reports_for_this_question = array_filter($open_reports, function ($report) use ($question) {
+                                                return $report->question_id == $question->question_id && !empty(trim($report->comment));
+                                            });
 
-            if (!empty($reports_for_this_question)):
-                foreach ($reports_for_this_question as $report):
-            ?>
-                <div class="notice notice-alt notice-warning" style="margin: 0 0 15px; padding: 10px; border-left-width: 4px;">
-                    <p style="margin: 0;"><strong>Reporter's Comment:</strong> <?php echo esc_html($report->comment); ?></p>
-                </div>
-            <?php
-                endforeach;
-            endif;
-            ?>
+                                            if (!empty($reports_for_this_question)):
+                                                foreach ($reports_for_this_question as $report):
+                                            ?>
+                                                    <div class="notice notice-alt notice-warning qp-reporter-comment-notice" style="margin: 0 0 15px; padding: 10px; border-left-width: 4px;">
+                                                        <p style="margin: 0;"><strong>Reporter's Comment:</strong> <?php echo esc_html($report->comment); ?></p>
+                                                    </div>
+                                            <?php
+                                                endforeach;
+                                            endif;
+                                            ?>
                                             <input type="hidden" name="questions[<?php echo $q_index; ?>][question_id]" class="question-id-input" value="<?php echo esc_attr($question->question_id); ?>">
                                             <?php if (!empty($question->labels)) : ?>
                                                 <div id="qp-labels-container-<?php echo $q_index; ?>" class="qp-editor-labels-container" data-editor-id="question_text_editor_<?php echo $q_index; ?>">
@@ -374,7 +374,7 @@ class QP_Question_Editor_Page
                                                     <?php endforeach; ?>
                                                 </div>
                                             <?php endif; ?>
-                                            
+
                                             <?php
                                             wp_editor(
                                                 $question->question_text, // The content

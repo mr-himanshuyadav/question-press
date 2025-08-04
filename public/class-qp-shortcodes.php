@@ -201,11 +201,11 @@ class QP_Shortcodes
             <div class="qp-form-group qp-marks-group" id="qp-revision-marks-group-wrapper" style="display: none;">
                 <div>
                     <label for="qp_revision_marks_correct">Marks for Correct Answer:</label>
-                    <input type="number" name="qp_marks_correct" id="qp_revision_marks_correct" value="4" step="0.01"  min="0.01" max="10">
+                    <input type="number" name="qp_marks_correct" id="qp_revision_marks_correct" value="4" step="0.01" min="0.01" max="10">
                 </div>
                 <div>
                     <label for="qp_revision_marks_incorrect">Penalty for Incorrect Answer:</label>
-                    <input type="number" name="qp_marks_incorrect" id="qp_revision_marks_incorrect" value="1" step="0.01"  min="0" max="10">
+                    <input type="number" name="qp_marks_incorrect" id="qp_revision_marks_incorrect" value="1" step="0.01" min="0" max="10">
                 </div>
             </div>
 
@@ -640,11 +640,11 @@ class QP_Shortcodes
                 <div class="qp-form-group qp-marks-group" id="qp-marks-group-wrapper" style="display: none;">
                     <div style="width: 48%">
                         <label for="qp_marks_correct">Correct Marks:</label>
-                        <input type="number" name="qp_marks_correct" id="qp_marks_correct" value="4" step="0.01"  min="0.01" max="10" required>
+                        <input type="number" name="qp_marks_correct" id="qp_marks_correct" value="4" step="0.01" min="0.01" max="10" required>
                     </div>
                     <div style="width: 48%">
                         <label for="qp_marks_incorrect">Negative Marks:</label>
-                        <input type="number" name="qp_marks_incorrect" id="qp_marks_incorrect" value="1" step="0.01" min="0"  max="10" required>
+                        <input type="number" name="qp_marks_incorrect" id="qp_marks_incorrect" value="1" step="0.01" min="0" max="10" required>
                     </div>
                 </div>
 
@@ -895,6 +895,7 @@ class QP_Shortcodes
                 <p>Please select all issues that apply to the current question.</p>
                 <form id="qp-report-form">
                     <div id="qp-report-options-container"></div>
+                    <textarea id="qp-report-comment" name="report_comment" rows="3" placeholder="Optional: Add a comment to explain the issue..."></textarea>
                     <div class="qp-modal-footer"><button type="submit" class="qp-button qp-button-primary">Submit Report</button></div>
                 </form>
             </div>
@@ -971,7 +972,7 @@ class QP_Shortcodes
             JOIN {$wpdb->prefix}qp_questions q ON a.question_id = q.question_id
             WHERE a.session_id = %d
         ", $session_id));
-        
+
         $topics_in_session = [];
         if (!empty($group_ids_in_session)) {
             $group_ids_placeholder = implode(',', $group_ids_in_session);
@@ -1010,17 +1011,18 @@ class QP_Shortcodes
                 $all_options[$option->question_id][] = $option;
             }
         }
-        
+
         // --- NEW: Fetch all lineage data in fewer queries for efficiency ---
         $lineage_cache = [];
         if (!function_exists('get_term_lineage')) {
-            function get_term_lineage($term_id, &$lineage_cache, $wpdb) {
+            function get_term_lineage($term_id, &$lineage_cache, $wpdb)
+            {
                 if (isset($lineage_cache[$term_id])) {
                     return $lineage_cache[$term_id];
                 }
                 $lineage = [];
                 $current_id = $term_id;
-                for ($i=0; $i<10; $i++) {
+                for ($i = 0; $i < 10; $i++) {
                     if (!$current_id) break;
                     $term = $wpdb->get_row($wpdb->prepare("SELECT name, parent FROM {$wpdb->prefix}qp_terms WHERE term_id = %d", $current_id));
                     if ($term) {
@@ -1052,10 +1054,10 @@ class QP_Shortcodes
 
             $attempt->subject_lineage = $subject_term_id ? get_term_lineage($subject_term_id, $lineage_cache, $wpdb) : [];
             $attempt->source_lineage = $source_term_id ? get_term_lineage($source_term_id, $lineage_cache, $wpdb) : [];
-            
+
             $attempts[] = $attempt;
         }
-        
+
         ob_start();
         echo '<div id="qp-practice-app-wrapper">';
         $is_mock_test = isset($settings['practice_mode']) && $settings['practice_mode'] === 'mock_test';
@@ -1241,6 +1243,7 @@ class QP_Shortcodes
                 <form id="qp-report-form">
                     <input type="hidden" id="qp-report-question-id-field" value="">
                     <div id="qp-report-options-container"></div>
+                    <textarea id="qp-report-comment-review" name="report_comment" rows="3" placeholder="Optional: Add a comment to explain the issue..."></textarea>
                     <div class="qp-modal-footer">
                         <button type="submit" class="qp-button qp-button-primary">Submit Report</button>
                     </div>
