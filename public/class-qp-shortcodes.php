@@ -1244,7 +1244,7 @@ class QP_Shortcodes
                 <form id="qp-report-form">
                     <input type="hidden" id="qp-report-question-id-field" value="">
                     <div id="qp-report-options-container"></div>
-                    <label for="qp-report-comment-review"><span style="color: red;">*</span></label>
+                    <label for="qp-report-comment-review" style="font-size: .8em;">Comment<span style="color: red;">*</span></label>
                     <textarea id="qp-report-comment-review" name="report_comment" rows="3" placeholder="Add a comment to explain the issue..." required></textarea>
                     <div class="qp-modal-footer">
                         <button type="submit" class="qp-button qp-button-primary">Submit Report</button>

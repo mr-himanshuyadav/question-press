@@ -172,8 +172,8 @@ body {
     content: "";
     position: absolute;
     display: none;
-    left: 6px;
-    top: 3px;
+    left: 5px;
+    top: 2px;
     width: 4px;
     height: 8px;
     border: solid white;

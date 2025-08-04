@@ -301,11 +301,10 @@ function qp_activate_plugin()
     // Define and insert default report reasons
     $default_reasons = [
         ['text' => 'Wrong Answer', 'type' => 'report'],
-        ['text' => 'Typo in question', 'type' => 'suggestion'],
+        ['text' => 'Language Mistakes', 'type' => 'suggestion'],
         ['text' => 'Options are incorrect', 'type' => 'report'],
         ['text' => 'Image is not loading', 'type' => 'report'],
         ['text' => 'Question is confusing', 'type' => 'suggestion'],
-        ['text' => 'Language Mistake', 'type' => 'suggestion'],
         ['text' => 'No Answer Provided', 'type' => 'report'],
         ['text' => 'Wrong Formatting', 'type' => 'suggestion']
     ];
@@ -3967,12 +3966,20 @@ function qp_get_report_reasons_ajax()
 
     $reason_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'report_reason'");
 
-    // This query now correctly fetches only the ACTIVE reasons from the new taxonomy system
+    // This query now also fetches the 'type' for each reason.
     $reasons = $wpdb->get_results($wpdb->prepare(
-        "SELECT t.term_id as reason_id, t.name as reason_text
+        "SELECT 
+            t.term_id as reason_id, 
+            t.name as reason_text,
+            MAX(CASE WHEN m.meta_key = 'type' THEN m.meta_value END) as type
          FROM {$term_table} t
-         LEFT JOIN {$meta_table} m ON t.term_id = m.term_id AND m.meta_key = 'is_active'
-         WHERE t.taxonomy_id = %d AND (m.meta_value = '1' OR m.meta_value IS NULL)
+         LEFT JOIN {$meta_table} m ON t.term_id = m.term_id
+         WHERE t.taxonomy_id = %d AND (
+            NOT EXISTS (SELECT 1 FROM {$meta_table} meta_active WHERE meta_active.term_id = t.term_id AND meta_active.meta_key = 'is_active') 
+            OR 
+            (SELECT meta_active.meta_value FROM {$meta_table} meta_active WHERE meta_active.term_id = t.term_id AND meta_active.meta_key = 'is_active') = '1'
+         )
+         GROUP BY t.term_id
          ORDER BY t.name ASC",
         $reason_tax_id
     ));
