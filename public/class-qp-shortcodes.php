@@ -483,14 +483,12 @@ $reports_table = $wpdb->prefix . 'qp_question_reports';
 $terms_table = $wpdb->prefix . 'qp_terms';
 $meta_table = $wpdb->prefix . 'qp_term_meta';
 
-// Get all open reports for the user in one go
+// Get all individual open reports for the user
 $all_user_reports = $wpdb->get_results($wpdb->prepare("
     SELECT
         r.question_id,
-        m.meta_value as type
+        r.reason_term_ids
     FROM {$reports_table} r
-    JOIN {$terms_table} t ON FIND_IN_SET(t.term_id, r.reason_term_ids)
-    JOIN {$meta_table} m ON t.term_id = m.term_id AND m.meta_key = 'type'
     WHERE r.user_id = %d AND r.status = 'open'
 ", $user_id));
 
@@ -503,10 +501,24 @@ foreach ($all_user_reports as $report) {
             'has_suggestion' => false,
         ];
     }
-    if ($report->type === 'report') {
-        $reported_info[$report->question_id]['has_report'] = true;
-    } else {
-        $reported_info[$report->question_id]['has_suggestion'] = true;
+    
+    // Get the types for the reasons in this specific report
+    $reason_ids = array_filter(explode(',', $report->reason_term_ids));
+    if (!empty($reason_ids)) {
+        $ids_placeholder = implode(',', array_map('absint', $reason_ids));
+        $reason_types = $wpdb->get_col("
+            SELECT m.meta_value 
+            FROM {$terms_table} t
+            JOIN {$meta_table} m ON t.term_id = m.term_id AND m.meta_key = 'type'
+            WHERE t.term_id IN ($ids_placeholder)
+        ");
+
+        if (in_array('report', $reason_types)) {
+            $reported_info[$report->question_id]['has_report'] = true;
+        }
+        if (in_array('suggestion', $reason_types)) {
+            $reported_info[$report->question_id]['has_suggestion'] = true;
+        }
     }
 }
 
@@ -923,7 +935,7 @@ $session_data['reported_info'] = $reported_info;
                 <form id="qp-report-form">
                     <div id="qp-report-options-container"></div>
                     <label for="qp-report-comment" style="font-size: .8em;">Comment<span style="color: red;">*</span></label>
-                    <textarea id="qp-report-comment" name="report_comment" rows="3" placeholder="Add a comment to explain the issue..."></textarea>
+                    <textarea id="qp-report-comment" name="report_comment" rows="3" placeholder="Add a comment to explain the issue..."></textarea required>
                     <div class="qp-modal-footer"><button type="submit" class="qp-button qp-button-primary">Submit Report</button></div>
                 </form>
             </div>

@@ -839,7 +839,7 @@ function renderPalette() {
   });
 
   // Handle the report form submission
-  wrapper.on("submit", "#qp-report-form", function (e) {
+wrapper.on("submit", "#qp-report-form", function (e) {
     e.preventDefault();
     var form = $(this);
     var submitButton = form.find('button[type="submit"]');
@@ -855,15 +855,29 @@ function renderPalette() {
         return $(this).val();
       })
       .get();
+    
+    var reportComment = form.find('textarea[name="report_comment"]').val().trim();
 
     if (selectedReasons.length === 0) {
-      Swal.fire(
-        "No Reason Selected",
-        "Please select at least one reason for the report.",
-        "warning"
-      );
-      return;
+        Swal.fire(
+            "No Reason Selected",
+            "Please select at least one reason for the report.",
+            "warning"
+        );
+        return;
     }
+    
+    // --- THIS IS THE FIX ---
+    // Check if the comment is empty
+    if (reportComment === '') {
+        Swal.fire(
+            "Comment Required",
+            "Please provide a comment to explain the issue.",
+            "warning"
+        );
+        return; // Stop the submission
+    }
+    // --- END FIX ---
 
     var reportComment = form.find('textarea[name="report_comment"]').val();
 
