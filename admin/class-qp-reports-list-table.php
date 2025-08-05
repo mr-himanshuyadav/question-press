@@ -61,146 +61,153 @@ class QP_Reports_List_Table extends WP_List_Table
     }
 
     /**
- * Overrides the parent display_rows method to add a custom class to the <tr>.
- */
-public function display_rows() {
-    foreach ( $this->items as $item ) {
-        // Add a class to the row based on the report severity
-        $row_class = 'report-type-' . (isset($item['report_severity']) ? esc_attr($item['report_severity']) : 'suggestion');
-        echo '<tr class="' . $row_class . '">';
-        $this->single_row_columns( $item );
-        echo '</tr>';
-    }
-}
-
-/**
- * NEW: Add this empty method to prevent a PHP notice.
- * The parent class expects this method to exist, even if we don't use it in our custom display_rows.
- */
-public function single_row_columns( $item ) {
-    parent::single_row_columns( $item );
-}
-
-    public function prepare_items()
+     * Overrides the parent display_rows method to add a custom class to the <tr>.
+     */
+    public function display_rows()
     {
-        global $wpdb;
-
-        // First, process any bulk actions
-        $this->process_bulk_action();
-
-        $this->_column_headers = [$this->get_columns(), [], []];
-
-        $reports_table = $wpdb->prefix . 'qp_question_reports';
-        $questions_table = $wpdb->prefix . 'qp_questions';
-        $users_table = $wpdb->users;
-        $terms_table = $wpdb->prefix . 'qp_terms';
-        $meta_table = $wpdb->prefix . 'qp_term_meta';
-
-        $current_status = isset($_GET['status']) ? sanitize_key($_GET['status']) : 'open';
-        $where_clauses = ["r.status = %s"];
-        $params = [$current_status];
-
-        if (!empty($_REQUEST['s'])) {
-            $search = '%' . $wpdb->esc_like($_REQUEST['s']) . '%';
-            $where_clauses[] = "(q.question_text LIKE %s OR q.question_id LIKE %s)";
-            $params[] = $search;
-            $params[] = $search;
+        foreach ($this->items as $item) {
+            // Add a class to the row based on the report severity
+            $row_class = 'report-type-' . (isset($item['report_severity']) ? esc_attr($item['report_severity']) : 'suggestion');
+            echo '<tr class="' . $row_class . '">';
+            $this->single_row_columns($item);
+            echo '</tr>';
         }
+    }
 
-        $where_sql = 'WHERE ' . implode(' AND ', $where_clauses);
+    /**
+     * NEW: Add this empty method to prevent a PHP notice.
+     * The parent class expects this method to exist, even if we don't use it in our custom display_rows.
+     */
+    public function single_row_columns($item)
+    {
+        parent::single_row_columns($item);
+    }
 
-        // Reverted query to fetch individual reports, not grouped reports.
-        $query = "
-            SELECT
-                r.report_id,
-                r.question_id,
-                r.user_id,
-                r.comment,
-                r.reason_term_ids,
-                r.report_date,
-                q.question_text,
-                u.display_name as reporter_name,
-                q.group_id
-            FROM {$reports_table} r
-            JOIN {$questions_table} q ON r.question_id = q.question_id
-            JOIN {$users_table} u ON r.user_id = u.ID
-            {$where_sql}
-            ORDER BY r.report_date DESC
-        ";
+    public function prepare_items() {
+    global $wpdb;
 
-        $items_raw = $wpdb->get_results($wpdb->prepare($query, $params), 'ARRAY_A');
+    $this->process_bulk_action();
+    $this->_column_headers = [$this->get_columns(), [], []];
 
-        $this->items = [];
-foreach ($items_raw as $item) {
-    $reason_ids = array_filter(explode(',', $item['reason_term_ids']));
+    $reports_table = $wpdb->prefix . 'qp_question_reports';
+    $questions_table = $wpdb->prefix . 'qp_questions';
+    $users_table = $wpdb->users;
+    $terms_table = $wpdb->prefix . 'qp_terms';
+    $meta_table = $wpdb->prefix . 'qp_term_meta';
+
+    $current_status = isset($_GET['status']) ? sanitize_key($_GET['status']) : 'open';
     
-    // Set defaults
-    $item['report_severity'] = 'suggestion';
-    $item['report_types'] = ['Suggestion']; // Default display type
-    $item['reasons'] = 'N/A';
+    // Base query parts
+    $select_sql = "SELECT r.report_id, r.question_id, r.user_id, r.comment, r.reason_term_ids, r.report_date, q.question_text, u.display_name as reporter_name, q.group_id";
+    $from_sql = " FROM {$reports_table} r JOIN {$questions_table} q ON r.question_id = q.question_id JOIN {$users_table} u ON r.user_id = u.ID";
+    $where_sql = $wpdb->prepare(" WHERE r.status = %s", $current_status);
+    $params = [];
 
-    if (!empty($reason_ids)) {
-        $ids_placeholder = implode(',', array_map('absint', $reason_ids));
-        $reasons_data = $wpdb->get_results("
-            SELECT t.name, m.meta_value as type
-            FROM {$terms_table} t
-            LEFT JOIN {$meta_table} m ON t.term_id = m.term_id AND m.meta_key = 'type'
-            WHERE t.term_id IN ($ids_placeholder)
-        ");
+    if (!empty($_REQUEST['s'])) {
+        $search_term = '%' . $wpdb->esc_like($_REQUEST['s']) . '%';
         
-        $reason_names = [];
-        $reason_types = [];
-        foreach ($reasons_data as $reason) {
-            $reason_names[] = $reason->name;
-            // Default any null or empty types to 'report' for safety
-            $type = !empty($reason->type) ? $reason->type : 'report'; 
-            $reason_types[] = ucfirst($type);
-        }
+        // Find term IDs that match the search term for reasons and types
+        $matching_term_ids = $wpdb->get_col($wpdb->prepare(
+            "SELECT DISTINCT t.term_id 
+             FROM {$terms_table} t 
+             LEFT JOIN {$meta_table} m ON t.term_id = m.term_id AND m.meta_key = 'type'
+             WHERE t.name LIKE %s OR m.meta_value LIKE %s",
+            $search_term, $search_term
+        ));
 
-        $item['reasons'] = implode(', ', $reason_names);
-        $unique_types = array_unique($reason_types);
-        sort($unique_types); // Sorts alphabetically, e.g., "Report, Suggestion"
-        $item['report_types'] = $unique_types;
+        $search_where_parts = [
+            $wpdb->prepare("r.report_id LIKE %s", $search_term),
+            $wpdb->prepare("r.question_id LIKE %s", $search_term),
+            $wpdb->prepare("u.display_name LIKE %s", $search_term),
+            $wpdb->prepare("r.user_id LIKE %s", $search_term),
+            $wpdb->prepare("r.comment LIKE %s", $search_term),
+        ];
 
-        // Prioritize 'report' for the severity class used for styling
-        if (in_array('Report', $unique_types)) {
-            $item['report_severity'] = 'report';
+        if (!empty($matching_term_ids)) {
+            foreach ($matching_term_ids as $term_id) {
+                // Use FIND_IN_SET for searching in the comma-separated string
+                $search_where_parts[] = $wpdb->prepare("FIND_IN_SET(%d, r.reason_term_ids)", $term_id);
+            }
         }
+        
+        $where_sql .= " AND (" . implode(' OR ', $search_where_parts) . ")";
     }
+
+    $query = $select_sql . $from_sql . $where_sql . " ORDER BY r.report_date DESC";
     
-    $this->items[] = $item;
-}
+    $items_raw = $wpdb->get_results($query, ARRAY_A);
+
+    $this->items = [];
+    foreach ($items_raw as $item) {
+        $reason_ids = array_filter(explode(',', $item['reason_term_ids']));
+        
+        $item['report_severity'] = 'suggestion';
+        $item['report_types'] = ['Suggestion'];
+        $item['reasons'] = 'N/A';
+
+        if (!empty($reason_ids)) {
+            $ids_placeholder = implode(',', array_map('absint', $reason_ids));
+            $reasons_data = $wpdb->get_results("
+                SELECT t.name, m.meta_value as type
+                FROM {$terms_table} t
+                LEFT JOIN {$meta_table} m ON t.term_id = m.term_id AND m.meta_key = 'type'
+                WHERE t.term_id IN ($ids_placeholder)
+            ");
+            
+            $reason_names = [];
+            $reason_types = [];
+            foreach ($reasons_data as $reason) {
+                $reason_names[] = $reason->name;
+                $type = !empty($reason->type) ? $reason->type : 'report'; 
+                $reason_types[] = ucfirst($type);
+            }
+
+            $item['reasons'] = implode(', ', $reason_names);
+            $unique_types = array_unique($reason_types);
+            sort($unique_types);
+            $item['report_types'] = $unique_types;
+
+            if (in_array('Report', $unique_types)) {
+                $item['report_severity'] = 'report';
+            }
+        }
+        
+        $this->items[] = $item;
     }
+}
 
     public function column_cb($item)
     {
         return sprintf('<input type="checkbox" name="question_ids[]" value="%s" />', $item['question_id']);
     }
 
-    public function column_report_id($item) {
-    return '<strong>' . esc_html($item['report_id']) . '</strong>';
-}
-    public function column_question_text($item) {
-    // Use the new report_types array to build the display string
-    $type_text = isset($item['report_types']) ? implode(', ', $item['report_types']) : 'Suggestion';
+    public function column_report_id($item)
+    {
+        return '<strong>' . esc_html($item['report_id']) . '</strong>';
+    }
+    public function column_question_text($item)
+    {
+        // Use the new report_types array to build the display string
+        $type_text = isset($item['report_types']) ? implode(', ', $item['report_types']) : 'Suggestion';
 
-    $output = '<strong>ID:</strong> ' . esc_html($item['question_id']) . ' | <strong>Type:</strong> ' . esc_html($type_text);
-    
-    if (!empty($item['reasons'])) {
-        $output .= '<br><strong>Reasons:</strong> <span style="color: #c00;">' . esc_html($item['reasons']) . '</span>';
+        $output = '<strong>Question ID:</strong> ' . esc_html($item['question_id']) . ' | <strong>Type:</strong> ' . esc_html($type_text);
+
+        if (!empty($item['reasons'])) {
+            $output .= '<br><strong>Reasons:</strong> <span style="color: #c00;">' . esc_html($item['reasons']) . '</span>';
+        }
+
+        if (!empty(trim($item['comment']))) {
+            $output .= '<br><strong>Comment:</strong> <em>' . esc_html(trim($item['comment'])) . '</em>';
+        }
+
+        return $output;
     }
 
-    if (!empty(trim($item['comment']))) {
-        $output .= '<br><strong>Comment:</strong> <em>' . esc_html(trim($item['comment'])) . '</em>';
+    public function column_report_details($item)
+    {
+        $reporter_info = esc_html($item['reporter_name']) . ' (ID: ' . esc_html($item['user_id']) . ')';
+        return sprintf('<strong>Reported By:</strong> %s<br><strong>Reported On:</strong> %s', $reporter_info, esc_html(date('M j, Y, g:i a', strtotime($item['report_date']))));
     }
-    
-    return $output;
-}
-
-public function column_report_details($item) {
-    $reporter_info = esc_html($item['reporter_name']) . ' (ID: ' . esc_html($item['user_id']) . ')';
-    return sprintf('<strong>Reported By:</strong> %s<br><strong>Reported On:</strong> %s', $reporter_info, esc_html(date('M j, Y, g:i a', strtotime($item['report_date']))));
-}
 
     public function column_actions($item)
     {
