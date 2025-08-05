@@ -303,11 +303,11 @@ function qp_activate_plugin()
         ['text' => 'Options are incorrect', 'type' => 'report'],
         ['text' => 'Image is not loading', 'type' => 'report'],
         ['text' => 'No Answer Provided', 'type' => 'report'],
-        ['text' => 'Other (Mention in Comment)', 'type' => 'report'],
+        ['text' => 'Other (Error)', 'type' => 'report'],
         ['text' => 'Wrong Formatting', 'type' => 'suggestion'],
         ['text' => 'Language Mistakes', 'type' => 'suggestion'],
         ['text' => 'Question is confusing', 'type' => 'suggestion'],
-        ['text' => 'Other (Mention in Comment)', 'type' => 'suggestion']
+        ['text' => 'Other (Suggestion)', 'type' => 'suggestion']
     ];
 
     if ($reason_tax_id) {
@@ -948,21 +948,16 @@ function qp_run_v5_report_migration()
 
         if (!empty($old_column_exists)) {
             foreach ($id_map as $old_id => $new_id) {
-                // This query updates all reports that have the old reason ID to the new term ID.
                 $updated = $wpdb->update(
                     $reports_table,
-                    ['reason_term_id' => $new_id], // Set the NEW term_id value in the existing column
-                    ['reason_id' => $old_id]  // WHERE the column has the OLD reason_id
+                    ['reason_term_ids' => $new_id], // Correctly update the new TEXT column
+                    ['reason_id' => $old_id]      // Find the row using the old INT column
                 );
                 if ($updated !== false) {
                     $updated_reports_count += $updated;
                 }
             }
             $messages[] = "Updated {$updated_reports_count} report entries with new term IDs.";
-
-            // Rename the column from reason_id to reason_term_id to match the new schema
-            $wpdb->query("ALTER TABLE {$reports_table} CHANGE `reason_id` `reason_term_id` BIGINT(20) UNSIGNED NOT NULL");
-            $messages[] = "Renamed column `reason_id` to `reason_term_id` in the reports table.";
         } else {
             $messages[] = "Migration for report entries seems to have been completed already. No column to rename.";
         }
