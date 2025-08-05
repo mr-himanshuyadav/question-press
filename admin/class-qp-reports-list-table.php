@@ -138,42 +138,49 @@ class QP_Reports_List_Table extends WP_List_Table
     $items_raw = $wpdb->get_results($query, ARRAY_A);
 
     $this->items = [];
-    foreach ($items_raw as $item) {
-        $reason_ids = array_filter(explode(',', $item['reason_term_ids']));
-        
-        $item['report_severity'] = 'suggestion';
-        $item['report_types'] = ['Suggestion'];
-        $item['reasons'] = 'N/A';
+foreach ($items_raw as $item) {
+    $reason_ids = array_filter(explode(',', $item['reason_term_ids']));
+    
+    // Set defaults
+    $item['report_severity'] = 'suggestion';
+    $item['report_types'] = ['Suggestion'];
+    $item['reasons'] = 'N/A';
 
-        if (!empty($reason_ids)) {
-            $ids_placeholder = implode(',', array_map('absint', $reason_ids));
-            $reasons_data = $wpdb->get_results("
-                SELECT t.name, m.meta_value as type
-                FROM {$terms_table} t
-                LEFT JOIN {$meta_table} m ON t.term_id = m.term_id AND m.meta_key = 'type'
-                WHERE t.term_id IN ($ids_placeholder)
-            ");
+    if (!empty($reason_ids)) {
+        $ids_placeholder = implode(',', array_map('absint', $reason_ids));
+        $reasons_data = $wpdb->get_results("
+            SELECT t.name, m.meta_value as type
+            FROM {$terms_table} t
+            LEFT JOIN {$meta_table} m ON t.term_id = m.term_id AND m.meta_key = 'type'
+            WHERE t.term_id IN ($ids_placeholder)
+        ");
+        
+        $reason_html_parts = [];
+        $reason_types = [];
+        foreach ($reasons_data as $reason) {
+            $type = !empty($reason->type) ? $reason->type : 'report';
+            $reason_types[] = ucfirst($type);
             
-            $reason_names = [];
-            $reason_types = [];
-            foreach ($reasons_data as $reason) {
-                $reason_names[] = $reason->name;
-                $type = !empty($reason->type) ? $reason->type : 'report'; 
-                $reason_types[] = ucfirst($type);
-            }
-
-            $item['reasons'] = implode(', ', $reason_names);
-            $unique_types = array_unique($reason_types);
-            sort($unique_types);
-            $item['report_types'] = $unique_types;
-
-            if (in_array('Report', $unique_types)) {
-                $item['report_severity'] = 'report';
-            }
+            // Determine color for each individual reason
+            $reason_color = ($type === 'report') ? '#c00' : '#f57f17';
+            $reason_html_parts[] = '<span style="color: ' . esc_attr($reason_color) . ';">' . esc_html($reason->name) . '</span>';
         }
+
+        // The 'reasons' key now contains a pre-built HTML string
+        $item['reasons'] = implode(', ', $reason_html_parts);
         
-        $this->items[] = $item;
+        $unique_types = array_unique($reason_types);
+        sort($unique_types);
+        $item['report_types'] = $unique_types;
+
+        // Prioritize 'report' for the row's severity class (for the border)
+        if (in_array('Report', $unique_types)) {
+            $item['report_severity'] = 'report';
+        }
     }
+    
+    $this->items[] = $item;
+}
 }
 
     public function column_cb($item)
@@ -189,12 +196,12 @@ class QP_Reports_List_Table extends WP_List_Table
     // Use the new report_types array to build the display string
     $type_text = isset($item['report_types']) ? implode(', ', $item['report_types']) : 'Suggestion';
 
-    $output = '<strong>Question ID:</strong> ' . esc_html($item['question_id']) . ' | <strong>Type:</strong> ' . esc_html($type_text);
+    $output = '<strong>ID:</strong> ' . esc_html($item['question_id']) . ' | <strong>Type:</strong> ' . esc_html($type_text);
     
-    if (!empty($item['reasons'])) {
-        // Determine the color based on the report's severity
-        $reason_color = ($item['report_severity'] === 'report') ? '#c00' : '#c39407ff'; // Red for report, dark yellow for suggestion
-        $output .= '<br><strong>Reasons:</strong> <span style="color: ' . esc_attr($reason_color) . ';">' . esc_html($item['reasons']) . '</span>';
+    if (!empty($item['reasons']) && $item['reasons'] !== 'N/A') {
+        // We no longer need to add a color here, just output the HTML string
+        // Using wp_kses_post to allow our safe <span> tags with style attributes
+        $output .= '<br><strong>Reasons:</strong> ' . wp_kses_post($item['reasons']);
     }
 
     if (!empty(trim($item['comment']))) {
