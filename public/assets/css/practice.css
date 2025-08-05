@@ -156,8 +156,8 @@ body {
     left: 0;
     top: 50%;
     transform: translateY(-50%);
-    height: 18px;
-    width: 18px;
+    height: 15px;
+    width: 15px;
     background: #fff;
     border: 1px solid var(--qp-border-color);
     border-radius: 4px;
@@ -172,8 +172,8 @@ body {
     content: "";
     position: absolute;
     display: none;
-    left: 6px;
-    top: 3px;
+    left: 5px;
+    top: 2px;
     width: 4px;
     height: 8px;
     border: solid white;
@@ -523,6 +523,18 @@ body {
     /* Orange */
 }
 
+#qp-suggestion-indicator {
+    padding: 4px 10px;
+    font-size: 12px;
+    font-weight: 700;
+    border-radius: 50px;
+    display: none; /* Hidden by default */
+    align-items: center;
+    gap: 5px;
+    background-color: #fffde7; /* Light Yellow */
+    color: #f57f17; /* Amber */
+}
+
 #qp-practice-app-wrapper .katex {
     font: normal 1em KaTeX_Main, Times New Roman, serif;
 }
@@ -550,6 +562,7 @@ body {
     justify-content: space-between;
     align-items: flex-start;
     gap: 8px;
+    padding-top: 2px;
 }
 
 .qp-question-meta-left {
@@ -1554,6 +1567,38 @@ body.palette-overlay-open #qp-palette-sliding {
     background-color: #90a4ae;
 }
 
+/* --- NEW: Report Modal Reason Grouping Styles --- */
+.qp-report-type-header {
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--qp-light-text);
+    padding-bottom: 5px;
+    border-bottom: 2px solid var(--qp-border-color);
+}
+
+#qp-report-options-container .qp-report-type-header:first-child {
+    margin-top: 0;
+}
+
+/* Style for Report (Error) reasons */
+#qp-report-options-container .qp-report-reason-report {
+    background-color: #f8d7da;
+    border-color: #f5c6cb;
+}
+#qp-report-options-container .qp-report-reason-report:hover {
+    
+}
+
+/* Style for Suggestion (Improvement) reasons */
+#qp-report-options-container .qp-report-reason-suggestion {
+    background-color: #f0f2f5; /* Darker white / light grey */
+    border-color: #dae0e8;
+}
+
+#qp-report-options-container .qp-report-reason-suggestion:hover {
+    background-color: #e4e9f0;
+}
 
 /* --- NEW: Rough Work Canvas Styles --- */
 #qp-header-top-row {
@@ -2951,6 +2996,25 @@ hr.qp-divider {
     /* This is the key property for centering */
 }
 
+/* --- NEW: Report Modal Textarea Styles --- */
+#qp-report-modal-content textarea {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 10px;
+    border: 1px solid var(--qp-border-color);
+    border-radius: 4px;
+    font-family: inherit;
+    font-size: 14px;
+    resize: vertical;
+    min-height: 70px;;
+}
+
+#qp-report-modal-content textarea:focus {
+    border-color: var(--qp-primary-color);
+    box-shadow: 0 0 0 1px var(--qp-primary-color);
+    outline: none;
+}
+
 #qp-report-modal-content {
     background: #fff;
     padding: 2rem;
@@ -2958,7 +3022,9 @@ hr.qp-divider {
     max-width: 90%;
     width: 500px;
     position: relative;
-    box-shadow: 0 5px 25px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 5px 25px rgba(0, 0, 0, 0.15);max-height: 90vh; /* Limit modal height to 90% of the viewport height */
+    display: flex; /* Use flexbox to control child element sizing */
+    flex-direction: column;
 }
 
 #qp-report-modal-content h3 {
@@ -2967,8 +3033,9 @@ hr.qp-divider {
 }
 
 #qp-report-modal-content p {
+    font-size: .7em;
     margin-top: 0;
-    margin-bottom: 1.5rem;
+    margin-bottom: 1rem;
     color: var(--qp-light-text);
 }
 
@@ -2976,7 +3043,19 @@ hr.qp-divider {
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
-    margin-bottom: 1.5rem;
+    max-height: 300px; /* Set a max height for the reasons list */
+    overflow-y: auto;  /* Add a scrollbar if the content overflows */
+    border: 1px solid var(--qp-border-color);
+    padding: 10px;
+    border-radius: 4px;
+    margin-bottom: 1rem;
+}
+
+/* Make the form itself flexible */
+#qp-report-form {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1; /* Allow the form to take available space */
 }
 
 /* --- Corrected Report Modal Checkbox Styles --- */
@@ -2984,12 +3063,13 @@ hr.qp-divider {
     display: flex;
     /* Ensures items stay on one line */
     width: 100%;
-    padding: 12px 15px 12px 40px;
+    padding: 7px 12px 7px 40px;
     /* Adjusted padding: more room on the left */
     background-color: #f9f9f9;
     border: 1px solid var(--qp-border-color);
     border-radius: 4px;
     box-sizing: border-box;
+    font-size: .8em;
     /* Ensures padding is included in width */
 }
 

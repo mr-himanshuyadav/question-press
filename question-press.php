@@ -3,7 +3,7 @@
 /**
  * Plugin Name:       Question Press
  * Description:       A complete plugin for creating, managing, and practicing questions.
- * Version:           3.3.6
+ * Version:           3.3.7
  * Author:            Himanshu
  */
 
@@ -173,39 +173,19 @@ function qp_activate_plugin()
     ) $charset_collate;";
     dbDelta($sql_review_later);
 
-    // Table: Report Reasons (Needs Attention for possiblity to migrate to terms table)
-    $table_report_reasons = $wpdb->prefix . 'qp_report_reasons';
-    $sql_report_reasons = "CREATE TABLE $table_report_reasons (
-        reason_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
-        reason_text VARCHAR(255) NOT NULL,
-        is_active BOOLEAN NOT NULL DEFAULT 1,
-        PRIMARY KEY (reason_id)
-    ) $charset_collate;";
-    dbDelta($sql_report_reasons);
-
-    // Add some default report reasons if the table is empty
-    if ($wpdb->get_var("SELECT COUNT(*) FROM $table_report_reasons") == 0) {
-        $default_reasons = ['Wrong Answer', 'Typo in question', 'Options are incorrect', 'Image is not loading', 'Question is confusing'];
-        foreach ($default_reasons as $reason) {
-            $wpdb->insert($table_report_reasons, ['reason_text' => $reason]);
-        }
-    }
-
-    // Attention! Need to migrate this from using report_reasons table to terms_table
-
     // Table: Question Reports (Needs Attention for better handling)
     $table_question_reports = $wpdb->prefix . 'qp_question_reports';
     $sql_question_reports = "CREATE TABLE $table_question_reports (
         report_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
         question_id BIGINT(20) UNSIGNED NOT NULL,
         user_id BIGINT(20) UNSIGNED NOT NULL,
-        reason_id BIGINT(20) UNSIGNED NOT NULL,
+        reason_term_ids TEXT NOT NULL,
+        comment TEXT,
         report_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         status VARCHAR(20) NOT NULL DEFAULT 'open',
         PRIMARY KEY (report_id),
         KEY question_id (question_id),
         KEY user_id (user_id),
-        KEY reason_id (reason_id),
         KEY status (status)
     ) $charset_collate;";
     dbDelta($sql_question_reports);
@@ -318,13 +298,24 @@ function qp_activate_plugin()
     }
 
     // Define and insert default report reasons
-    $default_reasons = ['Wrong Answer', 'Typo in question', 'Options are incorrect', 'Image is not loading', 'Question is confusing'];
+    $default_reasons = [
+        ['text' => 'Wrong Answer', 'type' => 'report'],
+        ['text' => 'Options are incorrect', 'type' => 'report'],
+        ['text' => 'Image is not loading', 'type' => 'report'],
+        ['text' => 'No Answer Provided', 'type' => 'report'],
+        ['text' => 'Other (Mention in Comment)', 'type' => 'report'],
+        ['text' => 'Wrong Formatting', 'type' => 'suggestion'],
+        ['text' => 'Language Mistakes', 'type' => 'suggestion'],
+        ['text' => 'Question is confusing', 'type' => 'suggestion'],
+        ['text' => 'Other (Mention in Comment)', 'type' => 'suggestion']
+    ];
 
     if ($reason_tax_id) {
-        foreach ($default_reasons as $reason_text) {
-            $term_id = qp_get_or_create_term($reason_text, $reason_tax_id);
+        foreach ($default_reasons as $reason) {
+            $term_id = qp_get_or_create_term($reason['text'], $reason_tax_id);
             if ($term_id) {
                 qp_update_term_meta($term_id, 'is_active', '1');
+                qp_update_term_meta($term_id, 'type', $reason['type']); // Add the type meta
             }
         }
     }
@@ -476,23 +467,24 @@ function qp_render_organization_page()
 /**
  * Renders the page for migration tools.
  */
-function qp_render_migration_tools_page() {
-    ?>
+function qp_render_migration_tools_page()
+{
+?>
     <div class="wrap">
         <h1>Question Press Migration Tools</h1>
+
         <div class="card" style="max-width: 600px; margin-top: 20px;">
-            <h2 class="title">V4 Relationship Migration</h2>
-            <p>This script will migrate Topic and Source/Section relationships from individual questions to their parent groups.</p>
-            <p><strong>Warning:</strong> This is a destructive operation. Please create a full backup of your database before proceeding.</p>
+            <h2 class="title">V5 Report System Migration</h2>
+            <p>This script will migrate your old report reasons into the new taxonomy system and update existing reports. This should only be run once.</p>
+            <p><strong>Warning:</strong> Create a full backup of your database before proceeding.</p>
             <?php
-            // Create a nonce for security
-            $nonce = wp_create_nonce('qp_v4_relationship_migration_nonce');
-            $migration_url = admin_url('admin.php?page=question-press&action=qp_v4_relationship_migration&_wpnonce=' . $nonce);
+            $v5_nonce = wp_create_nonce('qp_v5_report_migration_nonce');
+            $v5_migration_url = admin_url('admin.php?page=qp-tools&tab=migration&action=qp_v5_report_migration&_wpnonce=' . $v5_nonce);
             ?>
-            <a href="<?php echo esc_url($migration_url); ?>" class="button button-primary">Run V4 Relationship Migration</a>
+            <a href="<?php echo esc_url($v5_migration_url); ?>" class="button button-primary">Run Report System Migration</a>
         </div>
     </div>
-    <?php
+<?php
 }
 
 function qp_render_merge_terms_page()
@@ -661,7 +653,7 @@ function qp_render_tools_page()
         'import' => ['label' => 'Import', 'callback' => ['QP_Import_Page', 'render']],
         'export'   => ['label' => 'Export', 'callback' => ['QP_Export_Page', 'render']],
         'backup_restore'   => ['label' => 'Backup & Restore', 'callback' => ['QP_Backup_Restore_Page', 'render']],
-        'migration' => ['label' => 'Migration', 'callback' => 'qp_render_migration_tools_page'], 
+        'migration' => ['label' => 'Migration', 'callback' => 'qp_render_migration_tools_page'],
     ];
     $active_tab = isset($_GET['tab']) && array_key_exists($_GET['tab'], $tabs) ? $_GET['tab'] : 'import';
 ?>
@@ -863,7 +855,8 @@ add_action('wp_ajax_regenerate_api_key', 'qp_regenerate_api_key_ajax');
  * @param string $term_table The name of the terms table.
  * @return array An array of term IDs.
  */
-function get_all_descendant_ids($parent_id, $wpdb, $term_table) {
+function get_all_descendant_ids($parent_id, $wpdb, $term_table)
+{
     $descendant_ids = [$parent_id];
     $current_parent_ids = [$parent_id];
     for ($i = 0; $i < 10; $i++) { // Safety break
@@ -889,10 +882,11 @@ function get_all_descendant_ids($parent_id, $wpdb, $term_table) {
  * @param string $term_table   The name of the terms table.
  * @return array An ordered array of names from parent to child.
  */
-function qp_get_term_lineage_names($term_id, $wpdb, $term_table) {
+function qp_get_term_lineage_names($term_id, $wpdb, $term_table)
+{
     $lineage = [];
     $current_id = $term_id;
-    for ($i=0; $i<10; $i++) { // Safety break
+    for ($i = 0; $i < 10; $i++) { // Safety break
         if (!$current_id) break;
         $term = $wpdb->get_row($wpdb->prepare("SELECT name, parent FROM {$term_table} WHERE term_id = %d", $current_id));
         if ($term) {
@@ -906,56 +900,85 @@ function qp_get_term_lineage_names($term_id, $wpdb, $term_table) {
 }
 
 /**
- * Runs the relationship migration from questions to groups.
- * This function should be triggered by an admin action, similar to the v3 migration.
+ * Migrates old report reasons to the taxonomy term system.
+ * This should be run once after updating the plugin.
  */
-function qp_run_v4_relationship_migration() {
-    // Check if the trigger is present, user has permission, and nonce is valid
-    if (!isset($_GET['action']) || $_GET['action'] !== 'qp_v4_relationship_migration' || !current_user_can('manage_options')) {
+function qp_run_v5_report_migration()
+{
+    // Check for the trigger, user permissions, and nonce
+    if (!isset($_GET['action']) || $_GET['action'] !== 'qp_v5_report_migration' || !current_user_can('manage_options')) {
         return;
     }
-    check_admin_referer('qp_v4_relationship_migration_nonce');
+    check_admin_referer('qp_v5_report_migration_nonce');
 
     global $wpdb;
     $messages = [];
-    $skipped_items = [];
     $wpdb->query("START TRANSACTION;");
 
     try {
-        // Step 1: Migrate Topic Relationships from Questions to Groups
-        // A group is now linked directly to a topic. The subject is inferred from the topic's parent.
-        $topic_migration_results = qp_migrate_taxonomy_relationships('subject', 'Topic');
-        $messages[] = "Step 1 (Topics): Migrated {$topic_migration_results['migrated']} relationships to groups. Deleted {$topic_migration_results['deleted']} old question relationships.";
-        if (!empty($topic_migration_results['skipped'])) {
-            $skipped_items = array_merge($skipped_items, $topic_migration_results['skipped']);
+        $old_reasons_table = $wpdb->prefix . 'qp_report_reasons';
+        $reports_table = $wpdb->prefix . 'qp_question_reports';
+        $tax_table = $wpdb->prefix . 'qp_taxonomies';
+        $term_table = $wpdb->prefix . 'qp_terms';
+
+        // 1. Get the taxonomy ID for 'report_reason'
+        $reason_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'report_reason'");
+        if (!$reason_tax_id) {
+            throw new Exception("'report_reason' taxonomy not found. Cannot migrate.");
         }
 
-        // Step 2: Migrate Source/Section Relationships from Questions to Groups
-        // A group is now linked to the most specific source term (e.g., a section over a source book).
-        $source_migration_results = qp_migrate_taxonomy_relationships('source', 'Source/Section');
-        $messages[] = "Step 2 (Sources): Migrated {$source_migration_results['migrated']} relationships to groups. Deleted {$source_migration_results['deleted']} old question relationships.";
-        if (!empty($source_migration_results['skipped'])) {
-            $skipped_items = array_merge($skipped_items, $source_migration_results['skipped']);
-        }
+        // 2. Get all reasons from the old table and create a mapping to new term IDs
+        $old_reasons = $wpdb->get_results("SELECT * FROM {$old_reasons_table}");
+        $id_map = [];
+        $migrated_reasons_count = 0;
 
-        // Final Report
-        if (!empty($skipped_items)) {
-            $skipped_details = implode('<br> - ', $skipped_items);
-            $messages[] = "<strong>Migration Notices (For Review):</strong><br> - {$skipped_details}";
+        foreach ($old_reasons as $reason) {
+            $new_term_id = qp_get_or_create_term($reason->reason_text, $reason_tax_id);
+            if ($new_term_id) {
+                $id_map[$reason->reason_id] = $new_term_id;
+                $migrated_reasons_count++;
+            }
+        }
+        $messages[] = "Migrated {$migrated_reasons_count} report reasons to the taxonomy system.";
+
+        // 3. Update the reports table to use the new term IDs and rename the column
+        $updated_reports_count = 0;
+        // Check if the old column exists before proceeding
+        $old_column_exists = $wpdb->get_results($wpdb->prepare("SHOW COLUMNS FROM {$reports_table} LIKE %s", 'reason_id'));
+
+        if (!empty($old_column_exists)) {
+            foreach ($id_map as $old_id => $new_id) {
+                // This query updates all reports that have the old reason ID to the new term ID.
+                $updated = $wpdb->update(
+                    $reports_table,
+                    ['reason_term_id' => $new_id], // Set the NEW term_id value in the existing column
+                    ['reason_id' => $old_id]  // WHERE the column has the OLD reason_id
+                );
+                if ($updated !== false) {
+                    $updated_reports_count += $updated;
+                }
+            }
+            $messages[] = "Updated {$updated_reports_count} report entries with new term IDs.";
+
+            // Rename the column from reason_id to reason_term_id to match the new schema
+            $wpdb->query("ALTER TABLE {$reports_table} CHANGE `reason_id` `reason_term_id` BIGINT(20) UNSIGNED NOT NULL");
+            $messages[] = "Renamed column `reason_id` to `reason_term_id` in the reports table.";
+        } else {
+            $messages[] = "Migration for report entries seems to have been completed already. No column to rename.";
         }
 
         $wpdb->query("COMMIT;");
-        $_SESSION['qp_admin_message'] = '<strong>Relationship Migration Report:</strong><br> - ' . implode('<br> - ', $messages);
-        $_SESSION['qp_admin_message_type'] = 'success';
-
+        // Use a transient for the success message
+        set_transient('qp_admin_message', '<strong>Report System Migration Complete:</strong><br> - ' . implode('<br> - ', $messages), 30);
+        set_transient('qp_admin_message_type', 'success', 30);
     } catch (Exception $e) {
         $wpdb->query("ROLLBACK;");
-        $_SESSION['qp_admin_message'] = 'An error occurred during migration: ' . $e->getMessage();
-        $_SESSION['qp_admin_message_type'] = 'error';
+        // Use a transient for the error message
+        set_transient('qp_admin_message', 'An error occurred during migration: ' . $e->getMessage(), 30);
+        set_transient('qp_admin_message_type', 'error', 30);
     }
 
-    // Redirect to a safe page to show the message
-    wp_safe_redirect(admin_url('admin.php?page=question-press'));
+    wp_safe_redirect(admin_url('admin.php?page=qp-tools&tab=migration'));
     exit;
 }
 
@@ -966,7 +989,8 @@ function qp_run_v4_relationship_migration() {
  * @param string $log_prefix A prefix for logging messages (e.g., 'Topic', 'Source/Section').
  * @return array A report of the migration containing counts and skipped items.
  */
-function qp_migrate_taxonomy_relationships($taxonomy_name, $log_prefix) {
+function qp_migrate_taxonomy_relationships($taxonomy_name, $log_prefix)
+{
     global $wpdb;
     $rel_table = $wpdb->prefix . 'qp_term_relationships';
     $term_table = $wpdb->prefix . 'qp_terms';
@@ -995,7 +1019,7 @@ function qp_migrate_taxonomy_relationships($taxonomy_name, $log_prefix) {
         WHERE t.taxonomy_id = %d AND q.group_id > 0
     ", $taxonomy_id));
 
-    foreach($question_relationships as $rel) {
+    foreach ($question_relationships as $rel) {
         // For topics (subject taxonomy), we only care about children (parent != 0)
         if ($taxonomy_name === 'subject' && $rel->parent == 0) {
             continue;
@@ -1003,19 +1027,20 @@ function qp_migrate_taxonomy_relationships($taxonomy_name, $log_prefix) {
         // For a group, we always want to store the most specific (deepest) term.
         // A child term (parent != 0) is always more specific than a parent term.
         if (!isset($group_to_term_map[$rel->group_id]) || $rel->parent != 0) {
-             $group_to_term_map[$rel->group_id] = $rel->term_id;
+            $group_to_term_map[$rel->group_id] = $rel->term_id;
         }
     }
 
     // 2. Insert the new group-level relationships.
     foreach ($group_to_term_map as $group_id => $term_id) {
-         if ($group_id > 0 && $term_id > 0) {
+        if ($group_id > 0 && $term_id > 0) {
             // First, delete any existing relationship for this group and taxonomy to avoid conflicts
             $wpdb->query($wpdb->prepare(
                 "DELETE r FROM {$rel_table} r
                  JOIN {$term_table} t ON r.term_id = t.term_id
                  WHERE r.object_id = %d AND r.object_type = 'group' AND t.taxonomy_id = %d",
-                 $group_id, $taxonomy_id
+                $group_id,
+                $taxonomy_id
             ));
 
             // Now insert the new, correct relationship
@@ -1047,12 +1072,7 @@ function qp_migrate_taxonomy_relationships($taxonomy_name, $log_prefix) {
 // FORM & ACTION HANDLERS
 function qp_handle_form_submissions()
 {
-    qp_run_v4_relationship_migration();
-    if (isset($_GET['page']) && $_GET['page'] === 'question-press') {
-        $list_table = new QP_Questions_List_Table();
-        $list_table->process_bulk_action();
-    }
-
+    qp_run_v5_report_migration();
     if (isset($_GET['page']) && $_GET['page'] === 'qp-organization') {
         QP_Sources_Page::handle_forms();
         QP_Subjects_Page::handle_forms();
@@ -1074,7 +1094,7 @@ function qp_all_questions_page_cb()
     <div class="wrap">
         <h1 class="wp-heading-inline">All Questions</h1>
         <a href="<?php echo admin_url('admin.php?page=qp-question-editor'); ?>" class="page-title-action">Add New</a>
-        <?php 
+        <?php
         if (isset($_SESSION['qp_admin_message'])) {
             $message = html_entity_decode($_SESSION['qp_admin_message']);
             echo '<div id="message" class="notice notice-' . esc_attr($_SESSION['qp_admin_message_type']) . ' is-dismissible"><p>' . $message . '</p></div>';
@@ -1287,9 +1307,9 @@ function qp_get_sources_for_list_table_filter_ajax()
             $tree[] = &$term;
         }
     }
-    
+
     // Sort the top-level sources by name
-    usort($tree, function($a, $b) {
+    usort($tree, function ($a, $b) {
         return strcmp($a->name, $b->name);
     });
 
@@ -1340,18 +1360,18 @@ function qp_handle_save_question_group()
         $rel_table = "{$wpdb->prefix}qp_term_relationships";
         $term_table = "{$wpdb->prefix}qp_terms";
         $tax_table = "{$wpdb->prefix}qp_taxonomies";
-        
+
         $group_taxonomies_to_manage = ['subject', 'source', 'exam'];
         $tax_ids_to_clear = [];
-        foreach($group_taxonomies_to_manage as $tax_name) {
+        foreach ($group_taxonomies_to_manage as $tax_name) {
             $tax_id = $wpdb->get_var($wpdb->prepare("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = %s", $tax_name));
             if ($tax_id) $tax_ids_to_clear[] = $tax_id;
         }
 
         // 1. Delete all existing relationships for this group across managed taxonomies
         if (!empty($tax_ids_to_clear)) {
-             $tax_ids_placeholder = implode(',', $tax_ids_to_clear);
-             $wpdb->query($wpdb->prepare(
+            $tax_ids_placeholder = implode(',', $tax_ids_to_clear);
+            $wpdb->query($wpdb->prepare(
                 "DELETE FROM {$rel_table} WHERE object_id = %d AND object_type = 'group' AND term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id IN ($tax_ids_placeholder))",
                 $group_id
             ));
@@ -1366,7 +1386,7 @@ function qp_handle_save_question_group()
             // Fallback to parent subject if no topic is chosen
             $terms_to_apply_to_group[] = absint($_POST['subject_id']);
         }
-        
+
         // Source/Section: Use the most specific term selected.
         if (!empty($_POST['section_id'])) {
             $terms_to_apply_to_group[] = absint($_POST['section_id']);
@@ -1382,7 +1402,7 @@ function qp_handle_save_question_group()
         // 3. Insert the new, clean relationships for the group
         foreach (array_unique($terms_to_apply_to_group) as $term_id) {
             if ($term_id > 0) {
-                 $wpdb->insert($rel_table, ['object_id' => $group_id, 'term_id' => $term_id, 'object_type' => 'group']);
+                $wpdb->insert($rel_table, ['object_id' => $group_id, 'term_id' => $term_id, 'object_type' => 'group']);
             }
         }
     }
@@ -1428,7 +1448,7 @@ function qp_handle_save_question_group()
                     $wpdb->insert($rel_table, ['object_id' => $question_id, 'term_id' => $label_id, 'object_type' => 'question']);
                 }
             }
-            
+
             // Handle Options (No changes needed here)
             process_question_options($question_id, $q_data);
         }
@@ -1453,7 +1473,7 @@ function qp_handle_save_question_group()
     $redirect_url = $is_editing
         ? admin_url('admin.php?page=qp-edit-group&group_id=' . $group_id . '&message=1')
         : admin_url('admin.php?page=qp-edit-group&group_id=' . $group_id . '&message=2');
-    
+
     if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest') {
         wp_send_json_success(['redirect_url' => $redirect_url]);
     }
@@ -2235,7 +2255,7 @@ function qp_get_quick_edit_form_ajax()
         if ($term && $term->parent != 0) {
             // It's a section or subsection, so this is our selected "section"
             $current_section_id = $term->term_id;
-            
+
             // Now, find its top-level parent (the source)
             $parent_id = $term->parent;
             for ($i = 0; $i < 10; $i++) { // Safety break
@@ -2291,20 +2311,20 @@ function qp_get_quick_edit_form_ajax()
     <script>
         // This global object holds all the data our dynamic form needs.
         var qp_quick_edit_data = <?php echo wp_json_encode([
-            'all_subjects'        => $all_subjects,
-            'all_subject_terms'   => $all_subject_terms, // Used to build topic hierarchy
-            'all_source_terms'    => $all_source_terms,
-            'all_exams'           => $all_exams,
-            'all_labels'          => $all_labels,
-            'exam_subject_links'  => $exam_subject_links,
-            'source_subject_links'=> $source_subject_links,
-            'current_subject_id'  => $current_subject_id,
-            'current_topic_id'    => $current_topic_id,
-            'current_source_id'   => $current_source_id,
-            'current_section_id'  => $current_section_id,
-            'current_exam_id'     => $current_exam_id,
-            'current_labels'      => $current_labels,
-        ]); ?>;
+                                        'all_subjects'        => $all_subjects,
+                                        'all_subject_terms'   => $all_subject_terms, // Used to build topic hierarchy
+                                        'all_source_terms'    => $all_source_terms,
+                                        'all_exams'           => $all_exams,
+                                        'all_labels'          => $all_labels,
+                                        'exam_subject_links'  => $exam_subject_links,
+                                        'source_subject_links' => $source_subject_links,
+                                        'current_subject_id'  => $current_subject_id,
+                                        'current_topic_id'    => $current_topic_id,
+                                        'current_source_id'   => $current_source_id,
+                                        'current_section_id'  => $current_section_id,
+                                        'current_exam_id'     => $current_exam_id,
+                                        'current_labels'      => $current_labels,
+                                    ]); ?>;
     </script>
 
     <form class="quick-edit-form-wrapper">
@@ -2600,14 +2620,14 @@ function qp_save_quick_edit_data_ajax()
             'pyq_year' => (isset($data['is_pyq']) && !empty($data['pyq_year'])) ? sanitize_text_field($data['pyq_year']) : null
         ], ['group_id' => $group_id]);
     }
-    
+
     // Step 5: CONSOLIDATED Group and Question-Level Term Relationships
     if ($group_id) {
         // --- 5a: Handle ALL Group-Level Relationships ---
         $group_taxonomies = ['subject', 'source', 'exam'];
         $tax_ids_to_clear = [];
 
-        foreach($group_taxonomies as $tax_name) {
+        foreach ($group_taxonomies as $tax_name) {
             $tax_id = $wpdb->get_var($wpdb->prepare("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = %s", $tax_name));
             if ($tax_id) $tax_ids_to_clear[] = $tax_id;
         }
@@ -2627,12 +2647,12 @@ function qp_save_quick_edit_data_ajax()
         $group_terms_to_apply = [];
         // Subject/Topic: Link the group to the most specific topic selected.
         if (!empty($data['topic_id'])) $group_terms_to_apply[] = absint($data['topic_id']);
-        
+
         // Source/Section: Link the group to the most specific term (section > source).
         if (!empty($data['section_id'])) {
-             $group_terms_to_apply[] = absint($data['section_id']);
+            $group_terms_to_apply[] = absint($data['section_id']);
         } elseif (!empty($data['source_id'])) {
-             $group_terms_to_apply[] = absint($data['source_id']);
+            $group_terms_to_apply[] = absint($data['source_id']);
         }
 
         // Exam: Link the group if it's a PYQ and an exam is selected
@@ -2643,7 +2663,7 @@ function qp_save_quick_edit_data_ajax()
         // Insert all new group relationships
         foreach (array_unique($group_terms_to_apply) as $term_id) {
             if ($term_id > 0) {
-                 $wpdb->insert($rel_table, ['object_id' => $group_id, 'term_id' => $term_id, 'object_type' => 'group']);
+                $wpdb->insert($rel_table, ['object_id' => $group_id, 'term_id' => $term_id, 'object_type' => 'group']);
             }
         }
     }
@@ -2651,7 +2671,7 @@ function qp_save_quick_edit_data_ajax()
     // --- 5b: Handle Question-Level Relationships (Labels) ---
     // (This part remains the same as it correctly targets the question)
     $label_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'label'");
-    if($label_tax_id){
+    if ($label_tax_id) {
         $wpdb->query($wpdb->prepare(
             "DELETE FROM {$rel_table} 
              WHERE object_id = %d AND object_type = 'question' 
@@ -2660,10 +2680,10 @@ function qp_save_quick_edit_data_ajax()
             $label_tax_id
         ));
     }
-    
+
     if (!empty($data['labels']) && is_array($data['labels'])) {
         foreach ($data['labels'] as $label_id) {
-             if (absint($label_id) > 0) {
+            if (absint($label_id) > 0) {
                 $wpdb->insert($rel_table, ['object_id' => $question_id, 'term_id' => absint($label_id), 'object_type' => 'question']);
             }
         }
@@ -3115,7 +3135,7 @@ function qp_get_unattempted_counts_ajax()
 
     // 2. Get all unattempted questions and trace them to their parent subject.
     $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'subject'");
-    
+
     // This query joins from the unattempted question, up to its group, to its linked term (topic),
     // and finally to that term's parent (subject).
     $results = $wpdb->get_results($wpdb->prepare("
@@ -3167,7 +3187,7 @@ function qp_start_practice_session_ajax()
     $subjects_raw = isset($_POST['qp_subject']) && is_array($_POST['qp_subject']) ? $_POST['qp_subject'] : [];
     $topics_raw = isset($_POST['qp_topic']) && is_array($_POST['qp_topic']) ? $_POST['qp_topic'] : [];
     $section_id = isset($_POST['qp_section']) && is_numeric($_POST['qp_section']) ? absint($_POST['qp_section']) : 'all';
-    
+
     $practice_mode = ($section_id !== 'all') ? 'Section Wise Practice' : 'normal';
 
     if ($practice_mode === 'normal' && empty($subjects_raw)) {
@@ -3199,7 +3219,7 @@ function qp_start_practice_session_ajax()
             }
         }
     }
-    
+
     // --- Table Names ---
     $q_table = $wpdb->prefix . 'qp_questions';
     $g_table = $wpdb->prefix . 'qp_question_groups';
@@ -3223,7 +3243,7 @@ function qp_start_practice_session_ajax()
         $subject_ids_placeholder = implode(',', array_map('absint', $subjects_raw));
         $topic_term_ids_to_filter = $wpdb->get_col("SELECT term_id FROM {$term_table} WHERE parent IN ($subject_ids_placeholder)");
     }
-    
+
     // 2. Find all groups linked to the selected topics (or all topics if no selection).
     if (!empty($topic_term_ids_to_filter)) {
         $topic_ids_placeholder = implode(',', $topic_term_ids_to_filter);
@@ -3234,7 +3254,7 @@ function qp_start_practice_session_ajax()
     if ($practice_mode === 'Section Wise Practice') {
         $where_conditions[] = $wpdb->prepare("g.group_id IN (SELECT object_id FROM {$rel_table} WHERE object_type = 'group' AND term_id = %d)", $section_id);
     }
-    
+
     // 4. Apply PYQ filter.
     if ($session_settings['pyq_only']) {
         $where_conditions[] = "g.is_pyq = 1";
@@ -3266,7 +3286,7 @@ function qp_start_practice_session_ajax()
 
     $where_sql = ' WHERE ' . implode(' AND ', $where_conditions);
     $query = "SELECT q.question_id, q.question_number_in_section {$joins} {$where_sql} {$order_by_sql}";
-    
+
     $question_results = $wpdb->get_results($query);
     $question_ids = wp_list_pluck($question_results, 'question_id');
 
@@ -3563,8 +3583,11 @@ function qp_get_sources_for_subject_progress_ajax()
     $tax_table = $wpdb->prefix . 'qp_taxonomies';
     $source_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'source'");
 
-    // Step 1: Find all topics that are children of the selected subject.
-    $topic_ids = $wpdb->get_col($wpdb->prepare("SELECT term_id FROM $term_table WHERE parent = %d", $subject_term_id));
+    // --- THIS IS THE FIX ---
+    // Use the existing helper function to get ALL descendant topics and sub-topics,
+    // not just the direct children. This includes the parent subject ID itself.
+    $topic_ids = get_all_descendant_ids($subject_term_id, $wpdb, $term_table);
+    // --- END FIX ---
 
     if (empty($topic_ids)) {
         wp_send_json_success(['sources' => []]);
@@ -3625,10 +3648,10 @@ function qp_get_sources_for_subject_progress_ajax()
          WHERE term_id IN ($source_ids_placeholder)
          ORDER BY name ASC"
     );
-    
+
     // Step 6: Format for the dropdown.
     $sources = [];
-    foreach($source_terms as $term) {
+    foreach ($source_terms as $term) {
         $sources[] = [
             'source_id' => $term->source_id,
             'source_name' => $term->source_name
@@ -3659,24 +3682,6 @@ function qp_get_progress_data_ajax()
     $rel_table = $wpdb->prefix . 'qp_term_relationships';
     $attempts_table = $wpdb->prefix . 'qp_user_attempts';
     $questions_table = $wpdb->prefix . 'qp_questions';
-
-    // Helper function to get all descendant term IDs for a given parent
-    function get_all_descendant_ids($parent_id, $wpdb, $term_table) {
-        $descendant_ids = [$parent_id];
-        $current_parent_ids = [$parent_id];
-        for ($i = 0; $i < 10; $i++) { // Safety break
-            if (empty($current_parent_ids)) break;
-            $ids_placeholder = implode(',', $current_parent_ids);
-            $child_ids = $wpdb->get_col("SELECT term_id FROM $term_table WHERE parent IN ($ids_placeholder)");
-            if (!empty($child_ids)) {
-                $descendant_ids = array_merge($descendant_ids, $child_ids);
-                $current_parent_ids = $child_ids;
-            } else {
-                break;
-            }
-        }
-        return array_unique($descendant_ids);
-    }
 
     // Step 1: Get all term IDs in both the selected subject and source hierarchies
     $all_subject_term_ids = get_all_descendant_ids($subject_term_id, $wpdb, $term_table);
@@ -3721,7 +3726,7 @@ function qp_get_progress_data_ajax()
     $all_terms_data = $wpdb->get_results("SELECT term_id, name, parent FROM $term_table WHERE term_id IN ($source_terms_placeholder)");
     $question_group_map = $wpdb->get_results("SELECT question_id, group_id FROM {$questions_table} WHERE question_id IN ($qids_placeholder)", OBJECT_K);
     $group_term_map_raw = $wpdb->get_results("SELECT object_id, term_id FROM {$rel_table} WHERE object_id IN ($group_ids_placeholder) AND object_type = 'group' AND term_id IN ($source_terms_placeholder)");
-    
+
     $group_term_map = [];
     foreach ($group_term_map_raw as $row) {
         $group_term_map[$row->object_id][] = $row->term_id;
@@ -3743,10 +3748,10 @@ function qp_get_progress_data_ajax()
         if (isset($group_term_map[$gid])) {
             $term_ids_for_group = $group_term_map[$gid];
             $processed_parents = [];
-            
+
             foreach ($term_ids_for_group as $term_id) {
-                 $current_term_id = $term_id;
-                 while (isset($terms_by_id[$current_term_id]) && !in_array($current_term_id, $processed_parents)) {
+                $current_term_id = $term_id;
+                while (isset($terms_by_id[$current_term_id]) && !in_array($current_term_id, $processed_parents)) {
                     $terms_by_id[$current_term_id]->total++;
                     if ($is_completed) {
                         $terms_by_id[$current_term_id]->completed++;
@@ -3816,7 +3821,7 @@ function qp_get_progress_data_ajax()
             ?>
         </div>
     </div>
-    <?php
+<?php
     $html = ob_get_clean();
     wp_send_json_success(['html' => $html]);
 }
@@ -3854,7 +3859,7 @@ function qp_get_question_data_ajax()
     }
 
     $group_id = $question_data['group_id'];
-    
+
     // 2. Get Subject/Topic Hierarchy
     $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'subject'");
     $subject_term_id = $wpdb->get_var($wpdb->prepare("SELECT term_id FROM {$rel_table} WHERE object_id = %d AND object_type = 'group' AND term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id = %d)", $group_id, $subject_tax_id));
@@ -3864,7 +3869,7 @@ function qp_get_question_data_ajax()
     $source_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'source'");
     $source_term_id = $wpdb->get_var($wpdb->prepare("SELECT term_id FROM {$rel_table} WHERE object_id = %d AND object_type = 'group' AND term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id = %d)", $group_id, $source_tax_id));
     $question_data['source_lineage'] = $source_term_id ? qp_get_term_lineage_names($source_term_id, $wpdb, $term_table) : [];
-    
+
     $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
     $previous_attempt_count = $wpdb->get_var($wpdb->prepare(
         "SELECT COUNT(*) FROM {$a_table} WHERE user_id = %d AND question_id = %d AND session_id != %d",
@@ -3921,9 +3926,33 @@ function qp_get_question_data_ajax()
     $review_table = $wpdb->prefix . 'qp_review_later';
     $is_marked = (bool) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$review_table} WHERE user_id = %d AND question_id = %d", $user_id, $question_id));
 
-    // Necessary to disable the report button
+    // --- NEW: Fetch detailed report info, including the type ---
     $reports_table = $wpdb->prefix . 'qp_question_reports';
-    $is_reported_by_user = (bool) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$reports_table} WHERE user_id = %d AND question_id = %d AND status = 'open'", $user_id, $question_id));
+    $terms_table = $wpdb->prefix . 'qp_terms';
+    $meta_table = $wpdb->prefix . 'qp_term_meta';
+
+    $reported_questions_raw = $wpdb->get_results($wpdb->prepare("
+        SELECT
+            MAX(CASE WHEN m.meta_value = 'report' THEN 1 ELSE 0 END) as is_critical
+        FROM {$reports_table} r
+        JOIN {$terms_table} t ON r.reason_term_id = t.term_id
+        JOIN {$meta_table} m ON t.term_id = m.term_id AND m.meta_key = 'type'
+        WHERE r.user_id = %d AND r.status = 'open' AND r.question_id = %d
+        GROUP BY r.report_id
+    ", $user_id, $question_id));
+
+    $report_info = [
+        'has_report' => false,
+        'has_suggestion' => false,
+    ];
+    foreach ($reported_questions_raw as $report) {
+        if ($report->is_critical) {
+            $report_info['has_report'] = true;
+        } else {
+            $report_info['has_suggestion'] = true;
+        }
+    }
+
 
     // --- Send Final Response ---
     wp_send_json_success([
@@ -3933,7 +3962,7 @@ function qp_get_question_data_ajax()
         'is_revision'          => ($attempt_count > 0),
         'is_admin'             => $user_can_view,
         'is_marked_for_review' => $is_marked,
-        'is_reported_by_user'  => $is_reported_by_user // Send the authoritative state
+        'reported_info'  => $report_info
     ]);
 }
 add_action('wp_ajax_get_question_data', 'qp_get_question_data_ajax');
@@ -3946,13 +3975,85 @@ function qp_get_report_reasons_ajax()
     check_ajax_referer('qp_practice_nonce', 'nonce');
 
     global $wpdb;
-    $reasons_table = $wpdb->prefix . 'qp_report_reasons';
+    $tax_table = $wpdb->prefix . 'qp_taxonomies';
+    $term_table = $wpdb->prefix . 'qp_terms';
+    $meta_table = $wpdb->prefix . 'qp_term_meta';
 
-    $reasons = $wpdb->get_results(
-        "SELECT reason_id, reason_text FROM {$reasons_table} WHERE is_active = 1 ORDER BY reason_id ASC"
-    );
+    $reason_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'report_reason'");
 
-    wp_send_json_success(['reasons' => $reasons]);
+    $reasons_raw = $wpdb->get_results($wpdb->prepare(
+        "SELECT 
+            t.term_id as reason_id, 
+            t.name as reason_text,
+            MAX(CASE WHEN m.meta_key = 'type' THEN m.meta_value END) as type
+         FROM {$term_table} t
+         LEFT JOIN {$meta_table} m ON t.term_id = m.term_id
+         WHERE t.taxonomy_id = %d AND (
+            NOT EXISTS (SELECT 1 FROM {$meta_table} meta_active WHERE meta_active.term_id = t.term_id AND meta_active.meta_key = 'is_active') 
+            OR 
+            (SELECT meta_active.meta_value FROM {$meta_table} meta_active WHERE meta_active.term_id = t.term_id AND meta_active.meta_key = 'is_active') = '1'
+         )
+         GROUP BY t.term_id
+         ORDER BY t.name ASC",
+        $reason_tax_id
+    ));
+
+    $reasons_by_type = [
+        'report' => [],
+        'suggestion' => []
+    ];
+
+    // --- THIS IS THE FIX ---
+    $other_reasons = [];
+    foreach ($reasons_raw as $reason) {
+        $type = !empty($reason->type) ? $reason->type : 'report';
+        // Separate any reason containing "Other" into a temporary array
+        if (strpos($reason->reason_text, 'Other') !== false) {
+            $other_reasons[$type][] = $reason;
+        } else {
+            $reasons_by_type[$type][] = $reason;
+        }
+    }
+
+    // Append the "Other" reasons to the end of their respective lists
+    if (isset($other_reasons['report'])) {
+        $reasons_by_type['report'] = array_merge($reasons_by_type['report'], $other_reasons['report']);
+    }
+    if (isset($other_reasons['suggestion'])) {
+        $reasons_by_type['suggestion'] = array_merge($reasons_by_type['suggestion'], $other_reasons['suggestion']);
+    }
+    // --- END FIX ---
+
+    ob_start();
+
+    if (!empty($reasons_by_type['report'])) {
+        echo '<div class="qp-report-type-header">Reports (for errors)</div>';
+        foreach ($reasons_by_type['report'] as $reason) {
+            echo '<label class="qp-custom-checkbox qp-report-reason-report">
+                    <input type="checkbox" name="report_reasons[]" value="' . esc_attr($reason->reason_id) . '">
+                    <span></span>
+                    ' . esc_html($reason->reason_text) . '
+                  </label>';
+        }
+    }
+
+    if (!empty($reasons_by_type['suggestion'])) {
+        if (!empty($reasons_by_type['report'])) {
+            echo '<hr style="margin: 0.5rem 0; border: 0; border-top: 1px solid #ddd;">';
+        }
+        echo '<div class="qp-report-type-header">Suggestions<br><span style="font-size:0.8em;font-weight:400;">You can still attempt question after.</span></div>';
+        foreach ($reasons_by_type['suggestion'] as $reason) {
+            echo '<label class="qp-custom-checkbox qp-report-reason-suggestion">
+                    <input type="checkbox" name="report_reasons[]" value="' . esc_attr($reason->reason_id) . '">
+                    <span></span>
+                    ' . esc_html($reason->reason_text) . '
+                  </label>';
+        }
+    }
+
+    $html = ob_get_clean();
+
+    wp_send_json_success(['html' => $html]);
 }
 add_action('wp_ajax_get_report_reasons', 'qp_get_report_reasons_ajax');
 
@@ -3970,6 +4071,7 @@ function qp_submit_question_report_ajax()
     $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
     $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
     $reasons = isset($_POST['reasons']) && is_array($_POST['reasons']) ? array_map('absint', $_POST['reasons']) : [];
+    $comment = isset($_POST['comment']) ? sanitize_textarea_field($_POST['comment']) : '';
     $user_id = get_current_user_id();
 
     if (empty($question_id) || empty($reasons)) {
@@ -3979,29 +4081,96 @@ function qp_submit_question_report_ajax()
     global $wpdb;
     $reports_table = $wpdb->prefix . 'qp_question_reports';
 
-    foreach ($reasons as $reason_id) {
-        $wpdb->insert(
-            $reports_table,
-            [
-                'question_id' => $question_id,
-                'user_id'     => $user_id,
-                'reason_id'   => $reason_id,
-                'report_date' => current_time('mysql'),
-                'status'      => 'open'
-            ]
-        );
-    }
+    // Serialize the array of reason IDs into a comma-separated string
+    $reason_ids_string = implode(',', $reasons);
+
+    // Insert a single row with all the data
+    $wpdb->insert(
+        $reports_table,
+        [
+            'question_id'     => $question_id,
+            'user_id'         => $user_id,
+            'reason_term_ids' => $reason_ids_string,
+            'comment'         => $comment,
+            'report_date'     => current_time('mysql'),
+            'status'          => 'open'
+        ]
+    );
+
 
     // Add a log entry for the admin panel
     $wpdb->insert("{$wpdb->prefix}qp_logs", [
         'log_type'    => 'User Report',
         'log_message' => sprintf('User reported question #%s.', $question_id),
-        'log_data'    => wp_json_encode(['user_id' => $user_id, 'session_id' => $session_id, 'question_id' => $question_id, 'reasons' => $reasons])
+        'log_data'    => wp_json_encode(['user_id' => $user_id, 'session_id' => $session_id, 'question_id' => $question_id, 'reasons' => $reasons, 'comment' => $comment])
     ]);
 
-    wp_send_json_success(['message' => 'Report submitted.']);
+    // --- NEW: Fetch and return the updated report status ---
+$terms_table = $wpdb->prefix . 'qp_terms';
+$meta_table = $wpdb->prefix . 'qp_term_meta';
+$ids_placeholder = implode(',', $reasons);
+
+$reason_types = $wpdb->get_col("
+    SELECT m.meta_value 
+    FROM {$terms_table} t
+    JOIN {$meta_table} m ON t.term_id = m.term_id AND m.meta_key = 'type'
+    WHERE t.term_id IN ($ids_placeholder)
+");
+
+$report_info = [
+    'has_report' => in_array('report', $reason_types),
+    'has_suggestion' => in_array('suggestion', $reason_types),
+];
+
+wp_send_json_success(['message' => 'Report submitted.', 'reported_info' => $report_info]);
 }
 add_action('wp_ajax_submit_question_report', 'qp_submit_question_report_ajax');
+
+/**
+ * Adds a notification bubble with the count of open reports to the admin menu.
+ */
+function qp_add_report_count_to_menu()
+{
+    global $wpdb, $menu, $submenu;
+
+    // Only show the count to users who can manage the plugin
+    if (!current_user_can('manage_options')) {
+        return;
+    }
+
+    $reports_table = $wpdb->prefix . 'qp_question_reports';
+    // Get the count of open reports (not just distinct questions)
+    $open_reports_count = (int) $wpdb->get_var("SELECT COUNT(report_id) FROM {$reports_table} WHERE status = 'open'");
+
+    if ($open_reports_count > 0) {
+        // Create the bubble HTML using standard WordPress classes
+        $bubble = " <span class='awaiting-mod'><span class='count-{$open_reports_count}'>{$open_reports_count}</span></span>";
+
+        // Determine if we are on a Question Press admin page.
+        $is_qp_page = (isset($_GET['page']) && strpos($_GET['page'], 'qp-') === 0) || (isset($_GET['page']) && $_GET['page'] === 'question-press');
+
+        // Only add the bubble to the top-level menu if we are NOT on a Question Press page.
+        if (!$is_qp_page) {
+            foreach ($menu as $key => $value) {
+                if ($value[2] == 'question-press') {
+                    $menu[$key][0] .= $bubble;
+                    break;
+                }
+            }
+        }
+
+        // Always add the bubble to the "Reports" submenu item regardless of the current page.
+        if (isset($submenu['question-press'])) {
+            foreach ($submenu['question-press'] as $key => $value) {
+                if ($value[2] == 'qp-logs-reports') {
+                    $submenu['question-press'][$key][0] .= $bubble;
+                    break;
+                }
+            }
+        }
+    }
+}
+add_action('admin_menu', 'qp_add_report_count_to_menu', 99);
 
 function qp_check_answer_ajax()
 {
@@ -4959,8 +5128,6 @@ function qp_pause_session_ajax()
 }
 add_action('wp_ajax_qp_pause_session', 'qp_pause_session_ajax');
 
-// Attention! Look if it is needed or not.
-
 function qp_handle_log_settings_forms()
 {
     if (!isset($_GET['page']) || $_GET['page'] !== 'qp-logs-reports' || !isset($_GET['tab']) || $_GET['tab'] !== 'log_settings') {
@@ -4968,27 +5135,61 @@ function qp_handle_log_settings_forms()
     }
 
     global $wpdb;
-    $table_name = $wpdb->prefix . 'qp_report_reasons';
+    $term_table = $wpdb->prefix . 'qp_terms';
 
     // Add/Update Reason
     if (isset($_POST['action']) && ($_POST['action'] === 'add_reason' || $_POST['action'] === 'update_reason') && check_admin_referer('qp_add_edit_reason_nonce')) {
         $reason_text = sanitize_text_field($_POST['reason_text']);
         $is_active = isset($_POST['is_active']) ? 1 : 0;
-        $data = ['reason_text' => $reason_text, 'is_active' => $is_active];
+        $reason_type = isset($_POST['reason_type']) ? sanitize_key($_POST['reason_type']) : 'report';
+        $taxonomy_id = absint($_POST['taxonomy_id']);
+
+        $term_data = [
+            'name' => $reason_text,
+            'slug' => sanitize_title($reason_text),
+            'taxonomy_id' => $taxonomy_id,
+        ];
 
         if ($_POST['action'] === 'update_reason') {
-            $wpdb->update($table_name, $data, ['reason_id' => absint($_POST['reason_id'])]);
+            $term_id = absint($_POST['term_id']);
+            $wpdb->update($term_table, $term_data, ['term_id' => $term_id]);
         } else {
-            $wpdb->insert($table_name, $data);
+            $wpdb->insert($term_table, $term_data);
+            $term_id = $wpdb->insert_id;
         }
+
+        if ($term_id) {
+            qp_update_term_meta($term_id, 'is_active', $is_active);
+            qp_update_term_meta($term_id, 'type', $reason_type);
+        }
+
         wp_safe_redirect(admin_url('admin.php?page=qp-logs-reports&tab=log_settings&message=1'));
         exit;
     }
 
     // Delete Reason
     if (isset($_GET['action']) && $_GET['action'] === 'delete' && isset($_GET['reason_id']) && check_admin_referer('qp_delete_reason_' . absint($_GET['reason_id']))) {
-        $wpdb->delete($table_name, ['reason_id' => absint($_GET['reason_id'])]);
-        wp_safe_redirect(admin_url('admin.php?page=qp-logs-reports&tab=log_settings&message=2'));
+        $term_id_to_delete = absint($_GET['reason_id']);
+        $reports_table = $wpdb->prefix . 'qp_question_reports';
+
+        // Check if the reason is in use by any reports
+        $usage_count = $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$reports_table} WHERE reason_term_id = %d",
+            $term_id_to_delete
+        ));
+
+        if ($usage_count > 0) {
+            // If it's in use, set an error message and redirect
+            $message = sprintf('This reason cannot be deleted because it is currently used in %d report(s).', $usage_count);
+            QP_Sources_Page::set_message($message, 'error');
+        } else {
+            // If not in use, proceed with deletion
+            $wpdb->delete($wpdb->prefix . 'qp_term_meta', ['term_id' => $term_id_to_delete]);
+            $wpdb->delete($term_table, ['term_id' => $term_id_to_delete]);
+            QP_Sources_Page::set_message('Reason deleted successfully.', 'updated');
+        }
+
+        wp_safe_redirect(admin_url('admin.php?page=qp-logs-reports&tab=log_settings'));
         exit;
     }
 }

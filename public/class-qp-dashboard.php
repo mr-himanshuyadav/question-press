@@ -303,7 +303,7 @@ class QP_Dashboard
                 } elseif (isset($settings['practice_mode'])) {
                     if ($settings['practice_mode'] === 'revision') {
                         $mode = 'Revision';
-                    } elseif ($settings['practice_mode'] === 'mock_test') { // This is the missing condition
+                    } elseif ($settings['practice_mode'] === 'mock_test') {
                         $mode = 'Mock Test';
                     } elseif ($settings['practice_mode'] === 'Incorrect Que. Practice') {
                         $mode = 'Incorrect Practice';

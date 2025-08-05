@@ -201,11 +201,11 @@ class QP_Shortcodes
             <div class="qp-form-group qp-marks-group" id="qp-revision-marks-group-wrapper" style="display: none;">
                 <div>
                     <label for="qp_revision_marks_correct">Marks for Correct Answer:</label>
-                    <input type="number" name="qp_marks_correct" id="qp_revision_marks_correct" value="4" step="0.01"  min="0.01" max="10">
+                    <input type="number" name="qp_marks_correct" id="qp_revision_marks_correct" value="4" step="0.01" min="0.01" max="10">
                 </div>
                 <div>
                     <label for="qp_revision_marks_incorrect">Penalty for Incorrect Answer:</label>
-                    <input type="number" name="qp_marks_incorrect" id="qp_revision_marks_incorrect" value="1" step="0.01"  min="0" max="10">
+                    <input type="number" name="qp_marks_incorrect" id="qp_revision_marks_incorrect" value="1" step="0.01" min="0" max="10">
                 </div>
             </div>
 
@@ -347,6 +347,8 @@ class QP_Shortcodes
         }
 
         if ((int)$session_data_from_db->user_id !== $user_id) {
+
+            // Attention! There is no immediate return back for unauthorised access.
             // --- NEW: Handle sessions that are paused after the last question is answered ---
             $question_ids = json_decode($session_data_from_db->question_ids_snapshot, true);
             $attempts_table = $wpdb->prefix . 'qp_user_attempts';
@@ -478,13 +480,51 @@ class QP_Shortcodes
 
         $session_data['attempt_history'] = $attempt_history;
 
-        $reports_table = $wpdb->prefix . 'qp_question_reports';
-        $reported_qids_for_user = $wpdb->get_col($wpdb->prepare(
-            "SELECT DISTINCT question_id FROM {$reports_table} WHERE user_id = %d AND status = 'open'",
-            $user_id
-        ));
+        // --- NEW: Fetch detailed report info, including the type ---
+$reports_table = $wpdb->prefix . 'qp_question_reports';
+$terms_table = $wpdb->prefix . 'qp_terms';
+$meta_table = $wpdb->prefix . 'qp_term_meta';
 
-        $session_data['reported_ids'] = $reported_qids_for_user;
+// Get all individual open reports for the user
+$all_user_reports = $wpdb->get_results($wpdb->prepare("
+    SELECT
+        r.question_id,
+        r.reason_term_ids
+    FROM {$reports_table} r
+    WHERE r.user_id = %d AND r.status = 'open'
+", $user_id));
+
+// Process the raw reports into the structured format JS expects
+$reported_info = [];
+foreach ($all_user_reports as $report) {
+    if (!isset($reported_info[$report->question_id])) {
+        $reported_info[$report->question_id] = [
+            'has_report' => false,
+            'has_suggestion' => false,
+        ];
+    }
+    
+    // Get the types for the reasons in this specific report
+    $reason_ids = array_filter(explode(',', $report->reason_term_ids));
+    if (!empty($reason_ids)) {
+        $ids_placeholder = implode(',', array_map('absint', $reason_ids));
+        $reason_types = $wpdb->get_col("
+            SELECT m.meta_value 
+            FROM {$terms_table} t
+            JOIN {$meta_table} m ON t.term_id = m.term_id AND m.meta_key = 'type'
+            WHERE t.term_id IN ($ids_placeholder)
+        ");
+
+        if (in_array('report', $reason_types)) {
+            $reported_info[$report->question_id]['has_report'] = true;
+        }
+        if (in_array('suggestion', $reason_types)) {
+            $reported_info[$report->question_id]['has_suggestion'] = true;
+        }
+    }
+}
+
+$session_data['reported_info'] = $reported_info;
 
         self::$session_data_for_script = $session_data;
 
@@ -640,11 +680,11 @@ class QP_Shortcodes
                 <div class="qp-form-group qp-marks-group" id="qp-marks-group-wrapper" style="display: none;">
                     <div style="width: 48%">
                         <label for="qp_marks_correct">Correct Marks:</label>
-                        <input type="number" name="qp_marks_correct" id="qp_marks_correct" value="4" step="0.01"  min="0.01" max="10" required>
+                        <input type="number" name="qp_marks_correct" id="qp_marks_correct" value="4" step="0.01" min="0.01" max="10" required>
                     </div>
                     <div style="width: 48%">
                         <label for="qp_marks_incorrect">Negative Marks:</label>
-                        <input type="number" name="qp_marks_incorrect" id="qp_marks_incorrect" value="1" step="0.01" min="0"  max="10" required>
+                        <input type="number" name="qp_marks_incorrect" id="qp_marks_incorrect" value="1" step="0.01" min="0" max="10" required>
                     </div>
                 </div>
 
@@ -845,6 +885,7 @@ class QP_Shortcodes
                             <?php if (!$is_mock_test) : ?><div id="qp-timer-indicator" class="timer-stat" style="display: none;">--:--</div><?php endif; ?>
                             <div id="qp-revision-indicator" style="display: none;">&#9851; Revision</div>
                             <div id="qp-reported-indicator" style="display: none;">&#9888; Reported</div>
+                            <div id="qp-suggestion-indicator" style="display: none;">&#9998; Suggestion Sent</div>
                         </div>
 
                         <div class="qp-question-area">
@@ -890,11 +931,13 @@ class QP_Shortcodes
             </div>
         </div>
         <div id="qp-report-modal-backdrop" style="display: none;">
-            <div id="qp-report-modal-content"><button class="qp-modal-close-btn">&times;</button>
+            <div id="qp-report-modal-content"><button class="qp-modal-close-btn" style="outline: none;">&times;</button>
                 <h3>Report an Issue</h3>
                 <p>Please select all issues that apply to the current question.</p>
                 <form id="qp-report-form">
                     <div id="qp-report-options-container"></div>
+                    <label for="qp-report-comment" style="font-size: .8em;">Comment<span style="color: red;">*</span></label>
+                    <textarea id="qp-report-comment" name="report_comment" rows="3" placeholder="Add a comment to explain the issue..."></textarea required>
                     <div class="qp-modal-footer"><button type="submit" class="qp-button qp-button-primary">Submit Report</button></div>
                 </form>
             </div>
@@ -971,7 +1014,7 @@ class QP_Shortcodes
             JOIN {$wpdb->prefix}qp_questions q ON a.question_id = q.question_id
             WHERE a.session_id = %d
         ", $session_id));
-        
+
         $topics_in_session = [];
         if (!empty($group_ids_in_session)) {
             $group_ids_placeholder = implode(',', $group_ids_in_session);
@@ -1010,17 +1053,18 @@ class QP_Shortcodes
                 $all_options[$option->question_id][] = $option;
             }
         }
-        
+
         // --- NEW: Fetch all lineage data in fewer queries for efficiency ---
         $lineage_cache = [];
         if (!function_exists('get_term_lineage')) {
-            function get_term_lineage($term_id, &$lineage_cache, $wpdb) {
+            function get_term_lineage($term_id, &$lineage_cache, $wpdb)
+            {
                 if (isset($lineage_cache[$term_id])) {
                     return $lineage_cache[$term_id];
                 }
                 $lineage = [];
                 $current_id = $term_id;
-                for ($i=0; $i<10; $i++) {
+                for ($i = 0; $i < 10; $i++) {
                     if (!$current_id) break;
                     $term = $wpdb->get_row($wpdb->prepare("SELECT name, parent FROM {$wpdb->prefix}qp_terms WHERE term_id = %d", $current_id));
                     if ($term) {
@@ -1052,10 +1096,10 @@ class QP_Shortcodes
 
             $attempt->subject_lineage = $subject_term_id ? get_term_lineage($subject_term_id, $lineage_cache, $wpdb) : [];
             $attempt->source_lineage = $source_term_id ? get_term_lineage($source_term_id, $lineage_cache, $wpdb) : [];
-            
+
             $attempts[] = $attempt;
         }
-        
+
         ob_start();
         echo '<div id="qp-practice-app-wrapper">';
         $is_mock_test = isset($settings['practice_mode']) && $settings['practice_mode'] === 'mock_test';
@@ -1241,6 +1285,8 @@ class QP_Shortcodes
                 <form id="qp-report-form">
                     <input type="hidden" id="qp-report-question-id-field" value="">
                     <div id="qp-report-options-container"></div>
+                    <label for="qp-report-comment-review" style="font-size: .8em;">Comment<span style="color: red;">*</span></label>
+                    <textarea id="qp-report-comment-review" name="report_comment" rows="3" placeholder="Add a comment to explain the issue..." required></textarea>
                     <div class="qp-modal-footer">
                         <button type="submit" class="qp-button qp-button-primary">Submit Report</button>
                     </div>

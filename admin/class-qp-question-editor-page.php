@@ -13,14 +13,32 @@ class QP_Question_Editor_Page
         $open_reports = [];
         if ($is_editing) {
             $reports_table = $wpdb->prefix . 'qp_question_reports';
-            $reasons_table = $wpdb->prefix . 'qp_report_reasons';
-            $open_reports = $wpdb->get_results($wpdb->prepare(
-                "SELECT r.question_id, rr.reason_text 
-         FROM {$reports_table} r 
-         JOIN {$reasons_table} rr ON r.reason_id = rr.reason_id
-         WHERE r.status = 'open' AND r.question_id IN (SELECT question_id FROM {$wpdb->prefix}qp_questions WHERE group_id = %d)",
-                $group_id
-            ));
+            $term_table = $wpdb->prefix . 'qp_terms';
+            $questions_in_group_ids = $wpdb->get_col($wpdb->prepare("SELECT question_id FROM {$wpdb->prefix}qp_questions WHERE group_id = %d", $group_id));
+
+            if (!empty($questions_in_group_ids)) {
+                $ids_placeholder = implode(',', $questions_in_group_ids);
+                $reports_raw = $wpdb->get_results("
+                SELECT question_id, GROUP_CONCAT(DISTINCT reason_term_ids SEPARATOR ',') as all_reason_ids, GROUP_CONCAT(comment SEPARATOR '|||') as all_comments
+                FROM {$reports_table}
+                WHERE status = 'open' AND question_id IN ($ids_placeholder)
+                GROUP BY question_id
+            ");
+
+                foreach ($reports_raw as $report) {
+                    $reason_ids = array_unique(array_filter(explode(',', $report->all_reason_ids)));
+                    $reason_names = [];
+                    if (!empty($reason_ids)) {
+                        $reason_ids_placeholder = implode(',', array_map('absint', $reason_ids));
+                        $reason_names = $wpdb->get_col("SELECT name FROM {$term_table} WHERE term_id IN ($reason_ids_placeholder)");
+                    }
+
+                    $open_reports[$report->question_id] = [
+                        'reasons' => $reason_names,
+                        'comments' => array_filter(explode('|||', $report->all_comments))
+                    ];
+                }
+            }
         }
 
         // Data holders
@@ -62,7 +80,7 @@ class QP_Question_Editor_Page
                 // --- NEW HIERARCHICAL TERM LOOKUP ---
                 // Find the most specific topic/subject term linked to the group
                 $linked_subject_term_id = $wpdb->get_var($wpdb->prepare("SELECT term_id FROM {$rel_table} WHERE object_id = %d AND object_type = 'group' AND term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id = %d)", $group_id, $subject_tax_id));
-                
+
                 $current_topic_id = $linked_subject_term_id; // The most specific child is the "topic"
                 $current_subject_id = 0; // This will be the top-level parent
 
@@ -90,7 +108,7 @@ class QP_Question_Editor_Page
 
                 if ($linked_source_term_id) {
                     $parent_id = $wpdb->get_var($wpdb->prepare("SELECT parent FROM $term_table WHERE term_id = %d", $linked_source_term_id));
-                     if ($parent_id == 0) {
+                    if ($parent_id == 0) {
                         $current_source_id = $linked_source_term_id;
                     } else {
                         for ($i = 0; $i < 10; $i++) {
@@ -103,7 +121,7 @@ class QP_Question_Editor_Page
                         }
                     }
                 }
-                
+
                 // Get the current exam for the group (existing logic is correct)
                 $current_exam_id = $wpdb->get_var($wpdb->prepare("SELECT term_id FROM {$rel_table} WHERE object_id = %d AND object_type = 'group' AND term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id = %d)", $group_id, $exam_tax_id));
 
@@ -123,7 +141,7 @@ class QP_Question_Editor_Page
         if (empty($questions_in_group)) {
             $questions_in_group[] = (object)['question_id' => 0, 'question_text' => '', 'options' => [], 'labels' => []];
         }
-        
+
         // --- Fetch ALL data needed for the form dropdowns from the new taxonomy system ---
         $term_table = $wpdb->prefix . 'qp_terms';
         $tax_table = $wpdb->prefix . 'qp_taxonomies';
@@ -142,7 +160,7 @@ class QP_Question_Editor_Page
 
         $source_subject_links = $wpdb->get_results("SELECT object_id AS source_id, term_id AS subject_id FROM {$rel_table} WHERE object_type = 'source_subject_link'");
         $exam_subject_links = $wpdb->get_results("SELECT object_id AS exam_id, term_id AS subject_id FROM {$rel_table} WHERE object_type = 'exam_subject_link'");
-        
+
         // Pass all necessary data to our JavaScript file
         wp_localize_script('qp-editor-script', 'qp_editor_data', [
             'all_subject_terms'   => $all_subject_terms,
@@ -163,20 +181,15 @@ class QP_Question_Editor_Page
         }
 ?>
         <div class="wrap">
-            <?php if (!empty($open_reports)):
-                $reports_by_question = [];
-                foreach ($open_reports as $report) {
-                    $reports_by_question[$report->question_id][] = $report->reason_text;
-                }
-            ?>
+            <?php if (!empty($open_reports)): ?>
                 <div class="notice notice-error" style="padding: 1rem; border-left-width: 4px;">
                     <div style="display: flex; justify-content: space-between; align-items: flex-start;">
                         <div>
                             <h3 style="margin: 0 0 0.5rem 0;">&#9888; Open Reports for this Group</h3>
                             <p style="margin-top: 0;">The following questions have open reports. Resolving them will remove them from the "Needs Review" queue.</p>
                             <ul style="list-style: disc; padding-left: 20px; margin-bottom: 0;">
-                                <?php foreach ($reports_by_question as $qid => $reasons): ?>
-                                    <li><strong>Question #<?php echo esc_html($qid); ?>:</strong> <?php echo esc_html(implode(', ', array_unique($reasons))); ?></li>
+                                <?php foreach ($open_reports as $qid => $report_data): ?>
+                                    <li><strong>Question #<?php echo esc_html($qid); ?>:</strong> <?php echo esc_html(implode(', ', $report_data['reasons'])); ?></li>
                                 <?php endforeach; ?>
                             </ul>
                         </div>
@@ -290,14 +303,14 @@ class QP_Question_Editor_Page
                                     }
 
                                     // Prioritize 'reported' status for highlighting
-                                    if (isset($reports_by_question[$question->question_id])) {
+                                    if (isset($open_reports[$question->question_id])) {
                                         $status_class = 'status-reported';
                                     }
                                 ?>
                                     <div class="postbox qp-question-block <?php echo esc_attr($status_class); ?>">
                                         <div class="postbox-header">
-                                            <button type="button" class="qp-toggle-question-block" title="Toggle visibility">
-                                                <span class="dashicons dashicons-arrow-down-alt2"></span>
+                                            <button type="button" class="qp-toggle-question-block" title="Toggle visibility" style="padding: 0;">
+                                                <span class="dashicons dashicons-arrow-down-alt2" style="margin-left: 5px;"></span>
                                             </button>
                                             <h2 class="hndle">
                                                 <span>
@@ -326,8 +339,8 @@ class QP_Question_Editor_Page
                                                         </div>
                                                     </div>
                                                     <?php if ($question->question_id > 0) : ?>
-                                                        <?php if (isset($reports_by_question[$question->question_id])) : ?>
-                                                            <span class="qp-status-indicator qp-reported-indicator" title="This question has open reports. Reason(s): <?php echo esc_attr(implode(', ', array_unique($reports_by_question[$question->question_id]))); ?>">
+                                                        <?php if (isset($open_reports[$question->question_id])) : ?>
+                                                            <span class="qp-status-indicator qp-reported-indicator" title="This question has open reports. Reason(s): <?php echo esc_attr(implode(', ', $open_reports[$question->question_id]['reasons'])); ?>">
                                                                 <span class="dashicons dashicons-warning"></span> Reported
                                                             </span>
                                                         <?php else: ?>
@@ -348,6 +361,18 @@ class QP_Question_Editor_Page
                                             </div>
                                         </div>
                                         <div class="inside">
+                                            <?php
+                                            // Check if this specific question has any open reports with comments
+                                            if (isset($open_reports[$question->question_id]) && !empty($open_reports[$question->question_id]['comments'])):
+                                                foreach ($open_reports[$question->question_id]['comments'] as $comment):
+                                            ?>
+                                                    <div class="notice notice-alt notice-warning qp-reporter-comment-notice" style="margin: 0 0 15px; padding: 10px; border-left-width: 4px;">
+                                                        <p style="margin: 0;"><strong>Reporter's Comment:</strong> <?php echo esc_html($comment); ?></p>
+                                                    </div>
+                                            <?php
+                                                endforeach;
+                                            endif;
+                                            ?>
                                             <input type="hidden" name="questions[<?php echo $q_index; ?>][question_id]" class="question-id-input" value="<?php echo esc_attr($question->question_id); ?>">
                                             <?php if (!empty($question->labels)) : ?>
                                                 <div id="qp-labels-container-<?php echo $q_index; ?>" class="qp-editor-labels-container" data-editor-id="question_text_editor_<?php echo $q_index; ?>">
@@ -358,6 +383,7 @@ class QP_Question_Editor_Page
                                                     <?php endforeach; ?>
                                                 </div>
                                             <?php endif; ?>
+
                                             <?php
                                             wp_editor(
                                                 $question->question_text, // The content
