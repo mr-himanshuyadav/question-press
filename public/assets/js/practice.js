@@ -1310,7 +1310,13 @@ if (qp_session_data.reported_info) {
             answeredStates[qid] = {};
         }
         // Store the detailed info
-        answeredStates[qid].reported_info = info; 
+        answeredStates[qid].reported_info = info;
+        // --- THIS IS THE FIX ---
+        // If there's any report, set the flag for the palette button
+        if (info.has_report || info.has_suggestion) {
+            answeredStates[qid].reported = true;
+        }
+        // --- END FIX ---
     });
 }
 

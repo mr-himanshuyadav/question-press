@@ -300,12 +300,14 @@ function qp_activate_plugin()
     // Define and insert default report reasons
     $default_reasons = [
         ['text' => 'Wrong Answer', 'type' => 'report'],
-        ['text' => 'Language Mistakes', 'type' => 'suggestion'],
         ['text' => 'Options are incorrect', 'type' => 'report'],
         ['text' => 'Image is not loading', 'type' => 'report'],
-        ['text' => 'Question is confusing', 'type' => 'suggestion'],
         ['text' => 'No Answer Provided', 'type' => 'report'],
-        ['text' => 'Wrong Formatting', 'type' => 'suggestion']
+        ['text' => 'Other (Mention in Comment)', 'type' => 'report'],
+        ['text' => 'Wrong Formatting', 'type' => 'suggestion'],
+        ['text' => 'Language Mistakes', 'type' => 'suggestion'],
+        ['text' => 'Question is confusing', 'type' => 'suggestion'],
+        ['text' => 'Other (Mention in Comment)', 'type' => 'Suggestion']
     ];
 
     if ($reason_tax_id) {
