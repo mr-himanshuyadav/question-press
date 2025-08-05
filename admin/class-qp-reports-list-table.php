@@ -185,23 +185,24 @@ class QP_Reports_List_Table extends WP_List_Table
     {
         return '<strong>' . esc_html($item['report_id']) . '</strong>';
     }
-    public function column_question_text($item)
-    {
-        // Use the new report_types array to build the display string
-        $type_text = isset($item['report_types']) ? implode(', ', $item['report_types']) : 'Suggestion';
+    public function column_question_text($item) {
+    // Use the new report_types array to build the display string
+    $type_text = isset($item['report_types']) ? implode(', ', $item['report_types']) : 'Suggestion';
 
-        $output = '<strong>Question ID:</strong> ' . esc_html($item['question_id']) . ' | <strong>Type:</strong> ' . esc_html($type_text);
-
-        if (!empty($item['reasons'])) {
-            $output .= '<br><strong>Reasons:</strong> <span style="color: #c00;">' . esc_html($item['reasons']) . '</span>';
-        }
-
-        if (!empty(trim($item['comment']))) {
-            $output .= '<br><strong>Comment:</strong> <em>' . esc_html(trim($item['comment'])) . '</em>';
-        }
-
-        return $output;
+    $output = '<strong>ID:</strong> ' . esc_html($item['question_id']) . ' | <strong>Type:</strong> ' . esc_html($type_text);
+    
+    if (!empty($item['reasons'])) {
+        // Determine the color based on the report's severity
+        $reason_color = ($item['report_severity'] === 'report') ? '#c00' : '#c39407ff'; // Red for report, dark yellow for suggestion
+        $output .= '<br><strong>Reasons:</strong> <span style="color: ' . esc_attr($reason_color) . ';">' . esc_html($item['reasons']) . '</span>';
     }
+
+    if (!empty(trim($item['comment']))) {
+        $output .= '<br><strong>Comment:</strong> <em>' . esc_html(trim($item['comment'])) . '</em>';
+    }
+    
+    return $output;
+}
 
     public function column_report_details($item)
     {
