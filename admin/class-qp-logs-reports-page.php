@@ -46,39 +46,45 @@ class QP_Logs_Reports_Page {
     }
 
     public static function render_reports_tab() {
-        global $wpdb;
-        $reports_table = $wpdb->prefix . 'qp_question_reports';
+    global $wpdb;
+    $reports_table = $wpdb->prefix . 'qp_question_reports';
 
-        // Get counts for the view links
-        $open_count = $wpdb->get_var("SELECT COUNT(DISTINCT question_id) FROM {$reports_table} WHERE status = 'open'");
-        $resolved_count = $wpdb->get_var("SELECT COUNT(DISTINCT question_id) FROM {$reports_table} WHERE status = 'resolved'");
-        
-        $current_status = isset($_GET['status']) ? sanitize_key($_GET['status']) : 'open';
-        ?>
-        <ul class="subsubsub">
-            <li><a href="?page=qp-logs-reports&tab=reports&status=open" class="<?php if ($current_status === 'open') echo 'current'; ?>">Open <span class="count">(<?php echo esc_html($open_count); ?>)</span></a> |</li>
-            <li><a href="?page=qp-logs-reports&tab=reports&status=resolved" class="<?php if ($current_status === 'resolved') echo 'current'; ?>">Resolved <span class="count">(<?php echo esc_html($resolved_count); ?>)</span></a></li>
-        </ul>
+    // Get counts for the view links
+    $open_count = $wpdb->get_var("SELECT COUNT(DISTINCT question_id) FROM {$reports_table} WHERE status = 'open'");
+    $resolved_count = $wpdb->get_var("SELECT COUNT(DISTINCT question_id) FROM {$reports_table} WHERE status = 'resolved'");
+    
+    $current_status = isset($_GET['status']) ? sanitize_key($_GET['status']) : 'open';
+    ?>
+    <style>
+        /* Target the specific columns in the reports table */
+        .wp-list-table .column-question_text { width: 45%; }
+        .wp-list-table .column-report_details { width: 35%; }
+        .wp-list-table .column-actions { width: 20%; }
+    </style>
+    <ul class="subsubsub">
+        <li><a href="?page=qp-logs-reports&tab=reports&status=open" class="<?php if ($current_status === 'open') echo 'current'; ?>">Open <span class="count">(<?php echo esc_html($open_count); ?>)</span></a> |</li>
+        <li><a href="?page=qp-logs-reports&tab=reports&status=resolved" class="<?php if ($current_status === 'resolved') echo 'current'; ?>">Resolved <span class="count">(<?php echo esc_html($resolved_count); ?>)</span></a></li>
+    </ul>
 
-        <?php if ($current_status === 'resolved' && $resolved_count > 0) : 
-            $clear_url = wp_nonce_url(admin_url('admin.php?page=qp-logs-reports&tab=reports&action=clear_resolved_reports'), 'qp_clear_all_reports_nonce');
-        ?>
-            <a href="<?php echo esc_url($clear_url); ?>" class="button button-danger" style="float: right; margin-top: -30px;" onclick="return confirm('Are you sure you want to permanently delete all resolved reports? This action cannot be undone.');">Clear All Resolved Reports</a>
-        <?php endif; ?>
+    <?php if ($current_status === 'resolved' && $resolved_count > 0) : 
+        $clear_url = wp_nonce_url(admin_url('admin.php?page=qp-logs-reports&tab=reports&action=clear_resolved_reports'), 'qp_clear_all_reports_nonce');
+    ?>
+        <a href="<?php echo esc_url($clear_url); ?>" class="button button-danger" style="float: right; margin-top: -30px;" onclick="return confirm('Are you sure you want to permanently delete all resolved reports? This action cannot be undone.');">Clear All Resolved Reports</a>
+    <?php endif; ?>
 
-        <?php
-        $list_table = new QP_Reports_List_Table();
-        $list_table->prepare_items();
-        ?>
-        <form method="post">
-            <input type="hidden" name="page" value="qp-logs-reports">
-            <input type="hidden" name="tab" value="reports">
-            <input type="hidden" name="status" value="<?php echo esc_attr($current_status); ?>">
-            <?php $list_table->search_box('Search Reports', 'report'); ?>
-            <?php $list_table->display(); ?>
-        </form>
-        <?php
-    }
+    <?php
+    $list_table = new QP_Reports_List_Table();
+    $list_table->prepare_items();
+    ?>
+    <form method="post">
+        <input type="hidden" name="page" value="qp-logs-reports">
+        <input type="hidden" name="tab" value="reports">
+        <input type="hidden" name="status" value="<?php echo esc_attr($current_status); ?>">
+        <?php $list_table->search_box('Search Reports', 'report'); ?>
+        <?php $list_table->display(); ?>
+    </form>
+    <?php
+}
 
     public static function render_log_settings_tab() {
     global $wpdb;

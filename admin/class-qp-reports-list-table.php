@@ -4,13 +4,16 @@ if (!class_exists('WP_List_Table')) {
     require_once(ABSPATH . 'wp-admin/includes/class-wp-list-table.php');
 }
 
-class QP_Reports_List_Table extends WP_List_Table {
+class QP_Reports_List_Table extends WP_List_Table
+{
 
-    public function __construct() {
+    public function __construct()
+    {
         parent::__construct(['singular' => 'Report', 'plural' => 'Reports', 'ajax' => false]);
     }
 
-    public function get_columns() {
+    public function get_columns()
+    {
         return [
             'cb'            => '<input type="checkbox" />',
             'question_text' => 'Question',
@@ -20,7 +23,8 @@ class QP_Reports_List_Table extends WP_List_Table {
     }
 
     // --- NEW: Add Bulk Actions ---
-    protected function get_bulk_actions() {
+    protected function get_bulk_actions()
+    {
         return [
             'resolve_reports' => 'Mark as Resolved',
             'delete_reports'  => 'Delete Reports'
@@ -28,7 +32,8 @@ class QP_Reports_List_Table extends WP_List_Table {
     }
 
     // --- NEW: Process Bulk Actions ---
-    public function process_bulk_action() {
+    public function process_bulk_action()
+    {
         $action = $this->current_action();
         if (!$action) return;
 
@@ -64,9 +69,8 @@ class QP_Reports_List_Table extends WP_List_Table {
     $reports_table = $wpdb->prefix . 'qp_question_reports';
     $questions_table = $wpdb->prefix . 'qp_questions';
     $users_table = $wpdb->users;
-    $terms_table = $wpdb->prefix . 'qp_terms'; // Use the terms table
+    $terms_table = $wpdb->prefix . 'qp_terms';
 
-    // --- UPDATED: Filtering and Query Logic ---
     $current_status = isset($_GET['status']) ? sanitize_key($_GET['status']) : 'open';
     $where_clauses = ["r.status = %s"];
     $params = [$current_status];
@@ -80,32 +84,31 @@ class QP_Reports_List_Table extends WP_List_Table {
 
     $where_sql = 'WHERE ' . implode(' AND ', $where_clauses);
 
-    // This query now aggregates reports by question and fetches all associated data.
-    // It groups by the question ID to consolidate all reports for that question into a single row.
+    // Reverted query to fetch individual reports, not grouped reports.
     $query = "
         SELECT
+            r.report_id,
             r.question_id,
+            r.comment,
+            r.reason_term_ids,
+            r.report_date,
             q.question_text,
-            GROUP_CONCAT(DISTINCT u.display_name SEPARATOR ', ') as reporters,
-            MAX(r.report_date) as last_report_date,
-            (SELECT g.group_id FROM {$wpdb->prefix}qp_question_groups g WHERE g.group_id = q.group_id) as group_id,
-            GROUP_CONCAT(DISTINCT r.reason_term_ids SEPARATOR ',') as all_reason_ids
+            u.display_name as reporter_name,
+            q.group_id
         FROM {$reports_table} r
         JOIN {$questions_table} q ON r.question_id = q.question_id
         JOIN {$users_table} u ON r.user_id = u.ID
         {$where_sql}
-        GROUP BY r.question_id
-        ORDER BY last_report_date DESC
+        ORDER BY r.report_date DESC
     ";
 
     $items_raw = $wpdb->get_results($wpdb->prepare($query, $params), 'ARRAY_A');
     
-    // Post-process to get reason names, as this is difficult to do in a single SQL query efficiently.
     $this->items = [];
     foreach ($items_raw as $item) {
-        $all_ids = array_unique(array_filter(explode(',', $item['all_reason_ids'])));
-        if (!empty($all_ids)) {
-            $ids_placeholder = implode(',', array_map('absint', $all_ids));
+        $reason_ids = array_filter(explode(',', $item['reason_term_ids']));
+        if (!empty($reason_ids)) {
+            $ids_placeholder = implode(',', array_map('absint', $reason_ids));
             $reason_names = $wpdb->get_col("SELECT name FROM {$terms_table} WHERE term_id IN ($ids_placeholder)");
             $item['reasons'] = implode(', ', $reason_names);
         } else {
@@ -115,22 +118,30 @@ class QP_Reports_List_Table extends WP_List_Table {
     }
 }
 
-    public function column_cb($item) {
+    public function column_cb($item)
+    {
         return sprintf('<input type="checkbox" name="question_ids[]" value="%s" />', $item['question_id']);
     }
 
     public function column_question_text($item) {
-        return sprintf('<strong>#%s:</strong> %s', esc_html($item['question_id']), esc_html(wp_trim_words($item['question_text'], 40, '...')));
+    $output = '<strong>Question ID:</strong> ' . esc_html($item['question_id']);
+    
+    if (!empty(trim($item['comment']))) {
+        $output .= '<br><strong>Comment:</strong> <em>' . esc_html(trim($item['comment'])) . '</em>';
     }
+    
+    return $output;
+}
 
-    public function column_report_details($item) {
-        return sprintf('<strong>Reported By:</strong> %s<br><strong>Reason(s):</strong> <span style="color: #c00;">%s</span><br><strong>Reported:</strong> %s', esc_html($item['reporters']), esc_html($item['reasons']), esc_html(date('M j, Y, g:i a', strtotime($item['last_report_date']))));
-    }
+public function column_report_details($item) {
+    return sprintf('<strong>Reported By:</strong> %s<br><strong>Reason(s):</strong> <span style="color: #c00;">%s</span><br><strong>Reported On:</strong> %s', esc_html($item['reporter_name']), esc_html($item['reasons']), esc_html(date('M j, Y, g:i a', strtotime($item['report_date']))));
+}
 
-    public function column_actions($item) {
+    public function column_actions($item)
+    {
         $current_status = isset($_GET['status']) ? sanitize_key($_GET['status']) : 'open';
         $review_url = esc_url(admin_url('admin.php?page=qp-edit-group&group_id=' . $item['group_id']));
-        
+
         $actions['review'] = sprintf('<a href="%s" class="button button-secondary button-small">Review</a>', $review_url);
 
         if ($current_status === 'open') {
@@ -146,7 +157,8 @@ class QP_Reports_List_Table extends WP_List_Table {
         return $this->row_actions($actions, true);
     }
 
-    public function column_default($item, $column_name) {
+    public function column_default($item, $column_name)
+    {
         return 'N/A';
     }
 }
