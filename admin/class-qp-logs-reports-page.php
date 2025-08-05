@@ -56,11 +56,25 @@ class QP_Logs_Reports_Page {
     $current_status = isset($_GET['status']) ? sanitize_key($_GET['status']) : 'open';
     ?>
     <style>
-        /* Target the specific columns in the reports table */
-        .wp-list-table .column-question_text { width: 45%; }
-        .wp-list-table .column-report_details { width: 35%; }
-        .wp-list-table .column-actions { width: 20%; }
-    </style>
+    /* Target the specific columns in the reports table */
+    .wp-list-table .column-report_id { width: 8%; }
+    .wp-list-table .column-question_text { width: 45%; }
+    .wp-list-table .column-report_details { width: 22%; }
+    .wp-list-table .column-actions { width: 25%; }
+
+    /* --- NEW & IMPROVED Vertical Bar Styling --- */
+    .wp-list-table tr.report-type-report th,
+    .wp-list-table tr.report-type-suggestion th {
+        /* This creates the space for our bar */
+        border-left: 4px solid transparent;
+    }
+    .wp-list-table tr.report-type-report th{
+        border-left: 4px solid #d63638; /* Red */
+    }
+    .wp-list-table tr.report-type-suggestion th{
+        border-left: 4px solid #FFC107; /* Yellow */
+    }
+</style>    
     <ul class="subsubsub">
         <li><a href="?page=qp-logs-reports&tab=reports&status=open" class="<?php if ($current_status === 'open') echo 'current'; ?>">Open <span class="count">(<?php echo esc_html($open_count); ?>)</span></a> |</li>
         <li><a href="?page=qp-logs-reports&tab=reports&status=resolved" class="<?php if ($current_status === 'resolved') echo 'current'; ?>">Resolved <span class="count">(<?php echo esc_html($resolved_count); ?>)</span></a></li>
