@@ -1330,12 +1330,6 @@ if (qp_session_data.reported_info) {
         }
         // Store the detailed info
         answeredStates[qid].reported_info = info;
-        // --- THIS IS THE FIX ---
-        // If there's any report, set the flag for the palette button
-        if (info.has_report || info.has_suggestion) {
-            answeredStates[qid].reported = true;
-        }
-        // --- END FIX ---
     });
 }
 
@@ -1715,21 +1709,21 @@ if (qp_session_data.reported_info) {
       }
 
       // 3. Conditionally show other indicators
-var reportInfo = (previousState.reported_info || data.reported_info) || {};
-var isReported = false; // This will be true if a critical 'report' exists
+      var reportInfo = (previousState.reported_info || data.reported_info) || {};
+      var isReported = false; // This will be true if a critical 'report' exists
 
-if (reportInfo.has_report) {
-    $("#qp-reported-indicator").show();
-    showIndicatorBar = true;
-    isReported = true; // A critical report locks the UI
-}
-if (reportInfo.has_suggestion) {
-    $("#qp-suggestion-indicator").show();
-    showIndicatorBar = true;
-}
+      if (reportInfo.has_report) {
+          $("#qp-reported-indicator").show();
+          showIndicatorBar = true;
+          isReported = true; // A critical report locks the UI
+      }
+      if (reportInfo.has_suggestion) {
+          $("#qp-suggestion-indicator").show();
+          showIndicatorBar = true;
+      }
 
-var isAnswered = previousState.type === "answered";
-var isExpired = previousState.type === "expired";
+      var isAnswered = previousState.type === "answered";
+      var isExpired = previousState.type === "expired";
 
       // 4. Handle UI for answered/expired/reported questions
       if (isAnswered || isExpired || isReported) {
