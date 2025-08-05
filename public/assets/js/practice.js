@@ -1554,14 +1554,6 @@ jQuery(document).ready(function ($) {
 
   var questionCache = {};
 
-  function shuffleArray(array) {
-    for (let i = array.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [array[i], array[j]] = [array[j], array[i]];
-    }
-    return array;
-  }
-
   function renderQuestion(data, questionID) {
     if (!isMockTest) {
       clearInterval(questionTimer);

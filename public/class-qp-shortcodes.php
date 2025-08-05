@@ -347,6 +347,8 @@ class QP_Shortcodes
         }
 
         if ((int)$session_data_from_db->user_id !== $user_id) {
+
+            // Attention! There is no immediate return back for unauthorised access.
             // --- NEW: Handle sessions that are paused after the last question is answered ---
             $question_ids = json_decode($session_data_from_db->question_ids_snapshot, true);
             $attempts_table = $wpdb->prefix . 'qp_user_attempts';
