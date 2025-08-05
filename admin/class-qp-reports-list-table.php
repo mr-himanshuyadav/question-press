@@ -189,7 +189,7 @@ class QP_Reports_List_Table extends WP_List_Table
     // Use the new report_types array to build the display string
     $type_text = isset($item['report_types']) ? implode(', ', $item['report_types']) : 'Suggestion';
 
-    $output = '<strong>ID:</strong> ' . esc_html($item['question_id']) . ' | <strong>Type:</strong> ' . esc_html($type_text);
+    $output = '<strong>Question ID:</strong> ' . esc_html($item['question_id']) . ' | <strong>Type:</strong> ' . esc_html($type_text);
     
     if (!empty($item['reasons'])) {
         // Determine the color based on the report's severity

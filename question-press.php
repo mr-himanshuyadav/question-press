@@ -4077,6 +4077,51 @@ function qp_submit_question_report_ajax()
 }
 add_action('wp_ajax_submit_question_report', 'qp_submit_question_report_ajax');
 
+/**
+ * Adds a notification bubble with the count of open reports to the admin menu.
+ */
+function qp_add_report_count_to_menu() {
+    global $wpdb, $menu, $submenu;
+
+    // Only show the count to users who can manage the plugin
+    if (!current_user_can('manage_options')) {
+        return;
+    }
+
+    $reports_table = $wpdb->prefix . 'qp_question_reports';
+    // Get the count of open reports (not just distinct questions)
+    $open_reports_count = (int) $wpdb->get_var("SELECT COUNT(report_id) FROM {$reports_table} WHERE status = 'open'");
+
+    if ($open_reports_count > 0) {
+        // Create the bubble HTML using standard WordPress classes
+        $bubble = " <span class='awaiting-mod'><span class='count-{$open_reports_count}'>{$open_reports_count}</span></span>";
+
+        // Determine if we are on a Question Press admin page.
+        $is_qp_page = (isset($_GET['page']) && strpos($_GET['page'], 'qp-') === 0) || (isset($_GET['page']) && $_GET['page'] === 'question-press');
+
+        // Only add the bubble to the top-level menu if we are NOT on a Question Press page.
+        if (!$is_qp_page) {
+            foreach ($menu as $key => $value) {
+                if ($value[2] == 'question-press') {
+                    $menu[$key][0] .= $bubble;
+                    break;
+                }
+            }
+        }
+
+        // Always add the bubble to the "Reports" submenu item regardless of the current page.
+        if (isset($submenu['question-press'])) {
+            foreach ($submenu['question-press'] as $key => $value) {
+                if ($value[2] == 'qp-logs-reports') {
+                    $submenu['question-press'][$key][0] .= $bubble;
+                    break;
+                }
+            }
+        }
+    }
+}
+add_action('admin_menu', 'qp_add_report_count_to_menu', 99);
+
 function qp_check_answer_ajax()
 {
     check_ajax_referer('qp_practice_nonce', 'nonce');
