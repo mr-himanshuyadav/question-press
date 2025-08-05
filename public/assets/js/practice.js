@@ -257,17 +257,21 @@ jQuery(document).ready(function ($) {
   }
 
   // --- NEW: Mode-Aware Palette Rendering Function ---
-  function renderPalette() {
+function renderPalette() {
     paletteGrids.empty();
 
     // Determine the upper limit for the loop.
     let loopLimit = sessionQuestionIDs.length; // Default to all questions
     const isSectionWise =
-      sessionSettings.practice_mode === "Section Wise Practice";
+        sessionSettings.practice_mode === "Section Wise Practice";
 
     // For Normal or Revision mode (but NOT section-wise), only show questions up to the furthest point reached.
     if (!isMockTest && !isSectionWise) {
-      loopLimit = highestQuestionIndexReached + 1;
+        loopLimit = highestQuestionIndexReached + 1;
+        // Safeguard: Don't try to render more buttons than there are questions.
+        if (loopLimit > sessionQuestionIDs.length) {
+            loopLimit = sessionQuestionIDs.length;
+        }
     }
 
     // Loop up to the determined limit.
@@ -1868,11 +1872,29 @@ var isExpired = previousState.type === "expired";
   }
 
   function loadNextQuestion() {
+    // --- NEW: Intelligent Palette Button Appending ---
+    // Check if the user is advancing to a question for which a button doesn't exist yet.
+    var newIndex = currentQuestionIndex + 1;
+    if (newIndex > highestQuestionIndexReached && newIndex < sessionQuestionIDs.length) {
+        highestQuestionIndexReached = newIndex;
+        
+        // Only append a new button if it's a mode where the palette is not fully pre-rendered.
+        const isSectionWise = sessionSettings.practice_mode === "Section Wise Practice";
+        if (!isMockTest && !isSectionWise) {
+            const questionID = sessionQuestionIDs[newIndex];
+            const paletteBtn = $("<button></button>")
+                .addClass("qp-palette-btn status-not_viewed") // New buttons are always 'not_viewed' initially
+                .attr("data-question-index", newIndex)
+                .attr("data-question-id", questionID)
+                .text(newIndex + 1);
+            
+            // Append the new button to both the docked and sliding palettes.
+            paletteGrids.append(paletteBtn);
+        }
+    }
+    // --- END NEW LOGIC ---
+
     // First, check if we are ALREADY on the last question.
-    highestQuestionIndexReached = Math.max(
-      highestQuestionIndexReached,
-      currentQuestionIndex + 1
-    );
     if (currentQuestionIndex >= sessionQuestionIDs.length - 1) {
       clearInterval(questionTimer);
 
