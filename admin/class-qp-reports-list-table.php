@@ -94,6 +94,7 @@ public function single_row_columns( $item ) {
         $questions_table = $wpdb->prefix . 'qp_questions';
         $users_table = $wpdb->users;
         $terms_table = $wpdb->prefix . 'qp_terms';
+        $meta_table = $wpdb->prefix . 'qp_term_meta';
 
         $current_status = isset($_GET['status']) ? sanitize_key($_GET['status']) : 'open';
         $where_clauses = ["r.status = %s"];
@@ -130,17 +131,45 @@ public function single_row_columns( $item ) {
         $items_raw = $wpdb->get_results($wpdb->prepare($query, $params), 'ARRAY_A');
 
         $this->items = [];
-        foreach ($items_raw as $item) {
-            $reason_ids = array_filter(explode(',', $item['reason_term_ids']));
-            if (!empty($reason_ids)) {
-                $ids_placeholder = implode(',', array_map('absint', $reason_ids));
-                $reason_names = $wpdb->get_col("SELECT name FROM {$terms_table} WHERE term_id IN ($ids_placeholder)");
-                $item['reasons'] = implode(', ', $reason_names);
-            } else {
-                $item['reasons'] = 'N/A';
-            }
-            $this->items[] = $item;
+foreach ($items_raw as $item) {
+    $reason_ids = array_filter(explode(',', $item['reason_term_ids']));
+    
+    // Set defaults
+    $item['report_severity'] = 'suggestion';
+    $item['report_types'] = ['Suggestion']; // Default display type
+    $item['reasons'] = 'N/A';
+
+    if (!empty($reason_ids)) {
+        $ids_placeholder = implode(',', array_map('absint', $reason_ids));
+        $reasons_data = $wpdb->get_results("
+            SELECT t.name, m.meta_value as type
+            FROM {$terms_table} t
+            LEFT JOIN {$meta_table} m ON t.term_id = m.term_id AND m.meta_key = 'type'
+            WHERE t.term_id IN ($ids_placeholder)
+        ");
+        
+        $reason_names = [];
+        $reason_types = [];
+        foreach ($reasons_data as $reason) {
+            $reason_names[] = $reason->name;
+            // Default any null or empty types to 'report' for safety
+            $type = !empty($reason->type) ? $reason->type : 'report'; 
+            $reason_types[] = ucfirst($type);
         }
+
+        $item['reasons'] = implode(', ', $reason_names);
+        $unique_types = array_unique($reason_types);
+        sort($unique_types); // Sorts alphabetically, e.g., "Report, Suggestion"
+        $item['report_types'] = $unique_types;
+
+        // Prioritize 'report' for the severity class used for styling
+        if (in_array('Report', $unique_types)) {
+            $item['report_severity'] = 'report';
+        }
+    }
+    
+    $this->items[] = $item;
+}
     }
 
     public function column_cb($item)
@@ -152,9 +181,8 @@ public function single_row_columns( $item ) {
     return '<strong>' . esc_html($item['report_id']) . '</strong>';
 }
     public function column_question_text($item) {
-    // Check if the key exists and set a default if it doesn't.
-    $severity = isset($item['report_severity']) ? $item['report_severity'] : 'suggestion';
-    $type_text = ucfirst($severity);
+    // Use the new report_types array to build the display string
+    $type_text = isset($item['report_types']) ? implode(', ', $item['report_types']) : 'Suggestion';
 
     $output = '<strong>ID:</strong> ' . esc_html($item['question_id']) . ' | <strong>Type:</strong> ' . esc_html($type_text);
     
