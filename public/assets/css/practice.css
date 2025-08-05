@@ -1557,8 +1557,6 @@ body.palette-overlay-open #qp-palette-sliding {
 
 /* --- NEW: Report Modal Reason Grouping Styles --- */
 .qp-report-type-header {
-    margin-top: 1rem;
-    margin-bottom: 0.5rem;
     font-size: 13px;
     font-weight: 700;
     text-transform: uppercase;

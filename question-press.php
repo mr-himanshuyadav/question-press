@@ -3966,8 +3966,7 @@ function qp_get_report_reasons_ajax()
 
     $reason_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'report_reason'");
 
-    // This query now also fetches the 'type' for each reason.
-    $reasons = $wpdb->get_results($wpdb->prepare(
+    $reasons_raw = $wpdb->get_results($wpdb->prepare(
         "SELECT 
             t.term_id as reason_id, 
             t.name as reason_text,
@@ -3984,7 +3983,46 @@ function qp_get_report_reasons_ajax()
         $reason_tax_id
     ));
 
-    wp_send_json_success(['reasons' => $reasons]);
+    $reasons_by_type = [
+        'report' => [],
+        'suggestion' => []
+    ];
+
+    foreach ($reasons_raw as $reason) {
+        $type = !empty($reason->type) ? $reason->type : 'report';
+        $reasons_by_type[$type][] = $reason;
+    }
+
+    ob_start();
+
+    if (!empty($reasons_by_type['report'])) {
+        echo '<div class="qp-report-type-header">Reports (for errors)</div>';
+        foreach ($reasons_by_type['report'] as $reason) {
+            echo '<label class="qp-custom-checkbox qp-report-reason-report">
+                    <input type="checkbox" name="report_reasons[]" value="' . esc_attr($reason->reason_id) . '">
+                    <span></span>
+                    ' . esc_html($reason->reason_text) . '
+                  </label>';
+        }
+    }
+
+    if (!empty($reasons_by_type['suggestion'])) {
+        if(!empty($reasons_by_type['report'])){
+            echo '<hr style="margin: 0.5rem 0; border: 0; border-top: 1px solid #ddd;">';
+        }
+        echo '<div class="qp-report-type-header">Suggestions</div>';
+        foreach ($reasons_by_type['suggestion'] as $reason) {
+            echo '<label class="qp-custom-checkbox qp-report-reason-suggestion">
+                    <input type="checkbox" name="report_reasons[]" value="' . esc_attr($reason->reason_id) . '">
+                    <span></span>
+                    ' . esc_html($reason->reason_text) . '
+                  </label>';
+        }
+    }
+
+    $html = ob_get_clean();
+
+    wp_send_json_success(['html' => $html]);
 }
 add_action('wp_ajax_get_report_reasons', 'qp_get_report_reasons_ajax');
 
