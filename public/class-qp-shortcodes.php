@@ -479,29 +479,38 @@ class QP_Shortcodes
         $session_data['attempt_history'] = $attempt_history;
 
         // --- NEW: Fetch detailed report info, including the type ---
-        $reports_table = $wpdb->prefix . 'qp_question_reports';
-        $terms_table = $wpdb->prefix . 'qp_terms';
-        $meta_table = $wpdb->prefix . 'qp_term_meta';
+$reports_table = $wpdb->prefix . 'qp_question_reports';
+$terms_table = $wpdb->prefix . 'qp_terms';
+$meta_table = $wpdb->prefix . 'qp_term_meta';
 
-        $reported_questions_raw = $wpdb->get_results($wpdb->prepare("
-            SELECT
-                r.question_id,
-                MAX(CASE WHEN m.meta_value = 'report' THEN 1 ELSE 0 END) as is_critical
-            FROM {$reports_table} r
-            JOIN {$terms_table} t ON r.reason_term_id = t.term_id
-            JOIN {$meta_table} m ON t.term_id = m.term_id AND m.meta_key = 'type'
-            WHERE r.user_id = %d AND r.status = 'open'
-            GROUP BY r.question_id
-        ", $user_id));
+// Get all open reports for the user in one go
+$all_user_reports = $wpdb->get_results($wpdb->prepare("
+    SELECT
+        r.question_id,
+        m.meta_value as type
+    FROM {$reports_table} r
+    JOIN {$terms_table} t ON FIND_IN_SET(t.term_id, r.reason_term_ids)
+    JOIN {$meta_table} m ON t.term_id = m.term_id AND m.meta_key = 'type'
+    WHERE r.user_id = %d AND r.status = 'open'
+", $user_id));
 
-        $reported_info = [];
-        foreach ($reported_questions_raw as $report) {
-            $reported_info[$report->question_id] = [
-                'type' => $report->is_critical ? 'report' : 'suggestion'
-            ];
-        }
+// Process the raw reports into the structured format JS expects
+$reported_info = [];
+foreach ($all_user_reports as $report) {
+    if (!isset($reported_info[$report->question_id])) {
+        $reported_info[$report->question_id] = [
+            'has_report' => false,
+            'has_suggestion' => false,
+        ];
+    }
+    if ($report->type === 'report') {
+        $reported_info[$report->question_id]['has_report'] = true;
+    } else {
+        $reported_info[$report->question_id]['has_suggestion'] = true;
+    }
+}
 
-        $session_data['reported_info'] = $reported_info; // Send this detailed object instead of a simple array
+$session_data['reported_info'] = $reported_info;
 
         self::$session_data_for_script = $session_data;
 
@@ -862,6 +871,7 @@ class QP_Shortcodes
                             <?php if (!$is_mock_test) : ?><div id="qp-timer-indicator" class="timer-stat" style="display: none;">--:--</div><?php endif; ?>
                             <div id="qp-revision-indicator" style="display: none;">&#9851; Revision</div>
                             <div id="qp-reported-indicator" style="display: none;">&#9888; Reported</div>
+                            <div id="qp-suggestion-indicator" style="display: none;">&#9998; Suggestion Sent</div>
                         </div>
 
                         <div class="qp-question-area">

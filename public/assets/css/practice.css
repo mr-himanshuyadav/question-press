@@ -523,6 +523,18 @@ body {
     /* Orange */
 }
 
+#qp-suggestion-indicator {
+    padding: 4px 10px;
+    font-size: 12px;
+    font-weight: 700;
+    border-radius: 50px;
+    display: none; /* Hidden by default */
+    align-items: center;
+    gap: 5px;
+    background-color: #fffde7; /* Light Yellow */
+    color: #f57f17; /* Amber */
+}
+
 #qp-practice-app-wrapper .katex {
     font: normal 1em KaTeX_Main, Times New Roman, serif;
 }

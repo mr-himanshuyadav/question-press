@@ -75,23 +75,35 @@ jQuery(document).ready(function ($) {
 
   // --- NEW: Fullscreen Button State and Tooltip Updater ---
   function updateFullscreenButton() {
-      var $btn = $('#qp-fullscreen-btn');
-      var $icon = $btn.find('.dashicons');
+    var $btn = $("#qp-fullscreen-btn");
+    var $icon = $btn.find(".dashicons");
 
-      // Check the browser's fullscreen status
-      if (document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement) {
-          $btn.attr('title', 'Exit Fullscreen');
-          $icon.removeClass('dashicons-fullscreen-alt').addClass('dashicons-fullscreen-exit-alt');
-      } else {
-          $btn.attr('title', 'Enter Fullscreen');
-          $icon.removeClass('dashicons-fullscreen-exit-alt').addClass('dashicons-fullscreen-alt');
-      }
+    // Check the browser's fullscreen status
+    if (
+      document.fullscreenElement ||
+      document.webkitFullscreenElement ||
+      document.mozFullScreenElement ||
+      document.msFullscreenElement
+    ) {
+      $btn.attr("title", "Exit Fullscreen");
+      $icon
+        .removeClass("dashicons-fullscreen-alt")
+        .addClass("dashicons-fullscreen-exit-alt");
+    } else {
+      $btn.attr("title", "Enter Fullscreen");
+      $icon
+        .removeClass("dashicons-fullscreen-exit-alt")
+        .addClass("dashicons-fullscreen-alt");
+    }
   }
 
   // Listen for any change in the browser's fullscreen state
-  $(document).on('fullscreenchange webkitfullscreenchange mozfullscreenchange MSFullscreenChange', function() {
+  $(document).on(
+    "fullscreenchange webkitfullscreenchange mozfullscreenchange MSFullscreenChange",
+    function () {
       updateFullscreenButton();
-  });
+    }
+  );
 
   // Call the function once on load to set the correct initial state
   updateFullscreenButton();
@@ -765,38 +777,38 @@ jQuery(document).ready(function ($) {
   }
 
   // --- Report Modal ---
-wrapper.on("click", "#qp-report-btn", function () {
+  wrapper.on("click", "#qp-report-btn", function () {
     var reportContainer = $("#qp-report-options-container");
     reportContainer.html("<p>Loading reasons...</p>"); // Show loading state
 
     $.ajax({
-        url: qp_ajax_object.ajax_url,
-        type: "POST",
-        data: {
-            action: "get_report_reasons",
-            nonce: qp_ajax_object.nonce,
-        },
-        success: function (response) {
-            if (response.success && response.data && response.data.html) {
-                reportContainer.html(response.data.html);
-            } else {
-                reportContainer.html(
-                    "<p>Could not load reporting options. Please try again later.</p>"
-                );
-            }
-        },
-        error: function () {
-            reportContainer.html(
-                "<p>An error occurred. Please try again later.</p>"
-            );
-        },
+      url: qp_ajax_object.ajax_url,
+      type: "POST",
+      data: {
+        action: "get_report_reasons",
+        nonce: qp_ajax_object.nonce,
+      },
+      success: function (response) {
+        if (response.success && response.data && response.data.html) {
+          reportContainer.html(response.data.html);
+        } else {
+          reportContainer.html(
+            "<p>Could not load reporting options. Please try again later.</p>"
+          );
+        }
+      },
+      error: function () {
+        reportContainer.html(
+          "<p>An error occurred. Please try again later.</p>"
+        );
+      },
     });
 
     $("#qp-report-modal-backdrop").fadeIn(200);
-});
+  });
 
   // --- Report Modal on REVIEW PAGE---
-wrapper.on("click", ".qp-report-btn-review", function () {
+  wrapper.on("click", ".qp-report-btn-review", function () {
     var questionID = $(this).data("question-id");
     $("#qp-report-question-id-field").val(questionID); // Set the hidden field
 
@@ -804,23 +816,23 @@ wrapper.on("click", ".qp-report-btn-review", function () {
     reportContainer.html("<p>Loading reasons...</p>");
 
     $.ajax({
-        url: qp_ajax_object.ajax_url,
-        type: "POST",
-        data: { action: "get_report_reasons", nonce: qp_ajax_object.nonce },
-        success: function (response) {
-            if (response.success && response.data.html) {
-                reportContainer.html(response.data.html);
-            } else {
-                reportContainer.html("<p>Could not load reporting options.</p>");
-            }
-        },
-        error: function () {
-            reportContainer.html("<p>An error occurred.</p>");
-        },
+      url: qp_ajax_object.ajax_url,
+      type: "POST",
+      data: { action: "get_report_reasons", nonce: qp_ajax_object.nonce },
+      success: function (response) {
+        if (response.success && response.data.html) {
+          reportContainer.html(response.data.html);
+        } else {
+          reportContainer.html("<p>Could not load reporting options.</p>");
+        }
+      },
+      error: function () {
+        reportContainer.html("<p>An error occurred.</p>");
+      },
     });
 
     $("#qp-report-modal-backdrop").fadeIn(200);
-});
+  });
 
   // Handle the report form submission
   wrapper.on("submit", "#qp-report-form", function (e) {
@@ -892,12 +904,29 @@ wrapper.on("click", ".qp-report-btn-review", function () {
             } else {
               // --- Practice Session Page Logic (Original Logic) ---
               var questionID = sessionQuestionIDs[currentQuestionIndex];
-              if (typeof answeredStates[questionID] === "undefined") {
-                answeredStates[questionID] = {};
-              }
-              answeredStates[questionID].reported = true;
+if (typeof answeredStates[questionID] === "undefined") {
+    answeredStates[questionID] = {};
+}
 
-              $("#qp-reported-indicator").show();
+// Fetch the new detailed report info from the server after submitting
+$.ajax({
+    url: qp_ajax_object.ajax_url,
+    type: 'POST',
+    data: {
+        action: 'get_question_data', // Re-fetch data for this question
+        nonce: qp_ajax_object.nonce,
+        question_id: questionID,
+        session_id: sessionID
+    },
+    success: function(response) {
+        if (response.success) {
+            // Update the local state with the fresh, authoritative data
+            answeredStates[questionID].reported_info = response.data.reported_info;
+            // Now re-render the indicators based on the new state
+            renderQuestion(response.data, questionID); 
+        }
+    }
+});
               $(".qp-indicator-bar").show();
               $(".qp-options-area")
                 .addClass("disabled")
@@ -1275,18 +1304,18 @@ wrapper.on("click", ".qp-report-btn-review", function () {
       }
     }
 
-    // Restore reported questions state
-    if (
-      qp_session_data.reported_ids &&
-      qp_session_data.reported_ids.length > 0
-    ) {
-      $.each(qp_session_data.reported_ids, function (index, qid) {
+    // Restore reported questions state from the new detailed object
+if (qp_session_data.reported_info) {
+    $.each(qp_session_data.reported_info, function(qid, info) {
+        // Ensure the question ID is treated as a number/string consistently
+        qid = parseInt(qid, 10); 
         if (typeof answeredStates[qid] === "undefined") {
-          answeredStates[qid] = {};
+            answeredStates[qid] = {};
         }
-        answeredStates[qid].reported = true;
-      });
-    }
+        // Store the detailed info
+        answeredStates[qid].reported_info = info; 
+    });
+}
 
     // Update the header stats only for non-mock tests
     if (!isMockTest) {
@@ -1524,22 +1553,29 @@ wrapper.on("click", ".qp-report-btn-review", function () {
       directionEl.show();
     }
     // --- NEW: Hierarchical Subject/Topic Display ---
-    if (questionData.subject_lineage && Array.isArray(questionData.subject_lineage) && questionData.subject_lineage.length > 0) {
-        $("#qp-question-subject").html(
-            "<strong>Topic: </strong>" + questionData.subject_lineage.join(' / ')
-        );
+    if (
+      questionData.subject_lineage &&
+      Array.isArray(questionData.subject_lineage) &&
+      questionData.subject_lineage.length > 0
+    ) {
+      $("#qp-question-subject").html(
+        "<strong>Topic: </strong>" + questionData.subject_lineage.join(" / ")
+      );
     }
 
-    $("#qp-question-id").text(
-      "Question ID: " + questionData.question_id
-    );
+    $("#qp-question-id").text("Question ID: " + questionData.question_id);
 
     // --- NEW: Hierarchical Source/Section Display ---
     var sourceDisplayArea = $("#qp-question-source");
     if (sourceDisplayArea.length) {
       var sourceInfoParts = [];
-      if (questionData.source_lineage && Array.isArray(questionData.source_lineage) && questionData.source_lineage.length > 0) {
-        var sourceString = "<strong>Source:</strong> " + questionData.source_lineage.join(' / ');
+      if (
+        questionData.source_lineage &&
+        Array.isArray(questionData.source_lineage) &&
+        questionData.source_lineage.length > 0
+      ) {
+        var sourceString =
+          "<strong>Source:</strong> " + questionData.source_lineage.join(" / ");
         sourceInfoParts.push(sourceString);
       }
 
@@ -1548,7 +1584,7 @@ wrapper.on("click", ".qp-report-btn-review", function () {
           "<strong>Q:</strong> " + questionData.question_number_in_section
         );
       }
-      
+
       sourceDisplayArea.html(sourceInfoParts.join(" | "));
     }
     $("#qp-question-text-area").html(questionData.question_text);
@@ -1619,7 +1655,7 @@ wrapper.on("click", ".qp-report-btn-review", function () {
       var indicatorBar = $(".qp-indicator-bar");
       indicatorBar.hide(); // Hide the parent bar
       $(
-        "#qp-revision-indicator, #qp-reported-indicator, #qp-timer-indicator"
+        "#qp-revision-indicator, #qp-reported-indicator, #qp-suggestion-indicator, #qp-timer-indicator"
       ).hide(); // Hide all children
 
       var showIndicatorBar = false;
@@ -1652,15 +1688,22 @@ wrapper.on("click", ".qp-report-btn-review", function () {
         showIndicatorBar = true;
       }
 
-      var isReported = previousState.reported;
-      var isAnswered = previousState.type === "answered";
-      var isExpired = previousState.type === "expired";
-
       // 3. Conditionally show other indicators
-      if (isReported) {
-        $("#qp-reported-indicator").show();
-        showIndicatorBar = true;
-      }
+var reportInfo = (previousState.reported_info || data.reported_info) || {};
+var isReported = false; // This will be true if a critical 'report' exists
+
+if (reportInfo.has_report) {
+    $("#qp-reported-indicator").show();
+    showIndicatorBar = true;
+    isReported = true; // A critical report locks the UI
+}
+if (reportInfo.has_suggestion) {
+    $("#qp-suggestion-indicator").show();
+    showIndicatorBar = true;
+}
+
+var isAnswered = previousState.type === "answered";
+var isExpired = previousState.type === "expired";
 
       // 4. Handle UI for answered/expired/reported questions
       if (isAnswered || isExpired || isReported) {
@@ -2660,33 +2703,34 @@ wrapper.on("click", ".qp-report-btn-review", function () {
   });
 
   // --- Corrected and Robust Drawing Events ---
-    canvasEl.on('mousedown touchstart', function(e) {
-        isDrawing = true;
-        saveCanvasState();
-        var coords = getEventCoords(e);
-        var rect = canvas.getBoundingClientRect();
-        [lastX, lastY] = [coords.x - rect.left, coords.y - rect.top];
-        e.preventDefault();
-    });
+  canvasEl.on("mousedown touchstart", function (e) {
+    isDrawing = true;
+    saveCanvasState();
+    var coords = getEventCoords(e);
+    var rect = canvas.getBoundingClientRect();
+    [lastX, lastY] = [coords.x - rect.left, coords.y - rect.top];
+    e.preventDefault();
+  });
 
-    // Stop drawing if the mouse is released anywhere on the page
-    $(document).on('mouseup touchend', function() {
-        if (isDrawing) {
-            isDrawing = false;
-        }
-    });
+  // Stop drawing if the mouse is released anywhere on the page
+  $(document).on("mouseup touchend", function () {
+    if (isDrawing) {
+      isDrawing = false;
+    }
+  });
 
-    // Reset the line start point when the mouse re-enters the canvas while drawing.
-    canvasEl.on('mouseenter', function(e) {
-        if (isDrawing) { // Only act if the mouse button is still held down
-            var coords = getEventCoords(e);
-            var rect = canvas.getBoundingClientRect();
-            // Update the last known coordinates to the new entry point.
-            [lastX, lastY] = [coords.x - rect.left, coords.y - rect.top];
-        }
-    });
+  // Reset the line start point when the mouse re-enters the canvas while drawing.
+  canvasEl.on("mouseenter", function (e) {
+    if (isDrawing) {
+      // Only act if the mouse button is still held down
+      var coords = getEventCoords(e);
+      var rect = canvas.getBoundingClientRect();
+      // Update the last known coordinates to the new entry point.
+      [lastX, lastY] = [coords.x - rect.left, coords.y - rect.top];
+    }
+  });
 
-    canvasEl.on('mousemove touchmove', draw);
+  canvasEl.on("mousemove touchmove", draw);
 
   // Tool selection, color, etc. (unchanged)
   popup.on("click", ".qp-tool-btn", function () {
@@ -2704,8 +2748,11 @@ wrapper.on("click", ".qp-report-btn-review", function () {
     $(this).addClass("active");
     $("#qp-tool-pencil").click();
     // Update the CSS variable for the border color
-    var activeColor = $(this).data('color');
-    document.documentElement.style.setProperty('--qp-drawing-color', activeColor);
+    var activeColor = $(this).data("color");
+    document.documentElement.style.setProperty(
+      "--qp-drawing-color",
+      activeColor
+    );
   });
 
   // --- REFINED: Opacity Slider Logic with localStorage ---
