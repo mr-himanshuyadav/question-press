@@ -904,8 +904,8 @@ jQuery(document).ready(function ($) {
                 }
                 answeredStates[questionID].reported_info = response.data.reported_info;
 
-                // 2. Disable the report button immediately, regardless of type
-                $("#qp-report-btn").prop("disabled", true);
+                // 2. Hide the report button immediately, regardless of type
+                $("#qp-report-btn").hide()
 
                 // 3. Update the palette to the gray "reported" state
                 updatePaletteButton(questionID, "reported");
@@ -1591,7 +1591,11 @@ if (qp_session_data.reported_info) {
       sourceDisplayArea.html(sourceInfoParts.join(" | "));
     }
     $("#qp-question-text-area").html(questionData.question_text);
-    $("#qp-report-btn").prop("disabled", previousState.reported);
+    if (previousState.reported) {
+    $("#qp-report-btn").hide();
+} else {
+    $("#qp-report-btn").show();
+}
 
     $.each(questionData.options, function (index, option) {
       optionsArea.append(
@@ -1768,7 +1772,7 @@ var isExpired = previousState.type === "expired";
         .addClass("disabled")
         .find('input[type="radio"]')
         .prop("disabled", true);
-      $("#qp-report-btn").prop("disabled", true);
+      $("#qp-report-btn").hide();
 
       // 3. Mode-specific button disabling
       if (isMockTest) {
@@ -1786,7 +1790,7 @@ var isExpired = previousState.type === "expired";
       }
     } else {
       // Explicitly ensure buttons are enabled for non-reported questions
-      $("#qp-report-btn").prop("disabled", false);
+      $("#qp-report-btn").show();
 
       // Mode-specific button enabling
       if (isMockTest) {

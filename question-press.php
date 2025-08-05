@@ -307,7 +307,7 @@ function qp_activate_plugin()
         ['text' => 'Wrong Formatting', 'type' => 'suggestion'],
         ['text' => 'Language Mistakes', 'type' => 'suggestion'],
         ['text' => 'Question is confusing', 'type' => 'suggestion'],
-        ['text' => 'Other (Mention in Comment)', 'type' => 'Suggestion']
+        ['text' => 'Other (Mention in Comment)', 'type' => 'suggestion']
     ];
 
     if ($reason_tax_id) {
