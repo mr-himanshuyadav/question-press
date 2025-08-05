@@ -1176,7 +1176,8 @@ function renderPalette() {
   var sessionID = 0;
   var sessionQuestionIDs = [];
   var currentQuestionIndex = 0;
-  var highestQuestionIndexReached = 0;
+  var highestQuestionIndexReached = sessionStorage.getItem('qp_session_' + qp_session_data.session_id + '_highest_index') || 0;
+  highestQuestionIndexReached = parseInt(highestQuestionIndexReached, 10);
   var sessionSettings = {};
   var score = 0;
   var correctCount = 0;
@@ -1877,6 +1878,10 @@ var isExpired = previousState.type === "expired";
     var newIndex = currentQuestionIndex + 1;
     if (newIndex > highestQuestionIndexReached && newIndex < sessionQuestionIDs.length) {
         highestQuestionIndexReached = newIndex;
+        // --- THIS IS THE FIX ---
+        // Save the new highest index to sessionStorage.
+        sessionStorage.setItem('qp_session_' + sessionID + '_highest_index', highestQuestionIndexReached);
+        // --- END FIX ---
         
         // Only append a new button if it's a mode where the palette is not fully pre-rendered.
         const isSectionWise = sessionSettings.practice_mode === "Section Wise Practice";
