@@ -10,10 +10,7 @@ jQuery(document).ready(function ($) {
   var unattemptedCounts = {};
 
   // --- Fetch unattempted counts if the setting is enabled ---
-  if (
-    typeof qp_practice_settings !== "undefined" &&
-    qp_practice_settings.show_counts
-  ) {
+  if (typeof qp_practice_settings !== "undefined" && qp_practice_settings.show_counts) {
     $.ajax({
       url: qp_ajax_object.ajax_url,
       type: "POST",
@@ -257,21 +254,21 @@ jQuery(document).ready(function ($) {
   }
 
   // --- NEW: Mode-Aware Palette Rendering Function ---
-function renderPalette() {
+  function renderPalette() {
     paletteGrids.empty();
 
     // Determine the upper limit for the loop.
     let loopLimit = sessionQuestionIDs.length; // Default to all questions
     const isSectionWise =
-        sessionSettings.practice_mode === "Section Wise Practice";
+      sessionSettings.practice_mode === "Section Wise Practice";
 
     // For Normal or Revision mode (but NOT section-wise), only show questions up to the furthest point reached.
     if (!isMockTest && !isSectionWise) {
-        loopLimit = highestQuestionIndexReached + 1;
-        // Safeguard: Don't try to render more buttons than there are questions.
-        if (loopLimit > sessionQuestionIDs.length) {
-            loopLimit = sessionQuestionIDs.length;
-        }
+      loopLimit = highestQuestionIndexReached + 1;
+      // Safeguard: Don't try to render more buttons than there are questions.
+      if (loopLimit > sessionQuestionIDs.length) {
+        loopLimit = sessionQuestionIDs.length;
+      }
     }
 
     // Loop up to the determined limit.
@@ -280,7 +277,10 @@ function renderPalette() {
       const questionState = answeredStates[questionID] || {};
       let statusClass = "status-not_viewed";
 
-      if (questionState.reported) {
+      if (
+        questionState.reported_info &&
+        questionState.reported_info.has_report
+      ) {
         statusClass = "status-reported";
       } else if (isMockTest && questionState.mock_status) {
         statusClass = "status-" + questionState.mock_status;
@@ -839,7 +839,7 @@ function renderPalette() {
   });
 
   // Handle the report form submission
-wrapper.on("submit", "#qp-report-form", function (e) {
+  wrapper.on("submit", "#qp-report-form", function (e) {
     e.preventDefault();
     var form = $(this);
     var submitButton = form.find('button[type="submit"]');
@@ -855,27 +855,30 @@ wrapper.on("submit", "#qp-report-form", function (e) {
         return $(this).val();
       })
       .get();
-    
-    var reportComment = form.find('textarea[name="report_comment"]').val().trim();
+
+    var reportComment = form
+      .find('textarea[name="report_comment"]')
+      .val()
+      .trim();
 
     if (selectedReasons.length === 0) {
-        Swal.fire(
-            "No Reason Selected",
-            "Please select at least one reason for the report.",
-            "warning"
-        );
-        return;
+      Swal.fire(
+        "No Reason Selected",
+        "Please select at least one reason for the report.",
+        "warning"
+      );
+      return;
     }
-    
+
     // --- THIS IS THE FIX ---
     // Check if the comment is empty
-    if (reportComment === '') {
-        Swal.fire(
-            "Comment Required",
-            "Please provide a comment to explain the issue.",
-            "warning"
-        );
-        return; // Stop the submission
+    if (reportComment === "") {
+      Swal.fire(
+        "Comment Required",
+        "Please provide a comment to explain the issue.",
+        "warning"
+      );
+      return; // Stop the submission
     }
     // --- END FIX ---
 
@@ -896,73 +899,83 @@ wrapper.on("submit", "#qp-report-form", function (e) {
         submitButton.text("Submitting...").prop("disabled", true);
       },
       success: function (response) {
-    if (response.success) {
-        $("#qp-report-modal-backdrop").fadeOut(200);
-        Swal.fire({
+        if (response.success) {
+          $("#qp-report-modal-backdrop").fadeOut(200);
+          Swal.fire({
             title: "Report Submitted!",
             text: "Thank you for your feedback. The question has been flagged for review.",
             icon: "success",
-            timer: 2000,
-            showConfirmButton: false
-        }).then(() => {
+            timer: 1500,
+            showConfirmButton: false,
+          }).then(() => {
             var reviewPageQuestionId = $("#qp-report-question-id-field").val();
 
             if (reviewPageQuestionId) {
-                // Logic for the Review Page
-                var buttonToDisable = $('.qp-report-btn-review[data-question-id="' + reviewPageQuestionId + '"]');
-                buttonToDisable.prop("disabled", true).text("Reported");
-                $("#qp-report-question-id-field").val("");
+              // Logic for the Review Page
+              var buttonToDisable = $(
+                '.qp-report-btn-review[data-question-id="' +
+                  reviewPageQuestionId +
+                  '"]'
+              );
+              buttonToDisable.prop("disabled", true).text("Reported");
+              $("#qp-report-question-id-field").val("");
             } else {
-                // --- NEW, CONSOLIDATED LOGIC for the Practice Session Page ---
-                var questionID = sessionQuestionIDs[currentQuestionIndex];
-                
-                // 1. Update the local state with the new report info from the server
-                if (typeof answeredStates[questionID] === "undefined") {
-                    answeredStates[questionID] = {};
-                }
-                answeredStates[questionID].reported_info = response.data.reported_info;
+              // --- NEW, CONSOLIDATED LOGIC for the Practice Session Page ---
+              var questionID = sessionQuestionIDs[currentQuestionIndex];
 
-                // 2. Hide the report button immediately, regardless of type
-                $("#qp-report-btn").hide()
+              // 1. Update the local state with the new report info from the server
+              if (typeof answeredStates[questionID] === "undefined") {
+                answeredStates[questionID] = {};
+              }
+              answeredStates[questionID].reported_info =
+                response.data.reported_info;
 
-                // 3. Update the palette to the gray "reported" state
+              // 2. Hide the report button immediately, regardless of type
+              $("#qp-report-btn").hide();
+
+              // 3. Update the palette to the gray "reported" state
+              if (response.data.reported_info.has_report) {
                 updatePaletteButton(questionID, "reported");
-                scrollPaletteToCurrent();
-                updateLegendCounts(); // Update the legend count for reported items
+              }
+              scrollPaletteToCurrent();
+              updateLegendCounts(); // Update the legend count for reported items
 
-                // 4. Update the indicators
-                var showIndicatorBar = false;
-                $("#qp-reported-indicator, #qp-suggestion-indicator").hide();
-                if (response.data.reported_info.has_report) {
-                    $("#qp-reported-indicator").show();
-                    showIndicatorBar = true;
-                }
-                if (response.data.reported_info.has_suggestion) {
-                    $("#qp-suggestion-indicator").show();
-                    showIndicatorBar = true;
-                }
-                if(showIndicatorBar) {
-                    $(".qp-indicator-bar").show();
-                }
+              // 4. Update the indicators
+              var showIndicatorBar = false;
+              $("#qp-reported-indicator, #qp-suggestion-indicator").hide();
+              if (response.data.reported_info.has_report) {
+                $("#qp-reported-indicator").show();
+                showIndicatorBar = true;
+              }
+              if (response.data.reported_info.has_suggestion) {
+                $("#qp-suggestion-indicator").show();
+                showIndicatorBar = true;
+              }
+              if (showIndicatorBar) {
+                $(".qp-indicator-bar").show();
+              }
 
-                // 5. Conditionally lock the UI only if a critical 'report' was submitted
-                if (response.data.reported_info.has_report) {
-                    $(".qp-options-area").addClass("disabled").find('input[type="radio"]').prop("disabled", true);
-                    $("#qp-skip-btn, #qp-check-answer-btn").prop("disabled", true);
-                    // Ensure the user can move on
-                    $("#qp-next-btn").prop("disabled", false); 
-                }
-                // If it was only a suggestion, the UI remains active as desired.
+              // 5. Conditionally lock the UI only if a critical 'report' was submitted
+              if (response.data.reported_info.has_report) {
+                $(".qp-options-area")
+                  .addClass("disabled")
+                  .find('input[type="radio"]')
+                  .prop("disabled", true);
+                $("#qp-skip-btn, #qp-check-answer-btn").prop("disabled", true);
+                $("#qp-next-btn").prop("disabled", false);
+                $('#qp-next-btn').click();
+              }
+              // If it was only a suggestion, the UI remains active as desired.
             }
-        });
-    } else {
-        Swal.fire(
+          });
+        } else {
+          Swal.fire(
             "Error!",
             response.data.message || "Could not submit the report.",
             "error"
-        );
-    }
-},
+          );
+        }
+      },
       error: function () {
         Swal.fire("Error!", "An unknown server error occurred.", "error");
       },
@@ -1190,7 +1203,10 @@ wrapper.on("submit", "#qp-report-form", function (e) {
   var sessionID = 0;
   var sessionQuestionIDs = [];
   var currentQuestionIndex = 0;
-  var highestQuestionIndexReached = sessionStorage.getItem('qp_session_' + qp_session_data.session_id + '_highest_index') || 0;
+  var highestQuestionIndexReached =
+    sessionStorage.getItem(
+      "qp_session_" + qp_session_data.session_id + "_highest_index"
+    ) || 0;
   highestQuestionIndexReached = parseInt(highestQuestionIndexReached, 10);
   var sessionSettings = {};
   var score = 0;
@@ -1321,17 +1337,17 @@ wrapper.on("submit", "#qp-report-form", function (e) {
     }
 
     // Restore reported questions state from the new detailed object
-if (qp_session_data.reported_info) {
-    $.each(qp_session_data.reported_info, function(qid, info) {
+    if (qp_session_data.reported_info) {
+      $.each(qp_session_data.reported_info, function (qid, info) {
         // Ensure the question ID is treated as a number/string consistently
-        qid = parseInt(qid, 10); 
+        qid = parseInt(qid, 10);
         if (typeof answeredStates[qid] === "undefined") {
-            answeredStates[qid] = {};
+          answeredStates[qid] = {};
         }
         // Store the detailed info
         answeredStates[qid].reported_info = info;
-    });
-}
+      });
+    }
 
     // Update the header stats only for non-mock tests
     if (!isMockTest) {
@@ -1553,7 +1569,17 @@ if (qp_session_data.reported_info) {
 
     var questionData = data.question;
     var previousState = answeredStates[questionID] || {};
+    var reportInfo = previousState.reported_info || {};
     var optionsArea = $(".qp-options-area").empty().removeClass("disabled");
+
+    // --- THIS IS THE FIX ---
+    // Reset all indicators for EVERY question load, regardless of mode.
+    var indicatorBar = $(".qp-indicator-bar");
+    indicatorBar.hide();
+    $(
+      "#qp-revision-indicator, #qp-reported-indicator, #qp-suggestion-indicator, #qp-timer-indicator"
+    ).hide();
+    // --- END FIX ---
 
     // Common UI rendering for all modes
     var directionEl = $(".qp-direction").empty();
@@ -1604,11 +1630,14 @@ if (qp_session_data.reported_info) {
       sourceDisplayArea.html(sourceInfoParts.join(" | "));
     }
     $("#qp-question-text-area").html(questionData.question_text);
-    if (previousState.reported) {
-    $("#qp-report-btn").hide();
-} else {
-    $("#qp-report-btn").show();
-}
+    
+    // Directly check the detailed report_info from the backend data.
+    var reportInfoForButton = previousState.reported_info || data.reported_info || {};
+    if (reportInfoForButton.has_report || reportInfoForButton.has_suggestion) {
+        $("#qp-report-btn").hide();
+    } else {
+        $("#qp-report-btn").show();
+    }
 
     $.each(questionData.options, function (index, option) {
       optionsArea.append(
@@ -1652,14 +1681,11 @@ if (qp_session_data.reported_info) {
       if (!previousState.mock_status) {
         updateMockStatus(questionID, "viewed");
       }
-      // Replace the entire block above with this one
     } else {
       // --- CORRECTED LOGIC FOR NORMAL/REVISION MODES ---
       var isSectionWise =
         sessionSettings.practice_mode === "Section Wise Practice";
 
-      // Disable the next button ONLY if it's NOT section-wise practice.
-      // Also, re-enable the skip button for section-wise mode.
       $("#qp-next-btn").prop("disabled", !isSectionWise);
       $("#qp-skip-btn").prop("disabled", false);
       optionsArea.data("correct-option-id", data.correct_option_id);
@@ -1671,29 +1697,19 @@ if (qp_session_data.reported_info) {
         $("#qp-check-answer-btn").show().prop("disabled", true);
       }
 
-      // 1. Reset all indicators first
-      var indicatorBar = $(".qp-indicator-bar");
-      indicatorBar.hide(); // Hide the parent bar
-      $(
-        "#qp-revision-indicator, #qp-reported-indicator, #qp-suggestion-indicator, #qp-timer-indicator"
-      ).hide(); // Hide all children
-
+      // The indicator reset logic has been moved out of this block.
+      // Now we just handle showing the indicators.
       var showIndicatorBar = false;
 
-      // --- THIS IS THE FIX: Caching the historical attempt count ---
       if (data.is_revision) {
         var questionID = sessionQuestionIDs[currentQuestionIndex];
         var countToShow = 0;
-
-        // Check if we have a stored count for this question already
         if (
           answeredStates[questionID] &&
           typeof answeredStates[questionID].historical_attempts !== "undefined"
         ) {
-          // If yes, use the stored count
           countToShow = answeredStates[questionID].historical_attempts;
         } else {
-          // If no, use the count from the server and store it for the first time
           countToShow = data.previous_attempt_count;
           if (!answeredStates[questionID]) {
             answeredStates[questionID] = {};
@@ -1701,32 +1717,16 @@ if (qp_session_data.reported_info) {
           answeredStates[questionID].historical_attempts = countToShow;
         }
 
-        // Display the indicator with the stable count
         $("#qp-revision-indicator")
           .text("🔄 Revision (" + countToShow + ")")
           .show();
         showIndicatorBar = true;
       }
 
-      // 3. Conditionally show other indicators
-      var reportInfo = (previousState.reported_info || data.reported_info) || {};
-      var isReported = false; // This will be true if a critical 'report' exists
-
-      if (reportInfo.has_report) {
-          $("#qp-reported-indicator").show();
-          showIndicatorBar = true;
-          isReported = true; // A critical report locks the UI
-      }
-      if (reportInfo.has_suggestion) {
-          $("#qp-suggestion-indicator").show();
-          showIndicatorBar = true;
-      }
-
       var isAnswered = previousState.type === "answered";
       var isExpired = previousState.type === "expired";
 
-      // 4. Handle UI for answered/expired/reported questions
-      if (isAnswered || isExpired || isReported) {
+      if (isAnswered || isExpired) {
         optionsArea
           .addClass("disabled")
           .find('input[type="radio"]')
@@ -1753,7 +1753,6 @@ if (qp_session_data.reported_info) {
           showIndicatorBar = true;
         }
       } else {
-        // 5. Handle UI for active questions (timer)
         if (sessionSettings.timer_enabled) {
           var startTime =
             typeof previousState.remainingTime !== "undefined"
@@ -1765,29 +1764,37 @@ if (qp_session_data.reported_info) {
         }
       }
 
-      // 6. Finally, show the parent bar only if it has a visible child
       if (showIndicatorBar) {
         indicatorBar.show();
       }
     }
+    
+    // This logic now runs for ALL modes, after the specific mode logic.
+    var combinedReportInfo = previousState.reported_info || data.reported_info || {};
+    var showIndicatorBarAfterReportCheck = false;
+
+    if(combinedReportInfo.has_report) {
+        $("#qp-reported-indicator").show();
+        showIndicatorBarAfterReportCheck = true;
+    }
+    if(combinedReportInfo.has_suggestion) {
+        $("#qp-suggestion-indicator").show();
+        showIndicatorBarAfterReportCheck = true;
+    }
+    if(showIndicatorBarAfterReportCheck) {
+        $(".qp-indicator-bar").show();
+    }
 
     $("#qp-prev-btn").prop("disabled", currentQuestionIndex === 0);
-    // --- UNIFIED LOGIC TO HANDLE REPORTED QUESTIONS IN ALL MODES ---
-    var isQuestionReported = data.is_reported_by_user || previousState.reported;
+    
+    var isQuestionReported = combinedReportInfo.has_report; 
 
     if (isQuestionReported) {
-      // 1. Show the indicator
-      $("#qp-reported-indicator").show();
-      $(".qp-indicator-bar").show();
-
-      // 2. Disable all interactive elements for this question
       optionsArea
         .addClass("disabled")
         .find('input[type="radio"]')
         .prop("disabled", true);
-      $("#qp-report-btn").hide();
 
-      // 3. Mode-specific button disabling
       if (isMockTest) {
         $("#qp-clear-response-btn, #qp-mock-mark-review-cb").prop(
           "disabled",
@@ -1798,23 +1805,17 @@ if (qp_session_data.reported_info) {
         }
       } else {
         $("#qp-skip-btn, #qp-check-answer-btn").prop("disabled", true);
-        // Since the question is locked, the user must be able to move on.
         $("#qp-next-btn").prop("disabled", false);
       }
     } else {
-      // Explicitly ensure buttons are enabled for non-reported questions
-      $("#qp-report-btn").show();
-
-      // Mode-specific button enabling
       if (isMockTest) {
         $("#qp-clear-response-btn, #qp-mock-mark-review-cb").prop(
           "disabled",
           false
         );
       }
-      // For other modes, the button states are handled by other logic in this function.
     }
-    // --- END OF NEW LOGIC ---
+    
     if (typeof renderMathInElement !== "undefined") {
       renderMathInElement(document.getElementById("qp-practice-app-wrapper"), {
         delimiters: [
@@ -1884,26 +1885,33 @@ if (qp_session_data.reported_info) {
     // --- NEW: Intelligent Palette Button Appending ---
     // Check if the user is advancing to a question for which a button doesn't exist yet.
     var newIndex = currentQuestionIndex + 1;
-    if (newIndex > highestQuestionIndexReached && newIndex < sessionQuestionIDs.length) {
-        highestQuestionIndexReached = newIndex;
-        // --- THIS IS THE FIX ---
-        // Save the new highest index to sessionStorage.
-        sessionStorage.setItem('qp_session_' + sessionID + '_highest_index', highestQuestionIndexReached);
-        // --- END FIX ---
-        
-        // Only append a new button if it's a mode where the palette is not fully pre-rendered.
-        const isSectionWise = sessionSettings.practice_mode === "Section Wise Practice";
-        if (!isMockTest && !isSectionWise) {
-            const questionID = sessionQuestionIDs[newIndex];
-            const paletteBtn = $("<button></button>")
-                .addClass("qp-palette-btn status-not_viewed") // New buttons are always 'not_viewed' initially
-                .attr("data-question-index", newIndex)
-                .attr("data-question-id", questionID)
-                .text(newIndex + 1);
-            
-            // Append the new button to both the docked and sliding palettes.
-            paletteGrids.append(paletteBtn);
-        }
+    if (
+      newIndex > highestQuestionIndexReached &&
+      newIndex < sessionQuestionIDs.length
+    ) {
+      highestQuestionIndexReached = newIndex;
+      // --- THIS IS THE FIX ---
+      // Save the new highest index to sessionStorage.
+      sessionStorage.setItem(
+        "qp_session_" + sessionID + "_highest_index",
+        highestQuestionIndexReached
+      );
+      // --- END FIX ---
+
+      // Only append a new button if it's a mode where the palette is not fully pre-rendered.
+      const isSectionWise =
+        sessionSettings.practice_mode === "Section Wise Practice";
+      if (!isMockTest && !isSectionWise) {
+        const questionID = sessionQuestionIDs[newIndex];
+        const paletteBtn = $("<button></button>")
+          .addClass("qp-palette-btn status-not_viewed") // New buttons are always 'not_viewed' initially
+          .attr("data-question-index", newIndex)
+          .attr("data-question-id", questionID)
+          .text(newIndex + 1);
+
+        // Append the new button to both the docked and sliding palettes.
+        paletteGrids.append(paletteBtn);
+      }
     }
     // --- END NEW LOGIC ---
 

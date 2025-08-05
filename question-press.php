@@ -3583,8 +3583,11 @@ function qp_get_sources_for_subject_progress_ajax()
     $tax_table = $wpdb->prefix . 'qp_taxonomies';
     $source_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'source'");
 
-    // Step 1: Find all topics that are children of the selected subject.
-    $topic_ids = $wpdb->get_col($wpdb->prepare("SELECT term_id FROM $term_table WHERE parent = %d", $subject_term_id));
+    // --- THIS IS THE FIX ---
+    // Use the existing helper function to get ALL descendant topics and sub-topics,
+    // not just the direct children. This includes the parent subject ID itself.
+    $topic_ids = get_all_descendant_ids($subject_term_id, $wpdb, $term_table);
+    // --- END FIX ---
 
     if (empty($topic_ids)) {
         wp_send_json_success(['sources' => []]);
@@ -3679,25 +3682,6 @@ function qp_get_progress_data_ajax()
     $rel_table = $wpdb->prefix . 'qp_term_relationships';
     $attempts_table = $wpdb->prefix . 'qp_user_attempts';
     $questions_table = $wpdb->prefix . 'qp_questions';
-
-    // Helper function to get all descendant term IDs for a given parent
-    function get_all_descendant_ids($parent_id, $wpdb, $term_table)
-    {
-        $descendant_ids = [$parent_id];
-        $current_parent_ids = [$parent_id];
-        for ($i = 0; $i < 10; $i++) { // Safety break
-            if (empty($current_parent_ids)) break;
-            $ids_placeholder = implode(',', $current_parent_ids);
-            $child_ids = $wpdb->get_col("SELECT term_id FROM $term_table WHERE parent IN ($ids_placeholder)");
-            if (!empty($child_ids)) {
-                $descendant_ids = array_merge($descendant_ids, $child_ids);
-                $current_parent_ids = $child_ids;
-            } else {
-                break;
-            }
-        }
-        return array_unique($descendant_ids);
-    }
 
     // Step 1: Get all term IDs in both the selected subject and source hierarchies
     $all_subject_term_ids = get_all_descendant_ids($subject_term_id, $wpdb, $term_table);
@@ -4019,10 +4003,26 @@ function qp_get_report_reasons_ajax()
         'suggestion' => []
     ];
 
+    // --- THIS IS THE FIX ---
+    $other_reasons = [];
     foreach ($reasons_raw as $reason) {
         $type = !empty($reason->type) ? $reason->type : 'report';
-        $reasons_by_type[$type][] = $reason;
+        // Separate any reason containing "Other" into a temporary array
+        if (strpos($reason->reason_text, 'Other') !== false) {
+            $other_reasons[$type][] = $reason;
+        } else {
+            $reasons_by_type[$type][] = $reason;
+        }
     }
+
+    // Append the "Other" reasons to the end of their respective lists
+    if (isset($other_reasons['report'])) {
+        $reasons_by_type['report'] = array_merge($reasons_by_type['report'], $other_reasons['report']);
+    }
+    if (isset($other_reasons['suggestion'])) {
+        $reasons_by_type['suggestion'] = array_merge($reasons_by_type['suggestion'], $other_reasons['suggestion']);
+    }
+    // --- END FIX ---
 
     ob_start();
 
@@ -4041,7 +4041,7 @@ function qp_get_report_reasons_ajax()
         if (!empty($reasons_by_type['report'])) {
             echo '<hr style="margin: 0.5rem 0; border: 0; border-top: 1px solid #ddd;">';
         }
-        echo '<div class="qp-report-type-header">Suggestions</div>';
+        echo '<div class="qp-report-type-header">Suggestions<br><span style="font-size:0.8em;font-weight:400;">You can still attempt question after.</span></div>';
         foreach ($reasons_by_type['suggestion'] as $reason) {
             echo '<label class="qp-custom-checkbox qp-report-reason-suggestion">
                     <input type="checkbox" name="report_reasons[]" value="' . esc_attr($reason->reason_id) . '">
