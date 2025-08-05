@@ -13,14 +13,32 @@ class QP_Question_Editor_Page
         $open_reports = [];
         if ($is_editing) {
             $reports_table = $wpdb->prefix . 'qp_question_reports';
-            $term_table = $wpdb->prefix . 'qp_terms'; // Use the new terms table
-            $open_reports = $wpdb->get_results($wpdb->prepare(
-                "SELECT r.question_id, r.comment, t.name AS reason_text 
-                 FROM {$reports_table} r 
-                 JOIN {$term_table} t ON r.reason_term_id = t.term_id
-                 WHERE r.status = 'open' AND r.question_id IN (SELECT question_id FROM {$wpdb->prefix}qp_questions WHERE group_id = %d)",
-                $group_id
-            ));
+            $term_table = $wpdb->prefix . 'qp_terms';
+            $questions_in_group_ids = $wpdb->get_col($wpdb->prepare("SELECT question_id FROM {$wpdb->prefix}qp_questions WHERE group_id = %d", $group_id));
+
+            if (!empty($questions_in_group_ids)) {
+                $ids_placeholder = implode(',', $questions_in_group_ids);
+                $reports_raw = $wpdb->get_results("
+                SELECT question_id, GROUP_CONCAT(DISTINCT reason_term_ids SEPARATOR ',') as all_reason_ids, GROUP_CONCAT(comment SEPARATOR '|||') as all_comments
+                FROM {$reports_table}
+                WHERE status = 'open' AND question_id IN ($ids_placeholder)
+                GROUP BY question_id
+            ");
+
+                foreach ($reports_raw as $report) {
+                    $reason_ids = array_unique(array_filter(explode(',', $report->all_reason_ids)));
+                    $reason_names = [];
+                    if (!empty($reason_ids)) {
+                        $reason_ids_placeholder = implode(',', array_map('absint', $reason_ids));
+                        $reason_names = $wpdb->get_col("SELECT name FROM {$term_table} WHERE term_id IN ($reason_ids_placeholder)");
+                    }
+
+                    $open_reports[$report->question_id] = [
+                        'reasons' => $reason_names,
+                        'comments' => array_filter(explode('|||', $report->all_comments))
+                    ];
+                }
+            }
         }
 
         // Data holders
@@ -163,20 +181,15 @@ class QP_Question_Editor_Page
         }
 ?>
         <div class="wrap">
-            <?php if (!empty($open_reports)):
-                $reports_by_question = [];
-                foreach ($open_reports as $report) {
-                    $reports_by_question[$report->question_id][] = $report->reason_text;
-                }
-            ?>
+            <?php if (!empty($open_reports)): ?>
                 <div class="notice notice-error" style="padding: 1rem; border-left-width: 4px;">
                     <div style="display: flex; justify-content: space-between; align-items: flex-start;">
                         <div>
                             <h3 style="margin: 0 0 0.5rem 0;">&#9888; Open Reports for this Group</h3>
                             <p style="margin-top: 0;">The following questions have open reports. Resolving them will remove them from the "Needs Review" queue.</p>
                             <ul style="list-style: disc; padding-left: 20px; margin-bottom: 0;">
-                                <?php foreach ($reports_by_question as $qid => $reasons): ?>
-                                    <li><strong>Question #<?php echo esc_html($qid); ?>:</strong> <?php echo esc_html(implode(', ', array_unique($reasons))); ?></li>
+                                <?php foreach ($open_reports as $qid => $report_data): ?>
+                                    <li><strong>Question #<?php echo esc_html($qid); ?>:</strong> <?php echo esc_html(implode(', ', $report_data['reasons'])); ?></li>
                                 <?php endforeach; ?>
                             </ul>
                         </div>
@@ -290,7 +303,7 @@ class QP_Question_Editor_Page
                                     }
 
                                     // Prioritize 'reported' status for highlighting
-                                    if (isset($reports_by_question[$question->question_id])) {
+                                    if (isset($open_reports[$question->question_id])) {
                                         $status_class = 'status-reported';
                                     }
                                 ?>
@@ -326,8 +339,8 @@ class QP_Question_Editor_Page
                                                         </div>
                                                     </div>
                                                     <?php if ($question->question_id > 0) : ?>
-                                                        <?php if (isset($reports_by_question[$question->question_id])) : ?>
-                                                            <span class="qp-status-indicator qp-reported-indicator" title="This question has open reports. Reason(s): <?php echo esc_attr(implode(', ', array_unique($reports_by_question[$question->question_id]))); ?>">
+                                                        <?php if (isset($open_reports[$question->question_id])) : ?>
+                                                            <span class="qp-status-indicator qp-reported-indicator" title="This question has open reports. Reason(s): <?php echo esc_attr(implode(', ', $open_reports[$question->question_id]['reasons'])); ?>">
                                                                 <span class="dashicons dashicons-warning"></span> Reported
                                                             </span>
                                                         <?php else: ?>
@@ -350,15 +363,11 @@ class QP_Question_Editor_Page
                                         <div class="inside">
                                             <?php
                                             // Check if this specific question has any open reports with comments
-                                            $reports_for_this_question = array_filter($open_reports, function ($report) use ($question) {
-                                                return $report->question_id == $question->question_id && !empty(trim($report->comment));
-                                            });
-
-                                            if (!empty($reports_for_this_question)):
-                                                foreach ($reports_for_this_question as $report):
+                                            if (isset($open_reports[$question->question_id]) && !empty($open_reports[$question->question_id]['comments'])):
+                                                foreach ($open_reports[$question->question_id]['comments'] as $comment):
                                             ?>
                                                     <div class="notice notice-alt notice-warning qp-reporter-comment-notice" style="margin: 0 0 15px; padding: 10px; border-left-width: 4px;">
-                                                        <p style="margin: 0;"><strong>Reporter's Comment:</strong> <?php echo esc_html($report->comment); ?></p>
+                                                        <p style="margin: 0;"><strong>Reporter's Comment:</strong> <?php echo esc_html($comment); ?></p>
                                                     </div>
                                             <?php
                                                 endforeach;

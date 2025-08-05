@@ -179,14 +179,13 @@ function qp_activate_plugin()
         report_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
         question_id BIGINT(20) UNSIGNED NOT NULL,
         user_id BIGINT(20) UNSIGNED NOT NULL,
-        reason_term_id BIGINT(20) UNSIGNED NOT NULL,
+        reason_term_ids TEXT NOT NULL,
         comment TEXT,
         report_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         status VARCHAR(20) NOT NULL DEFAULT 'open',
         PRIMARY KEY (report_id),
         KEY question_id (question_id),
         KEY user_id (user_id),
-        KEY reason_term_id (reason_term_id),
         KEY status (status)
     ) $charset_collate;";
     dbDelta($sql_question_reports);
@@ -4050,19 +4049,22 @@ function qp_submit_question_report_ajax()
     global $wpdb;
     $reports_table = $wpdb->prefix . 'qp_question_reports';
 
-    foreach ($reasons as $reason_id) {
-        $wpdb->insert(
-            $reports_table,
-            [
-                'question_id'    => $question_id,
-                'user_id'        => $user_id,
-                'reason_term_id' => $reason_id, // Use the correct column name
-                'comment'        => $comment,   // Add the comment
-                'report_date'    => current_time('mysql'),
-                'status'         => 'open'
-            ]
-        );
-    }
+    // Serialize the array of reason IDs into a comma-separated string
+    $reason_ids_string = implode(',', $reasons);
+
+    // Insert a single row with all the data
+    $wpdb->insert(
+        $reports_table,
+        [
+            'question_id'     => $question_id,
+            'user_id'         => $user_id,
+            'reason_term_ids' => $reason_ids_string,
+            'comment'         => $comment,
+            'report_date'     => current_time('mysql'),
+            'status'          => 'open'
+        ]
+    );
+
 
     // Add a log entry for the admin panel
     $wpdb->insert("{$wpdb->prefix}qp_logs", [
