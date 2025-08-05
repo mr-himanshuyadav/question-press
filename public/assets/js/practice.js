@@ -878,76 +878,73 @@ jQuery(document).ready(function ($) {
         submitButton.text("Submitting...").prop("disabled", true);
       },
       success: function (response) {
-        if (response.success) {
-          $("#qp-report-modal-backdrop").fadeOut(200);
-          Swal.fire({
+    if (response.success) {
+        $("#qp-report-modal-backdrop").fadeOut(200);
+        Swal.fire({
             title: "Report Submitted!",
             text: "Thank you for your feedback. The question has been flagged for review.",
             icon: "success",
             timer: 2000,
-            showConfirmButton: false,
-          }).then(() => {
-            // Check if we are on the review page by looking at the hidden field
+            showConfirmButton: false
+        }).then(() => {
             var reviewPageQuestionId = $("#qp-report-question-id-field").val();
 
             if (reviewPageQuestionId) {
-              // --- Review Page Logic ---
-              // Find the specific report button for this question and disable it.
-              var buttonToDisable = $(
-                '.qp-report-btn-review[data-question-id="' +
-                  reviewPageQuestionId +
-                  '"]'
-              );
-              buttonToDisable.prop("disabled", true).text("Reported");
-              // Clear the hidden field for the next report
-              $("#qp-report-question-id-field").val("");
+                // Logic for the Review Page
+                var buttonToDisable = $('.qp-report-btn-review[data-question-id="' + reviewPageQuestionId + '"]');
+                buttonToDisable.prop("disabled", true).text("Reported");
+                $("#qp-report-question-id-field").val("");
             } else {
-              // --- Practice Session Page Logic (Original Logic) ---
-              var questionID = sessionQuestionIDs[currentQuestionIndex];
-if (typeof answeredStates[questionID] === "undefined") {
-    answeredStates[questionID] = {};
-}
+                // --- NEW, CONSOLIDATED LOGIC for the Practice Session Page ---
+                var questionID = sessionQuestionIDs[currentQuestionIndex];
+                
+                // 1. Update the local state with the new report info from the server
+                if (typeof answeredStates[questionID] === "undefined") {
+                    answeredStates[questionID] = {};
+                }
+                answeredStates[questionID].reported_info = response.data.reported_info;
 
-// Fetch the new detailed report info from the server after submitting
-$.ajax({
-    url: qp_ajax_object.ajax_url,
-    type: 'POST',
-    data: {
-        action: 'get_question_data', // Re-fetch data for this question
-        nonce: qp_ajax_object.nonce,
-        question_id: questionID,
-        session_id: sessionID
-    },
-    success: function(response) {
-        if (response.success) {
-            // Update the local state with the fresh, authoritative data
-            answeredStates[questionID].reported_info = response.data.reported_info;
-            // Now re-render the indicators based on the new state
-            renderQuestion(response.data, questionID); 
-        }
-    }
-});
-              $(".qp-indicator-bar").show();
-              $(".qp-options-area")
-                .addClass("disabled")
-                .find('input[type="radio"]')
-                .prop("disabled", true);
-              $("#qp-next-btn").prop("disabled", false);
+                // 2. Disable the report button immediately, regardless of type
+                $("#qp-report-btn").prop("disabled", true);
 
-              updatePaletteButton(questionID, "reported");
-              scrollPaletteToCurrent();
-              updateLegendCounts();
-              loadNextQuestion();
+                // 3. Update the palette to the gray "reported" state
+                updatePaletteButton(questionID, "reported");
+                scrollPaletteToCurrent();
+                updateLegendCounts(); // Update the legend count for reported items
+
+                // 4. Update the indicators
+                var showIndicatorBar = false;
+                $("#qp-reported-indicator, #qp-suggestion-indicator").hide();
+                if (response.data.reported_info.has_report) {
+                    $("#qp-reported-indicator").show();
+                    showIndicatorBar = true;
+                }
+                if (response.data.reported_info.has_suggestion) {
+                    $("#qp-suggestion-indicator").show();
+                    showIndicatorBar = true;
+                }
+                if(showIndicatorBar) {
+                    $(".qp-indicator-bar").show();
+                }
+
+                // 5. Conditionally lock the UI only if a critical 'report' was submitted
+                if (response.data.reported_info.has_report) {
+                    $(".qp-options-area").addClass("disabled").find('input[type="radio"]').prop("disabled", true);
+                    $("#qp-skip-btn, #qp-check-answer-btn").prop("disabled", true);
+                    // Ensure the user can move on
+                    $("#qp-next-btn").prop("disabled", false); 
+                }
+                // If it was only a suggestion, the UI remains active as desired.
             }
-          });
-        } else {
-          Swal.fire(
+        });
+    } else {
+        Swal.fire(
             "Error!",
             response.data.message || "Could not submit the report.",
             "error"
-          );
-        }
-      },
+        );
+    }
+},
       error: function () {
         Swal.fire("Error!", "An unknown server error occurred.", "error");
       },

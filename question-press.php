@@ -4103,7 +4103,24 @@ function qp_submit_question_report_ajax()
         'log_data'    => wp_json_encode(['user_id' => $user_id, 'session_id' => $session_id, 'question_id' => $question_id, 'reasons' => $reasons, 'comment' => $comment])
     ]);
 
-    wp_send_json_success(['message' => 'Report submitted.']);
+    // --- NEW: Fetch and return the updated report status ---
+$terms_table = $wpdb->prefix . 'qp_terms';
+$meta_table = $wpdb->prefix . 'qp_term_meta';
+$ids_placeholder = implode(',', $reasons);
+
+$reason_types = $wpdb->get_col("
+    SELECT m.meta_value 
+    FROM {$terms_table} t
+    JOIN {$meta_table} m ON t.term_id = m.term_id AND m.meta_key = 'type'
+    WHERE t.term_id IN ($ids_placeholder)
+");
+
+$report_info = [
+    'has_report' => in_array('report', $reason_types),
+    'has_suggestion' => in_array('suggestion', $reason_types),
+];
+
+wp_send_json_success(['message' => 'Report submitted.', 'reported_info' => $report_info]);
 }
 add_action('wp_ajax_submit_question_report', 'qp_submit_question_report_ajax');
 
