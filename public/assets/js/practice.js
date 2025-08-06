@@ -919,6 +919,7 @@ jQuery(document).ready(function ($) {
               );
               buttonToDisable.prop("disabled", true).text("Reported");
               $("#qp-report-question-id-field").val("");
+              form.find('textarea[name="report_comment"]').val(''); // Reset comment textarea
             } else {
               // --- NEW, CONSOLIDATED LOGIC for the Practice Session Page ---
               var questionID = sessionQuestionIDs[currentQuestionIndex];
@@ -966,6 +967,8 @@ jQuery(document).ready(function ($) {
                 $('#qp-next-btn').click();
               }
               // If it was only a suggestion, the UI remains active as desired.
+
+              form.find('textarea[name="report_comment"]').val(''); // Reset comment textarea
             }
           });
         } else {
@@ -1905,13 +1908,11 @@ jQuery(document).ready(function ($) {
         paletteGrids.append(paletteBtn);
       }
     }
-    // --- END NEW LOGIC ---
 
     // First, check if we are ALREADY on the last question.
     if (currentQuestionIndex >= sessionQuestionIDs.length - 1) {
       clearInterval(questionTimer);
 
-      // --- THIS IS THE FIX ---
       // Check if this is a section-wise practice session
       if (sessionSettings.practice_mode === "Section Wise Practice") {
         // Count how many non-reported questions have NOT been answered
@@ -1919,7 +1920,7 @@ jQuery(document).ready(function ($) {
         sessionQuestionIDs.forEach(function (qid) {
           const state = answeredStates[qid] || {};
           // A question is unattempted if it's NOT reported AND has NOT been answered.
-          if (!state.reported && state.type !== "answered") {
+          if (state.type !== "answered" && (!state.reported_info || !state.reported_info.has_report)) {
             unattemptedCount++;
           }
         });
@@ -1936,7 +1937,6 @@ jQuery(document).ready(function ($) {
           return;
         }
       }
-      // --- END FIX ---
 
       // If it's not a section practice, or if all questions are complete, show the standard completion message.
       Swal.fire({
