@@ -1579,6 +1579,10 @@ function process_question_options($question_id, $q_data)
     if ($correct_option_id_from_form) {
         $wpdb->update($o_table, ['is_correct' => 1], ['option_id' => absint($correct_option_id_from_form), 'question_id' => $question_id]);
     }
+    // If the correct answer has changed, trigger the re-evaluation function.
+    if ($original_correct_option_id != $correct_option_id_from_form) {
+        qp_re_evaluate_question_attempts($question_id, absint($correct_option_id_from_form));
+    }
 }
 
 /**
@@ -2601,6 +2605,7 @@ function qp_save_quick_edit_data_ajax()
     global $wpdb;
     $q_table = $wpdb->prefix . 'qp_questions';
     $g_table = $wpdb->prefix . 'qp_question_groups';
+    $o_table = $wpdb->prefix . 'qp_options';
     $rel_table = $wpdb->prefix . 'qp_term_relationships';
     $term_table = $wpdb->prefix . 'qp_terms';
     $tax_table = $wpdb->prefix . 'qp_taxonomies';
@@ -2684,11 +2689,20 @@ function qp_save_quick_edit_data_ajax()
         }
     }
 
-    // Step 6: Update the Correct Answer Option
-    $correct_option_id = isset($data['correct_option_id']) ? absint($data['correct_option_id']) : 0;
-    if ($correct_option_id > 0) {
-        $wpdb->update("{$wpdb->prefix}qp_options", ['is_correct' => 0], ['question_id' => $question_id]);
-        $wpdb->update("{$wpdb->prefix}qp_options", ['is_correct' => 1], ['option_id' => $correct_option_id, 'question_id' => $question_id]);
+    // Step 6: Update the Correct Answer Option and Re-evaluate
+    $new_correct_option_id = isset($data['correct_option_id']) ? absint($data['correct_option_id']) : 0;
+    if ($new_correct_option_id > 0) {
+        // Get the original correct option ID before making any changes.
+        $original_correct_option_id = $wpdb->get_var($wpdb->prepare("SELECT option_id FROM {$o_table} WHERE question_id = %d AND is_correct = 1", $question_id));
+
+        // Update the database
+        $wpdb->update($o_table, ['is_correct' => 0], ['question_id' => $question_id]);
+        $wpdb->update($o_table, ['is_correct' => 1], ['option_id' => $new_correct_option_id, 'question_id' => $question_id]);
+
+        // If the correct answer has changed, trigger the re-evaluation.
+        if ($original_correct_option_id != $new_correct_option_id) {
+            qp_re_evaluate_question_attempts($question_id, $new_correct_option_id);
+        }
     }
 
     // Step 7: Re-render the updated table row and send it back
