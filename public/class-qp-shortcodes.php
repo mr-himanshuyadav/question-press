@@ -1210,7 +1210,7 @@ $session_data['reported_info'] = $reported_info;
                     <div class="qp-review-question-item">
                         <div class="qp-review-question-meta" style="display: flex; justify-content: space-between; align-items: flex-start;">
                             <div class="meta-left" style="display: flex; flex-direction: column; gap: 5px;">
-                                <span><strong>ID: </strong><?php echo esc_html($attempt->question_id); ?></span>
+                                <span><strong>Question ID: </strong><?php echo esc_html($attempt->question_id); ?><?php if (!empty($attempt->attempt_id)) { echo ' | <strong>Attempt ID: </strong>' . esc_html($attempt->attempt_id); } ?></span>
                                 <span>
                                     <strong>Topic: </strong>
                                     <?php echo esc_html(implode(' / ', $attempt->subject_lineage)); ?>
