@@ -1248,6 +1248,9 @@ jQuery(document).ready(function ($) {
     }, 400); // 350ms load time + 50ms buffer
     practiceInProgress = true;
     sessionID = qp_session_data.session_id;
+    if (sessionID) {
+        $('#qp-session-id-display').html('<strong>Session ID:</strong> ' + sessionID).show();
+    }
     sessionQuestionIDs = qp_session_data.question_ids;
     sessionSettings = qp_session_data.settings;
     isMockTest = sessionSettings.practice_mode === "mock_test"; // Set our global flag

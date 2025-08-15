@@ -830,7 +830,10 @@ $session_data['reported_info'] = $reported_info;
             <div id="qp-main-content">
                 <div class="qp-header">
                     <div class="qp-header-top-row">
-                        <div class="qp-session-mode-indicator"><?php echo esc_html($mode_name); ?></div>
+                        <div style="display: flex; align-items: center; gap: 10px; margin-right: 10px;">
+                            <div class="qp-session-mode-indicator"><?php echo esc_html($mode_name); ?></div>
+                            <p id="qp-session-id-display" style="margin: 0; color: #50575e; font-size: 14px; display: none;"></p>
+                        </div>
                         <div style="display: flex; flex-direction: row; gap: 5px;">
                             <button id="qp-fullscreen-btn" class="qp-button qp-button-secondary" title="Enter Fullscreen" style="padding: 8px; line-height: 1;">
                                 <span class="dashicons dashicons-fullscreen-alt"></span>
