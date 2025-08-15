@@ -2918,7 +2918,10 @@ function qp_public_enqueue_scripts()
             wp_enqueue_script('qp-practice-script', QP_PLUGIN_URL . 'public/assets/js/practice.js', ['jquery', 'hammer-js'], $practice_js_version, true);
             wp_localize_script('qp-practice-script', 'qp_ajax_object', $ajax_data);
             $qp_settings = get_option('qp_settings');
-            wp_localize_script('qp-practice-script', 'qp_practice_settings', ['show_counts' => !empty($qp_settings['show_question_counts'])]);
+            wp_localize_script('qp-practice-script', 'qp_practice_settings', [
+                'show_counts' => !empty($qp_settings['show_question_counts']),
+                'show_topic_meta' => !empty($qp_settings['show_topic_meta'])
+            ]);
         }
 
         // Load KaTeX if any page that can display questions is present

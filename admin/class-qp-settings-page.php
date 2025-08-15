@@ -56,6 +56,8 @@ class QP_Settings_Page
         add_settings_field('qp_session_timeout', 'Session Timeout (Minutes)', [self::class, 'render_session_timeout_input'], 'qp-settings-page', 'qp_data_settings_section');
         add_settings_field('qp_show_question_counts', 'Show Unattempted Counts', [self::class, 'render_show_question_counts_checkbox'], 'qp-settings-page', 'qp_data_settings_section');
 
+        add_settings_field('qp_show_topic_meta', 'Display Topic Meta', [self::class, 'render_show_topic_meta_checkbox'], 'qp-settings-page', 'qp_data_settings_section');
+
 
         add_settings_field('qp_can_delete_history_roles', 'Roles That Can Delete History', [self::class, 'render_can_delete_history_roles_multiselect'], 'qp-settings-page', 'qp_data_settings_section');
 
@@ -140,6 +142,14 @@ class QP_Settings_Page
         echo '<label><input type="checkbox" name="qp_settings[show_question_counts]" value="1" ' . checked(1, $checked, false) . ' /> ';
         echo '<span>Display the number of unattempted questions next to subjects, topics, and sections on the practice form.</span></label>';
         echo '<p class="description">Note: Enabling this may slightly increase the form loading time for users with a large history.</p>';
+    }
+
+    public static function render_show_topic_meta_checkbox()
+    {
+        $options = get_option('qp_settings');
+        $checked = isset($options['show_topic_meta']) ? $options['show_topic_meta'] : 0;
+        echo '<label><input type="checkbox" name="qp_settings[show_topic_meta]" value="1" ' . checked(1, $checked, false) . ' /> ';
+        echo '<span>Display the topic/subject lineage on the session page.</span></label>';
     }
 
     public static function render_can_delete_history_roles_multiselect()
@@ -322,6 +332,11 @@ class QP_Settings_Page
             $new_input['show_question_counts'] = absint($input['show_question_counts']);
         } else {
             $new_input['show_question_counts'] = 0;
+        }
+        if (isset($input['show_topic_meta'])) {
+            $new_input['show_topic_meta'] = absint($input['show_topic_meta']);
+        } else {
+            $new_input['show_topic_meta'] = 0;
         }
         if (isset($input['review_page'])) {
             $new_input['review_page'] = absint($input['review_page']);

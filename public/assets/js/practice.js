@@ -1593,21 +1593,24 @@ jQuery(document).ready(function ($) {
       directionEl.show();
     }
     // --- NEW: Hierarchical Subject/Topic Display ---
-    if (
-      questionData.subject_lineage &&
-      Array.isArray(questionData.subject_lineage) &&
-      questionData.subject_lineage.length > 0
-    ) {
-      $("#qp-question-subject").html(
-        "<strong>Topic: </strong>" + questionData.subject_lineage.join(" / ")
-      );
-    }
+    var showTopic = qp_practice_settings.show_topic_meta &&
+                    questionData.subject_lineage &&
+                    Array.isArray(questionData.subject_lineage) &&
+                    questionData.subject_lineage.length > 0;
 
     var questionIdText = "Question ID: " + questionData.question_id;
     if (data.attempt_id) {
         questionIdText += " | Attempt ID: " + data.attempt_id;
     }
-    $("#qp-question-id").text(questionIdText);
+    $('#qp-question-id').html(questionIdText);
+
+    if (showTopic) {
+        $("#qp-question-subject").html(
+            "<strong>Topic: </strong>" + questionData.subject_lineage.join(" / ") + ' | '
+        ).show();
+    } else {
+        $("#qp-question-subject").hide().html('');
+    }
 
     // --- NEW: Hierarchical Source/Section Display ---
     var sourceDisplayArea = $("#qp-question-source");

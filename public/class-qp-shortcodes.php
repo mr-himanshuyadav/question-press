@@ -869,7 +869,7 @@ $session_data['reported_info'] = $reported_info;
                     <div class="qp-animatable-area">
                         <div class="question-meta">
                             <div class="qp-question-meta-left">
-                                <div id="qp-question-subject-line"><span id="qp-question-subject"></span> | <span id="qp-question-id"></span></div>
+                                <div id="qp-question-subject-line"><span id="qp-question-subject"> | </span><span id="qp-question-id"></span></div>
                                 <?php if ($user_can_view_source): ?>
                                     <div id="qp-question-source"></div>
                                 <?php endif; ?>
