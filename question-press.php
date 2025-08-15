@@ -3931,6 +3931,7 @@ function qp_get_question_data_ajax()
 
     // --- State Checks ---
     $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
+    $attempt = $wpdb->get_row($wpdb->prepare("SELECT attempt_id FROM $a_table WHERE user_id = %d AND question_id = %d AND session_id = %d", $user_id, $question_id, $session_id));
     $attempt_count = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $a_table WHERE user_id = %d AND question_id = %d AND status = 'answered' AND session_id != %d", $user_id, $question_id, $session_id));
     $review_table = $wpdb->prefix . 'qp_review_later';
     $is_marked = (bool) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$review_table} WHERE user_id = %d AND question_id = %d", $user_id, $question_id));
@@ -3967,7 +3968,8 @@ function qp_get_question_data_ajax()
     wp_send_json_success([
         'question'             => $question_data,
         'correct_option_id'    => $correct_option_id,
-        'previous_attempt_count' => (int) $previous_attempt_count,
+        'attempt_id'           => $attempt ? (int) $attempt->attempt_id : null,
+        'previous_attempt_count' => (int) $attempt_count,
         'is_revision'          => ($attempt_count > 0),
         'is_admin'             => $user_can_view,
         'is_marked_for_review' => $is_marked,
@@ -4229,7 +4231,11 @@ function qp_check_answer_ajax()
     }
     // --- End of new logic ---
 
-    wp_send_json_success(['is_correct' => $is_correct, 'correct_option_id' => $correct_option_id]);
+    wp_send_json_success([
+        'is_correct' => $is_correct, 
+        'correct_option_id' => $correct_option_id,
+        'attempt_id' => $wpdb->insert_id // **NEW**: Return the ID of the attempt that was just created
+    ]);
 }
 add_action('wp_ajax_check_answer', 'qp_check_answer_ajax');
 

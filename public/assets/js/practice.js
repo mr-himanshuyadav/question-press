@@ -1600,7 +1600,11 @@ jQuery(document).ready(function ($) {
       );
     }
 
-    $("#qp-question-id").text("Question ID: " + questionData.question_id);
+    var questionIdText = "Question ID: " + questionData.question_id;
+    if (data.attempt_id) {
+        questionIdText += " | Attempt ID: " + data.attempt_id;
+    }
+    $("#qp-question-id").text(questionIdText);
 
     // --- NEW: Hierarchical Source/Section Display ---
     var sourceDisplayArea = $("#qp-question-source");
@@ -2208,7 +2212,6 @@ jQuery(document).ready(function ($) {
     scrollPaletteToCurrent();
     $("#qp-next-btn").prop("disabled", false);
 
-    // Sync attempt with the server in the background
     $.ajax({
       url: qp_ajax_object.ajax_url,
       type: "POST",
@@ -2220,6 +2223,13 @@ jQuery(document).ready(function ($) {
         option_id: selectedOptionId,
         remaining_time: remainingTime,
       },
+      success: function(response) {
+        if (response.success && response.data.attempt_id) {
+            // Update the UI with the new attempt ID
+            var questionIdText = "Question ID: " + questionID + " | Attempt ID: " + response.data.attempt_id;
+            $('#qp-question-id').text(questionIdText);
+        }
+      }
     });
 
     updateLegendCounts();

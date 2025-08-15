@@ -1033,7 +1033,7 @@ $session_data['reported_info'] = $reported_info;
         // --- NEW, CORRECTED QUERY TO FETCH ALL ATTEMPT DATA ---
         $attempts_raw = $wpdb->get_results($wpdb->prepare(
             "SELECT 
-                a.question_id, a.selected_option_id, a.is_correct, a.mock_status,
+                a.attempt_id, a.question_id, a.selected_option_id, a.is_correct, a.mock_status,
                 q.question_text, q.question_number_in_section,
                 g.group_id, g.direction_text
             FROM {$wpdb->prefix}qp_user_attempts a
