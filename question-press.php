@@ -3674,6 +3674,64 @@ function qp_get_sources_for_subject_progress_ajax()
 }
 add_action('wp_ajax_get_sources_for_subject_progress', 'qp_get_sources_for_subject_progress_ajax');
 
+// Add these two new functions at the end of question-press.php
+
+/**
+ * AJAX handler to get sources linked to a specific subject.
+ */
+function qp_get_sources_for_subject_ajax() {
+    check_ajax_referer('qp_practice_nonce', 'nonce');
+    $subject_id = isset($_POST['subject_id']) ? absint($_POST['subject_id']) : 0;
+
+    if (!$subject_id) {
+        wp_send_json_error(['message' => 'Invalid subject ID.']);
+    }
+
+    global $wpdb;
+    $term_table = $wpdb->prefix . 'qp_terms';
+    $rel_table = $wpdb->prefix . 'qp_term_relationships';
+    
+    // Find source terms (object_id) linked to the given subject term (term_id)
+    $source_ids = $wpdb->get_col($wpdb->prepare(
+        "SELECT object_id FROM {$rel_table} WHERE term_id = %d AND object_type = 'source_subject_link'",
+        $subject_id
+    ));
+
+    if (empty($source_ids)) {
+        wp_send_json_success(['sources' => []]);
+        return;
+    }
+
+    $ids_placeholder = implode(',', $source_ids);
+    $sources = $wpdb->get_results("SELECT term_id, name FROM {$term_table} WHERE term_id IN ($ids_placeholder) ORDER BY name ASC");
+
+    wp_send_json_success(['sources' => $sources]);
+}
+add_action('wp_ajax_get_sources_for_subject', 'qp_get_sources_for_subject_ajax');
+
+/**
+ * AJAX handler to get child terms (sections) for a given parent term.
+ */
+function qp_get_child_terms_ajax() {
+    check_ajax_referer('qp_practice_nonce', 'nonce');
+    $parent_term_id = isset($_POST['parent_id']) ? absint($_POST['parent_id']) : 0;
+
+    if (!$parent_term_id) {
+        wp_send_json_error(['message' => 'Invalid parent ID.']);
+    }
+
+    global $wpdb;
+    $term_table = $wpdb->prefix . 'qp_terms';
+
+    $child_terms = $wpdb->get_results($wpdb->prepare(
+        "SELECT term_id, name FROM {$term_table} WHERE parent = %d ORDER BY name ASC",
+        $parent_term_id
+    ));
+
+    wp_send_json_success(['children' => $child_terms]);
+}
+add_action('wp_ajax_get_child_terms', 'qp_get_child_terms_ajax');
+
 /**
  * AJAX handler for the dashboard progress tab.
  * Calculates and returns the hierarchical progress data.

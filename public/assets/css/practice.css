@@ -98,6 +98,20 @@ body {
     border-color: #b02a2a;
 }
 
+/* --- NEW: Style for disabled buttons --- */
+.qp-button:disabled,
+.qp-button[disabled] {
+    background-color: #dcdcde;
+    border-color: #dcdcde;
+    color: #a7aaad;
+    cursor: not-allowed;
+    box-shadow: none;
+    transform: none;
+}
+#qp_section_subject, .qp-cascading-select{
+    outline: none;
+}
+
 /* --- Settings Form --- */
 .qp-practice-form-wrapper h2 {
     text-align: center;
