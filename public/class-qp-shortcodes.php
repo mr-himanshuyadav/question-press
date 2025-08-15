@@ -740,7 +740,7 @@ $session_data['reported_info'] = $reported_info;
                     break;
                 case 'Section Wise Practice':
                     $mode_class = 'mode-section-wise';
-                    $mode_name = 'Section Practice';
+                    $mode_name = 'Section Wise Practice';
                     break;
             }
         } elseif (isset($session_settings['subject_id']) && $session_settings['subject_id'] === 'review') {
@@ -1129,7 +1129,7 @@ $session_data['reported_info'] = $reported_info;
                     break;
                 case 'Section Wise Practice':
                     $mode_class = 'mode-section-wise';
-                    $mode = 'Section Practice';
+                    $mode = 'Section Wise Practice';
                     break;
             }
         } elseif (isset($settings['subject_id']) && $settings['subject_id'] === 'review') {
@@ -1230,7 +1230,7 @@ $session_data['reported_info'] = $reported_info;
                         $user_can_view_source = !empty(array_intersect((array)wp_get_current_user()->roles, (array)($options['show_source_meta_roles'] ?? [])));
                         if ($mode === 'Section Wise Practice' && $user_can_view_source && !empty($attempt->source_lineage)):
                             $source_parts = $attempt->source_lineage;
-                            if ($attempt->question_number_in_section) $source_parts[] = 'Q. ' . esc_html($attempt->question_number_in_section);
+                            if ($attempt->question_number_in_section) $source_parts[] = 'Q ' . esc_html($attempt->question_number_in_section);
                         ?>
                             <div class="qp-review-source-meta">
                                 <?php echo implode(' / ', $source_parts); ?>
