@@ -117,12 +117,31 @@ private function recursively_merge_terms($source_term_id, $destination_term_id) 
         return; // Cannot merge a term into itself.
     }
 
-    // 1. Reassign questions from the source term to the destination term.
-    $wpdb->query($wpdb->prepare(
-        "UPDATE $rel_table SET term_id = %d WHERE term_id = %d AND object_type = 'question'",
-        $destination_term_id,
+    // --- FIX START: Correctly reassign GROUP relationships ---
+    // 1. Find all groups linked to the source term.
+    $group_ids = $wpdb->get_col($wpdb->prepare(
+        "SELECT object_id FROM $rel_table WHERE term_id = %d AND object_type = 'group'",
         $source_term_id
     ));
+
+    if (!empty($group_ids)) {
+        // 2. Delete the old relationships for these groups to the source term.
+        $wpdb->query($wpdb->prepare(
+            "DELETE FROM $rel_table WHERE term_id = %d AND object_type = 'group'",
+            $source_term_id
+        ));
+
+        // 3. Insert new relationships for the destination term, ignoring duplicates.
+        foreach ($group_ids as $group_id) {
+            $wpdb->query($wpdb->prepare(
+                "INSERT IGNORE INTO $rel_table (object_id, term_id, object_type) VALUES (%d, %d, 'group')",
+                $group_id,
+                $destination_term_id
+            ));
+        }
+    }
+    // --- FIX END ---
+
 
     // 2. Get children of both source and destination to compare them.
     $source_children = $wpdb->get_results($wpdb->prepare("SELECT term_id, name FROM $term_table WHERE parent = %d", $source_term_id), OBJECT_K);

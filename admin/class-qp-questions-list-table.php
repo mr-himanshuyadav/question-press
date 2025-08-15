@@ -327,6 +327,8 @@ protected function bulk_actions($which = '')
     {
         global $wpdb;
 
+        $this->process_bulk_action();
+
         $columns = $this->get_columns();
         $hidden = get_hidden_columns($this->screen);
         $sortable = $this->get_sortable_columns();
