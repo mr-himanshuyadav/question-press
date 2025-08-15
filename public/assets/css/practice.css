@@ -3141,28 +3141,42 @@ hr.qp-divider {
 }
 
 .qp-form-step {
-    display: none;
     width: 100%;
     box-sizing: border-box;
     padding: 1rem;
-    transition: transform 0.4s ease-in-out;
+    /* NEW: Transition opacity as well as transform */
+    transition: transform 0.3s ease-in-out, opacity 0.3s ease-in-out;
     position: absolute;
     top: 0;
-    left: 100%;
+    left: 0;
+    /* NEW: Start slightly to the right and fully transparent */
+    transform: translateX(120px);
+    opacity: 0;
+    visibility: hidden;
 }
 
 .qp-form-step.active {
-    display: block;
     position: relative;
-    left: 0;
-}
-
-.qp-form-step.animating-out {
-    transform: translateX(-100%);
-}
-
-.qp-form-step.animating-in {
+    /* NEW: Active state is centered and fully visible */
     transform: translateX(0);
+    opacity: 1;
+    visibility: visible;
+}
+
+/* State for the outgoing step when moving to the next step */
+.qp-form-step.is-exiting-left {
+    /* NEW: Move slightly to the left and fade out */
+    transform: translateX(-120px);
+    opacity: 0;
+    visibility: hidden;
+}
+
+/* State for the outgoing step when moving back */
+.qp-form-step.is-exiting-right {
+    /* NEW: Move slightly to the right and fade out */
+    transform: translateX(120px);
+    opacity: 0;
+    visibility: hidden;
 }
 
 .qp-step-content {
@@ -3239,6 +3253,7 @@ hr.qp-divider {
     display: block;
     text-align: left;
     padding: 0;
+    outline: none;
 }
 
 /* Revision Mode Specific */

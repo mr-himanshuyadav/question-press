@@ -794,39 +794,72 @@ jQuery(document).ready(function ($) {
 
   // --- MULTI-STEP FORM LOGIC ---
   if ($(".qp-multi-step-container").length) {
-    var multiStepContainer = $(".qp-multi-step-container");
-
-    // Enable the next button as soon as a mode is selected
-    wrapper.on("change", 'input[name="practice_mode_selection"]', function () {
-      if ($(this).is(":checked")) {
-        $("#qp-step1-next-btn").prop("disabled", false);
-      }
-    });
-
-    // Function to navigate between steps
-    function navigateToStep(targetStepNumber) {
+    // Function to navigate between steps with animation
+    // Function to navigate between steps with animation
+    function navigateToStep(targetStepNumber, direction) {
       var currentStep = $(".qp-form-step.active");
       var targetStep = $("#qp-step-" + targetStepNumber);
 
-      if (targetStep.length) {
-        currentStep.removeClass("active").css("left", "-100%");
-        targetStep.addClass("active").css("left", "0");
+      if (targetStep.length && currentStep.attr("id") !== targetStep.attr("id")) {
+        // --- FIX: Handle URL Hash Correctly ---
+        if (targetStepNumber === 1) {
+            // Clear the hash without reloading the page when returning to the first step
+            history.pushState("", document.title, window.location.pathname + window.location.search);
+        } else {
+            window.location.hash = 'step-' + targetStepNumber;
+        }
+
+        // --- FIX: Animate correctly based on direction ---
+        if (direction === "next") {
+          currentStep.removeClass("active").addClass("is-exiting-left");
+          // Reset target step's position before making it active
+          targetStep.removeClass("is-exiting-left is-exiting-right").addClass("active");
+        } else { // direction === 'back'
+          currentStep.removeClass("active").addClass("is-exiting-right");
+          // Reset target step's position before making it active
+          targetStep.removeClass("is-exiting-left is-exiting-right").addClass("active");
+        }
       }
     }
 
-    // Handlers for Mode Selection (Step 1 -> 2 or 3)
+    // Enable the "Next" button when a mode is selected
+    wrapper.on("change", 'input[name="practice_mode_selection"]', function () {
+      $("#qp-step1-next-btn").prop("disabled", !$(this).is(":checked"));
+    });
+
+    // Handler for "Next" button click
     wrapper.on("click", "#qp-step1-next-btn", function () {
       var targetStep = $('input[name="practice_mode_selection"]:checked').val();
       if (targetStep) {
-        navigateToStep(targetStep);
+        navigateToStep(targetStep, "next");
       }
     });
 
-    // Handler for Back buttons
+    // Handler for "Back" button clicks
     wrapper.on("click", ".qp-back-btn", function () {
       var targetStep = $(this).data("target-step");
-      navigateToStep(targetStep);
+      navigateToStep(targetStep, "back");
     });
+
+    // Check URL hash on page load to restore state
+    if (window.location.hash) {
+      var hash = window.location.hash;
+      var targetStepNumber = hash.split('-')[1];
+      var targetStep = $("#qp-step-" + targetStepNumber);
+      
+      if (targetStep.length && targetStepNumber !== '1') {
+        // Deactivate default step 1 and position it off-screen
+        $("#qp-step-1").removeClass("active is-exiting-right").addClass("is-exiting-left");
+        // Activate the target step
+        targetStep.addClass("active");
+      } else {
+        // If hash is #step-1 or invalid, default to a clean state
+        $("#qp-step-1").addClass('active');
+      }
+    } else {
+        // If no hash, ensure step 1 is active by default
+        $("#qp-step-1").addClass('active');
+    }
 
     // --- Revision Mode UI Logic ---
     wrapper.on("click", ".qp-revision-type-btn", function () {
