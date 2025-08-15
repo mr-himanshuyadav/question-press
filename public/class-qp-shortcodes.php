@@ -1268,6 +1268,7 @@ $session_data['reported_info'] = $reported_info;
                                     <?php foreach ($attempt->options as $option): ?>
                                         <li style="padding: 2px 0; <?php echo $option->is_correct ? 'font-weight: bold; color: #2e7d32;' : ''; ?>">
                                             <?php echo esc_html($option->option_text); ?>
+                                            <span style="font-weight: normal; color: #888; font-size: 0.6em; margin-left: 5px;">(ID: <?php echo esc_html($option->option_id); ?>)</span>
                                         </li>
                                     <?php endforeach; ?>
                                 </ul>
