@@ -464,182 +464,6 @@ function qp_render_organization_page()
     </div>
 <?php
 }
-/**
- * Renders the page for migration tools.
- */
-function qp_render_migration_tools_page()
-{
-?>
-    <div class="wrap">
-        <h1>Question Press Migration Tools</h1>
-        
-        <div class="card" style="max-width: 600px; margin-top: 20px;">
-            <h2 class="title">Fix Section Practice Session Data</h2>
-            <p>This script will correct the section IDs in the historical data of your "Section Wise Practice" sessions. This is necessary if you have recently merged or deleted sections.</p>
-            <p><strong>Warning:</strong> Create a full backup of your database before proceeding.</p>
-            <?php
-            $nonce = wp_create_nonce('qp_fix_section_sessions_nonce');
-            $migration_url = admin_url('admin.php?page=qp-tools&tab=migration&action=qp_fix_section_sessions&_wpnonce=' . $nonce);
-            ?>
-            <a href="<?php echo esc_url($migration_url); ?>" class="button button-primary">Run Section Fix</a>
-        </div>
-
-        <div class="card" style="max-width: 600px; margin-top: 20px;">
-            <h2 class="title">Merge Duplicate Section Sessions</h2>
-            <p>This tool will find and merge any duplicate "Section Wise Practice" sessions that may have been created due to earlier merging logic. All attempts will be consolidated into the most recent session for each section.</p>
-            <p><strong>Warning:</strong> Create a full backup of your database before proceeding.</p>
-            <?php
-            $nonce_merge = wp_create_nonce('qp_merge_section_sessions_nonce');
-            $url_merge = admin_url('admin.php?page=qp-tools&tab=migration&action=qp_merge_duplicate_sessions&_wpnonce=' . $nonce_merge);
-            ?>
-            <a href="<?php echo esc_url($url_merge); ?>" class="button button-primary">Run Session Merge Tool</a>
-        </div>
-    </div>
-<?php
-}
-
-/**
- * Handles the one-time migration to merge duplicate "Section Wise Practice" sessions.
- */
-function qp_handle_merge_duplicate_sessions_migration() {
-    if (!isset($_GET['action']) || $_GET['action'] !== 'qp_merge_duplicate_sessions' || !current_user_can('manage_options')) {
-        return;
-    }
-    check_admin_referer('qp_merge_section_sessions_nonce');
-
-    global $wpdb;
-    $sessions_table = $wpdb->prefix . 'qp_user_sessions';
-    $attempts_table = $wpdb->prefix . 'qp_user_attempts';
-    $pauses_table = $wpdb->prefix . 'qp_session_pauses'; // Added pauses table
-    
-    $all_sessions = $wpdb->get_results("SELECT session_id, user_id, start_time, settings_snapshot, total_active_seconds FROM {$sessions_table}");
-    
-    $sessions_to_process = [];
-    foreach ($all_sessions as $session) {
-        $settings = json_decode($session->settings_snapshot, true);
-        if (isset($settings['practice_mode']) && $settings['practice_mode'] === 'Section Wise Practice' && isset($settings['section_id'])) {
-            $section_id = $settings['section_id'];
-            $user_id = $session->user_id;
-            $sessions_to_process[$user_id][$section_id][] = $session;
-        }
-    }
-    
-    $merged_count = 0;
-    $deleted_count = 0;
-
-    foreach ($sessions_to_process as $user_id => $sections) {
-        foreach ($sections as $section_id => $sessions) {
-            if (count($sessions) > 1) {
-                // Sort sessions by start_time, newest first
-                usort($sessions, function($a, $b) {
-                    return strtotime($b->start_time) - strtotime($a->start_time);
-                });
-
-                $final_session = array_shift($sessions); // The newest session is the target
-                $old_sessions = $sessions;
-                $old_session_ids = wp_list_pluck($old_sessions, 'session_id');
-                
-                if (!empty($old_session_ids)) {
-                    $ids_placeholder = implode(',', array_map('absint', $old_session_ids));
-                    
-                    // Re-assign attempts and pauses from all old sessions to the final one
-                    $wpdb->query($wpdb->prepare(
-                        "UPDATE {$attempts_table} SET session_id = %d WHERE session_id IN ($ids_placeholder)",
-                        $final_session->session_id
-                    ));
-                    $wpdb->query($wpdb->prepare(
-                        "UPDATE {$pauses_table} SET session_id = %d WHERE session_id IN ($ids_placeholder)",
-                        $final_session->session_id
-                    ));
-
-                    // Sum the active seconds from all sessions
-                    $total_active_seconds = (int)$final_session->total_active_seconds;
-                    foreach ($old_sessions as $old_session) {
-                        $total_active_seconds += (int)$old_session->total_active_seconds;
-                    }
-                    
-                    // Delete the old, now-empty sessions
-                    $deleted_count += $wpdb->query("DELETE FROM {$sessions_table} WHERE session_id IN ($ids_placeholder)");
-                    
-                    // Recalculate stats and update the final, merged session
-                    $finalized_data = qp_finalize_and_end_session($final_session->session_id, 'completed', 'user_submitted');
-                    
-                    // If the session wasn't empty, update its active time
-                    if ($finalized_data) {
-                         $wpdb->update($sessions_table, ['total_active_seconds' => $total_active_seconds], ['session_id' => $final_session->session_id]);
-                    }
-
-                    $merged_count++;
-                }
-            }
-        }
-    }
-
-    $message = "Session merge complete. {$merged_count} user-section groups were merged, and {$deleted_count} old session records were deleted.";
-    set_transient('qp_admin_message', $message, 30);
-    set_transient('qp_admin_message_type', 'success', 30);
-
-    wp_safe_redirect(admin_url('admin.php?page=qp-tools&tab=migration'));
-    exit;
-}
-
-/**
- * Handles the one-time migration to fix incorrect section IDs in session snapshots.
- */
-function qp_handle_fix_section_sessions_migration() {
-    if (!isset($_GET['action']) || $_GET['action'] !== 'qp_fix_section_sessions' || !current_user_can('manage_options')) {
-        return;
-    }
-    check_admin_referer('qp_fix_section_sessions_nonce');
-
-    global $wpdb;
-    $sessions_table = $wpdb->prefix . 'qp_user_sessions';
-    $questions_table = $wpdb->prefix . 'qp_questions';
-    $rel_table = $wpdb->prefix . 'qp_term_relationships';
-    $term_table = $wpdb->prefix . 'qp_terms';
-    $tax_table = $wpdb->prefix . 'qp_taxonomies';
-
-    $sessions_to_check = $wpdb->get_results("SELECT session_id, settings_snapshot, question_ids_snapshot FROM {$sessions_table}");
-    
-    $updated_count = 0;
-    $source_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'source'");
-
-    foreach ($sessions_to_check as $session) {
-        $settings = json_decode($session->settings_snapshot, true);
-        
-        if (isset($settings['practice_mode']) && $settings['practice_mode'] === 'Section Wise Practice') {
-            $question_ids = json_decode($session->question_ids_snapshot, true);
-            if (empty($question_ids)) continue;
-
-            $first_question_id = absint($question_ids[0]);
-            $group_id = $wpdb->get_var($wpdb->prepare("SELECT group_id FROM {$questions_table} WHERE question_id = %d", $first_question_id));
-            
-            if (!$group_id) continue;
-
-            $correct_section_id = $wpdb->get_var($wpdb->prepare(
-                "SELECT term_id FROM {$rel_table} WHERE object_id = %d AND object_type = 'group' AND term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id = %d AND parent != 0)",
-                $group_id, $source_tax_id
-            ));
-
-            if ($correct_section_id && (!isset($settings['section_id']) || $settings['section_id'] != $correct_section_id)) {
-                $settings['section_id'] = (int)$correct_section_id;
-                $wpdb->update(
-                    $sessions_table,
-                    ['settings_snapshot' => wp_json_encode($settings)],
-                    ['session_id' => $session->session_id]
-                );
-                $updated_count++;
-            }
-        }
-    }
-
-    $message = "Session data check complete. {$updated_count} session records were updated.";
-    set_transient('qp_admin_message', $message, 30);
-    set_transient('qp_admin_message_type', 'success', 30);
-
-    wp_safe_redirect(admin_url('admin.php?page=qp-tools&tab=migration'));
-    exit;
-}
 
 function qp_render_merge_terms_page()
 {
@@ -807,7 +631,6 @@ function qp_render_tools_page()
         'import' => ['label' => 'Import', 'callback' => ['QP_Import_Page', 'render']],
         'export'   => ['label' => 'Export', 'callback' => ['QP_Export_Page', 'render']],
         'backup_restore'   => ['label' => 'Backup & Restore', 'callback' => ['QP_Backup_Restore_Page', 'render']],
-        'migration' => ['label' => 'Migration', 'callback' => 'qp_render_migration_tools_page'],
     ];
     $active_tab = isset($_GET['tab']) && array_key_exists($_GET['tab'], $tabs) ? $_GET['tab'] : 'import';
 ?>
@@ -1143,8 +966,6 @@ function qp_migrate_taxonomy_relationships($taxonomy_name, $log_prefix)
 // FORM & ACTION HANDLERS
 function qp_handle_form_submissions()
 {
-    qp_handle_fix_section_sessions_migration();
-    qp_handle_merge_duplicate_sessions_migration();
     if (isset($_GET['page']) && $_GET['page'] === 'qp-organization') {
         QP_Sources_Page::handle_forms();
         QP_Subjects_Page::handle_forms();
