@@ -3271,6 +3271,7 @@ function qp_start_practice_session_ajax()
     global $wpdb;
     $user_id = get_current_user_id();
     $sessions_table = $wpdb->prefix . 'qp_user_sessions';
+    $pauses_table = $wpdb->prefix . 'qp_session_pauses';
 
     // --- Session Settings ---
     $subjects_raw = isset($_POST['qp_subject']) && is_array($_POST['qp_subject']) ? $_POST['qp_subject'] : [];
@@ -3398,7 +3399,20 @@ function qp_start_practice_session_ajax()
     }
 
     if ($session_id > 0) {
-        // An existing session was found, so we update it
+        // An existing session was found, so we update it.
+        // Get the last activity time to use as the pause time.
+        $end_time = $wpdb->get_var($wpdb->prepare("SELECT end_time FROM {$sessions_table} WHERE session_id = %d", $session_id));
+
+        if ($end_time) {
+            // Add a pause record from the last activity until now.
+            $wpdb->insert($pauses_table, [
+                'session_id' => $session_id,
+                'pause_time' => $end_time,
+                'resume_time' => current_time('mysql')
+            ]);
+        }
+        
+        // Now, update the session to be active again.
         $wpdb->update($sessions_table, [
             'status'                  => 'active',
             'last_activity'           => current_time('mysql'),
@@ -3843,16 +3857,16 @@ function qp_get_progress_data_ajax()
     $rel_table = $wpdb->prefix . 'qp_term_relationships';
     $attempts_table = $wpdb->prefix . 'qp_user_attempts';
     $questions_table = $wpdb->prefix . 'qp_questions';
-    $sessions_table = $wpdb->prefix . 'qp_user_sessions'; // Added sessions table
+    $sessions_table = $wpdb->prefix . 'qp_user_sessions';
 
-    // Step 1: Get all term IDs in both the selected subject and source hierarchies
+    // Step 1: Get all term IDs in both hierarchies
     $all_subject_term_ids = get_all_descendant_ids($subject_term_id, $wpdb, $term_table);
     $all_source_term_ids = get_all_descendant_ids($source_term_id, $wpdb, $term_table);
 
     $subject_terms_placeholder = implode(',', $all_subject_term_ids);
     $source_terms_placeholder = implode(',', $all_source_term_ids);
 
-    // Step 2: Find the intersection of groups linked to BOTH hierarchies
+    // Step 2: Find intersecting groups
     $relevant_group_ids = $wpdb->get_col("
         SELECT DISTINCT r1.object_id
         FROM {$rel_table} r1
@@ -3867,7 +3881,7 @@ function qp_get_progress_data_ajax()
     }
     $group_ids_placeholder = implode(',', $relevant_group_ids);
 
-    // Step 3: Get all questions within those relevant groups
+    // Step 3: Get all questions in scope
     $all_qids_in_scope = $wpdb->get_col("SELECT question_id FROM {$questions_table} WHERE group_id IN ($group_ids_placeholder)");
 
     if (empty($all_qids_in_scope)) {
@@ -3876,26 +3890,25 @@ function qp_get_progress_data_ajax()
     }
     $qids_placeholder = implode(',', $all_qids_in_scope);
 
-    // Step 4: Get the user's completed questions within this specific scope
+    // Step 4: Get user's completed questions
     $exclude_incorrect = isset($_POST['exclude_incorrect']) && $_POST['exclude_incorrect'] === 'true';
     $attempt_status_clause = $exclude_incorrect ? "AND is_correct = 1" : "AND status = 'answered'";
     $completed_qids = $wpdb->get_col($wpdb->prepare(
         "SELECT DISTINCT question_id FROM {$attempts_table} WHERE user_id = %d AND question_id IN ($qids_placeholder) $attempt_status_clause",
         $user_id
     ));
-
-    // *** NEW: Step 4b: Get all section practice sessions for this user ***
+    
+    // Step 4b: Get all section practice sessions for this user
     $section_sessions = $wpdb->get_results($wpdb->prepare(
-        "SELECT session_id, status, settings_snapshot FROM {$sessions_table} WHERE user_id = %d AND status IN ('paused', 'completed')",
+        "SELECT session_id, status, settings_snapshot FROM {$sessions_table} WHERE user_id = %d",
         $user_id
     ));
-
+    
     $session_info_by_section = [];
     foreach ($section_sessions as $session) {
         $settings = json_decode($session->settings_snapshot, true);
         if (isset($settings['practice_mode']) && $settings['practice_mode'] === 'Section Wise Practice' && isset($settings['section_id'])) {
             $section_id = $settings['section_id'];
-            // Store the most recent session's data for each section
             if (!isset($session_info_by_section[$section_id])) {
                 $session_info_by_section[$section_id] = [
                     'session_id' => $session->session_id,
@@ -3905,12 +3918,11 @@ function qp_get_progress_data_ajax()
         }
     }
 
-
-    // Step 5: Prepare data to build the hierarchical tree
+    // Step 5: Prepare data for the tree
     $all_terms_data = $wpdb->get_results("SELECT term_id, name, parent FROM $term_table WHERE term_id IN ($source_terms_placeholder)");
     $question_group_map = $wpdb->get_results("SELECT question_id, group_id FROM {$questions_table} WHERE question_id IN ($qids_placeholder)", OBJECT_K);
     $group_term_map_raw = $wpdb->get_results("SELECT object_id, term_id FROM {$rel_table} WHERE object_id IN ($group_ids_placeholder) AND object_type = 'group' AND term_id IN ($source_terms_placeholder)");
-
+    
     $group_term_map = [];
     foreach ($group_term_map_raw as $row) {
         $group_term_map[$row->object_id][] = $row->term_id;
@@ -3921,12 +3933,12 @@ function qp_get_progress_data_ajax()
         $term->children = [];
         $term->total = 0;
         $term->completed = 0;
-        // *** NEW: Add session info to each term object ***
+        $term->is_fully_attempted = false; // Add new property
         $term->session_info = $session_info_by_section[$term->term_id] ?? null;
         $terms_by_id[$term->term_id] = $term;
     }
 
-    // Populate counts by walking up the tree for each question
+    // Populate counts and check completion status
     foreach ($all_qids_in_scope as $qid) {
         $is_completed = in_array($qid, $completed_qids);
         $gid = $question_group_map[$qid]->group_id;
@@ -3946,6 +3958,13 @@ function qp_get_progress_data_ajax()
                     $current_term_id = $terms_by_id[$current_term_id]->parent;
                 }
             }
+        }
+    }
+
+    // Final completion check for each term
+    foreach ($terms_by_id as $term) {
+        if ($term->total > 0 && $term->completed >= $term->total) {
+            $term->is_fully_attempted = true;
         }
     }
 
@@ -4003,22 +4022,21 @@ function qp_get_progress_data_ajax()
 
                     echo '<div class="qp-progress-item-details">';
                     echo '<span class="qp-progress-percentage">' . esc_html($percentage) . '% (' . $term->completed . '/' . $term->total . ')</span>';
-
+                    
+                    // *** THIS IS THE FINAL FIX ***
                     if (!$has_children) {
-                        if ($term->session_info) {
-                            $session = $term->session_info;
-                            if ($session['status'] === 'paused') {
-                                $url = esc_url(add_query_arg('session_id', $session['session_id'], $session_page_url));
-                                echo '<a href="' . $url . '" class="qp-button qp-button-primary qp-progress-action-btn">Resume</a>';
-                            } elseif ($session['status'] === 'completed') {
-                                $url = esc_url(add_query_arg('session_id', $session['session_id'], $review_page_url));
-                                echo '<a href="' . $url . '" class="qp-button qp-button-secondary qp-progress-action-btn">Review</a>';
-                            }
+                        $session = $term->session_info;
+                        if ($session && $session['status'] === 'paused') {
+                            $url = esc_url(add_query_arg('session_id', $session['session_id'], $session_page_url));
+                            echo '<a href="' . $url . '" class="qp-button qp-button-primary qp-progress-action-btn">Resume</a>';
+                        } elseif ($term->is_fully_attempted && $session) {
+                            $url = esc_url(add_query_arg('session_id', $session['session_id'], $review_page_url));
+                            echo '<a href="' . $url . '" class="qp-button qp-button-secondary qp-progress-action-btn">Review</a>';
                         } else {
-                            // *** THIS IS THE FIX ***
                             echo '<button class="qp-button qp-button-primary qp-progress-start-btn qp-progress-action-btn" data-subject-id="' . esc_attr($subject_term_id) . '" data-section-id="' . esc_attr($term->term_id) . '">Start</button>';
                         }
                     }
+                    
                     echo '</div>'; 
                     
                     echo '</div>';
