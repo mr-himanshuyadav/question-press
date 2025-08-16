@@ -3,7 +3,7 @@
 /**
  * Plugin Name:       Question Press
  * Description:       A complete plugin for creating, managing, and practicing questions.
- * Version:           3.4.2
+ * Version:           3.4.3
  * Author:            Himanshu
  */
 
@@ -2012,7 +2012,7 @@ function qp_perform_restore($filename)
         return ['success' => false, 'message' => 'Invalid JSON in backup file.'];
     }
 
-    // *** THIS IS THE FIX: Part 2 - Use the Image Map during Restore ***
+    // --- Image ID Mapping ---
     $old_to_new_id_map = [];
     $images_dir = trailingslashit($temp_extract_dir) . 'images';
     if (isset($backup_data['image_map']) && is_array($backup_data['image_map']) && file_exists($images_dir)) {
@@ -2038,7 +2038,6 @@ function qp_perform_restore($filename)
         }
     }
 
-    // Update the image IDs in the backup data before inserting into the database
     if (isset($backup_data['qp_question_groups']) && !empty($old_to_new_id_map)) {
         foreach ($backup_data['qp_question_groups'] as &$group) {
             if (!empty($group['direction_image_id']) && isset($old_to_new_id_map[$group['direction_image_id']])) {
@@ -2047,8 +2046,8 @@ function qp_perform_restore($filename)
         }
         unset($group);
     }
-    // *** END FIX ***
-
+    
+    // --- Clear Existing Data ---
     $tables_to_clear = [
         'qp_question_groups', 'qp_questions', 'qp_options', 'qp_report_reasons',
         'qp_question_reports', 'qp_logs', 'qp_user_sessions', 'qp_session_pauses',
@@ -2061,9 +2060,8 @@ function qp_perform_restore($filename)
     }
     $wpdb->query('SET FOREIGN_KEY_CHECKS=1');
 
-    $stats = [ 'questions' => 0, 'options' => 0, 'sessions' => 0, 'attempts' => 0, 'reports' => 0, 'duplicates_handled' => 0 ];
-    // (The rest of the restore logic, including stats and table insertion, remains the same)
-
+    // --- Deduplicate Attempts and Calculate Stats ---
+    $duplicates_handled = 0;
     if (!empty($backup_data['qp_user_attempts'])) {
         $original_attempt_count = count($backup_data['qp_user_attempts']);
         $unique_attempts = [];
@@ -2073,17 +2071,28 @@ function qp_perform_restore($filename)
                 $unique_attempts[$key] = $attempt;
             } else {
                 $existing_attempt = $unique_attempts[$key];
-                $current_attempt = $attempt;
-                if (!empty($current_attempt['selected_option_id']) && empty($existing_attempt['selected_option_id'])) {
-                    $unique_attempts[$key] = $current_attempt;
+                if (!empty($attempt['selected_option_id']) && empty($existing_attempt['selected_option_id'])) {
+                    $unique_attempts[$key] = $attempt;
                 }
             }
         }
         $final_attempts = array_values($unique_attempts);
-        $stats['duplicates_handled'] = $original_attempt_count - count($final_attempts);
+        $duplicates_handled = $original_attempt_count - count($final_attempts);
         $backup_data['qp_user_attempts'] = $final_attempts;
     }
 
+    // *** THIS IS THE FIX: Calculate stats AFTER data processing ***
+    $stats = [
+        'questions' => isset($backup_data['qp_questions']) ? count($backup_data['qp_questions']) : 0,
+        'options' => isset($backup_data['qp_options']) ? count($backup_data['qp_options']) : 0,
+        'sessions' => isset($backup_data['qp_user_sessions']) ? count($backup_data['qp_user_sessions']) : 0,
+        'attempts' => isset($backup_data['qp_user_attempts']) ? count($backup_data['qp_user_attempts']) : 0,
+        'reports' => isset($backup_data['qp_question_reports']) ? count($backup_data['qp_question_reports']) : 0,
+        'duplicates_handled' => $duplicates_handled
+    ];
+    // *** END FIX ***
+
+    // --- Insert Restored Data into Database ---
     $restore_order = [
         'qp_taxonomies', 'qp_terms', 'qp_term_meta', 'qp_term_relationships', 'qp_question_groups', 
         'qp_questions', 'qp_options', 'qp_report_reasons', 'qp_question_reports', 'qp_logs', 
