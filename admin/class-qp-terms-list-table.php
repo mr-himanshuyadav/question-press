@@ -113,6 +113,7 @@ private function recursively_merge_terms($source_term_id, $destination_term_id) 
     $meta_table = $wpdb->prefix . 'qp_term_meta';
     $rel_table = $wpdb->prefix . 'qp_term_relationships';
     $sessions_table = $wpdb->prefix . 'qp_user_sessions';
+    $attempts_table = $wpdb->prefix . 'qp_user_attempts';
 
     if ($source_term_id === $destination_term_id) {
         return; // Cannot merge a term into itself.
@@ -143,45 +144,75 @@ private function recursively_merge_terms($source_term_id, $destination_term_id) 
     }
     // --- FIX END ---
 
-    // *** NEW: Update historical session snapshots ***
-    $sessions_to_update = $wpdb->get_results($wpdb->prepare(
-        "SELECT session_id, settings_snapshot FROM {$sessions_table} WHERE settings_snapshot LIKE %s",
-        '%"' . $wpdb->esc_like($source_term_id) . '"%'
-    ));
-
-    foreach ($sessions_to_update as $session) {
+    // *** NEW: Merge "Section Wise Practice" Sessions ***
+    $source_sessions_raw = $wpdb->get_results("SELECT session_id, user_id, settings_snapshot FROM {$sessions_table} WHERE settings_snapshot LIKE '%\"section_id\":" . $source_term_id . "%'");
+    $sessions_by_user = [];
+    foreach ($source_sessions_raw as $session) {
         $settings = json_decode($session->settings_snapshot, true);
-        $was_updated = false;
-
-        // Check and update various keys where the term ID might be stored
-        $keys_to_check = ['subjects', 'topics', 'section_id'];
-        foreach ($keys_to_check as $key) {
-            if (isset($settings[$key])) {
-                if (is_array($settings[$key])) {
-                    $index = array_search($source_term_id, $settings[$key]);
-                    if ($index !== false) {
-                        $settings[$key][$index] = $destination_term_id;
-                        $settings[$key] = array_unique($settings[$key]); // Prevent duplicates
-                        $was_updated = true;
-                    }
-                } else {
-                    if ($settings[$key] == $source_term_id) {
-                        $settings[$key] = $destination_term_id;
-                        $was_updated = true;
-                    }
-                }
-            }
-        }
-
-        if ($was_updated) {
-            $wpdb->update(
-                $sessions_table,
-                ['settings_snapshot' => wp_json_encode($settings)],
-                ['session_id' => $session->session_id]
-            );
+        if (isset($settings['practice_mode']) && $settings['practice_mode'] === 'Section Wise Practice' && $settings['section_id'] == $source_term_id) {
+            $sessions_by_user[$session->user_id]['source'] = $session;
         }
     }
-    // *** END NEW ***
+
+    $dest_sessions_raw = $wpdb->get_results("SELECT session_id, user_id, settings_snapshot FROM {$sessions_table} WHERE settings_snapshot LIKE '%\"section_id\":" . $destination_term_id . "%'");
+    foreach ($dest_sessions_raw as $session) {
+        $settings = json_decode($session->settings_snapshot, true);
+        if (isset($settings['practice_mode']) && $settings['practice_mode'] === 'Section Wise Practice' && $settings['section_id'] == $destination_term_id) {
+            $sessions_by_user[$session->user_id]['destination'] = $session;
+        }
+    }
+
+    foreach ($sessions_by_user as $user_id => $user_sessions) {
+        if (isset($user_sessions['source']) && isset($user_sessions['destination'])) {
+            // Both source and destination sessions exist, so we need to merge them.
+            $source_session = $wpdb->get_row("SELECT * FROM {$sessions_table} WHERE session_id = " . $user_sessions['source']->session_id);
+            $dest_session = $wpdb->get_row("SELECT * FROM {$sessions_table} WHERE session_id = " . $user_sessions['destination']->session_id);
+
+            // Determine which session is newer and will be the final merged session.
+            if (strtotime($dest_session->start_time) > strtotime($source_session->start_time)) {
+                $final_session = $dest_session;
+                $old_session = $source_session;
+            } else {
+                $final_session = $source_session;
+                $old_session = $dest_session;
+            }
+            
+            // Re-assign all attempts from the old session to the final session
+            $wpdb->update($attempts_table, ['session_id' => $final_session->session_id], ['session_id' => $old_session->session_id]);
+            
+            // Recalculate stats for the final session
+            $correct_count = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $attempts_table WHERE session_id = %d AND is_correct = 1", $final_session->session_id));
+            $incorrect_count = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $attempts_table WHERE session_id = %d AND is_correct = 0", $final_session->session_id));
+            $total_attempted = $correct_count + $incorrect_count;
+            
+            $final_settings = json_decode($final_session->settings_snapshot, true);
+            $final_settings['section_id'] = $destination_term_id;
+            
+            $marks_correct = $final_settings['marks_correct'] ?? 0;
+            $marks_incorrect = $final_settings['marks_incorrect'] ?? 0;
+            $final_score = ($correct_count * $marks_correct) + ($incorrect_count * $marks_incorrect);
+            
+            // Update the final session with merged data
+            $wpdb->update($sessions_table, [
+                'total_attempted' => $total_attempted,
+                'correct_count' => $correct_count,
+                'incorrect_count' => $incorrect_count,
+                'marks_obtained' => $final_score,
+                'settings_snapshot' => wp_json_encode($final_settings)
+            ], ['session_id' => $final_session->session_id]);
+            
+            // Delete the old, now-empty session
+            $wpdb->delete($sessions_table, ['session_id' => $old_session->session_id]);
+
+        } elseif (isset($user_sessions['source'])) {
+            // Only a source session exists, so just update its section_id
+            $source_session_id = $user_sessions['source']->session_id;
+            $settings = json_decode($user_sessions['source']->settings_snapshot, true);
+            $settings['section_id'] = $destination_term_id;
+            $wpdb->update($sessions_table, ['settings_snapshot' => wp_json_encode($settings)], ['session_id' => $source_session_id]);
+        }
+    }
+
 
     // 2. Get children of both source and destination to compare them.
     $source_children = $wpdb->get_results($wpdb->prepare("SELECT term_id, name FROM $term_table WHERE parent = %d", $source_term_id), OBJECT_K);

@@ -3199,19 +3199,7 @@ function qp_start_practice_session_ajax()
         'timer_enabled'    => isset($_POST['qp_timer_enabled']),
         'timer_seconds'    => isset($_POST['qp_timer_seconds']) ? absint($_POST['qp_timer_seconds']) : 60
     ];
-
-    // --- Duplicate Session Check for Section Practice ---
-    if ($practice_mode === 'Section Wise Practice') {
-        $existing_sessions = $wpdb->get_results($wpdb->prepare("SELECT session_id, settings_snapshot FROM {$sessions_table} WHERE user_id = %d AND status IN ('active', 'paused')", $user_id));
-        foreach ($existing_sessions as $session) {
-            $settings = json_decode($session->settings_snapshot, true);
-            if (isset($settings['section_id']) && (int)$settings['section_id'] === $section_id) {
-                wp_send_json_error(['code' => 'duplicate_session_exists', 'message' => 'An active or paused session for this section already exists.', 'session_id' => $session->session_id]);
-                return;
-            }
-        }
-    }
-
+    
     // --- Table Names ---
     $q_table = $wpdb->prefix . 'qp_questions';
     $g_table = $wpdb->prefix . 'qp_question_groups';
@@ -3219,6 +3207,21 @@ function qp_start_practice_session_ajax()
     $rel_table = $wpdb->prefix . 'qp_term_relationships';
     $term_table = $wpdb->prefix . 'qp_terms';
     $reports_table = $wpdb->prefix . 'qp_question_reports';
+
+    // *** NEW LOGIC: Find Existing Session BEFORE Building Query ***
+    $session_id = 0;
+    $is_updating_session = false;
+    if ($practice_mode === 'Section Wise Practice') {
+        $existing_sessions = $wpdb->get_results($wpdb->prepare("SELECT session_id, settings_snapshot FROM {$sessions_table} WHERE user_id = %d AND status IN ('completed', 'paused')", $user_id));
+        foreach ($existing_sessions as $session) {
+            $settings = json_decode($session->settings_snapshot, true);
+            if (isset($settings['section_id']) && (int)$settings['section_id'] === $section_id) {
+                $session_id = $session->session_id;
+                $is_updating_session = true; // Set our flag
+                break;
+            }
+        }
+    }
 
     // --- Build Question Pool based on NEW Group Hierarchy ---
     $joins = " FROM {$q_table} q JOIN {$g_table} g ON q.group_id = g.group_id";
@@ -3252,8 +3255,8 @@ function qp_start_practice_session_ajax()
         $where_conditions[] = "g.is_pyq = 1";
     }
 
-    // 5. Exclude previously attempted questions if specified.
-    if (!$session_settings['include_attempted']) {
+    // 5. Exclude previously attempted questions if specified, UNLESS we are updating a session.
+    if (!$session_settings['include_attempted'] && !$is_updating_session) {
         $attempted_q_ids_sql = $wpdb->prepare("SELECT DISTINCT question_id FROM $a_table WHERE user_id = %d AND status = 'answered'", $user_id);
         $where_conditions[] = "q.question_id NOT IN ($attempted_q_ids_sql)";
     }
@@ -3286,7 +3289,7 @@ function qp_start_practice_session_ajax()
     if (empty($question_ids)) {
         wp_send_json_error(['message' => 'No questions were found for the selected criteria. Please try different options.']);
     }
-
+    
     $session_page_id = isset($options['session_page']) ? absint($options['session_page']) : 0;
     if (!$session_page_id) {
         wp_send_json_error(['message' => 'The administrator has not configured a session page.']);
@@ -3297,15 +3300,26 @@ function qp_start_practice_session_ajax()
         $session_settings['question_numbers'] = wp_list_pluck($question_results, 'question_number_in_section', 'question_id');
     }
 
-    $wpdb->insert($sessions_table, [
-        'user_id'                 => $user_id,
-        'status'                  => 'active',
-        'start_time'              => current_time('mysql'),
-        'last_activity'           => current_time('mysql'),
-        'settings_snapshot'       => wp_json_encode($session_settings),
-        'question_ids_snapshot'   => wp_json_encode($question_ids)
-    ]);
-    $session_id = $wpdb->insert_id;
+    if ($session_id > 0) {
+        // An existing session was found, so we update it
+        $wpdb->update($sessions_table, [
+            'status'                  => 'active',
+            'last_activity'           => current_time('mysql'),
+            'settings_snapshot'       => wp_json_encode($session_settings),
+            'question_ids_snapshot'   => wp_json_encode($question_ids)
+        ], ['session_id' => $session_id]);
+    } else {
+        // No existing session found, create a new one
+        $wpdb->insert($sessions_table, [
+            'user_id'                 => $user_id,
+            'status'                  => 'active',
+            'start_time'              => current_time('mysql'),
+            'last_activity'           => current_time('mysql'),
+            'settings_snapshot'       => wp_json_encode($session_settings),
+            'question_ids_snapshot'   => wp_json_encode($question_ids)
+        ]);
+        $session_id = $wpdb->insert_id;
+    }
 
     $redirect_url = add_query_arg('session_id', $session_id, get_permalink($session_page_id));
     wp_send_json_success(['redirect_url' => $redirect_url]);
