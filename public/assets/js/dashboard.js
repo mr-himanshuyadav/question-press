@@ -89,6 +89,40 @@ jQuery(document).ready(function($) {
             });
     });
 
+    // --- NEW: Handler for starting a section practice from the Progress tab ---
+    wrapper.on('click', '.qp-progress-start-btn', function(e) {
+        e.preventDefault();
+        var button = $(this);
+        var sectionId = button.data('section-id');
+
+        // This AJAX call now sends only the essential data to create a default
+        // section-wise practice session, matching your required snapshot.
+        $.ajax({
+            url: qp_ajax_object.ajax_url,
+            type: 'POST',
+            data: {
+                action: 'start_practice_session',
+                nonce: qp_ajax_object.nonce,
+                practice_mode: 'Section Wise Practice',
+                qp_section: sectionId
+            },
+            beforeSend: function() {
+                button.text('Starting...').prop('disabled', true);
+            },
+            success: function(response) {
+                if (response.success && response.data.redirect_url) {
+                    window.location.href = response.data.redirect_url;
+                } else {
+                    Swal.fire('Error!', response.data.message || 'Could not start the session.', 'error');
+                    button.text('Start').prop('disabled', false);
+                }
+            },
+            error: function() {
+                Swal.fire('Error!', 'A server error occurred. Please try again.', 'error');
+                button.text('Start').prop('disabled', false);
+            }
+        });
+    });
 
     // --- NEW: Tab Switching Logic with URL Hash ---
     function switchTab(tab_id) {

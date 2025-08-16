@@ -2901,6 +2901,39 @@ ul.qp-review-list li {
     justify-content: space-between;
     align-items: center;
     font-weight: 500;
+    width: 100%;
+}
+.qp-progress-item-name {
+    display: flex;
+    align-items: center;
+    gap: 8px; /* Space between arrow and text */
+}
+
+.qp-progress-item-details {
+    display: flex;
+    align-items: center;
+    gap: 10px; /* Space between percentage and button */
+    flex-shrink: 0; /* Prevent this container from shrinking */
+}
+.qp-progress-action-btn {
+    display: inline-flex;      /* Use flexbox for consistent alignment */
+    align-items: center;        /* Vertically center the text */
+    justify-content: center;    /* Horizontally center the text */
+    box-sizing: border-box;     /* Include padding and border in the total width */
+    width: 90px;                /* Set a fixed width for all buttons */
+    padding: 6px 10px;          /* Adjust padding for a better look */
+    font-size: 13px;
+    text-decoration: none;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+.qp-progress-start-btn {
+    background-color: #2e7d32; /* A distinct green */
+    border-color: #2e7d32;
+}
+.qp-progress-start-btn:hover {
+    background-color: #1b5e20; /* A darker green for hover */
+    border-color: #1b5e20;
 }
 /* Subject Level (Largest) */
 .qp-progress-item.subject-level {

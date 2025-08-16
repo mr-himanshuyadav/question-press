@@ -3,7 +3,7 @@
 /**
  * Plugin Name:       Question Press
  * Description:       A complete plugin for creating, managing, and practicing questions.
- * Version:           3.4.1
+ * Version:           3.4.2
  * Author:            Himanshu
  */
 
@@ -3752,6 +3752,7 @@ function qp_get_progress_data_ajax()
     $rel_table = $wpdb->prefix . 'qp_term_relationships';
     $attempts_table = $wpdb->prefix . 'qp_user_attempts';
     $questions_table = $wpdb->prefix . 'qp_questions';
+    $sessions_table = $wpdb->prefix . 'qp_user_sessions'; // Added sessions table
 
     // Step 1: Get all term IDs in both the selected subject and source hierarchies
     $all_subject_term_ids = get_all_descendant_ids($subject_term_id, $wpdb, $term_table);
@@ -3792,6 +3793,28 @@ function qp_get_progress_data_ajax()
         $user_id
     ));
 
+    // *** NEW: Step 4b: Get all section practice sessions for this user ***
+    $section_sessions = $wpdb->get_results($wpdb->prepare(
+        "SELECT session_id, status, settings_snapshot FROM {$sessions_table} WHERE user_id = %d AND status IN ('paused', 'completed')",
+        $user_id
+    ));
+
+    $session_info_by_section = [];
+    foreach ($section_sessions as $session) {
+        $settings = json_decode($session->settings_snapshot, true);
+        if (isset($settings['practice_mode']) && $settings['practice_mode'] === 'Section Wise Practice' && isset($settings['section_id'])) {
+            $section_id = $settings['section_id'];
+            // Store the most recent session's data for each section
+            if (!isset($session_info_by_section[$section_id])) {
+                $session_info_by_section[$section_id] = [
+                    'session_id' => $session->session_id,
+                    'status' => $session->status
+                ];
+            }
+        }
+    }
+
+
     // Step 5: Prepare data to build the hierarchical tree
     $all_terms_data = $wpdb->get_results("SELECT term_id, name, parent FROM $term_table WHERE term_id IN ($source_terms_placeholder)");
     $question_group_map = $wpdb->get_results("SELECT question_id, group_id FROM {$questions_table} WHERE question_id IN ($qids_placeholder)", OBJECT_K);
@@ -3807,6 +3830,8 @@ function qp_get_progress_data_ajax()
         $term->children = [];
         $term->total = 0;
         $term->completed = 0;
+        // *** NEW: Add session info to each term object ***
+        $term->session_info = $session_info_by_section[$term->term_id] ?? null;
         $terms_by_id[$term->term_id] = $term;
     }
 
@@ -3843,6 +3868,11 @@ function qp_get_progress_data_ajax()
             $terms_by_id[$term->parent]->children[] = $term;
         }
     }
+    
+    $options = get_option('qp_settings');
+    $review_page_url = isset($options['review_page']) ? get_permalink($options['review_page']) : '';
+    $session_page_url = isset($options['session_page']) ? get_permalink($options['session_page']) : '';
+
 
     ob_start();
     $subject_name = $wpdb->get_var($wpdb->prepare("SELECT name FROM {$term_table} WHERE term_id = %d", $subject_term_id));
@@ -3860,7 +3890,7 @@ function qp_get_progress_data_ajax()
         </div>
         <div class="qp-source-children-container" style="padding-left: 20px;">
             <?php
-            function qp_render_progress_tree_recursive($terms)
+            function qp_render_progress_tree_recursive($terms, $review_page_url, $session_page_url, $subject_term_id)
             {
                 usort($terms, fn($a, $b) => strcmp($a->name, $b->name));
 
@@ -3872,21 +3902,46 @@ function qp_get_progress_data_ajax()
                     echo '<div class="qp-progress-item ' . $level_class . '" data-topic-id="' . esc_attr($term->term_id) . '">';
                     echo '<div class="qp-progress-bar-bg" style="width: ' . esc_attr($percentage) . '%;"></div>';
                     echo '<div class="qp-progress-label">';
+                    
+                    echo '<span class="qp-progress-item-name">';
                     if ($has_children) {
                         echo '<span class="dashicons dashicons-arrow-right-alt2"></span>';
                     }
-                    echo esc_html($term->name) . ' <span class="qp-progress-percentage">' . esc_html($percentage) . '% (' . $term->completed . '/' . $term->total . ')</span></div>';
+                    echo esc_html($term->name);
+                    echo '</span>';
+
+                    echo '<div class="qp-progress-item-details">';
+                    echo '<span class="qp-progress-percentage">' . esc_html($percentage) . '% (' . $term->completed . '/' . $term->total . ')</span>';
+
+                    if (!$has_children) {
+                        if ($term->session_info) {
+                            $session = $term->session_info;
+                            if ($session['status'] === 'paused') {
+                                $url = esc_url(add_query_arg('session_id', $session['session_id'], $session_page_url));
+                                echo '<a href="' . $url . '" class="qp-button qp-button-primary qp-progress-action-btn">Resume</a>';
+                            } elseif ($session['status'] === 'completed') {
+                                $url = esc_url(add_query_arg('session_id', $session['session_id'], $review_page_url));
+                                echo '<a href="' . $url . '" class="qp-button qp-button-secondary qp-progress-action-btn">Review</a>';
+                            }
+                        } else {
+                            // *** THIS IS THE FIX ***
+                            echo '<button class="qp-button qp-button-primary qp-progress-start-btn qp-progress-action-btn" data-subject-id="' . esc_attr($subject_term_id) . '" data-section-id="' . esc_attr($term->term_id) . '">Start</button>';
+                        }
+                    }
+                    echo '</div>'; 
+                    
                     echo '</div>';
+                    echo '</div>'; 
 
                     if ($has_children) {
                         echo '<div class="qp-topic-sections-container" data-parent-topic="' . esc_attr($term->term_id) . '" style="display: none; padding-left: 20px;">';
-                        qp_render_progress_tree_recursive($term->children);
+                        qp_render_progress_tree_recursive($term->children, $review_page_url, $session_page_url, $subject_term_id);
                         echo '</div>';
                     }
                 }
             }
             if ($source_term_object && !empty($source_term_object->children)) {
-                qp_render_progress_tree_recursive($source_term_object->children);
+                qp_render_progress_tree_recursive($source_term_object->children, $review_page_url, $session_page_url, $subject_term_id);
             }
             ?>
         </div>
