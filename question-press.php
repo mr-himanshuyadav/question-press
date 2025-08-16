@@ -472,19 +472,77 @@ function qp_render_migration_tools_page()
 ?>
     <div class="wrap">
         <h1>Question Press Migration Tools</h1>
-
+        
         <div class="card" style="max-width: 600px; margin-top: 20px;">
-            <h2 class="title">V5 Report System Migration</h2>
-            <p>This script will migrate your old report reasons into the new taxonomy system and update existing reports. This should only be run once.</p>
+            <h2 class="title">Fix Section Practice Session Data</h2>
+            <p>This script will correct the section IDs in the historical data of your "Section Wise Practice" sessions. This is necessary if you have recently merged or deleted sections.</p>
             <p><strong>Warning:</strong> Create a full backup of your database before proceeding.</p>
             <?php
-            $v5_nonce = wp_create_nonce('qp_v5_report_migration_nonce');
-            $v5_migration_url = admin_url('admin.php?page=qp-tools&tab=migration&action=qp_v5_report_migration&_wpnonce=' . $v5_nonce);
+            $nonce = wp_create_nonce('qp_fix_section_sessions_nonce');
+            $migration_url = admin_url('admin.php?page=qp-tools&tab=migration&action=qp_fix_section_sessions&_wpnonce=' . $nonce);
             ?>
-            <a href="<?php echo esc_url($v5_migration_url); ?>" class="button button-primary">Run Report System Migration</a>
+            <a href="<?php echo esc_url($migration_url); ?>" class="button button-primary">Run Section Fix</a>
         </div>
     </div>
 <?php
+}
+
+/**
+ * Handles the one-time migration to fix incorrect section IDs in session snapshots.
+ */
+function qp_handle_fix_section_sessions_migration() {
+    if (!isset($_GET['action']) || $_GET['action'] !== 'qp_fix_section_sessions' || !current_user_can('manage_options')) {
+        return;
+    }
+    check_admin_referer('qp_fix_section_sessions_nonce');
+
+    global $wpdb;
+    $sessions_table = $wpdb->prefix . 'qp_user_sessions';
+    $questions_table = $wpdb->prefix . 'qp_questions';
+    $rel_table = $wpdb->prefix . 'qp_term_relationships';
+    $term_table = $wpdb->prefix . 'qp_terms';
+    $tax_table = $wpdb->prefix . 'qp_taxonomies';
+
+    $sessions_to_check = $wpdb->get_results("SELECT session_id, settings_snapshot, question_ids_snapshot FROM {$sessions_table}");
+    
+    $updated_count = 0;
+    $source_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'source'");
+
+    foreach ($sessions_to_check as $session) {
+        $settings = json_decode($session->settings_snapshot, true);
+        
+        if (isset($settings['practice_mode']) && $settings['practice_mode'] === 'Section Wise Practice') {
+            $question_ids = json_decode($session->question_ids_snapshot, true);
+            if (empty($question_ids)) continue;
+
+            $first_question_id = absint($question_ids[0]);
+            $group_id = $wpdb->get_var($wpdb->prepare("SELECT group_id FROM {$questions_table} WHERE question_id = %d", $first_question_id));
+            
+            if (!$group_id) continue;
+
+            $correct_section_id = $wpdb->get_var($wpdb->prepare(
+                "SELECT term_id FROM {$rel_table} WHERE object_id = %d AND object_type = 'group' AND term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id = %d AND parent != 0)",
+                $group_id, $source_tax_id
+            ));
+
+            if ($correct_section_id && (!isset($settings['section_id']) || $settings['section_id'] != $correct_section_id)) {
+                $settings['section_id'] = (int)$correct_section_id;
+                $wpdb->update(
+                    $sessions_table,
+                    ['settings_snapshot' => wp_json_encode($settings)],
+                    ['session_id' => $session->session_id]
+                );
+                $updated_count++;
+            }
+        }
+    }
+
+    $message = "Session data check complete. {$updated_count} session records were updated.";
+    set_transient('qp_admin_message', $message, 30);
+    set_transient('qp_admin_message_type', 'success', 30);
+
+    wp_safe_redirect(admin_url('admin.php?page=qp-tools&tab=migration'));
+    exit;
 }
 
 function qp_render_merge_terms_page()
@@ -900,84 +958,6 @@ function qp_get_term_lineage_names($term_id, $wpdb, $term_table)
 }
 
 /**
- * Migrates old report reasons to the taxonomy term system.
- * This should be run once after updating the plugin.
- */
-function qp_run_v5_report_migration()
-{
-    // Check for the trigger, user permissions, and nonce
-    if (!isset($_GET['action']) || $_GET['action'] !== 'qp_v5_report_migration' || !current_user_can('manage_options')) {
-        return;
-    }
-    check_admin_referer('qp_v5_report_migration_nonce');
-
-    global $wpdb;
-    $messages = [];
-    $wpdb->query("START TRANSACTION;");
-
-    try {
-        $old_reasons_table = $wpdb->prefix . 'qp_report_reasons';
-        $reports_table = $wpdb->prefix . 'qp_question_reports';
-        $tax_table = $wpdb->prefix . 'qp_taxonomies';
-        $term_table = $wpdb->prefix . 'qp_terms';
-
-        // 1. Get the taxonomy ID for 'report_reason'
-        $reason_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'report_reason'");
-        if (!$reason_tax_id) {
-            throw new Exception("'report_reason' taxonomy not found. Cannot migrate.");
-        }
-
-        // 2. Get all reasons from the old table and create a mapping to new term IDs
-        $old_reasons = $wpdb->get_results("SELECT * FROM {$old_reasons_table}");
-        $id_map = [];
-        $migrated_reasons_count = 0;
-
-        foreach ($old_reasons as $reason) {
-            $new_term_id = qp_get_or_create_term($reason->reason_text, $reason_tax_id);
-            if ($new_term_id) {
-                $id_map[$reason->reason_id] = $new_term_id;
-                $migrated_reasons_count++;
-            }
-        }
-        $messages[] = "Migrated {$migrated_reasons_count} report reasons to the taxonomy system.";
-
-        // 3. Update the reports table to use the new term IDs and rename the column
-        $updated_reports_count = 0;
-        // Check if the old column exists before proceeding
-        $old_column_exists = $wpdb->get_results($wpdb->prepare("SHOW COLUMNS FROM {$reports_table} LIKE %s", 'reason_id'));
-
-        if (!empty($old_column_exists)) {
-            foreach ($id_map as $old_id => $new_id) {
-                $updated = $wpdb->update(
-                    $reports_table,
-                    ['reason_term_ids' => $new_id], // Correctly update the new TEXT column
-                    ['reason_id' => $old_id]      // Find the row using the old INT column
-                );
-                if ($updated !== false) {
-                    $updated_reports_count += $updated;
-                }
-            }
-            $messages[] = "Updated {$updated_reports_count} report entries with new term IDs.";
-        } else {
-            $messages[] = "Migration for report entries seems to have been completed already. No column to rename.";
-        }
-
-        $wpdb->query("COMMIT;");
-        // Use a transient for the success message
-        set_transient('qp_admin_message', '<strong>Report System Migration Complete:</strong><br> - ' . implode('<br> - ', $messages), 30);
-        set_transient('qp_admin_message_type', 'success', 30);
-    } catch (Exception $e) {
-        $wpdb->query("ROLLBACK;");
-        // Use a transient for the error message
-        set_transient('qp_admin_message', 'An error occurred during migration: ' . $e->getMessage(), 30);
-        set_transient('qp_admin_message_type', 'error', 30);
-    }
-
-    wp_safe_redirect(admin_url('admin.php?page=qp-tools&tab=migration'));
-    exit;
-}
-
-/**
  * Helper function to migrate term relationships from questions to their parent groups for a specific taxonomy.
  *
  * @param string $taxonomy_name The name of the taxonomy to process (e.g., 'subject' for topics, 'source' for sources/sections).
@@ -1067,7 +1047,7 @@ function qp_migrate_taxonomy_relationships($taxonomy_name, $log_prefix)
 // FORM & ACTION HANDLERS
 function qp_handle_form_submissions()
 {
-    qp_run_v5_report_migration();
+    qp_handle_fix_section_sessions_migration();
     if (isset($_GET['page']) && $_GET['page'] === 'qp-organization') {
         QP_Sources_Page::handle_forms();
         QP_Subjects_Page::handle_forms();

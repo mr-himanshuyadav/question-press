@@ -112,6 +112,7 @@ private function recursively_merge_terms($source_term_id, $destination_term_id) 
     $term_table = $wpdb->prefix . 'qp_terms';
     $meta_table = $wpdb->prefix . 'qp_term_meta';
     $rel_table = $wpdb->prefix . 'qp_term_relationships';
+    $sessions_table = $wpdb->prefix . 'qp_user_sessions';
 
     if ($source_term_id === $destination_term_id) {
         return; // Cannot merge a term into itself.
@@ -142,6 +143,45 @@ private function recursively_merge_terms($source_term_id, $destination_term_id) 
     }
     // --- FIX END ---
 
+    // *** NEW: Update historical session snapshots ***
+    $sessions_to_update = $wpdb->get_results($wpdb->prepare(
+        "SELECT session_id, settings_snapshot FROM {$sessions_table} WHERE settings_snapshot LIKE %s",
+        '%"' . $wpdb->esc_like($source_term_id) . '"%'
+    ));
+
+    foreach ($sessions_to_update as $session) {
+        $settings = json_decode($session->settings_snapshot, true);
+        $was_updated = false;
+
+        // Check and update various keys where the term ID might be stored
+        $keys_to_check = ['subjects', 'topics', 'section_id'];
+        foreach ($keys_to_check as $key) {
+            if (isset($settings[$key])) {
+                if (is_array($settings[$key])) {
+                    $index = array_search($source_term_id, $settings[$key]);
+                    if ($index !== false) {
+                        $settings[$key][$index] = $destination_term_id;
+                        $settings[$key] = array_unique($settings[$key]); // Prevent duplicates
+                        $was_updated = true;
+                    }
+                } else {
+                    if ($settings[$key] == $source_term_id) {
+                        $settings[$key] = $destination_term_id;
+                        $was_updated = true;
+                    }
+                }
+            }
+        }
+
+        if ($was_updated) {
+            $wpdb->update(
+                $sessions_table,
+                ['settings_snapshot' => wp_json_encode($settings)],
+                ['session_id' => $session->session_id]
+            );
+        }
+    }
+    // *** END NEW ***
 
     // 2. Get children of both source and destination to compare them.
     $source_children = $wpdb->get_results($wpdb->prepare("SELECT term_id, name FROM $term_table WHERE parent = %d", $source_term_id), OBJECT_K);
