@@ -1281,7 +1281,7 @@ $session_data['reported_info'] = $reported_info;
 
             <div class="qp-review-questions-list">
                 <?php foreach ($attempts as $index => $attempt) :
-                    $is_skipped = !$attempt->selected_answer;
+                    $is_skipped = empty($attempt->selected_option_id);
                     $answer_display_text = 'Skipped';
                     $answer_class = $is_skipped ? 'skipped' : ($attempt->is_correct ? 'correct' : 'incorrect');
 
@@ -1330,9 +1330,7 @@ $session_data['reported_info'] = $reported_info;
 
                         <div class="qp-review-answer-row">
                             <span class="qp-review-label">Your Answer:</span>
-                            <span class="qp-review-answer <?php echo $answer_class; ?>">
-                                <?php echo esc_html($attempt->selected_answer ?: $answer_display_text); ?>
-                            </span>
+                            <span class="qp-review-answer <?php echo $answer_class; ?>"><?php if ($is_skipped) {echo esc_html($answer_display_text);} else {echo esc_html ($attempt->selected_answer);}?></span>
                         </div>
 
                         <?php if ($is_skipped || !$attempt->is_correct) : ?>
