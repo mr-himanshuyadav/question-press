@@ -1188,6 +1188,7 @@ $session_data['reported_info'] = $reported_info;
         ob_start();
         echo '<div id="qp-practice-app-wrapper">';
         $is_mock_test = isset($settings['practice_mode']) && $settings['practice_mode'] === 'mock_test';
+        $is_section_wise_practice = isset($settings['practice_mode']) && $settings['practice_mode'] === 'Section Wise Practice'; // *** THIS IS THE FIX ***
         $reported_qids_for_user = $wpdb->get_col($wpdb->prepare(
             "SELECT DISTINCT question_id FROM {$wpdb->prefix}qp_question_reports WHERE user_id = %d AND status = 'open'",
             $user_id
@@ -1265,7 +1266,7 @@ $session_data['reported_info'] = $reported_info;
                             <div class="value"><?php echo (int)$session->not_viewed_count; ?></div>
                             <div class="label">Not Viewed</div>
                         </div>
-                    <?php else : ?>
+                    <?php elseif (!$is_section_wise_practice) : // *** THIS IS THE FIX *** ?>
                         <div class="stat">
                             <div class="value"><?php echo (int)$session->skipped_count; ?></div>
                             <div class="label">Skipped</div>
@@ -1330,7 +1331,15 @@ $session_data['reported_info'] = $reported_info;
 
                         <div class="qp-review-answer-row">
                             <span class="qp-review-label">Your Answer:</span>
-                            <span class="qp-review-answer <?php echo $answer_class; ?>"><?php if ($is_skipped) {echo esc_html($answer_display_text);} else {echo esc_html ($attempt->selected_answer);}?></span>
+                            <span class="qp-review-answer <?php echo $answer_class; ?>">
+                                <?php
+                                    if ($is_skipped) {
+                                        echo esc_html($answer_display_text);
+                                    } else {
+                                        echo esc_html($attempt->selected_answer);
+                                    }
+                                ?>
+                            </span>
                         </div>
 
                         <?php if ($is_skipped || !$attempt->is_correct) : ?>

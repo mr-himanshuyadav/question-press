@@ -1865,6 +1865,9 @@ body.palette-overlay-open #qp-palette-sliding {
         padding-left: 0.75rem; /* Adjust padding to not overlap the border */
         border-radius: 4px 8px 8px 4px; /* Slightly adjust radius to account for the border */
     }
+    .qp-dashboard-table td:last-child{
+        justify-content: space-between;
+    }
 }
 
 .qp-delete-session-btn {
