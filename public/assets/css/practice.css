@@ -1844,6 +1844,7 @@ body.palette-overlay-open #qp-palette-sliding {
     border-bottom: 0;
     display: flex;
     gap: 5px;
+    justify-content: center;;
 }
 
 .qp-dashboard-table td::before {
@@ -1851,6 +1852,19 @@ body.palette-overlay-open #qp-palette-sliding {
     font-weight: 600;
     text-align: left;
     color: var(--qp-dark-text);
+}
+
+.qp-dashboard-table tr.qp-session-paused {
+    background-color: #f4fbff; /* A light blue background */
+    border-left: 4px solid #2196F3; /* A solid blue left border for emphasis */
+    border-right: 4px solid #2196F3;
+}
+/* Make the highlight more prominent on mobile view */
+@media (max-width: 767px) {
+    .qp-dashboard-table tr.qp-session-paused {
+        padding-left: 0.75rem; /* Adjust padding to not overlap the border */
+        border-radius: 4px 8px 8px 4px; /* Slightly adjust radius to account for the border */
+    }
 }
 
 .qp-delete-session-btn {
@@ -2179,6 +2193,25 @@ body.palette-overlay-open #qp-palette-sliding {
 
     .qp-dashboard-table thead {
         display: table-header-group;
+        min-height: 30px;
+    }
+
+    .qp-dashboard-table thead th {
+        padding: 8px; /* Adjust this value as needed */
+    }
+
+    /* 2. Set text alignment for specific header columns */
+    .qp-dashboard-table thead th:nth-child(1), /* Date */
+    .qp-dashboard-table thead th:nth-child(2), /* Mode */
+    .qp-dashboard-table thead th:nth-child(3) { /* Subjects */
+        text-align: left;
+        padding-left: 15px;
+    }
+
+    .qp-dashboard-table thead th:nth-child(4), /* Accuracy */
+    .qp-dashboard-table thead th:nth-child(5), /* Status */
+    .qp-dashboard-table thead th:nth-child(6) { /* Actions */
+        text-align: center;
     }
 
     .qp-dashboard-table tr {
@@ -2196,6 +2229,28 @@ body.palette-overlay-open #qp-palette-sliding {
 
     .qp-dashboard-table td::before {
         display: none;
+    }
+
+    /* Setting Table Column Widths on Dashboard */
+    .qp-dashboard-table td[data-label="Date"] {
+        width: 17%;
+    }
+    .qp-dashboard-table td[data-label="Mode"] {
+        width: 15%;
+    }
+    .qp-dashboard-table td[data-label="Subjects"] {
+        width: 30%;
+    }
+    .qp-dashboard-table td[data-label="Accuracy"] {
+        width: 8%;
+        text-align: center;
+    }
+    .qp-dashboard-table td[data-label="Status"] {
+        width: 10%;
+        text-align: center;
+    }
+    .qp-dashboard-table td[data-label="Actions"] {
+        text-align: center;
     }
 }
 

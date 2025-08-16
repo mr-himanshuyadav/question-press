@@ -61,7 +61,7 @@ class QP_Dashboard
         $never_correct_count = count($never_correct_qids);
 
         ob_start();
-?>
+?>      <div id="qp-practice-app-wrapper">
         <div class="qp-container qp-dashboard-wrapper">
             <div class="qp-profile-header">
                 <div class="qp-user-info">
@@ -203,6 +203,7 @@ class QP_Dashboard
                 </div>
             </div>
         </div>
+        </div>
 <?php
         return ob_get_clean();
     }
@@ -227,7 +228,7 @@ class QP_Dashboard
 
         // --- RESTORED: Fetch Active Sessions ---
         $active_sessions = $wpdb->get_results($wpdb->prepare("SELECT * FROM $sessions_table WHERE user_id = %d AND status IN ('active', 'mock_test') ORDER BY start_time DESC", $user_id));
-        $session_history = $wpdb->get_results($wpdb->prepare("SELECT * FROM $sessions_table WHERE user_id = %d AND status IN ('completed', 'abandoned', 'paused') ORDER BY start_time DESC", $user_id));
+        $session_history = $wpdb->get_results($wpdb->prepare("SELECT * FROM $sessions_table WHERE user_id = %d AND status IN ('completed', 'abandoned', 'paused') ORDER BY CASE WHEN status = 'paused' THEN 0 ELSE 1 END, start_time DESC", $user_id));
 
         $session_ids_history = wp_list_pluck($session_history, 'session_id');
         $accuracy_stats = [];
@@ -436,8 +437,9 @@ class QP_Dashboard
                 // END: Replacement block
 
 
-
-                echo '<tr>
+                // *** THIS IS THE FIX ***
+                $row_class = $session->status === 'paused' ? 'class="qp-session-paused"' : '';
+                echo '<tr ' . $row_class . '>
                 <td data-label="Date">' . date_format(date_create($session->start_time), 'M j, Y, g:i a') . '</td>
                 <td data-label="Mode">' . esc_html($mode) . '</td>
                 <td data-label="Subjects">' . $subjects_display . '</td>
