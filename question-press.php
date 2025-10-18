@@ -631,7 +631,6 @@ function qp_render_tools_page()
         'import' => ['label' => 'Import', 'callback' => ['QP_Import_Page', 'render']],
         'export'   => ['label' => 'Export', 'callback' => ['QP_Export_Page', 'render']],
         'backup_restore'   => ['label' => 'Backup & Restore', 'callback' => ['QP_Backup_Restore_Page', 'render']],
-        'user_attempts'    => ['label' => 'User Attempts', 'callback' => 'qp_render_user_attempts_tool_page'],
     ];
     $active_tab = isset($_GET['tab']) && array_key_exists($_GET['tab'], $tabs) ? $_GET['tab'] : 'import';
 ?>
@@ -654,109 +653,6 @@ function qp_render_tools_page()
             call_user_func($tabs[$active_tab]['callback']);
             ?>
         </div>
-    </div>
-<?php
-}
-
-/**
- * Renders the User Attempts management tool page.
- */
-function qp_render_user_attempts_tool_page() {
-    // --- Form Handling Logic ---
-    $user_id_searched = null;
-    $current_attempts = 'N/A';
-    $user_info = null;
-
-    // Check if the user search form was submitted
-    // Check if the update attempts form was submitted
-if (isset($_POST['action']) && $_POST['action'] === 'qp_update_attempts' && isset($_POST['user_id_to_update'])) {
-    // Verify the nonce for the update action
-    check_admin_referer('qp_update_user_attempts_nonce');
-
-    $user_id_to_update = absint($_POST['user_id_to_update']);
-    // Make sure the new attempts value is a non-negative integer
-    $new_attempts = isset($_POST['qp_new_attempts']) ? max(0, intval($_POST['qp_new_attempts'])) : 0;
-
-    if ($user_id_to_update > 0) {
-        $user_info = get_userdata($user_id_to_update); // Get user data again to confirm existence
-        if ($user_info) {
-            // Update the user meta value
-            update_user_meta($user_id_to_update, 'qp_remaining_attempts', $new_attempts);
-            add_settings_error('qp_user_attempts_notices', 'attempts_updated', 'Attempts updated successfully for ' . esc_html($user_info->display_name) . '. New count: ' . $new_attempts, 'success');
-            // We need to re-set these variables so the form displays the *updated* info immediately
-            $user_id_searched = $user_id_to_update;
-            $current_attempts = $new_attempts;
-        } else {
-            add_settings_error('qp_user_attempts_notices', 'update_user_not_found', 'Error: Could not update attempts because User ID ' . esc_html($user_id_to_update) . ' was not found.', 'error');
-        }
-    } else {
-         add_settings_error('qp_user_attempts_notices', 'update_invalid_user_id', 'Error: Invalid User ID for update.', 'error');
-    }
-}
-    elseif (isset($_POST['action']) && $_POST['action'] === 'qp_search_user' && isset($_POST['qp_user_id_search'])) {
-        // Verify the nonce
-        check_admin_referer('qp_search_user_attempts_nonce');
-
-        $user_id_searched = absint($_POST['qp_user_id_search']);
-        if ($user_id_searched > 0) {
-            $user_info = get_userdata($user_id_searched); // Fetch user data object
-
-            if ($user_info) {
-                // User found, get their attempts meta
-                $attempts_meta = get_user_meta($user_id_searched, 'qp_remaining_attempts', true);
-                // Set current attempts (handle case where meta doesn't exist yet)
-                $current_attempts = ($attempts_meta !== '') ? (int)$attempts_meta : 0;
-                add_settings_error('qp_user_attempts_notices', 'user_found', 'User found: ' . esc_html($user_info->display_name), 'success');
-            } else {
-                // User ID entered, but no user found
-                add_settings_error('qp_user_attempts_notices', 'user_not_found', 'Error: User ID ' . esc_html($user_id_searched) . ' not found.', 'error');
-                $user_id_searched = absint($_POST['qp_user_id_search']); // Keep the searched ID for display
-            }
-        } else {
-            add_settings_error('qp_user_attempts_notices', 'invalid_user_id', 'Error: Please enter a valid User ID.', 'error');
-        }
-    }
-     // --- End Form Handling Logic ---
-
-
-    // --- Display the Form ---
-?>
-    <div class="wrap">
-        <h2>Manage User Attempts</h2>
-        <p>View and update the number of remaining question attempts for a specific user.</p>
-
-        <?php settings_errors('qp_user_attempts_notices'); // Display feedback messages ?>
-
-        <form method="post" action="admin.php?page=qp-tools&tab=user_attempts" style="margin-bottom: 2rem;">
-            <?php wp_nonce_field('qp_search_user_attempts_nonce'); ?>
-            <input type="hidden" name="action" value="qp_search_user">
-            <label for="qp_user_id_search"><strong>Enter User ID:</strong></label><br>
-            <input type="number" id="qp_user_id_search" name="qp_user_id_search" value="<?php echo esc_attr($user_id_searched); ?>" min="1" required>
-            <input type="submit" class="button button-secondary" value="Find User">
-        </form>
-
-        <?php if ($user_id_searched): // Only show update form if a user *ID* was searched for ?>
-            <hr>
-            <h3>Update Attempts for User: <?php echo esc_html($user_info ? $user_info->display_name . ' (ID: ' . $user_id_searched . ')' : 'Not Found'); ?></h3>
-            <?php if ($user_info): // Only show update fields if the user was actually found ?>
-                <form method="post" action="admin.php?page=qp-tools&tab=user_attempts">
-                    <?php wp_nonce_field('qp_update_user_attempts_nonce'); ?>
-                    <input type="hidden" name="action" value="qp_update_attempts">
-                    <input type="hidden" name="user_id_to_update" value="<?php echo esc_attr($user_id_searched); ?>">
-
-                    <p><strong>Current Remaining Attempts:</strong> <?php echo esc_html($current_attempts); ?></p>
-
-                    <label for="qp_new_attempts"><strong>Set New Attempt Count:</strong></label><br>
-                    <input type="number" id="qp_new_attempts" name="qp_new_attempts" value="<?php echo esc_attr($current_attempts !== 'N/A' ? $current_attempts : 0); ?>" min="0" required>
-                    <p class="description">Enter the total number of attempts the user should have. Use 0 to remove access.</p>
-
-                    <input type="submit" class="button button-primary" value="Update Attempts">
-                </form>
-            <?php else: ?>
-                <?php // Error message is handled by settings_errors() above ?>
-            <?php endif; ?>
-        <?php endif; ?>
-
     </div>
 <?php
 }
@@ -2887,7 +2783,6 @@ function qp_public_enqueue_scripts()
         wp_enqueue_script('sweetalert2', 'https://cdn.jsdelivr.net/npm/sweetalert2@11', [], null, true);
 
         $options = get_option('qp_settings');
-        $shop_page_url = function_exists('wc_get_page_id') ? get_permalink(wc_get_page_id('shop')) : home_url('/');
         $ajax_data = [
             'ajax_url'           => admin_url('admin-ajax.php'),
             'nonce'              => wp_create_nonce('qp_practice_nonce'),
@@ -2896,7 +2791,6 @@ function qp_public_enqueue_scripts()
             'review_page_url'    => isset($options['review_page']) ? get_permalink($options['review_page']) : home_url('/'),
             'session_page_url'   => isset($options['session_page']) ? get_permalink($options['session_page']) : home_url('/'),
             'question_order_setting'   => isset($options['question_order']) ? $options['question_order'] : 'random',
-            'shop_page_url'      => $shop_page_url,
             'can_delete_history' => $can_delete
         ];
 
@@ -4082,51 +3976,32 @@ function qp_get_question_data_ajax()
     $review_table = $wpdb->prefix . 'qp_review_later';
     $is_marked = (bool) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$review_table} WHERE user_id = %d AND question_id = %d", $user_id, $question_id));
 
-    // --- CORRECTED: Fetch detailed report info ---
+    // --- NEW: Fetch detailed report info, including the type ---
     $reports_table = $wpdb->prefix . 'qp_question_reports';
     $terms_table = $wpdb->prefix . 'qp_terms';
     $meta_table = $wpdb->prefix . 'qp_term_meta';
 
-    // Get all reason ID strings for open reports for this question by this user
-    $reason_id_strings = $wpdb->get_col($wpdb->prepare(
-        "SELECT reason_term_ids FROM {$reports_table} WHERE user_id = %d AND status = 'open' AND question_id = %d",
-        $user_id,
-        $question_id
-    ));
+    $reported_questions_raw = $wpdb->get_results($wpdb->prepare("
+        SELECT
+            MAX(CASE WHEN m.meta_value = 'report' THEN 1 ELSE 0 END) as is_critical
+        FROM {$reports_table} r
+        JOIN {$terms_table} t ON r.reason_term_id = t.term_id
+        JOIN {$meta_table} m ON t.term_id = m.term_id AND m.meta_key = 'type'
+        WHERE r.user_id = %d AND r.status = 'open' AND r.question_id = %d
+        GROUP BY r.report_id
+    ", $user_id, $question_id));
 
     $report_info = [
         'has_report' => false,
         'has_suggestion' => false,
     ];
-    $all_reason_ids = [];
-
-    // Collect all unique reason IDs from all reports for this question
-    foreach ($reason_id_strings as $id_string) {
-        $ids = array_filter(explode(',', $id_string));
-        if (!empty($ids)) {
-            $all_reason_ids = array_merge($all_reason_ids, $ids);
-        }
-    }
-    $all_reason_ids = array_unique(array_map('absint', $all_reason_ids));
-
-    // If there are any reason IDs, query their types
-    if (!empty($all_reason_ids)) {
-        $ids_placeholder = implode(',', $all_reason_ids);
-        $reason_types = $wpdb->get_col("
-            SELECT m.meta_value
-            FROM {$terms_table} t
-            JOIN {$meta_table} m ON t.term_id = m.term_id AND m.meta_key = 'type'
-            WHERE t.term_id IN ({$ids_placeholder})
-        ");
-
-        if (in_array('report', $reason_types)) {
+    foreach ($reported_questions_raw as $report) {
+        if ($report->is_critical) {
             $report_info['has_report'] = true;
-        }
-        if (in_array('suggestion', $reason_types)) {
+        } else {
             $report_info['has_suggestion'] = true;
         }
     }
-    // --- END CORRECTION ---
 
 
     // --- Send Final Response ---
@@ -4351,36 +4226,6 @@ add_action('admin_menu', 'qp_add_report_count_to_menu', 99);
 function qp_check_answer_ajax()
 {
     check_ajax_referer('qp_practice_nonce', 'nonce');
-    // --- Access Control Check ---
-    if (!is_user_logged_in()) {
-        wp_send_json_error(['message' => 'You must be logged in to answer questions.', 'code' => 'not_logged_in']);
-        return;
-    }
-    $user_id = get_current_user_id();
-    // --- Real Access Check & Decrement ---
-    $remaining_attempts = get_user_meta($user_id, 'qp_remaining_attempts', true); // Returns '' if not set
-
-    // Check if attempts are available (treat '' or < 1 as no access)
-    if ($remaining_attempts !== '' && (int)$remaining_attempts > 0) {
-        $has_access = true;
-        // Decrement attempts *before* processing the answer
-        update_user_meta($user_id, 'qp_remaining_attempts', (int)$remaining_attempts - 1);
-        error_log("QP Access Check: User #{$user_id} used an attempt. Remaining: " . ((int)$remaining_attempts - 1));
-    } else {
-        // No attempts left or meta key not set
-        $has_access = false;
-        error_log("QP Access Check: User #{$user_id} denied access. Attempts: {$remaining_attempts}");
-    }
-    // --- End Real Access Check ---
-
-    if (!$has_access) {
-        wp_send_json_error([
-            'message' => 'You have run out of attempts or your subscription has expired.',
-            'code' => 'access_denied'
-        ]);
-        return;
-    }
-    // --- End Access Control Check ---
     $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
     $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
     $option_id = isset($_POST['option_id']) ? absint($_POST['option_id']) : 0;
@@ -4440,36 +4285,6 @@ add_action('wp_ajax_check_answer', 'qp_check_answer_ajax');
 function qp_save_mock_attempt_ajax()
 {
     check_ajax_referer('qp_practice_nonce', 'nonce');
-    // --- Access Control Check ---
-    if (!is_user_logged_in()) {
-        wp_send_json_error(['message' => 'You must be logged in to answer questions.', 'code' => 'not_logged_in']);
-        return;
-    }
-    $user_id = get_current_user_id();
-    // --- Real Access Check & Decrement ---
-    $remaining_attempts = get_user_meta($user_id, 'qp_remaining_attempts', true); // Returns '' if not set
-
-    // Check if attempts are available (treat '' or < 1 as no access)
-    if ($remaining_attempts !== '' && (int)$remaining_attempts > 0) {
-        $has_access = true;
-        // Decrement attempts *before* processing the answer
-        update_user_meta($user_id, 'qp_remaining_attempts', (int)$remaining_attempts - 1);
-        error_log("QP Access Check: User #{$user_id} used an attempt. Remaining: " . ((int)$remaining_attempts - 1));
-    } else {
-        // No attempts left or meta key not set
-        $has_access = false;
-        error_log("QP Access Check: User #{$user_id} denied access. Attempts: {$remaining_attempts}");
-    }
-    // --- End Real Access Check ---
-
-    if (!$has_access) {
-        wp_send_json_error([
-            'message' => 'You have run out of attempts or your subscription has expired.',
-            'code' => 'access_denied'
-        ]);
-        return;
-    }
-    // --- End Access Control Check ---
     $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
     $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
     $option_id = isset($_POST['option_id']) ? absint($_POST['option_id']) : 0;
@@ -5434,82 +5249,3 @@ function qp_handle_log_settings_forms()
     }
 }
 add_action('admin_init', 'qp_handle_log_settings_forms');
-
-
-
-
-// New Development - Subscriptions
-
-/**
- * Grant Question Press attempts when a specific WooCommerce order is completed.
- *
- * @param int $order_id The ID of the completed order.
- */
-function qp_grant_access_on_order_complete($order_id) {
-    $order = wc_get_order($order_id);
-
-    // Check if the order is valid and paid
-    if (!$order || !$order->is_paid()) {
-        error_log("QP Access Hook: Order #{$order_id} not valid/paid.");
-        return;
-    }
-
-    $user_id = $order->get_user_id();
-    if (!$user_id) {
-        error_log("QP Access Hook: No user ID for order #{$order_id}.");
-        return; // Only grant access to registered users
-    }
-
-    // --- USE YOUR PRODUCT ID HERE ---
-    $attempt_pack_product_id = 136; // Product ID for the attempt pack
-    $attempts_to_add = 100; // <<< How many attempts this product gives
-    // ---------------------------------
-
-    $granted_access = false;
-
-    foreach ($order->get_items() as $item_id => $item) {
-        $product_id = $item->get_product_id();
-
-        if ($product_id === $attempt_pack_product_id) {
-            $current_attempts = (int) get_user_meta($user_id, 'qp_remaining_attempts', true);
-            // Ensure we don't accidentally subtract if meta doesn't exist yet
-            if ($current_attempts < 0) { $current_attempts = 0; }
-            $new_total_attempts = $current_attempts + $attempts_to_add;
-
-            update_user_meta($user_id, 'qp_remaining_attempts', $new_total_attempts);
-            error_log("QP Access Hook: Added {$attempts_to_add} attempts via Order #{$order_id} to User #{$user_id}. New total: {$new_total_attempts}");
-            $granted_access = true;
-            break; // Stop checking items once the pack is found
-        }
-    }
-
-     if (!$granted_access) {
-        error_log("QP Access Hook: Order #{$order_id} did not contain QP Product ID {$attempt_pack_product_id}.");
-     }
-}
-// Hook into WooCommerce order completion
-add_action('woocommerce_order_status_completed', 'qp_grant_access_on_order_complete', 10, 1);
-
-/**
- * AJAX handler to check remaining attempts for the current user.
- */
-function qp_check_remaining_attempts_ajax() {
-    // No nonce check needed here as it's just reading data,
-    // but we MUST check if the user is logged in.
-    if (!is_user_logged_in()) {
-        wp_send_json_error(['has_access' => false, 'message' => 'Not logged in.']);
-        return;
-    }
-
-    $user_id = get_current_user_id();
-    $has_access = false;
-    $remaining_attempts = get_user_meta($user_id, 'qp_remaining_attempts', true);
-
-    if ($remaining_attempts !== '' && (int)$remaining_attempts > 0) {
-        $has_access = true;
-    }
-
-    wp_send_json_success(['has_access' => $has_access, 'remaining' => (int)$remaining_attempts]);
-}
-// Hook the AJAX action for logged-in users
-add_action('wp_ajax_qp_check_remaining_attempts', 'qp_check_remaining_attempts_ajax');
