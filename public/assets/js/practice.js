@@ -1338,7 +1338,24 @@ jQuery(document).ready(function ($) {
     });
   });
 
-  // Session state variables
+  // --- NEW: SWIPE GESTURE HANDLING ---
+  // Check if we are on the actual practice screen
+  if (wrapper.find(".qp-practice-wrapper").length > 0) {
+    var practiceArea = document.querySelector(".qp-practice-wrapper");
+    var hammer = new Hammer(practiceArea);
+
+    hammer.on("swipeleft", function (ev) {
+      $("#qp-next-btn:not(:disabled)").trigger("click");
+    });
+
+    hammer.on("swiperight", function (ev) {
+      $("#qp-prev-btn:not(:disabled)").trigger("click");
+    });
+  }
+
+  // Session Initialization
+  if (typeof qp_session_data !== "undefined") {
+    // Session state variables
   var sessionID = 0;
   var sessionQuestionIDs = [];
   var currentQuestionIndex = 0;
@@ -1357,24 +1374,6 @@ jQuery(document).ready(function ($) {
   var practiceInProgress = false;
   var questionCache = {};
   var remainingTime = 0;
-
-  // --- NEW: SWIPE GESTURE HANDLING ---
-  // Check if we are on the actual practice screen
-  if (wrapper.find(".qp-practice-wrapper").length > 0) {
-    var practiceArea = document.querySelector(".qp-practice-wrapper");
-    var hammer = new Hammer(practiceArea);
-
-    hammer.on("swipeleft", function (ev) {
-      $("#qp-next-btn:not(:disabled)").trigger("click");
-    });
-
-    hammer.on("swiperight", function (ev) {
-      $("#qp-prev-btn:not(:disabled)").trigger("click");
-    });
-  }
-
-  // Session Initialization
-  if (typeof qp_session_data !== "undefined") {
     // Hide preloader and show content after a delay
     setTimeout(function () {
       $("#qp-preloader").fadeOut(300, function () {

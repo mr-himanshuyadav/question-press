@@ -1680,6 +1680,14 @@ body.palette-overlay-open #qp-palette-sliding {
     display: none; /* Initially hidden */
 }
 
+@media (max-width: 767px) {
+    #qp-rough-work-btn,
+    #qp-rough-work-overlay,
+    #qp-rough-work-popup {
+        display: none !important;
+    }
+}
+
 .qp-popup-header {
     display: flex;
     align-items: center;
