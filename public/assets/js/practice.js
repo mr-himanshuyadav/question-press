@@ -2239,7 +2239,9 @@ jQuery(document).ready(function ($) {
   }
 
   // Handles clicking an answer option to select it
-  wrapper.on("click", ".qp-options-area .option", function () {
+  wrapper.off('click', '.qp-options-area .option').on('click', '.qp-options-area .option', function () {
+    console.log('Option clicked! isMockTest:', isMockTest);
+
     var selectedOption = $(this);
     var optionsArea = selectedOption.closest(".qp-options-area");
     if (optionsArea.hasClass("disabled")) return;
@@ -2263,6 +2265,7 @@ jQuery(document).ready(function ($) {
         ? "answered_and_marked_for_review"
         : "answered";
 
+      console.log('DEBUG: Mock test logic - preparing qp_save_mock_attempt AJAX');
       // First, save the answer. The backend sets the main status to 'answered'.
       $.ajax({
         url: qp_ajax_object.ajax_url,
@@ -2279,7 +2282,9 @@ jQuery(document).ready(function ($) {
           updateMockStatus(questionID, newStatus);
         },
       });
-    } else if (isAutoCheckEnabled) {
+      return;
+    } else if (!isMockTest && isAutoCheckEnabled) {
+      console.log('DEBUG: Auto-check logic - calling checkSelectedAnswer()');
       // For other modes with auto-check on
       checkSelectedAnswer();
     } else {

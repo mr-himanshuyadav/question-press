@@ -3976,32 +3976,51 @@ function qp_get_question_data_ajax()
     $review_table = $wpdb->prefix . 'qp_review_later';
     $is_marked = (bool) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$review_table} WHERE user_id = %d AND question_id = %d", $user_id, $question_id));
 
-    // --- NEW: Fetch detailed report info, including the type ---
+    // --- CORRECTED: Fetch detailed report info ---
     $reports_table = $wpdb->prefix . 'qp_question_reports';
     $terms_table = $wpdb->prefix . 'qp_terms';
     $meta_table = $wpdb->prefix . 'qp_term_meta';
 
-    $reported_questions_raw = $wpdb->get_results($wpdb->prepare("
-        SELECT
-            MAX(CASE WHEN m.meta_value = 'report' THEN 1 ELSE 0 END) as is_critical
-        FROM {$reports_table} r
-        JOIN {$terms_table} t ON r.reason_term_id = t.term_id
-        JOIN {$meta_table} m ON t.term_id = m.term_id AND m.meta_key = 'type'
-        WHERE r.user_id = %d AND r.status = 'open' AND r.question_id = %d
-        GROUP BY r.report_id
-    ", $user_id, $question_id));
+    // Get all reason ID strings for open reports for this question by this user
+    $reason_id_strings = $wpdb->get_col($wpdb->prepare(
+        "SELECT reason_term_ids FROM {$reports_table} WHERE user_id = %d AND status = 'open' AND question_id = %d",
+        $user_id,
+        $question_id
+    ));
 
     $report_info = [
         'has_report' => false,
         'has_suggestion' => false,
     ];
-    foreach ($reported_questions_raw as $report) {
-        if ($report->is_critical) {
+    $all_reason_ids = [];
+
+    // Collect all unique reason IDs from all reports for this question
+    foreach ($reason_id_strings as $id_string) {
+        $ids = array_filter(explode(',', $id_string));
+        if (!empty($ids)) {
+            $all_reason_ids = array_merge($all_reason_ids, $ids);
+        }
+    }
+    $all_reason_ids = array_unique(array_map('absint', $all_reason_ids));
+
+    // If there are any reason IDs, query their types
+    if (!empty($all_reason_ids)) {
+        $ids_placeholder = implode(',', $all_reason_ids);
+        $reason_types = $wpdb->get_col("
+            SELECT m.meta_value
+            FROM {$terms_table} t
+            JOIN {$meta_table} m ON t.term_id = m.term_id AND m.meta_key = 'type'
+            WHERE t.term_id IN ({$ids_placeholder})
+        ");
+
+        if (in_array('report', $reason_types)) {
             $report_info['has_report'] = true;
-        } else {
+        }
+        if (in_array('suggestion', $reason_types)) {
             $report_info['has_suggestion'] = true;
         }
     }
+    // --- END CORRECTION ---
 
 
     // --- Send Final Response ---
@@ -4232,8 +4251,21 @@ function qp_check_answer_ajax()
         return;
     }
     $user_id = get_current_user_id();
-    $has_access = true; // TEMPORARY - Assume access for now
-    // TODO: Add real check logic later
+    // --- Real Access Check & Decrement ---
+    $remaining_attempts = get_user_meta($user_id, 'qp_remaining_attempts', true); // Returns '' if not set
+
+    // Check if attempts are available (treat '' or < 1 as no access)
+    if ($remaining_attempts !== '' && (int)$remaining_attempts > 0) {
+        $has_access = true;
+        // Decrement attempts *before* processing the answer
+        update_user_meta($user_id, 'qp_remaining_attempts', (int)$remaining_attempts - 1);
+        error_log("QP Access Check: User #{$user_id} used an attempt. Remaining: " . ((int)$remaining_attempts - 1));
+    } else {
+        // No attempts left or meta key not set
+        $has_access = false;
+        error_log("QP Access Check: User #{$user_id} denied access. Attempts: {$remaining_attempts}");
+    }
+    // --- End Real Access Check ---
 
     if (!$has_access) {
         wp_send_json_error([
@@ -4308,8 +4340,21 @@ function qp_save_mock_attempt_ajax()
         return;
     }
     $user_id = get_current_user_id();
-    $has_access = true; // TEMPORARY - Assume access for now
-    // TODO: Add real check logic later
+    // --- Real Access Check & Decrement ---
+    $remaining_attempts = get_user_meta($user_id, 'qp_remaining_attempts', true); // Returns '' if not set
+
+    // Check if attempts are available (treat '' or < 1 as no access)
+    if ($remaining_attempts !== '' && (int)$remaining_attempts > 0) {
+        $has_access = true;
+        // Decrement attempts *before* processing the answer
+        update_user_meta($user_id, 'qp_remaining_attempts', (int)$remaining_attempts - 1);
+        error_log("QP Access Check: User #{$user_id} used an attempt. Remaining: " . ((int)$remaining_attempts - 1));
+    } else {
+        // No attempts left or meta key not set
+        $has_access = false;
+        error_log("QP Access Check: User #{$user_id} denied access. Attempts: {$remaining_attempts}");
+    }
+    // --- End Real Access Check ---
 
     if (!$has_access) {
         wp_send_json_error([
@@ -5283,3 +5328,58 @@ function qp_handle_log_settings_forms()
     }
 }
 add_action('admin_init', 'qp_handle_log_settings_forms');
+
+
+
+
+// New Development - Subscriptions
+
+/**
+ * Grant Question Press attempts when a specific WooCommerce order is completed.
+ *
+ * @param int $order_id The ID of the completed order.
+ */
+function qp_grant_access_on_order_complete($order_id) {
+    $order = wc_get_order($order_id);
+
+    // Check if the order is valid and paid
+    if (!$order || !$order->is_paid()) {
+        error_log("QP Access Hook: Order #{$order_id} not valid/paid.");
+        return;
+    }
+
+    $user_id = $order->get_user_id();
+    if (!$user_id) {
+        error_log("QP Access Hook: No user ID for order #{$order_id}.");
+        return; // Only grant access to registered users
+    }
+
+    // --- USE YOUR PRODUCT ID HERE ---
+    $attempt_pack_product_id = 136; // Product ID for the attempt pack
+    $attempts_to_add = 100; // <<< How many attempts this product gives
+    // ---------------------------------
+
+    $granted_access = false;
+
+    foreach ($order->get_items() as $item_id => $item) {
+        $product_id = $item->get_product_id();
+
+        if ($product_id === $attempt_pack_product_id) {
+            $current_attempts = (int) get_user_meta($user_id, 'qp_remaining_attempts', true);
+            // Ensure we don't accidentally subtract if meta doesn't exist yet
+            if ($current_attempts < 0) { $current_attempts = 0; }
+            $new_total_attempts = $current_attempts + $attempts_to_add;
+
+            update_user_meta($user_id, 'qp_remaining_attempts', $new_total_attempts);
+            error_log("QP Access Hook: Added {$attempts_to_add} attempts via Order #{$order_id} to User #{$user_id}. New total: {$new_total_attempts}");
+            $granted_access = true;
+            break; // Stop checking items once the pack is found
+        }
+    }
+
+     if (!$granted_access) {
+        error_log("QP Access Hook: Order #{$order_id} did not contain QP Product ID {$attempt_pack_product_id}.");
+     }
+}
+// Hook into WooCommerce order completion
+add_action('woocommerce_order_status_completed', 'qp_grant_access_on_order_complete', 10, 1);
