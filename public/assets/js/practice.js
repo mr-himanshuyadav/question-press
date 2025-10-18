@@ -2282,19 +2282,59 @@ jQuery(document).ready(function ($) {
             // --- Keep existing success logic ---
             updateMockStatus(questionID, newStatus); // Assuming this is called on success
             // --- End existing success logic ---
-        } else if (response.data && response.data.code === 'access_denied') { // <--- ADD THIS ELSE IF
-            // --- Handle Access Denied ---
-            Swal.fire({
-                title: 'Out of Attempts',
-                html: response.data.message || 'You have run out of attempts. Please purchase more to continue.', // Use html for potential link
-                icon: 'error',
-                confirmButtonText: 'OK'
+        } else if (response.data && response.data.code === 'access_denied') {
+    // --- Handle Access Denied ---
+    practiceInProgress = false; // Allow redirects from buttons
+    var alertConfig = {
+        title: 'Out of Attempts!',
+        html: response.data.message || 'Please purchase more attempts to continue.',
+        icon: 'error',
+        allowOutsideClick: false, // Prevent closing by clicking outside
+        allowEscapeKey: false,   // Prevent closing with Esc key
+        showConfirmButton: false, // Hide default OK button
+        showCancelButton: false   // Hide default Cancel button
+    };
+
+    // Check if it's NOT section wise practice to add custom buttons
+    if (sessionSettings && sessionSettings.practice_mode !== 'Section Wise Practice') {
+        alertConfig.html += `
+            <div style="margin-top: 20px; display: flex; justify-content: center; gap: 10px;">
+                <button id="swal-end-practice" class="qp-button qp-button-secondary">End Practice</button>
+                <button id="swal-purchase-more" class="qp-button qp-button-primary">Purchase More</button>
+            </div>`;
+
+        alertConfig.didOpen = () => {
+            const endBtn = Swal.getPopup().querySelector('#swal-end-practice');
+            const purchaseBtn = Swal.getPopup().querySelector('#swal-purchase-more');
+
+            endBtn.addEventListener('click', () => {
+                endSession(false); // Call your existing endSession function
+                Swal.close();
             });
-            // Optionally disable further interaction
-            $('.qp-options-area').addClass('disabled').find('input[type="radio"]').prop('disabled', true);
-            $('#qp-clear-response-btn, #qp-mock-mark-review-cb').prop('disabled', true);
-            $('#qp-next-btn').prop('disabled', true); // Prevent moving forward
-        } else {
+
+            purchaseBtn.addEventListener('click', () => {
+                if (qp_ajax_object.shop_page_url) {
+                    window.location.href = qp_ajax_object.shop_page_url;
+                }
+                Swal.close();
+            });
+        };
+    } else {
+        // For Section Wise Practice, just show an OK button to go to dashboard
+        alertConfig.confirmButtonText = 'Go to Dashboard';
+        alertConfig.showConfirmButton = true; // Show the button for this case
+        alertConfig.preConfirm = () => {
+             window.location.href = qp_ajax_object.dashboard_page_url;
+        };
+    }
+
+
+    Swal.fire(alertConfig);
+
+    // Disable interactions for the current question (keep this)
+    $('.qp-options-area').addClass('disabled').find('input[type="radio"]').prop('disabled', true);
+    $('#qp-check-answer-btn, #qp-skip-btn, #qp-next-btn').prop('disabled', true);
+} else {
             // --- Keep existing generic error handling here ---
             Swal.fire('Error!', response.data.message || 'Could not save answer.', 'error');
         }
@@ -2399,19 +2439,59 @@ jQuery(document).ready(function ($) {
                 $('#qp-question-id').text(questionIdText);
             }
             // --- End existing success logic ---
-        } else if (response.data && response.data.code === 'access_denied') { // <--- ADD THIS ELSE IF
-            // --- Handle Access Denied ---
-            Swal.fire({
-                title: 'Out of Attempts',
-                html: response.data.message || 'You have run out of attempts. Please purchase more to continue.', // Use html for potential link
-                icon: 'error',
-                confirmButtonText: 'OK'
+        } else if (response.data && response.data.code === 'access_denied') {
+    // --- Handle Access Denied ---
+    practiceInProgress = false; // Allow redirects from buttons
+    var alertConfig = {
+        title: 'Out of Attempts!',
+        html: response.data.message || 'Please purchase more attempts to continue.',
+        icon: 'error',
+        allowOutsideClick: false, // Prevent closing by clicking outside
+        allowEscapeKey: false,   // Prevent closing with Esc key
+        showConfirmButton: false, // Hide default OK button
+        showCancelButton: false   // Hide default Cancel button
+    };
+
+    // Check if it's NOT section wise practice to add custom buttons
+    if (sessionSettings && sessionSettings.practice_mode !== 'Section Wise Practice') {
+        alertConfig.html += `
+            <div style="margin-top: 20px; display: flex; justify-content: center; gap: 10px;">
+                <button id="swal-end-practice" class="qp-button qp-button-secondary">End Practice</button>
+                <button id="swal-purchase-more" class="qp-button qp-button-primary">Purchase More</button>
+            </div>`;
+
+        alertConfig.didOpen = () => {
+            const endBtn = Swal.getPopup().querySelector('#swal-end-practice');
+            const purchaseBtn = Swal.getPopup().querySelector('#swal-purchase-more');
+
+            endBtn.addEventListener('click', () => {
+                endSession(false); // Call your existing endSession function
+                Swal.close();
             });
-            // Optionally disable further interaction on the current question
-            $('.qp-options-area').addClass('disabled').find('input[type="radio"]').prop('disabled', true);
-            $('#qp-check-answer-btn, #qp-skip-btn').prop('disabled', true);
-            $('#qp-next-btn').prop('disabled', true); // Prevent moving forward too
-        } else {
+
+            purchaseBtn.addEventListener('click', () => {
+                if (qp_ajax_object.shop_page_url) {
+                    window.location.href = qp_ajax_object.shop_page_url;
+                }
+                Swal.close();
+            });
+        };
+    } else {
+        // For Section Wise Practice, just show an OK button to go to dashboard
+        alertConfig.confirmButtonText = 'Go to Dashboard';
+        alertConfig.showConfirmButton = true; // Show the button for this case
+        alertConfig.preConfirm = () => {
+             window.location.href = qp_ajax_object.dashboard_page_url;
+        };
+    }
+
+
+    Swal.fire(alertConfig);
+
+    // Disable interactions for the current question (keep this)
+    $('.qp-options-area').addClass('disabled').find('input[type="radio"]').prop('disabled', true);
+    $('#qp-check-answer-btn, #qp-skip-btn, #qp-next-btn').prop('disabled', true);
+} else {
             // --- Keep existing generic error handling here ---
             Swal.fire('Error!', response.data.message || 'Could not check answer.', 'error');
         }
