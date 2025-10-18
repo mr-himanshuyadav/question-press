@@ -615,72 +615,175 @@ jQuery(document).ready(function ($) {
           );
         }
       }
-      var $sectionGroup = $form.find("#qp-section-group");
-      if ($sectionGroup.length > 0) {
-        var $sectionSelect = $form.find("#qp_section");
-        var $selectedTopicCheckboxes = $form
-          .find('[id^="qp_topic_list_container"] input:checked[value!="all"]')
-          .not(".qp-subject-topic-toggle");
-
-        // Only show the section dropdown if exactly ONE topic is selected
-        if ($selectedTopicCheckboxes.length === 1) {
-          var singleTopicCheckbox = $selectedTopicCheckboxes.first();
-          var topicId = singleTopicCheckbox.val();
-          var subjectIdForTopic = singleTopicCheckbox.data("subject-id"); // We need the parent subject
-
-          if (topicId && subjectIdForTopic) {
-            $.ajax({
-              url: qp_ajax_object.ajax_url,
-              type: "POST",
-              data: {
-                action: "get_sections_for_subject",
-                nonce: qp_ajax_object.nonce,
-                subject_id: subjectIdForTopic, // Pass subject for context if needed
-                topic_id: topicId,
-              },
-              beforeSend: function () {
-                $sectionSelect
-                  .prop("disabled", true)
-                  .html("<option>Loading sections...</option>");
-                $sectionGroup.slideDown();
-              },
-              success: function (response) {
-                if (response.success && response.data.sections.length > 0) {
-                  $sectionSelect
-                    .prop("disabled", false)
-                    .empty()
-                    .append('<option value="all">All Sections</option>');
-                  $.each(response.data.sections, function (index, sec) {
-                    var count =
-                      sec.unattempted_count && sec.unattempted_count > 0
-                        ? " (" + sec.unattempted_count + ")"
-                        : "";
-                    var optionText =
-                      sec.source_name + " / " + sec.section_name + count;
-                    $sectionSelect.append(
-                      $("<option></option>")
-                        .val(sec.section_id)
-                        .text(optionText)
-                    );
-                  });
-                } else {
-                  $sectionGroup.slideUp(); // Hide if no sections are found
-                }
-              },
-              error: function () {
-                $sectionGroup.slideUp();
-              },
-            });
-          } else {
-            $sectionGroup.slideUp();
-          }
-        } else {
-          // If zero or more than one topic is selected, hide the section dropdown
-          $sectionGroup.slideUp();
-        }
-      }
     }
   );
+
+  // --- NEW: CASCADING DROPDOWNS FOR SECTION WISE PRACTICE ---
+  var cascadingContainer = $("#qp-section-cascading-dropdowns-container");
+
+  // When the Subject changes
+  wrapper.on("change", "#qp_section_subject", function () {
+    var subjectId = $(this).val();
+    cascadingContainer.empty(); // Clear all child dropdowns
+    $('#qp-start-section-wise-form input[type="submit"]').prop("disabled", true);
+
+
+    if (!subjectId) return;
+
+    $.ajax({
+      url: qp_ajax_object.ajax_url,
+      type: "POST",
+      data: {
+        action: "get_sources_for_subject",
+        nonce: qp_ajax_object.nonce,
+        subject_id: subjectId,
+      },
+      beforeSend: function () {
+        cascadingContainer.html("<p>Loading Sources...</p>");
+      },
+      success: function (response) {
+        if (response.success && response.data.sources.length > 0) {
+          var html =
+            '<div class="qp-form-group" style="display: none;">' + // Add display:none
+            '<label>Select Source:</label>' +
+            '<select name="cascading_term" class="qp-cascading-select" data-level="1">' +
+            '<option value="">— Select a Source —</option>';
+          $.each(response.data.sources, function (i, source) {
+            html += `<option value="${source.term_id}">${source.name}</option>`;
+          });
+          html += "</select></div>";
+          cascadingContainer.html(html);
+          cascadingContainer.find('.qp-form-group').slideDown(); // Use slideDown()
+        } else {
+          cascadingContainer.html("<p>No sources found for this subject.</p>");
+        }
+      },
+    });
+  });
+
+  // When any Source or Section dropdown changes
+  wrapper.on("change", ".qp-cascading-select", function () {
+    var parentId = $(this).val();
+    var level = parseInt($(this).data("level"), 10);
+    var submitButton = $('#qp-start-section-wise-form input[type="submit"]');
+
+    // Remove all subsequent dropdowns
+    cascadingContainer.find(".qp-form-group").slice(level).remove();
+    submitButton.prop("disabled", true);
+
+
+    if (!parentId) return;
+
+    $.ajax({
+      url: qp_ajax_object.ajax_url,
+      type: "POST",
+      data: {
+        action: "get_child_terms",
+        nonce: qp_ajax_object.nonce,
+        parent_id: parentId,
+      },
+      success: function (response) {
+        if (response.success && response.data.children.length > 0) {
+          var html =
+            '<div class="qp-form-group" style="display: none;">' + // Add display:none
+            `<label>Select Section (Level ${level + 1}):</label>` +
+            `<select name="cascading_term" class="qp-cascading-select" data-level="${
+              level + 1
+            }">` +
+             '<option value="">— Select a Section —</option>';
+          $.each(response.data.children, function (i, child) {
+            html += `<option value="${child.term_id}">${child.name}</option>`;
+          });
+          html += "</select></div>";
+          var $newDropdown = $(html);
+          cascadingContainer.append($newDropdown);
+          $newDropdown.slideDown(); // Use slideDown()
+        } else {
+          // This is the last possible child, enable the submit button
+          submitButton.prop("disabled", false);
+        }
+      },
+    });
+  });
+  
+  // --- NEW: Section Wise Practice Form Submission ---
+  wrapper.on("submit", "#qp-start-section-wise-form", function(e) {
+      e.preventDefault();
+      var form = $(this);
+      var submitButton = form.find('input[type="submit"]');
+      var originalButtonText = submitButton.val();
+      
+      // Find the value of the LAST dropdown in the container
+      var lastSelectedTerm = form.find('.qp-cascading-select').last().val();
+
+      if (!lastSelectedTerm) {
+          Swal.fire('Selection Incomplete', 'Please select an item from the final dropdown.', 'warning');
+          return;
+      }
+
+      // Add the final selected section to the form data
+      var formData = form.serialize() + '&qp_section=' + lastSelectedTerm;
+
+      $.ajax({
+          url: qp_ajax_object.ajax_url,
+          type: "POST",
+          data: formData + '&action=start_practice_session&nonce=' + qp_ajax_object.nonce,
+          beforeSend: function () {
+              submitButton.val("Setting up session...").prop("disabled", true);
+          },
+          success: function (response) {
+              if (response.success && response.data.redirect_url) {
+                  window.location.href = response.data.redirect_url;
+              } else {
+                if (response.data && response.data.code === 'duplicate_session_exists') {
+                    var resumeUrl = new URL(qp_ajax_object.session_page_url);
+                    resumeUrl.searchParams.set('session_id', response.data.session_id);
+
+                    Swal.fire({
+                        title: "Session Already Active",
+                        text: "You already have an active or paused session for this section. Would you like to resume it?",
+                        icon: "info",
+                        showCancelButton: true,
+                        confirmButtonText: "Resume Session",
+                        cancelButtonText: "Cancel",
+                        confirmButtonColor: '#2e7d32',
+                    }).then((result) => {
+                        if (result.isConfirmed) {
+                            window.location.href = resumeUrl.href;
+                        }
+                    });
+
+                } else {
+                    Swal.fire('Could Not Start Session', response.data.message || 'An unknown error occurred.', 'warning');
+                }
+                submitButton.val(originalButtonText).prop("disabled", false);
+              }
+          },
+          error: function() {
+              Swal.fire('Error!', 'A server error occurred.', 'error');
+              submitButton.val(originalButtonText).prop("disabled", false);
+          }
+      });
+  });
+
+  // --- NEW: Generic handlers for scoring/timer toggles in the new form ---
+  wrapper.on('change', '#qp-start-section-wise-form .qp-scoring-enabled-cb', function () {
+      var marksWrapper = $(this).closest('form').find('.qp-marks-group');
+      if ($(this).is(':checked')) {
+          marksWrapper.slideDown();
+      } else {
+          marksWrapper.slideUp();
+      }
+  });
+
+  wrapper.on('change', '#qp-start-section-wise-form .qp-timer-enabled-cb', function () {
+      var timerWrapper = $(this).closest('form').find('.qp-timer-input-wrapper');
+      if ($(this).is(':checked')) {
+          timerWrapper.slideDown();
+      } else {
+          timerWrapper.slideUp();
+      }
+  });
 
   // Hide dropdowns when clicking outside
   $(document).on("click", function (e) {
@@ -691,39 +794,72 @@ jQuery(document).ready(function ($) {
 
   // --- MULTI-STEP FORM LOGIC ---
   if ($(".qp-multi-step-container").length) {
-    var multiStepContainer = $(".qp-multi-step-container");
-
-    // Enable the next button as soon as a mode is selected
-    wrapper.on("change", 'input[name="practice_mode_selection"]', function () {
-      if ($(this).is(":checked")) {
-        $("#qp-step1-next-btn").prop("disabled", false);
-      }
-    });
-
-    // Function to navigate between steps
-    function navigateToStep(targetStepNumber) {
+    // Function to navigate between steps with animation
+    // Function to navigate between steps with animation
+    function navigateToStep(targetStepNumber, direction) {
       var currentStep = $(".qp-form-step.active");
       var targetStep = $("#qp-step-" + targetStepNumber);
 
-      if (targetStep.length) {
-        currentStep.removeClass("active").css("left", "-100%");
-        targetStep.addClass("active").css("left", "0");
+      if (targetStep.length && currentStep.attr("id") !== targetStep.attr("id")) {
+        // --- FIX: Handle URL Hash Correctly ---
+        if (targetStepNumber === 1) {
+            // Clear the hash without reloading the page when returning to the first step
+            history.pushState("", document.title, window.location.pathname + window.location.search);
+        } else {
+            window.location.hash = 'step-' + targetStepNumber;
+        }
+
+        // --- FIX: Animate correctly based on direction ---
+        if (direction === "next") {
+          currentStep.removeClass("active").addClass("is-exiting-left");
+          // Reset target step's position before making it active
+          targetStep.removeClass("is-exiting-left is-exiting-right").addClass("active");
+        } else { // direction === 'back'
+          currentStep.removeClass("active").addClass("is-exiting-right");
+          // Reset target step's position before making it active
+          targetStep.removeClass("is-exiting-left is-exiting-right").addClass("active");
+        }
       }
     }
 
-    // Handlers for Mode Selection (Step 1 -> 2 or 3)
+    // Enable the "Next" button when a mode is selected
+    wrapper.on("change", 'input[name="practice_mode_selection"]', function () {
+      $("#qp-step1-next-btn").prop("disabled", !$(this).is(":checked"));
+    });
+
+    // Handler for "Next" button click
     wrapper.on("click", "#qp-step1-next-btn", function () {
       var targetStep = $('input[name="practice_mode_selection"]:checked').val();
       if (targetStep) {
-        navigateToStep(targetStep);
+        navigateToStep(targetStep, "next");
       }
     });
 
-    // Handler for Back buttons
+    // Handler for "Back" button clicks
     wrapper.on("click", ".qp-back-btn", function () {
       var targetStep = $(this).data("target-step");
-      navigateToStep(targetStep);
+      navigateToStep(targetStep, "back");
     });
+
+    // Check URL hash on page load to restore state
+    if (window.location.hash) {
+      var hash = window.location.hash;
+      var targetStepNumber = hash.split('-')[1];
+      var targetStep = $("#qp-step-" + targetStepNumber);
+      
+      if (targetStep.length && targetStepNumber !== '1') {
+        // Deactivate default step 1 and position it off-screen
+        $("#qp-step-1").removeClass("active is-exiting-right").addClass("is-exiting-left");
+        // Activate the target step
+        targetStep.addClass("active");
+      } else {
+        // If hash is #step-1 or invalid, default to a clean state
+        $("#qp-step-1").addClass('active');
+      }
+    } else {
+        // If no hash, ensure step 1 is active by default
+        $("#qp-step-1").addClass('active');
+    }
 
     // --- Revision Mode UI Logic ---
     wrapper.on("click", ".qp-revision-type-btn", function () {
@@ -1202,7 +1338,24 @@ jQuery(document).ready(function ($) {
     });
   });
 
-  // Session state variables
+  // --- NEW: SWIPE GESTURE HANDLING ---
+  // Check if we are on the actual practice screen
+  if (wrapper.find(".qp-practice-wrapper").length > 0) {
+    var practiceArea = document.querySelector(".qp-practice-wrapper");
+    var hammer = new Hammer(practiceArea);
+
+    hammer.on("swipeleft", function (ev) {
+      $("#qp-next-btn:not(:disabled)").trigger("click");
+    });
+
+    hammer.on("swiperight", function (ev) {
+      $("#qp-prev-btn:not(:disabled)").trigger("click");
+    });
+  }
+
+  // Session Initialization
+  if (typeof qp_session_data !== "undefined") {
+    // Session state variables
   var sessionID = 0;
   var sessionQuestionIDs = [];
   var currentQuestionIndex = 0;
@@ -1221,24 +1374,6 @@ jQuery(document).ready(function ($) {
   var practiceInProgress = false;
   var questionCache = {};
   var remainingTime = 0;
-
-  // --- NEW: SWIPE GESTURE HANDLING ---
-  // Check if we are on the actual practice screen
-  if (wrapper.find(".qp-practice-wrapper").length > 0) {
-    var practiceArea = document.querySelector(".qp-practice-wrapper");
-    var hammer = new Hammer(practiceArea);
-
-    hammer.on("swipeleft", function (ev) {
-      $("#qp-next-btn:not(:disabled)").trigger("click");
-    });
-
-    hammer.on("swiperight", function (ev) {
-      $("#qp-prev-btn:not(:disabled)").trigger("click");
-    });
-  }
-
-  // Session Initialization
-  if (typeof qp_session_data !== "undefined") {
     // Hide preloader and show content after a delay
     setTimeout(function () {
       $("#qp-preloader").fadeOut(300, function () {

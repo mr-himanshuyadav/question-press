@@ -112,40 +112,126 @@ private function recursively_merge_terms($source_term_id, $destination_term_id) 
     $term_table = $wpdb->prefix . 'qp_terms';
     $meta_table = $wpdb->prefix . 'qp_term_meta';
     $rel_table = $wpdb->prefix . 'qp_term_relationships';
+    $sessions_table = $wpdb->prefix . 'qp_user_sessions';
+    $attempts_table = $wpdb->prefix . 'qp_user_attempts';
+    $pauses_table = $wpdb->prefix . 'qp_session_pauses'; // Added pauses table
 
     if ($source_term_id === $destination_term_id) {
         return; // Cannot merge a term into itself.
     }
 
-    // 1. Reassign questions from the source term to the destination term.
-    $wpdb->query($wpdb->prepare(
-        "UPDATE $rel_table SET term_id = %d WHERE term_id = %d AND object_type = 'question'",
-        $destination_term_id,
+    // --- FIX START: Correctly reassign GROUP relationships ---
+    $group_ids = $wpdb->get_col($wpdb->prepare(
+        "SELECT object_id FROM $rel_table WHERE term_id = %d AND object_type = 'group'",
         $source_term_id
     ));
 
-    // 2. Get children of both source and destination to compare them.
+    if (!empty($group_ids)) {
+        $wpdb->query($wpdb->prepare(
+            "DELETE FROM $rel_table WHERE term_id = %d AND object_type = 'group'",
+            $source_term_id
+        ));
+        foreach ($group_ids as $group_id) {
+            $wpdb->query($wpdb->prepare(
+                "INSERT IGNORE INTO $rel_table (object_id, term_id, object_type) VALUES (%d, %d, 'group')",
+                $group_id,
+                $destination_term_id
+            ));
+        }
+    }
+    // --- FIX END ---
+
+    // *** NEW & IMPROVED: Merge "Section Wise Practice" Sessions with Time Calculation ***
+    $source_sessions_raw = $wpdb->get_results("SELECT session_id, user_id, settings_snapshot FROM {$sessions_table} WHERE settings_snapshot LIKE '%\"section_id\":" . $source_term_id . "%'");
+    $sessions_by_user = [];
+    foreach ($source_sessions_raw as $session) {
+        $settings = json_decode($session->settings_snapshot, true);
+        if (isset($settings['practice_mode']) && $settings['practice_mode'] === 'Section Wise Practice' && $settings['section_id'] == $source_term_id) {
+            $sessions_by_user[$session->user_id]['source'] = $session;
+        }
+    }
+
+    $dest_sessions_raw = $wpdb->get_results("SELECT session_id, user_id, settings_snapshot FROM {$sessions_table} WHERE settings_snapshot LIKE '%\"section_id\":" . $destination_term_id . "%'");
+    foreach ($dest_sessions_raw as $session) {
+        $settings = json_decode($session->settings_snapshot, true);
+        if (isset($settings['practice_mode']) && $settings['practice_mode'] === 'Section Wise Practice' && $settings['section_id'] == $destination_term_id) {
+            $sessions_by_user[$session->user_id]['destination'] = $session;
+        }
+    }
+
+    foreach ($sessions_by_user as $user_id => $user_sessions) {
+        if (isset($user_sessions['source']) && isset($user_sessions['destination'])) {
+            $source_session = $wpdb->get_row("SELECT * FROM {$sessions_table} WHERE session_id = " . $user_sessions['source']->session_id);
+            $dest_session = $wpdb->get_row("SELECT * FROM {$sessions_table} WHERE session_id = " . $user_sessions['destination']->session_id);
+
+            if (strtotime($dest_session->start_time) > strtotime($source_session->start_time)) {
+                $final_session = $dest_session;
+                $old_session = $source_session;
+            } else {
+                $final_session = $source_session;
+                $old_session = $dest_session;
+            }
+            
+            // Re-assign attempts and pauses
+            $wpdb->update($attempts_table, ['session_id' => $final_session->session_id], ['session_id' => $old_session->session_id]);
+            $wpdb->update($pauses_table, ['session_id' => $final_session->session_id], ['session_id' => $old_session->session_id]);
+            
+            // Sum the active seconds
+            $total_active_seconds = (int)$final_session->total_active_seconds + (int)$old_session->total_active_seconds;
+
+            // Recalculate stats for the final session
+            $correct_count = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $attempts_table WHERE session_id = %d AND is_correct = 1", $final_session->session_id));
+            $incorrect_count = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $attempts_table WHERE session_id = %d AND is_correct = 0", $final_session->session_id));
+            $total_attempted = $correct_count + $incorrect_count;
+            
+            $final_settings = json_decode($final_session->settings_snapshot, true);
+            $final_settings['section_id'] = $destination_term_id;
+            
+            $marks_correct = $final_settings['marks_correct'] ?? 0;
+            $marks_incorrect = $final_settings['marks_incorrect'] ?? 0;
+            $final_score = ($correct_count * $marks_correct) + ($incorrect_count * $marks_incorrect);
+            
+            // Update the final session with all merged data
+            $wpdb->update($sessions_table, [
+                'total_active_seconds' => $total_active_seconds,
+                'total_attempted' => $total_attempted,
+                'correct_count' => $correct_count,
+                'incorrect_count' => $incorrect_count,
+                'marks_obtained' => $final_score,
+                'settings_snapshot' => wp_json_encode($final_settings)
+            ], ['session_id' => $final_session->session_id]);
+            
+            // Delete the old, now-empty session
+            $wpdb->delete($sessions_table, ['session_id' => $old_session->session_id]);
+
+        } elseif (isset($user_sessions['source'])) {
+            $source_session_id = $user_sessions['source']->session_id;
+            $settings = json_decode($user_sessions['source']->settings_snapshot, true);
+            $settings['section_id'] = $destination_term_id;
+            $wpdb->update($sessions_table, ['settings_snapshot' => wp_json_encode($settings)], ['session_id' => $source_session_id]);
+        }
+    }
+
+    // Get children of both source and destination to compare them.
     $source_children = $wpdb->get_results($wpdb->prepare("SELECT term_id, name FROM $term_table WHERE parent = %d", $source_term_id), OBJECT_K);
     $dest_children = $wpdb->get_results($wpdb->prepare("SELECT term_id, name FROM $term_table WHERE parent = %d", $destination_term_id), OBJECT_K);
 
     $dest_children_names = array_map('strtolower', wp_list_pluck($dest_children, 'name'));
 
-    // 3. Loop through source children to decide their fate.
+    // Loop through source children to decide their fate.
     foreach ($source_children as $source_child) {
         $found_in_dest = array_search(strtolower($source_child->name), $dest_children_names);
 
         if ($found_in_dest !== false) {
-            // A child with the same name exists in the destination. Merge them recursively.
             $dest_child_key = array_keys($dest_children)[$found_in_dest];
             $dest_child_id = $dest_children[$dest_child_key]->term_id;
             $this->recursively_merge_terms($source_child->term_id, $dest_child_id);
         } else {
-            // This child is unique. Re-parent it to the destination term.
             $wpdb->update($term_table, ['parent' => $destination_term_id], ['term_id' => $source_child->term_id]);
         }
     }
 
-    // 4. After re-assigning questions and handling children, delete the now-empty source term.
+    // After re-assigning questions and handling children, delete the now-empty source term.
     $wpdb->delete($term_table, ['term_id' => $source_term_id]);
     $wpdb->delete($meta_table, ['term_id' => $source_term_id]);
 }

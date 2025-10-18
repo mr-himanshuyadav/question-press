@@ -98,6 +98,20 @@ body {
     border-color: #b02a2a;
 }
 
+/* --- NEW: Style for disabled buttons --- */
+.qp-button:disabled,
+.qp-button[disabled] {
+    background-color: #dcdcde;
+    border-color: #dcdcde;
+    color: #a7aaad;
+    cursor: not-allowed;
+    box-shadow: none;
+    transform: none;
+}
+#qp_section_subject, .qp-cascading-select{
+    outline: none;
+}
+
 /* --- Settings Form --- */
 .qp-practice-form-wrapper h2 {
     text-align: center;
@@ -1666,6 +1680,14 @@ body.palette-overlay-open #qp-palette-sliding {
     display: none; /* Initially hidden */
 }
 
+@media (max-width: 767px) {
+    #qp-rough-work-btn,
+    #qp-rough-work-overlay,
+    #qp-rough-work-popup {
+        display: none !important;
+    }
+}
+
 .qp-popup-header {
     display: flex;
     align-items: center;
@@ -1830,6 +1852,7 @@ body.palette-overlay-open #qp-palette-sliding {
     border-bottom: 0;
     display: flex;
     gap: 5px;
+    justify-content: center;;
 }
 
 .qp-dashboard-table td::before {
@@ -1837,6 +1860,22 @@ body.palette-overlay-open #qp-palette-sliding {
     font-weight: 600;
     text-align: left;
     color: var(--qp-dark-text);
+}
+
+.qp-dashboard-table tr.qp-session-paused {
+    background-color: #f4fbff; /* A light blue background */
+    border-left: 4px solid #2196F3; /* A solid blue left border for emphasis */
+    border-right: 4px solid #2196F3;
+}
+/* Make the highlight more prominent on mobile view */
+@media (max-width: 767px) {
+    .qp-dashboard-table tr.qp-session-paused {
+        padding-left: 0.75rem; /* Adjust padding to not overlap the border */
+        border-radius: 4px 8px 8px 4px; /* Slightly adjust radius to account for the border */
+    }
+    .qp-dashboard-table td:last-child{
+        justify-content: space-between;
+    }
 }
 
 .qp-delete-session-btn {
@@ -2165,6 +2204,25 @@ body.palette-overlay-open #qp-palette-sliding {
 
     .qp-dashboard-table thead {
         display: table-header-group;
+        min-height: 30px;
+    }
+
+    .qp-dashboard-table thead th {
+        padding: 8px; /* Adjust this value as needed */
+    }
+
+    /* 2. Set text alignment for specific header columns */
+    .qp-dashboard-table thead th:nth-child(1), /* Date */
+    .qp-dashboard-table thead th:nth-child(2), /* Mode */
+    .qp-dashboard-table thead th:nth-child(3) { /* Subjects */
+        text-align: left;
+        padding-left: 15px;
+    }
+
+    .qp-dashboard-table thead th:nth-child(4), /* Accuracy */
+    .qp-dashboard-table thead th:nth-child(5), /* Status */
+    .qp-dashboard-table thead th:nth-child(6) { /* Actions */
+        text-align: center;
     }
 
     .qp-dashboard-table tr {
@@ -2182,6 +2240,28 @@ body.palette-overlay-open #qp-palette-sliding {
 
     .qp-dashboard-table td::before {
         display: none;
+    }
+
+    /* Setting Table Column Widths on Dashboard */
+    .qp-dashboard-table td[data-label="Date"] {
+        width: 17%;
+    }
+    .qp-dashboard-table td[data-label="Mode"] {
+        width: 15%;
+    }
+    .qp-dashboard-table td[data-label="Subjects"] {
+        width: 30%;
+    }
+    .qp-dashboard-table td[data-label="Accuracy"] {
+        width: 8%;
+        text-align: center;
+    }
+    .qp-dashboard-table td[data-label="Status"] {
+        width: 10%;
+        text-align: center;
+    }
+    .qp-dashboard-table td[data-label="Actions"] {
+        text-align: center;
     }
 }
 
@@ -2829,6 +2909,39 @@ ul.qp-review-list li {
     justify-content: space-between;
     align-items: center;
     font-weight: 500;
+    width: 100%;
+}
+.qp-progress-item-name {
+    display: flex;
+    align-items: center;
+    gap: 8px; /* Space between arrow and text */
+}
+
+.qp-progress-item-details {
+    display: flex;
+    align-items: center;
+    gap: 10px; /* Space between percentage and button */
+    flex-shrink: 0; /* Prevent this container from shrinking */
+}
+.qp-progress-action-btn {
+    display: inline-flex;      /* Use flexbox for consistent alignment */
+    align-items: center;        /* Vertically center the text */
+    justify-content: center;    /* Horizontally center the text */
+    box-sizing: border-box;     /* Include padding and border in the total width */
+    width: 90px;                /* Set a fixed width for all buttons */
+    padding: 6px 10px;          /* Adjust padding for a better look */
+    font-size: 13px;
+    text-decoration: none;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+.qp-progress-start-btn {
+    background-color: #2e7d32; /* A distinct green */
+    border-color: #2e7d32;
+}
+.qp-progress-start-btn:hover {
+    background-color: #1b5e20; /* A darker green for hover */
+    border-color: #1b5e20;
 }
 /* Subject Level (Largest) */
 .qp-progress-item.subject-level {
@@ -3127,28 +3240,42 @@ hr.qp-divider {
 }
 
 .qp-form-step {
-    display: none;
     width: 100%;
     box-sizing: border-box;
     padding: 1rem;
-    transition: transform 0.4s ease-in-out;
+    /* NEW: Transition opacity as well as transform */
+    transition: transform 0.3s ease-in-out, opacity 0.3s ease-in-out;
     position: absolute;
     top: 0;
-    left: 100%;
+    left: 0;
+    /* NEW: Start slightly to the right and fully transparent */
+    transform: translateX(120px);
+    opacity: 0;
+    visibility: hidden;
 }
 
 .qp-form-step.active {
-    display: block;
     position: relative;
-    left: 0;
-}
-
-.qp-form-step.animating-out {
-    transform: translateX(-100%);
-}
-
-.qp-form-step.animating-in {
+    /* NEW: Active state is centered and fully visible */
     transform: translateX(0);
+    opacity: 1;
+    visibility: visible;
+}
+
+/* State for the outgoing step when moving to the next step */
+.qp-form-step.is-exiting-left {
+    /* NEW: Move slightly to the left and fade out */
+    transform: translateX(-120px);
+    opacity: 0;
+    visibility: hidden;
+}
+
+/* State for the outgoing step when moving back */
+.qp-form-step.is-exiting-right {
+    /* NEW: Move slightly to the right and fade out */
+    transform: translateX(120px);
+    opacity: 0;
+    visibility: hidden;
 }
 
 .qp-step-content {
@@ -3225,6 +3352,7 @@ hr.qp-divider {
     display: block;
     text-align: left;
     padding: 0;
+    outline: none;
 }
 
 /* Revision Mode Specific */

@@ -84,6 +84,10 @@ class QP_Shortcodes
                                 <span class="qp-mode-radio-button">Normal Practice</span>
                             </label>
                             <label class="qp-mode-radio-label">
+                                <input type="radio" name="practice_mode_selection" value="5">
+                                <span class="qp-mode-radio-button">Section Wise Practice</span>
+                            </label>
+                            <label class="qp-mode-radio-label">
                                 <input type="radio" name="practice_mode_selection" value="3">
                                 <span class="qp-mode-radio-button">Revision Mode</span>
                             </label>
@@ -122,6 +126,13 @@ class QP_Shortcodes
                     <div class="qp-step-content">
                         <button class="qp-back-btn" data-target-step="1">&larr; Back to Mode Selection</button>
                         <?php echo self::render_mock_test_form(); ?>
+                    </div>
+                </div>
+
+                <div id="qp-step-5" class="qp-form-step">
+                    <div class="qp-step-content">
+                        <button class="qp-back-btn" data-target-step="1">&larr; Back to Mode Selection</button>
+                        <?php echo self::render_section_wise_practice_form(); ?>
                     </div>
                 </div>
             </div>
@@ -314,6 +325,84 @@ class QP_Shortcodes
 
             <div class="qp-form-group qp-action-buttons">
                 <input type="submit" name="qp_start_mock_test" value="Start Mock Test" class="qp-button qp-button-primary">
+            </div>
+        </form>
+    <?php
+        return ob_get_clean();
+    }
+
+    public static function render_section_wise_practice_form()
+    {
+        global $wpdb;
+        $term_table = $wpdb->prefix . 'qp_terms';
+        $tax_table = $wpdb->prefix . 'qp_taxonomies';
+        $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'subject'");
+
+        $subjects = $wpdb->get_results($wpdb->prepare(
+            "SELECT term_id AS subject_id, name AS subject_name FROM {$term_table} WHERE taxonomy_id = %d AND name != 'Uncategorized' AND parent = 0 ORDER BY name ASC",
+            $subject_tax_id
+        ));
+
+        ob_start();
+    ?>
+        <form id="qp-start-section-wise-form" method="post" action="">
+            <input type="hidden" name="practice_mode" value="Section Wise Practice">
+            <h2>Section Wise Practice</h2>
+
+            <div class="qp-form-group">
+                <label for="qp_section_subject">Select Subject:</label>
+                <select name="qp_section_subject" id="qp_section_subject">
+                    <option value="">— Select a Subject —</option>
+                    <?php foreach ($subjects as $subject) : ?>
+                        <option value="<?php echo esc_attr($subject->subject_id); ?>"><?php echo esc_html($subject->subject_name); ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+
+            <div id="qp-section-cascading-dropdowns-container">
+                </div>
+
+            <div class="qp-form-group qp-checkbox-group">
+                <label class="qp-custom-checkbox">
+                    <input type="checkbox" name="qp_include_attempted" value="1">
+                    <span></span>
+                    Include previously attempted questions
+                </label>
+            </div>
+
+            <div class="qp-form-group">
+                <label class="qp-custom-checkbox">
+                    <input type="checkbox" name="scoring_enabled" class="qp-scoring-enabled-cb">
+                    <span></span>
+                    Enable Scoring
+                </label>
+            </div>
+
+            <div class="qp-form-group qp-marks-group" style="display: none;">
+                <div style="width: 48%">
+                    <label>Correct Marks:</label>
+                    <input type="number" name="qp_marks_correct" value="4" step="0.01" min="0.01" max="10" required>
+                </div>
+                <div style="width: 48%">
+                    <label>Negative Marks:</label>
+                    <input type="number" name="qp_marks_incorrect" value="1" step="0.01" min="0" max="10" required>
+                </div>
+            </div>
+
+            <div class="qp-form-group">
+                <label class="qp-custom-checkbox">
+                    <input type="checkbox" name="qp_timer_enabled" class="qp-timer-enabled-cb">
+                    <span></span>
+                    Question Timer
+                </label>
+                <div class="qp-timer-input-wrapper" style="display: none; margin-top: 15px;">
+                    <label>Time in Seconds:</label>
+                    <input type="number" name="qp_timer_seconds" value="60" min="10" max="300">
+                </div>
+            </div>
+
+            <div class="qp-form-group qp-action-buttons">
+                <input type="submit" name="qp_start_section_practice" value="Start Practice" class="qp-button qp-button-primary" disabled>
             </div>
         </form>
     <?php
@@ -644,13 +733,6 @@ $session_data['reported_info'] = $reported_info;
                         <div class="qp-multi-select-list" id="qp_topic_list_container">
                         </div>
                     </div>
-                </div>
-
-                <div class="qp-form-group" id="qp-section-group" style="display: none;">
-                    <label for="qp_section">Select Section (Optional):</label>
-                    <select name="qp_section" id="qp_section" disabled>
-                        <option value="">-- Select a subject first --</option>
-                    </select>
                 </div>
 
                 <div class="qp-form-group qp-checkbox-group">
@@ -1106,6 +1188,7 @@ $session_data['reported_info'] = $reported_info;
         ob_start();
         echo '<div id="qp-practice-app-wrapper">';
         $is_mock_test = isset($settings['practice_mode']) && $settings['practice_mode'] === 'mock_test';
+        $is_section_wise_practice = isset($settings['practice_mode']) && $settings['practice_mode'] === 'Section Wise Practice'; // *** THIS IS THE FIX ***
         $reported_qids_for_user = $wpdb->get_col($wpdb->prepare(
             "SELECT DISTINCT question_id FROM {$wpdb->prefix}qp_question_reports WHERE user_id = %d AND status = 'open'",
             $user_id
@@ -1183,7 +1266,7 @@ $session_data['reported_info'] = $reported_info;
                             <div class="value"><?php echo (int)$session->not_viewed_count; ?></div>
                             <div class="label">Not Viewed</div>
                         </div>
-                    <?php else : ?>
+                    <?php elseif (!$is_section_wise_practice) : // *** THIS IS THE FIX *** ?>
                         <div class="stat">
                             <div class="value"><?php echo (int)$session->skipped_count; ?></div>
                             <div class="label">Skipped</div>
@@ -1199,7 +1282,7 @@ $session_data['reported_info'] = $reported_info;
 
             <div class="qp-review-questions-list">
                 <?php foreach ($attempts as $index => $attempt) :
-                    $is_skipped = !$attempt->selected_answer;
+                    $is_skipped = empty($attempt->selected_option_id);
                     $answer_display_text = 'Skipped';
                     $answer_class = $is_skipped ? 'skipped' : ($attempt->is_correct ? 'correct' : 'incorrect');
 
@@ -1249,7 +1332,13 @@ $session_data['reported_info'] = $reported_info;
                         <div class="qp-review-answer-row">
                             <span class="qp-review-label">Your Answer:</span>
                             <span class="qp-review-answer <?php echo $answer_class; ?>">
-                                <?php echo esc_html($attempt->selected_answer ?: $answer_display_text); ?>
+                                <?php
+                                    if ($is_skipped) {
+                                        echo esc_html($answer_display_text);
+                                    } else {
+                                        echo esc_html($attempt->selected_answer);
+                                    }
+                                ?>
                             </span>
                         </div>
 
