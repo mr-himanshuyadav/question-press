@@ -2277,10 +2277,31 @@ jQuery(document).ready(function ($) {
           question_id: questionID,
           option_id: selectedOptionId,
         },
-        success: function () {
-          // After successfully saving, update the detailed mock_status.
-          updateMockStatus(questionID, newStatus);
-        },
+        success: function(response) {
+        if (response.success) {
+            // --- Keep existing success logic ---
+            updateMockStatus(questionID, newStatus); // Assuming this is called on success
+            // --- End existing success logic ---
+        } else if (response.data && response.data.code === 'access_denied') { // <--- ADD THIS ELSE IF
+            // --- Handle Access Denied ---
+            Swal.fire({
+                title: 'Out of Attempts',
+                html: response.data.message || 'You have run out of attempts. Please purchase more to continue.', // Use html for potential link
+                icon: 'error',
+                confirmButtonText: 'OK'
+            });
+            // Optionally disable further interaction
+            $('.qp-options-area').addClass('disabled').find('input[type="radio"]').prop('disabled', true);
+            $('#qp-clear-response-btn, #qp-mock-mark-review-cb').prop('disabled', true);
+            $('#qp-next-btn').prop('disabled', true); // Prevent moving forward
+        } else {
+            // --- Keep existing generic error handling here ---
+            Swal.fire('Error!', response.data.message || 'Could not save answer.', 'error');
+        }
+    },
+    error: function() { // Keep existing network error handling
+        Swal.fire('Error!', 'An unknown server error occurred.', 'error');
+    }
       });
       return;
     } else if (!isMockTest && isAutoCheckEnabled) {
@@ -2370,12 +2391,34 @@ jQuery(document).ready(function ($) {
         remaining_time: remainingTime,
       },
       success: function(response) {
-        if (response.success && response.data.attempt_id) {
-            // Update the UI with the new attempt ID
-            var questionIdText = "Question ID: " + questionID + " | Attempt ID: " + response.data.attempt_id;
-            $('#qp-question-id').text(questionIdText);
+        if (response.success) {
+            // --- Keep existing success logic here ---
+            if (response.data.attempt_id) {
+                // Update the UI with the new attempt ID
+                var questionIdText = "Question ID: " + questionID + " | Attempt ID: " + response.data.attempt_id;
+                $('#qp-question-id').text(questionIdText);
+            }
+            // --- End existing success logic ---
+        } else if (response.data && response.data.code === 'access_denied') { // <--- ADD THIS ELSE IF
+            // --- Handle Access Denied ---
+            Swal.fire({
+                title: 'Out of Attempts',
+                html: response.data.message || 'You have run out of attempts. Please purchase more to continue.', // Use html for potential link
+                icon: 'error',
+                confirmButtonText: 'OK'
+            });
+            // Optionally disable further interaction on the current question
+            $('.qp-options-area').addClass('disabled').find('input[type="radio"]').prop('disabled', true);
+            $('#qp-check-answer-btn, #qp-skip-btn').prop('disabled', true);
+            $('#qp-next-btn').prop('disabled', true); // Prevent moving forward too
+        } else {
+            // --- Keep existing generic error handling here ---
+            Swal.fire('Error!', response.data.message || 'Could not check answer.', 'error');
         }
-      }
+    },
+    error: function() { // Keep existing network error handling
+        Swal.fire('Error!', 'An unknown server error occurred.', 'error');
+    }
     });
 
     updateLegendCounts();

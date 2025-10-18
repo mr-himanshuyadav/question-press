@@ -14,6 +14,33 @@ class QP_Dashboard
         $current_user = wp_get_current_user();
         $user_id = $current_user->ID;
 
+        $remaining_attempts = get_user_meta($user_id, 'qp_remaining_attempts', true);
+$access_status_message = '';
+
+if ($remaining_attempts !== '' && (int)$remaining_attempts > 0) { // Check if meta exists and is 0 or more
+     // Use number_format to potentially add commas for larger numbers
+     $access_status_message = 'Attempts remaining: <strong>' . number_format((int)$remaining_attempts) . '</strong>';
+} else {
+     // --- IMPROVED LINK GENERATION ---
+     $shop_page_url = '';
+     // Ensure WooCommerce functions exist before calling them
+     if (function_exists('wc_get_page_id')) {
+         $shop_page_id = wc_get_page_id('shop');
+         if ($shop_page_id > 0) {
+             $shop_page_url = get_permalink($shop_page_id);
+         }
+     }
+     // Fallback if shop page isn't found
+     if (empty($shop_page_url)) {
+         $shop_page_url = home_url('/'); // Link to homepage as a last resort
+         $link_text = 'Purchase Access'; // Generic text if shop page fails
+     } else {
+         $link_text = 'Purchase More';
+     }
+     $access_status_message = 'No attempts remaining. <a href="' . esc_url($shop_page_url) . '">' . esc_html($link_text) . '</a>';
+     // --- END IMPROVEMENT ---
+}
+
         $attempts_table = $wpdb->prefix . 'qp_user_attempts';
         $stats = $wpdb->get_row($wpdb->prepare(
             "SELECT 
@@ -65,9 +92,14 @@ class QP_Dashboard
         <div class="qp-container qp-dashboard-wrapper">
             <div class="qp-profile-header">
                 <div class="qp-user-info">
-                    <span class="qp-user-name">Welcome, <?php echo esc_html($current_user->display_name); ?>!</span>
-                    <a href="<?php echo wp_logout_url(wp_login_url()); ?>" class="qp-logout-link">(Logout)</a>
-                </div>
+     <span class="qp-user-name">Welcome, <?php echo esc_html($current_user->display_name); ?>!</span>
+
+     <span class="qp-access-status" style="font-size: 14px; color: #50575e; background-color: #e9ecef; padding: 4px 8px; border-radius: 4px;">
+         <?php echo wp_kses_post($access_status_message); // Use wp_kses_post to allow the link and strong tag ?>
+     </span>
+
+     <a href="<?php echo wp_logout_url(wp_login_url()); ?>" class="qp-logout-link">(Logout)</a>
+ </div>
             </div>
 
             <div class="qp-stats-section">
