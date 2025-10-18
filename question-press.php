@@ -2887,6 +2887,7 @@ function qp_public_enqueue_scripts()
         wp_enqueue_script('sweetalert2', 'https://cdn.jsdelivr.net/npm/sweetalert2@11', [], null, true);
 
         $options = get_option('qp_settings');
+        $shop_page_url = function_exists('wc_get_page_id') ? get_permalink(wc_get_page_id('shop')) : home_url('/');
         $ajax_data = [
             'ajax_url'           => admin_url('admin-ajax.php'),
             'nonce'              => wp_create_nonce('qp_practice_nonce'),
@@ -2895,6 +2896,7 @@ function qp_public_enqueue_scripts()
             'review_page_url'    => isset($options['review_page']) ? get_permalink($options['review_page']) : home_url('/'),
             'session_page_url'   => isset($options['session_page']) ? get_permalink($options['session_page']) : home_url('/'),
             'question_order_setting'   => isset($options['question_order']) ? $options['question_order'] : 'random',
+            'shop_page_url'      => $shop_page_url,
             'can_delete_history' => $can_delete
         ];
 
