@@ -5489,3 +5489,27 @@ function qp_grant_access_on_order_complete($order_id) {
 }
 // Hook into WooCommerce order completion
 add_action('woocommerce_order_status_completed', 'qp_grant_access_on_order_complete', 10, 1);
+
+/**
+ * AJAX handler to check remaining attempts for the current user.
+ */
+function qp_check_remaining_attempts_ajax() {
+    // No nonce check needed here as it's just reading data,
+    // but we MUST check if the user is logged in.
+    if (!is_user_logged_in()) {
+        wp_send_json_error(['has_access' => false, 'message' => 'Not logged in.']);
+        return;
+    }
+
+    $user_id = get_current_user_id();
+    $has_access = false;
+    $remaining_attempts = get_user_meta($user_id, 'qp_remaining_attempts', true);
+
+    if ($remaining_attempts !== '' && (int)$remaining_attempts > 0) {
+        $has_access = true;
+    }
+
+    wp_send_json_success(['has_access' => $has_access, 'remaining' => (int)$remaining_attempts]);
+}
+// Hook the AJAX action for logged-in users
+add_action('wp_ajax_qp_check_remaining_attempts', 'qp_check_remaining_attempts_ajax');
