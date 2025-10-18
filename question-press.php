@@ -4226,6 +4226,23 @@ add_action('admin_menu', 'qp_add_report_count_to_menu', 99);
 function qp_check_answer_ajax()
 {
     check_ajax_referer('qp_practice_nonce', 'nonce');
+    // --- Access Control Check ---
+    if (!is_user_logged_in()) {
+        wp_send_json_error(['message' => 'You must be logged in to answer questions.', 'code' => 'not_logged_in']);
+        return;
+    }
+    $user_id = get_current_user_id();
+    $has_access = true; // TEMPORARY - Assume access for now
+    // TODO: Add real check logic later
+
+    if (!$has_access) {
+        wp_send_json_error([
+            'message' => 'You have run out of attempts or your subscription has expired.',
+            'code' => 'access_denied'
+        ]);
+        return;
+    }
+    // --- End Access Control Check ---
     $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
     $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
     $option_id = isset($_POST['option_id']) ? absint($_POST['option_id']) : 0;
@@ -4285,6 +4302,23 @@ add_action('wp_ajax_check_answer', 'qp_check_answer_ajax');
 function qp_save_mock_attempt_ajax()
 {
     check_ajax_referer('qp_practice_nonce', 'nonce');
+    // --- Access Control Check ---
+    if (!is_user_logged_in()) {
+        wp_send_json_error(['message' => 'You must be logged in to answer questions.', 'code' => 'not_logged_in']);
+        return;
+    }
+    $user_id = get_current_user_id();
+    $has_access = true; // TEMPORARY - Assume access for now
+    // TODO: Add real check logic later
+
+    if (!$has_access) {
+        wp_send_json_error([
+            'message' => 'You have run out of attempts or your subscription has expired.',
+            'code' => 'access_denied'
+        ]);
+        return;
+    }
+    // --- End Access Control Check ---
     $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
     $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
     $option_id = isset($_POST['option_id']) ? absint($_POST['option_id']) : 0;
