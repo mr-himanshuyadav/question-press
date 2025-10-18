@@ -64,7 +64,8 @@ jQuery(document).ready(function($) {
         var button = $(this);
         var originalText = button.text();
 
-        $.ajax({
+        checkAttemptsBeforeAction(function() {
+            $.ajax({
                 url: qp_ajax_object.ajax_url,
                 type: 'POST',
                 data: {
@@ -87,6 +88,7 @@ jQuery(document).ready(function($) {
                     button.text(originalText).prop('disabled', false);
                 }
             });
+        }, button, originalText, 'Starting...');
     });
 
     // --- NEW: Handler for starting a section practice from the Progress tab ---
@@ -97,7 +99,8 @@ jQuery(document).ready(function($) {
 
         // This AJAX call now sends only the essential data to create a default
         // section-wise practice session, matching your required snapshot.
-        $.ajax({
+        checkAttemptsBeforeAction(function() {
+            $.ajax({
             url: qp_ajax_object.ajax_url,
             type: 'POST',
             data: {
@@ -122,7 +125,27 @@ jQuery(document).ready(function($) {
                 button.text('Start').prop('disabled', false);
             }
         });
+        }, button, button.text(), 'Starting...');
     });
+
+    // --- Check Attempts Before Resuming ---
+wrapper.on('click', 'a.qp-button-primary[href*="session_id="]', function(e) {
+     // Check if this is specifically a "Resume" link from the history or active list
+     var linkText = $(this).text().trim();
+     if (linkText !== 'Resume' && linkText !== 'Continue') {
+         return; // Allow other links (like Review) to pass through
+     }
+
+     e.preventDefault(); // Stop the link from navigating immediately
+     var resumeUrl = $(this).attr('href');
+     var button = $(this); // Treat the link like a button for the helper
+     var originalText = button.text();
+
+     checkAttemptsBeforeAction(function() {
+         // If check passes, navigate to the resume URL
+         window.location.href = resumeUrl;
+     }, button, originalText, 'Checking...'); // Pass link element
+});
 
     // --- NEW: Tab Switching Logic with URL Hash ---
     function switchTab(tab_id) {
@@ -419,6 +442,7 @@ jQuery(document).ready(function($) {
         var originalText = button.text();
         var includeAllIncorrect = $('#qp-include-all-incorrect-cb').is(':checked');
 
+        checkAttemptsBeforeAction(function() {
         $.ajax({
             url: qp_ajax_object.ajax_url,
             type: 'POST',
@@ -442,7 +466,7 @@ jQuery(document).ready(function($) {
                 Swal.fire('Error!', 'A server error occurred.', 'error');
                 button.text(originalText).prop('disabled', false);
             }
-        });
+        });}, button, originalText, 'Preparing Session...');
     });
 
     subjectSelect.on('change', function() {
@@ -545,3 +569,77 @@ jQuery(document).ready(function($) {
         }
     });
 });
+
+/**
+ * Checks if the user has attempts before executing a callback.
+ * Shows an error alert if access is denied.
+ * @param {function} callback - The function to execute if access is granted.
+ * @param {jQuery} [button] - Optional: The button triggering the action.
+ * @param {string} [originalText] - Optional: The button's original text.
+ * @param {string} [loadingText] - Optional: Text to show while checking.
+ */
+function checkAttemptsBeforeAction(callback, button, originalText, loadingText = 'Checking access...') {
+    // Use global qp_ajax_object defined elsewhere
+    if (typeof qp_ajax_object === 'undefined') {
+         console.error('qp_ajax_object is not defined.');
+         Swal.fire('Error!', 'Configuration missing. Cannot check access.', 'error');
+         return;
+    }
+
+    if (button) {
+        // Determine if it's an input button or a regular button
+        if (button.is('input[type="submit"]') || button.is('input[type="button"]')) {
+            button.prop('disabled', true).val(loadingText);
+        } else {
+            button.prop('disabled', true).text(loadingText);
+        }
+    }
+
+    jQuery.ajax({ // Use jQuery.ajax since this is outside ready block
+        url: qp_ajax_object.ajax_url,
+        type: 'POST',
+        data: {
+            action: 'qp_check_remaining_attempts',
+            // No nonce needed here as per PHP function
+        },
+        success: function(response) {
+            if (response.success && response.data.has_access) {
+                // Access granted, execute the original action
+                if (typeof callback === 'function') {
+                    callback();
+                }
+                // Note: Don't re-enable the button here if the callback redirects
+            } else {
+                // Access denied, show alert
+                var practiceInProgress = false; // Allow redirect (safe to declare here)
+                 Swal.fire({
+                    title: 'Out of Attempts!',
+                    html: 'You do not have enough attempts remaining to start or resume this session. <a href="' + qp_ajax_object.shop_page_url + '">Purchase More</a>',
+                    icon: 'error',
+                    confirmButtonText: 'OK',
+                    allowOutsideClick: false,
+                    allowEscapeKey: false
+                });
+                // Reset button if provided
+                if (button && originalText) {
+                   if (button.is('input[type="submit"]') || button.is('input[type="button"]')) {
+                       button.prop('disabled', false).val(originalText);
+                   } else {
+                       button.prop('disabled', false).text(originalText);
+                   }
+                }
+            }
+        },
+        error: function() {
+            // Handle AJAX error during check
+            Swal.fire('Error!', 'Could not verify your access. Please try again.', 'error');
+             if (button && originalText) {
+                 if (button.is('input[type="submit"]') || button.is('input[type="button"]')) {
+                     button.prop('disabled', false).val(originalText);
+                 } else {
+                     button.prop('disabled', false).text(originalText);
+                 }
+             }
+        }
+    });
+}
