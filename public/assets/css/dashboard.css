@@ -325,3 +325,119 @@ body {
     from { opacity: 0; transform: translateY(10px); }
     to { opacity: 1; transform: translateY(0); }
 }
+
+/* --- History Section --- */
+.qp-history-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--qp-dashboard-border);
+    flex-wrap: wrap; /* Allow wrapping on small screens */
+    gap: 1rem;
+}
+ .qp-history-header h2 { margin: 0; }
+.qp-history-actions { display: flex; gap: 0.5rem; }
+
+.qp-full-history-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1rem;
+}
+ .qp-full-history-table th, .qp-full-history-table td {
+    padding: 12px 10px;
+    text-align: left;
+    border-bottom: 1px solid var(--qp-dashboard-border);
+    font-size: 14px;
+    vertical-align: middle;
+}
+.qp-full-history-table th {
+    font-weight: 600;
+    color: var(--qp-dashboard-text-light);
+    background-color: #f9f9f9;
+}
+ .qp-full-history-table tr.qp-session-paused td {
+     background-color: #fff8ed; /* Light orange for paused */
+ }
+ .qp-full-history-table .qp-actions-cell {
+     text-align: right;
+     white-space: nowrap;
+ }
+ .qp-full-history-table .qp-actions-cell .qp-button,
+ .qp-full-history-table .qp-actions-cell .qp-delete-session-btn {
+     margin-left: 5px;
+     padding: 4px 10px;
+     font-size: 12px;
+     vertical-align: middle;
+ }
+
+/* Mobile Table Styles for Full History */
+@media (max-width: 782px) {
+    .qp-full-history-table thead { display: none; }
+    .qp-full-history-table tr { display: block; margin-bottom: 1rem; border: 1px solid var(--qp-dashboard-border); border-radius: var(--qp-dashboard-radius); padding: 0.75rem 1rem; background-color: #fff; }
+     .qp-full-history-table tr.qp-session-paused { background-color: #fff8ed; border-left: 4px solid #ffb13d; }
+    .qp-full-history-table td { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px dashed #eee; text-align: right; align-items: center; }
+    .qp-full-history-table td:last-child { border-bottom: none; }
+    .qp-full-history-table td::before { content: attr(data-label); font-weight: 600; text-align: left; margin-right: 1rem; color: var(--qp-dashboard-text-dark); }
+    .qp-full-history-table .qp-actions-cell { justify-content: flex-end; }
+     .qp-full-history-table .qp-actions-cell .qp-button,
+     .qp-full-history-table .qp-actions-cell .qp-delete-session-btn { margin-left: 5px; }
+}
+
+
+/* --- Review Section --- */
+.qp-review-list-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin: 1.5rem 0 1rem 0;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--qp-dashboard-border);
+}
+ .qp-review-list-header h3 { margin: 0; }
+
+ul.qp-review-list { list-style: none; padding: 0; margin: 0; }
+ul.qp-review-list li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 0;
+    border-bottom: 1px solid var(--qp-dashboard-border);
+    gap: 1rem;
+}
+ul.qp-review-list li:last-child { border-bottom: none; }
+.qp-review-list-q-text { flex-grow: 1; font-size: 14px; }
+.qp-review-list-q-text small { display: block; font-size: 12px; color: var(--qp-dashboard-text-light); margin-top: 4px; }
+.qp-review-list-actions { display: flex; gap: 0.5rem; flex-shrink: 0; }
+.qp-review-list-actions .qp-button { padding: 4px 10px; font-size: 12px; }
+
+/* Review Modal Styles (Mostly inherited from practice.css, add overrides if needed) */
+#qp-review-modal-backdrop { /* Ensure it displays */
+    display: none; /* Initially hidden, shown by JS */
+    position: fixed;
+    /* ... rest of modal styles if needed ... */
+}
+
+/* --- Progress Section --- */
+/* Styles for qp-progress-filters, qp-progress-tree, qp-progress-item etc. */
+/* These should already exist in practice.css, copy them over if you removed them */
+/* OR ensure practice.css is still loaded on the dashboard page */
+.qp-progress-filters {
+    display: flex;
+    flex-wrap: wrap; /* Allow wrapping */
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    background-color: #f6f7f7; /* Match card header */
+    padding: 1rem 1.5rem;
+    border-radius: var(--qp-dashboard-radius);
+    border: 1px solid var(--qp-dashboard-border);
+}
+.qp-progress-filters .qp-form-group { flex: 1; min-width: 200px; margin-bottom: 0; } /* Allow shrinking/growing */
+ .qp-progress-filters .qp-form-group label { margin-bottom: 5px; font-weight: 600; }
+ .qp-progress-filters select { width: 100%; }
+
+#qp-progress-results-container {
+    min-height: 100px; /* Adjust as needed */
+    position: relative; /* For loader positioning */
+}

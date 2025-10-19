@@ -1,5 +1,5 @@
 jQuery(document).ready(function($) {
-    var wrapper = $('.qp-dashboard-wrapper');
+    var wrapper = $('#qp-practice-app-wrapper');
     var subjectSelect = $('#qp-progress-subject');
     var sourceSelect = $('#qp-progress-source');
     var resultsContainer = $('#qp-progress-results-container');
@@ -171,18 +171,11 @@ jQuery(document).ready(function($) {
         e.preventDefault();
         var button = $(this);
         var originalText = button.text();
-
         checkAttemptsBeforeAction(function() {
             $.ajax({
-                url: qp_ajax_object.ajax_url,
-                type: 'POST',
-                data: {
-                    action: 'qp_start_review_session',
-                    nonce: qp_ajax_object.nonce,
-                },
-                beforeSend: function() {
-                    button.text('Starting...').prop('disabled', true);
-                },
+                url: qp_ajax_object.ajax_url, type: 'POST',
+                data: { action: 'qp_start_review_session', nonce: qp_ajax_object.nonce },
+                beforeSend: function() { button.text('Starting...').prop('disabled', true); },
                 success: function(response) {
                     if (response.success && response.data.redirect_url) {
                         window.location.href = response.data.redirect_url;
@@ -288,10 +281,9 @@ wrapper.on('click', 'a.qp-button-primary[href*="session_id="]', function(e) {
         // --- UPDATED: Handler for the "View" button to open the modal ---
     wrapper.on('click', '.qp-review-list-view-btn', function() {
         var button = $(this);
-        var questionID = button.closest('li').data('question-id');
-
-        var modalBackdrop = $('#qp-review-modal-backdrop');
-        var modalContent = $('#qp-review-modal-content');
+         var questionID = button.closest('li').data('question-id');
+         var modalBackdrop = $('#qp-review-modal-backdrop');
+         var modalContent = $('#qp-review-modal-content');
 
         modalContent.html('<p>Loading question...</p>');
         modalBackdrop.show();
@@ -549,19 +541,11 @@ wrapper.on('click', 'a.qp-button-primary[href*="session_id="]', function(e) {
         var button = $(this);
         var originalText = button.text();
         var includeAllIncorrect = $('#qp-include-all-incorrect-cb').is(':checked');
-
         checkAttemptsBeforeAction(function() {
-        $.ajax({
-            url: qp_ajax_object.ajax_url,
-            type: 'POST',
-            data: {
-                action: 'qp_start_incorrect_practice_session',
-                nonce: qp_ajax_object.nonce,
-                include_all_incorrect: includeAllIncorrect
-            },
-            beforeSend: function() {
-                button.text('Preparing Session...').prop('disabled', true);
-            },
+            $.ajax({
+                url: qp_ajax_object.ajax_url, type: 'POST',
+                data: { action: 'qp_start_incorrect_practice_session', nonce: qp_ajax_object.nonce, include_all_incorrect: includeAllIncorrect },
+                beforeSend: function() { button.text('Preparing Session...').prop('disabled', true); },
             success: function(response) {
                 if (response.success && response.data.redirect_url) {
                     window.location.href = response.data.redirect_url;

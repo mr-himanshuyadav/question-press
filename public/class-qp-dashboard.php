@@ -111,35 +111,34 @@ class QP_Dashboard
                 </aside>
 
                 <main class="qp-main-content">
-                    <?php settings_errors('qp_user_attempts_notices'); // Display notices if any (like from attempt updates) ?>
+                    <?php settings_errors('qp_user_attempts_notices'); ?>
 
                     <section id="qp-dashboard-overview" class="qp-dashboard-section active">
                         <?php self::render_overview_content($stats, $overall_accuracy, $active_sessions, $recent_history, $review_count, $never_correct_count, $practice_page_url, $session_page_url, $review_page_url); ?>
                     </section>
 
                     <section id="qp-dashboard-history" class="qp-dashboard-section" style="display: none;">
-                        <?php /* Content will be loaded by JS/AJAX or rendered by PHP function later */ ?>
-                         <h2>Practice History</h2>
-                         <p>Loading history...</p> <?php // Placeholder ?>
+                        <?php // --- MODIFIED --- ?>
+                        <?php echo self::render_history_content(); ?>
+                        <?php // --- END MODIFIED --- ?>
                     </section>
 
                     <section id="qp-dashboard-review" class="qp-dashboard-section" style="display: none;">
-                         <?php /* Content will be loaded by JS/AJAX or rendered by PHP function later */ ?>
-                         <h2>Review Center</h2>
-                         <p>Loading review items...</p> <?php // Placeholder ?>
+                         <?php // --- MODIFIED --- ?>
+                         <?php echo self::render_review_content(); ?>
+                         <?php // --- END MODIFIED --- ?>
                     </section>
 
                     <section id="qp-dashboard-progress" class="qp-dashboard-section" style="display: none;">
-                         <?php /* Content will be loaded by JS/AJAX or rendered by PHP function later */ ?>
-                         <h2>Progress Tracker</h2>
-                         <p>Loading progress data...</p> <?php // Placeholder ?>
+                         <?php // --- MODIFIED --- ?>
+                         <?php echo self::render_progress_content(); ?>
+                         <?php // --- END MODIFIED --- ?>
                     </section>
 
-                     <?php /* Hidden modal for View Question popup (Keep from old code) */ ?>
+                     <?php /* Hidden modal (Keep from old code) */ ?>
                      <div id="qp-review-modal-backdrop" style="display: none;">
                          <div id="qp-review-modal-content"></div>
                      </div>
-
                 </main>
             </div>
         </div> <?php // End #qp-practice-app-wrapper ?>
@@ -279,6 +278,269 @@ class QP_Dashboard
             </div>
         </div>
         <?php
+    }
+
+    /**
+     * Renders the content specifically for the History section.
+     * (Formerly part of render_sessions_tab_content)
+     */
+    private static function render_history_content() {
+        global $wpdb;
+        $user_id = get_current_user_id();
+        $sessions_table = $wpdb->prefix . 'qp_user_sessions';
+        $attempts_table = $wpdb->prefix . 'qp_user_attempts'; // Needed for accuracy calc
+
+        $options = get_option('qp_settings');
+        $session_page_url = isset($options['session_page']) ? get_permalink($options['session_page']) : home_url('/');
+        $review_page_url = isset($options['review_page']) ? get_permalink($options['review_page']) : home_url('/');
+        $practice_page_url = isset($options['practice_page']) ? get_permalink($options['practice_page']) : home_url('/');
+
+        $user = wp_get_current_user();
+        $user_roles = (array) $user->roles;
+        $allowed_roles = isset($options['can_delete_history_roles']) ? $options['can_delete_history_roles'] : ['administrator'];
+        $can_delete = !empty(array_intersect($user_roles, $allowed_roles));
+
+        // Fetch Paused Sessions (Order them first)
+        $paused_sessions = $wpdb->get_results($wpdb->prepare(
+            "SELECT * FROM $sessions_table WHERE user_id = %d AND status = 'paused' ORDER BY start_time DESC",
+            $user_id
+        ));
+
+         // Fetch Completed/Abandoned Sessions (Order them after paused)
+        $session_history = $wpdb->get_results($wpdb->prepare(
+            "SELECT * FROM $sessions_table WHERE user_id = %d AND status IN ('completed', 'abandoned') ORDER BY start_time DESC",
+            $user_id
+        ));
+
+         // Combine paused and history
+         $all_sessions_for_history = array_merge($paused_sessions, $session_history);
+
+
+        // Pre-fetch lineage data
+        list($lineage_cache, $group_to_topic_map, $question_to_group_map) = self::prefetch_lineage_data($all_sessions_for_history);
+
+        // Fetch accuracy stats efficiently
+        $session_ids_history = wp_list_pluck($all_sessions_for_history, 'session_id');
+        $accuracy_stats = [];
+         if (!empty($session_ids_history)) {
+             $ids_placeholder = implode(',', array_map('absint', $session_ids_history));
+             $results = $wpdb->get_results(
+                 "SELECT session_id,
+                     COUNT(CASE WHEN is_correct = 1 THEN 1 END) as correct,
+                     COUNT(CASE WHEN is_correct = 0 THEN 1 END) as incorrect
+              FROM {$attempts_table}
+              WHERE session_id IN ({$ids_placeholder}) AND status = 'answered'
+              GROUP BY session_id"
+             );
+             foreach ($results as $result) {
+                 $total_attempted = $result->correct + $result->incorrect;
+                 $accuracy_stats[$result->session_id] = ($total_attempted > 0) ? round(($result->correct / $total_attempted) * 100) . '%' : '0%';
+             }
+         }
+
+
+        ob_start();
+        ?>
+        <div class="qp-history-header">
+             <h2 style="margin:0;">Practice History</h2>
+             <div class="qp-history-actions">
+                 <a href="<?php echo esc_url($practice_page_url); ?>" class="qp-button qp-button-primary">Start New Practice</a>
+                 <?php if ($can_delete) : ?>
+                     <button id="qp-delete-history-btn" class="qp-button qp-button-danger">Clear History</button>
+                 <?php endif; ?>
+             </div>
+         </div>
+
+         <table class="qp-dashboard-table qp-full-history-table">
+             <thead>
+                 <tr>
+                     <th>Date</th>
+                     <th>Mode</th>
+                     <th>Context</th>
+                     <th>Result</th>
+                     <th>Status</th>
+                     <th>Actions</th>
+                 </tr>
+             </thead>
+             <tbody>
+                 <?php if (!empty($all_sessions_for_history)) : ?>
+                     <?php foreach ($all_sessions_for_history as $session) :
+                        $settings = json_decode($session->settings_snapshot, true);
+                        $mode = self::get_session_mode_name($session, $settings);
+                        $subjects_display = self::get_session_subjects_display($session, $settings, $lineage_cache, $group_to_topic_map, $question_to_group_map);
+                        $result_display = $accuracy_stats[$session->session_id] ?? self::get_session_result_display($session, $settings); // Use calculated accuracy if available
+                         $status_display = ucfirst($session->status);
+                         if ($session->status === 'abandoned') $status_display = 'Abandoned';
+                         if ($session->end_reason === 'autosubmitted_timer') $status_display = 'Auto-Submitted';
+
+                         $row_class = $session->status === 'paused' ? 'class="qp-session-paused"' : '';
+                     ?>
+                     <tr <?php echo $row_class; ?>>
+                         <td data-label="Date"><?php echo date_format(date_create($session->start_time), 'M j, Y, g:i a'); ?></td>
+                         <td data-label="Mode"><?php echo esc_html($mode); ?></td>
+                         <td data-label="Context"><?php echo esc_html($subjects_display); ?></td>
+                         <td data-label="Result"><strong><?php echo esc_html($result_display); ?></strong></td>
+                         <td data-label="Status"><?php echo esc_html($status_display); ?></td>
+                         <td data-label="Actions" class="qp-actions-cell">
+                             <?php if ($session->status === 'paused') : ?>
+                                 <a href="<?php echo esc_url(add_query_arg('session_id', $session->session_id, $session_page_url)); ?>" class="qp-button qp-button-primary">Resume</a>
+                             <?php else : ?>
+                                 <a href="<?php echo esc_url(add_query_arg('session_id', $session->session_id, $review_page_url)); ?>" class="qp-button qp-button-secondary">Review</a>
+                             <?php endif; ?>
+                             <?php if ($can_delete) : ?>
+                                 <button class="qp-delete-session-btn" data-session-id="<?php echo esc_attr($session->session_id); ?>">Delete</button>
+                             <?php endif; ?>
+                         </td>
+                     </tr>
+                     <?php endforeach; ?>
+                 <?php else : ?>
+                     <tr><td colspan="6" style="text-align: center; padding: 2rem;">You have no practice sessions yet.</td></tr>
+                 <?php endif; ?>
+             </tbody>
+         </table>
+        <?php
+        return ob_get_clean();
+    }
+
+    /**
+     * Renders the content specifically for the Review section.
+     */
+    private static function render_review_content() {
+        global $wpdb;
+        $user_id = get_current_user_id();
+        $attempts_table = $wpdb->prefix . 'qp_user_attempts';
+
+         // Fetch Review Later questions
+         $review_questions = $wpdb->get_results($wpdb->prepare(
+             "SELECT
+                 q.question_id, q.question_text,
+                 subject_term.name as subject_name
+              FROM {$wpdb->prefix}qp_review_later rl
+              JOIN {$wpdb->prefix}qp_questions q ON rl.question_id = q.question_id
+              LEFT JOIN {$wpdb->prefix}qp_question_groups g ON q.group_id = g.group_id
+              LEFT JOIN {$wpdb->prefix}qp_term_relationships topic_rel ON g.group_id = topic_rel.object_id AND topic_rel.object_type = 'group' AND topic_rel.term_id IN (SELECT term_id FROM {$wpdb->prefix}qp_terms WHERE parent != 0 AND taxonomy_id = (SELECT taxonomy_id FROM {$wpdb->prefix}qp_taxonomies WHERE taxonomy_name = 'subject'))
+               LEFT JOIN {$wpdb->prefix}qp_terms topic_term ON topic_rel.term_id = topic_term.term_id
+              LEFT JOIN {$wpdb->prefix}qp_terms subject_term ON topic_term.parent = subject_term.term_id
+              WHERE rl.user_id = %d
+              ORDER BY rl.review_id DESC",
+             $user_id
+         ));
+
+        // Calculate counts for "Practice Your Mistakes"
+         $total_incorrect_count = $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(DISTINCT question_id) FROM {$attempts_table} WHERE user_id = %d AND is_correct = 0", $user_id
+         ));
+         $correctly_answered_qids = $wpdb->get_col($wpdb->prepare("SELECT DISTINCT question_id FROM {$attempts_table} WHERE user_id = %d AND is_correct = 1", $user_id));
+         $all_answered_qids = $wpdb->get_col($wpdb->prepare("SELECT DISTINCT question_id FROM {$attempts_table} WHERE user_id = %d AND status = 'answered'", $user_id));
+         $never_correct_qids = array_diff($all_answered_qids, $correctly_answered_qids);
+         $never_correct_count = count($never_correct_qids);
+
+        ob_start();
+        ?>
+        <h2>Review Center</h2>
+        <div class="qp-practice-card qp-card"> <?php // Add qp-card class ?>
+             <div class="qp-card-content">
+                 <h4 id="qp-incorrect-practice-heading"
+                     data-never-correct-count="<?php echo (int)$never_correct_count; ?>"
+                     data-total-incorrect-count="<?php echo (int)$total_incorrect_count; ?>">
+                     Practice Your Mistakes (<span><?php echo (int)$never_correct_count; ?></span>)
+                 </h4>
+                 <p>Create a session from questions you have not yet answered correctly, or optionally include all past mistakes.</p>
+             </div>
+             <div class="qp-card-action">
+                 <button id="qp-start-incorrect-practice-btn" class="qp-button qp-button-primary" <?php disabled($never_correct_count + $total_incorrect_count, 0); ?>>Start Practice</button>
+                 <label class="qp-custom-checkbox">
+                     <input type="checkbox" id="qp-include-all-incorrect-cb" name="include_all_incorrect" value="1">
+                     <span></span>
+                     Include all past mistakes
+                 </label>
+             </div>
+         </div>
+
+         <hr class="qp-divider">
+
+         <?php if (!empty($review_questions)) : ?>
+             <div class="qp-review-list-header">
+                 <h3 style="margin: 0;">Marked for Review (<?php echo count($review_questions); ?>)</h3>
+                 <button id="qp-start-reviewing-btn" class="qp-button qp-button-primary">Start Reviewing All</button>
+             </div>
+             <ul class="qp-review-list">
+                 <?php foreach ($review_questions as $index => $q) : ?>
+                     <li data-question-id="<?php echo esc_attr($q->question_id); ?>">
+                         <div class="qp-review-list-q-text">
+                             <strong>Q<?php echo $index + 1; ?>:</strong> <?php echo wp_trim_words(esc_html(strip_tags($q->question_text)), 25, '...'); // Strip tags for display ?>
+                             <small>ID: <?php echo esc_html($q->question_id); ?> | Subject: <?php echo esc_html($q->subject_name ?: 'N/A'); ?></small>
+                         </div>
+                         <div class="qp-review-list-actions">
+                             <button class="qp-review-list-view-btn qp-button qp-button-secondary">View</button>
+                             <button class="qp-review-list-remove-btn qp-button qp-button-danger">Remove</button>
+                         </div>
+                     </li>
+                 <?php endforeach; ?>
+             </ul>
+         <?php else : ?>
+             <div class="qp-card"><div class="qp-card-content"><p style="text-align: center;">You haven't marked any questions for review yet.</p></div></div>
+         <?php endif; ?>
+        <?php
+        return ob_get_clean();
+    }
+
+    /**
+     * Renders the content specifically for the Progress section.
+     */
+    private static function render_progress_content() {
+         global $wpdb;
+         $term_table = $wpdb->prefix . 'qp_terms';
+         $tax_table = $wpdb->prefix . 'qp_taxonomies';
+         $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'subject'");
+         $subjects = [];
+         if ($subject_tax_id) {
+             $subjects = $wpdb->get_results($wpdb->prepare(
+                 "SELECT term_id, name FROM {$term_table} WHERE taxonomy_id = %d AND name != 'Uncategorized' AND parent = 0 ORDER BY name ASC",
+                 $subject_tax_id
+             ));
+         }
+
+        ob_start();
+        ?>
+        <h2>Progress Tracker</h2>
+        <p style="text-align: center; font-style: italic; color: var(--qp-dashboard-text-light);">Track your completion progress by subject and source.</p>
+
+        <div class="qp-card"> <?php // Wrap filters in a card ?>
+         <div class="qp-card-content">
+             <div class="qp-progress-filters">
+                 <div class="qp-form-group">
+                     <label for="qp-progress-subject">Select Subject</label>
+                     <select name="qp-progress-subject" id="qp-progress-subject">
+                         <option value="">— Select a Subject —</option>
+                         <?php foreach ($subjects as $subject) : ?>
+                             <option value="<?php echo esc_attr($subject->term_id); ?>"><?php echo esc_html($subject->name); ?></option>
+                         <?php endforeach; ?>
+                     </select>
+                 </div>
+                 <div class="qp-form-group">
+                     <label for="qp-progress-source">Select Source</label>
+                     <select name="qp-progress-source" id="qp-progress-source" disabled>
+                         <option value="">— Select a Subject First —</option>
+                     </select>
+                 </div>
+                  <div class="qp-form-group" style="align-self: flex-end;"> <?php // Align checkbox lower ?>
+                     <label class="qp-custom-checkbox">
+                         <input type="checkbox" id="qp-exclude-incorrect-cb" name="exclude_incorrect_attempts" value="1">
+                         <span></span>
+                         Count Correct Only
+                     </label>
+                 </div>
+             </div>
+         </div>
+        </div>
+
+         <div id="qp-progress-results-container" style="margin-top: 1.5rem;">
+             <?php // Results will be loaded here via AJAX ?>
+              <p style="text-align: center; color: var(--qp-dashboard-text-light);">Please select a subject and source to view your progress.</p>
+         </div>
+        <?php
+        return ob_get_clean();
     }
 
    /**
