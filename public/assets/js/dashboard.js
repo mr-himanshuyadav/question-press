@@ -18,9 +18,19 @@ jQuery(document).ready(function($) {
     });
 
     // Close sidebar when overlay is clicked
-    $sidebarOverlay.on('click', function() {
+    $sidebarOverlay.on('click', function(e) { // Add the event object 'e'
+    // Check if the clicked element is the overlay itself
+    if (e.target === this) {
         $body.removeClass('qp-sidebar-open');
         $sidebarToggle.attr('aria-expanded', 'false');
+    }
+});
+// --- NEW: Handler for the dedicated close button ---
+    var $sidebarCloseBtn = $('.qp-sidebar-close-btn');
+
+    $sidebarCloseBtn.on('click', function() {
+        $body.removeClass('qp-sidebar-open');
+        $sidebarToggle.attr('aria-expanded', 'false'); // Sync the toggle button state
     });
 
     // Close sidebar when a navigation link is clicked (especially on mobile)

@@ -81,16 +81,28 @@ class QP_Dashboard
         ob_start();
         ?>
         <div id="qp-practice-app-wrapper"> <?php // Keep existing wrapper ?>
-            <div class="qp-dashboard-layout">
-                <?php // --- NEW: Add Toggle Button and Overlay --- ?>
+
+        <?php // --- NEW: Add Mobile Header --- ?>
+            <div id="qp-mobile-header">
+                <?php // --- MOVED: Toggle Button is now here --- ?>
                 <button class="qp-sidebar-toggle" aria-label="Toggle Navigation" aria-expanded="false">
                     <span class="dashicons dashicons-menu-alt"></span>
                 </button>
+                <span class="qp-mobile-header-title"><?php bloginfo('name'); // Optional: Add site title ?></span>
+                <?php // --- END MOVE --- ?>
+            </div>
+            <?php // --- END NEW --- ?>
+            <div class="qp-dashboard-layout">
+                <?php // --- ADD THIS LINE --- ?>
                 <div class="qp-sidebar-overlay"></div>
-                <?php // --- END NEW --- ?>
-
+                <?php // --- END ADD --- ?>
                 <aside class="qp-sidebar">
                     <div class="qp-sidebar-header" style="text-align: center; padding-bottom: 1rem; margin-bottom: 1rem; border-bottom: 1px solid var(--qp-dashboard-border);">
+                        <?php // --- ADD THIS BUTTON --- ?>
+                         <button class="qp-sidebar-close-btn" aria-label="Close Navigation">
+                             <span class="dashicons dashicons-no-alt"></span>
+                         </button>
+                         <?php // --- END ADD --- ?>
                          <span class="qp-user-name" style="font-size: 1.1em; font-weight: 600;"><?php echo esc_html($current_user->display_name); ?></span><br>
                          <span class="qp-access-status" style="font-size: 0.85em; color: var(--qp-dashboard-text-light);">
                              <?php echo wp_kses_post($access_status_message); ?>
