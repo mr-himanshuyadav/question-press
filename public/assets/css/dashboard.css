@@ -473,7 +473,9 @@ ul.qp-review-list li:last-child { border-bottom: none; }
 
 /* --- Mobile Responsiveness --- */
 @media (max-width: 782px) {
-    .qp-main-content { padding: var(--qp-dashboard-mobile-padding); }
+    .qp-main-content {
+	margin-left: 0px;
+}
     .qp-sidebar {
         width: var(--qp-dashboard-sidebar-width); /* Full width when open */
         transform: translateX(-100%); /* Start hidden */
@@ -563,3 +565,163 @@ ul.qp-review-list li:last-child { border-bottom: none; }
 .qp-custom-checkbox span::after { content: ""; position: absolute; display: none; left: 5px; top: 2px; width: 4px; height: 8px; border: solid white; border-width: 0 2px 2px 0; transform: rotate(45deg); }
 .qp-custom-checkbox input:checked~span::after { display: block; }
 .qp-custom-checkbox input:focus~span { box-shadow: 0 0 0 1px var(--qp-dashboard-primary); }
+
+/* =================================================================
+   Dashboard Polish - History, Review, Progress Sections
+   ================================================================= */
+
+/* --- History Section Polish --- */
+.qp-history-header {
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--qp-dashboard-border-light); /* Lighter border */
+}
+
+/* Ensure full history table matches recent history styling */
+.qp-full-history-table {
+    border-color: var(--qp-dashboard-border-light);
+    background-color: var(--qp-dashboard-card-bg); /* Use card background */
+}
+.qp-full-history-table th {
+    font-size: 13px; /* Smaller header font */
+    background-color: var(--qp-dashboard-table-header-bg);
+    border-bottom-color: var(--qp-dashboard-border-light);
+}
+.qp-full-history-table td {
+    border-bottom-color: var(--qp-dashboard-border-light);
+    color: var(--qp-dashboard-text-dark);
+}
+.qp-full-history-table td[data-label="Result"] strong {
+    font-weight: 600; /* Ensure result stands out */
+}
+.qp-full-history-table tr:last-child td {
+    border-bottom: none;
+}
+.qp-full-history-table tr.qp-session-paused td {
+    background-color: var(--qp-dashboard-paused-bg); /* Ensure paused style */
+}
+/* Ensure consistent action button styling in full history table */
+.qp-full-history-table .qp-actions-cell .qp-button,
+.qp-full-history-table .qp-actions-cell .qp-delete-session-btn {
+    opacity: 0.7; /* Dim by default */
+    transition: opacity 0.2s ease;
+}
+.qp-full-history-table tr:hover .qp-actions-cell .qp-button,
+.qp-full-history-table tr:hover .qp-actions-cell .qp-delete-session-btn {
+    opacity: 1; /* Show fully on hover */
+}
+.qp-full-history-table .qp-actions-cell .qp-delete-session-btn {
+    padding: 4px 6px; /* Adjust padding */
+}
+
+/* Mobile history table card consistency */
+@media (max-width: 782px) {
+    .qp-full-history-table tr {
+        border-color: var(--qp-dashboard-border-light);
+        background-color: var(--qp-dashboard-card-bg);
+    }
+     .qp-full-history-table td {
+         border-bottom-color: var(--qp-dashboard-border-light);
+     }
+      .qp-full-history-table tr.qp-session-paused {
+          background-color: var(--qp-dashboard-paused-bg);
+          border-left: 4px solid var(--qp-dashboard-warning);
+      }
+}
+
+
+/* --- Review Section Polish --- */
+/* Style the "Practice Mistakes" card consistently */
+#qp-dashboard-review .qp-practice-card {
+    border-color: var(--qp-dashboard-border-light);
+    background-color: var(--qp-dashboard-card-bg); /* Match card background */
+}
+#qp-dashboard-review .qp-practice-card .qp-card-content h4 {
+    font-size: 1.15em; /* Match h3 size */
+    margin-bottom: 0.5rem;
+}
+#qp-dashboard-review .qp-practice-card p {
+    color: var(--qp-dashboard-text-light);
+    font-size: 0.95em; /* Slightly smaller text */
+    line-height: 1.5;
+}
+#qp-dashboard-review .qp-practice-card .qp-card-action .qp-custom-checkbox {
+    font-size: 13px; /* Consistent checkbox label size */
+}
+
+/* Refine Review List Header */
+.qp-review-list-header {
+    border-bottom-color: var(--qp-dashboard-border-light);
+    margin-top: 2rem; /* More space after divider */
+    margin-bottom: 0; /* Remove bottom margin, list handles spacing */
+    padding-bottom: 0.75rem;
+}
+.qp-review-list-header h3 { font-size: 1.3em; }
+
+/* Refine Review List Items */
+ul.qp-review-list {
+    margin-top: 0; /* Remove top margin */
+    border-color: var(--qp-dashboard-border-light);
+    background-color: var(--qp-dashboard-card-bg);
+}
+ul.qp-review-list li {
+    padding: 1rem 1.5rem; /* Match card padding */
+    border-bottom-color: var(--qp-dashboard-border-light);
+}
+.qp-review-list-q-text { font-size: 1em; } /* Slightly larger text */
+.qp-review-list-q-text small { font-size: 0.85em; } /* Smaller meta text */
+
+
+/* --- Progress Section Polish --- */
+/* Filter card refinement */
+.qp-progress-filters {
+    border-color: var(--qp-dashboard-border-light);
+    background-color: var(--qp-dashboard-card-bg); /* Match card background */
+    box-shadow: var(--qp-dashboard-shadow);
+}
+.qp-progress-filters .qp-form-group label { font-size: 13px; }
+
+/* Progress Results Container */
+#qp-progress-results-container {
+    border-color: var(--qp-dashboard-border-light);
+}
+
+/* Progress Tree Item Refinements */
+.qp-progress-item {
+    border-color: var(--qp-dashboard-border-light); /* Lighter border for all items */
+    transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+}
+ .qp-progress-item:hover {
+     border-color: #c8cacf; /* Darker border on hover */
+     box-shadow: var(--qp-dashboard-shadow);
+ }
+.qp-progress-item.subject-level { background-color: var(--qp-dashboard-card-header-bg); border-color: var(--qp-dashboard-border); }
+.qp-progress-item.topic-level { background-color: #fcfcfc; } /* Very light grey */
+.qp-progress-item.section-level { background-color: var(--qp-dashboard-card-bg); }
+
+.qp-progress-label { padding: 10px 15px; } /* Consistent padding */
+.qp-progress-item.subject-level .qp-progress-label { padding: 12px 15px; }
+
+.qp-progress-item-name { font-weight: 500; }
+.qp-progress-item.subject-level .qp-progress-item-name { font-weight: 700; }
+
+.qp-source-children-container, .qp-topic-sections-container {
+    border-left-color: var(--qp-dashboard-border-light); /* Lighter indentation line */
+}
+
+/* Active group highlight */
+.qp-progress-item.is-active-group {
+    border-color: var(--qp-dashboard-primary-light); /* Light blue border */
+    background-color: var(--qp-dashboard-nav-active-bg); /* Use nav active bg */
+}
+.qp-progress-item.is-active-group > .qp-progress-label {
+    font-weight: 600; /* Bolder for active */
+}
+
+/* Progress Percentage Bubble */
+.qp-progress-percentage {
+    background-color: var(--qp-dashboard-primary-light); /* Light blue background */
+    color: var(--qp-dashboard-primary); /* Darker blue text */
+    font-weight: 600; /* Bolder percentage */
+    border: 1px solid #b3d7f3; /* Subtle border */
+}
