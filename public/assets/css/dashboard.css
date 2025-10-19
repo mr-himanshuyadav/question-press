@@ -441,3 +441,44 @@ ul.qp-review-list li:last-child { border-bottom: none; }
     min-height: 100px; /* Adjust as needed */
     position: relative; /* For loader positioning */
 }
+
+/* --- Review Modal Centering Fix --- */
+#qp-review-modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.6);
+    z-index: 1050; /* Ensure it's above other dashboard elements */
+    display: flex; /* Use flexbox */
+    justify-content: center; /* Center horizontally */
+    align-items: center; /* Center vertically */
+    /* display: none; /* Keep initially hidden - JS handles showing/hiding */
+}
+
+#qp-review-modal-content {
+    background: #fff;
+    padding: 2rem;
+    border-radius: var(--qp-dashboard-radius, 6px); /* Use dashboard radius */
+    max-width: 90%;
+    width: 700px; /* Or your preferred width */
+    max-height: 90vh;
+    overflow-y: auto;
+    position: relative; /* Needed for absolute positioning of close button */
+    box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+}
+
+/* Ensure close button style is present */
+.qp-modal-close-btn {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    font-size: 24px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--qp-dashboard-text-light, #50575e);
+    line-height: 1;
+    padding: 0;
+}
