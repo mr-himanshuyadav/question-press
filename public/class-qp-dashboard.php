@@ -334,7 +334,8 @@ class QP_Dashboard
              );
              foreach ($results as $result) {
                  $total_attempted = $result->correct + $result->incorrect;
-                 $accuracy_stats[$result->session_id] = ($total_attempted > 0) ? round(($result->correct / $total_attempted) * 100) . '%' : '0%';
+                 $accuracy = ($total_attempted > 0) ? (($result->correct / $total_attempted) * 100) : 0;
+                 $accuracy_stats[$result->session_id] = number_format($accuracy, 2) . '%';
              }
          }
 
@@ -368,7 +369,12 @@ class QP_Dashboard
                         $settings = json_decode($session->settings_snapshot, true);
                         $mode = self::get_session_mode_name($session, $settings);
                         $subjects_display = self::get_session_subjects_display($session, $settings, $lineage_cache, $group_to_topic_map, $question_to_group_map);
-                        $result_display = $accuracy_stats[$session->session_id] ?? self::get_session_result_display($session, $settings); // Use calculated accuracy if available
+                        // Use pre-calculated stats for accuracy, otherwise fallback for scored sessions
+                        if (isset($accuracy_stats[$session->session_id]) && !$is_scored) {
+                            $result_display = $accuracy_stats[$session->session_id];
+                        } else {
+                            $result_display = self::get_session_result_display($session, $settings);
+                        }
                          $status_display = ucfirst($session->status);
                          if ($session->status === 'abandoned') $status_display = 'Abandoned';
                          if ($session->end_reason === 'autosubmitted_timer') $status_display = 'Auto-Submitted';
@@ -680,8 +686,10 @@ class QP_Dashboard
             return number_format((float)$session->marks_obtained, 1) . ' Score';
         } else {
              $total_attempted = (int) $session->correct_count + (int) $session->incorrect_count;
-             $accuracy = ($total_attempted > 0) ? round(((int) $session->correct_count / $total_attempted) * 100) : 0;
-             return $accuracy . '% Acc';
+             // Calculate accuracy
+             $accuracy = ($total_attempted > 0) ? (((int) $session->correct_count / $total_attempted) * 100) : 0;
+             // Format to two decimal places and add '%'
+             return number_format($accuracy, 2) . '%';
         }
     }
 
