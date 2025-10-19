@@ -33,6 +33,85 @@ jQuery(document).ready(function($) {
         // Navigation/section switching logic will be added later
     });
 
+    // --- NEW: Sidebar Navigation & Section Switching Logic ---
+    var $dashboardSections = $('.qp-dashboard-section'); // Cache the section elements
+    var $sidebarNavLinks = $('.qp-sidebar-nav a'); // Cache the nav links
+
+    // Function to switch sections
+    function showSection(sectionId) {
+        var targetSection = $('#' + sectionId); // Find the target section by ID
+
+        if (targetSection.length) {
+            // Update sidebar link active state
+            $sidebarNavLinks.removeClass('active');
+            $sidebarNavLinks.filter('[href="#' + sectionId.replace('qp-dashboard-', '') + '"]').addClass('active');
+
+            // Hide all sections, then show the target one
+            $dashboardSections.removeClass('active').hide(); // Hide ensures display:none is applied
+            targetSection.addClass('active').show(); // Show ensures display:block/flex etc. is applied before animation
+
+            // Update URL hash without jumping
+            history.pushState(null, null, '#' + sectionId.replace('qp-dashboard-', ''));
+
+            // If switching to the 'History' tab, maybe trigger data loading if needed
+            // if (sectionId === 'qp-dashboard-history') {
+            //     loadHistoryData(); // Example: Call a function to load history via AJAX if not already loaded
+            // }
+            // Add similar checks for 'Review' and 'Progress' if using AJAX loading
+             if (sectionId === 'qp-dashboard-progress') {
+                 // Trigger change on subject dropdown to potentially load sources if a subject is pre-selected (or just enable it)
+                 $('#qp-progress-subject').trigger('change');
+             }
+
+        } else {
+            // Fallback to overview if the target doesn't exist
+            showSection('qp-dashboard-overview');
+        }
+    }
+
+    // Handle clicks on sidebar navigation links
+    $sidebarNavLinks.on('click', function(e) {
+        e.preventDefault(); // Prevent default anchor jump
+        var targetHash = $(this).attr('href'); // Get the href (e.g., "#history")
+        var sectionId = 'qp-dashboard-' + targetHash.substring(1); // Construct the section ID (e.g., "qp-dashboard-history")
+
+        // Close sidebar if open (mobile view) - Moved logic here
+         if ($body.hasClass('qp-sidebar-open')) {
+             $body.removeClass('qp-sidebar-open');
+             $sidebarToggle.attr('aria-expanded', 'false');
+             // Add a small delay for the sidebar to close before switching content
+             setTimeout(function() {
+                 showSection(sectionId);
+             }, 300); // Adjust delay to match CSS transition
+         } else {
+             showSection(sectionId); // Switch immediately on desktop
+         }
+    });
+
+    // Initial load: Check URL hash and show the corresponding section
+    var initialHash = window.location.hash;
+    if (initialHash) {
+        var initialSectionId = 'qp-dashboard-' + initialHash.substring(1);
+        // Small delay to ensure CSS transitions don't clash on initial load
+        setTimeout(function() {
+            showSection(initialSectionId);
+             // Special check for mobile: If navigating directly via hash, ensure sidebar is closed
+             if ($body.hasClass('qp-mobile-dashboard')) {
+                 $body.removeClass('qp-sidebar-open');
+                 $sidebarToggle.attr('aria-expanded', 'false');
+             }
+        }, 10);
+    } else {
+         // Default to overview if no hash is present
+         showSection('qp-dashboard-overview');
+    }
+
+     // Handle 'View Full History' link click
+     wrapper.on('click', '.qp-view-full-history-link', function(e) {
+         e.preventDefault();
+         showSection('qp-dashboard-history');
+     });
+
     // --- NEW: Handler for removing an item from the review list ---
     wrapper.on('click', '.qp-review-list-remove-btn', function(e) {
         e.preventDefault();
