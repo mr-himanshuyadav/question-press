@@ -82,6 +82,12 @@ class QP_Dashboard
         ?>
         <div id="qp-practice-app-wrapper"> <?php // Keep existing wrapper ?>
             <div class="qp-dashboard-layout">
+                <?php // --- NEW: Add Toggle Button and Overlay --- ?>
+                <button class="qp-sidebar-toggle" aria-label="Toggle Navigation" aria-expanded="false">
+                    <span class="dashicons dashicons-menu-alt"></span>
+                </button>
+                <div class="qp-sidebar-overlay"></div>
+                <?php // --- END NEW --- ?>
 
                 <aside class="qp-sidebar">
                     <div class="qp-sidebar-header" style="text-align: center; padding-bottom: 1rem; margin-bottom: 1rem; border-bottom: 1px solid var(--qp-dashboard-border);">

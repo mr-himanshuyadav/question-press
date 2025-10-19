@@ -3,6 +3,35 @@ jQuery(document).ready(function($) {
     var subjectSelect = $('#qp-progress-subject');
     var sourceSelect = $('#qp-progress-source');
     var resultsContainer = $('#qp-progress-results-container');
+    var $body = $('body');
+    var $sidebarToggle = $('.qp-sidebar-toggle');
+    var $sidebarOverlay = $('.qp-sidebar-overlay');
+    var $sidebar = $('.qp-sidebar');
+    var $sidebarLinks = $('.qp-sidebar-nav a');
+
+    // --- NEW: Off-Canvas Sidebar Toggle Logic ---
+    $sidebarToggle.on('click', function() {
+        $body.toggleClass('qp-sidebar-open qp-mobile-dashboard'); // Add mobile class dynamically
+        // Update aria-expanded attribute for accessibility
+        var isExpanded = $body.hasClass('qp-sidebar-open');
+        $(this).attr('aria-expanded', isExpanded);
+    });
+
+    // Close sidebar when overlay is clicked
+    $sidebarOverlay.on('click', function() {
+        $body.removeClass('qp-sidebar-open');
+        $sidebarToggle.attr('aria-expanded', 'false');
+    });
+
+    // Close sidebar when a navigation link is clicked (especially on mobile)
+    $sidebarLinks.on('click', function() {
+        // Check if the sidebar is currently open (primarily for mobile)
+        if ($body.hasClass('qp-sidebar-open')) {
+             $body.removeClass('qp-sidebar-open');
+             $sidebarToggle.attr('aria-expanded', 'false');
+        }
+        // Navigation/section switching logic will be added later
+    });
 
     // --- NEW: Handler for removing an item from the review list ---
     wrapper.on('click', '.qp-review-list-remove-btn', function(e) {

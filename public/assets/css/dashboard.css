@@ -131,35 +131,89 @@ body {
 
 /* --- Responsive (Mobile Sidebar - Off-canvas or Collapsed - Placeholder for now) --- */
 @media (max-width: 782px) {
+    /* Add a body class for easier targeting */
+    body.qp-mobile-dashboard {
+        overflow-x: hidden; /* Prevent horizontal scroll when sidebar is out */
+    }
+
     .qp-sidebar {
-        /* Example: Make sidebar narrower on mobile, or hide it */
-         width: var(--qp-dashboard-sidebar-width-collapsed); /* Use collapsed width */
-         /* Add styles here later to hide text, show icons only, or implement off-canvas */
-         padding: 1.5rem 0; /* Adjust padding if needed */
-         /* Hide text, show only icons - simplistic example */
+        position: fixed; /* Keep it fixed */
+        top: 32px; /* Below admin bar */
+        left: 0;
+        bottom: 0;
+        width: var(--qp-dashboard-sidebar-width); /* Use full width when open */
+        transform: translateX(-100%); /* Start hidden off-screen left */
+        transition: transform 0.3s ease-in-out;
+        z-index: 1001; /* Ensure sidebar is above content */
+        border-right: 1px solid var(--qp-dashboard-border);
+        box-shadow: 2px 0 10px rgba(0,0,0,0.1); /* Add shadow for depth */
+        overflow-y: auto; /* Ensure scrolling */
     }
-     .qp-sidebar-nav li a span:not(.dashicons) {
-         /* display: none; */ /* Uncomment later if using icon-only */
-         position: absolute;
-         left: var(--qp-dashboard-sidebar-width-collapsed);
-         background: #333;
-         color: white;
-         padding: 5px 10px;
-         border-radius: 4px;
-         white-space: nowrap;
-         opacity: 0;
-         visibility: hidden;
-         transition: opacity 0.2s ease;
-         margin-left: 10px; /* Space from icon */
+
+    /* State when sidebar is open */
+    body.qp-sidebar-open .qp-sidebar {
+        transform: translateX(0); /* Slide in */
     }
-     .qp-sidebar-nav li a:hover span:not(.dashicons) {
-         /* opacity: 1; */ /* Show tooltip on hover */
-         /* visibility: visible; */
-    }
+
     .qp-main-content {
-        margin-left: var(--qp-dashboard-sidebar-width-collapsed); /* Adjust content margin */
-        padding: 1.5rem;
+        margin-left: 0; /* Remove the desktop margin */
+        padding: 1.5rem 1rem; /* Adjust padding for mobile */
+        transition: transform 0.3s ease-in-out; /* Add transition for push effect */
+        width: 100%; /* Ensure content takes full width */
+        box-sizing: border-box; /* Include padding in width */
     }
+
+    /* Optional: Push content slightly when sidebar opens */
+    /* body.qp-sidebar-open .qp-main-content { */
+        /* transform: translateX(50px); */ /* Adjust push amount as needed */
+    /* } */
+
+    /* Overlay for dimming content */
+    .qp-sidebar-overlay {
+        position: fixed;
+        top: 32px; /* Below admin bar */
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: rgba(0, 0, 0, 0.4);
+        z-index: 1000; /* Below sidebar, above content */
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out;
+    }
+    body.qp-sidebar-open .qp-sidebar-overlay {
+        opacity: 1;
+        visibility: visible;
+    }
+
+    /* Sidebar Toggle Button (Style for the button we'll add in PHP) */
+    .qp-sidebar-toggle {
+        display: block; /* Show only on mobile */
+        position: fixed; /* Or absolute within header */
+        top: 40px; /* Adjust positioning as needed */
+        left: 10px;
+        z-index: 1002; /* Above content and overlay */
+        background: var(--qp-dashboard-sidebar-bg);
+        border: 1px solid var(--qp-dashboard-border);
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        padding: 0;
+        cursor: pointer;
+        box-shadow: var(--qp-dashboard-shadow);
+    }
+     .qp-sidebar-toggle .dashicons {
+         font-size: 24px;
+         line-height: 40px; /* Center icon vertically */
+         color: var(--qp-dashboard-text-dark);
+    }
+
+    .qp-recent-history-table thead { display: none; }
+     .qp-recent-history-table tr { display: block; margin-bottom: 1rem; border: 1px solid var(--qp-dashboard-border); border-radius: var(--qp-dashboard-radius); padding: 0.5rem 1rem; }
+     .qp-recent-history-table td { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px dashed #eee; text-align: right; }
+     .qp-recent-history-table td:last-child { border-bottom: none; }
+     .qp-recent-history-table td::before { content: attr(data-label); font-weight: 600; text-align: left; margin-right: 1rem; color: var(--qp-dashboard-text-dark); }
+     .qp-recent-history-table .qp-actions-cell { justify-content: flex-end; } /* Align buttons right */
 }
 
 /* --- Overview Section Specific Styles --- */
@@ -239,16 +293,6 @@ body {
     text-decoration: none;
 }
 .qp-view-full-history-link:hover { text-decoration: underline; }
-
-/* Hide table header and use data-labels on mobile for recent history */
-@media (max-width: 782px) {
-     .qp-recent-history-table thead { display: none; }
-     .qp-recent-history-table tr { display: block; margin-bottom: 1rem; border: 1px solid var(--qp-dashboard-border); border-radius: var(--qp-dashboard-radius); padding: 0.5rem 1rem; }
-     .qp-recent-history-table td { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px dashed #eee; text-align: right; }
-     .qp-recent-history-table td:last-child { border-bottom: none; }
-     .qp-recent-history-table td::before { content: attr(data-label); font-weight: 600; text-align: left; margin-right: 1rem; color: var(--qp-dashboard-text-dark); }
-     .qp-recent-history-table .qp-actions-cell { justify-content: flex-end; } /* Align buttons right */
-}
 
 /* Overall Stats Grid - Consistent Spacing */
 .qp-overall-stats {
