@@ -2884,6 +2884,10 @@ function qp_public_enqueue_scripts()
         $can_delete = !empty(array_intersect($user_roles, $allowed_roles));
 
         wp_enqueue_style('qp-practice-styles', QP_PLUGIN_URL . 'public/assets/css/practice.css', [], $css_version);
+        if (has_shortcode($post->post_content, 'question_press_dashboard')) {
+            $dashboard_css_version = filemtime(QP_PLUGIN_DIR . 'public/assets/css/dashboard.css'); // Get version for cache busting
+            wp_enqueue_style('qp-dashboard-styles', QP_PLUGIN_URL . 'public/assets/css/dashboard.css', ['qp-practice-styles'], $dashboard_css_version); // Make it dependent on practice styles
+        }
         wp_enqueue_script('sweetalert2', 'https://cdn.jsdelivr.net/npm/sweetalert2@11', [], null, true);
 
         $options = get_option('qp_settings');
