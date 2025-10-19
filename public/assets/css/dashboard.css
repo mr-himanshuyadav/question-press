@@ -1,0 +1,163 @@
+/* =================================================================
+   Question Press Dashboard Styles - Sidebar Layout
+   ================================================================= */
+
+:root {
+    --qp-dashboard-primary: #2271b1;
+    --qp-dashboard-primary-hover: #1d5f96;
+    --qp-dashboard-bg: #f0f2f5;         /* Light grey page background */
+    --qp-dashboard-sidebar-bg: #ffffff; /* White sidebar */
+    --qp-dashboard-content-bg: transparent; /* Content area background (transparent to show page bg) */
+    --qp-dashboard-card-bg: #ffffff;    /* White cards */
+    --qp-dashboard-border: #dcdcde;
+    --qp-dashboard-text-dark: #1d2327;
+    --qp-dashboard-text-light: #50575e;
+    --qp-dashboard-nav-text: #3c434a;
+    --qp-dashboard-nav-hover-bg: #f0f0f1;
+    --qp-dashboard-nav-active-bg: #e6f1f9; /* Light blue for active nav */
+    --qp-dashboard-nav-active-text: var(--qp-dashboard-primary);
+    --qp-dashboard-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    --qp-dashboard-radius: 6px;
+    --qp-dashboard-sidebar-width: 240px;
+    --qp-dashboard-sidebar-width-collapsed: 70px; /* For potential future collapsed state */
+}
+
+/* Remove default body margin if theme adds it */
+body {
+    margin: 0;
+}
+
+#qp-practice-app-wrapper {
+    padding: 0; /* Override padding from practice.css for dashboard */
+    max-width: 100%;
+    background-color: var(--qp-dashboard-bg); /* Apply background to the wrapper */
+}
+
+.qp-dashboard-layout {
+    display: flex;
+    min-height: calc(100vh - 32px); /* Full height minus WP admin bar */
+    background-color: var(--qp-dashboard-bg);
+}
+
+/* --- Sidebar --- */
+.qp-sidebar {
+    width: var(--qp-dashboard-sidebar-width);
+    background-color: var(--qp-dashboard-sidebar-bg);
+    border-right: 1px solid var(--qp-dashboard-border);
+    padding: 1.5rem 0;
+    transition: width 0.3s ease;
+    flex-shrink: 0; /* Prevent sidebar from shrinking */
+    position: fixed; /* Fixed position */
+    top: 32px; /* Account for WP admin bar */
+    bottom: 0;
+    left: 0;
+    overflow-y: auto; /* Allow scrolling if content overflows */
+}
+
+/* --- Main Content Area --- */
+.qp-main-content {
+    flex-grow: 1;
+    padding: 2rem;
+    background-color: var(--qp-dashboard-content-bg);
+    margin-left: var(--qp-dashboard-sidebar-width); /* Offset by sidebar width */
+    transition: margin-left 0.3s ease;
+}
+
+/* --- Card Component --- */
+.qp-card {
+    background-color: var(--qp-dashboard-card-bg);
+    border: 1px solid var(--qp-dashboard-border);
+    border-radius: var(--qp-dashboard-radius);
+    box-shadow: var(--qp-dashboard-shadow);
+    margin-bottom: 1.5rem;
+    overflow: hidden; /* Ensures content respects border-radius */
+}
+
+.qp-card-header {
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--qp-dashboard-border);
+    background-color: #f6f7f7; /* Slightly off-white header */
+}
+
+.qp-card-header h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--qp-dashboard-text-dark);
+}
+
+.qp-card-content {
+    padding: 1.5rem;
+}
+
+.qp-card-content p:first-child {
+    margin-top: 0;
+}
+ .qp-card-content p:last-child {
+    margin-bottom: 0;
+}
+
+/* --- Basic Sidebar Navigation (Placeholder) --- */
+.qp-sidebar-nav {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.qp-sidebar-nav li a {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 20px;
+    text-decoration: none;
+    color: var(--qp-dashboard-nav-text);
+    font-weight: 500;
+    border-radius: 4px;
+    margin: 5px 15px;
+    transition: background-color 0.2s ease, color 0.2s ease;
+}
+ .qp-sidebar-nav li a:hover {
+    background-color: var(--qp-dashboard-nav-hover-bg);
+}
+.qp-sidebar-nav li a.active {
+    background-color: var(--qp-dashboard-nav-active-bg);
+    color: var(--qp-dashboard-nav-active-text);
+    font-weight: 600;
+}
+.qp-sidebar-nav li a .dashicons {
+    font-size: 20px;
+    line-height: 1;
+}
+
+/* --- Responsive (Mobile Sidebar - Off-canvas or Collapsed - Placeholder for now) --- */
+@media (max-width: 782px) {
+    .qp-sidebar {
+        /* Example: Make sidebar narrower on mobile, or hide it */
+         width: var(--qp-dashboard-sidebar-width-collapsed); /* Use collapsed width */
+         /* Add styles here later to hide text, show icons only, or implement off-canvas */
+         padding: 1.5rem 0; /* Adjust padding if needed */
+         /* Hide text, show only icons - simplistic example */
+    }
+     .qp-sidebar-nav li a span:not(.dashicons) {
+         /* display: none; */ /* Uncomment later if using icon-only */
+         position: absolute;
+         left: var(--qp-dashboard-sidebar-width-collapsed);
+         background: #333;
+         color: white;
+         padding: 5px 10px;
+         border-radius: 4px;
+         white-space: nowrap;
+         opacity: 0;
+         visibility: hidden;
+         transition: opacity 0.2s ease;
+         margin-left: 10px; /* Space from icon */
+    }
+     .qp-sidebar-nav li a:hover span:not(.dashicons) {
+         /* opacity: 1; */ /* Show tooltip on hover */
+         /* visibility: visible; */
+    }
+    .qp-main-content {
+        margin-left: var(--qp-dashboard-sidebar-width-collapsed); /* Adjust content margin */
+        padding: 1.5rem;
+    }
+}
