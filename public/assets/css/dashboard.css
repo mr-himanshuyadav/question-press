@@ -1,5 +1,5 @@
 /* =================================================================
-   Question Press Dashboard Styles - Sidebar Layout v1.0
+   Question Press Dashboard Styles - Sidebar Layout v1.1 (Consolidated)
    ================================================================= */
 
 :root {
@@ -10,7 +10,9 @@
 	--qp-dashboard-danger: #d63638;      /* Red for delete/terminate */
 	--qp-dashboard-danger-hover: #b02a2a;
 	--qp-dashboard-success: #2e7d32;     /* Green for positive actions */
-	--qp-dashboard-warning: #f57f17;     /* Amber/Orange for warnings/paused */
+	--qp-dashboard-success-hover: #1b5e20;
+	--qp-dashboard-warning: #ffb13d;     /* Orange/Amber for warnings/paused */
+	--qp-dashboard-warning-dark: #f57f17;
 	--qp-dashboard-info: #1976d2;      /* Blue for informational */
 
 	/* Backgrounds */
@@ -23,6 +25,10 @@
 	--qp-dashboard-nav-active-bg: var(--qp-dashboard-primary-light);
 	--qp-dashboard-table-header-bg: #f9f9f9;
 	--qp-dashboard-paused-bg: #fff8ed;    /* Light orange for paused items */
+    --qp-dashboard-progress-bar-bg: #d8f3da; /* Light green progress */
+    --qp-dashboard-progress-item-bg: #ffffff;
+    --qp-dashboard-progress-topic-bg: #fafafa;
+    --qp-dashboard-progress-subject-bg: #f0f2f5;
 
 	/* Text */
 	--qp-dashboard-text-dark: #1d2327;    /* Primary text */
@@ -32,33 +38,33 @@
 	--qp-dashboard-nav-active-text: var(--qp-dashboard-primary);
 	--qp-dashboard-link: var(--qp-dashboard-primary);
 	--qp-dashboard-link-hover: var(--qp-dashboard-primary-hover);
+    --qp-dashboard-progress-percentage-text: #1e4620; /* Dark green for progress % */
 
 	/* Borders & Shadows */
-	--qp-dashboard-border: #dcdcde;
+	--qp-dashboard-border-light: #e5e7eb; /* Lighter border for cards */
+	--qp-dashboard-border: #dcdcde;       /* Standard border */
 	--qp-dashboard-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 	--qp-dashboard-shadow-hover: 0 4px 10px rgba(0, 0, 0, 0.08);
 	--qp-dashboard-radius: 6px;
 
 	/* Layout */
-	--qp-dashboard-sidebar-width: 250px; /* Slightly wider */
-	--qp-dashboard-sidebar-width-collapsed: 70px; /* Only used conceptually in mobile CSS */
+	--qp-dashboard-sidebar-width: 250px;
 	--qp-dashboard-content-padding: 2rem;
 	--qp-dashboard-mobile-padding: 1rem;
 }
 
+* { box-sizing: border-box; outline: none; }
+
 /* --- General Typography & Base --- */
-/* Remove default body margin if theme adds it */
-body {
-	margin: 0;
-}
+body { margin: 0; }
 
 #qp-practice-app-wrapper {
-	padding: 0; /* Override padding from practice.css for dashboard */
+	padding: 0;
 	max-width: 100%;
-	background-color: var(--qp-dashboard-bg); /* Apply background to the wrapper */
+	background-color: var(--qp-dashboard-bg);
 	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
 	color: var(--qp-dashboard-text-dark);
-	font-size: 14px; /* Slightly smaller base font */
+	font-size: 14px;
 	line-height: 1.6;
 }
 
@@ -68,46 +74,50 @@ body {
 	background-color: var(--qp-dashboard-bg);
 }
 
-.qp-dashboard-layout h2 { /* Consistent Heading Style */
+.qp-dashboard-layout h2 {
 	font-size: 1.5em; /* ~21px */
 	font-weight: 600;
 	color: var(--qp-dashboard-text-dark);
-	margin: 0 0 1rem 0;
+	margin: 0 0 1.5rem 0; /* Consistent bottom margin */
+    line-height: 1.3;
 }
- .qp-dashboard-layout h3 { /* Consistent Sub-Heading Style */
+ .qp-dashboard-layout h3 {
 	 font-size: 1.15em; /* ~16px */
 	 font-weight: 600;
 	 margin: 0;
 	 color: var(--qp-dashboard-text-dark);
+     line-height: 1.4;
  }
+ .qp-dashboard-layout p { margin: 0 0 1rem 0; }
+ .qp-dashboard-layout p:last-child { margin-bottom: 0; }
 
 /* --- Sidebar --- */
 .qp-sidebar {
 	width: var(--qp-dashboard-sidebar-width);
-	padding: 1rem 0; /* Adjusted padding */
-	box-shadow: 1px 0 5px rgba(0,0,0,0.05); /* Subtle right shadow */
+	padding: 1rem 0;
+	box-shadow: 1px 0 5px rgba(0,0,0,0.05);
 	background-color: var(--qp-dashboard-sidebar-bg);
-	border-right: 1px solid var(--qp-dashboard-border);
-	transition: width 0.3s ease; /* Keep width transition for potential future collapse */
-	flex-shrink: 0; /* Prevent sidebar from shrinking */
-	position: fixed; /* Fixed position */
-	top: 32px; /* Account for WP admin bar */
+	border-right: 1px solid var(--qp-dashboard-border-light); /* Lighter border */
+	transition: transform 0.3s ease-in-out; /* Changed from width */
+	flex-shrink: 0;
+	position: fixed;
+	top: 32px;
 	bottom: 0;
 	left: 0;
-	overflow-y: auto; /* Allow scrolling if content overflows */
-	z-index: 100; /* Ensure it's above content but below modals/overlays */
+	overflow-y: auto;
+	z-index: 1001; /* Above overlay */
 }
 
 .qp-sidebar-header {
-	 padding: 0.5rem 1.5rem 1rem 1.5rem; /* More specific padding */
+	 padding: 0.5rem 1.5rem 1rem 1.5rem;
 	 text-align: left;
-	 border-bottom: 1px solid var(--qp-dashboard-border);
+	 border-bottom: 1px solid var(--qp-dashboard-border-light);
 }
-.qp-sidebar-header .qp-user-name { font-size: 1.1em; font-weight: 600; }
+.qp-sidebar-header .qp-user-name { font-size: 1.1em; font-weight: 600; display: block; }
 .qp-sidebar-header .qp-access-status {
 	font-size: 0.85em;
 	margin-top: 4px;
-	display: inline-block; /* Allow margin-top */
+	display: inline-block;
     color: var(--qp-dashboard-text-light);
 }
 .qp-sidebar-header .qp-access-status a {
@@ -126,64 +136,64 @@ body {
 	display: flex;
 	align-items: center;
 	gap: 12px;
-	padding: 10px 25px; /* Adjust padding */
-	margin: 2px 15px; /* Tighter vertical margin */
+	padding: 10px 25px;
+	margin: 2px 15px;
 	text-decoration: none;
 	color: var(--qp-dashboard-nav-text);
 	font-weight: 500;
 	border-radius: 4px;
 	font-size: 14px;
-	transition: background-color 0.2s ease, color 0.2s ease;
-    outline: none; /* Remove focus outline */
+	transition: background-color 0.2s ease, color 0.2s ease, border-left-color 0.2s ease;
+    border-left: 4px solid transparent; /* Placeholder for active state */
+    outline: none;
 }
 .qp-sidebar-nav li a:hover {
 	background-color: var(--qp-dashboard-nav-hover-bg);
-    color: var(--qp-dashboard-text-dark); /* Darken text on hover */
+    color: var(--qp-dashboard-text-dark);
 }
- .qp-sidebar-nav li a.active { /* Ensure active background covers full width */
+ .qp-sidebar-nav li a.active {
 	 background-color: var(--qp-dashboard-nav-active-bg);
      color: var(--qp-dashboard-nav-active-text);
      font-weight: 600;
-     margin-left: 0;
-     margin-right: 0;
-     border-radius: 0;
-     border-left: 4px solid var(--qp-dashboard-primary);
-     padding-left: 21px; /* Adjust left padding to account for border */
+     margin-left: 15px; /* Keep margin for consistency */
+     margin-right: 15px;
+     border-radius: 4px;
+     border-left-color: var(--qp-dashboard-primary); /* Use border for active indicator */
+     padding-left: 21px; /* Adjust padding for border */
  }
  .qp-sidebar-nav li a .dashicons {
 	 font-size: 20px;
 	 line-height: 1;
-     width: 20px; /* Ensure consistent icon width */
+     width: 20px;
      flex-shrink: 0;
  }
- /* Style for the link text itself */
  .qp-sidebar-nav li a span:not(.dashicons) {
-	 transition: opacity 0.2s ease; /* Smooth fade for text */
+	 transition: opacity 0.2s ease;
  }
 
 .qp-sidebar-footer {
 	position: absolute;
 	bottom: 0;
 	width: 100%;
-	padding: 1rem 15px; /* Add padding */
-	border-top: 1px solid var(--qp-dashboard-border);
-	background-color: var(--qp-dashboard-sidebar-bg); /* Match sidebar bg */
-	text-align: left; /* Align left */
-	box-sizing: border-box; /* Include padding in width */
+	padding: 1rem 15px;
+	border-top: 1px solid var(--qp-dashboard-border-light);
+	background-color: var(--qp-dashboard-sidebar-bg);
+	text-align: left;
+	box-sizing: border-box;
 }
 .qp-sidebar-footer .qp-logout-link {
 	font-size: 0.9em;
 	color: var(--qp-dashboard-text-light);
-	 background-color: transparent; /* Remove background */
-	 padding: 5px; /* Add slight padding for click area */
-	 display: flex; /* Use flex for alignment */
+	 background-color: transparent;
+	 padding: 5px;
+	 display: flex;
 	 align-items: center;
 	 gap: 8px;
      text-decoration: none;
-     border-radius: 4px; /* Add radius for hover */
+     border-radius: 4px;
 }
 .qp-sidebar-footer .qp-logout-link:hover {
-	 background-color: var(--qp-dashboard-nav-hover-bg); /* Use nav hover */
+	 background-color: var(--qp-dashboard-nav-hover-bg);
 	 color: var(--qp-dashboard-text-dark);
 }
 
@@ -192,302 +202,168 @@ body {
 	flex-grow: 1;
 	padding: var(--qp-dashboard-content-padding);
 	background-color: var(--qp-dashboard-content-bg);
-	margin-left: var(--qp-dashboard-sidebar-width); /* Offset by sidebar width */
-	transition: margin-left 0.3s ease;
+	margin-left: var(--qp-dashboard-sidebar-width);
+	transition: margin-left 0.3s ease-in-out;
     box-sizing: border-box;
 }
 
 /* --- Card Component --- */
 .qp-card {
 	background-color: var(--qp-dashboard-card-bg);
-	border: 1px solid var(--qp-dashboard-border);
+	border: 1px solid var(--qp-dashboard-border-light);
 	border-radius: var(--qp-dashboard-radius);
 	box-shadow: var(--qp-dashboard-shadow);
 	transition: box-shadow 0.2s ease-in-out, transform 0.2s ease-in-out;
-	border-color: #e5e7eb; /* Slightly lighter border */
 	margin-bottom: 1.5rem;
-	overflow: hidden; /* Ensures content respects border-radius */
+	overflow: hidden;
 }
-/* Optional: Subtle lift on hover */
 .qp-card:hover {
 	box-shadow: var(--qp-dashboard-shadow-hover);
 	transform: translateY(-2px);
 }
 .qp-card-header {
 	padding: 1rem 1.5rem;
-	border-bottom: 1px solid var(--qp-dashboard-border);
+	border-bottom: 1px solid var(--qp-dashboard-border-light);
 	background-color: var(--qp-dashboard-card-header-bg);
-	 border-bottom-color: #e5e7eb; /* Match lighter border */
 }
-
-.qp-card-header h3 { font-size: 1.1em; /* ~16px */ } /* Match H3 style */
-
-.qp-card-content {
-	padding: 1.5rem;
-}
-
-.qp-card-content p:first-child { margin-top: 0; }
-.qp-card-content p:last-child { margin-bottom: 0; }
+.qp-card-header h3 { font-size: 1.1em; }
+.qp-card-content { padding: 1.5rem; }
 
 /* --- Section Display & Animation --- */
-.qp-dashboard-section {
-	display: none; /* Hide sections by default */
-}
+.qp-dashboard-section { display: none; }
 .qp-dashboard-section.active {
-	display: block; /* Show the active section */
-	animation: qpFadeIn 0.4s ease-out; /* Add fade-in animation */
+	display: block;
+	animation: qpFadeIn 0.4s ease-out;
 }
-
 @keyframes qpFadeIn {
 	from { opacity: 0; transform: translateY(10px); }
 	to { opacity: 1; transform: translateY(0); }
 }
 
-/* --- Overview Section Specific Styles --- */
-/* Overall Stats Grid */
+/* --- Overview Section --- */
 .qp-overall-stats {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-	gap: 1rem;
+	gap: 1.25rem;
 }
  .stat-item {
-	 padding: 1rem;
+	 padding: 1.25rem 1rem;
 	 text-align: center;
-	 background-color: #f9f9f9;
+	 background-color: var(--qp-dashboard-card-bg);
 	 border-radius: var(--qp-dashboard-radius);
-	 border: 1px solid var(--qp-dashboard-border);
+	 border: 1px solid var(--qp-dashboard-border-light);
+     box-shadow: none;
+     transition: transform 0.2s ease, box-shadow 0.2s ease;
  }
- .stat-label { font-size: 11px; text-transform: uppercase; color: var(--qp-dashboard-text-light); margin-bottom: 4px; display: block; }
- .stat-value { font-size: 1.5em; font-weight: 700; color: var(--qp-dashboard-text-dark); display: block; line-height: 1.1;}
+  .stat-item:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--qp-dashboard-shadow);
+  }
+ .stat-label { font-size: 12px; text-transform: uppercase; color: var(--qp-dashboard-text-light); margin-bottom: 4px; display: block; font-weight: 500; }
+ .stat-value { font-size: 1.8em; font-weight: 700; color: var(--qp-dashboard-text-dark); display: block; line-height: 1.1; margin-top: 5px;}
  .qp-overall-stats .stat-item:first-child .stat-value { color: #00897b; /* Teal */ } /* Accuracy color */
 
-/* Quick Actions */
 .qp-quick-actions {
 	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); /* Responsive columns */
+	grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
 	gap: 1rem;
 }
-
 .qp-quick-actions .qp-button {
-	width: 100%; /* Make buttons fill grid cells */
-	box-sizing: border-box;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	gap: 8px; /* Space between icon and text */
-	padding: 15px 10px; /* More padding for better look */
-	font-size: 15px;
-    /* Base styles using variables */
+	width: 100%; box-sizing: border-box; display: flex; align-items: center;
+	justify-content: center; gap: 8px; padding: 18px 12px; font-size: 14px;
     border: 1px solid var(--qp-dashboard-border);
-    background-color: var(--qp-dashboard-card-bg); /* Match card background */
+    background-color: var(--qp-dashboard-card-bg);
     color: var(--qp-dashboard-text-dark);
-    transition: all 0.2s ease;
+    font-weight: 500;
 }
- .qp-quick-actions .qp-button .dashicons {
-	 font-size: 18px;
-	 line-height: 1;
-	 margin-top: -2px; /* Fine-tune vertical alignment */
- }
+ .qp-quick-actions .qp-button .dashicons { font-size: 18px; line-height: 1; margin-top: -2px; }
  .qp-quick-actions .qp-button:hover:not(:disabled) {
-     background-color: var(--qp-dashboard-nav-hover-bg);
-     border-color: #c8cacf;
-     box-shadow: var(--qp-dashboard-shadow);
-     transform: translateY(-1px);
+     background-color: var(--qp-dashboard-nav-hover-bg); border-color: #c8cacf;
  }
  .qp-quick-actions .qp-button:disabled {
-     background-color: #f6f7f7;
-     border-color: #e5e7eb;
-     color: #a0a5aa;
-     cursor: not-allowed;
-     transform: none; /* Override hover transform */
-     box-shadow: none; /* Override hover shadow */
+     background-color: #f6f7f7; border-color: var(--qp-dashboard-border-light); color: #a0a5aa;
  }
- /* Primary action slightly different */
- .qp-quick-actions .qp-button.qp-button-primary {
-     background-color: var(--qp-dashboard-primary);
-     border-color: var(--qp-dashboard-primary);
-     color: var(--qp-dashboard-text-white);
- }
-  .qp-quick-actions .qp-button.qp-button-primary:hover:not(:disabled) {
-     background-color: var(--qp-dashboard-primary-hover);
-     border-color: var(--qp-dashboard-primary-hover);
- }
-  .qp-quick-actions .qp-button.qp-button-primary:disabled {
-      background-color: #a4c9e8; /* Lighter disabled blue */
-      border-color: #a4c9e8;
-      color: #eef5fa;
-  }
+ .qp-quick-actions .qp-button.qp-button-primary { background-color: var(--qp-dashboard-primary); border-color: var(--qp-dashboard-primary); color: var(--qp-dashboard-text-white); }
+  .qp-quick-actions .qp-button.qp-button-primary:hover:not(:disabled) { background-color: var(--qp-dashboard-primary-hover); border-color: var(--qp-dashboard-primary-hover); }
+  .qp-quick-actions .qp-button.qp-button-primary:disabled { background-color: #a4c9e8; border-color: #a4c9e8; color: #eef5fa; }
 
-/* Active/Paused Sessions List */
-.qp-active-sessions-list {
-	display: flex;
-	flex-direction: column;
-	gap: 0.75rem;
-}
-
+.qp-active-sessions-list { display: flex; flex-direction: column; gap: 0.75rem; }
 .qp-active-session-card {
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-	gap: 1rem;
-	padding: 1rem 1.5rem;
-	background-color: #f9f9f9; /* Lighter than card header */
-	border: 1px solid var(--qp-dashboard-border);
-	border-left: 4px solid var(--qp-dashboard-primary); /* Default active border */
-	border-radius: var(--qp-dashboard-radius);
-    transition: box-shadow 0.2s ease;
+	display: flex; justify-content: space-between; align-items: center; gap: 1rem;
+	padding: 1.25rem 1.5rem; background-color: var(--qp-dashboard-card-bg);
+	border: 1px solid var(--qp-dashboard-border-light); border-left: 5px solid var(--qp-dashboard-primary);
+	border-radius: var(--qp-dashboard-radius); transition: box-shadow 0.2s ease;
 }
- .qp-active-session-card:hover {
-     box-shadow: var(--qp-dashboard-shadow-hover);
- }
- .qp-active-session-card.qp-session-paused-card {
-	 border-left-color: var(--qp-dashboard-warning); /* Orange border for paused */
-	 background-color: var(--qp-dashboard-paused-bg); /* Light orange background */
- }
-
+ .qp-active-session-card:hover { box-shadow: var(--qp-dashboard-shadow-hover); }
+ .qp-active-session-card.qp-session-paused-card { background-color: var(--qp-dashboard-paused-bg); border-left-color: var(--qp-dashboard-warning); }
 .qp-card-details { flex-grow: 1; }
-.qp-card-subject { font-weight: 600; font-size: 15px; }
-.qp-card-date { font-size: 13px; color: var(--qp-dashboard-text-light); }
+.qp-card-subject { font-weight: 600; font-size: 16px; margin-bottom: 2px; }
+.qp-card-date { font-size: 12px; color: var(--qp-dashboard-text-light); }
 .qp-card-actions { display: flex; gap: 0.5rem; flex-shrink: 0; }
- .qp-card-actions .qp-button { padding: 6px 14px; font-size: 13px; } /* Smaller buttons */
+ .qp-card-actions .qp-button { padding: 6px 14px; font-size: 13px; }
 
-/* Recent History Table (Overview specific) */
-.qp-recent-history-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 1rem; /* Space above table */
-}
-.qp-recent-history-table th, .qp-recent-history-table td {
-	padding: 10px 8px;
-	text-align: left;
-	border-bottom: 1px solid var(--qp-dashboard-border);
-	font-size: 14px;
-    vertical-align: middle;
-}
-.qp-recent-history-table th {
-    font-weight: 600;
-    color: var(--qp-dashboard-text-light);
-    background-color: var(--qp-dashboard-table-header-bg);
-}
-.qp-recent-history-table td[data-label="Result"] strong { color: var(--qp-dashboard-primary); }
+.qp-recent-history-table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+.qp-recent-history-table th, .qp-recent-history-table td { padding: 12px 10px; text-align: left; border-bottom: 1px solid var(--qp-dashboard-border-light); font-size: 14px; vertical-align: middle; }
+.qp-recent-history-table th { font-weight: 600; font-size: 13px; color: var(--qp-dashboard-text-light); background-color: var(--qp-dashboard-table-header-bg); }
+.qp-recent-history-table td[data-label="Result"] strong { font-weight: 600; color: var(--qp-dashboard-primary); }
 .qp-recent-history-table tr:last-child td { border-bottom: none; }
 .qp-recent-history-table .qp-actions-cell { text-align: right; }
  .qp-recent-history-table .qp-actions-cell .qp-button { padding: 4px 10px; font-size: 12px; vertical-align: middle; }
-
-/* View Full History Link */
-.qp-view-full-history-link {
-	font-size: 14px;
-	font-weight: 500;
-	color: var(--qp-dashboard-link);
-	text-decoration: none;
-    display: inline-block; /* Allows margin */
-    margin-top: 0.5rem;
-}
+.qp-view-full-history-link { font-size: 14px; font-weight: 500; color: var(--qp-dashboard-link); text-decoration: none; display: inline-block; margin-top: 0.5rem; }
 .qp-view-full-history-link:hover { text-decoration: underline; color: var(--qp-dashboard-link-hover); }
 
 /* --- History Section --- */
 .qp-history-header {
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-	margin-bottom: 1.5rem;
-	padding-bottom: 1rem;
-	border-bottom: 1px solid var(--qp-dashboard-border);
-	flex-wrap: wrap; /* Allow wrapping on small screens */
-	gap: 1rem;
+	display: flex; justify-content: space-between; align-items: center;
+	margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--qp-dashboard-border);
+	flex-wrap: wrap; gap: 1rem;
 }
  .qp-history-header h2 { margin: 0; }
 .qp-history-actions { display: flex; gap: 0.5rem; }
 
 .qp-full-history-table { /* Extends .qp-dashboard-table */
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 1rem;
-    border: 1px solid var(--qp-dashboard-border);
-    border-radius: var(--qp-dashboard-radius);
-    overflow: hidden; /* Clip content to rounded corners */
-    box-shadow: var(--qp-dashboard-shadow);
+    width: 100%; border-collapse: collapse; margin-top: 1rem;
+    border: 1px solid var(--qp-dashboard-border-light); border-radius: var(--qp-dashboard-radius);
+    overflow: hidden; box-shadow: var(--qp-dashboard-shadow); background-color: var(--qp-dashboard-card-bg);
 }
  .qp-full-history-table th, .qp-full-history-table td {
-	padding: 12px 10px;
-	text-align: left;
-	border-bottom: 1px solid var(--qp-dashboard-border);
-	font-size: 14px;
-	vertical-align: middle;
+	padding: 12px 10px; text-align: left; border-bottom: 1px solid var(--qp-dashboard-border-light);
+	font-size: 14px; vertical-align: middle;
 }
 .qp-full-history-table th {
-	font-weight: 600;
-	color: var(--qp-dashboard-text-light);
+	font-weight: 600; font-size: 13px; color: var(--qp-dashboard-text-light);
 	background-color: var(--qp-dashboard-table-header-bg);
 }
- .qp-full-history-table tr.qp-session-paused td {
-	 background-color: var(--qp-dashboard-paused-bg); /* Light orange for paused */
- }
+ .qp-full-history-table tr.qp-session-paused td { background-color: var(--qp-dashboard-paused-bg); }
  .qp-full-history-table tr:last-child td { border-bottom: none; }
- .qp-full-history-table .qp-actions-cell {
-	 text-align: right;
-	 white-space: nowrap;
- }
+ .qp-full-history-table .qp-actions-cell { text-align: right; white-space: nowrap; }
  .qp-full-history-table .qp-actions-cell .qp-button,
  .qp-full-history-table .qp-actions-cell .qp-delete-session-btn {
-	 margin-left: 5px;
-	 padding: 4px 10px;
-	 font-size: 12px;
-	 vertical-align: middle;
-     transition: opacity 0.2s ease;
+	 margin-left: 5px; padding: 4px 10px; font-size: 12px; vertical-align: middle; transition: opacity 0.2s ease;
  }
- /* Dim buttons by default, show on row hover */
- .qp-full-history-table td .qp-button,
+ .qp-full-history-table td .qp-button, .qp-full-history-table td .qp-delete-session-btn { opacity: 0.6; }
+ .qp-full-history-table tr:hover td .qp-button, .qp-full-history-table tr:hover td .qp-delete-session-btn { opacity: 1; }
  .qp-full-history-table td .qp-delete-session-btn {
-     opacity: 0.6;
+     color: var(--qp-dashboard-danger); background: transparent; border: none; padding: 4px;
+     font-size: 11px; font-weight: 500; cursor: pointer;
  }
- .qp-full-history-table tr:hover td .qp-button,
- .qp-full-history-table tr:hover td .qp-delete-session-btn {
-     opacity: 1;
- }
-
- .qp-full-history-table td .qp-delete-session-btn { /* Style delete button */
-     color: var(--qp-dashboard-danger);
-     background: transparent;
-     border: none;
-     padding: 4px; /* Minimal padding */
-     font-size: 11px;
-     font-weight: 500;
-     cursor: pointer;
- }
-  .qp-full-history-table td .qp-delete-session-btn:hover {
-      color: var(--qp-dashboard-danger-hover);
-      text-decoration: underline;
-      opacity: 1;
-  }
+  .qp-full-history-table td .qp-delete-session-btn:hover { color: var(--qp-dashboard-danger-hover); text-decoration: underline; opacity: 1; }
 
 /* --- Review Section --- */
-/* Practice Mistakes Card - inherits .qp-card styles */
 #qp-dashboard-review .qp-practice-card { margin-bottom: 2rem; }
-#qp-dashboard-review .qp-card-action { align-items: flex-start; } /* Align checkbox left */
+#qp-dashboard-review .qp-card-action { align-items: flex-start; }
 
-/* Review List Header */
 .qp-review-list-header {
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-    flex-wrap: wrap; /* Wrap on small screens */
-    gap: 0.5rem 1rem;
-	margin: 1.5rem 0 1rem 0;
-	padding-bottom: 1rem;
+	display: flex; justify-content: space-between; align-items: center;
+    flex-wrap: wrap; gap: 0.5rem 1rem; margin: 1.5rem 0 1rem 0; padding-bottom: 1rem;
 	border-bottom: 1px solid var(--qp-dashboard-border);
 }
  .qp-review-list-header h3 { margin: 0; font-size: 1.3em; }
 
-/* Review List */
-ul.qp-review-list { list-style: none; padding: 0; margin: 0; }
+ul.qp-review-list { list-style: none; padding: 0; margin: 0; background-color: var(--qp-dashboard-card-bg); border: 1px solid var(--qp-dashboard-border-light); border-radius: var(--qp-dashboard-radius); box-shadow: var(--qp-dashboard-shadow); overflow: hidden;}
 ul.qp-review-list li {
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-	padding: 1rem 0;
-	border-bottom: 1px solid var(--qp-dashboard-border);
-	gap: 1rem;
+	display: flex; justify-content: space-between; align-items: center;
+	padding: 1rem 1.5rem; border-bottom: 1px solid var(--qp-dashboard-border-light); gap: 1rem;
 }
 ul.qp-review-list li:last-child { border-bottom: none; }
 .qp-review-list-q-text { flex-grow: 1; font-size: 14px; line-height: 1.5; }
@@ -498,175 +374,102 @@ ul.qp-review-list li:last-child { border-bottom: none; }
 
 /* --- Progress Section --- */
 .qp-progress-filters {
-	display: flex;
-	flex-wrap: wrap; /* Allow wrapping */
-	gap: 1rem;
-	margin-bottom: 1.5rem;
-	background-color: var(--qp-dashboard-card-header-bg); /* Match card header */
-	padding: 1rem 1.5rem;
-	border-radius: var(--qp-dashboard-radius);
-	border: 1px solid var(--qp-dashboard-border);
+	display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.5rem;
+	background-color: var(--qp-dashboard-card-header-bg); padding: 1rem 1.5rem;
+	border-radius: var(--qp-dashboard-radius); border: 1px solid var(--qp-dashboard-border-light);
 }
-.qp-progress-filters .qp-form-group { flex: 1; min-width: 200px; margin-bottom: 0; } /* Allow shrinking/growing */
+.qp-progress-filters .qp-form-group { flex: 1; min-width: 200px; margin-bottom: 0; }
  .qp-progress-filters .qp-form-group label { margin-bottom: 5px; font-weight: 600; font-size: 13px; }
  .qp-progress-filters select { width: 100%; }
- .qp-progress-filters .qp-custom-checkbox { padding-left: 25px; font-size: 13px; }
- .qp-progress-filters .qp-custom-checkbox span { height: 14px; width: 14px; top: 3px; } /* Adjust checkbox */
+ .qp-progress-filters .qp-custom-checkbox { padding-left: 25px; font-size: 13px; margin-top: 1.5rem; /* Align checkbox with bottom of selects */}
+ .qp-progress-filters .qp-custom-checkbox span { height: 14px; width: 14px; top: 3px; }
  .qp-progress-filters .qp-custom-checkbox span::after { left: 4px; top: 1px; width: 3px; height: 6px; }
 
 #qp-progress-results-container {
-	min-height: 100px; /* Adjust as needed */
-	position: relative; /* For loader positioning */
-    background-color: var(--qp-dashboard-card-bg); /* Give it card background */
-    border: 1px solid var(--qp-dashboard-border);
-    border-radius: var(--qp-dashboard-radius);
-    padding: 1rem;
+	min-height: 100px; position: relative;
+    background-color: var(--qp-dashboard-card-bg); border: 1px solid var(--qp-dashboard-border-light);
+    border-radius: var(--qp-dashboard-radius); padding: 1.5rem;
     box-shadow: var(--qp-dashboard-shadow);
 }
-#qp-progress-results-container p { /* Style placeholder text */
-    text-align: center;
-    color: var(--qp-dashboard-text-light);
-    padding: 2rem 0;
-}
+#qp-progress-results-container p { text-align: center; color: var(--qp-dashboard-text-light); padding: 2rem 0; }
 
-/* Progress Tree Styles (Ensure these are present, potentially copied/moved from practice.css) */
-.qp-progress-tree { margin-top: 0; /* Remove top margin if results container has padding */ }
-.qp-progress-item { /* Base item style */
-    margin-bottom: 5px;
-    border: 1px solid #e0e0e0;
-    border-radius: 6px;
-    position: relative;
-    overflow: hidden;
-    background-color: #fff; /* Ensure white background for sections */
+/* Progress Tree Styles */
+.qp-progress-tree { margin-top: 0; }
+.qp-progress-item {
+    margin-bottom: 5px; border: 1px solid #e0e0e0; border-radius: 6px;
+    position: relative; overflow: hidden; background-color: var(--qp-dashboard-progress-item-bg);
+    transition: border-color 0.2s ease, background-color 0.2s ease;
 }
 .qp-progress-label {
-    position: relative;
-    z-index: 2;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-weight: 500;
-    width: 100%;
-    padding: 8px 12px; /* Base padding */
-    font-size: 14px;
+    position: relative; z-index: 2; display: flex; justify-content: space-between;
+    align-items: center; font-weight: 500; width: 100%; padding: 8px 12px; font-size: 14px;
 }
 .qp-progress-item-name { display: flex; align-items: center; gap: 8px; }
 .qp-progress-item-details { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
-.qp-progress-action-btn { /* Consistent button style */
+.qp-progress-action-btn {
     display: inline-flex; align-items: center; justify-content: center;
-    box-sizing: border-box; width: 80px; /* Slightly narrower */
-    padding: 5px 8px; font-size: 12px; text-decoration: none; white-space: nowrap; flex-shrink: 0;
+    box-sizing: border-box; width: 80px; padding: 5px 8px; font-size: 12px;
+    text-decoration: none; white-space: nowrap; flex-shrink: 0;
 }
 .qp-progress-start-btn { background-color: var(--qp-dashboard-success); border-color: var(--qp-dashboard-success); color: var(--qp-dashboard-text-white); }
-.qp-progress-start-btn:hover { background-color: #1b5e20; border-color: #1b5e20; }
+.qp-progress-start-btn:hover { background-color: var(--qp-dashboard-success-hover); border-color: var(--qp-dashboard-success-hover); }
 .qp-progress-item .qp-button-secondary { background-color: #f0f0f1; border-color: #dcdcde; color: var(--qp-dashboard-text-dark); }
 .qp-progress-item .qp-button-secondary:hover { background-color: #e6e6e6; }
 
 /* Hierarchy Visuals */
-.qp-progress-item.subject-level { /* Top level */
-    padding: 0; /* Remove padding, label handles it */
-    background-color: #f0f2f5; /* Light grey background */
-    border-width: 1px;
-    border-color: #c8cdd2;
-}
-.qp-progress-item.subject-level .qp-progress-label {
-    font-size: 16px;
-    font-weight: 700;
-    padding: 12px 15px;
-}
-.qp-progress-item.topic-level { /* Intermediate */
-    padding: 0;
-    background-color: #fafafa;
-}
-.qp-progress-item.topic-level .qp-progress-label {
-    font-size: 15px;
-    padding: 10px 15px;
-}
-.qp-progress-item.section-level { /* Leaf node */
-    padding: 0;
-    background-color: #fff;
-}
-.qp-progress-item.section-level .qp-progress-label {
-    font-size: 14px;
-    font-weight: 400;
-    padding: 8px 15px;
-}
+.qp-progress-item.subject-level { padding: 0; background-color: var(--qp-dashboard-progress-subject-bg); border-width: 1px; border-color: #c8cdd2; }
+.qp-progress-item.subject-level .qp-progress-label { font-size: 16px; font-weight: 700; padding: 12px 15px; }
+.qp-progress-item.topic-level { padding: 0; background-color: var(--qp-dashboard-progress-topic-bg); }
+.qp-progress-item.topic-level .qp-progress-label { font-size: 15px; padding: 10px 15px; }
+.qp-progress-item.section-level { padding: 0; background-color: var(--qp-dashboard-progress-item-bg); }
+.qp-progress-item.section-level .qp-progress-label { font-size: 14px; font-weight: 400; padding: 8px 15px; }
+
 .qp-source-children-container, .qp-topic-sections-container {
-    padding-left: 20px; /* Indentation */
-    border-left: 2px solid #e0e0e0; /* Indentation line */
-    margin-left: 15px; /* Space for the line */
-    padding-top: 5px; /* Space below parent */
+    padding-left: 20px; border-left: 2px solid #e0e0e0; margin-left: 15px; padding-top: 5px;
 }
-.qp-progress-bar-bg { position: absolute; top: 0; left: 0; height: 100%; background-color: #d8f3da; z-index: 1; transition: width 0.5s ease-in-out; }
-.qp-progress-percentage { font-weight: 600; color: #1e4620; background-color: rgba(255,255,255,0.7); padding: 2px 6px; border-radius: 4px; font-size: 12px; }
+.qp-progress-bar-bg { position: absolute; top: 0; left: 0; height: 100%; background-color: var(--qp-dashboard-progress-bar-bg); z-index: 1; transition: width 0.5s ease-in-out; }
+.qp-progress-percentage { font-weight: 600; color: var(--qp-dashboard-progress-percentage-text); background-color: rgba(255,255,255,0.7); padding: 2px 6px; border-radius: 4px; font-size: 12px; }
 .qp-topic-toggle { cursor: pointer; }
-.qp-topic-toggle .qp-progress-label .dashicons { transition: transform 0.2s ease-in-out; font-size: 20px; margin-right: 0; /* Removed margin */ }
+.qp-topic-toggle .qp-progress-label .dashicons { transition: transform 0.2s ease-in-out; font-size: 20px; margin-right: 0; }
 .qp-topic-toggle.is-open .qp-progress-label .dashicons { transform: rotate(90deg); }
 .qp-progress-item.is-active-group { border-color: #a4c9e8; background-color: #f0f5fa; }
 .qp-progress-item.is-active-group > .qp-progress-label { font-weight: 600; color: var(--qp-dashboard-text-dark); }
 
 /* Loader for Progress */
-#qp-progress-results-container .qp-loader-spinner { /* Ensure loader is visible */
+#qp-progress-results-container .qp-loader-spinner {
     border: 4px solid #f3f3f3; border-top: 4px solid var(--qp-dashboard-primary);
     border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite;
     position: absolute; top: 40px; left: 50%; margin-left: -15px;
 }
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
 /* --- Review Modal --- */
 #qp-review-modal-backdrop {
-    position: fixed; /* Keep fixed positioning */
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.6);
-    z-index: 1050; /* High z-index */
-
-    /* --- Centering Properties --- */
-    display: none; /* Initially hidden (JS toggles this) */
-    justify-content: center; /* Center horizontally */
-    align-items: center; /* Center vertically */
-    /* --- End Centering Properties --- */
+	position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+	background-color: rgba(0, 0, 0, 0.6); z-index: 1050;
+	display: none; justify-content: center; align-items: center;
 }
-/* Ensure the display: flex is applied when shown by JS */
-#qp-review-modal-backdrop:has(> #qp-review-modal-content) {
-     display: flex;
-}
-
-/* Keep the content styles as they were */
+#qp-review-modal-backdrop:has(> #qp-review-modal-content) { display: flex; }
 #qp-review-modal-content {
-    background: #fff;
-    padding: 2rem;
-    border-radius: var(--qp-dashboard-radius, 6px);
-    max-width: 90%;
-    width: 700px;
-    max-height: 90vh;
-    overflow-y: auto;
-    position: relative;
-    box-shadow: 0 5px 15px rgba(0,0,0,0.2);
-}
-
-/* Keep close button styles */
-.qp-modal-close-btn {
-    position: absolute;
-    top: 1rem;
-    right: 1rem;
-    font-size: 24px;
-    background: none;
-    border: none;
-    cursor: pointer;
-    color: var(--qp-dashboard-text-light, #50575e);
-    line-height: 1;
-    padding: 0;
+	background: #fff; padding: 2rem; border-radius: var(--qp-dashboard-radius);
+	max-width: 90%; width: 700px; max-height: 90vh; overflow-y: auto;
+	position: relative; box-shadow: 0 5px 15px rgba(0,0,0,0.2);
 }
 #qp-review-modal-content h4 { margin-top: 0; font-size: 1.2em; }
 #qp-review-modal-content .qp-direction { background-color: var(--qp-dashboard-card-header-bg); padding: 1rem; border-radius: var(--qp-dashboard-radius); margin-bottom: 1rem; font-size: 0.95em; line-height: 1.5; }
 #qp-review-modal-content .question-text { font-size: 1em; margin-bottom: 1.5rem; }
-#qp-review-modal-content .option { border: 2px solid var(--qp-dashboard-border); padding: 0.8rem 1rem; margin-bottom: 0.5rem; border-radius: var(--qp-dashboard-radius); font-size: 0.95em; }
+#qp-review-modal-content .option { border: 2px solid var(--qp-dashboard-border-light); padding: 0.8rem 1rem; margin-bottom: 0.5rem; border-radius: var(--qp-dashboard-radius); font-size: 0.95em; }
 #qp-review-modal-content .option.correct { border-color: var(--qp-dashboard-success); background-color: #e8f5e9; font-weight: 600; }
-.qp-modal-footer { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--qp-dashboard-border); text-align: right; }
+.qp-modal-footer { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--qp-dashboard-border-light); text-align: right; }
 .qp-modal-footer label { font-weight: 500; cursor: pointer; font-size: 0.9em; }
-.qp-modal-footer input[type="checkbox"] { margin-right: 5px; vertical-align: middle; }
+.qp-modal-footer input[type="checkbox"] { margin-right: 5px; vertical-align: middle; outline:none;}
+.qp-modal-close-btn {
+	position: absolute; top: 1rem; right: 1rem; font-size: 24px;
+	background: none; border: none; cursor: pointer;
+	color: var(--qp-dashboard-text-light); line-height: 1; padding: 0;
+}
+.qp-modal-close-btn:hover { color: var(--qp-dashboard-text-dark); }
+
 
 /* --- Mobile Responsiveness --- */
 @media (max-width: 782px) {
@@ -674,12 +477,11 @@ ul.qp-review-list li:last-child { border-bottom: none; }
     .qp-sidebar {
         width: var(--qp-dashboard-sidebar-width); /* Full width when open */
         transform: translateX(-100%); /* Start hidden */
-         /* Ensure text is visible when open on mobile */
+        box-shadow: 2px 0 10px rgba(0,0,0,0.1);
     }
     body.qp-sidebar-open .qp-sidebar { transform: translateX(0); } /* Slide in */
     .qp-sidebar-toggle { /* Mobile toggle button */
-        display: block;
-        position: fixed; top: 40px; left: var(--qp-dashboard-mobile-padding);
+        display: block; position: fixed; top: 40px; left: var(--qp-dashboard-mobile-padding);
         z-index: 1002; background: var(--qp-dashboard-card-bg);
         border: 1px solid var(--qp-dashboard-border); border-radius: 50%;
         width: 40px; height: 40px; padding: 0; cursor: pointer; box-shadow: var(--qp-dashboard-shadow);
@@ -695,17 +497,38 @@ ul.qp-review-list li:last-child { border-bottom: none; }
 
     /* Table adjustments on mobile */
      .qp-recent-history-table, .qp-full-history-table { border: none; box-shadow: none; background: transparent; border-radius: 0;}
-     .qp-recent-history-table tr, .qp-full-history-table tr { box-shadow: var(--qp-dashboard-shadow); background: var(--qp-dashboard-card-bg); border-radius: var(--qp-dashboard-radius); padding: 0.75rem 1rem;}
+     .qp-recent-history-table tr, .qp-full-history-table tr {
+         display: block; /* Make rows block elements */
+         box-shadow: var(--qp-dashboard-shadow); background: var(--qp-dashboard-card-bg);
+         border-radius: var(--qp-dashboard-radius); padding: 0.75rem 1rem; margin-bottom: 1rem;
+     }
+     .qp-recent-history-table thead, .qp-full-history-table thead { display: none; } /* Hide headers */
+     .qp-recent-history-table td, .qp-full-history-table td {
+         display: flex; justify-content: space-between; padding: 10px 0;
+         border-bottom: 1px dashed var(--qp-dashboard-border-light); text-align: right; align-items: center;
+     }
+      .qp-recent-history-table tr:last-child td, .qp-full-history-table tr:last-child td { border-bottom: none; }
+      .qp-recent-history-table td::before, .qp-full-history-table td::before {
+          content: attr(data-label); font-weight: 600; text-align: left;
+          margin-right: 1rem; color: var(--qp-dashboard-text-dark);
+      }
+      .qp-recent-history-table .qp-actions-cell, .qp-full-history-table .qp-actions-cell { justify-content: flex-end; }
+      .qp-recent-history-table .qp-actions-cell .qp-button, .qp-full-history-table .qp-actions-cell .qp-button,
+      .qp-recent-history-table .qp-actions-cell .qp-delete-session-btn, .qp-full-history-table .qp-actions-cell .qp-delete-session-btn { margin-left: 5px; }
 
      /* Active sessions card on mobile */
      .qp-active-session-card { flex-direction: column; align-items: flex-start; }
-     .qp-card-actions { width: 100%; }
+     .qp-card-actions { width: 100%; margin-top: 0.5rem; }
      .qp-card-actions .qp-button { flex-grow: 1; text-align: center; }
 
      /* Review list actions on mobile */
       ul.qp-review-list li { flex-direction: column; align-items: stretch; }
       .qp-review-list-actions { width: 100%; margin-top: 0.5rem; justify-content: flex-end; }
       .qp-review-list-actions .qp-button { padding: 6px 14px; }
+
+      /* Progress filters stacking */
+      .qp-progress-filters .qp-form-group { min-width: 100%; } /* Full width */
+      .qp-progress-filters .qp-custom-checkbox { margin-top: 0; } /* Remove extra top margin */
 
 }
 
@@ -714,21 +537,25 @@ ul.qp-review-list li:last-child { border-bottom: none; }
     .qp-sidebar-toggle { display: none; }
 }
 
-/* Base button styles from practice.css (ensure these are available or copied) */
+/* --- Base Button Styles --- */
+/* (Copied from previous step - ensure these are correct and consistent) */
 .qp-button {
-    text-decoration: none; font-weight: 600; padding: 10px 18px; /* Adjusted padding */
-    border-radius: var(--qp-dashboard-radius); transition: all 0.2s; border: 1px solid transparent;
+    text-decoration: none; font-weight: 500; padding: 10px 18px;
+    border-radius: var(--qp-dashboard-radius); transition: all 0.2s ease; border: 1px solid transparent;
     cursor: pointer; font-size: 14px; text-align: center; line-height: 1.4;
+    box-shadow: 0 1px 1px rgba(0,0,0,0.04);
 }
+.qp-button:hover:not(:disabled) { transform: translateY(-1px); box-shadow: var(--qp-dashboard-shadow); }
 .qp-button-primary { background-color: var(--qp-dashboard-primary); color: var(--qp-dashboard-text-white); border-color: var(--qp-dashboard-primary); }
-.qp-button-primary:hover:not(:disabled) { background-color: var(--qp-dashboard-primary-hover); border-color: var(--qp-dashboard-primary-hover); transform: translateY(-1px); box-shadow: var(--qp-dashboard-shadow-hover); }
+.qp-button-primary:hover:not(:disabled) { background-color: var(--qp-dashboard-primary-hover); border-color: var(--qp-dashboard-primary-hover); }
 .qp-button-secondary { background-color: var(--qp-dashboard-card-bg); color: var(--qp-dashboard-text-dark); border-color: var(--qp-dashboard-border); }
-.qp-button-secondary:hover:not(:disabled) { background-color: #f0f0f1; border-color: #c8cacf; transform: translateY(-1px); box-shadow: var(--qp-dashboard-shadow); }
+.qp-button-secondary:hover:not(:disabled) { background-color: #f6f7f7; border-color: #c8cacf; }
 .qp-button-danger { background-color: var(--qp-dashboard-danger); color: var(--qp-dashboard-text-white); border-color: var(--qp-dashboard-danger); }
-.qp-button-danger:hover:not(:disabled) { background-color: var(--qp-dashboard-danger-hover); border-color: var(--qp-dashboard-danger-hover); transform: translateY(-1px); box-shadow: var(--qp-dashboard-shadow-hover); }
-.qp-button:disabled { background-color: #e2e4e6; border-color: #e2e4e6; color: #a0a5aa; cursor: not-allowed; box-shadow: none; transform: none; }
+.qp-button-danger:hover:not(:disabled) { background-color: var(--qp-dashboard-danger-hover); border-color: var(--qp-dashboard-danger-hover); }
+.qp-button:disabled { background-color: #e2e4e6; border-color: #e2e4e6; color: #a0a5aa; cursor: not-allowed; box-shadow: none; transform: none; opacity: 0.7; }
 
-/* Custom Checkbox from practice.css (ensure these are available or copied) */
+/* --- Custom Checkbox --- */
+/* (Copied from previous step - ensure these are correct and consistent) */
 .qp-custom-checkbox { display: inline-flex; align-items: center; padding-left: 25px; position: relative; cursor: pointer; user-select: none; line-height: 1.4; }
 .qp-custom-checkbox input { position: absolute; opacity: 0; height: 0; width: 0; }
 .qp-custom-checkbox span { position: absolute; left: 0; top: 50%; transform: translateY(-50%); height: 16px; width: 16px; background: #fff; border: 1px solid var(--qp-dashboard-border); border-radius: 3px; transition: all 0.2s ease;}
