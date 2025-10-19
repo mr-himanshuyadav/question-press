@@ -161,3 +161,123 @@ body {
         padding: 1.5rem;
     }
 }
+
+/* --- Overview Section Specific Styles --- */
+
+/* Quick Actions */
+.qp-quick-actions {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); /* Responsive columns */
+    gap: 1rem;
+}
+
+.qp-quick-actions .qp-button {
+    width: 100%; /* Make buttons fill grid cells */
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px; /* Space between icon and text */
+    padding: 15px 10px; /* More padding for better look */
+    font-size: 15px;
+}
+
+ .qp-quick-actions .qp-button .dashicons {
+     font-size: 18px;
+     line-height: 1;
+     margin-top: -2px; /* Fine-tune vertical alignment */
+ }
+
+/* Active/Paused Sessions List */
+.qp-active-sessions-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.qp-active-session-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem 1.5rem;
+    background-color: #f9f9f9; /* Lighter than card header */
+    border: 1px solid var(--qp-dashboard-border);
+    border-left: 4px solid var(--qp-dashboard-primary); /* Default active border */
+    border-radius: var(--qp-dashboard-radius);
+}
+ .qp-active-session-card.qp-session-paused-card {
+     border-left-color: #ffb13d; /* Orange border for paused */
+     background-color: #fff8ed; /* Light orange background */
+ }
+
+.qp-card-details { flex-grow: 1; }
+.qp-card-subject { font-weight: 600; font-size: 15px; }
+.qp-card-date { font-size: 13px; color: var(--qp-dashboard-text-light); }
+.qp-card-actions { display: flex; gap: 0.5rem; flex-shrink: 0; }
+ .qp-card-actions .qp-button { padding: 6px 14px; font-size: 13px; } /* Smaller buttons */
+
+/* Recent History Table (Overview specific) */
+.qp-recent-history-table { width: 100%; border-collapse: collapse; }
+.qp-recent-history-table th, .qp-recent-history-table td {
+    padding: 10px 8px;
+    text-align: left;
+    border-bottom: 1px solid var(--qp-dashboard-border);
+    font-size: 14px;
+}
+.qp-recent-history-table th { font-weight: 600; color: var(--qp-dashboard-text-light); }
+.qp-recent-history-table td[data-label="Result"] strong { color: var(--qp-dashboard-primary); }
+.qp-recent-history-table tr:last-child td { border-bottom: none; }
+.qp-recent-history-table .qp-actions-cell { text-align: right; }
+ .qp-recent-history-table .qp-actions-cell .qp-button { padding: 4px 10px; font-size: 12px; }
+
+/* View Full History Link */
+.qp-view-full-history-link {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--qp-dashboard-primary);
+    text-decoration: none;
+}
+.qp-view-full-history-link:hover { text-decoration: underline; }
+
+/* Hide table header and use data-labels on mobile for recent history */
+@media (max-width: 782px) {
+     .qp-recent-history-table thead { display: none; }
+     .qp-recent-history-table tr { display: block; margin-bottom: 1rem; border: 1px solid var(--qp-dashboard-border); border-radius: var(--qp-dashboard-radius); padding: 0.5rem 1rem; }
+     .qp-recent-history-table td { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px dashed #eee; text-align: right; }
+     .qp-recent-history-table td:last-child { border-bottom: none; }
+     .qp-recent-history-table td::before { content: attr(data-label); font-weight: 600; text-align: left; margin-right: 1rem; color: var(--qp-dashboard-text-dark); }
+     .qp-recent-history-table .qp-actions-cell { justify-content: flex-end; } /* Align buttons right */
+}
+
+/* Overall Stats Grid - Consistent Spacing */
+.qp-overall-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 1rem;
+}
+ .stat-item {
+     padding: 1rem;
+     text-align: center;
+     background-color: #f9f9f9;
+     border-radius: var(--qp-dashboard-radius);
+     border: 1px solid var(--qp-dashboard-border);
+ }
+ .stat-label { font-size: 11px; text-transform: uppercase; color: var(--qp-dashboard-text-light); margin-bottom: 4px; display: block; }
+ .stat-value { font-size: 1.5em; font-weight: 700; color: var(--qp-dashboard-text-dark); display: block; line-height: 1.1;}
+ .qp-overall-stats .stat-item:first-child .stat-value { color: #00897b; /* Teal */ } /* Accuracy color */
+
+
+/* Section base styles */
+.qp-dashboard-section {
+    display: none; /* Hide sections by default */
+}
+.qp-dashboard-section.active {
+    display: block; /* Show the active section */
+    animation: qpFadeIn 0.4s ease-out; /* Add fade-in animation */
+}
+
+@keyframes qpFadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
