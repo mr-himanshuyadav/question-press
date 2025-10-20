@@ -107,6 +107,19 @@ jQuery(document).ready(function ($) {
                         <input type="number" name="${itemBaseName}[marks_incorrect]" data-config-key="marks_incorrect" value="${configData.marks_incorrect || 0}" step="0.1" min="0">
                     </div>
                  </div>
+
+                 <hr style="margin: 1.5rem 0;">
+                <div>
+                    <label>Manually Selected Questions</label>
+                    <div id="selected-questions-display-${sectionIndex}-${itemIndex}" class="qp-selected-questions-display" style="min-height: 40px; background: #f0f0f1; border: 1px solid #ddd; padding: 8px; border-radius: 4px; margin-bottom: 8px;">
+                        <span style="color: #777;">No questions selected manually. Criteria above will be used.</span>
+                    </div>
+                    <button type="button" class="button qp-select-questions-btn" data-section-index="${sectionIndex}" data-item-index="${itemIndex}">
+                        <span class="dashicons dashicons-editor-ul" style="vertical-align: text-top;"></span> Select Questions
+                    </button>
+                    <input type="hidden" name="${itemBaseName}[selected_questions]" data-config-key="selected_questions" class="qp-selected-questions-input" value="${configData.selected_questions ? configData.selected_questions.join(',') : ''}">
+                    <p class="description" style="margin-top: 5px;">If you manually select questions, the Subject/Topic/Number criteria above will be ignored for this item.</p>
+                </div>
             </div>`;
         return configHtml;
     }
