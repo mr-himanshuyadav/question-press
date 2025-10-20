@@ -690,9 +690,6 @@ function qp_save_course_structure_meta($post_id) {
                     $config = [];
                     if ($content_type === 'test_series') {
                         $config = [
-                            'subjects' => isset($item_data['config']['subjects']) ? array_map('sanitize_text_field', (array)$item_data['config']['subjects']) : [],
-                            'topics' => isset($item_data['config']['topics']) ? array_map('sanitize_text_field', (array)$item_data['config']['topics']) : [],
-                            'num_questions' => isset($item_data['config']['num_questions']) ? absint($item_data['config']['num_questions']) : 10,
                             'time_limit' => isset($item_data['config']['time_limit']) ? absint($item_data['config']['time_limit']) : 0, // 0 means no limit
                             'scoring_enabled' => isset($item_data['config']['scoring_enabled']) ? 1 : 0,
                             'marks_correct' => isset($item_data['config']['marks_correct']) ? floatval($item_data['config']['marks_correct']) : 1,
