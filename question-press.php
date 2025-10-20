@@ -5360,6 +5360,45 @@ function qp_finalize_and_end_session($session_id, $new_status = 'completed', $en
         'marks_obtained' => $final_score
     ], ['session_id' => $session_id]);
 
+    // --- NEW: Update Course Item Progress if applicable ---
+    if (($new_status === 'completed' || $new_status === 'abandoned') && // Only update progress if session truly ended
+        isset($settings['course_id']) && isset($settings['item_id'])) {
+
+        $course_id = absint($settings['course_id']);
+        $item_id = absint($settings['item_id']);
+        $user_id = $session->user_id; // Get user ID from the session object
+        $progress_table = $wpdb->prefix . 'qp_user_items_progress';
+
+        // Prepare result data (customize as needed)
+        $result_data = json_encode([
+            'score' => $final_score,
+            'correct' => $correct_count,
+            'incorrect' => $incorrect_count,
+            'skipped' => $skipped_count,
+            'not_viewed' => $not_viewed_count, // Include if relevant (from mock tests)
+            'total_attempted' => $total_attempted,
+            'session_id' => $session_id // Store the session ID for potential review linking
+        ]);
+
+        // Use REPLACE INTO for simplicity: Deletes old row with same UNIQUE KEY (user_id, item_id) then inserts new one.
+        // Or use INSERT ... ON DUPLICATE KEY UPDATE if you prefer.
+        $wpdb->query($wpdb->prepare(
+            "REPLACE INTO {$progress_table} (user_id, item_id, course_id, status, completion_date, result_data, last_viewed)
+             VALUES (%d, %d, %d, %s, %s, %s, %s)",
+            $user_id,
+            $item_id,
+            $course_id,
+            'completed', // Mark item as completed when session ends
+            current_time('mysql'), // Completion date
+            $result_data,
+            current_time('mysql') // Update last viewed as well
+        ));
+
+        // Note: Calculation and update of overall course progress in wp_qp_user_courses
+        // will be handled in the next step (Step 8) for clarity.
+    }
+    // --- END NEW Course Item Progress Update ---
+
     return [
         'final_score' => $final_score,
         'total_attempted' => $total_attempted,
