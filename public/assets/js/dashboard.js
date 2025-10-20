@@ -833,6 +833,47 @@ wrapper.on('click', 'a.qp-button-primary[href*="session_id="]', function(e) {
         // window.location.href = qp_ajax_object.review_page_url + '?session_id=' + relevantSessionId;
     });
 
+    // --- Start Test Series from Course Item ---
+    coursesSection.on('click', '.start-course-test-btn', function() {
+        var button = $(this);
+        var itemId = button.data('item-id');
+        var originalText = button.text();
+
+        // Use the checkAttemptsBeforeAction helper
+        checkAttemptsBeforeAction(function() {
+            // This code runs ONLY if the attempt check is successful
+            $.ajax({
+                url: qp_ajax_object.ajax_url,
+                type: 'POST',
+                data: {
+                    action: 'start_course_test_series',
+                    nonce: qp_ajax_object.nonce,
+                    item_id: itemId
+                },
+                beforeSend: function() {
+                    // Button state is already 'Checking...' or similar from checkAttemptsBeforeAction
+                    button.text('Starting Test...'); // Update text
+                },
+                success: function(response) {
+                    if (response.success && response.data.redirect_url) {
+                        window.location.href = response.data.redirect_url;
+                        // Don't reset the button text here as we are redirecting
+                    } else {
+                        // Handle errors specifically from start_course_test_series
+                        Swal.fire('Error!', response.data.message || 'Could not start the test session.', 'error');
+                        button.text(originalText).prop('disabled', false); // Reset button on failure
+                    }
+                },
+                error: function() {
+                    // Handle general AJAX errors
+                    Swal.fire('Error!', 'A server error occurred while starting the test.', 'error');
+                    button.text(originalText).prop('disabled', false); // Reset button on failure
+                }
+                // No 'complete' needed here as success handles redirect or error handles reset
+            });
+        }, button, originalText, 'Checking Access...'); // Pass button details to the helper
+    });
+
 }); // End jQuery ready
 
 /**
