@@ -6205,6 +6205,13 @@ function qp_start_course_test_series_ajax() {
     }
 
     $config = json_decode($item->content_config, true);
+    if (json_last_error() !== JSON_ERROR_NONE) {
+        // Log the error for debugging
+        error_log("QP Course Test Start: Invalid JSON in content_config for item ID: " . $item_id . ". Error: " . json_last_error_msg());
+        // Send a specific error back to the user
+        wp_send_json_error(['message' => 'Invalid test configuration data stored. Please contact an administrator.']);
+        return; // Stop execution
+    }
     if (json_last_error() !== JSON_ERROR_NONE || empty($config)) {
         wp_send_json_error(['message' => 'Invalid test configuration data.']);
     }
