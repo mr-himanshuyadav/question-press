@@ -113,6 +113,7 @@ class QP_Dashboard
                         <li><a href="#history"><span class="dashicons dashicons-list-view"></span><span>History</span></a></li>
                         <li><a href="#review"><span class="dashicons dashicons-star-filled"></span><span>Review Center</span></a></li>
                         <li><a href="#progress"><span class="dashicons dashicons-chart-bar"></span><span>Progress</span></a></li>
+                        <li><a href="#courses"><span class="dashicons dashicons-welcome-learn-more"></span><span>Courses</span></a></li>
                         <?php /* Placeholder for future items */ ?>
                     </ul>
                      <div class="qp-sidebar-footer" style="position: absolute; bottom: 10px; width: 100%; text-align: center;display: flex; justify-content:center;">
@@ -144,6 +145,12 @@ class QP_Dashboard
                          <?php echo self::render_progress_content(); ?>
                          <?php // --- END MODIFIED --- ?>
                     </section>
+
+                    <?php // --- ADD THIS NEW SECTION --- ?>
+                        <section id="qp-dashboard-courses" class="qp-dashboard-section" style="display: none;">
+                            <?php echo self::render_courses_content(); // We will create this method next ?>
+                        </section>
+                    <?php // --- END NEW SECTION --- ?>
 
                      <?php /* Hidden modal (Keep from old code) */ ?>
                      <div id="qp-review-modal-backdrop" style="display: none;">
@@ -558,6 +565,70 @@ class QP_Dashboard
         <?php
         return ob_get_clean();
     }
+
+    /**
+ * Renders the content specifically for the Courses section.
+ */
+private static function render_courses_content() {
+    // Query Arguments for published 'qp_course' posts
+    $args = [
+        'post_type' => 'qp_course',
+        'post_status' => 'publish',
+        'posts_per_page' => -1, // Get all published courses
+        'orderby' => 'menu_order title', // Order by custom order, then title
+        'order' => 'ASC',
+    ];
+
+    $courses_query = new WP_Query($args);
+
+    ob_start();
+    ?>
+    <h2>Available Courses</h2>
+
+    <?php if ($courses_query->have_posts()) : ?>
+        <div class="qp-course-list">
+            <?php while ($courses_query->have_posts()) : $courses_query->the_post(); ?>
+                <div class="qp-card qp-course-item"> <?php // Re-use qp-card styling ?>
+                    <div class="qp-card-content">
+                        <h3 style="margin-top:0;"><?php the_title(); ?></h3>
+                        <?php if (has_excerpt()) : ?>
+                            <p><?php the_excerpt(); ?></p>
+                        <?php else : ?>
+                            <?php // Show limited content if no excerpt
+                            echo '<p>' . wp_trim_words(get_the_content(), 30, '...') . '</p>';
+                            ?>
+                        <?php endif; ?>
+                    </div>
+                    <div class="qp-card-action" style="padding: 1rem 1.5rem; border-top: 1px solid var(--qp-dashboard-border-light); text-align: right;">
+                         <?php // Button to view course details - JS will handle the click ?>
+                         <button class="qp-button qp-button-primary qp-view-course-btn" data-course-id="<?php echo get_the_ID(); ?>">
+                             View Course
+                         </button>
+                    </div>
+                </div>
+            <?php endwhile; ?>
+            <?php wp_reset_postdata(); // IMPORTANT: Reset post data after custom query ?>
+        </div>
+    <?php else : ?>
+        <div class="qp-card"><div class="qp-card-content"><p style="text-align: center;">No courses are available at the moment.</p></div></div>
+    <?php endif; ?>
+
+    <?php // --- Add CSS specific for this new section --- ?>
+    <style>
+        .qp-course-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+        }
+        .qp-course-item .qp-card-content p {
+             color: var(--qp-dashboard-text-light);
+             font-size: 0.95em;
+             line-height: 1.6;
+        }
+    </style>
+    <?php
+    return ob_get_clean();
+}
 
    /**
      * NEW HELPER: Prefetches lineage data needed for session lists.
