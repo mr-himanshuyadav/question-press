@@ -6267,78 +6267,67 @@ function qp_start_course_test_series_ajax() {
     $time_limit_minutes = $config['time_limit'] ?? 0;
     // Add other parameters like 'distribution' if you saved them
 
-    // --- Reuse Question Query Logic (adapted from mock test AJAX) ---
-    $q_table = $wpdb->prefix . 'qp_questions';
-    $g_table = $wpdb->prefix . 'qp_question_groups';
-    $rel_table = $wpdb->prefix . 'qp_term_relationships';
-    $term_table = $wpdb->prefix . 'qp_terms';
-    $tax_table = $wpdb->prefix . 'qp_taxonomies';
-    $reports_table = $wpdb->prefix . 'qp_question_reports';
+    // --- Determine Question IDs ---
+    $final_question_ids = [];
+    $q_table = $wpdb->prefix . 'qp_questions'; // Need this table name
 
-    $where_clauses = ["q.status = 'publish'"];
-    $query_params = [];
-    $joins = "FROM {$q_table} q JOIN {$g_table} g ON q.group_id = g.group_id";
+    if (isset($config['selected_questions']) && is_array($config['selected_questions']) && !empty($config['selected_questions'])) {
+        // --- Manual Selection Path ---
+        $potential_ids = array_map('absint', $config['selected_questions']); // Sanitize IDs
+        if (!empty($potential_ids)) {
+            $ids_placeholder = implode(',', $potential_ids);
 
-    // Exclude reported
-    $reported_question_ids = $wpdb->get_col("SELECT DISTINCT question_id FROM {$reports_table} WHERE status = 'open'");
-    if (!empty($reported_question_ids)) {
-        $ids_placeholder = implode(',', array_map('absint', $reported_question_ids));
-        $where_clauses[] = "q.question_id NOT IN ($ids_placeholder)";
-    }
+            // Verify that the selected questions still exist and are published
+            // Also exclude reported questions
+            $reports_table = $wpdb->prefix . 'qp_question_reports';
+             $reported_question_ids = $wpdb->get_col("SELECT DISTINCT question_id FROM {$reports_table} WHERE status = 'open'");
+             $exclude_reported_sql = !empty($reported_question_ids) ? ' AND question_id NOT IN (' . implode(',', $reported_question_ids) . ')' : '';
 
-    $subjects_selected = !empty($subjects) && !in_array('all', $subjects);
-    $topics_selected = !empty($topics) && !in_array('all', $topics);
+            $verified_ids = $wpdb->get_col("SELECT question_id FROM {$q_table} WHERE question_id IN ($ids_placeholder) AND status = 'publish' {$exclude_reported_sql}");
 
-    $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'subject'");
-    $joins .= " LEFT JOIN {$rel_table} topic_rel ON g.group_id = topic_rel.object_id AND topic_rel.object_type = 'group'";
-    $joins .= " LEFT JOIN {$term_table} topic_term ON topic_rel.term_id = topic_term.term_id AND topic_term.taxonomy_id = " . (int)$subject_tax_id . " AND topic_term.parent != 0";
-
-    if ($topics_selected) {
-        $term_ids_to_filter = array_map('absint', $topics);
-        if (!empty($term_ids_to_filter)) {
-            $ids_placeholder = implode(',', array_fill(0, count($term_ids_to_filter), '%d'));
-            $where_clauses[] = $wpdb->prepare("topic_term.term_id IN ($ids_placeholder)", $term_ids_to_filter);
+            // Use only the verified IDs, try to maintain original order before shuffling later
+            $final_question_ids = array_intersect($potential_ids, $verified_ids);
         }
-    } elseif ($subjects_selected) {
-        $term_ids_to_filter = array_map('absint', $subjects);
-         if (!empty($term_ids_to_filter)) {
-            $ids_placeholder = implode(',', array_fill(0, count($term_ids_to_filter), '%d'));
-            $where_clauses[] = $wpdb->prepare("topic_term.parent IN ($ids_placeholder)", $term_ids_to_filter);
+
+        if (empty($final_question_ids)) {
+             wp_send_json_error(['message' => 'None of the manually selected questions are currently available (they may be unpublished, deleted, or reported).']);
+             // No 'return;' needed as wp_send_json_error exits
         }
-    }
-    // else: no subject/topic filter if 'all' was selected or arrays empty
 
-    $base_where_sql = implode(' AND ', $where_clauses);
-    $query = "SELECT q.question_id {$joins} WHERE {$base_where_sql} ORDER BY RAND() LIMIT %d"; // Use LIMIT directly
-    $query_params[] = $num_questions * 2; // Fetch slightly more to account for potential duplicates if needed, though RAND() helps
-
-    $question_pool_ids = $wpdb->get_col($wpdb->prepare($query, $query_params));
-    $final_question_ids = array_slice($question_pool_ids, 0, $num_questions); // Ensure exact number
-
-    if (empty($final_question_ids)) {
-        wp_send_json_error(['message' => 'No questions were found matching the test criteria.']);
+    } else {
+        // --- No Manual Selection Found ---
+        // Since criteria-based selection is removed, this is now an error state.
+        wp_send_json_error(['message' => 'No questions have been manually selected for this test item. Please edit the course.']);
+        // No 'return;' needed as wp_send_json_error exits
     }
 
-    // --- Create Session Record ---
-    $options = get_option('qp_settings');
+     // --- Ensure we have questions before proceeding ---
+     if (empty($final_question_ids)) { // This check might seem redundant but is a good final safeguard
+        wp_send_json_error(['message' => 'Could not find any valid questions for this test.']);
+        // No 'return;' needed
+    }
+
+    shuffle($final_question_ids); // Shuffle the final list
+
+    // --- Prepare Session Settings ---
+    $options = get_option('qp_settings'); // Moved options fetch here
     $session_page_id = isset($options['session_page']) ? absint($options['session_page']) : 0;
     if (!$session_page_id) {
         wp_send_json_error(['message' => 'The administrator has not configured a session page.']);
     }
 
-    // Prepare settings snapshot, adding course context
+    // Prepare settings snapshot, adding course context and using actual count
     $session_settings = [
         'practice_mode'       => 'mock_test', // Treat course tests like mock tests
         'course_id'           => $item->course_id,
         'item_id'             => $item_id,
-        'num_questions'       => count($final_question_ids), // Actual count used
+        'num_questions'       => count($final_question_ids), // Use actual count of verified questions
         'marks_correct'       => $config['scoring_enabled'] ? ($config['marks_correct'] ?? 1) : null,
         'marks_incorrect'     => $config['scoring_enabled'] ? -abs($config['marks_incorrect'] ?? 0) : null,
-        'timer_enabled'       => ($time_limit_minutes > 0),
-        'timer_seconds'       => $time_limit_minutes * 60,
-        // Include original subject/topic selection for potential review page display
-        'original_subjects'   => $subjects,
-        'original_topics'     => $topics,
+        'timer_enabled'       => ($config['time_limit'] > 0), // Use 'time_limit' from config
+        'timer_seconds'       => ($config['time_limit'] ?? 0) * 60, // Use 'time_limit' from config
+        // Keep original selected IDs for potential reference/debugging
+        'original_selection'  => $config['selected_questions'] ?? [],
     ];
 
     $wpdb->insert($wpdb->prefix . 'qp_user_sessions', [
@@ -6347,7 +6336,7 @@ function qp_start_course_test_series_ajax() {
         'start_time'              => current_time('mysql'),
         'last_activity'           => current_time('mysql'),
         'settings_snapshot'       => wp_json_encode($session_settings),
-        'question_ids_snapshot'   => wp_json_encode($final_question_ids) // Store the actual IDs used
+        'question_ids_snapshot'   => wp_json_encode(array_values($final_question_ids)) // Store the actual IDs used
     ]);
     $session_id = $wpdb->insert_id;
 
