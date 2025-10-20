@@ -1127,6 +1127,83 @@ function qp_save_screen_options($status, $option, $value)
 }
 add_filter('set-screen-option', 'qp_save_screen_options', 10, 3);
 
+/**
+ * Helper function to retrieve the existing course structure for the editor.
+ *
+ * @param int $course_id The ID of the course post.
+ * @return array The structured course data.
+ */
+function qp_get_course_structure_for_editor($course_id) {
+    if (!$course_id) {
+        return ['sections' => []]; // Return empty structure for new courses
+    }
+
+    global $wpdb;
+    $sections_table = $wpdb->prefix . 'qp_course_sections';
+    $items_table = $wpdb->prefix . 'qp_course_items';
+    $structure = ['sections' => []];
+
+    $sections = $wpdb->get_results($wpdb->prepare(
+        "SELECT section_id, title, description, section_order FROM $sections_table WHERE course_id = %d ORDER BY section_order ASC",
+        $course_id
+    ));
+
+    if (empty($sections)) {
+        return $structure;
+    }
+
+    $section_ids = wp_list_pluck($sections, 'section_id');
+    $ids_placeholder = implode(',', array_map('absint', $section_ids));
+
+    $items_raw = $wpdb->get_results("SELECT item_id, section_id, title, item_order, content_type, content_config FROM $items_table WHERE section_id IN ($ids_placeholder) ORDER BY item_order ASC");
+
+    $items_by_section = [];
+    foreach ($items_raw as $item) {
+        $item->content_config = json_decode($item->content_config, true); // Decode JSON
+        if (!isset($items_by_section[$item->section_id])) {
+            $items_by_section[$item->section_id] = [];
+        }
+        $items_by_section[$item->section_id][] = $item;
+    }
+
+    foreach ($sections as $section) {
+        $structure['sections'][] = [
+            'id' => $section->section_id,
+            'title' => $section->title,
+            'description' => $section->description,
+            'order' => $section->section_order,
+            'items' => $items_by_section[$section->section_id] ?? []
+        ];
+    }
+
+    return $structure;
+}
+
+/**
+ * Helper function to get data needed for Test Series config dropdowns in JS.
+ *
+ * @return array Data for subjects, topics, etc.
+ */
+function qp_get_test_series_options_for_js() {
+    global $wpdb;
+    $term_table = $wpdb->prefix . 'qp_terms';
+    $tax_table = $wpdb->prefix . 'qp_taxonomies';
+    $rel_table = $wpdb->prefix . 'qp_term_relationships';
+
+    $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'subject'");
+
+    // Fetch ALL subjects and topics together
+    $all_subject_terms = $wpdb->get_results($wpdb->prepare(
+        "SELECT term_id as id, name, parent FROM {$term_table} WHERE taxonomy_id = %d ORDER BY name ASC",
+        $subject_tax_id
+    ), ARRAY_A); // Fetch as associative arrays for JS
+
+    return [
+        'allSubjectTerms' => $all_subject_terms,
+        // Add other needed data like exams or source links if required by config later
+    ];
+}
+
 
 function qp_admin_enqueue_scripts($hook_suffix)
 {
@@ -1153,6 +1230,32 @@ function qp_admin_enqueue_scripts($hook_suffix)
             'save_nonce' => wp_create_nonce('qp_save_quick_edit_nonce')
         ]);
         wp_enqueue_script('qp-multi-select-dropdown-script', QP_PLUGIN_URL . 'admin/assets/js/multi-select-dropdown.js', ['jquery'], '1.0.1', true);
+    }
+    // Check if we are on the 'Add New' or 'Edit' screen for the 'qp_course' post type
+    global $pagenow, $typenow;
+    if (($pagenow == 'post-new.php' && isset($_GET['post_type']) && $_GET['post_type'] == 'qp_course') ||
+        ($pagenow == 'post.php' && isset($_GET['post']) && get_post_type($_GET['post']) == 'qp_course')) {
+
+        // Enqueue jQuery UI Sortable
+        wp_enqueue_script('jquery-ui-sortable');
+
+        // Enqueue our new course editor script
+        $course_editor_js_version = filemtime(QP_PLUGIN_DIR . 'admin/assets/js/course-editor.js'); // For cache busting
+        wp_enqueue_script('qp-course-editor-script', QP_PLUGIN_URL . 'admin/assets/js/course-editor.js', ['jquery', 'jquery-ui-sortable'], $course_editor_js_version, true);
+
+        // Localize data needed by the script (like existing structure and dropdown options)
+        global $post; // Get the current post object
+        $course_structure_data = qp_get_course_structure_for_editor($post ? $post->ID : 0); // We will create this helper function next
+        $test_series_options = qp_get_test_series_options_for_js(); // And this one too
+
+        wp_localize_script('qp-course-editor-script', 'qpCourseEditorData', [
+            'nonce' => wp_create_nonce('qp_save_course_structure_meta'), // Re-use the save nonce
+            'structure' => $course_structure_data,
+            'testSeriesOptions' => $test_series_options
+        ]);
+        // Enqueue course editor CSS
+        $course_editor_css_version = filemtime(QP_PLUGIN_DIR . 'admin/assets/css/course-editor.css');
+        wp_enqueue_style('qp-course-editor-style', QP_PLUGIN_URL . 'admin/assets/css/course-editor.css', [], $course_editor_css_version);
     }
     if ($hook_suffix === 'question-press_page_qp-organization' && isset($_GET['tab']) && $_GET['tab'] === 'labels') {
         add_action('admin_footer', function () {
