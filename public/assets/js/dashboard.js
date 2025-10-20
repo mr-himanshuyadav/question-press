@@ -74,10 +74,7 @@ jQuery(document).ready(function($) {
              }
              // --- ADDED: Trigger rendering of courses when navigating to the tab ---
              if (sectionId === 'qp-dashboard-courses') {
-                 // If the section is empty or just has a loading message, render the initial list
-                 if (targetSection.children().length === 0 || targetSection.find('.qp-loader-spinner').length) {
-                     renderInitialCourseList(targetSection);
-                 }
+                renderInitialCourseList(targetSection);
              }
 
         } else {
@@ -797,18 +794,29 @@ wrapper.on('click', 'a.qp-button-primary[href*="session_id="]', function(e) {
 
     // --- NEW: Function to render the initial course list (used by back button and tab switch) ---
     function renderInitialCourseList(targetSection) {
-        // We need the original PHP output to re-render.
-        // It's best to store this in a variable or fetch it again if needed.
-        // For simplicity now, let's assume it's stored globally (though not ideal)
-        // A better approach would be another AJAX call or storing in a data attribute.
-        if (typeof initialCourseListHtml !== 'undefined') {
-             targetSection.html(initialCourseListHtml);
-        } else {
-            // Fallback: If original HTML isn't stored, just show a basic message
-             targetSection.html('<h2>Available Courses</h2><p>Loading course list...</p>');
-             // Ideally, trigger an AJAX call here to fetch the list content again
-             // $.ajax({... action: 'get_course_list_html' ...});
-        }
+        // Show a loading state
+        targetSection.html('<div class="qp-loader-spinner" style="position: absolute; top: 40px; left: 50%; margin-left: -15px;"></div><h2>My Courses</h2>'); // Added h2 back
+
+        $.ajax({
+            url: qp_ajax_object.ajax_url,
+            type: 'POST',
+            data: {
+                action: 'get_course_list_html',
+                nonce: qp_ajax_object.nonce // Use the general frontend nonce
+            },
+            success: function(response) {
+                if (response.success && response.data.html) {
+                    targetSection.html(response.data.html);
+                    // Store the newly fetched HTML in case it's needed again without refresh
+                    initialCourseListHtml = response.data.html;
+                } else {
+                    targetSection.html('<h2>My Courses</h2><p>Error loading courses. Please try refreshing the page.</p>');
+                }
+            },
+            error: function() {
+                targetSection.html('<h2>My Courses</h2><p>Could not load courses due to a server error.</p>');
+            }
+        });
     }
 
     // --- MODIFIED: Store initial HTML ---

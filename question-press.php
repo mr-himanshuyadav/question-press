@@ -6364,3 +6364,4 @@ function qp_enroll_in_course_ajax() {
     }
 }
 add_action('wp_ajax_enroll_in_course', 'qp_enroll_in_course_ajax');
+add_action('wp_ajax_get_course_list_html', ['QP_Dashboard', 'get_course_list_ajax']);
