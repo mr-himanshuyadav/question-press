@@ -799,3 +799,34 @@ ul.qp-review-list li {
     border: 1px solid #b3d7f3; /* Subtle border */
 }
 
+/* --- Course Structure View --- */
+.qp-course-structure-header {
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--qp-dashboard-border);
+}
+
+.qp-course-section-card {
+    margin-bottom: 1.5rem;
+}
+
+.qp-course-items-list .qp-course-item-row:last-child {
+    border-bottom: none;
+}
+
+.qp-course-item-link {
+    cursor: default; /* Make it look non-interactive for now */
+    flex-grow: 1; /* Allow title to take space */
+}
+
+/* Add hover effect if you make the title linkable later */
+/*
+.qp-course-item-link:hover span:last-child {
+    text-decoration: underline;
+    color: var(--qp-dashboard-link-hover);
+}
+*/
+
+.qp-course-item-row .dashicons {
+    font-size: 18px;
+    line-height: 1;
+}

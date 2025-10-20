@@ -5965,3 +5965,84 @@ function qp_check_remaining_attempts_ajax() {
 }
 // Hook the AJAX action for logged-in users
 add_action('wp_ajax_qp_check_remaining_attempts', 'qp_check_remaining_attempts_ajax');
+
+
+// Courses Section on Dashboard
+/**
+ * AJAX handler to fetch the structure (sections and items) for a specific course.
+ * Also fetches the user's progress for items within that course.
+ */
+function qp_get_course_structure_ajax() {
+    check_ajax_referer('qp_practice_nonce', 'nonce'); // Re-use the existing frontend nonce
+
+    if (!is_user_logged_in()) {
+        wp_send_json_error(['message' => 'Not logged in.']);
+    }
+
+    $course_id = isset($_POST['course_id']) ? absint($_POST['course_id']) : 0;
+    $user_id = get_current_user_id();
+
+    if (!$course_id) {
+        wp_send_json_error(['message' => 'Invalid course ID.']);
+    }
+
+    global $wpdb;
+    $sections_table = $wpdb->prefix . 'qp_course_sections';
+    $items_table = $wpdb->prefix . 'qp_course_items';
+    $progress_table = $wpdb->prefix . 'qp_user_items_progress';
+    $course_title = get_the_title($course_id); // Get course title from wp_posts
+
+    $structure = [
+        'course_id' => $course_id,
+        'course_title' => $course_title,
+        'sections' => []
+    ];
+
+    // Get sections for the course
+    $sections = $wpdb->get_results($wpdb->prepare(
+        "SELECT section_id, title, description, section_order FROM $sections_table WHERE course_id = %d ORDER BY section_order ASC",
+        $course_id
+    ));
+
+    if (empty($sections)) {
+        wp_send_json_success($structure); // Send structure with empty sections array
+        return;
+    }
+
+    $section_ids = wp_list_pluck($sections, 'section_id');
+    $ids_placeholder = implode(',', array_map('absint', $section_ids));
+
+    // Get all items for these sections
+    $items_raw = $wpdb->get_results("SELECT item_id, section_id, title, item_order, content_type FROM $items_table WHERE section_id IN ($ids_placeholder) ORDER BY item_order ASC");
+
+    // Get user's progress for these items in this course
+    $progress_raw = $wpdb->get_results($wpdb->prepare(
+        "SELECT item_id, status FROM $progress_table WHERE user_id = %d AND course_id = %d",
+        $user_id,
+        $course_id
+    ), OBJECT_K); // Keyed by item_id for easy lookup
+
+    // Organize items by section
+    $items_by_section = [];
+    foreach ($items_raw as $item) {
+        $item->status = $progress_raw[$item->item_id]->status ?? 'not_started'; // Add status
+        if (!isset($items_by_section[$item->section_id])) {
+            $items_by_section[$item->section_id] = [];
+        }
+        $items_by_section[$item->section_id][] = $item;
+    }
+
+    // Build the final structure
+    foreach ($sections as $section) {
+        $structure['sections'][] = [
+            'id' => $section->section_id,
+            'title' => $section->title,
+            'description' => $section->description,
+            'order' => $section->section_order,
+            'items' => $items_by_section[$section->section_id] ?? []
+        ];
+    }
+
+    wp_send_json_success($structure);
+}
+add_action('wp_ajax_get_course_structure', 'qp_get_course_structure_ajax');
