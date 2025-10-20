@@ -740,34 +740,38 @@ wrapper.on('click', 'a.qp-button-primary[href*="session_id="]', function(e) {
                         let itemClass = 'qp-course-item-link';
                         let buttonText = 'Start';
                         let buttonClass = 'qp-button-primary start-course-test-btn'; // Specific class for test
+                        let sessionIdAttr = ''; // <-- ***FIX: Declare and initialize here***
 
                         switch(item.status) {
                         case 'completed':
                             statusIcon = '<span class="dashicons dashicons-yes-alt" style="color: var(--qp-dashboard-success);"></span>';
-                            buttonText = 'Review'; // Or 'Start Again' if re-attempts are desired
-                            buttonClass = 'qp-button-secondary view-test-results-btn'; // Use specific class for review
-                            if (item.session_id) { sessionIdAttr = `data-session-id="${item.session_id}"`; }
+                            buttonText = 'Review';
+                            buttonClass = 'qp-button-secondary view-test-results-btn';
+                            // --- ***FIX: Assign to existing variable*** ---
+                            if (item.session_id) {
+                                sessionIdAttr = `data-session-id="${item.session_id}"`;
+                            }
+                            // --- ***END FIX*** ---
                             break;
                         case 'in_progress': // Note: 'in_progress' isn't set yet, but plan for it
                             statusIcon = '<span class="dashicons dashicons-marker" style="color: var(--qp-dashboard-warning-dark);"></span>';
                             buttonText = 'Continue';
-                            buttonClass = 'qp-button-primary start-course-test-btn'; // Or a different 'continue' class if needed
+                            buttonClass = 'qp-button-primary start-course-test-btn';
                             break;
                         default: // not_started
                             statusIcon = '<span class="dashicons dashicons-marker" style="color: var(--qp-dashboard-border);"></span>';
                             buttonText = 'Start';
-                            buttonClass = 'qp-button-primary start-course-test-btn'; // Class to trigger start
+                            buttonClass = 'qp-button-primary start-course-test-btn';
                             break;
                     }
 
-                    // Add different classes/buttons based on content_type later
                     if (item.content_type !== 'test_series') {
-                       buttonClass = 'qp-button-secondary view-course-content-btn'; // Example for other types
+                       buttonClass = 'qp-button-secondary view-course-content-btn';
                        buttonText = 'View';
                     }
 
-
-                        html += `
+                    // Now sessionIdAttr will always be defined (either as an empty string or with the data attribute)
+                    html += `
                         <div class="qp-course-item-row" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--qp-dashboard-border-light);">
                             <span class="${itemClass}" style="display: flex; align-items: center; gap: 8px;">
                                 ${statusIcon}
