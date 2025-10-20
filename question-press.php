@@ -699,10 +699,29 @@ function qp_save_course_structure_meta($post_id) {
                             'marks_incorrect' => isset($item_data['config']['marks_incorrect']) ? floatval($item_data['config']['marks_incorrect']) : 0,
                             // Add other test config fields here as needed (e.g., distribution mode)
                         ];
+                        // Add manually selected questions if present
+                        if (isset($item_data['config']['selected_questions']) && !empty($item_data['config']['selected_questions'])) {
+                            // Value comes from the hidden input as a comma-separated string
+                            $question_ids_str = sanitize_text_field($item_data['config']['selected_questions']);
+                            // Convert string to an array of integers, filtering out empty or non-numeric values
+                            $question_ids = array_filter(array_map('absint', explode(',', $question_ids_str)));
+
+                            if (!empty($question_ids)) {
+                                $config['selected_questions'] = $question_ids;
+                                // Optional: Clear criteria-based fields if manual selection exists
+                                // unset($config['subjects'], $config['topics'], $config['num_questions']);
+                            } else {
+                                // Ensure key doesn't exist if the string was empty or invalid
+                                unset($config['selected_questions']);
+                            }
+                        } else {
+                             // Ensure key doesn't exist if not submitted
+                             unset($config['selected_questions']);
+                        }
                     }
                     // --- (Add config handling for other content types here later) ---
 
-                    // Insert item
+                    // Insert item (This part already exists)
                     $wpdb->insert($items_table, [
                         'section_id' => $section_id,
                         'course_id' => $post_id, // Store denormalized course ID
