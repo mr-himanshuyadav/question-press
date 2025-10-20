@@ -6092,27 +6092,38 @@ function qp_get_course_structure_ajax() {
     $section_ids = wp_list_pluck($sections, 'section_id');
     $ids_placeholder = implode(',', array_map('absint', $section_ids));
 
-    // Get all items for these sections
-$items_raw = $wpdb->get_results($wpdb->prepare(
-    "SELECT i.item_id, i.section_id, i.title, i.item_order, i.content_type, p.status
-     FROM $items_table i
-     LEFT JOIN {$wpdb->prefix}qp_user_items_progress p ON i.item_id = p.item_id AND p.user_id = %d AND p.course_id = %d
-     WHERE i.section_id IN ($ids_placeholder)
-     ORDER BY i.item_order ASC",
-    $user_id, // Add user_id
-    $course_id // Add course_id
-));
+    // Get all items for these sections, including progress status and result data
+    $items_raw = $wpdb->get_results($wpdb->prepare(
+        "SELECT i.item_id, i.section_id, i.title, i.item_order, i.content_type, p.status, p.result_data -- <<< ADD p.result_data
+         FROM $items_table i
+         LEFT JOIN {$wpdb->prefix}qp_user_items_progress p ON i.item_id = p.item_id AND p.user_id = %d AND p.course_id = %d
+         WHERE i.section_id IN ($ids_placeholder)
+         ORDER BY i.item_order ASC",
+        $user_id,
+        $course_id
+    ));
 
-// Organize items by section (No need for a separate progress query now)
-$items_by_section = [];
-foreach ($items_raw as $item) {
-    $item->status = $item->status ?? 'not_started'; // Use fetched status or default
-    // $item->content_config = json_decode($item->content_config, true); // Keep if needed for JS
-    if (!isset($items_by_section[$item->section_id])) {
-        $items_by_section[$item->section_id] = [];
+// Organize items by section
+    $items_by_section = [];
+    foreach ($items_raw as $item) {
+        $item->status = $item->status ?? 'not_started'; // Use fetched status or default
+
+        // --- ADD THIS BLOCK ---
+        $item->session_id = null; // Default to null
+        if (!empty($item->result_data)) {
+            $result_data_decoded = json_decode($item->result_data, true);
+            if (isset($result_data_decoded['session_id'])) {
+                $item->session_id = absint($result_data_decoded['session_id']);
+            }
+        }
+        unset($item->result_data); // Don't need to send the full result data to JS for this
+        // --- END ADDED BLOCK ---
+
+        if (!isset($items_by_section[$item->section_id])) {
+            $items_by_section[$item->section_id] = [];
+        }
+        $items_by_section[$item->section_id][] = $item;
     }
-    $items_by_section[$item->section_id][] = $item;
-}
 
     // Get user's progress for these items in this course
     $progress_raw = $wpdb->get_results($wpdb->prepare(

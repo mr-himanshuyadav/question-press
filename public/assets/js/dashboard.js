@@ -749,6 +749,7 @@ wrapper.on('click', 'a.qp-button-primary[href*="session_id="]', function(e) {
                             statusIcon = '<span class="dashicons dashicons-yes-alt" style="color: var(--qp-dashboard-success);"></span>';
                             buttonText = 'Review'; // Or 'Start Again' if re-attempts are desired
                             buttonClass = 'qp-button-secondary view-test-results-btn'; // Use specific class for review
+                            if (item.session_id) { sessionIdAttr = `data-session-id="${item.session_id}"`; }
                             break;
                         case 'in_progress': // Note: 'in_progress' isn't set yet, but plan for it
                             statusIcon = '<span class="dashicons dashicons-marker" style="color: var(--qp-dashboard-warning-dark);"></span>';
@@ -770,13 +771,13 @@ wrapper.on('click', 'a.qp-button-primary[href*="session_id="]', function(e) {
 
 
                         html += `
-                            <div class="qp-course-item-row" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--qp-dashboard-border-light);">
-                                <span class="${itemClass}" style="display: flex; align-items: center; gap: 8px;">
-                                    ${statusIcon}
-                                    <span style="font-weight: 500;">${item.title || 'Untitled Item'}</span>
-                                </span>
-                                <button class="qp-button ${buttonClass}" data-item-id="${item.item_id}" style="padding: 4px 10px; font-size: 12px;">${buttonText}</button>
-                            </div>`;
+                        <div class="qp-course-item-row" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--qp-dashboard-border-light);">
+                            <span class="${itemClass}" style="display: flex; align-items: center; gap: 8px;">
+                                ${statusIcon}
+                                <span style="font-weight: 500;">${item.title || 'Untitled Item'}</span>
+                            </span>
+                            <button class="qp-button ${buttonClass}" data-item-id="${item.item_id}" ${sessionIdAttr} style="padding: 4px 10px; font-size: 12px;">${buttonText}</button>
+                        </div>`;
                     });
                      // Remove last border
                      html = html.replace(/border-bottom: 1px solid var\(--qp-dashboard-border-light\);(?=<\/div>\s*<\/div>\s*<\/div>$)/, '');
@@ -825,14 +826,22 @@ wrapper.on('click', 'a.qp-button-primary[href*="session_id="]', function(e) {
         Swal.fire('Coming Soon!', 'Support for this content type will be added later.', 'info');
     });
 
-    // Placeholder for handling clicks on completed test review buttons
+    // --- Review Completed Test Button Handler ---
     coursesSection.on('click', '.view-test-results-btn', function() {
-        var itemId = $(this).data('item-id');
-        // Need to figure out how to link this item ID back to the specific session ID
-        // Maybe store session_id in wp_qp_user_items_progress->result_data?
-        Swal.fire('Info', 'Linking to session review will be implemented later.', 'info');
-        // Example redirect (needs session ID):
-        // window.location.href = qp_ajax_object.review_page_url + '?session_id=' + relevantSessionId;
+        var button = $(this);
+        var sessionId = button.data('session-id');
+        var reviewPageUrl = qp_ajax_object.review_page_url; // Get review page URL from localized data
+
+        if (sessionId && reviewPageUrl) {
+            // Construct the URL and redirect
+            var url = new URL(reviewPageUrl);
+            url.searchParams.set('session_id', sessionId);
+            window.location.href = url.href;
+        } else if (!sessionId) {
+            Swal.fire('Error', 'Could not find the session data associated with this item.', 'error');
+        } else {
+            Swal.fire('Error', 'Review page URL is not configured.', 'error');
+        }
     });
 
     // --- Start Test Series from Course Item ---
