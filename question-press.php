@@ -5430,7 +5430,17 @@ function qp_finalize_and_end_session($session_id, $new_status = 'completed', $en
                 'progress_percent' => $progress_percent,
                 'status' => $course_status,
                 // Update completion_date only if status becomes 'completed' and it's not already set
-                'completion_date' => ($course_status === 'completed') ? current_time('mysql') : null // Be careful not to overwrite if already completed
+                'completion_date' => $wpdb->get_var($wpdb->prepare(
+                    "SELECT CASE
+                        WHEN %s = 'completed' AND completion_date IS NULL THEN %s
+                        ELSE completion_date
+                    END
+                    FROM {$user_courses_table} WHERE user_id = %d AND course_id = %d",
+                    $course_status, // New status ('completed' or 'in_progress')
+                    current_time('mysql'), // The time to set if conditions are met
+                    $user_id,
+                    $course_id
+                )),
             ],
             [
                 'user_id' => $user_id,
