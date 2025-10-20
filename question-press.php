@@ -264,6 +264,95 @@ function qp_activate_plugin()
     ) $charset_collate;";
     dbDelta($sql_term_meta);
 
+    // 5. Courses Table
+    $table_courses = $wpdb->prefix . 'qp_courses';
+    $sql_courses = "CREATE TABLE $table_courses (
+        course_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+        title VARCHAR(255) NOT NULL,
+        slug VARCHAR(255) NOT NULL,
+        description LONGTEXT,
+        status VARCHAR(20) NOT NULL DEFAULT 'draft',
+        author_id BIGINT(20) UNSIGNED NOT NULL,
+        created_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        modified_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        menu_order INT NOT NULL DEFAULT 0,
+        PRIMARY KEY (course_id),
+        UNIQUE KEY slug (slug(191)),
+        KEY status (status),
+        KEY author_id (author_id)
+    ) $charset_collate;";
+    dbDelta($sql_courses);
+
+    // 6. Course Sections Table
+    $table_course_sections = $wpdb->prefix . 'qp_course_sections';
+    $sql_course_sections = "CREATE TABLE $table_course_sections (
+        section_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+        course_id BIGINT(20) UNSIGNED NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        description TEXT,
+        section_order INT NOT NULL DEFAULT 0,
+        PRIMARY KEY (section_id),
+        KEY course_id (course_id),
+        KEY section_order (section_order)
+    ) $charset_collate;";
+    dbDelta($sql_course_sections);
+
+    // 7. Course Items Table
+    $table_course_items = $wpdb->prefix . 'qp_course_items';
+    $sql_course_items = "CREATE TABLE $table_course_items (
+        item_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+        section_id BIGINT(20) UNSIGNED NOT NULL,
+        course_id BIGINT(20) UNSIGNED NOT NULL, /* Denormalized for easier queries */
+        title VARCHAR(255) NOT NULL,
+        item_order INT NOT NULL DEFAULT 0,
+        content_type VARCHAR(50) NOT NULL, /* e.g., 'test_series', 'pdf', 'video', 'lesson' */
+        content_config LONGTEXT, /* JSON configuration for the item */
+        PRIMARY KEY (item_id),
+        KEY section_id (section_id),
+        KEY course_id (course_id), /* Index denormalized course_id */
+        KEY item_order (item_order)
+    ) $charset_collate;";
+    dbDelta($sql_course_items);
+
+    // 8. User Courses Table (Enrollment & Overall Progress)
+    $table_user_courses = $wpdb->prefix . 'qp_user_courses';
+    $sql_user_courses = "CREATE TABLE $table_user_courses (
+        user_course_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+        user_id BIGINT(20) UNSIGNED NOT NULL,
+        course_id BIGINT(20) UNSIGNED NOT NULL,
+        enrollment_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        completion_date DATETIME DEFAULT NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'enrolled', /* e.g., enrolled, in_progress, completed */
+        progress_percent TINYINT UNSIGNED NOT NULL DEFAULT 0,
+        last_accessed_item_id BIGINT(20) UNSIGNED DEFAULT NULL, /* Optional: For resuming */
+        PRIMARY KEY (user_course_id),
+        UNIQUE KEY user_course (user_id, course_id),
+        KEY user_id (user_id),
+        KEY course_id (course_id),
+        KEY status (status)
+    ) $charset_collate;";
+    dbDelta($sql_user_courses);
+
+    // 9. User Items Progress Table
+    $table_user_items_progress = $wpdb->prefix . 'qp_user_items_progress';
+    $sql_user_items_progress = "CREATE TABLE $table_user_items_progress (
+        user_item_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+        user_id BIGINT(20) UNSIGNED NOT NULL,
+        item_id BIGINT(20) UNSIGNED NOT NULL,
+        course_id BIGINT(20) UNSIGNED NOT NULL, /* Denormalized */
+        status VARCHAR(20) NOT NULL DEFAULT 'not_started', /* e.g., not_started, in_progress, completed */
+        completion_date DATETIME DEFAULT NULL,
+        result_data TEXT DEFAULT NULL, /* JSON for score/details */
+        last_viewed DATETIME DEFAULT NULL,
+        PRIMARY KEY (user_item_id),
+        UNIQUE KEY user_item (user_id, item_id),
+        KEY user_id (user_id),
+        KEY item_id (item_id),
+        KEY course_id (course_id), /* Index denormalized course_id */
+        KEY status (status)
+    ) $charset_collate;";
+    dbDelta($sql_user_items_progress);
+
     $default_taxonomies = [
         ['taxonomy_name' => 'subject', 'taxonomy_label' => 'Subjects', 'hierarchical' => 1],
         ['taxonomy_name' => 'label', 'taxonomy_label' => 'Labels', 'hierarchical' => 0],
