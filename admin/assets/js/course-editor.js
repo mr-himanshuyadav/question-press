@@ -2,22 +2,117 @@ jQuery(document).ready(function ($) {
     const sectionsList = $('#qp-sections-list');
     const structureContainer = $('#qp-course-structure-container');
 
+    // --- Add Modal HTML to the page FIRST ---
+    const modalHtml = `
+    <div id="qp-question-select-modal" style="display: none;">
+        <div class="qp-modal-overlay"></div>
+        <div class="qp-modal-content">
+            <button type="button" class="button-link qp-modal-close-btn">&times;</button>
+            <h2>Select Questions</h2>
+            <div class="qp-modal-filters">
+                <input type="text" id="qp-modal-search-input" placeholder="Search by ID or text...">
+                <select id="qp-modal-subject-filter"><option value="">All Subjects</option></select>
+                <select id="qp-modal-topic-filter" disabled><option value="">Select Subject First</option></select>
+                <select id="qp-modal-source-filter" disabled><option value="">Select Subject First</option></select>
+                <button type="button" class="button" id="qp-modal-filter-btn">Filter</button>
+            </div>
+            <div class="qp-modal-results-container">
+                <div id="qp-modal-search-results" class="qp-modal-column">
+                    <h3>Available Questions</h3>
+                    <div class="qp-results-list"></div>
+                    <div class="qp-pagination"></div>
+                </div>
+                <div id="qp-modal-selected-questions" class="qp-modal-column">
+                    <h3>Selected (<span class="qp-selected-count">0</span>)</h3>
+                    <div class="qp-selected-list"></div>
+                </div>
+            </div>
+            <div class="qp-modal-actions">
+                <button type="button" class="button button-secondary qp-modal-cancel-btn">Cancel</button>
+                <button type="button" class="button button-primary qp-modal-done-btn">Done</button>
+            </div>
+        </div>
+    </div>
+    `;
+    // Ensure modal is added only once
+    if ($('#qp-question-select-modal').length === 0) {
+        $('body').append(modalHtml);
+    }
+
+    // --- NOW get a reference to the modal ---
+    const modal = $('#qp-question-select-modal');
+
+    // --- Variables to store context when modal opens ---
+    let currentModalTargetInput = null;
+    let currentModalTargetDisplay = null;
+    let currentlySelectedInModal = []; // Store IDs selected *within* the modal
+
+    // --- Pre-populate Subject Filter in Modal ---
+    const subjectDropdown = $('#qp-modal-subject-filter');
+    // Check if dropdown is already populated to prevent duplicates
+    if (subjectDropdown.children('option').length <= 1 && typeof qpCourseEditorData !== 'undefined' && qpCourseEditorData.testSeriesOptions && qpCourseEditorData.testSeriesOptions.allSubjectTerms) {
+        qpCourseEditorData.testSeriesOptions.allSubjectTerms
+            .filter(term => term.parent == 0)
+            .sort((a,b) => a.name.localeCompare(b.name)) // Sort subjects
+            .forEach(subject => {
+                subjectDropdown.append(`<option value="${subject.id}">${subject.name}</option>`);
+        });
+    }
+     // --- Add basic dynamic dropdown logic for modal filters ---
+     $('#qp-modal-subject-filter').off('change.qpsmodal').on('change.qpsmodal', function() { // Use namespaced event
+        var subjectId = $(this).val();
+        var $topicSelect = $('#qp-modal-topic-filter');
+        var $sourceSelect = $('#qp-modal-source-filter');
+
+        $topicSelect.empty().prop('disabled', true).append('<option value="">All Topics</option>');
+        $sourceSelect.empty().prop('disabled', true).append('<option value="">All Sources</option>');
+
+        if (subjectId && typeof qpCourseEditorData !== 'undefined') { // Check qpCourseEditorData exists
+            // Populate Topics
+            const topics = qpCourseEditorData.testSeriesOptions.allSubjectTerms
+                           .filter(term => term.parent == subjectId);
+            if(topics.length > 0) {
+                $topicSelect.prop('disabled', false);
+                 topics.sort((a,b) => a.name.localeCompare(b.name))
+                       .forEach(topic => {
+                            $topicSelect.append(`<option value="${topic.id}">${topic.name}</option>`);
+                       });
+            }
+
+
+            // Populate Sources
+             if (qpCourseEditorData.testSeriesOptions.sourceSubjectLinks && qpCourseEditorData.testSeriesOptions.allSourceTerms) {
+                 const linkedSourceIds = qpCourseEditorData.testSeriesOptions.sourceSubjectLinks
+                                         .filter(link => link.subject_id == subjectId)
+                                         .map(link => link.source_id);
+
+                 const availableSources = qpCourseEditorData.testSeriesOptions.allSourceTerms
+                                         .filter(term => term.parent == 0 && linkedSourceIds.includes(String(term.id)));
+
+                 if (availableSources.length > 0) {
+                      $sourceSelect.prop('disabled', false);
+                      availableSources.sort((a,b) => a.name.localeCompare(b.name))
+                                      .forEach(source => {
+                                         $sourceSelect.append(`<option value="${source.id}">${source.name}</option>`);
+                                      });
+                 }
+            }
+        }
+    });
+
     // --- Helper Function: Get Next Index ---
-    // Calculates the next available index for naming inputs correctly
     function getNextIndex(containerSelector, elementSelector) {
         const items = $(containerSelector).find(elementSelector);
         return items.length;
     }
 
     // --- Helper Function: Re-index Inputs ---
-    // Updates name attributes after sorting or deleting
     function reindexInputs() {
         sectionsList.find('.qp-section').each(function (sectionIndex, sectionEl) {
             const $section = $(sectionEl);
             const sectionBaseName = `course_sections[${sectionIndex}]`;
 
             $section.find('> .qp-section-header').find('.qp-section-title-input').attr('name', `${sectionBaseName}[title]`);
-            // Add other section-level fields here if needed (like description)
 
             $section.find('.qp-course-item').each(function (itemIndex, itemEl) {
                 const $item = $(itemEl);
@@ -26,24 +121,23 @@ jQuery(document).ready(function ($) {
                 $item.find('.qp-item-title-input').attr('name', `${itemBaseName}[title]`);
                 $item.find('.qp-item-content-type-select').attr('name', `${itemBaseName}[content_type]`);
 
-                // Re-index config fields based on content type
                 const contentType = $item.find('.qp-item-content-type-select').val();
                 if (contentType === 'test_series') {
-                    $item.find('.qp-test-series-config').find('[data-config-key]').each(function () {
+                    // Re-index hidden input for selected questions
+                    $item.find('.qp-selected-questions-input').attr('name', `${itemBaseName}[config][selected_questions]`);
+
+                    // Re-index other config fields
+                    $item.find('.qp-test-series-config').find('[data-config-key]').not('.qp-selected-questions-input').each(function () {
                         const key = $(this).data('config-key');
-                        $(this).attr('name', `${itemBaseName}[config][${key}]`);
-                    });
-                     // Handle multi-selects (subjects/topics) - ensure names are updated
-                    $item.find('.qp-test-series-config').find('select[multiple][data-config-key]').each(function() {
-                        const key = $(this).data('config-key');
-                        $(this).attr('name', `${itemBaseName}[config][${key}][]`); // Add [] for array
-                    });
-                    $item.find('.qp-test-series-config').find('input[type="checkbox"][data-config-key]').each(function() {
-                        const key = $(this).data('config-key');
-                         $(this).attr('name', `${itemBaseName}[config][${key}]`);
+                        const isMultiple = $(this).is('select[multiple]');
+                        const isCheckbox = $(this).is('input[type="checkbox"]');
+                        let inputName = `${itemBaseName}[config][${key}]`;
+                        if (isMultiple) {
+                            inputName += '[]';
+                        }
+                        $(this).attr('name', inputName);
                     });
                 }
-                // Add re-indexing for other content types here later
             });
         });
     }
@@ -52,15 +146,13 @@ jQuery(document).ready(function ($) {
     function renderTestSeriesConfig(itemIndex, sectionIndex, configData = {}) {
         const itemBaseName = `course_sections[${sectionIndex}][items][${itemIndex}][config]`;
         const allSubjectTerms = qpCourseEditorData.testSeriesOptions.allSubjectTerms || [];
+        const selectedQuestionsArray = configData.selected_questions || []; // Ensure it's an array
 
-        // Build subject options first
         let subjectOptionsHtml = '';
         allSubjectTerms.filter(term => term.parent == 0).forEach(subject => {
             const isSelected = configData.subjects && configData.subjects.includes(String(subject.id));
             subjectOptionsHtml += `<option value="${subject.id}" ${isSelected ? 'selected' : ''}>${subject.name}</option>`;
         });
-
-        // Build topic options dynamically later based on subject selection
 
         // --- Basic Structure ---
         let configHtml = `
@@ -111,13 +203,15 @@ jQuery(document).ready(function ($) {
                  <hr style="margin: 1.5rem 0;">
                 <div>
                     <label>Manually Selected Questions</label>
-                    <div id="selected-questions-display-${sectionIndex}-${itemIndex}" class="qp-selected-questions-display" style="min-height: 40px; background: #f0f0f1; border: 1px solid #ddd; padding: 8px; border-radius: 4px; margin-bottom: 8px;">
-                        <span style="color: #777;">No questions selected manually. Criteria above will be used.</span>
+                     <div id="selected-questions-display-${sectionIndex}-${itemIndex}" class="qp-selected-questions-display" style="min-height: 40px; background: #f0f0f1; border: 1px solid #ddd; padding: 8px; border-radius: 4px; margin-bottom: 8px;">
+                        ${selectedQuestionsArray.length > 0
+                            ? `<span style="font-weight: bold;">${selectedQuestionsArray.length} questions selected:</span> ${selectedQuestionsArray.join(', ')}`
+                            : '<span style="color: #777;">No questions selected manually. Criteria above will be used.</span>'}
                     </div>
                     <button type="button" class="button qp-select-questions-btn" data-section-index="${sectionIndex}" data-item-index="${itemIndex}">
                         <span class="dashicons dashicons-editor-ul" style="vertical-align: text-top;"></span> Select Questions
                     </button>
-                    <input type="hidden" name="${itemBaseName}[selected_questions]" data-config-key="selected_questions" class="qp-selected-questions-input" value="${configData.selected_questions ? configData.selected_questions.join(',') : ''}">
+                    <input type="hidden" name="${itemBaseName}[selected_questions]" data-config-key="selected_questions" class="qp-selected-questions-input" value="${selectedQuestionsArray.join(',') || ''}">
                     <p class="description" style="margin-top: 5px;">If you manually select questions, the Subject/Topic/Number criteria above will be ignored for this item.</p>
                 </div>
             </div>`;
@@ -126,8 +220,9 @@ jQuery(document).ready(function ($) {
 
     // --- Helper Function: Render Single Item ---
     function renderItem(itemData, itemIndex, sectionIndex) {
+         const config = itemData.content_config || {};
         const itemHtml = `
-            <div class="qp-course-item" data-item-id="${itemData.id || 0}">
+            <div class="qp-course-item" data-item-id="${itemData.item_id || 0}" data-initial-config='${JSON.stringify(config)}'>
                  <div class="qp-item-header">
                      <span class="dashicons dashicons-menu handle"></span>
                      <input type="text" class="qp-item-title-input" value="${itemData.title || ''}" placeholder="Item Title">
@@ -138,7 +233,7 @@ jQuery(document).ready(function ($) {
                     </div>
                  </div>
                  <div class="qp-item-config">
-                     ${renderTestSeriesConfig(itemIndex, sectionIndex, itemData.content_config)}
+                     ${renderTestSeriesConfig(itemIndex, sectionIndex, config)}
                  </div>
             </div>`;
         return itemHtml;
@@ -182,11 +277,12 @@ jQuery(document).ready(function ($) {
             qpCourseEditorData.structure.sections.forEach((section, index) => {
                 sectionsList.append(renderSection(section, index));
             });
-            // Make sure dynamically loaded selects trigger their updates
-            $('.qp-config-subjects').trigger('change');
+            sectionsList.find('.qp-config-subjects').each(function() {
+                $(this).trigger('change');
+            });
             $('.qp-config-scoring-enabled').trigger('change');
             makeSortable();
-            reindexInputs(); // Ensure initial names are correct
+            reindexInputs();
         }
     }
 
@@ -194,7 +290,7 @@ jQuery(document).ready(function ($) {
     $('#qp-add-section-btn').on('click', function () {
         const sectionIndex = getNextIndex('#qp-sections-list', '.qp-section');
         sectionsList.append(renderSection({}, sectionIndex));
-        makeSortable(); // Re-initialize sortable
+        makeSortable();
         reindexInputs();
     });
 
@@ -211,12 +307,14 @@ jQuery(document).ready(function ($) {
         const $sectionContent = $(this).closest('.qp-section-header').next('.qp-section-content');
         const $itemsList = $sectionContent.find('.qp-items-list');
         const $section = $(this).closest('.qp-section');
-        const sectionIndex = $section.index(); // Get current index
+        const sectionIndex = $section.index();
         const itemIndex = getNextIndex($itemsList, '.qp-course-item');
 
         $itemsList.append(renderItem({}, itemIndex, sectionIndex));
-        makeSortable(); // Re-initialize sortable
+        makeSortable();
         reindexInputs();
+        $itemsList.find('.qp-course-item:last-child .qp-config-subjects').trigger('change');
+        $itemsList.find('.qp-course-item:last-child .qp-config-scoring-enabled').trigger('change');
     });
 
     // --- Remove Item ---
@@ -234,14 +332,28 @@ jQuery(document).ready(function ($) {
         const $topicSelect = $item.find('.qp-config-topics');
         const selectedSubjectIds = $subjectSelect.val() || [];
         const allSubjectTerms = qpCourseEditorData.testSeriesOptions.allSubjectTerms || [];
-        const currentConfig = $item.data('initial-config') || {}; // Get initial config if stored
+
+        const initialConfigStr = $item.attr('data-initial-config');
+        let initialConfig = {};
+        let currentlySelectedTopics = [];
+
+        try {
+            if (initialConfigStr && initialConfigStr !== 'null') {
+                initialConfig = JSON.parse(initialConfigStr);
+                currentlySelectedTopics = initialConfig.topics || [];
+            }
+        } catch (e) {
+            console.error("Error parsing initial config JSON:", e, "String was:", initialConfigStr);
+            initialConfig = {};
+            currentlySelectedTopics = [];
+        }
+
 
         $topicSelect.empty().prop('disabled', true);
 
         if (selectedSubjectIds.length > 0) {
             let availableTopics = [];
             selectedSubjectIds.forEach(subjectId => {
-                // Find topics whose parent is the selected subject
                 availableTopics = availableTopics.concat(
                     allSubjectTerms.filter(term => term.parent == subjectId)
                 );
@@ -251,7 +363,7 @@ jQuery(document).ready(function ($) {
                  $topicSelect.prop('disabled', false);
                  availableTopics.sort((a, b) => a.name.localeCompare(b.name));
                  availableTopics.forEach(topic => {
-                     const isSelected = currentConfig.topics && currentConfig.topics.includes(String(topic.id));
+                     const isSelected = currentlySelectedTopics.includes(String(topic.id));
                      $topicSelect.append(`<option value="${topic.id}" ${isSelected ? 'selected' : ''}>${topic.name}</option>`);
                  });
             } else {
@@ -260,6 +372,7 @@ jQuery(document).ready(function ($) {
         } else {
             $topicSelect.append('<option value="">— Select Subjects First —</option>');
         }
+        $item.attr('data-initial-config', null);
     });
 
      // --- Toggle Scoring Fields ---
@@ -270,7 +383,7 @@ jQuery(document).ready(function ($) {
             $marksGroup.slideDown(200);
         } else {
             $marksGroup.slideUp(200);
-            $marksGroup.find('input').val(0); // Optionally reset values when hiding
+            $marksGroup.find('input').val(0);
         }
     });
 
@@ -289,7 +402,7 @@ jQuery(document).ready(function ($) {
         sectionsList.find('.qp-items-list').sortable({
             handle: '.qp-item-header .handle',
             axis: 'y',
-            connectWith: '.qp-items-list', // Allow moving between sections
+            connectWith: '.qp-items-list',
             placeholder: 'qp-item-placeholder',
             forcePlaceholderSize: true,
             update: function (event, ui) {
@@ -297,6 +410,92 @@ jQuery(document).ready(function ($) {
             }
         });
     }
+
+    // =============================================
+    // --- Modal Interaction Logic Start ---
+    // =============================================
+
+    // --- Open Modal ---
+    structureContainer.on('click', '.qp-select-questions-btn', function() {
+        const $button = $(this);
+        const $itemConfig = $button.closest('.qp-item-config');
+        currentModalTargetInput = $itemConfig.find('.qp-selected-questions-input');
+        currentModalTargetDisplay = $itemConfig.find('.qp-selected-questions-display');
+
+        const currentIdsString = currentModalTargetInput.val();
+        currentlySelectedInModal = currentIdsString ? currentIdsString.split(',').map(id => parseInt(id.trim(), 10)).filter(id => !isNaN(id)) : [];
+
+        updateModalSelectedList();
+
+        $('#qp-modal-search-input').val('');
+        $('#qp-modal-subject-filter').val('').trigger('change');
+        $('.qp-results-list').html('<p>Use filters above to find questions.</p>');
+        $('.qp-pagination').empty();
+
+        modal.fadeIn(200);
+    });
+
+    // --- Close Modal (Cancel, X button, Overlay) ---
+    modal.on('click', '.qp-modal-cancel-btn, .qp-modal-close-btn, .qp-modal-overlay', function(e) {
+        if ($(e.target).hasClass('qp-modal-overlay') || $(e.target).hasClass('qp-modal-cancel-btn') || $(e.target).hasClass('qp-modal-close-btn')) {
+            modal.fadeOut(200);
+            currentModalTargetInput = null;
+            currentModalTargetDisplay = null;
+            currentlySelectedInModal = [];
+        }
+    });
+
+     // --- Close Modal (Done button) ---
+     modal.on('click', '.qp-modal-done-btn', function() {
+        if (currentModalTargetInput && currentModalTargetDisplay) {
+            const selectedIdsString = currentlySelectedInModal.join(',');
+            currentModalTargetInput.val(selectedIdsString);
+
+            if (currentlySelectedInModal.length > 0) {
+                 currentModalTargetDisplay.html(`<span style="font-weight: bold;">${currentlySelectedInModal.length} questions selected:</span> ${selectedIdsString}`);
+            } else {
+                 currentModalTargetDisplay.html('<span style="color: #777;">No questions selected manually. Criteria above will be used.</span>');
+            }
+        }
+        modal.fadeOut(200);
+        currentModalTargetInput = null;
+        currentModalTargetDisplay = null;
+        currentlySelectedInModal = [];
+    });
+
+    // --- Function to update the "Selected" list inside the modal ---
+    function updateModalSelectedList() {
+        const $selectedList = modal.find('.qp-selected-list');
+        const $selectedCount = modal.find('.qp-selected-count');
+        $selectedList.empty();
+        $selectedCount.text(currentlySelectedInModal.length);
+
+        if (currentlySelectedInModal.length === 0) {
+            $selectedList.html('<p style="text-align: center; color: #777; padding: 10px;">Click "Add" on available questions to select them.</p>');
+            return;
+        }
+
+        currentlySelectedInModal.forEach(qId => {
+            $selectedList.append(`
+                <div class="qp-selected-item" data-id="${qId}">
+                    <span>Question ID: ${qId}</span>
+                    <button type="button" class="qp-remove-selected-btn" data-id="${qId}" title="Remove">&times;</button>
+                </div>
+            `);
+        });
+    }
+
+    // --- Remove from Selected List (inside modal) ---
+    modal.on('click', '.qp-remove-selected-btn', function() {
+        const qIdToRemove = parseInt($(this).data('id'), 10);
+        currentlySelectedInModal = currentlySelectedInModal.filter(id => id !== qIdToRemove);
+        updateModalSelectedList();
+        // TODO later: Update corresponding item in results list
+    });
+
+    // ===========================================
+    // --- Modal Interaction Logic End ---
+    // ===========================================
 
     // --- Load initial data and make sortable ---
     loadInitialStructure();
