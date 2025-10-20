@@ -12,14 +12,14 @@ jQuery(document).ready(function ($) {
             <div class="qp-modal-filters">
                 <input type="text" id="qp-modal-search-input" placeholder="Search by ID or text...">
                 <select id="qp-modal-subject-filter"><option value="">All Subjects</option></select>
-                <select id="qp-modal-topic-filter" disabled><option value="">Select Subject First</option></select>
-                <select id="qp-modal-source-filter" disabled><option value="">Select Subject First</option></select>
+                <select id="qp-modal-topic-filter" disabled><option value="">All Topics</option></select>
+                <select id="qp-modal-source-filter" disabled><option value="">All Sources</option></select>
                 <button type="button" class="button" id="qp-modal-filter-btn">Filter</button>
             </div>
             <div class="qp-modal-results-container">
                 <div id="qp-modal-search-results" class="qp-modal-column">
                     <h3>Available Questions</h3>
-                    <div class="qp-results-list"></div>
+                    <div class="qp-results-list"><p class="qp-modal-message">Use filters above to find questions.</p></div>
                     <div class="qp-pagination"></div>
                 </div>
                 <div id="qp-modal-selected-questions" class="qp-modal-column">
@@ -34,32 +34,32 @@ jQuery(document).ready(function ($) {
         </div>
     </div>
     `;
-    // Ensure modal is added only once
     if ($('#qp-question-select-modal').length === 0) {
         $('body').append(modalHtml);
     }
-
-    // --- NOW get a reference to the modal ---
     const modal = $('#qp-question-select-modal');
+    const resultsList = modal.find('.qp-results-list'); // Cache results list element
+    const selectedList = modal.find('.qp-selected-list'); // Cache selected list element
+    const selectedCountSpan = modal.find('.qp-selected-count'); // Cache count element
 
     // --- Variables to store context when modal opens ---
     let currentModalTargetInput = null;
     let currentModalTargetDisplay = null;
-    let currentlySelectedInModal = []; // Store IDs selected *within* the modal
+    let currentlySelectedInModal = [];
+    let currentAjaxRequest = null; // To handle aborting previous requests
 
     // --- Pre-populate Subject Filter in Modal ---
     const subjectDropdown = $('#qp-modal-subject-filter');
-    // Check if dropdown is already populated to prevent duplicates
     if (subjectDropdown.children('option').length <= 1 && typeof qpCourseEditorData !== 'undefined' && qpCourseEditorData.testSeriesOptions && qpCourseEditorData.testSeriesOptions.allSubjectTerms) {
         qpCourseEditorData.testSeriesOptions.allSubjectTerms
             .filter(term => term.parent == 0)
-            .sort((a,b) => a.name.localeCompare(b.name)) // Sort subjects
+            .sort((a,b) => a.name.localeCompare(b.name))
             .forEach(subject => {
                 subjectDropdown.append(`<option value="${subject.id}">${subject.name}</option>`);
         });
     }
-     // --- Add basic dynamic dropdown logic for modal filters ---
-     $('#qp-modal-subject-filter').off('change.qpsmodal').on('change.qpsmodal', function() { // Use namespaced event
+     // --- Dynamic dropdown logic for modal filters ---
+     $('#qp-modal-subject-filter').off('change.qpsmodal').on('change.qpsmodal', function() {
         var subjectId = $(this).val();
         var $topicSelect = $('#qp-modal-topic-filter');
         var $sourceSelect = $('#qp-modal-source-filter');
@@ -67,7 +67,7 @@ jQuery(document).ready(function ($) {
         $topicSelect.empty().prop('disabled', true).append('<option value="">All Topics</option>');
         $sourceSelect.empty().prop('disabled', true).append('<option value="">All Sources</option>');
 
-        if (subjectId && typeof qpCourseEditorData !== 'undefined') { // Check qpCourseEditorData exists
+        if (subjectId && typeof qpCourseEditorData !== 'undefined') {
             // Populate Topics
             const topics = qpCourseEditorData.testSeriesOptions.allSubjectTerms
                            .filter(term => term.parent == subjectId);
@@ -79,13 +79,11 @@ jQuery(document).ready(function ($) {
                        });
             }
 
-
             // Populate Sources
              if (qpCourseEditorData.testSeriesOptions.sourceSubjectLinks && qpCourseEditorData.testSeriesOptions.allSourceTerms) {
                  const linkedSourceIds = qpCourseEditorData.testSeriesOptions.sourceSubjectLinks
                                          .filter(link => link.subject_id == subjectId)
                                          .map(link => link.source_id);
-
                  const availableSources = qpCourseEditorData.testSeriesOptions.allSourceTerms
                                          .filter(term => term.parent == 0 && linkedSourceIds.includes(String(term.id)));
 
@@ -123,14 +121,10 @@ jQuery(document).ready(function ($) {
 
                 const contentType = $item.find('.qp-item-content-type-select').val();
                 if (contentType === 'test_series') {
-                    // Re-index hidden input for selected questions
                     $item.find('.qp-selected-questions-input').attr('name', `${itemBaseName}[config][selected_questions]`);
-
-                    // Re-index other config fields
                     $item.find('.qp-test-series-config').find('[data-config-key]').not('.qp-selected-questions-input').each(function () {
                         const key = $(this).data('config-key');
                         const isMultiple = $(this).is('select[multiple]');
-                        const isCheckbox = $(this).is('input[type="checkbox"]');
                         let inputName = `${itemBaseName}[config][${key}]`;
                         if (isMultiple) {
                             inputName += '[]';
@@ -146,7 +140,7 @@ jQuery(document).ready(function ($) {
     function renderTestSeriesConfig(itemIndex, sectionIndex, configData = {}) {
         const itemBaseName = `course_sections[${sectionIndex}][items][${itemIndex}][config]`;
         const allSubjectTerms = qpCourseEditorData.testSeriesOptions.allSubjectTerms || [];
-        const selectedQuestionsArray = configData.selected_questions || []; // Ensure it's an array
+        const selectedQuestionsArray = configData.selected_questions || [];
 
         let subjectOptionsHtml = '';
         allSubjectTerms.filter(term => term.parent == 0).forEach(subject => {
@@ -154,7 +148,6 @@ jQuery(document).ready(function ($) {
             subjectOptionsHtml += `<option value="${subject.id}" ${isSelected ? 'selected' : ''}>${subject.name}</option>`;
         });
 
-        // --- Basic Structure ---
         let configHtml = `
             <div class="qp-test-series-config">
                 <div class="qp-config-row">
@@ -348,7 +341,6 @@ jQuery(document).ready(function ($) {
             currentlySelectedTopics = [];
         }
 
-
         $topicSelect.empty().prop('disabled', true);
 
         if (selectedSubjectIds.length > 0) {
@@ -429,10 +421,12 @@ jQuery(document).ready(function ($) {
 
         $('#qp-modal-search-input').val('');
         $('#qp-modal-subject-filter').val('').trigger('change');
-        $('.qp-results-list').html('<p>Use filters above to find questions.</p>');
+        resultsList.html('<p class="qp-modal-message">Use filters above to find questions.</p>'); // Reset results
         $('.qp-pagination').empty();
 
         modal.fadeIn(200);
+        // Trigger initial fetch when modal opens (optional, can wait for filter button)
+        // fetchQuestionsForModal();
     });
 
     // --- Close Modal (Cancel, X button, Overlay) ---
@@ -442,6 +436,11 @@ jQuery(document).ready(function ($) {
             currentModalTargetInput = null;
             currentModalTargetDisplay = null;
             currentlySelectedInModal = [];
+             // Abort ongoing AJAX request if modal is closed
+             if (currentAjaxRequest) {
+                currentAjaxRequest.abort();
+                currentAjaxRequest = null;
+            }
         }
     });
 
@@ -461,36 +460,157 @@ jQuery(document).ready(function ($) {
         currentModalTargetInput = null;
         currentModalTargetDisplay = null;
         currentlySelectedInModal = [];
+         if (currentAjaxRequest) {
+            currentAjaxRequest.abort();
+            currentAjaxRequest = null;
+        }
     });
 
     // --- Function to update the "Selected" list inside the modal ---
     function updateModalSelectedList() {
-        const $selectedList = modal.find('.qp-selected-list');
-        const $selectedCount = modal.find('.qp-selected-count');
-        $selectedList.empty();
-        $selectedCount.text(currentlySelectedInModal.length);
+        selectedList.empty();
+        selectedCountSpan.text(currentlySelectedInModal.length);
 
         if (currentlySelectedInModal.length === 0) {
-            $selectedList.html('<p style="text-align: center; color: #777; padding: 10px;">Click "Add" on available questions to select them.</p>');
+            selectedList.html('<p class="qp-modal-message" style="text-align: center; color: #777; padding: 10px;">Click "Add" on available questions to select them.</p>');
             return;
         }
 
         currentlySelectedInModal.forEach(qId => {
-            $selectedList.append(`
+             // Maybe fetch text later? For now, just ID.
+            selectedList.append(`
                 <div class="qp-selected-item" data-id="${qId}">
-                    <span>Question ID: ${qId}</span>
+                    <span>ID: ${qId}</span>
                     <button type="button" class="qp-remove-selected-btn" data-id="${qId}" title="Remove">&times;</button>
                 </div>
             `);
         });
+         // Update 'Add'/'Remove' buttons in results list based on changes
+        updateResultsListButtons();
     }
+
+     // --- Function to update Add/Remove buttons in the results list ---
+    function updateResultsListButtons() {
+        resultsList.find('.qp-result-item').each(function() {
+            const $item = $(this);
+            const qId = parseInt($item.data('id'), 10);
+            const $button = $item.find('.qp-add-question-btn, .qp-remove-question-btn'); // Find either button
+
+            if (currentlySelectedInModal.includes(qId)) {
+                // If selected, show 'Remove' button
+                $button.removeClass('qp-add-question-btn button-primary')
+                       .addClass('qp-remove-question-btn button-secondary')
+                       .text('Remove');
+            } else {
+                // If not selected, show 'Add' button
+                $button.removeClass('qp-remove-question-btn button-secondary')
+                       .addClass('qp-add-question-btn button-primary')
+                       .text('Add');
+            }
+        });
+    }
+
 
     // --- Remove from Selected List (inside modal) ---
     modal.on('click', '.qp-remove-selected-btn', function() {
         const qIdToRemove = parseInt($(this).data('id'), 10);
         currentlySelectedInModal = currentlySelectedInModal.filter(id => id !== qIdToRemove);
         updateModalSelectedList();
-        // TODO later: Update corresponding item in results list
+    });
+
+    // --- Add Question from Results to Selected List ---
+    resultsList.on('click', '.qp-add-question-btn', function() {
+        const $button = $(this);
+        const $item = $button.closest('.qp-result-item');
+        const qId = parseInt($item.data('id'), 10);
+        const qText = $item.find('.qp-result-text').text(); // Get text if needed later
+
+        if (!currentlySelectedInModal.includes(qId)) {
+            currentlySelectedInModal.push(qId);
+            updateModalSelectedList();
+        }
+        // Change button state handled by updateModalSelectedList -> updateResultsListButtons
+    });
+
+    // --- Remove Question from Selected List via Results List Button ---
+    resultsList.on('click', '.qp-remove-question-btn', function() {
+        const $button = $(this);
+        const $item = $button.closest('.qp-result-item');
+        const qIdToRemove = parseInt($item.data('id'), 10);
+
+        currentlySelectedInModal = currentlySelectedInModal.filter(id => id !== qIdToRemove);
+        updateModalSelectedList();
+        // Change button state handled by updateModalSelectedList -> updateResultsListButtons
+    });
+
+
+    // --- AJAX Function to Fetch Questions ---
+    function fetchQuestionsForModal() {
+        // Abort previous request if it's still running
+        if (currentAjaxRequest) {
+            currentAjaxRequest.abort();
+        }
+
+        const search = $('#qp-modal-search-input').val();
+        const subject = $('#qp-modal-subject-filter').val();
+        const topic = $('#qp-modal-topic-filter').val();
+        const source = $('#qp-modal-source-filter').val();
+
+        // Show loading state
+        resultsList.html('<p class="qp-modal-message"><i>Loading questions...</i></p>');
+        $('.qp-pagination').empty(); // Clear pagination
+
+        currentAjaxRequest = $.ajax({
+            url: qpCourseEditorData.ajax_url,
+            type: 'POST',
+            data: {
+                action: 'qp_search_questions_for_course',
+                nonce: qpCourseEditorData.select_nonce,
+                search: search,
+                subject_id: subject,
+                topic_id: topic,
+                source_id: source
+                // Add page number later for pagination
+            },
+            success: function(response) {
+                resultsList.empty(); // Clear loading message
+                if (response.success && response.data.questions && response.data.questions.length > 0) {
+                    response.data.questions.forEach(q => {
+                        resultsList.append(`
+                            <div class="qp-result-item" data-id="${q.id}">
+                                <span class="qp-result-text">ID: ${q.id} - ${q.text}</span>
+                                <button type="button" class="button button-small qp-add-question-btn button-primary">Add</button>
+                            </div>
+                        `);
+                    });
+                     // Update button states after adding results
+                     updateResultsListButtons();
+                    // Add pagination controls later if response includes pagination data
+                } else if (response.success) {
+                    resultsList.html('<p class="qp-modal-message">No questions found matching your criteria.</p>');
+                } else {
+                    resultsList.html('<p class="qp-modal-message" style="color: red;">Error: ' + (response.data.message || 'Could not fetch questions.') + '</p>');
+                }
+            },
+            error: function(jqXHR, textStatus) {
+                 if (textStatus !== 'abort') { // Don't show error if we aborted it intentionally
+                    resultsList.html('<p class="qp-modal-message" style="color: red;">An AJAX error occurred. Please try again.</p>');
+                 }
+            },
+            complete: function() {
+                currentAjaxRequest = null; // Clear the request variable
+            }
+        });
+    }
+
+    // --- Trigger AJAX Fetch on Filter Button Click ---
+    modal.on('click', '#qp-modal-filter-btn', fetchQuestionsForModal);
+
+    // --- Optional: Trigger AJAX on Enter key in search input ---
+    modal.on('keypress', '#qp-modal-search-input', function(e) {
+        if (e.which === 13) { // Enter key pressed
+            fetchQuestionsForModal();
+        }
     });
 
     // ===========================================
