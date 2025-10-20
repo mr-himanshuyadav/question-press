@@ -3343,6 +3343,8 @@ function qp_public_enqueue_scripts()
         $ajax_data = [
             'ajax_url'           => admin_url('admin-ajax.php'),
             'nonce'              => wp_create_nonce('qp_practice_nonce'),
+            'enroll_nonce'       => wp_create_nonce('qp_enroll_course_nonce'), // <-- ADD THIS
+            'start_course_test_nonce' => wp_create_nonce('qp_start_course_test_nonce'), // <-- ADD THIS
             'dashboard_page_url' => isset($options['dashboard_page']) ? get_permalink($options['dashboard_page']) : home_url('/'),
             'practice_page_url'  => isset($options['practice_page']) ? get_permalink($options['practice_page']) : home_url('/'),
             'review_page_url'    => isset($options['review_page']) ? get_permalink($options['review_page']) : home_url('/'),
@@ -6161,7 +6163,7 @@ add_action('wp_ajax_get_course_structure', 'qp_get_course_structure_ajax');
  * AJAX handler to start a Test Series session launched from a course item.
  */
 function qp_start_course_test_series_ajax() {
-    check_ajax_referer('qp_practice_nonce', 'nonce'); // Re-use frontend nonce
+    check_ajax_referer('qp_start_course_test_nonce', 'nonce'); // Use the dedicated start course test nonce
 
     if (!is_user_logged_in()) {
         wp_send_json_error(['message' => 'You must be logged in.']);
@@ -6311,7 +6313,7 @@ add_action('wp_ajax_start_course_test_series', 'qp_start_course_test_series_ajax
  * AJAX handler for enrolling a user in a course.
  */
 function qp_enroll_in_course_ajax() {
-    check_ajax_referer('qp_practice_nonce', 'nonce'); // Re-use frontend nonce
+    check_ajax_referer('qp_enroll_course_nonce', 'nonce'); // Use the dedicated course enroll nonce
 
     if (!is_user_logged_in()) {
         wp_send_json_error(['message' => 'Not logged in.']);

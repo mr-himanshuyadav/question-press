@@ -858,7 +858,7 @@ wrapper.on('click', 'a.qp-button-primary[href*="session_id="]', function(e) {
                 type: 'POST',
                 data: {
                     action: 'start_course_test_series',
-                    nonce: qp_ajax_object.nonce,
+                    nonce: qp_ajax_object.start_course_test_nonce,
                     item_id: itemId
                 },
                 beforeSend: function() {
@@ -896,7 +896,7 @@ wrapper.on('click', 'a.qp-button-primary[href*="session_id="]', function(e) {
             type: 'POST',
             data: {
                 action: 'enroll_in_course',
-                nonce: qp_ajax_object.nonce,
+                nonce: qp_ajax_object.enroll_nonce,
                 course_id: courseId
             },
             beforeSend: function() {
