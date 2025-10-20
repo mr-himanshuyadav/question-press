@@ -7,11 +7,17 @@
  * Author:            Himanshu
  */
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
-
 if (!defined('ABSPATH')) exit;
+
+/**
+ * Start session on init hook.
+ */
+function qp_start_session() {
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
+}
+add_action('init', 'qp_start_session', 1); // Run early on init
 
 // Define constants and include files
 define('QP_PLUGIN_FILE', __FILE__);

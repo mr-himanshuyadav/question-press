@@ -115,16 +115,14 @@ class QP_Dashboard
                         <li><a href="#progress"><span class="dashicons dashicons-chart-bar"></span><span>Progress</span></a></li>
                         <?php /* Placeholder for future items */ ?>
                     </ul>
-                     <div class="qp-sidebar-footer" style="position: absolute; bottom: 10px; width: 100%; text-align: center;">
-                         <a href="<?php echo wp_logout_url(get_permalink()); ?>" class="qp-logout-link" style="font-size: 0.9em; color: var(--qp-dashboard-text-light); text-decoration: none;">
+                     <div class="qp-sidebar-footer" style="position: absolute; bottom: 10px; width: 100%; text-align: center;display: flex; justify-content:center;">
+                         <a href="<?php echo wp_logout_url(get_permalink()); ?>" class="qp-logout-link" style="font-size: 0.9em; color: var(--qp-dashboard-text-light); text-decoration: none;width:65%;border:1px solid #dfdfdf;justify-content:center;">
                              <span class="dashicons dashicons-exit" style="vertical-align: middle;"></span> Logout
                          </a>
                      </div>
                 </aside>
 
                 <main class="qp-main-content">
-                    <?php settings_errors('qp_user_attempts_notices'); ?>
-
                     <section id="qp-dashboard-overview" class="qp-dashboard-section active">
                         <?php self::render_overview_content($stats, $overall_accuracy, $active_sessions, $recent_history, $review_count, $never_correct_count, $practice_page_url, $session_page_url, $review_page_url); ?>
                     </section>
