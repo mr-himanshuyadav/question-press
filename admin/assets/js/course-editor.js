@@ -150,25 +150,7 @@ jQuery(document).ready(function ($) {
 
         let configHtml = `
             <div class="qp-test-series-config">
-                <div class="qp-config-row">
-                    <div>
-                        <label>Subjects</label>
-                        <select name="${itemBaseName}[subjects][]" data-config-key="subjects" class="qp-config-subjects" multiple style="height: 100px;">
-                           ${subjectOptionsHtml}
-                        </select>
-                    </div>
-                     <div>
-                        <label>Topics</label>
-                        <select name="${itemBaseName}[topics][]" data-config-key="topics" class="qp-config-topics" multiple style="height: 100px;" disabled>
-                            <option value="">— Select Subjects First —</option>
-                        </select>
-                    </div>
-                </div>
                  <div class="qp-config-row">
-                    <div>
-                        <label for="${itemBaseName}[num_questions]">Number of Questions</label>
-                        <input type="number" name="${itemBaseName}[num_questions]" data-config-key="num_questions" value="${configData.num_questions || 10}" min="1">
-                    </div>
                     <div>
                         <label for="${itemBaseName}[time_limit]">Time Limit (Minutes, 0=None)</label>
                         <input type="number" name="${itemBaseName}[time_limit]" data-config-key="time_limit" value="${configData.time_limit || 0}" min="0">
@@ -193,19 +175,19 @@ jQuery(document).ready(function ($) {
                     </div>
                  </div>
 
-                 <hr style="margin: 1.5rem 0;">
+                 <hr>
                 <div>
-                    <label>Manually Selected Questions</label>
+                    <label>Manually Selected Questions<span style="color:red;">*</span></label>
                      <div id="selected-questions-display-${sectionIndex}-${itemIndex}" class="qp-selected-questions-display" style="min-height: 40px; background: #f0f0f1; border: 1px solid #ddd; padding: 8px; border-radius: 4px; margin-bottom: 8px;">
                         ${selectedQuestionsArray.length > 0
                             ? `<span style="font-weight: bold;">${selectedQuestionsArray.length} questions selected:</span> ${selectedQuestionsArray.join(', ')}`
-                            : '<span style="color: #777;">No questions selected manually. Criteria above will be used.</span>'}
+                            : '<span style="color: #777;">No questions selected manually.</span>'}
                     </div>
                     <button type="button" class="button qp-select-questions-btn" data-section-index="${sectionIndex}" data-item-index="${itemIndex}">
                         <span class="dashicons dashicons-editor-ul" style="vertical-align: text-top;"></span> Select Questions
                     </button>
                     <input type="hidden" name="${itemBaseName}[selected_questions]" data-config-key="selected_questions" class="qp-selected-questions-input" value="${selectedQuestionsArray.join(',') || ''}">
-                    <p class="description" style="margin-top: 5px;">If you manually select questions, the Subject/Topic/Number criteria above will be ignored for this item.</p>
+                    <p class="description" style="margin-top: 5px;">You have to select questions manually.</p>
                 </div>
             </div>`;
         return configHtml;
@@ -316,55 +298,6 @@ jQuery(document).ready(function ($) {
              $(this).remove();
              reindexInputs();
         });
-    });
-
-    // --- Dynamic Topic Loading for Test Series Config ---
-    sectionsList.on('change', '.qp-config-subjects', function() {
-        const $subjectSelect = $(this);
-        const $item = $subjectSelect.closest('.qp-course-item');
-        const $topicSelect = $item.find('.qp-config-topics');
-        const selectedSubjectIds = $subjectSelect.val() || [];
-        const allSubjectTerms = qpCourseEditorData.testSeriesOptions.allSubjectTerms || [];
-
-        const initialConfigStr = $item.attr('data-initial-config');
-        let initialConfig = {};
-        let currentlySelectedTopics = [];
-
-        try {
-            if (initialConfigStr && initialConfigStr !== 'null') {
-                initialConfig = JSON.parse(initialConfigStr);
-                currentlySelectedTopics = initialConfig.topics || [];
-            }
-        } catch (e) {
-            console.error("Error parsing initial config JSON:", e, "String was:", initialConfigStr);
-            initialConfig = {};
-            currentlySelectedTopics = [];
-        }
-
-        $topicSelect.empty().prop('disabled', true);
-
-        if (selectedSubjectIds.length > 0) {
-            let availableTopics = [];
-            selectedSubjectIds.forEach(subjectId => {
-                availableTopics = availableTopics.concat(
-                    allSubjectTerms.filter(term => term.parent == subjectId)
-                );
-            });
-
-            if (availableTopics.length > 0) {
-                 $topicSelect.prop('disabled', false);
-                 availableTopics.sort((a, b) => a.name.localeCompare(b.name));
-                 availableTopics.forEach(topic => {
-                     const isSelected = currentlySelectedTopics.includes(String(topic.id));
-                     $topicSelect.append(`<option value="${topic.id}" ${isSelected ? 'selected' : ''}>${topic.name}</option>`);
-                 });
-            } else {
-                 $topicSelect.append('<option value="">— No topics for selected subject(s) —</option>');
-            }
-        } else {
-            $topicSelect.append('<option value="">— Select Subjects First —</option>');
-        }
-        $item.attr('data-initial-config', null);
     });
 
      // --- Toggle Scoring Fields ---
