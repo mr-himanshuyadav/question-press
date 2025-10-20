@@ -5395,7 +5395,48 @@ function qp_finalize_and_end_session($session_id, $new_status = 'completed', $en
         ));
 
         // Note: Calculation and update of overall course progress in wp_qp_user_courses
-        // will be handled in the next step (Step 8) for clarity.
+        // --- Calculate and Update Overall Course Progress ---
+        $items_table = $wpdb->prefix . 'qp_course_items';
+        $user_courses_table = $wpdb->prefix . 'qp_user_courses';
+
+        // Get total number of items in the course
+        $total_items = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(item_id) FROM $items_table WHERE course_id = %d",
+            $course_id
+        ));
+
+        // Get number of completed items for the user in this course
+        $completed_items = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(user_item_id) FROM $progress_table WHERE user_id = %d AND course_id = %d AND status = 'completed'",
+            $user_id,
+            $course_id
+        ));
+
+        // Calculate percentage
+        $progress_percent = ($total_items > 0) ? round(($completed_items / $total_items) * 100) : 0;
+
+        // Check if course is now fully complete
+        $course_status = 'in_progress'; // Default
+        if ($total_items > 0 && $completed_items >= $total_items) {
+            $course_status = 'completed';
+        }
+
+        // Update the user's overall course record
+        $wpdb->update(
+            $user_courses_table,
+            [
+                'progress_percent' => $progress_percent,
+                'status' => $course_status,
+                // Update completion_date only if status becomes 'completed' and it's not already set
+                'completion_date' => ($course_status === 'completed') ? current_time('mysql') : null // Be careful not to overwrite if already completed
+            ],
+            [
+                'user_id' => $user_id,
+                'course_id' => $course_id
+            ]
+            // Add a condition here if you don't want to reset completion_date: AND completion_date IS NULL
+        );
+        // --- End Overall Course Progress Update ---
     }
     // --- END NEW Course Item Progress Update ---
 
@@ -6052,7 +6093,26 @@ function qp_get_course_structure_ajax() {
     $ids_placeholder = implode(',', array_map('absint', $section_ids));
 
     // Get all items for these sections
-    $items_raw = $wpdb->get_results("SELECT item_id, section_id, title, item_order, content_type FROM $items_table WHERE section_id IN ($ids_placeholder) ORDER BY item_order ASC");
+$items_raw = $wpdb->get_results($wpdb->prepare(
+    "SELECT i.item_id, i.section_id, i.title, i.item_order, i.content_type, p.status
+     FROM $items_table i
+     LEFT JOIN {$wpdb->prefix}qp_user_items_progress p ON i.item_id = p.item_id AND p.user_id = %d AND p.course_id = %d
+     WHERE i.section_id IN ($ids_placeholder)
+     ORDER BY i.item_order ASC",
+    $user_id, // Add user_id
+    $course_id // Add course_id
+));
+
+// Organize items by section (No need for a separate progress query now)
+$items_by_section = [];
+foreach ($items_raw as $item) {
+    $item->status = $item->status ?? 'not_started'; // Use fetched status or default
+    // $item->content_config = json_decode($item->content_config, true); // Keep if needed for JS
+    if (!isset($items_by_section[$item->section_id])) {
+        $items_by_section[$item->section_id] = [];
+    }
+    $items_by_section[$item->section_id][] = $item;
+}
 
     // Get user's progress for these items in this course
     $progress_raw = $wpdb->get_results($wpdb->prepare(
@@ -6235,3 +6295,52 @@ function qp_start_course_test_series_ajax() {
     wp_send_json_success(['redirect_url' => $redirect_url, 'session_id' => $session_id]);
 }
 add_action('wp_ajax_start_course_test_series', 'qp_start_course_test_series_ajax');
+
+/**
+ * AJAX handler for enrolling a user in a course.
+ */
+function qp_enroll_in_course_ajax() {
+    check_ajax_referer('qp_practice_nonce', 'nonce'); // Re-use frontend nonce
+
+    if (!is_user_logged_in()) {
+        wp_send_json_error(['message' => 'Not logged in.']);
+    }
+
+    $course_id = isset($_POST['course_id']) ? absint($_POST['course_id']) : 0;
+    $user_id = get_current_user_id();
+
+    if (!$course_id || get_post_type($course_id) !== 'qp_course') {
+        wp_send_json_error(['message' => 'Invalid course ID.']);
+    }
+
+    global $wpdb;
+    $user_courses_table = $wpdb->prefix . 'qp_user_courses';
+
+    // Check if already enrolled
+    $is_enrolled = $wpdb->get_var($wpdb->prepare(
+        "SELECT user_course_id FROM $user_courses_table WHERE user_id = %d AND course_id = %d",
+        $user_id,
+        $course_id
+    ));
+
+    if ($is_enrolled) {
+        wp_send_json_success(['message' => 'Already enrolled.', 'already_enrolled' => true]);
+        return;
+    }
+
+    // Enroll the user
+    $result = $wpdb->insert($user_courses_table, [
+        'user_id' => $user_id,
+        'course_id' => $course_id,
+        'enrollment_date' => current_time('mysql'),
+        'status' => 'enrolled', // Initial status
+        'progress_percent' => 0
+    ]);
+
+    if ($result) {
+        wp_send_json_success(['message' => 'Successfully enrolled!']);
+    } else {
+        wp_send_json_error(['message' => 'Could not enroll in the course. Please try again.']);
+    }
+}
+add_action('wp_ajax_enroll_in_course', 'qp_enroll_in_course_ajax');

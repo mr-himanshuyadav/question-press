@@ -745,26 +745,28 @@ wrapper.on('click', 'a.qp-button-primary[href*="session_id="]', function(e) {
                         let buttonClass = 'qp-button-primary start-course-test-btn'; // Specific class for test
 
                         switch(item.status) {
-                            case 'completed':
-                                statusIcon = '<span class="dashicons dashicons-yes-alt" style="color: var(--qp-dashboard-success);"></span>';
-                                buttonText = 'Review'; // Or keep Start if re-attempts are allowed
-                                // You might want a different class/action for review, e.g., view-test-results-btn
-                                buttonClass = 'qp-button-secondary view-test-results-btn'; // Example
-                                break;
-                            case 'in_progress':
-                                statusIcon = '<span class="dashicons dashicons-marker" style="color: var(--qp-dashboard-warning-dark);"></span>';
-                                buttonText = 'Continue';
-                                break;
-                            default: // not_started
-                                statusIcon = '<span class="dashicons dashicons-marker" style="color: var(--qp-dashboard-border);"></span>';
-                                break;
-                        }
+                        case 'completed':
+                            statusIcon = '<span class="dashicons dashicons-yes-alt" style="color: var(--qp-dashboard-success);"></span>';
+                            buttonText = 'Review'; // Or 'Start Again' if re-attempts are desired
+                            buttonClass = 'qp-button-secondary view-test-results-btn'; // Use specific class for review
+                            break;
+                        case 'in_progress': // Note: 'in_progress' isn't set yet, but plan for it
+                            statusIcon = '<span class="dashicons dashicons-marker" style="color: var(--qp-dashboard-warning-dark);"></span>';
+                            buttonText = 'Continue';
+                            buttonClass = 'qp-button-primary start-course-test-btn'; // Or a different 'continue' class if needed
+                            break;
+                        default: // not_started
+                            statusIcon = '<span class="dashicons dashicons-marker" style="color: var(--qp-dashboard-border);"></span>';
+                            buttonText = 'Start';
+                            buttonClass = 'qp-button-primary start-course-test-btn'; // Class to trigger start
+                            break;
+                    }
 
-                        // Add different classes/buttons based on content_type later
-                        if (item.content_type !== 'test_series') {
-                           buttonClass = 'qp-button-secondary view-course-content-btn'; // Example for other types
-                           buttonText = 'View';
-                        }
+                    // Add different classes/buttons based on content_type later
+                    if (item.content_type !== 'test_series') {
+                       buttonClass = 'qp-button-secondary view-course-content-btn'; // Example for other types
+                       buttonText = 'View';
+                    }
 
 
                         html += `
@@ -872,6 +874,48 @@ wrapper.on('click', 'a.qp-button-primary[href*="session_id="]', function(e) {
                 // No 'complete' needed here as success handles redirect or error handles reset
             });
         }, button, originalText, 'Checking Access...'); // Pass button details to the helper
+    });
+
+    // --- Enroll Button Handler ---
+    coursesSection.on('click', '.qp-enroll-course-btn', function() {
+        var button = $(this);
+        var courseId = button.data('course-id');
+        var originalText = button.text();
+
+        $.ajax({
+            url: qp_ajax_object.ajax_url,
+            type: 'POST',
+            data: {
+                action: 'enroll_in_course',
+                nonce: qp_ajax_object.nonce,
+                course_id: courseId
+            },
+            beforeSend: function() {
+                button.text('Enrolling...').prop('disabled', true);
+            },
+            success: function(response) {
+                if (response.success) {
+                    Swal.fire({
+                        title: 'Enrolled!',
+                        text: response.data.message,
+                        icon: 'success',
+                        timer: 1500,
+                        showConfirmButton: false
+                    }).then(() => {
+                        // Refresh the courses tab content to show updated lists
+                        // A simple way is to re-render, though more complex updates are possible
+                        renderInitialCourseList(coursesSection); // Re-render the list
+                    });
+                } else {
+                    Swal.fire('Error', response.data.message || 'Could not enroll.', 'error');
+                    button.text(originalText).prop('disabled', false);
+                }
+            },
+            error: function() {
+                Swal.fire('Error', 'A server error occurred during enrollment.', 'error');
+                button.text(originalText).prop('disabled', false);
+            }
+        });
     });
 
 }); // End jQuery ready

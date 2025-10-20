@@ -566,69 +566,173 @@ class QP_Dashboard
         return ob_get_clean();
     }
 
-    /**
- * Renders the content specifically for the Courses section.
- */
-private static function render_courses_content() {
-    // Query Arguments for published 'qp_course' posts
-    $args = [
-        'post_type' => 'qp_course',
-        'post_status' => 'publish',
-        'posts_per_page' => -1, // Get all published courses
-        'orderby' => 'menu_order title', // Order by custom order, then title
-        'order' => 'ASC',
-    ];
+/**
+     * Renders the content specifically for the Courses section.
+     * NOW INCLUDES Enrollment Status and Progress.
+     */
+    private static function render_courses_content() {
+        if (!is_user_logged_in()) return ''; // Should not happen here, but good practice
 
-    $courses_query = new WP_Query($args);
+        $user_id = get_current_user_id();
+        global $wpdb;
+        $user_courses_table = $wpdb->prefix . 'qp_user_courses';
+        $items_table = $wpdb->prefix . 'qp_course_items';
+        $progress_table = $wpdb->prefix . 'qp_user_items_progress';
 
-    ob_start();
-    ?>
-    <h2>Available Courses</h2>
+        // Get IDs of courses the user is enrolled in
+        $enrolled_course_ids = $wpdb->get_col($wpdb->prepare(
+            "SELECT course_id FROM $user_courses_table WHERE user_id = %d",
+            $user_id
+        ));
 
-    <?php if ($courses_query->have_posts()) : ?>
-        <div class="qp-course-list">
-            <?php while ($courses_query->have_posts()) : $courses_query->the_post(); ?>
-                <div class="qp-card qp-course-item"> <?php // Re-use qp-card styling ?>
-                    <div class="qp-card-content">
-                        <h3 style="margin-top:0;"><?php the_title(); ?></h3>
-                        <?php if (has_excerpt()) : ?>
-                            <p><?php the_excerpt(); ?></p>
-                        <?php else : ?>
-                            <?php // Show limited content if no excerpt
-                            echo '<p>' . wp_trim_words(get_the_content(), 30, '...') . '</p>';
-                            ?>
-                        <?php endif; ?>
-                    </div>
-                    <div class="qp-card-action" style="padding: 1rem 1.5rem; border-top: 1px solid var(--qp-dashboard-border-light); text-align: right;">
-                         <?php // Button to view course details - JS will handle the click ?>
-                         <button class="qp-button qp-button-primary qp-view-course-btn" data-course-id="<?php echo get_the_ID(); ?>">
-                             View Course
-                         </button>
-                    </div>
-                </div>
-            <?php endwhile; ?>
-            <?php wp_reset_postdata(); // IMPORTANT: Reset post data after custom query ?>
-        </div>
-    <?php else : ?>
-        <div class="qp-card"><div class="qp-card-content"><p style="text-align: center;">No courses are available at the moment.</p></div></div>
-    <?php endif; ?>
+        // Get all published courses
+        $args = [
+            'post_type' => 'qp_course',
+            'post_status' => 'publish',
+            'posts_per_page' => -1,
+            'orderby' => 'menu_order title',
+            'order' => 'ASC',
+        ];
+        $courses_query = new WP_Query($args);
 
-    <?php // --- Add CSS specific for this new section --- ?>
-    <style>
-        .qp-course-list {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 1.5rem;
+        // Prepare data for enrolled courses (progress calculation)
+        $enrolled_courses_data = [];
+        if (!empty($enrolled_course_ids)) {
+            $ids_placeholder = implode(',', array_map('absint', $enrolled_course_ids));
+
+            // Get total item count for each enrolled course
+            $total_items_results = $wpdb->get_results(
+                "SELECT course_id, COUNT(item_id) as total_items FROM $items_table WHERE course_id IN ($ids_placeholder) GROUP BY course_id",
+                OBJECT_K // Key by course_id
+            );
+
+            // Get completed item count for the user in each enrolled course
+            $completed_items_results = $wpdb->get_results($wpdb->prepare(
+                "SELECT course_id, COUNT(user_item_id) as completed_items FROM $progress_table WHERE user_id = %d AND course_id IN ($ids_placeholder) AND status = 'completed' GROUP BY course_id",
+                $user_id
+            ), OBJECT_K); // Key by course_id
+
+            // Calculate progress
+            foreach ($enrolled_course_ids as $course_id) {
+                $total_items = $total_items_results[$course_id]->total_items ?? 0;
+                $completed_items = $completed_items_results[$course_id]->completed_items ?? 0;
+                $progress_percent = ($total_items > 0) ? round(($completed_items / $total_items) * 100) : 0;
+                $enrolled_courses_data[$course_id] = [
+                    'progress' => $progress_percent,
+                    'is_complete' => ($total_items > 0 && $completed_items >= $total_items)
+                ];
+            }
         }
-        .qp-course-item .qp-card-content p {
-             color: var(--qp-dashboard-text-light);
-             font-size: 0.95em;
-             line-height: 1.6;
-        }
-    </style>
-    <?php
-    return ob_get_clean();
-}
+
+
+        ob_start();
+        ?>
+        <h2>My Courses</h2>
+
+        <?php if (!empty($enrolled_course_ids)) : ?>
+            <div class="qp-course-list qp-enrolled-courses">
+                <?php while ($courses_query->have_posts()) : $courses_query->the_post(); ?>
+                    <?php if (in_array(get_the_ID(), $enrolled_course_ids)) :
+                        $course_data = $enrolled_courses_data[get_the_ID()];
+                        $progress = $course_data['progress'];
+                        $is_complete = $course_data['is_complete'];
+                    ?>
+                        <div class="qp-card qp-course-item">
+                            <div class="qp-card-content">
+                                <h3 style="margin-top:0;"><?php the_title(); ?></h3>
+                                <?php // --- Progress Bar --- ?>
+                                <div class="qp-progress-bar-container" title="<?php echo esc_attr($progress); ?>% Complete">
+                                    <div class="qp-progress-bar-fill" style="width: <?php echo esc_attr($progress); ?>%;"></div>
+                                </div>
+                                <?php if (has_excerpt()) : ?>
+                                    <p><?php the_excerpt(); ?></p>
+                                <?php else : ?>
+                                    <?php echo '<p>' . wp_trim_words(get_the_content(), 30, '...') . '</p>'; ?>
+                                <?php endif; ?>
+                            </div>
+                            <div class="qp-card-action" style="padding: 1rem 1.5rem; border-top: 1px solid var(--qp-dashboard-border-light); text-align: right;">
+                                 <button class="qp-button qp-button-primary qp-view-course-btn" data-course-id="<?php echo get_the_ID(); ?>">
+                                     <?php echo $is_complete ? 'View Course' : 'Continue Course'; ?>
+                                 </button>
+                            </div>
+                        </div>
+                    <?php endif; ?>
+                <?php endwhile; ?>
+                <?php rewind_posts(); // Rewind the query to loop again for available courses ?>
+            </div>
+            <hr class="qp-divider" style="margin: 2rem 0;">
+            <h2>Available Courses</h2>
+        <?php endif; ?>
+
+        <?php // --- List Available Courses --- ?>
+        <?php if ($courses_query->have_posts()) : ?>
+            <div class="qp-course-list qp-available-courses">
+                 <?php
+                 $found_available = false;
+                 while ($courses_query->have_posts()) : $courses_query->the_post(); ?>
+                    <?php if (!in_array(get_the_ID(), $enrolled_course_ids)) :
+                        $found_available = true;
+                    ?>
+                        <div class="qp-card qp-course-item">
+                            <div class="qp-card-content">
+                                <h3 style="margin-top:0;"><?php the_title(); ?></h3>
+                                <?php if (has_excerpt()) : ?>
+                                    <p><?php the_excerpt(); ?></p>
+                                <?php else : ?>
+                                    <?php echo '<p>' . wp_trim_words(get_the_content(), 30, '...') . '</p>'; ?>
+                                <?php endif; ?>
+                            </div>
+                            <div class="qp-card-action" style="padding: 1rem 1.5rem; border-top: 1px solid var(--qp-dashboard-border-light); text-align: right;">
+                                 <button class="qp-button qp-button-secondary qp-enroll-course-btn" data-course-id="<?php echo get_the_ID(); ?>">
+                                     Enroll Now
+                                 </button>
+                            </div>
+                        </div>
+                    <?php endif; ?>
+                <?php endwhile; ?>
+                <?php wp_reset_postdata(); ?>
+
+                <?php if (!$found_available && empty($enrolled_course_ids)) : // If no courses at all ?>
+                     <div class="qp-card"><div class="qp-card-content"><p style="text-align: center;">No courses are available at the moment.</p></div></div>
+                <?php elseif (!$found_available) : // If enrolled in all available courses ?>
+                     <div class="qp-card"><div class="qp-card-content"><p style="text-align: center;">You are enrolled in all available courses.</p></div></div>
+                <?php endif; ?>
+            </div>
+        <?php elseif (empty($enrolled_course_ids)) : // No courses exist at all ?>
+            <div class="qp-card"><div class="qp-card-content"><p style="text-align: center;">No courses are available at the moment.</p></div></div>
+        <?php endif; ?>
+
+
+        <?php // --- Add CSS specific for this new section --- ?>
+        <style>
+            .qp-course-list {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+                gap: 1.5rem;
+            }
+            .qp-course-item .qp-card-content p {
+                 color: var(--qp-dashboard-text-light);
+                 font-size: 0.95em;
+                 line-height: 1.6;
+                 margin-bottom: 1rem; /* Add margin below description */
+            }
+            .qp-progress-bar-container {
+                height: 8px;
+                background-color: var(--qp-dashboard-border-light);
+                border-radius: 4px;
+                overflow: hidden;
+                margin-bottom: 1rem; /* Space between bar and description */
+            }
+            .qp-progress-bar-fill {
+                height: 100%;
+                background-color: var(--qp-dashboard-success); /* Use success color */
+                transition: width 0.5s ease-in-out;
+                border-radius: 4px;
+            }
+        </style>
+        <?php
+        return ob_get_clean();
+    }
 
    /**
      * NEW HELPER: Prefetches lineage data needed for session lists.
