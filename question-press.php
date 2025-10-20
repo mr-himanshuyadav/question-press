@@ -1180,9 +1180,8 @@ function qp_get_course_structure_for_editor($course_id) {
 }
 
 /**
- * Helper function to get data needed for Test Series config dropdowns in JS.
- *
- * @return array Data for subjects, topics, etc.
+ * UPDATED: qp_get_test_series_options_for_js
+ * Also fetches source terms and source-subject links needed for modal filters.
  */
 function qp_get_test_series_options_for_js() {
     global $wpdb;
@@ -1191,6 +1190,7 @@ function qp_get_test_series_options_for_js() {
     $rel_table = $wpdb->prefix . 'qp_term_relationships';
 
     $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'subject'");
+    $source_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'source'");
 
     // Fetch ALL subjects and topics together
     $all_subject_terms = $wpdb->get_results($wpdb->prepare(
@@ -1198,9 +1198,23 @@ function qp_get_test_series_options_for_js() {
         $subject_tax_id
     ), ARRAY_A); // Fetch as associative arrays for JS
 
+    // Fetch ALL source terms (including sections)
+    $all_source_terms = $wpdb->get_results($wpdb->prepare(
+        "SELECT term_id as id, name, parent FROM {$term_table} WHERE taxonomy_id = %d ORDER BY name ASC",
+        $source_tax_id
+    ), ARRAY_A);
+
+     // Fetch source-subject links
+     $source_subject_links = $wpdb->get_results(
+        "SELECT object_id AS source_id, term_id AS subject_id FROM {$rel_table} WHERE object_type = 'source_subject_link'",
+        ARRAY_A
+     );
+
+
     return [
         'allSubjectTerms' => $all_subject_terms,
-        // Add other needed data like exams or source links if required by config later
+        'allSourceTerms' => $all_source_terms, // Add source terms
+        'sourceSubjectLinks' => $source_subject_links, // Add source-subject links
     ];
 }
 
@@ -1249,7 +1263,9 @@ function qp_admin_enqueue_scripts($hook_suffix)
         $test_series_options = qp_get_test_series_options_for_js(); // And this one too
 
         wp_localize_script('qp-course-editor-script', 'qpCourseEditorData', [
-            'nonce' => wp_create_nonce('qp_save_course_structure_meta'), // Re-use the save nonce
+            'ajax_url' => admin_url('admin-ajax.php'), // Add ajaxurl for convenience
+            'save_nonce' => wp_create_nonce('qp_save_course_structure_meta'), // Keep existing save nonce
+            'select_nonce' => wp_create_nonce('qp_course_editor_select_nonce'), // Add the NEW nonce
             'structure' => $course_structure_data,
             'testSeriesOptions' => $test_series_options
         ]);
@@ -3181,6 +3197,8 @@ function qp_save_quick_edit_data_ajax()
     wp_send_json_error(['message' => 'Could not retrieve the updated row data. Please refresh the page.']);
 }
 add_action('wp_ajax_save_quick_edit_data', 'qp_save_quick_edit_data_ajax');
+
+
 
 function qp_admin_head_styles_for_list_table()
 {
@@ -6375,3 +6393,108 @@ function qp_enroll_in_course_ajax() {
 }
 add_action('wp_ajax_enroll_in_course', 'qp_enroll_in_course_ajax');
 add_action('wp_ajax_get_course_list_html', ['QP_Dashboard', 'get_course_list_ajax']);
+
+/**
+ * AJAX handler to search for questions for the course editor modal.
+ */
+function qp_search_questions_for_course_ajax() {
+    // 1. Security Checks
+    // Use a dedicated nonce for this action for better security
+    check_ajax_referer('qp_course_editor_select_nonce', 'nonce');
+    if (!current_user_can('manage_options')) { // Or a more specific capability if needed
+        wp_send_json_error(['message' => 'Permission denied.'], 403);
+    }
+
+    // 2. Get and Sanitize Input Parameters
+    $search_term = isset($_POST['search']) ? sanitize_text_field($_POST['search']) : '';
+    $subject_id = isset($_POST['subject_id']) ? absint($_POST['subject_id']) : 0;
+    $topic_id = isset($_POST['topic_id']) ? absint($_POST['topic_id']) : 0;
+    $source_id = isset($_POST['source_id']) ? absint($_POST['source_id']) : 0; // Assuming source filter sends term_id
+    // Add pagination parameters later if needed (e.g., $_POST['page'])
+
+    // 3. Database Setup
+    global $wpdb;
+    $q_table = $wpdb->prefix . 'qp_questions';
+    $g_table = $wpdb->prefix . 'qp_question_groups';
+    $rel_table = $wpdb->prefix . 'qp_term_relationships';
+    $term_table = $wpdb->prefix . 'qp_terms';
+    $tax_table = $wpdb->prefix . 'qp_taxonomies';
+
+    // 4. Build Query Parts
+    $select = "SELECT DISTINCT q.question_id, q.question_text"; // Select distinct to avoid duplicates if multiple terms match
+    $from = "FROM {$q_table} q";
+    $joins = " LEFT JOIN {$g_table} g ON q.group_id = g.group_id"; // Join groups needed for term relationships
+    $where = ["q.status = 'publish'"]; // Only search published questions
+    $params = [];
+    $joins_added = []; // Helper
+
+    // Add search term condition (ID or text)
+    if (!empty($search_term)) {
+        if (is_numeric($search_term)) {
+            $where[] = $wpdb->prepare("q.question_id = %d", absint($search_term));
+        } else {
+            $like_term = '%' . $wpdb->esc_like($search_term) . '%';
+            $where[] = $wpdb->prepare("q.question_text LIKE %s", $like_term);
+        }
+    }
+
+    // Add Subject/Topic filtering (similar to list table)
+    if ($topic_id) {
+        // Filter by specific topic
+        if (!in_array('topic_rel', $joins_added)) {
+            $joins .= " JOIN {$rel_table} topic_rel ON g.group_id = topic_rel.object_id AND topic_rel.object_type = 'group'";
+            $joins_added[] = 'topic_rel';
+        }
+        $where[] = $wpdb->prepare("topic_rel.term_id = %d", $topic_id);
+    } elseif ($subject_id) {
+        // Filter by subject (find all child topics)
+        $child_topic_ids = $wpdb->get_col($wpdb->prepare("SELECT term_id FROM {$term_table} WHERE parent = %d", $subject_id));
+        if (!empty($child_topic_ids)) {
+            $ids_placeholder = implode(',', $child_topic_ids);
+            if (!in_array('topic_rel', $joins_added)) {
+                $joins .= " JOIN {$rel_table} topic_rel ON g.group_id = topic_rel.object_id AND topic_rel.object_type = 'group'";
+                $joins_added[] = 'topic_rel';
+            }
+            $where[] = "topic_rel.term_id IN ($ids_placeholder)";
+        } else {
+             $where[] = "1=0"; // Subject has no topics, so no questions
+        }
+    }
+
+    // Add Source filtering (only filtering by top-level source for now, sections can be added later)
+    if ($source_id) {
+        $source_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'source'");
+        // Get all descendant IDs including the source itself
+         $descendant_ids = get_all_descendant_ids($source_id, $wpdb, $term_table); // Use the global helper
+         if (!empty($descendant_ids)) {
+             $ids_placeholder = implode(',', $descendant_ids);
+             if (!in_array('source_rel', $joins_added)) {
+                 $joins .= " JOIN {$rel_table} source_rel ON g.group_id = source_rel.object_id AND source_rel.object_type = 'group'";
+                 $joins_added[] = 'source_rel';
+             }
+             $where[] = "source_rel.term_id IN ($ids_placeholder)";
+         } else {
+             $where[] = "1=0"; // Source term not found or has no descendants
+         }
+    }
+
+    // 5. Construct and Execute Query
+    $sql = $select . " " . $from . " " . $joins . " WHERE " . implode(' AND ', $where) . " ORDER BY q.question_id DESC LIMIT 100"; // Add a LIMIT for now
+
+    $results = $wpdb->get_results($wpdb->prepare($sql, $params)); // Use prepare if you added %s/%d placeholders
+
+    // 6. Format and Send Response
+    $formatted_results = [];
+    if ($results) {
+        foreach ($results as $question) {
+            $formatted_results[] = [
+                'id' => $question->question_id,
+                // Simple text for now, strip tags and limit length
+                'text' => wp_strip_all_tags(wp_trim_words($question->question_text, 15, '...'))
+            ];
+        }
+    }
+
+    wp_send_json_success(['questions' => $formatted_results]);
+}
+add_action('wp_ajax_qp_search_questions_for_course', 'qp_search_questions_for_course_ajax');
