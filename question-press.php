@@ -469,6 +469,58 @@ function qp_deactivate_plugin() {}
 register_deactivation_hook(QP_PLUGIN_FILE, 'qp_deactivate_plugin');
 
 /**
+ * Register the 'Course' Custom Post Type.
+ */
+function qp_register_course_post_type() {
+    $labels = [
+        'name'                  => _x('Courses', 'Post type general name', 'question-press'),
+        'singular_name'         => _x('Course', 'Post type singular name', 'question-press'),
+        'menu_name'             => _x('Courses', 'Admin Menu text', 'question-press'),
+        'name_admin_bar'        => _x('Course', 'Add New on Toolbar', 'question-press'),
+        'add_new'               => __('Add New', 'question-press'),
+        'add_new_item'          => __('Add New Course', 'question-press'),
+        'new_item'              => __('New Course', 'question-press'),
+        'edit_item'             => __('Edit Course', 'question-press'),
+        'view_item'             => __('View Course', 'question-press'),
+        'all_items'             => __('All Courses', 'question-press'),
+        'search_items'          => __('Search Courses', 'question-press'),
+        'parent_item_colon'     => __('Parent Course:', 'question-press'),
+        'not_found'             => __('No courses found.', 'question-press'),
+        'not_found_in_trash'    => __('No courses found in Trash.', 'question-press'),
+        'featured_image'        => _x('Course Cover Image', 'Overrides the “Featured Image” phrase for this post type. Added in 4.3', 'question-press'),
+        'set_featured_image'    => _x('Set cover image', 'Overrides the “Set featured image” phrase for this post type. Added in 4.3', 'question-press'),
+        'remove_featured_image' => _x('Remove cover image', 'Overrides the “Remove featured image” phrase for this post type. Added in 4.3', 'question-press'),
+        'use_featured_image'    => _x('Use as cover image', 'Overrides the “Use as featured image” phrase for this post type. Added in 4.3', 'question-press'),
+        'archives'              => _x('Course archives', 'The post type archive label used in nav menus. Default “Post Archives”. Added in 4.4', 'question-press'),
+        'insert_into_item'      => _x('Insert into course', 'Overrides the “Insert into post”/”Insert into page” phrase (used when inserting media into a post). Added in 4.4', 'question-press'),
+        'uploaded_to_this_item' => _x('Uploaded to this course', 'Overrides the “Uploaded to this post”/”Uploaded to this page” phrase (used when viewing media attached to a post). Added in 4.4', 'question-press'),
+        'filter_items_list'     => _x('Filter courses list', 'Screen reader text for the filter links heading on the post type listing screen. Default “Filter posts list”/”Filter pages list”. Added in 4.4', 'question-press'),
+        'items_list_navigation' => _x('Courses list navigation', 'Screen reader text for the pagination heading on the post type listing screen. Default “Posts list navigation”/”Pages list navigation”. Added in 4.4', 'question-press'),
+        'items_list'            => _x('Courses list', 'Screen reader text for the items list heading on the post type listing screen. Default “Posts list”/”Pages list”. Added in 4.4', 'question-press'),
+    ];
+
+    $args = [
+        'labels'             => $labels,
+        'public'             => false, // Not publicly viewable on the frontend directly via its slug
+        'publicly_queryable' => false, // Not queryable in the main WP query
+        'show_ui'            => true,  // Show in the admin UI
+        'show_in_menu'       => true,  // Show as a top-level menu item
+        'query_var'          => false, // No query variable needed
+        'rewrite'            => false, // No URL rewriting needed
+        'capability_type'    => 'post', // Use standard post capabilities
+        'has_archive'        => false, // No archive page needed
+        'hierarchical'       => false, // Courses are not hierarchical like pages
+        'menu_position'      => 26,    // Position below Question Press (usually 25)
+        'menu_icon'          => 'dashicons-welcome-learn-more', // Choose an appropriate icon
+        'supports'           => ['title', 'editor', 'author'], // Features we want initially
+        'show_in_rest'       => false, // Disable Block Editor support for now
+    ];
+
+    register_post_type('qp_course', $args);
+}
+add_action('init', 'qp_register_course_post_type'); // Register the CPT on init
+
+/**
  * Initialize all plugin features that hook into WordPress.
  */
 function qp_init_plugin()
