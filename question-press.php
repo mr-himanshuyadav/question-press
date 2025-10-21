@@ -6725,64 +6725,78 @@ add_action('woocommerce_order_status_completed', 'qp_grant_access_on_order_compl
 
 /**
  * AJAX handler to check remaining attempts/access for the current user based on entitlements table.
+ * Provides a reason code for access denial.
  */
 function qp_check_remaining_attempts_ajax() {
     // No nonce check needed for reads, but login is essential.
     if (!is_user_logged_in()) {
-        wp_send_json_error(['has_access' => false, 'message' => 'Not logged in.']);
+        wp_send_json_error(['has_access' => false, 'message' => 'Not logged in.', 'reason_code' => 'not_logged_in']);
         return;
     }
 
     $user_id = get_current_user_id();
     $has_access = false;
-    $total_remaining = 0; // Initialize total remaining attempts count
-    $has_unlimited_attempts = false; // Flag for unlimited attempt plans
+    $total_remaining = 0;
+    $has_unlimited_attempts = false;
+    $denial_reason_code = 'no_entitlements'; // Default reason if nothing is found
 
     global $wpdb;
     $entitlements_table = $wpdb->prefix . 'qp_user_entitlements';
     $current_time = current_time('mysql');
 
-    // Query for ANY active entitlement for this user
-    // An entitlement is active if:
-    // 1. Status is 'active'
-    // 2. AND (Expiry date is NULL OR Expiry date is in the future)
-    $active_entitlements = $wpdb->get_results($wpdb->prepare(
-        "SELECT entitlement_id, remaining_attempts, expiry_date
+    // Query for ALL entitlement records for this user to determine the reason later
+    $all_user_entitlements = $wpdb->get_results($wpdb->prepare(
+        "SELECT entitlement_id, remaining_attempts, expiry_date, status
          FROM {$entitlements_table}
-         WHERE user_id = %d
-         AND status = 'active'
-         AND (expiry_date IS NULL OR expiry_date > %s)",
-        $user_id,
-        $current_time
+         WHERE user_id = %d",
+        $user_id
     ));
 
-    if (!empty($active_entitlements)) {
-        // User has at least one active plan (time-wise). Now check attempts.
-        foreach ($active_entitlements as $entitlement) {
-            if (is_null($entitlement->remaining_attempts)) {
-                // Found an active plan with UNLIMITED attempts
-                $has_unlimited_attempts = true;
-                $has_access = true; // Grant access immediately
-                $total_remaining = -1; // Indicate unlimited with -1 or a large number
-                break; // No need to check further entitlements
-            } else {
-                // Add this plan's remaining attempts to the total
-                $total_remaining += (int) $entitlement->remaining_attempts;
-            }
-        }
+    if (!empty($all_user_entitlements)) {
+        $denial_reason_code = 'expired_or_inactive'; // Assume expired/inactive if records exist but don't grant access
+        $found_active_non_expired = false;
 
-        // If no unlimited plan was found, check if the total remaining attempts are greater than 0
-        if (!$has_unlimited_attempts && $total_remaining > 0) {
+        foreach ($all_user_entitlements as $entitlement) {
+            // Check if the entitlement is currently valid (active status and not expired)
+            $is_active = $entitlement->status === 'active';
+            $is_expired = !is_null($entitlement->expiry_date) && $entitlement->expiry_date <= $current_time;
+
+            if ($is_active && !$is_expired) {
+                $found_active_non_expired = true; // Found at least one potentially valid plan
+                $denial_reason_code = 'out_of_attempts'; // Assume out of attempts if active plans exist
+
+                if (is_null($entitlement->remaining_attempts)) {
+                    // Found an active plan with UNLIMITED attempts
+                    $has_unlimited_attempts = true;
+                    $has_access = true;
+                    $total_remaining = -1;
+                    break; // Access granted, stop checking
+                } else {
+                    // Add this plan's remaining attempts to the total
+                    $total_remaining += (int) $entitlement->remaining_attempts;
+                }
+            }
+        } // End foreach
+
+        // If no unlimited plan was found among active/non-expired ones, check the total attempts
+        if (!$has_unlimited_attempts && $found_active_non_expired && $total_remaining > 0) {
             $has_access = true;
         }
+        // If $found_active_non_expired is true but $total_remaining is 0, $denial_reason_code remains 'out_of_attempts'
+        // If $found_active_non_expired is false, $denial_reason_code remains 'expired_or_inactive'
+
     } else {
-        // No active entitlements found based on status and expiry date
-        $has_access = false;
-        $total_remaining = 0;
+        // No entitlement records found at all for the user
+        $denial_reason_code = 'no_entitlements';
     }
 
-    // Use $total_remaining in the response for potential display, -1 indicates unlimited
-    wp_send_json_success(['has_access' => $has_access, 'remaining' => $has_unlimited_attempts ? -1 : $total_remaining]);
+
+    if ($has_access) {
+        wp_send_json_success(['has_access' => true, 'remaining' => $has_unlimited_attempts ? -1 : $total_remaining]);
+    } else {
+        // Send the specific reason code along with has_access = false
+        wp_send_json_success(['has_access' => false, 'remaining' => 0, 'reason_code' => $denial_reason_code]);
+    }
 }
 // Hook the AJAX action (this line should already exist and remain unchanged)
 add_action('wp_ajax_qp_check_remaining_attempts', 'qp_check_remaining_attempts_ajax');
