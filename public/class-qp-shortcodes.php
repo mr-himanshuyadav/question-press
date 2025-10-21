@@ -1185,6 +1185,19 @@ $session_data['reported_info'] = $reported_info;
             $attempts[] = $attempt;
         }
 
+        $is_course_item_deleted = false;
+        if (isset($settings['course_id']) && isset($settings['item_id'])) {
+            $items_table = $wpdb->prefix . 'qp_course_items';
+            $item_exists = $wpdb->get_var($wpdb->prepare(
+                "SELECT COUNT(*) FROM {$items_table} WHERE item_id = %d AND course_id = %d",
+                absint($settings['item_id']),
+                absint($settings['course_id'])
+            ));
+            if (!$item_exists) {
+                $is_course_item_deleted = true;
+            }
+        }
+
         ob_start();
         echo '<div id="qp-practice-app-wrapper">';
         $is_mock_test = isset($settings['practice_mode']) && $settings['practice_mode'] === 'mock_test';
@@ -1229,6 +1242,9 @@ $session_data['reported_info'] = $reported_info;
                 <div style="display: flex; align-items: center; gap: 15px; margin-top: 5px;">
                     <span class="qp-session-mode-indicator" style="padding: 5px 12px; font-size: 12px;"><?php echo esc_html($mode); ?></span>
                     <p style="margin: 0; color: #50575e; font-size: 14px;"><strong>Session ID:</strong> <?php echo esc_html($session_id); ?></p>
+                    <?php if ($is_course_item_deleted): ?>
+                        <em style="color:#777; font-size:13px;">(Original course item removed)</em>
+                     <?php endif; ?>
                 </div>
             </div>
 

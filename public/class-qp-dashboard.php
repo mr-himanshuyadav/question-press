@@ -398,10 +398,30 @@ class QP_Dashboard
 
                          $row_class = $session->status === 'paused' ? 'class="qp-session-paused"' : '';
                      ?>
+                     <?php
+                         // *** START NEW CHECK ***
+                         $context_display = $subjects_display; // Default context
+                         if (isset($settings['course_id']) && isset($settings['item_id'])) {
+                             // Check if the item ID exists in the pre-fetched list (efficient)
+                             // We need to pre-fetch existing item IDs before the loop
+                             if (!isset($existing_course_item_ids)) {
+                                 $items_table = $wpdb->prefix . 'qp_course_items';
+                                 $existing_course_item_ids = $wpdb->get_col("SELECT item_id FROM $items_table");
+                                 // Convert to a hash map for quick lookups
+                                 $existing_course_item_ids = array_flip($existing_course_item_ids);
+                             }
+
+                             if (!isset($existing_course_item_ids[absint($settings['item_id'])])) {
+                                 // If item ID is NOT in the list of existing items
+                                 $context_display .= ' <em style="color:#777; font-size:0.9em;">(Item removed)</em>';
+                             }
+                         }
+                         // *** END NEW CHECK ***
+                     ?>
                      <tr <?php echo $row_class; ?>>
                          <td data-label="Date"><?php echo date_format(date_create($session->start_time), 'M j, Y, g:i a'); ?></td>
                          <td data-label="Mode"><?php echo esc_html($mode); ?></td>
-                         <td data-label="Context"><?php echo esc_html($subjects_display); ?></td>
+                         <td data-label="Context"><?php echo wp_kses_post($context_display); // Use wp_kses_post to allow <em> tag ?></td>
                          <td data-label="Result"><strong><?php echo esc_html($result_display); ?></strong></td>
                          <td data-label="Status"><?php echo esc_html($status_display); ?></td>
                          <td data-label="Actions" class="qp-actions-cell">
