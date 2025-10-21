@@ -1089,6 +1089,91 @@ function qp_sync_course_plan($post_id) {
 add_action('save_post_qp_course', 'qp_sync_course_plan', 40, 1);
 
 /**
+ * Checks if a user has an active entitlement granting access to a specific course.
+ * (Re-added for Revised Monetization Approach)
+ *
+ * @param int $user_id   The ID of the user to check.
+ * @param int $course_id The ID of the course (qp_course post ID) to check access for.
+ * @return bool True if the user has access, false otherwise.
+ */
+function qp_user_can_access_course($user_id, $course_id) {
+    if (empty($user_id) || empty($course_id)) {
+        return false;
+    }
+
+    // Admins always have access
+    if (user_can($user_id, 'manage_options')) {
+        return true;
+    }
+
+    global $wpdb;
+    $entitlements_table = $wpdb->prefix . 'qp_user_entitlements';
+    $current_time = current_time('mysql');
+
+    // Find ANY active entitlement for the user
+    $active_entitlements = $wpdb->get_results($wpdb->prepare(
+        "SELECT entitlement_id, plan_id
+         FROM {$entitlements_table}
+         WHERE user_id = %d
+         AND status = 'active'
+         AND (expiry_date IS NULL OR expiry_date > %s)",
+        $user_id,
+        $current_time
+    ));
+
+    if (empty($active_entitlements)) {
+        // Check if the course itself is free - grant access if so
+        $access_mode = get_post_meta($course_id, '_qp_course_access_mode', true);
+        if ($access_mode === 'free') {
+             // Even without entitlements, free courses are accessible (for viewing structure/enrolling)
+             // We handle the "Enroll Free" button logic elsewhere.
+             // This function primarily checks if access is *granted* by an entitlement.
+             // Let's refine: For a free course, access is implicitly granted for viewing/enrolling.
+             // Let's return true here to simplify the dashboard logic.
+             return true; // <<< CHANGE: Free courses grant implicit access here
+        }
+        return false; // No active plans and course requires purchase
+    }
+
+
+    // Check each active plan to see if it grants access to this course
+    foreach ($active_entitlements as $entitlement) {
+        $plan_id = $entitlement->plan_id;
+
+        // Get the course access type and linked courses for this plan
+        $course_access_type = get_post_meta($plan_id, '_qp_plan_course_access_type', true);
+        $linked_courses_raw = get_post_meta($plan_id, '_qp_plan_linked_courses', true);
+        $linked_courses = is_array($linked_courses_raw) ? $linked_courses_raw : [];
+
+        // Check if the plan grants access
+        if ($course_access_type === 'all') {
+            // Plan grants access to ALL courses
+            return true; // Access granted, no need to check further
+        } elseif ($course_access_type === 'specific' && !empty($linked_courses)) {
+            // Plan grants access to specific courses, check if this course is in the list
+            if (in_array($course_id, $linked_courses)) {
+                return true; // Access granted, no need to check further
+            }
+        }
+        // If this plan doesn't grant access (e.g., it's attempt-only or time-only,
+        // or course-specific but doesn't include this course), continue to the next entitlement.
+    }
+
+    // --- ADDED CHECK FOR FREE COURSES ---
+    // If we looped through all entitlements and none granted access,
+    // let's do a final check if the course itself is free.
+    $access_mode_final_check = get_post_meta($course_id, '_qp_course_access_mode', true);
+    if ($access_mode_final_check === 'free') {
+        return true; // Free courses are always accessible
+    }
+    // --- END ADDED CHECK ---
+
+
+    // If we looped through all active entitlements and none granted access, and course is not free
+    return false;
+}
+
+/**
  * Add custom field to WooCommerce Product Data > General tab for Simple products.
  */
 function qp_add_plan_link_to_simple_products() {
