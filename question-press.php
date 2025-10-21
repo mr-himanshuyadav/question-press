@@ -374,6 +374,13 @@ function qp_activate_plugin()
     ) $charset_collate;";
     dbDelta($sql_user_entitlements);
 
+    // === SCHEDULE CRON JOBS ===
+    if (!wp_next_scheduled('qp_check_entitlement_expiration_hook')) {
+        // Schedule to run daily, around midnight server time. Adjust 'daily' if needed.
+        wp_schedule_event(time(), 'daily', 'qp_check_entitlement_expiration_hook');
+        error_log("QP Cron: Scheduled entitlement expiration check.");
+    }
+
     $default_taxonomies = [
         ['taxonomy_name' => 'subject', 'taxonomy_label' => 'Subjects', 'hierarchical' => 1],
         ['taxonomy_name' => 'label', 'taxonomy_label' => 'Labels', 'hierarchical' => 0],
@@ -1156,6 +1163,59 @@ function qp_user_can_access_course($user_id, $course_id) {
     // 5. If none of the above grant access, deny.
     return false;
 }
+
+/**
+ * Ensures the entitlement expiration cron job is scheduled.
+ * Runs on WordPress initialization.
+ */
+function qp_ensure_cron_scheduled() {
+    if (!wp_next_scheduled('qp_check_entitlement_expiration_hook')) {
+        wp_schedule_event(time(), 'daily', 'qp_check_entitlement_expiration_hook');
+        error_log("QP Cron: Re-scheduled entitlement expiration check on init.");
+    }
+}
+add_action('init', 'qp_ensure_cron_scheduled');
+
+/**
+ * The callback function executed by the WP-Cron job to update expired entitlements.
+ */
+function qp_run_entitlement_expiration_check() {
+    error_log("QP Cron: Running entitlement expiration check...");
+    global $wpdb;
+    $entitlements_table = $wpdb->prefix . 'qp_user_entitlements';
+    $current_time = current_time('mysql');
+
+    // Find entitlement records that are 'active' but whose expiry date is in the past
+    $expired_ids = $wpdb->get_col($wpdb->prepare(
+        "SELECT entitlement_id
+         FROM {$entitlements_table}
+         WHERE status = 'active'
+         AND expiry_date IS NOT NULL
+         AND expiry_date <= %s",
+        $current_time
+    ));
+
+    if (!empty($expired_ids)) {
+        $ids_placeholder = implode(',', array_map('absint', $expired_ids));
+
+        // Update the status of these records to 'expired'
+        $updated_count = $wpdb->query(
+            "UPDATE {$entitlements_table}
+             SET status = 'expired'
+             WHERE entitlement_id IN ($ids_placeholder)"
+        );
+
+        if ($updated_count !== false) {
+             error_log("QP Cron: Marked {$updated_count} entitlements as expired.");
+        } else {
+             error_log("QP Cron: Error updating expired entitlements. DB Error: " . $wpdb->last_error);
+        }
+    } else {
+        error_log("QP Cron: No expired entitlements found to update.");
+    }
+}
+// Hook the callback function to the scheduled event's action name
+add_action('qp_check_entitlement_expiration_hook', 'qp_run_entitlement_expiration_check');
 
 /**
  * Add custom field to WooCommerce Product Data > General tab for Simple products.
