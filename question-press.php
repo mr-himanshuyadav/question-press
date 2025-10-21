@@ -997,6 +997,98 @@ function qp_save_course_access_meta($post_id) {
 add_action('save_post_qp_course', 'qp_save_course_access_meta', 30, 1);
 
 /**
+ * Automatically creates or updates a qp_plan post based on course settings.
+ * Triggered after the course meta is saved.
+ *
+ * @param int $post_id The ID of the qp_course post being saved.
+ */
+function qp_sync_course_plan($post_id) {
+    // Basic checks (already done in qp_save_course_access_meta, but good practice)
+    if ( (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) || 'qp_course' !== get_post_type($post_id) || !current_user_can('edit_post', $post_id) ) {
+        return;
+    }
+    // Verify nonce again, just to be safe, using the nonce from the access meta save
+    if (!isset($_POST['qp_course_access_nonce']) || !wp_verify_nonce($_POST['qp_course_access_nonce'], 'qp_save_course_access_meta')) {
+        return;
+    }
+
+    $access_mode = get_post_meta($post_id, '_qp_course_access_mode', true);
+
+    // Only proceed if the course requires purchase
+    if ($access_mode !== 'requires_purchase') {
+        // Optional: If switched from paid to free, we could potentially update the linked plan's status,
+        // but for now, we'll just leave the plan as is to preserve access for past purchasers.
+        return;
+    }
+
+    // Get the course details needed for the plan
+    $course_title = get_the_title($post_id);
+    $duration_value = get_post_meta($post_id, '_qp_course_access_duration_value', true);
+    $duration_unit = get_post_meta($post_id, '_qp_course_access_duration_unit', true);
+    $existing_plan_id = get_post_meta($post_id, '_qp_course_auto_plan_id', true);
+
+    // Determine plan type based on duration
+    $plan_type = !empty($duration_value) ? 'time_limited' : 'unlimited'; // Course access implies unlimited attempts
+
+    // Prepare plan post data
+    $plan_post_args = [
+        'post_title' => 'Auto: Access Plan for Course "' . $course_title . '"',
+        'post_content' => '', // Content not needed
+        'post_status' => 'publish', // Auto-publish the plan
+        'post_type' => 'qp_plan',
+        'meta_input' => [ // Use meta_input for direct meta saving/updating
+            '_qp_is_auto_generated' => 'true', // Flag this as auto-managed
+            '_qp_plan_type' => $plan_type,
+            '_qp_plan_duration_value' => !empty($duration_value) ? absint($duration_value) : null,
+            '_qp_plan_duration_unit' => !empty($duration_value) ? sanitize_key($duration_unit) : null,
+            '_qp_plan_attempts' => null, // Course access plans grant unlimited attempts within duration
+            '_qp_plan_course_access_type' => 'specific',
+            '_qp_plan_linked_courses' => [$post_id], // Link specifically to this course ID
+            // '_qp_plan_description' => 'Automatically generated plan for ' . $course_title, // Optional description
+        ],
+    ];
+
+    $plan_id_to_save = 0;
+
+    // Check if a plan already exists and is valid
+    if (!empty($existing_plan_id)) {
+         $existing_plan_post = get_post($existing_plan_id);
+         // Check if the post exists and is indeed a qp_plan
+         if ($existing_plan_post && $existing_plan_post->post_type === 'qp_plan') {
+             // Update existing plan
+             $plan_post_args['ID'] = $existing_plan_id; // Add ID for update
+             $updated_plan_id = wp_update_post($plan_post_args, true); // true returns WP_Error on failure
+             if (!is_wp_error($updated_plan_id)) {
+                 $plan_id_to_save = $updated_plan_id;
+                 error_log("QP Auto Plan: Updated Plan ID #{$plan_id_to_save} for Course ID #{$post_id}");
+             } else {
+                 error_log("QP Auto Plan: FAILED to update Plan ID #{$existing_plan_id} for Course ID #{$post_id}. Error: " . $updated_plan_id->get_error_message());
+             }
+         } else {
+             // The linked ID was invalid, clear it and create a new one
+             delete_post_meta($post_id, '_qp_course_auto_plan_id');
+             $existing_plan_id = 0; // Force creation below
+         }
+    }
+
+    // Create new plan if no valid existing one was found/updated
+    if (empty($plan_id_to_save) && empty($existing_plan_id)) {
+        $new_plan_id = wp_insert_post($plan_post_args, true); // true returns WP_Error on failure
+        if (!is_wp_error($new_plan_id)) {
+            $plan_id_to_save = $new_plan_id;
+            // Save the new plan ID back to the course meta
+            update_post_meta($post_id, '_qp_course_auto_plan_id', $plan_id_to_save);
+            error_log("QP Auto Plan: CREATED Plan ID #{$plan_id_to_save} for Course ID #{$post_id}");
+        } else {
+            error_log("QP Auto Plan: FAILED to create new Plan for Course ID #{$post_id}. Error: " . $new_plan_id->get_error_message());
+        }
+    }
+
+}
+// Hook with a later priority, ensuring course meta is saved first
+add_action('save_post_qp_course', 'qp_sync_course_plan', 40, 1);
+
+/**
  * Add custom field to WooCommerce Product Data > General tab for Simple products.
  */
 function qp_add_plan_link_to_simple_products() {
