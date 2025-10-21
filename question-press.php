@@ -631,6 +631,8 @@ function qp_render_course_structure_meta_box($post) {
 
 /**
  * Save the course structure data when the 'qp_course' post type is saved.
+ * Handles updates, inserts, and deletions intelligently.
+ * Cleans up user progress for deleted items.
  */
 function qp_save_course_structure_meta($post_id) {
     // Check nonce
@@ -656,81 +658,128 @@ function qp_save_course_structure_meta($post_id) {
     global $wpdb;
     $sections_table = $wpdb->prefix . 'qp_course_sections';
     $items_table = $wpdb->prefix . 'qp_course_items';
+    $progress_table = $wpdb->prefix . 'qp_user_items_progress';
 
     // --- Data processing ---
 
-    // 1. Delete existing structure for this course to handle removals/reordering easily
+    // 1. Fetch Existing Structure IDs from DB
     $existing_section_ids = $wpdb->get_col($wpdb->prepare("SELECT section_id FROM $sections_table WHERE course_id = %d", $post_id));
-    if (!empty($existing_section_ids)) {
-        $ids_placeholder = implode(',', array_map('absint', $existing_section_ids));
-        $wpdb->query("DELETE FROM $items_table WHERE section_id IN ($ids_placeholder)");
-        $wpdb->query("DELETE FROM $sections_table WHERE section_id IN ($ids_placeholder)");
-    }
+    $existing_item_ids = $wpdb->get_col($wpdb->prepare("SELECT item_id FROM $items_table WHERE course_id = %d", $post_id));
 
-    // 2. Loop through submitted sections and items and insert them
+    $submitted_section_ids = [];
+    $submitted_item_ids = [];
+    $processed_item_ids = []; // Keep track of item IDs processed (inserted or updated)
+
+    // 2. Loop through submitted sections and items: Update or Insert
     if (isset($_POST['course_sections']) && is_array($_POST['course_sections'])) {
         foreach ($_POST['course_sections'] as $section_order => $section_data) {
-            // Basic sanitization
+            $section_id = isset($section_data['section_id']) ? absint($section_data['section_id']) : 0;
             $section_title = sanitize_text_field($section_data['title'] ?? 'Untitled Section');
 
-            // Insert section
-            $wpdb->insert($sections_table, [
+            $section_db_data = [
                 'course_id' => $post_id,
                 'title' => $section_title,
-                'section_order' => $section_order + 1 // 1-based order
-            ]);
-            $section_id = $wpdb->insert_id;
+                'section_order' => $section_order + 1 // Ensure correct 1-based order
+            ];
 
+            if ($section_id > 0 && in_array($section_id, $existing_section_ids)) {
+                // UPDATE existing section
+                $wpdb->update($sections_table, $section_db_data, ['section_id' => $section_id]);
+                $submitted_section_ids[] = $section_id;
+            } else {
+                // INSERT new section
+                $wpdb->insert($sections_table, $section_db_data);
+                $section_id = $wpdb->insert_id; // Get the new ID for items below
+                 if (!$section_id) {
+                    // Handle potential insert error, maybe log it
+                    continue; // Skip items for this failed section insert
+                 }
+                 $submitted_section_ids[] = $section_id;
+            }
+
+            // Process Items within this section
             if ($section_id && isset($section_data['items']) && is_array($section_data['items'])) {
                 foreach ($section_data['items'] as $item_order => $item_data) {
+                    $item_id = isset($item_data['item_id']) ? absint($item_data['item_id']) : 0;
                     $item_title = sanitize_text_field($item_data['title'] ?? 'Untitled Item');
                     $content_type = sanitize_key($item_data['content_type'] ?? 'test_series'); // Default to test_series
 
-                    // --- Configuration specific to 'test_series' ---
+                    // --- Process Configuration ---
                     $config = [];
-                    if ($content_type === 'test_series') {
+                    if ($content_type === 'test_series' && isset($item_data['config'])) {
+                         $raw_config = $item_data['config'];
                         $config = [
-                            'time_limit' => isset($item_data['config']['time_limit']) ? absint($item_data['config']['time_limit']) : 0, // 0 means no limit
-                            'scoring_enabled' => isset($item_data['config']['scoring_enabled']) ? 1 : 0,
-                            'marks_correct' => isset($item_data['config']['marks_correct']) ? floatval($item_data['config']['marks_correct']) : 1,
-                            'marks_incorrect' => isset($item_data['config']['marks_incorrect']) ? floatval($item_data['config']['marks_incorrect']) : 0,
-                            // Add other test config fields here as needed (e.g., distribution mode)
+                            'time_limit'      => isset($raw_config['time_limit']) ? absint($raw_config['time_limit']) : 0,
+                            'scoring_enabled' => isset($raw_config['scoring_enabled']) ? 1 : 0,
+                            'marks_correct'   => isset($raw_config['marks_correct']) ? floatval($raw_config['marks_correct']) : 1,
+                            'marks_incorrect' => isset($raw_config['marks_incorrect']) ? floatval($raw_config['marks_incorrect']) : 0,
                         ];
-                        // Add manually selected questions if present
-                        if (isset($item_data['config']['selected_questions']) && !empty($item_data['config']['selected_questions'])) {
-                            // Value comes from the hidden input as a comma-separated string
-                            $question_ids_str = sanitize_text_field($item_data['config']['selected_questions']);
-                            // Convert string to an array of integers, filtering out empty or non-numeric values
+                        // Process selected questions (string to array)
+                        if (isset($raw_config['selected_questions']) && !empty($raw_config['selected_questions'])) {
+                            $question_ids_str = sanitize_text_field($raw_config['selected_questions']);
                             $question_ids = array_filter(array_map('absint', explode(',', $question_ids_str)));
-
                             if (!empty($question_ids)) {
                                 $config['selected_questions'] = $question_ids;
-                                // Optional: Clear criteria-based fields if manual selection exists
-                                // unset($config['subjects'], $config['topics'], $config['num_questions']);
-                            } else {
-                                // Ensure key doesn't exist if the string was empty or invalid
-                                unset($config['selected_questions']);
                             }
-                        } else {
-                             // Ensure key doesn't exist if not submitted
-                             unset($config['selected_questions']);
                         }
-                    }
-                    // --- (Add config handling for other content types here later) ---
+                    } // Add 'else if' blocks here for other content types
 
-                    // Insert item (This part already exists)
-                    $wpdb->insert($items_table, [
+                    $item_db_data = [
                         'section_id' => $section_id,
-                        'course_id' => $post_id, // Store denormalized course ID
+                        'course_id' => $post_id,
                         'title' => $item_title,
-                        'item_order' => $item_order + 1, // 1-based order
+                        'item_order' => $item_order + 1,
                         'content_type' => $content_type,
-                        'content_config' => wp_json_encode($config) // Store config as JSON
-                    ]);
-                }
-            }
-        }
+                        'content_config' => wp_json_encode($config)
+                    ];
+
+                    if ($item_id > 0 && in_array($item_id, $existing_item_ids)) {
+                        // UPDATE existing item
+                        $wpdb->update($items_table, $item_db_data, ['item_id' => $item_id]);
+                        $submitted_item_ids[] = $item_id;
+                        $processed_item_ids[] = $item_id; // Track processed item
+                    } else {
+                        // INSERT new item
+                        $wpdb->insert($items_table, $item_db_data);
+                         $new_item_id = $wpdb->insert_id;
+                         if ($new_item_id) {
+                            $submitted_item_ids[] = $new_item_id;
+                            $processed_item_ids[] = $new_item_id; // Track processed item
+                         } else {
+                            // Handle potential insert error
+                         }
+                    }
+                } // end foreach item
+            } // end if section_id and items exist
+        } // end foreach section
+    } // end if course_sections exist
+
+    // 3. Identify Sections and Items to Delete
+    $section_ids_to_delete = array_diff($existing_section_ids, $submitted_section_ids);
+    $item_ids_to_delete = array_diff($existing_item_ids, $processed_item_ids); // Use processed_item_ids
+
+    // 4. *** CRITICAL STEP: Clean up User Progress for Deleted Items ***
+    if (!empty($item_ids_to_delete)) {
+        $ids_placeholder = implode(',', array_map('absint', $item_ids_to_delete));
+        $wpdb->query("DELETE FROM $progress_table WHERE item_id IN ($ids_placeholder)");
+        // Log this action (optional)
+        error_log('QP Course Save: Cleaned up progress for deleted item IDs: ' . $ids_placeholder);
     }
+
+    // 5. Delete Orphaned Items (associated with kept sections but removed in UI, or from deleted sections)
+    if (!empty($item_ids_to_delete)) {
+        $ids_placeholder = implode(',', array_map('absint', $item_ids_to_delete));
+        $wpdb->query("DELETE FROM $items_table WHERE item_id IN ($ids_placeholder)");
+    }
+
+    // 6. Delete Orphaned Sections (and implicitly cascade delete remaining items if DB constraints were set, although we deleted items explicitly above)
+    if (!empty($section_ids_to_delete)) {
+        $ids_placeholder = implode(',', array_map('absint', $section_ids_to_delete));
+        // We already deleted items, just need to delete sections now
+        $wpdb->query("DELETE FROM $sections_table WHERE section_id IN ($ids_placeholder)");
+    }
+
+    // Note: No explicit return needed as this hooks into save_post action
 }
 add_action('save_post_qp_course', 'qp_save_course_structure_meta'); // Hook into the CPT's save action
 
