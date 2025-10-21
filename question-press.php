@@ -7170,6 +7170,12 @@ function qp_get_course_structure_ajax() {
         wp_send_json_error(['message' => 'Invalid course ID.']);
     }
 
+    // --- NEW: Check if user has access to this course before proceeding ---
+    if (!qp_user_can_access_course($user_id, $course_id)) {
+        wp_send_json_error(['message' => 'You do not have access to view this course structure.', 'code' => 'access_denied']);
+        return; // Stop execution
+    }
+
     global $wpdb;
     $sections_table = $wpdb->prefix . 'qp_course_sections';
     $items_table = $wpdb->prefix . 'qp_course_items';
@@ -7207,7 +7213,7 @@ function qp_get_course_structure_ajax() {
         $course_id
     ));
 
-// Organize items by section
+    // Organize items by section
     $items_by_section = [];
     foreach ($items_raw as $item) {
         $item->status = $item->status ?? 'not_started'; // Use fetched status or default
@@ -7276,31 +7282,48 @@ function qp_start_course_test_series_ajax() {
     // --- NEW: Entitlement Check ONLY ---
     // (Decrement happens when the first answer is submitted in check_answer or save_mock_attempt)
     global $wpdb;
+
+    $items_table = $wpdb->prefix . 'qp_course_items';
+
+    // --- Get Course ID associated with the item ---
+    $course_id = $wpdb->get_var($wpdb->prepare("SELECT course_id FROM $items_table WHERE item_id = %d", $item_id));
+    if (!$course_id) {
+        wp_send_json_error(['message' => 'Could not determine the course for this item.']);
+        return;
+    }
+    // --- END Get Course ID ---
+
+
+    // --- NEW: Check Course Access FIRST ---
+    if (!qp_user_can_access_course($user_id, $course_id)) {
+        wp_send_json_error(['message' => 'You do not have access to start tests in this course.', 'code' => 'access_denied']);
+        return; // Stop execution
+    }
+    // --- Proceed with Attempt Check (Existing Logic from previous step) ---
     $entitlements_table = $wpdb->prefix . 'qp_user_entitlements';
     $current_time = current_time('mysql');
-    $has_access = false;
+    $has_access_for_attempt = false; // Renamed variable for clarity
 
-    // Check if there's *any* active entitlement that *could potentially* grant an attempt
     $active_entitlements_count = $wpdb->get_var($wpdb->prepare(
         "SELECT COUNT(entitlement_id)
          FROM {$entitlements_table}
          WHERE user_id = %d
          AND status = 'active'
          AND (expiry_date IS NULL OR expiry_date > %s)
-         AND (remaining_attempts IS NULL OR remaining_attempts > 0)", // Check for NULL OR > 0
+         AND (remaining_attempts IS NULL OR remaining_attempts > 0)",
         $user_id,
         $current_time
     ));
 
     if ($active_entitlements_count > 0) {
-        $has_access = true;
+        $has_access_for_attempt = true;
     }
 
-    if (!$has_access) {
-        error_log("QP Course Test Start: User #{$user_id} denied access. No suitable active entitlement found.");
+    if (!$has_access_for_attempt) {
+        error_log("QP Course Test Start: User #{$user_id} denied access. No suitable active entitlement found for attempt.");
         wp_send_json_error([
             'message' => 'You have run out of attempts or your subscription has expired.',
-            'code' => 'access_denied'
+            'code' => 'access_denied' // Keep same code, JS handles message
         ]);
         return;
     }
@@ -7397,9 +7420,10 @@ add_action('wp_ajax_start_course_test_series', 'qp_start_course_test_series_ajax
 
 /**
  * AJAX handler for enrolling a user in a course.
+ * Includes check for course access entitlement if required.
  */
 function qp_enroll_in_course_ajax() {
-    check_ajax_referer('qp_enroll_course_nonce', 'nonce'); // Use the dedicated course enroll nonce
+    check_ajax_referer('qp_enroll_course_nonce', 'nonce');
 
     if (!is_user_logged_in()) {
         wp_send_json_error(['message' => 'Not logged in.']);
@@ -7412,10 +7436,24 @@ function qp_enroll_in_course_ajax() {
         wp_send_json_error(['message' => 'Invalid course ID.']);
     }
 
+    // --- NEW: Check if course requires purchase AND if user has access ---
+    $access_mode = get_post_meta($course_id, '_qp_course_access_mode', true) ?: 'free';
+
+    if ($access_mode === 'requires_purchase') {
+        // If it requires purchase, verify the user has a valid entitlement
+        if (!qp_user_can_access_course($user_id, $course_id)) {
+            wp_send_json_error(['message' => 'You do not have access to enroll in this course. Please purchase it first.', 'code' => 'access_denied']);
+            return; // Stop execution
+        }
+        // If access check passes for a paid course, proceed to enrollment
+    }
+    // If access_mode is 'free', proceed to enrollment without entitlement check
+    // --- END NEW CHECK ---
+
     global $wpdb;
     $user_courses_table = $wpdb->prefix . 'qp_user_courses';
 
-    // Check if already enrolled
+    // Check if already enrolled (keep this check)
     $is_enrolled = $wpdb->get_var($wpdb->prepare(
         "SELECT user_course_id FROM $user_courses_table WHERE user_id = %d AND course_id = %d",
         $user_id,
@@ -7427,12 +7465,12 @@ function qp_enroll_in_course_ajax() {
         return;
     }
 
-    // Enroll the user
+    // Enroll the user (keep this logic)
     $result = $wpdb->insert($user_courses_table, [
         'user_id' => $user_id,
         'course_id' => $course_id,
         'enrollment_date' => current_time('mysql'),
-        'status' => 'enrolled', // Initial status
+        'status' => 'enrolled', // Initial status, could change later if progress starts
         'progress_percent' => 0
     ]);
 
