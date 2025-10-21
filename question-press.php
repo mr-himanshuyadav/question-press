@@ -521,6 +521,48 @@ function qp_register_course_post_type() {
 add_action('init', 'qp_register_course_post_type'); // Register the CPT on init
 
 /**
+ * Register the 'Plan' Custom Post Type for monetization.
+ */
+function qp_register_plan_post_type() {
+    $labels = [
+        'name'                  => _x('Plans', 'Post type general name', 'question-press'),
+        'singular_name'         => _x('Plan', 'Post type singular name', 'question-press'),
+        'menu_name'             => _x('Monetization Plans', 'Admin Menu text', 'question-press'),
+        'name_admin_bar'        => _x('Plan', 'Add New on Toolbar', 'question-press'),
+        'add_new'               => __('Add New Plan', 'question-press'),
+        'add_new_item'          => __('Add New Plan', 'question-press'),
+        'new_item'              => __('New Plan', 'question-press'),
+        'edit_item'             => __('Edit Plan', 'question-press'),
+        'view_item'             => __('View Plan', 'question-press'), // Should not be viewable on frontend
+        'all_items'             => __('All Plans', 'question-press'),
+        'search_items'          => __('Search Plans', 'question-press'),
+        'parent_item_colon'     => __('Parent Plan:', 'question-press'), // Not applicable, but standard label
+        'not_found'             => __('No plans found.', 'question-press'),
+        'not_found_in_trash'    => __('No plans found in Trash.', 'question-press'),
+    ];
+
+    $args = [
+        'labels'             => $labels,
+        'description'        => __('Defines access plans for Question Press features.', 'question-press'),
+        'public'             => false, // Not publicly viewable on frontend
+        'publicly_queryable' => false, // Not queryable directly
+        'show_ui'            => true,  // Show in admin UI
+        'show_in_menu'       => 'question-press', // Show under the main Question Press menu
+        'query_var'          => false,
+        'rewrite'            => false,
+        'capability_type'    => 'post', // Use standard post capabilities (adjust if needed)
+        'has_archive'        => false,
+        'hierarchical'       => false,
+        'menu_position'      => null, // Will appear as submenu
+        'supports'           => ['title'], // Only title needed initially, details via meta
+        'show_in_rest'       => false, // Disable Gutenberg for this CPT
+    ];
+
+    register_post_type('qp_plan', $args);
+}
+add_action('init', 'qp_register_plan_post_type'); // Register the CPT on init
+
+/**
  * Add meta box for Course Structure.
  */
 function qp_add_course_structure_meta_box() {
