@@ -6525,3 +6525,39 @@ function qp_cleanup_course_data_on_delete($post_id) {
     }
 }
 add_action('before_delete_post', 'qp_cleanup_course_data_on_delete', 10, 1);
+
+/**
+ * Cleans up related course enrollment and progress data when a WordPress user is deleted.
+ * Hooks into 'delete_user'.
+ *
+ * @param int $user_id The ID of the user being deleted.
+ */
+function qp_cleanup_user_data_on_delete($user_id) {
+    global $wpdb;
+    $user_courses_table = $wpdb->prefix . 'qp_user_courses';
+    $progress_table = $wpdb->prefix . 'qp_user_items_progress';
+    $sessions_table = $wpdb->prefix . 'qp_user_sessions'; // Added sessions
+    $attempts_table = $wpdb->prefix . 'qp_user_attempts'; // Added attempts
+    $review_table = $wpdb->prefix . 'qp_review_later'; // Added review later
+    $reports_table = $wpdb->prefix . 'qp_question_reports'; // Added reports
+
+    // Sanitize the user ID just in case
+    $user_id_to_delete = absint($user_id);
+    if ($user_id_to_delete <= 0) {
+        return; // Invalid user ID
+    }
+
+    // Delete item progress first
+    $wpdb->delete($progress_table, ['user_id' => $user_id_to_delete], ['%d']);
+
+    // Then delete enrollments
+    $wpdb->delete($user_courses_table, ['user_id' => $user_id_to_delete], ['%d']);
+
+    // Also delete sessions, attempts, review list, and reports by this user
+    $wpdb->delete($attempts_table, ['user_id' => $user_id_to_delete], ['%d']);
+    $wpdb->delete($sessions_table, ['user_id' => $user_id_to_delete], ['%d']);
+    $wpdb->delete($review_table, ['user_id' => $user_id_to_delete], ['%d']);
+    $wpdb->delete($reports_table, ['user_id' => $user_id_to_delete], ['%d']);
+
+}
+add_action('delete_user', 'qp_cleanup_user_data_on_delete', 10, 1);
