@@ -575,7 +575,7 @@ function qp_register_plan_post_type() {
         'has_archive'        => false,
         'hierarchical'       => false,
         'menu_position'      => null, // Will appear as submenu
-        'supports'           => ['title'], // Only title needed initially, details via meta
+        'supports'           => ['title', 'editor'], // Only title needed initially, details via meta
         'show_in_rest'       => false, // Disable Gutenberg for this CPT
     ];
 
@@ -6606,11 +6606,10 @@ function qp_grant_access_on_order_complete($order_id) {
 add_action('woocommerce_order_status_completed', 'qp_grant_access_on_order_complete', 10, 1);
 
 /**
- * AJAX handler to check remaining attempts for the current user.
+ * AJAX handler to check remaining attempts/access for the current user based on entitlements table.
  */
 function qp_check_remaining_attempts_ajax() {
-    // No nonce check needed here as it's just reading data,
-    // but we MUST check if the user is logged in.
+    // No nonce check needed for reads, but login is essential.
     if (!is_user_logged_in()) {
         wp_send_json_error(['has_access' => false, 'message' => 'Not logged in.']);
         return;
@@ -6618,15 +6617,56 @@ function qp_check_remaining_attempts_ajax() {
 
     $user_id = get_current_user_id();
     $has_access = false;
-    $remaining_attempts = get_user_meta($user_id, 'qp_remaining_attempts', true);
+    $total_remaining = 0; // Initialize total remaining attempts count
+    $has_unlimited_attempts = false; // Flag for unlimited attempt plans
 
-    if ($remaining_attempts !== '' && (int)$remaining_attempts > 0) {
-        $has_access = true;
+    global $wpdb;
+    $entitlements_table = $wpdb->prefix . 'qp_user_entitlements';
+    $current_time = current_time('mysql');
+
+    // Query for ANY active entitlement for this user
+    // An entitlement is active if:
+    // 1. Status is 'active'
+    // 2. AND (Expiry date is NULL OR Expiry date is in the future)
+    $active_entitlements = $wpdb->get_results($wpdb->prepare(
+        "SELECT entitlement_id, remaining_attempts, expiry_date
+         FROM {$entitlements_table}
+         WHERE user_id = %d
+         AND status = 'active'
+         AND (expiry_date IS NULL OR expiry_date > %s)",
+        $user_id,
+        $current_time
+    ));
+
+    if (!empty($active_entitlements)) {
+        // User has at least one active plan (time-wise). Now check attempts.
+        foreach ($active_entitlements as $entitlement) {
+            if (is_null($entitlement->remaining_attempts)) {
+                // Found an active plan with UNLIMITED attempts
+                $has_unlimited_attempts = true;
+                $has_access = true; // Grant access immediately
+                $total_remaining = -1; // Indicate unlimited with -1 or a large number
+                break; // No need to check further entitlements
+            } else {
+                // Add this plan's remaining attempts to the total
+                $total_remaining += (int) $entitlement->remaining_attempts;
+            }
+        }
+
+        // If no unlimited plan was found, check if the total remaining attempts are greater than 0
+        if (!$has_unlimited_attempts && $total_remaining > 0) {
+            $has_access = true;
+        }
+    } else {
+        // No active entitlements found based on status and expiry date
+        $has_access = false;
+        $total_remaining = 0;
     }
 
-    wp_send_json_success(['has_access' => $has_access, 'remaining' => (int)$remaining_attempts]);
+    // Use $total_remaining in the response for potential display, -1 indicates unlimited
+    wp_send_json_success(['has_access' => $has_access, 'remaining' => $has_unlimited_attempts ? -1 : $total_remaining]);
 }
-// Hook the AJAX action for logged-in users
+// Hook the AJAX action (this line should already exist and remain unchanged)
 add_action('wp_ajax_qp_check_remaining_attempts', 'qp_check_remaining_attempts_ajax');
 
 

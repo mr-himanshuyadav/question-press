@@ -974,18 +974,26 @@ function checkAttemptsBeforeAction(callback, button, originalText, loadingText =
             // No nonce needed here as per PHP function
         },
         success: function(response) {
+            // --- NEW SIMPLIFIED LOGIC ---
             if (response.success && response.data.has_access) {
-                // Access granted, execute the original action
+                // Access granted by PHP, execute the original action
                 if (typeof callback === 'function') {
                     callback();
                 }
-                // Note: Don't re-enable the button here if the callback redirects
+                // Note: Don't re-enable the button here if the callback redirects or leads to another action
             } else {
-                // Access denied, show alert
-                var practiceInProgress = false; // Allow redirect (safe to declare here)
+                 // Access denied by PHP (or AJAX failed partially), show alert
+                 var practiceInProgress = false; // Allow redirect (safe to declare here)
+                 // Construct purchase link URL using localized object
+                 var purchaseUrl = (typeof qp_ajax_object !== 'undefined' && qp_ajax_object.shop_page_url) ? qp_ajax_object.shop_page_url : '#';
+                 var alertHtml = (response.data && response.data.message)
+                                ? response.data.message
+                                : 'You do not have enough attempts remaining to start or resume this session.';
+                 alertHtml += ' <a href="' + purchaseUrl + '">Purchase More</a>';
+
                  Swal.fire({
                     title: 'Out of Attempts!',
-                    html: 'You do not have enough attempts remaining to start or resume this session. <a href="' + qp_ajax_object.shop_page_url + '">Purchase More</a>',
+                    html: alertHtml, // Use the constructed HTML
                     icon: 'error',
                     confirmButtonText: 'OK',
                     allowOutsideClick: false,
@@ -1000,6 +1008,7 @@ function checkAttemptsBeforeAction(callback, button, originalText, loadingText =
                    }
                 }
             }
+            // --- END NEW LOGIC ---
         },
         error: function() {
             // Handle AJAX error during check

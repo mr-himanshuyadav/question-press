@@ -15,28 +15,51 @@ class QP_Dashboard
         $current_user = wp_get_current_user();
         $user_id = $current_user->ID;
 
-        // Remaining Attempts Message (Keep this)
-        $remaining_attempts = get_user_meta($user_id, 'qp_remaining_attempts', true);
+        // --- NEW: Calculate Attempts Remaining Message from Entitlements ---
         $access_status_message = '';
-        // --- (Keep the logic for $access_status_message as it was) ---
-        if ($remaining_attempts !== '' && (int)$remaining_attempts > 0) {
-             $access_status_message = 'Attempts remaining: <strong>' . number_format((int)$remaining_attempts) . '</strong>';
-        } else {
-             $shop_page_url = '';
-             if (function_exists('wc_get_page_id')) {
-                 $shop_page_id = wc_get_page_id('shop');
-                 if ($shop_page_id > 0) {
-                     $shop_page_url = get_permalink($shop_page_id);
-                 }
-             }
-             if (empty($shop_page_url)) {
-                 $shop_page_url = home_url('/');
-                 $link_text = 'Purchase Access';
-             } else {
-                 $link_text = 'Purchase More';
-             }
-             $access_status_message = 'No attempts remaining. <a href="' . esc_url($shop_page_url) . '">' . esc_html($link_text) . '</a>';
+        $shop_page_url = function_exists('wc_get_page_id') ? get_permalink(wc_get_page_id('shop')) : home_url('/');
+        $link_text = empty($shop_page_url) ? 'Purchase Access' : 'Purchase More';
+
+        $total_remaining_for_display = 0;
+        $has_unlimited_for_display = false;
+        $has_active_plan = false; // Flag to see if *any* plan is active time-wise
+
+        global $wpdb;
+        $entitlements_table = $wpdb->prefix . 'qp_user_entitlements';
+        $current_time = current_time('mysql');
+
+        $active_entitlements_for_display = $wpdb->get_results($wpdb->prepare(
+            "SELECT remaining_attempts, expiry_date
+             FROM {$entitlements_table}
+             WHERE user_id = %d
+             AND status = 'active'
+             AND (expiry_date IS NULL OR expiry_date > %s)",
+            $user_id,
+            $current_time
+        ));
+
+        if (!empty($active_entitlements_for_display)) {
+            $has_active_plan = true; // User has at least one valid plan
+            foreach ($active_entitlements_for_display as $entitlement) {
+                if (is_null($entitlement->remaining_attempts)) {
+                    $has_unlimited_for_display = true;
+                    break; // Found unlimited, no need to sum further
+                } else {
+                    $total_remaining_for_display += (int) $entitlement->remaining_attempts;
+                }
+            }
         }
+
+        // Construct the message based on findings
+        if ($has_unlimited_for_display) {
+            $access_status_message = 'Attempts remaining: <strong>Unlimited</strong>';
+        } elseif ($has_active_plan && $total_remaining_for_display > 0) {
+            $access_status_message = 'Attempts remaining: <strong>' . number_format($total_remaining_for_display) . '</strong>';
+        } else {
+            // No active plans OR active plans exist but all have 0 attempts
+            $access_status_message = 'No attempts remaining. <a href="' . esc_url($shop_page_url) . '">' . esc_html($link_text) . '</a>';
+        }
+        // --- END NEW LOGIC ---
 
 
         // Lifetime Stats (Keep this)
