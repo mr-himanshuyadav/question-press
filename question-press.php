@@ -825,6 +825,178 @@ function qp_save_plan_details_meta($post_id) {
 add_action('save_post_qp_plan', 'qp_save_plan_details_meta'); // Hook specifically for qp_plan
 
 /**
+ * Add meta box for Course Access Settings (Revised).
+ */
+function qp_add_course_access_meta_box() {
+    add_meta_box(
+        'qp_course_access_meta_box',          // Unique ID
+        __('Course Access & Monetization', 'question-press'), // Updated Box title
+        'qp_render_course_access_meta_box',   // Callback function
+        'qp_course',                          // Post type
+        'side',                               // Context (side = right column)
+        'high'                                // Priority
+    );
+}
+add_action('add_meta_boxes_qp_course', 'qp_add_course_access_meta_box'); // Hook specifically for qp_course
+
+/**
+ * Render the HTML content for the Course Access meta box (Revised).
+ */
+function qp_render_course_access_meta_box($post) {
+    // Add a nonce field for security
+    wp_nonce_field('qp_save_course_access_meta', 'qp_course_access_nonce');
+
+    // Get existing meta values
+    $access_mode = get_post_meta($post->ID, '_qp_course_access_mode', true) ?: 'free'; // Default to free
+    $duration_value = get_post_meta($post->ID, '_qp_course_access_duration_value', true);
+    $duration_unit = get_post_meta($post->ID, '_qp_course_access_duration_unit', true) ?: 'day'; // Default unit
+    $linked_product_id = get_post_meta($post->ID, '_qp_linked_product_id', true);
+    $auto_plan_id = get_post_meta($post->ID, '_qp_course_auto_plan_id', true); // Get the auto-generated plan ID
+
+    // Get all published WooCommerce products for selection
+    $products = wc_get_products([
+        'status' => 'publish',
+        'limit' => -1,
+        'orderby' => 'title',
+        'order' => 'ASC',
+        'return' => 'objects',
+    ]);
+
+    ?>
+    <style>
+        #qp_course_access_meta_box p { margin-bottom: 15px; }
+        #qp_course_access_meta_box label { font-weight: 600; display: block; margin-bottom: 5px; }
+        #qp_course_access_meta_box select,
+        #qp_course_access_meta_box input[type="number"] { width: 100%; box-sizing: border-box; margin-bottom: 5px;}
+        #qp_course_access_meta_box .duration-group { display: flex; align-items: center; gap: 10px; }
+        #qp_course_access_meta_box .duration-group input[type="number"] { width: 80px; flex-shrink: 0; }
+        #qp_course_access_meta_box .duration-group select { flex-grow: 1; }
+        #qp-purchase-fields { display: <?php echo ($access_mode === 'requires_purchase') ? 'block' : 'none'; ?>; margin-top: 15px; border-top: 1px solid #eee; padding-top: 15px;}
+        #qp_course_access_meta_box small.description { font-size: 0.9em; color: #666; display: block; margin-top: 3px; }
+        #qp-auto-plan-info { font-style: italic; color: #666; font-size: 0.9em; margin-top: 10px; padding-top: 10px; border-top: 1px dashed #ddd; }
+    </style>
+
+    <p>
+        <label for="qp_course_access_mode"><?php _e('Access Mode:', 'question-press'); ?></label>
+        <select name="_qp_course_access_mode" id="qp_course_access_mode">
+            <option value="free" <?php selected($access_mode, 'free'); ?>><?php _e('Free (Public Enrollment)', 'question-press'); ?></option>
+            <option value="requires_purchase" <?php selected($access_mode, 'requires_purchase'); ?>><?php _e('Requires Purchase', 'question-press'); ?></option>
+        </select>
+    </p>
+
+    <div id="qp-purchase-fields">
+        <p>
+            <label><?php _e('Access Duration:', 'question-press'); ?></label>
+            <div class="duration-group">
+                <input type="number" name="_qp_course_access_duration_value" value="<?php echo esc_attr($duration_value); ?>" min="1" placeholder="e.g., 30">
+                <select name="_qp_course_access_duration_unit">
+                    <option value="day" <?php selected($duration_unit, 'day'); ?>>Day(s)</option>
+                    <option value="month" <?php selected($duration_unit, 'month'); ?>>Month(s)</option>
+                    <option value="year" <?php selected($duration_unit, 'year'); ?>>Year(s)</option>
+                </select>
+            </div>
+             <small class="description"><?php _e('How long access lasts after purchase. Leave blank for lifetime access.', 'question-press'); ?></small>
+        </p>
+
+        <p>
+            <label for="qp_linked_product_id"><?php _e('Linked WooCommerce Product:', 'question-press'); ?></label>
+            <select name="_qp_linked_product_id" id="qp_linked_product_id">
+                <option value="">— <?php _e('Select Product', 'question-press'); ?> —</option>
+                <?php
+                if ($products) {
+                    foreach ($products as $product) {
+                        if ($product->is_type('simple') || $product->is_type('variable')) {
+                            printf(
+                                '<option value="%s" %s>%s</option>',
+                                esc_attr($product->get_id()),
+                                selected($linked_product_id, $product->get_id(), false),
+                                esc_html($product->get_name()) . ' (#' . $product->get_id() . ')'
+                            );
+                        }
+                    }
+                }
+                ?>
+            </select>
+            <small class="description"><?php _e('Product users click "Purchase" for. Ensure this product is linked to the correct auto-generated or manual plan.', 'question-press'); ?></small>
+        </p>
+
+        <?php if ($auto_plan_id && get_post($auto_plan_id)) : ?>
+             <p id="qp-auto-plan-info">
+                 This course automatically manages Plan ID #<?php echo esc_html($auto_plan_id); ?>.
+                 <a href="<?php echo esc_url(get_edit_post_link($auto_plan_id)); ?>" target="_blank">View Plan</a><br>
+                 Ensure your Linked Product above uses this Plan ID.
+             </p>
+        <?php elseif ($access_mode === 'requires_purchase') : ?>
+             <p id="qp-auto-plan-info">
+                 A Plan will be automatically created/updated when you save this course. Link your WC Product to that Plan ID.
+             </p>
+        <?php endif; ?>
+
+    </div>
+
+    <script type="text/javascript">
+        jQuery(document).ready(function($) {
+            $('#qp_course_access_mode').on('change', function() {
+                if ($(this).val() === 'requires_purchase') {
+                    $('#qp-purchase-fields').slideDown(200);
+                } else {
+                    $('#qp-purchase-fields').slideUp(200);
+                    // Clear fields when switching to free
+                    // $('#qp-purchase-fields input[type="number"]').val('');
+                    // $('#qp-purchase-fields select').val('');
+                }
+            }).trigger('change'); // Trigger on load to set initial state
+        });
+    </script>
+    <?php
+}
+
+/**
+ * Save the meta box data when the 'qp_course' post type is saved (Revised).
+ * This function ONLY saves the course meta. Auto-plan logic will be separate.
+ */
+function qp_save_course_access_meta($post_id) {
+    // Check nonce
+    if (!isset($_POST['qp_course_access_nonce']) || !wp_verify_nonce($_POST['qp_course_access_nonce'], 'qp_save_course_access_meta')) {
+        return $post_id;
+    }
+
+    // Check permissions, autosave, post type
+    if (!current_user_can('edit_post', $post_id) || (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) || 'qp_course' !== get_post_type($post_id)) {
+        return $post_id;
+    }
+
+    // Save Access Mode
+    $access_mode = isset($_POST['_qp_course_access_mode']) ? sanitize_key($_POST['_qp_course_access_mode']) : 'free';
+    update_post_meta($post_id, '_qp_course_access_mode', $access_mode);
+
+    // Save fields only if requires_purchase is selected
+    if ($access_mode === 'requires_purchase') {
+        // Save Duration Value (allow empty for lifetime)
+        $duration_value = isset($_POST['_qp_course_access_duration_value']) ? absint($_POST['_qp_course_access_duration_value']) : '';
+        update_post_meta($post_id, '_qp_course_access_duration_value', $duration_value);
+
+        // Save Duration Unit
+        $duration_unit = isset($_POST['_qp_course_access_duration_unit']) ? sanitize_key($_POST['_qp_course_access_duration_unit']) : 'day';
+        update_post_meta($post_id, '_qp_course_access_duration_unit', $duration_unit);
+
+        // Save Linked Product ID
+        $product_id = isset($_POST['_qp_linked_product_id']) ? absint($_POST['_qp_linked_product_id']) : '';
+        update_post_meta($post_id, '_qp_linked_product_id', $product_id);
+
+    } else {
+        // Delete monetization meta if mode is free
+        delete_post_meta($post_id, '_qp_course_access_duration_value');
+        delete_post_meta($post_id, '_qp_course_access_duration_unit');
+        delete_post_meta($post_id, '_qp_linked_product_id');
+        // We keep '_qp_course_auto_plan_id' even if switched to free,
+        // so we don't lose the link if switched back later.
+    }
+}
+// Hook *after* the structure save but *before* the auto-plan logic
+add_action('save_post_qp_course', 'qp_save_course_access_meta', 30, 1);
+
+/**
  * Add custom field to WooCommerce Product Data > General tab for Simple products.
  */
 function qp_add_plan_link_to_simple_products() {
