@@ -3,7 +3,7 @@
 /**
  * Plugin Name:       Question Press
  * Description:       A complete plugin for creating, managing, and practicing questions.
- * Version:           3.4.3
+ * Version:           3.4.4
  * Author:            Himanshu
  */
 
@@ -36,6 +36,7 @@ require_once QP_PLUGIN_DIR . 'admin/class-qp-question-editor-page.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-settings-page.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-logs-reports-page.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-backup-restore-page.php';
+require_once QP_PLUGIN_DIR . 'admin/class-qp-entitlements-list-table.php';
 require_once QP_PLUGIN_DIR . 'public/class-qp-shortcodes.php';
 require_once QP_PLUGIN_DIR . 'public/class-qp-dashboard.php';
 require_once QP_PLUGIN_DIR . 'api/class-qp-rest-api.php';
@@ -1589,6 +1590,7 @@ function qp_admin_menu()
     add_submenu_page('question-press', 'Organize', 'Organize', 'manage_options', 'qp-organization', 'qp_render_organization_page');
     add_submenu_page('question-press', 'Tools', 'Tools', 'manage_options', 'qp-tools', 'qp_render_tools_page');
     add_submenu_page('question-press', 'Reports', 'Reports', 'manage_options', 'qp-logs-reports', ['QP_Logs_Reports_Page', 'render']);
+    add_submenu_page('question-press', 'User Entitlements', 'User Entitlements', 'manage_options', 'qp-user-entitlements', 'qp_render_user_entitlements_page');
     add_submenu_page('question-press', 'Settings', 'Settings', 'manage_options', 'qp-settings', ['QP_Settings_Page', 'render']);
 
     // Hidden pages (Indirectly required)
@@ -1853,6 +1855,41 @@ function qp_render_tools_page()
 }
 
 /**
+ * Callback function to render the User Entitlements admin page.
+ */
+function qp_render_user_entitlements_page() {
+    // Instantiate the List Table
+    $entitlements_list_table = new QP_Entitlements_List_Table();
+
+    // Fetch, prepare, sort, and filter our data
+    $entitlements_list_table->prepare_items();
+
+    ?>
+    <div class="wrap">
+        <h1 class="wp-heading-inline"><?php _e('User Entitlements', 'question-press'); ?></h1>
+        <p><?php _e('View access entitlements granted to users.', 'question-press'); ?></p>
+        <hr class="wp-header-end">
+
+        <?php // Display any notices if needed ?>
+        <?php // settings_errors('qp_entitlements_notices'); ?>
+
+        <form method="get">
+            <?php // Keep existing page parameters ?>
+            <input type="hidden" name="page" value="<?php echo esc_attr($_REQUEST['page']); ?>" />
+            <?php
+                // Add the search box
+                $entitlements_list_table->search_box(__('Search Entitlements'), 'entitlement');
+            ?>
+            <?php
+                // Display the list table
+                $entitlements_list_table->display();
+            ?>
+        </form>
+    </div>
+    <?php
+}
+
+/**
  * Renders the User Attempts management tool page.
  */
 function qp_render_user_attempts_tool_page() {
@@ -1966,6 +2003,28 @@ function qp_add_screen_options()
     add_screen_option($option, $args);
     new QP_Questions_List_Table(); // Instantiate table to register columns
 }
+
+/**
+ * Add screen options for the Entitlements list table.
+ */
+function qp_add_entitlements_screen_options() {
+    $screen = get_current_screen();
+    // Check if we are on the correct screen
+    if ($screen && $screen->id === 'question-press_page_qp-user-entitlements') {
+        QP_Entitlements_List_Table::add_screen_options();
+    }
+}
+add_action('admin_head', 'qp_add_entitlements_screen_options');
+
+// Filter to save the screen option (reuse existing function if desired, or keep separate)
+function qp_save_entitlements_screen_options($status, $option, $value) {
+    if ('entitlements_per_page' === $option) {
+        return $value;
+    }
+    // Important: Return the original status for other options
+    return $status;
+}
+add_filter('set-screen-option', 'qp_save_entitlements_screen_options', 10, 3);
 
 function qp_save_screen_options($status, $option, $value)
 {
