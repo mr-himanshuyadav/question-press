@@ -5276,171 +5276,289 @@ function qp_add_report_count_to_menu()
 }
 add_action('admin_menu', 'qp_add_report_count_to_menu', 99);
 
-function qp_check_answer_ajax()
-{
+/**
+ * AJAX handler for checking an answer in non-mock test modes.
+ * Includes access check and attempt decrement logic using entitlements table.
+ */
+function qp_check_answer_ajax() {
     check_ajax_referer('qp_practice_nonce', 'nonce');
+
     // --- Access Control Check ---
     if (!is_user_logged_in()) {
         wp_send_json_error(['message' => 'You must be logged in to answer questions.', 'code' => 'not_logged_in']);
         return;
     }
     $user_id = get_current_user_id();
-    // --- Real Access Check & Decrement ---
-    $remaining_attempts = get_user_meta($user_id, 'qp_remaining_attempts', true); // Returns '' if not set
 
-    // Check if attempts are available (treat '' or < 1 as no access)
-    if ($remaining_attempts !== '' && (int)$remaining_attempts > 0) {
-        $has_access = true;
-        // Decrement attempts *before* processing the answer
-        update_user_meta($user_id, 'qp_remaining_attempts', (int)$remaining_attempts - 1);
-        error_log("QP Access Check: User #{$user_id} used an attempt. Remaining: " . ((int)$remaining_attempts - 1));
-    } else {
-        // No attempts left or meta key not set
-        $has_access = false;
-        error_log("QP Access Check: User #{$user_id} denied access. Attempts: {$remaining_attempts}");
+    // --- NEW: Entitlement Check & Decrement ---
+    global $wpdb;
+    $entitlements_table = $wpdb->prefix . 'qp_user_entitlements';
+    $current_time = current_time('mysql');
+    $entitlement_to_decrement = null;
+
+    // Find an active entitlement with attempts remaining (prioritize non-NULL attempts, maybe oldest expiry first?)
+    // For simplicity, find the first one with attempts > 0, then check for NULL if none found.
+    $active_entitlements = $wpdb->get_results($wpdb->prepare(
+        "SELECT entitlement_id, remaining_attempts
+         FROM {$entitlements_table}
+         WHERE user_id = %d
+         AND status = 'active'
+         AND (expiry_date IS NULL OR expiry_date > %s)
+         ORDER BY remaining_attempts ASC, expiry_date ASC", // Prioritize finite attempts first, then soonest expiry
+        $user_id,
+        $current_time
+    ));
+
+    $has_access = false;
+    if (!empty($active_entitlements)) {
+        foreach ($active_entitlements as $entitlement) {
+            if (!is_null($entitlement->remaining_attempts)) {
+                if ((int)$entitlement->remaining_attempts > 0) {
+                    $entitlement_to_decrement = $entitlement;
+                    $has_access = true;
+                    break; // Found one with finite attempts > 0
+                }
+                // If attempts are 0, continue checking other entitlements
+            } else {
+                // Found an unlimited attempt entitlement
+                $has_access = true;
+                // No need to decrement, but break the loop as access is confirmed
+                break;
+            }
+        }
     }
-    // --- End Real Access Check ---
 
     if (!$has_access) {
+        error_log("QP Check Answer: User #{$user_id} denied access. No suitable active entitlement found.");
         wp_send_json_error([
             'message' => 'You have run out of attempts or your subscription has expired.',
             'code' => 'access_denied'
         ]);
         return;
     }
-    // --- End Access Control Check ---
+
+    // Decrement attempts if a specific entitlement was identified
+    if ($entitlement_to_decrement) {
+        $new_attempts = max(0, (int)$entitlement_to_decrement->remaining_attempts - 1);
+        $wpdb->update(
+            $entitlements_table,
+            ['remaining_attempts' => $new_attempts],
+            ['entitlement_id' => $entitlement_to_decrement->entitlement_id]
+        );
+        error_log("QP Check Answer: User #{$user_id} used attempt from Entitlement #{$entitlement_to_decrement->entitlement_id}. Remaining on this plan: {$new_attempts}");
+    } else {
+         error_log("QP Check Answer: User #{$user_id} used attempt via an unlimited plan.");
+    }
+    // --- END NEW Entitlement Check & Decrement ---
+
+    // --- Proceed with checking the answer (Original logic, slightly adjusted) ---
     $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
     $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
     $option_id = isset($_POST['option_id']) ? absint($_POST['option_id']) : 0;
+
     if (!$session_id || !$question_id || !$option_id) {
-        wp_send_json_error(['message' => 'Invalid data submitted.']);
+        // This case should ideally not happen if access was granted, but good to keep
+        wp_send_json_error(['message' => 'Invalid data submitted after access check.']);
+        return;
     }
 
-    global $wpdb;
     $o_table = $wpdb->prefix . 'qp_options';
     $attempts_table = $wpdb->prefix . 'qp_user_attempts';
     $sessions_table = $wpdb->prefix . 'qp_user_sessions';
+    $revision_table = $wpdb->prefix . 'qp_revision_attempts'; // For revision mode
 
-    $wpdb->update($sessions_table, ['last_activity' => current_time('mysql')], ['session_id' => $session_id]);
+    // Update session activity
+    $wpdb->update($sessions_table, ['last_activity' => $current_time], ['session_id' => $session_id]);
 
+    // Check correctness
     $is_correct = (bool) $wpdb->get_var($wpdb->prepare("SELECT is_correct FROM $o_table WHERE question_id = %d AND option_id = %d", $question_id, $option_id));
     $correct_option_id = $wpdb->get_var($wpdb->prepare("SELECT option_id FROM $o_table WHERE question_id = %d AND is_correct = 1", $question_id));
 
-    $session = $wpdb->get_row($wpdb->prepare("SELECT settings_snapshot FROM $sessions_table WHERE session_id = %d", $session_id));
-    $settings = json_decode($session->settings_snapshot, true);
+    // Get session settings for revision mode check
+    $session_settings_json = $wpdb->get_var($wpdb->prepare("SELECT settings_snapshot FROM $sessions_table WHERE session_id = %d", $session_id));
+    $settings = $session_settings_json ? json_decode($session_settings_json, true) : [];
 
-    // Always record in the main attempts table
-    $wpdb->insert($attempts_table, [
-        'session_id' => $session_id,
-        'user_id' => get_current_user_id(),
-        'question_id' => $question_id,
-        'selected_option_id' => $option_id,
-        'is_correct' => $is_correct ? 1 : 0,
-        'status' => 'answered',
-        'remaining_time' => isset($_POST['remaining_time']) ? absint($_POST['remaining_time']) : null
-    ]);
+    // Record the attempt
+    $wpdb->replace( // Use REPLACE to handle potential re-attempts within the same session if needed
+        $attempts_table,
+        [
+            'session_id' => $session_id,
+            'user_id' => $user_id,
+            'question_id' => $question_id,
+            'selected_option_id' => $option_id,
+            'is_correct' => $is_correct ? 1 : 0,
+            'status' => 'answered',
+            'mock_status' => null, // Not applicable for this mode
+            'remaining_time' => isset($_POST['remaining_time']) ? absint($_POST['remaining_time']) : null,
+            'attempt_time' => $current_time // Use the time check was performed
+        ]
+    );
+     $attempt_id = $wpdb->insert_id; // Get attempt ID after insert/replace
+
 
     // If it's a revision session, also record in the revision table
     if (isset($settings['practice_mode']) && $settings['practice_mode'] === 'revision') {
-        $topic_id = $wpdb->get_var($wpdb->prepare("SELECT topic_id FROM {$wpdb->prefix}qp_questions WHERE question_id = %d", $question_id));
+         // **FIX START**: Get topic ID directly from group relationship
+         $q_table = $wpdb->prefix . 'qp_questions';
+         $rel_table = $wpdb->prefix . 'qp_term_relationships';
+         $term_table = $wpdb->prefix . 'qp_terms';
+         $tax_table = $wpdb->prefix . 'qp_taxonomies';
+         $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'subject'");
+
+         $topic_id = $wpdb->get_var($wpdb->prepare(
+             "SELECT r.term_id
+              FROM {$q_table} q
+              JOIN {$rel_table} r ON q.group_id = r.object_id AND r.object_type = 'group'
+              JOIN {$term_table} t ON r.term_id = t.term_id
+              WHERE q.question_id = %d AND t.taxonomy_id = %d AND t.parent != 0",
+             $question_id,
+             $subject_tax_id
+         ));
+         // **FIX END**
+
         if ($topic_id) {
             $wpdb->query($wpdb->prepare(
-                "INSERT INTO {$wpdb->prefix}qp_revision_attempts (user_id, question_id, topic_id) VALUES (%d, %d, %d) ON DUPLICATE KEY UPDATE attempt_date = NOW()",
-                get_current_user_id(),
+                "INSERT INTO {$revision_table} (user_id, question_id, topic_id) VALUES (%d, %d, %d) ON DUPLICATE KEY UPDATE attempt_date = NOW()",
+                $user_id,
                 $question_id,
                 $topic_id
             ));
         }
     }
-    // --- End of new logic ---
 
     wp_send_json_success([
-        'is_correct' => $is_correct, 
+        'is_correct' => $is_correct,
         'correct_option_id' => $correct_option_id,
-        'attempt_id' => $wpdb->insert_id // **NEW**: Return the ID of the attempt that was just created
+        'attempt_id' => $attempt_id // Return attempt ID
     ]);
 }
 add_action('wp_ajax_check_answer', 'qp_check_answer_ajax');
 
 /**
- * AJAX handler to save a user's selected answer during a mock test without checking it.
+ * AJAX handler to save a user's selected answer during a mock test.
+ * Includes access check and attempt decrement logic using entitlements table.
  */
-function qp_save_mock_attempt_ajax()
-{
+function qp_save_mock_attempt_ajax() {
     check_ajax_referer('qp_practice_nonce', 'nonce');
+
     // --- Access Control Check ---
     if (!is_user_logged_in()) {
         wp_send_json_error(['message' => 'You must be logged in to answer questions.', 'code' => 'not_logged_in']);
         return;
     }
     $user_id = get_current_user_id();
-    // --- Real Access Check & Decrement ---
-    $remaining_attempts = get_user_meta($user_id, 'qp_remaining_attempts', true); // Returns '' if not set
 
-    // Check if attempts are available (treat '' or < 1 as no access)
-    if ($remaining_attempts !== '' && (int)$remaining_attempts > 0) {
-        $has_access = true;
-        // Decrement attempts *before* processing the answer
-        update_user_meta($user_id, 'qp_remaining_attempts', (int)$remaining_attempts - 1);
-        error_log("QP Access Check: User #{$user_id} used an attempt. Remaining: " . ((int)$remaining_attempts - 1));
-    } else {
-        // No attempts left or meta key not set
-        $has_access = false;
-        error_log("QP Access Check: User #{$user_id} denied access. Attempts: {$remaining_attempts}");
+    // --- NEW: Entitlement Check & Decrement ---
+    global $wpdb;
+    $entitlements_table = $wpdb->prefix . 'qp_user_entitlements';
+    $current_time = current_time('mysql');
+    $entitlement_to_decrement = null;
+
+    // Find an active entitlement with attempts remaining
+    $active_entitlements = $wpdb->get_results($wpdb->prepare(
+        "SELECT entitlement_id, remaining_attempts
+         FROM {$entitlements_table}
+         WHERE user_id = %d
+         AND status = 'active'
+         AND (expiry_date IS NULL OR expiry_date > %s)
+         ORDER BY remaining_attempts ASC, expiry_date ASC",
+        $user_id,
+        $current_time
+    ));
+
+    $has_access = false;
+    if (!empty($active_entitlements)) {
+        foreach ($active_entitlements as $entitlement) {
+            if (!is_null($entitlement->remaining_attempts)) {
+                if ((int)$entitlement->remaining_attempts > 0) {
+                    $entitlement_to_decrement = $entitlement;
+                    $has_access = true;
+                    break;
+                }
+            } else {
+                $has_access = true;
+                break;
+            }
+        }
     }
-    // --- End Real Access Check ---
 
     if (!$has_access) {
+        error_log("QP Mock Save: User #{$user_id} denied access. No suitable active entitlement found.");
         wp_send_json_error([
             'message' => 'You have run out of attempts or your subscription has expired.',
             'code' => 'access_denied'
         ]);
         return;
     }
-    // --- End Access Control Check ---
+
+    // Decrement attempts if needed
+    if ($entitlement_to_decrement) {
+        $new_attempts = max(0, (int)$entitlement_to_decrement->remaining_attempts - 1);
+        $wpdb->update(
+            $entitlements_table,
+            ['remaining_attempts' => $new_attempts],
+            ['entitlement_id' => $entitlement_to_decrement->entitlement_id]
+        );
+        error_log("QP Mock Save: User #{$user_id} used attempt from Entitlement #{$entitlement_to_decrement->entitlement_id}. Remaining on this plan: {$new_attempts}");
+    } else {
+         error_log("QP Mock Save: User #{$user_id} used attempt via an unlimited plan.");
+    }
+    // --- END NEW Entitlement Check & Decrement ---
+
+    // --- Proceed with saving the mock attempt (Original logic, slightly adjusted) ---
     $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
     $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
-    $option_id = isset($_POST['option_id']) ? absint($_POST['option_id']) : 0;
+    $option_id = isset($_POST['option_id']) ? absint($_POST['option_id']) : 0; // Can be 0 if clearing response
 
-    if (!$session_id || !$question_id || !$option_id) {
-        wp_send_json_error(['message' => 'Invalid data submitted.']);
+    if (!$session_id || !$question_id) { // Option ID can be 0 when clearing
+        wp_send_json_error(['message' => 'Invalid data submitted after access check.']);
+        return;
     }
 
-    global $wpdb;
     $attempts_table = $wpdb->prefix . 'qp_user_attempts';
-    $user_id = get_current_user_id();
 
-    // --- FIX: Explicitly check for an existing attempt before inserting/updating ---
-    $existing_attempt_id = $wpdb->get_var($wpdb->prepare(
-        "SELECT attempt_id FROM {$attempts_table} WHERE session_id = %d AND question_id = %d",
+    // Check if an attempt record already exists for this question in this session
+    $existing_attempt = $wpdb->get_row($wpdb->prepare(
+        "SELECT attempt_id, mock_status FROM {$attempts_table} WHERE session_id = %d AND question_id = %d",
         $session_id,
         $question_id
     ));
 
-    if ($existing_attempt_id) {
-        // If an attempt already exists, UPDATE it with the new option
-        $wpdb->update(
-            $attempts_table,
-            [
-                'selected_option_id' => $option_id,
-                'attempt_time' => current_time('mysql'),
-                'status' => 'answered' // Ensure status is 'answered'
-            ],
-            ['attempt_id' => $existing_attempt_id]
-        );
+    // Determine the correct mock_status based on whether an option is selected and previous status
+    $current_mock_status = $existing_attempt ? $existing_attempt->mock_status : 'viewed'; // Default to viewed if no record
+    $new_mock_status = $current_mock_status; // Keep current status unless changed below
+
+    if ($option_id > 0) { // An answer is being saved
+        if ($current_mock_status == 'marked_for_review' || $current_mock_status == 'answered_and_marked_for_review') {
+            $new_mock_status = 'answered_and_marked_for_review';
+        } else {
+            $new_mock_status = 'answered';
+        }
+    }
+    // Note: Clearing the response (option_id=0) is handled by qp_update_mock_status_ajax, not this function directly.
+    // This function assumes an answer is being *selected*.
+
+    $attempt_data = [
+        'session_id' => $session_id,
+        'user_id' => $user_id,
+        'question_id' => $question_id,
+        'selected_option_id' => $option_id > 0 ? $option_id : null, // Store NULL if clearing
+        'is_correct' => null, // Graded only at the end
+        'status' => $option_id > 0 ? 'answered' : 'viewed', // Main status: 'answered' if option selected, 'viewed' if cleared
+        'mock_status' => $new_mock_status,
+        'attempt_time' => $current_time
+    ];
+
+    if ($existing_attempt) {
+        // Update existing attempt
+        $wpdb->update($attempts_table, $attempt_data, ['attempt_id' => $existing_attempt->attempt_id]);
     } else {
-        $wpdb->insert($attempts_table, [
-            'session_id' => $session_id,
-            'user_id' => $user_id,
-            'question_id' => $question_id,
-            'selected_option_id' => $option_id,
-            'is_correct' => null, // Graded at the end
-            'status' => 'answered'
-        ]);
+        // Insert new attempt
+        $wpdb->insert($attempts_table, $attempt_data);
     }
 
-    // Also update the session's last activity to keep it from timing out
-    $wpdb->update($wpdb->prefix . 'qp_user_sessions', ['last_activity' => current_time('mysql')], ['session_id' => $session_id]);
+    // Update session activity time
+    $wpdb->update($wpdb->prefix . 'qp_user_sessions', ['last_activity' => $current_time], ['session_id' => $session_id]);
 
     wp_send_json_success(['message' => 'Answer saved.']);
 }
@@ -6782,37 +6900,55 @@ add_action('wp_ajax_get_course_structure', 'qp_get_course_structure_ajax');
 
 /**
  * AJAX handler to start a Test Series session launched from a course item.
+ * Includes access check using entitlements table. Decrement happens on first answer.
  */
 function qp_start_course_test_series_ajax() {
-    check_ajax_referer('qp_start_course_test_nonce', 'nonce'); // Use the dedicated start course test nonce
+    check_ajax_referer('qp_start_course_test_nonce', 'nonce');
 
     if (!is_user_logged_in()) {
         wp_send_json_error(['message' => 'You must be logged in.']);
     }
-
-    // --- Access Control Check ---
     $user_id = get_current_user_id();
-    $remaining_attempts = get_user_meta($user_id, 'qp_remaining_attempts', true);
-    if ($remaining_attempts !== '' && (int)$remaining_attempts > 0) {
-        // Decrement attempts *before* creating the session
-        update_user_meta($user_id, 'qp_remaining_attempts', (int)$remaining_attempts - 1);
-        error_log("QP Course Test Start: User #{$user_id} used an attempt. Remaining: " . ((int)$remaining_attempts - 1));
-    } else {
-        error_log("QP Course Test Start: User #{$user_id} denied access. Attempts: {$remaining_attempts}");
+
+    // --- NEW: Entitlement Check ONLY ---
+    // (Decrement happens when the first answer is submitted in check_answer or save_mock_attempt)
+    global $wpdb;
+    $entitlements_table = $wpdb->prefix . 'qp_user_entitlements';
+    $current_time = current_time('mysql');
+    $has_access = false;
+
+    // Check if there's *any* active entitlement that *could potentially* grant an attempt
+    $active_entitlements_count = $wpdb->get_var($wpdb->prepare(
+        "SELECT COUNT(entitlement_id)
+         FROM {$entitlements_table}
+         WHERE user_id = %d
+         AND status = 'active'
+         AND (expiry_date IS NULL OR expiry_date > %s)
+         AND (remaining_attempts IS NULL OR remaining_attempts > 0)", // Check for NULL OR > 0
+        $user_id,
+        $current_time
+    ));
+
+    if ($active_entitlements_count > 0) {
+        $has_access = true;
+    }
+
+    if (!$has_access) {
+        error_log("QP Course Test Start: User #{$user_id} denied access. No suitable active entitlement found.");
         wp_send_json_error([
             'message' => 'You have run out of attempts or your subscription has expired.',
-            'code' => 'access_denied' // Keep consistent code
+            'code' => 'access_denied'
         ]);
         return;
     }
-    // --- End Access Control Check ---
+    // --- END NEW Entitlement Check ---
 
+    // --- Proceed with starting the session (Original logic) ---
     $item_id = isset($_POST['item_id']) ? absint($_POST['item_id']) : 0;
     if (!$item_id) {
         wp_send_json_error(['message' => 'Invalid course item ID.']);
     }
 
-    global $wpdb;
     $items_table = $wpdb->prefix . 'qp_course_items';
 
     // Get the item details and configuration
@@ -6826,94 +6962,64 @@ function qp_start_course_test_series_ajax() {
     }
 
     $config = json_decode($item->content_config, true);
-    if (json_last_error() !== JSON_ERROR_NONE) {
-        // Log the error for debugging
-        error_log("QP Course Test Start: Invalid JSON in content_config for item ID: " . $item_id . ". Error: " . json_last_error_msg());
-        // Send a specific error back to the user
-        wp_send_json_error(['message' => 'Invalid test configuration data stored. Please contact an administrator.']);
-        return; // Stop execution
-    }
     if (json_last_error() !== JSON_ERROR_NONE || empty($config)) {
-        wp_send_json_error(['message' => 'Invalid test configuration data.']);
+         error_log("QP Course Test Start: Invalid JSON in content_config for item ID: " . $item_id . ". Error: " . json_last_error_msg());
+        wp_send_json_error(['message' => 'Invalid test configuration data stored. Please contact an administrator.']);
+        return;
     }
-
-    // Extract config parameters (provide defaults)
-    $subjects = $config['subjects'] ?? [];
-    $topics = $config['topics'] ?? [];
-    $num_questions = $config['num_questions'] ?? 10;
-    $time_limit_minutes = $config['time_limit'] ?? 0;
-    // Add other parameters like 'distribution' if you saved them
 
     // --- Determine Question IDs ---
     $final_question_ids = [];
-    $q_table = $wpdb->prefix . 'qp_questions'; // Need this table name
+    $q_table = $wpdb->prefix . 'qp_questions';
+    $reports_table = $wpdb->prefix . 'qp_question_reports';
 
     if (isset($config['selected_questions']) && is_array($config['selected_questions']) && !empty($config['selected_questions'])) {
-        // --- Manual Selection Path ---
-        $potential_ids = array_map('absint', $config['selected_questions']); // Sanitize IDs
+        $potential_ids = array_map('absint', $config['selected_questions']);
         if (!empty($potential_ids)) {
             $ids_placeholder = implode(',', $potential_ids);
-
-            // Verify that the selected questions still exist and are published
-            // Also exclude reported questions
-            $reports_table = $wpdb->prefix . 'qp_question_reports';
-             $reported_question_ids = $wpdb->get_col("SELECT DISTINCT question_id FROM {$reports_table} WHERE status = 'open'");
-             $exclude_reported_sql = !empty($reported_question_ids) ? ' AND question_id NOT IN (' . implode(',', $reported_question_ids) . ')' : '';
-
+            $reported_question_ids = $wpdb->get_col("SELECT DISTINCT question_id FROM {$reports_table} WHERE status = 'open'");
+            $exclude_reported_sql = !empty($reported_question_ids) ? ' AND question_id NOT IN (' . implode(',', $reported_question_ids) . ')' : '';
             $verified_ids = $wpdb->get_col("SELECT question_id FROM {$q_table} WHERE question_id IN ($ids_placeholder) AND status = 'publish' {$exclude_reported_sql}");
-
-            // Use only the verified IDs, try to maintain original order before shuffling later
             $final_question_ids = array_intersect($potential_ids, $verified_ids);
         }
-
-        if (empty($final_question_ids)) {
-             wp_send_json_error(['message' => 'None of the manually selected questions are currently available (they may be unpublished, deleted, or reported).']);
-             // No 'return;' needed as wp_send_json_error exits
-        }
-
     } else {
-        // --- No Manual Selection Found ---
-        // Since criteria-based selection is removed, this is now an error state.
         wp_send_json_error(['message' => 'No questions have been manually selected for this test item. Please edit the course.']);
-        // No 'return;' needed as wp_send_json_error exits
+        return;
     }
 
-     // --- Ensure we have questions before proceeding ---
-     if (empty($final_question_ids)) { // This check might seem redundant but is a good final safeguard
-        wp_send_json_error(['message' => 'Could not find any valid questions for this test.']);
-        // No 'return;' needed
+    if (empty($final_question_ids)) {
+         wp_send_json_error(['message' => 'None of the selected questions are currently available.']);
+         return;
     }
 
-    shuffle($final_question_ids); // Shuffle the final list
+    shuffle($final_question_ids);
 
     // --- Prepare Session Settings ---
-    $options = get_option('qp_settings'); // Moved options fetch here
+    $options = get_option('qp_settings');
     $session_page_id = isset($options['session_page']) ? absint($options['session_page']) : 0;
     if (!$session_page_id) {
         wp_send_json_error(['message' => 'The administrator has not configured a session page.']);
     }
 
-    // Prepare settings snapshot, adding course context and using actual count
     $session_settings = [
-        'practice_mode'       => 'mock_test', // Treat course tests like mock tests
+        'practice_mode'       => 'mock_test',
         'course_id'           => $item->course_id,
         'item_id'             => $item_id,
-        'num_questions'       => count($final_question_ids), // Use actual count of verified questions
+        'num_questions'       => count($final_question_ids),
         'marks_correct'       => $config['scoring_enabled'] ? ($config['marks_correct'] ?? 1) : null,
         'marks_incorrect'     => $config['scoring_enabled'] ? -abs($config['marks_incorrect'] ?? 0) : null,
-        'timer_enabled'       => ($config['time_limit'] > 0), // Use 'time_limit' from config
-        'timer_seconds'       => ($config['time_limit'] ?? 0) * 60, // Use 'time_limit' from config
-        // Keep original selected IDs for potential reference/debugging
+        'timer_enabled'       => ($config['time_limit'] > 0),
+        'timer_seconds'       => ($config['time_limit'] ?? 0) * 60,
         'original_selection'  => $config['selected_questions'] ?? [],
     ];
 
     $wpdb->insert($wpdb->prefix . 'qp_user_sessions', [
         'user_id'                 => $user_id,
-        'status'                  => 'mock_test', // Use mock_test status
-        'start_time'              => current_time('mysql'),
-        'last_activity'           => current_time('mysql'),
+        'status'                  => 'mock_test',
+        'start_time'              => $current_time, // Use current time
+        'last_activity'           => $current_time,
         'settings_snapshot'       => wp_json_encode($session_settings),
-        'question_ids_snapshot'   => wp_json_encode(array_values($final_question_ids)) // Store the actual IDs used
+        'question_ids_snapshot'   => wp_json_encode(array_values($final_question_ids))
     ]);
     $session_id = $wpdb->insert_id;
 
