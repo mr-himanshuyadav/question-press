@@ -353,6 +353,27 @@ function qp_activate_plugin()
     ) $charset_collate;";
     dbDelta($sql_user_items_progress);
 
+    // === NEW USER ENTITLEMENTS TABLE ===
+    $table_user_entitlements = $wpdb->prefix . 'qp_user_entitlements';
+    $sql_user_entitlements = "CREATE TABLE $table_user_entitlements (
+        entitlement_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+        user_id BIGINT(20) UNSIGNED NOT NULL,
+        plan_id BIGINT(20) UNSIGNED NOT NULL,
+        order_id BIGINT(20) UNSIGNED NOT NULL,
+        start_date DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00',
+        expiry_date DATETIME DEFAULT NULL,
+        remaining_attempts INT DEFAULT NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'active',
+        notes TEXT DEFAULT NULL,
+        PRIMARY KEY  (entitlement_id),
+        KEY user_id (user_id),
+        KEY plan_id (plan_id),
+        KEY order_id (order_id),
+        KEY status (status),
+        KEY expiry_date (expiry_date)
+    ) $charset_collate;";
+    dbDelta($sql_user_entitlements);
+
     $default_taxonomies = [
         ['taxonomy_name' => 'subject', 'taxonomy_label' => 'Subjects', 'hierarchical' => 1],
         ['taxonomy_name' => 'label', 'taxonomy_label' => 'Labels', 'hierarchical' => 0],
