@@ -15,51 +15,54 @@ class QP_Dashboard
         $current_user = wp_get_current_user();
         $user_id = $current_user->ID;
 
-        // --- NEW: Calculate Attempts Remaining Message from Entitlements ---
+        // --- NEW: Display Entitlement Summary ---
         $access_status_message = '';
         $shop_page_url = function_exists('wc_get_page_id') ? get_permalink(wc_get_page_id('shop')) : home_url('/');
         $link_text = empty($shop_page_url) ? 'Purchase Access' : 'Purchase More';
-
-        $total_remaining_for_display = 0;
-        $has_unlimited_for_display = false;
-        $has_active_plan = false; // Flag to see if *any* plan is active time-wise
+        $entitlement_summary = []; // Array to hold summary lines
 
         global $wpdb;
         $entitlements_table = $wpdb->prefix . 'qp_user_entitlements';
         $current_time = current_time('mysql');
 
+        // Fetch ACTIVE entitlements, including plan names
         $active_entitlements_for_display = $wpdb->get_results($wpdb->prepare(
-            "SELECT remaining_attempts, expiry_date
-             FROM {$entitlements_table}
-             WHERE user_id = %d
-             AND status = 'active'
-             AND (expiry_date IS NULL OR expiry_date > %s)",
+            "SELECT e.entitlement_id, e.plan_id, e.remaining_attempts, e.expiry_date, p.post_title as plan_title
+             FROM {$entitlements_table} e
+             JOIN {$wpdb->posts} p ON e.plan_id = p.ID
+             WHERE e.user_id = %d
+             AND e.status = 'active'
+             AND (e.expiry_date IS NULL OR e.expiry_date > %s)
+             ORDER BY e.expiry_date ASC, e.entitlement_id ASC", // Show soonest expiring first
             $user_id,
             $current_time
         ));
 
         if (!empty($active_entitlements_for_display)) {
-            $has_active_plan = true; // User has at least one valid plan
             foreach ($active_entitlements_for_display as $entitlement) {
-                if (is_null($entitlement->remaining_attempts)) {
-                    $has_unlimited_for_display = true;
-                    break; // Found unlimited, no need to sum further
+                $summary_line = '<strong>' . esc_html(str_replace('Auto: Access Plan for Course "', '', $entitlement->plan_title)) . '</strong>'; // Clean up auto-plan title
+                $details = [];
+                if (!is_null($entitlement->remaining_attempts)) {
+                    $details[] = number_format($entitlement->remaining_attempts) . ' attempts';
                 } else {
-                    $total_remaining_for_display += (int) $entitlement->remaining_attempts;
+                    $details[] = 'Unlimited attempts';
                 }
+                if (!is_null($entitlement->expiry_date)) {
+                    $expiry_timestamp = strtotime($entitlement->expiry_date);
+                    // Format date nicely using WordPress date format
+                    $details[] = 'expires ' . date_i18n(get_option('date_format'), $expiry_timestamp);
+                } else {
+                     $details[] = 'never expires';
+                }
+                $summary_line .= ': ' . implode(', ', $details);
+                $entitlement_summary[] = $summary_line;
             }
-        }
-
-        // Construct the message based on findings
-        if ($has_unlimited_for_display) {
-            $access_status_message = 'Attempts remaining: <strong>Unlimited</strong>';
-        } elseif ($has_active_plan && $total_remaining_for_display > 0) {
-            $access_status_message = 'Attempts remaining: <strong>' . number_format($total_remaining_for_display) . '</strong>';
+            $access_status_message = implode('<br>', $entitlement_summary); // Combine lines with breaks
         } else {
-            // No active plans OR active plans exist but all have 0 attempts
-            $access_status_message = 'No attempts remaining. <a href="' . esc_url($shop_page_url) . '">' . esc_html($link_text) . '</a>';
+            // No active plans found
+            $access_status_message = 'No active plan found. <a href="' . esc_url($shop_page_url) . '">' . esc_html($link_text) . '</a>';
         }
-        // --- END NEW LOGIC ---
+        // --- END NEW DISPLAY LOGIC ---
 
 
         // Lifetime Stats (Keep this)
