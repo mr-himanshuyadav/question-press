@@ -672,76 +672,104 @@ class QP_Dashboard
         ?>
         <h2>My Courses</h2>
 
-        <?php if (!empty($enrolled_course_ids)) : ?>
-            <div class="qp-course-list qp-enrolled-courses">
-                <?php while ($courses_query->have_posts()) : $courses_query->the_post(); ?>
-                    <?php if (in_array(get_the_ID(), $enrolled_course_ids)) :
-                        $course_data = $enrolled_courses_data[get_the_ID()];
+        <?php if ($courses_query->have_posts()) : ?>
+            <div class="qp-course-list"> <?php // Combined list container ?>
+                 <?php
+                 $found_enrolled = false;
+                 $found_available = false;
+                 while ($courses_query->have_posts()) : $courses_query->the_post();
+                    $course_id = get_the_ID();
+                    $is_enrolled = in_array($course_id, $enrolled_course_ids);
+
+                    // --- NEW: Check access mode and user entitlement ---
+                    $access_mode = get_post_meta($course_id, '_qp_course_access_mode', true) ?: 'free';
+                    $linked_product_id = get_post_meta($course_id, '_qp_linked_product_id', true);
+                    $product_url = $linked_product_id ? get_permalink($linked_product_id) : '#'; // Link to product page
+                    $user_has_access = qp_user_can_access_course($user_id, $course_id); // <<< CALL ACCESS CHECK FUNCTION
+
+                    $button_html = '';
+                    if ($is_enrolled) {
+                        $found_enrolled = true; // Mark that we found at least one enrolled course
+                        $course_data = $enrolled_courses_data[$course_id] ?? ['progress' => 0, 'is_complete' => false];
                         $progress = $course_data['progress'];
                         $is_complete = $course_data['is_complete'];
-                    ?>
-                        <div class="qp-card qp-course-item">
-                            <div class="qp-card-content">
-                                <h3 style="margin-top:0;"><?php the_title(); ?></h3>
-                                <?php // --- Progress Bar --- ?>
-                                <div class="qp-progress-bar-container" title="<?php echo esc_attr($progress); ?>% Complete">
-                                    <div class="qp-progress-bar-fill" style="width: <?php echo esc_attr($progress); ?>%;"></div>
-                                </div>
-                                <?php if (has_excerpt()) : ?>
-                                    <p><?php the_excerpt(); ?></p>
-                                <?php else : ?>
-                                    <?php echo '<p>' . wp_trim_words(get_the_content(), 30, '...') . '</p>'; ?>
-                                <?php endif; ?>
-                            </div>
-                            <div class="qp-card-action" style="padding: 1rem 1.5rem; border-top: 1px solid var(--qp-dashboard-border-light); text-align: right;">
-                                 <button class="qp-button qp-button-primary qp-view-course-btn" data-course-id="<?php echo get_the_ID(); ?>">
-                                     <?php echo $is_complete ? 'View Course' : 'Continue Course'; ?>
-                                 </button>
-                            </div>
-                        </div>
-                    <?php endif; ?>
-                <?php endwhile; ?>
-                <?php rewind_posts(); // Rewind the query to loop again for available courses ?>
-            </div>
-            <hr class="qp-divider" style="margin: 2rem 0;">
-            <h2>Available Courses</h2>
-        <?php endif; ?>
+                        $button_text = $is_complete ? __('View Results', 'question-press') : __('Continue Course', 'question-press');
+                        // Enrolled users always get the view/continue button, access check already passed implicitly
+                        $button_html = sprintf(
+                            '<button class="qp-button qp-button-primary qp-view-course-btn" data-course-id="%d">%s</button>',
+                            $course_id,
+                            esc_html($button_text)
+                        );
+                    } else {
+                        // Not enrolled - determine button based on access mode and entitlement
+                        $found_available = true; // Mark that we found at least one available course
+                        if ($access_mode === 'free') {
+                            // Free course, not enrolled yet
+                            $button_html = sprintf(
+                                '<button class="qp-button qp-button-secondary qp-enroll-course-btn" data-course-id="%d">%s</button>',
+                                $course_id,
+                                __('Enroll Free', 'question-press')
+                            );
+                        } elseif ($access_mode === 'requires_purchase') {
+                            if ($user_has_access) {
+                                // User purchased but somehow isn't enrolled? Show enroll (should ideally auto-enroll on purchase later)
+                                // Or maybe they unenrolled? Let's allow re-enrollment if they have access.
+                                $button_html = sprintf(
+                                    '<button class="qp-button qp-button-secondary qp-enroll-course-btn" data-course-id="%d">%s</button>',
+                                    $course_id,
+                                    __('Enroll Now (Purchased)', 'question-press') // Clarify they have access
+                                );
+                            } else {
+                                // Requires purchase, user does not have access -> Show Purchase button
+                                $button_html = sprintf(
+                                    '<a href="%s" class="qp-button qp-button-primary">%s</a>',
+                                    esc_url($product_url),
+                                    __('Purchase Access', 'question-press')
+                                );
+                            }
+                        }
+                    }
 
-        <?php // --- List Available Courses --- ?>
-        <?php if ($courses_query->have_posts()) : ?>
-            <div class="qp-course-list qp-available-courses">
-                 <?php
-                 $found_available = false;
-                 while ($courses_query->have_posts()) : $courses_query->the_post(); ?>
-                    <?php if (!in_array(get_the_ID(), $enrolled_course_ids)) :
-                        $found_available = true;
+                    // --- Render the Course Card ---
                     ?>
-                        <div class="qp-card qp-course-item">
-                            <div class="qp-card-content">
-                                <h3 style="margin-top:0;"><?php the_title(); ?></h3>
-                                <?php if (has_excerpt()) : ?>
-                                    <p><?php the_excerpt(); ?></p>
-                                <?php else : ?>
-                                    <?php echo '<p>' . wp_trim_words(get_the_content(), 30, '...') . '</p>'; ?>
-                                <?php endif; ?>
+                    <div class="qp-card qp-course-item <?php echo $is_enrolled ? 'qp-enrolled' : 'qp-available'; ?>">
+                        <div class="qp-card-content">
+                            <h3 style="margin-top:0;"><?php the_title(); ?></h3>
+                            <?php if ($is_enrolled): // Show progress only if enrolled ?>
+                            <div class="qp-progress-bar-container" title="<?php echo esc_attr($progress); ?>% Complete">
+                                <div class="qp-progress-bar-fill" style="width: <?php echo esc_attr($progress); ?>%;"></div>
                             </div>
-                            <div class="qp-card-action" style="padding: 1rem 1.5rem; border-top: 1px solid var(--qp-dashboard-border-light); text-align: right;">
-                                 <button class="qp-button qp-button-secondary qp-enroll-course-btn" data-course-id="<?php echo get_the_ID(); ?>">
-                                     Enroll Now
-                                 </button>
-                            </div>
+                            <?php endif; ?>
+                            <?php // Show excerpt ?>
+                            <?php if (has_excerpt()) : ?>
+                                <p><?php the_excerpt(); ?></p>
+                            <?php else : ?>
+                                <?php echo '<p>' . wp_trim_words(get_the_content(), 30, '...') . '</p>'; ?>
+                            <?php endif; ?>
                         </div>
-                    <?php endif; ?>
-                <?php endwhile; ?>
-                <?php wp_reset_postdata(); ?>
+                        <?php if ($button_html): // Only show action area if there's a button ?>
+                        <div class="qp-card-action" style="padding: 1rem 1.5rem; border-top: 1px solid var(--qp-dashboard-border-light); text-align: right;">
+                            <?php echo $button_html; // Output the generated button/link ?>
+                        </div>
+                        <?php endif; ?>
+                    </div>
+                    <?php
+                 endwhile;
+                 wp_reset_postdata();
+                 ?>
+            </div> <?php // End combined list container ?>
 
-                <?php if (!$found_available && empty($enrolled_course_ids)) : // If no courses at all ?>
-                     <div class="qp-card"><div class="qp-card-content"><p style="text-align: center;">No courses are available at the moment.</p></div></div>
-                <?php elseif (!$found_available) : // If enrolled in all available courses ?>
-                     <div class="qp-card"><div class="qp-card-content"><p style="text-align: center;">You are enrolled in all available courses.</p></div></div>
-                <?php endif; ?>
-            </div>
-        <?php elseif (empty($enrolled_course_ids)) : // No courses exist at all ?>
+             <?php // --- Display "No courses" messages --- ?>
+             <?php if (!$found_enrolled && !$found_available) : // No courses at all ?>
+                 <div class="qp-card"><div class="qp-card-content"><p style="text-align: center;">No courses are available at the moment.</p></div></div>
+             <?php elseif (!$found_available && $found_enrolled) : // Enrolled in all, none available ?>
+                 <div class="qp-card qp-available-courses"><div class="qp-card-content"><p style="text-align: center;">You are enrolled in all available courses.</p></div></div>
+            <?php elseif (!$found_enrolled && $found_available) : // None enrolled, but some available ?>
+                 <?php // Need to add the "Available Courses" header back if no enrolled courses were found ?>
+                 <script>jQuery(document).ready(function($){ if($('.qp-enrolled').length === 0) { $('.qp-available-courses').before('<h2>Available Courses</h2><hr class="qp-divider" style="margin: 0 0 1.5rem 0;">'); } });</script>
+             <?php endif; ?>
+
+        <?php else : // No courses query results at all ?>
             <div class="qp-card"><div class="qp-card-content"><p style="text-align: center;">No courses are available at the moment.</p></div></div>
         <?php endif; ?>
 
