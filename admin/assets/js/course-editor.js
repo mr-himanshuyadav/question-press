@@ -110,28 +110,36 @@ jQuery(document).ready(function ($) {
             const $section = $(sectionEl);
             const sectionBaseName = `course_sections[${sectionIndex}]`;
 
+            // Re-index section title and hidden ID
             $section.find('> .qp-section-header').find('.qp-section-title-input').attr('name', `${sectionBaseName}[title]`);
+            $section.find('> input[name$="[section_id]"]').attr('name', `${sectionBaseName}[section_id]`); // Re-index hidden section_id
 
             $section.find('.qp-course-item').each(function (itemIndex, itemEl) {
                 const $item = $(itemEl);
                 const itemBaseName = `${sectionBaseName}[items][${itemIndex}]`;
 
+                // Re-index item title, hidden ID, and content type
                 $item.find('.qp-item-title-input').attr('name', `${itemBaseName}[title]`);
+                $item.find('input[name$="[item_id]"]').attr('name', `${itemBaseName}[item_id]`); // Re-index hidden item_id
                 $item.find('.qp-item-content-type-select').attr('name', `${itemBaseName}[content_type]`);
 
                 const contentType = $item.find('.qp-item-content-type-select').val();
                 if (contentType === 'test_series') {
-                    $item.find('.qp-selected-questions-input').attr('name', `${itemBaseName}[config][selected_questions]`);
-                    $item.find('.qp-test-series-config').find('[data-config-key]').not('.qp-selected-questions-input').each(function () {
-                        const key = $(this).data('config-key');
-                        const isMultiple = $(this).is('select[multiple]');
+                    // Re-index all config inputs
+                    $item.find('.qp-test-series-config').find('[data-config-key]').each(function () {
+                        const $input = $(this);
+                        const key = $input.data('config-key');
+                        const isMultiple = $input.is('select[multiple]'); // Check if it's a multi-select
                         let inputName = `${itemBaseName}[config][${key}]`;
                         if (isMultiple) {
-                            inputName += '[]';
+                            inputName += '[]'; // Append brackets for array submission
                         }
-                        $(this).attr('name', inputName);
+                        $input.attr('name', inputName);
                     });
+                     // Specifically re-index the hidden selected_questions input
+                    $item.find('.qp-selected-questions-input').attr('name', `${itemBaseName}[config][selected_questions]`);
                 }
+                 // Add similar blocks here if you add other content types with config fields
             });
         });
     }
@@ -195,9 +203,13 @@ jQuery(document).ready(function ($) {
 
     // --- Helper Function: Render Single Item ---
     function renderItem(itemData, itemIndex, sectionIndex) {
-         const config = itemData.content_config || {};
+        const config = itemData.content_config || {};
+        const itemId = itemData.item_id || 0; // Get existing ID or 0 for new
+        const itemBaseName = `course_sections[${sectionIndex}][items][${itemIndex}]`; // Base name for inputs
+
         const itemHtml = `
-            <div class="qp-course-item" data-item-id="${itemData.item_id || 0}" data-initial-config='${JSON.stringify(config)}'>
+            <div class="qp-course-item" data-item-id="${itemId}" data-initial-config='${JSON.stringify(config)}'>
+                 <input type="hidden" name="${itemBaseName}[item_id]" value="${itemId}">
                  <div class="qp-item-header">
                      <span class="dashicons dashicons-menu handle"></span>
                      <input type="text" class="qp-item-title-input" value="${itemData.title || ''}" placeholder="Item Title">
@@ -222,9 +234,12 @@ jQuery(document).ready(function ($) {
                 itemsHtml += renderItem(item, itemIndex, sectionIndex);
             });
         }
+        const sectionId = sectionData.id || 0; // Get existing ID or 0 for new
+        const sectionBaseName = `course_sections[${sectionIndex}]`; // Base name for inputs
 
         const sectionHtml = `
-            <div class="qp-section" data-section-id="${sectionData.id || 0}">
+            <div class="qp-section" data-section-id="${sectionId}">
+                <input type="hidden" name="${sectionBaseName}[section_id]" value="${sectionId}">
                 <div class="qp-section-header">
                      <span style="display: flex; align-items: center;">
                          <span class="dashicons dashicons-menu handle"></span>
