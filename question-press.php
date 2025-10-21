@@ -5501,9 +5501,22 @@ function qp_finalize_and_end_session($session_id, $new_status = 'completed', $en
         $progress_percent = ($total_items > 0) ? round(($completed_items / $total_items) * 100) : 0;
 
         // Check if course is now fully complete
-        $course_status = 'in_progress'; // Default
+        $new_course_status = 'in_progress'; // Default
         if ($total_items > 0 && $completed_items >= $total_items) {
-            $course_status = 'completed';
+            $new_course_status = 'completed';
+        }
+
+        // Get the current completion date (if any) to avoid overwriting it
+        $current_completion_date = $wpdb->get_var($wpdb->prepare(
+            "SELECT completion_date FROM {$user_courses_table} WHERE user_id = %d AND course_id = %d",
+            $user_id, $course_id
+        ));
+        $completion_date_to_set = $current_completion_date; // Keep existing by default
+
+        if ($new_course_status === 'completed' && is_null($current_completion_date)) {
+            $completion_date_to_set = current_time('mysql'); // Set completion date only if newly completed
+        } elseif ($new_course_status !== 'completed') {
+             $completion_date_to_set = null; // Reset completion date if no longer complete (e.g., if items were added later)
         }
 
         // Update the user's overall course record
@@ -5511,25 +5524,15 @@ function qp_finalize_and_end_session($session_id, $new_status = 'completed', $en
             $user_courses_table,
             [
                 'progress_percent' => $progress_percent,
-                'status' => $course_status,
-                // Update completion_date only if status becomes 'completed' and it's not already set
-                'completion_date' => $wpdb->get_var($wpdb->prepare(
-                    "SELECT CASE
-                        WHEN %s = 'completed' AND completion_date IS NULL THEN %s
-                        ELSE completion_date
-                    END
-                    FROM {$user_courses_table} WHERE user_id = %d AND course_id = %d",
-                    $course_status, // New status ('completed' or 'in_progress')
-                    current_time('mysql'), // The time to set if conditions are met
-                    $user_id,
-                    $course_id
-                )),
+                'status'           => $new_course_status,
+                'completion_date'  => $completion_date_to_set // Set potentially updated completion date
             ],
             [
-                'user_id' => $user_id,
+                'user_id'   => $user_id,
                 'course_id' => $course_id
-            ]
-            // Add a condition here if you don't want to reset completion_date: AND completion_date IS NULL
+            ],
+            ['%d', '%s', '%s'], // Data formats
+            ['%d', '%d']  // Where formats
         );
         // --- End Overall Course Progress Update ---
     }
