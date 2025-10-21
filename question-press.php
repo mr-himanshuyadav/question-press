@@ -6503,3 +6503,25 @@ function qp_search_questions_for_course_ajax() {
     wp_send_json_success(['questions' => $formatted_results]);
 }
 add_action('wp_ajax_qp_search_questions_for_course', 'qp_search_questions_for_course_ajax');
+
+/**
+ * Cleans up related enrollment and progress data when a qp_course post is deleted.
+ * Hooks into 'before_delete_post'.
+ *
+ * @param int $post_id The ID of the post being deleted.
+ */
+function qp_cleanup_course_data_on_delete($post_id) {
+    // Check if the post being deleted is actually a 'qp_course'
+    if (get_post_type($post_id) === 'qp_course') {
+        global $wpdb;
+        $user_courses_table = $wpdb->prefix . 'qp_user_courses';
+        $progress_table = $wpdb->prefix . 'qp_user_items_progress';
+
+        // Delete item progress records associated with this course first
+        $wpdb->delete($progress_table, ['course_id' => $post_id], ['%d']);
+
+        // Then delete the main enrollment records for this course
+        $wpdb->delete($user_courses_table, ['course_id' => $post_id], ['%d']);
+    }
+}
+add_action('before_delete_post', 'qp_cleanup_course_data_on_delete', 10, 1);
