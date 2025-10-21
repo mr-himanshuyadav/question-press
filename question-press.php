@@ -5453,90 +5453,105 @@ function qp_finalize_and_end_session($session_id, $new_status = 'completed', $en
         $item_id = absint($settings['item_id']);
         $user_id = $session->user_id; // Get user ID from the session object
         $progress_table = $wpdb->prefix . 'qp_user_items_progress';
+        $items_table = $wpdb->prefix . 'qp_course_items'; // <<< Keep this variable definition
 
-        // Prepare result data (customize as needed)
-        $result_data = json_encode([
-            'score' => $final_score,
-            'correct' => $correct_count,
-            'incorrect' => $incorrect_count,
-            'skipped' => $skipped_count,
-            'not_viewed' => $not_viewed_count, // Include if relevant (from mock tests)
-            'total_attempted' => $total_attempted,
-            'session_id' => $session_id // Store the session ID for potential review linking
-        ]);
-
-        // Use REPLACE INTO for simplicity: Deletes old row with same UNIQUE KEY (user_id, item_id) then inserts new one.
-        // Or use INSERT ... ON DUPLICATE KEY UPDATE if you prefer.
-        $wpdb->query($wpdb->prepare(
-            "REPLACE INTO {$progress_table} (user_id, item_id, course_id, status, completion_date, result_data, last_viewed)
-             VALUES (%d, %d, %d, %s, %s, %s, %s)",
-            $user_id,
+        // *** START NEW CHECK ***
+        // Check if the course item still exists before trying to update progress
+        $item_exists = $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$items_table} WHERE item_id = %d AND course_id = %d",
             $item_id,
-            $course_id,
-            'completed', // Mark item as completed when session ends
-            current_time('mysql'), // Completion date
-            $result_data,
-            current_time('mysql') // Update last viewed as well
-        ));
-
-        // Note: Calculation and update of overall course progress in wp_qp_user_courses
-        // --- Calculate and Update Overall Course Progress ---
-        $items_table = $wpdb->prefix . 'qp_course_items';
-        $user_courses_table = $wpdb->prefix . 'qp_user_courses';
-
-        // Get total number of items in the course
-        $total_items = (int) $wpdb->get_var($wpdb->prepare(
-            "SELECT COUNT(item_id) FROM $items_table WHERE course_id = %d",
             $course_id
         ));
 
-        // Get number of completed items for the user in this course
-        $completed_items = (int) $wpdb->get_var($wpdb->prepare(
-            "SELECT COUNT(user_item_id) FROM $progress_table WHERE user_id = %d AND course_id = %d AND status = 'completed'",
-            $user_id,
-            $course_id
-        ));
+        if ($item_exists) {
+            // *** Item exists, proceed with updating progress ***
 
-        // Calculate percentage
-        $progress_percent = ($total_items > 0) ? round(($completed_items / $total_items) * 100) : 0;
+            // Prepare result data (customize as needed)
+            $result_data = json_encode([
+                'score' => $final_score,
+                'correct' => $correct_count,
+                'incorrect' => $incorrect_count,
+                'skipped' => $skipped_count,
+                'not_viewed' => $not_viewed_count, // Include if relevant (from mock tests)
+                'total_attempted' => $total_attempted,
+                'session_id' => $session_id // Store the session ID for potential review linking
+            ]);
 
-        // Check if course is now fully complete
-        $new_course_status = 'in_progress'; // Default
-        if ($total_items > 0 && $completed_items >= $total_items) {
-            $new_course_status = 'completed';
+            // Use REPLACE INTO for simplicity
+            $wpdb->query($wpdb->prepare(
+                "REPLACE INTO {$progress_table} (user_id, item_id, course_id, status, completion_date, result_data, last_viewed)
+                 VALUES (%d, %d, %d, %s, %s, %s, %s)",
+                $user_id,
+                $item_id,
+                $course_id,
+                'completed', // Mark item as completed when session ends
+                current_time('mysql'), // Completion date
+                $result_data,
+                current_time('mysql') // Update last viewed as well
+            ));
+
+            // Note: Calculation and update of overall course progress should happen ONLY if the item exists
+            // --- Calculate and Update Overall Course Progress ---
+            $user_courses_table = $wpdb->prefix . 'qp_user_courses';
+
+            // Get total number of items in the course
+            $total_items = (int) $wpdb->get_var($wpdb->prepare(
+                "SELECT COUNT(item_id) FROM $items_table WHERE course_id = %d",
+                $course_id
+            ));
+
+            // Get number of completed items for the user in this course
+            $completed_items = (int) $wpdb->get_var($wpdb->prepare(
+                "SELECT COUNT(user_item_id) FROM $progress_table WHERE user_id = %d AND course_id = %d AND status = 'completed'",
+                $user_id,
+                $course_id
+            ));
+
+            // Calculate percentage
+            $progress_percent = ($total_items > 0) ? round(($completed_items / $total_items) * 100) : 0;
+
+            // Check if course is now fully complete
+            $new_course_status = 'in_progress'; // Default
+            if ($total_items > 0 && $completed_items >= $total_items) {
+                $new_course_status = 'completed';
+            }
+
+            // Get the current completion date (if any) to avoid overwriting it
+            $current_completion_date = $wpdb->get_var($wpdb->prepare(
+                "SELECT completion_date FROM {$user_courses_table} WHERE user_id = %d AND course_id = %d",
+                $user_id, $course_id
+            ));
+            $completion_date_to_set = $current_completion_date;
+
+            if ($new_course_status === 'completed' && is_null($current_completion_date)) {
+                $completion_date_to_set = current_time('mysql');
+            } elseif ($new_course_status !== 'completed') {
+                 $completion_date_to_set = null;
+            }
+
+            // Update the user's overall course record
+            $wpdb->update(
+                $user_courses_table,
+                [
+                    'progress_percent' => $progress_percent,
+                    'status'           => $new_course_status,
+                    'completion_date'  => $completion_date_to_set
+                ],
+                [ 'user_id'   => $user_id, 'course_id' => $course_id ],
+                ['%d', '%s', '%s'],
+                ['%d', '%d']
+            );
+            // --- End Overall Course Progress Update ---
+
+        } else {
+            // *** Item does NOT exist, skip progress update ***
+            // Optional: Log this occurrence for debugging
+            error_log("QP Session Finalize: Skipped progress update for user {$user_id}, course {$course_id}, because item {$item_id} no longer exists.");
         }
+        // *** END NEW CHECK ***
 
-        // Get the current completion date (if any) to avoid overwriting it
-        $current_completion_date = $wpdb->get_var($wpdb->prepare(
-            "SELECT completion_date FROM {$user_courses_table} WHERE user_id = %d AND course_id = %d",
-            $user_id, $course_id
-        ));
-        $completion_date_to_set = $current_completion_date; // Keep existing by default
-
-        if ($new_course_status === 'completed' && is_null($current_completion_date)) {
-            $completion_date_to_set = current_time('mysql'); // Set completion date only if newly completed
-        } elseif ($new_course_status !== 'completed') {
-             $completion_date_to_set = null; // Reset completion date if no longer complete (e.g., if items were added later)
-        }
-
-        // Update the user's overall course record
-        $wpdb->update(
-            $user_courses_table,
-            [
-                'progress_percent' => $progress_percent,
-                'status'           => $new_course_status,
-                'completion_date'  => $completion_date_to_set // Set potentially updated completion date
-            ],
-            [
-                'user_id'   => $user_id,
-                'course_id' => $course_id
-            ],
-            ['%d', '%s', '%s'], // Data formats
-            ['%d', '%d']  // Where formats
-        );
-        // --- End Overall Course Progress Update ---
-    }
-    // --- END NEW Course Item Progress Update ---
+    } // This closing brace corresponds to the "if (isset($settings['course_id']) ...)" check
+    // --- END Course Item Progress Update ---
 
     return [
         'final_score' => $final_score,
