@@ -73,6 +73,13 @@ class QP_Entitlements_List_Table extends WP_List_Table {
                   LEFT JOIN {$wpdb->posts} p ON e.plan_id = p.ID";
 
         $where_clauses = [];
+        if (!empty($_REQUEST['user_id_filter'])) {
+            $where_clauses[] = $wpdb->prepare("e.user_id = %d", absint($_REQUEST['user_id_filter']));
+        } else {
+            // If no user is selected (shouldn't happen with the new structure, but safe fallback)
+            // Show nothing by default by adding a condition that's always false
+            $where_clauses[] = "1=0";
+        }
         $params = [];
 
         // Search functionality (by User ID, User Email/Name, or Order ID)

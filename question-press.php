@@ -1856,37 +1856,95 @@ function qp_render_tools_page()
 
 /**
  * Callback function to render the User Entitlements admin page.
+ * NOW INCLUDES user search and scope management section.
  */
 function qp_render_user_entitlements_page() {
-    // Instantiate the List Table
-    $entitlements_list_table = new QP_Entitlements_List_Table();
+    // --- NEW: Handle User Search ---
+    $user_id_searched = isset($_GET['user_id']) ? absint($_GET['user_id']) : 0;
+    $user_info = null;
+    if ($user_id_searched > 0) {
+        $user_info = get_userdata($user_id_searched);
+    }
+    // --- END NEW ---
 
-    // Fetch, prepare, sort, and filter our data
-    $entitlements_list_table->prepare_items();
-
-    ?>
+?>
     <div class="wrap">
-        <h1 class="wp-heading-inline"><?php _e('User Entitlements', 'question-press'); ?></h1>
-        <p><?php _e('View access entitlements granted to users.', 'question-press'); ?></p>
+        <h1 class="wp-heading-inline"><?php _e('User Entitlements & Scope', 'question-press'); ?></h1>
+        <?php // Display any notices if needed (e.g., after saving scope)
+            if (isset($_GET['message']) && $_GET['message'] === 'scope_updated') {
+                 echo '<div id="message" class="notice notice-success is-dismissible"><p>' . __('User scope updated successfully.', 'question-press') . '</p></div>';
+            }
+            settings_errors('qp_entitlements_notices');
+        ?>
+
+        <?php // --- NEW: User Search Form --- ?>
+        <form method="get" action="<?php echo admin_url('admin.php'); ?>" style="margin-bottom: 2rem;">
+            <input type="hidden" name="page" value="qp-user-entitlements" />
+            <label for="qp_user_id_search"><strong><?php _e('Enter User ID:', 'question-press'); ?></strong></label><br>
+            <input type="number" id="qp_user_id_search" name="user_id" value="<?php echo esc_attr($user_id_searched ?: ''); ?>" min="1" required>
+            <input type="submit" class="button button-secondary" value="<?php _e('Find User & Manage Scope', 'question-press'); ?>">
+             <?php if ($user_id_searched > 0 && !$user_info): ?>
+                <p style="color: red;"><?php _e('Error: User ID not found.', 'question-press'); ?></p>
+             <?php endif; ?>
+        </form>
+        <?php // --- END NEW --- ?>
+
         <hr class="wp-header-end">
 
-        <?php // Display any notices if needed ?>
-        <?php // settings_errors('qp_entitlements_notices'); ?>
+        <?php // --- NEW: Conditional Display based on user search ---
+        if ($user_id_searched > 0 && $user_info) :
+        ?>
+            <h2><?php printf(__('Managing Scope & Entitlements for: %s (#%d)', 'question-press'), esc_html($user_info->display_name), $user_id_searched); ?></h2>
 
-        <form method="get">
-            <?php // Keep existing page parameters ?>
-            <input type="hidden" name="page" value="<?php echo esc_attr($_REQUEST['page']); ?>" />
+            <?php // --- NEW: Scope Management Section Placeholder --- ?>
+            <div id="qp-user-scope-management" style="margin-bottom: 2rem; padding: 1.5rem; background-color: #f6f7f7; border: 1px solid #ccd0d4; border-radius: 4px;">
+                <h3><?php _e('User\'s Subject Scope', 'question-press'); ?></h3>
+                <p><?php _e('Define which subjects this user can access based on Exams or direct Subject assignments. Leave both sections empty to allow access to all subjects.', 'question-press'); ?></p>
+                <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+                    <?php // Nonce field will be added in Step 1.3 ?>
+                    <?php // Form fields (multi-selects) will be added in Step 1.3 ?>
+                    <?php // Save button will be added in Step 1.3 ?>
+                    <p><em><?php _e('(Scope selection form will appear here in the next step)', 'question-press'); ?></em></p>
+                </form>
+            </div>
+            <?php // --- END NEW --- ?>
+
+            <hr> <?php // Separator ?>
+
+            <h3><?php _e('User\'s Entitlement Records', 'question-press'); ?></h3>
             <?php
-                // Add the search box
-                $entitlements_list_table->search_box(__('Search Entitlements'), 'entitlement');
+            // Instantiate the List Table
+            $entitlements_list_table = new QP_Entitlements_List_Table();
+
+            // --- MODIFIED: Pass user_id to prepare_items for filtering ---
+            // We will modify prepare_items in the next step to handle this. For now, just pass it.
+            $_REQUEST['user_id_filter'] = $user_id_searched; // Use a temporary request variable
+
+            // Fetch, prepare, sort, and filter data (will be filtered by user ID later)
+            $entitlements_list_table->prepare_items();
             ?>
-            <?php
-                // Display the list table
-                $entitlements_list_table->display();
-            ?>
-        </form>
+            <form method="get">
+                <?php // Keep existing page parameters ?>
+                <input type="hidden" name="page" value="<?php echo esc_attr($_REQUEST['page']); ?>" />
+                 <input type="hidden" name="user_id" value="<?php echo esc_attr($user_id_searched); ?>" /> <?php // Keep user_id in subsequent requests (sorting, pagination) ?>
+                <?php
+                    // Add the search box (will search WITHIN this user's entitlements if we modify prepare_items later)
+                    // $entitlements_list_table->search_box(__('Search Entitlements'), 'entitlement'); // Keep commented for now
+                ?>
+                <?php
+                    // Display the list table
+                    $entitlements_list_table->display();
+                ?>
+            </form>
+
+        <?php // --- NEW: End conditional display ---
+        else:
+             echo '<p>' . __('Please search for a User ID above to manage their scope and view their entitlements.', 'question-press') . '</p>';
+        endif;
+        ?>
+
     </div>
-    <?php
+<?php
 }
 
 /**
