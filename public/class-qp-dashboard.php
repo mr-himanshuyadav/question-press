@@ -171,9 +171,14 @@ private static function render_sidebar($current_user, $access_status_message, $a
          <button class="qp-sidebar-close-btn" aria-label="Close Navigation">
              <span class="dashicons dashicons-no-alt"></span>
          </button>
-         <span class="qp-user-name"><?php echo esc_html($current_user->display_name); ?></span><br>
+         <?php // --- NEW: Added Avatar --- ?>
+         <div class="qp-sidebar-avatar">
+             <?php echo get_avatar($current_user->ID, 64); // Display 64x64 avatar ?>
+         </div>
+         <?php // --- MODIFIED: Added Greeting --- ?>
+         <span class="qp-user-name"><?php echo esc_html__('Hello, ', 'question-press') . esc_html($current_user->display_name); ?>!</span><br>
          <span class="qp-access-status">
-             <?php echo wp_kses_post($access_status_message); // Make sure $access_status_message is fetched/set correctly ?>
+             <?php echo wp_kses_post($access_status_message); ?>
          </span>
     </div>
      <ul class="qp-sidebar-nav">

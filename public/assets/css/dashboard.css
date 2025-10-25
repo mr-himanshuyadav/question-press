@@ -133,6 +133,32 @@ body { margin: 0; }
 }
  .qp-sidebar-header .qp-access-status a:hover { text-decoration: underline; }
 
+ /* --- NEW: Sidebar Avatar and Header Centering --- */
+.qp-sidebar-header {
+	 padding: 1rem 1.5rem 1rem 1.5rem; /* Adjusted padding */
+	 text-align: center; /* Center align header content */
+	 border-bottom: 1px solid var(--qp-dashboard-border-light);
+     position: relative; /* Needed for close button positioning */
+}
+.qp-sidebar-avatar {
+    margin-bottom: 0.75rem; /* Space below avatar */
+}
+.qp-sidebar-avatar img {
+    border-radius: 50%; /* Make avatar circular */
+    border: 2px solid var(--qp-dashboard-border); /* Optional subtle border */
+}
+.qp-sidebar-header .qp-user-name {
+    font-size: 1.1em;
+    font-weight: 600;
+    display: block;
+    margin-bottom: 5px; /* Space below name */
+}
+/* Adjust close button position for centered header */
+.qp-sidebar-header .qp-sidebar-close-btn {
+    top: 10px;
+    right: 10px;
+}
+
 .qp-sidebar-nav {
     margin-top: 0.5rem;
     list-style: none;
