@@ -201,25 +201,23 @@ private static function render_sidebar($current_user, $access_status_message, $a
 }
 
 /**
- * NEW HELPER: Renders the view for a single specific course.
- * (Initially a placeholder, will require porting JS logic later)
+ * Renders the view for a single specific course, fetching its structure and user progress.
  */
 private static function render_single_course_view($course_slug, $user_id) {
     $course_post = get_page_by_path($course_slug, OBJECT, 'qp_course'); // Get course WP_Post object by slug
 
+    // --- Basic Course Validation ---
     if (!$course_post || $course_post->post_type !== 'qp_course') {
         echo '<div class="qp-card"><div class="qp-card-content"><p>Error: Course not found.</p></div></div>';
-        // It's helpful to add a back button here too
         $options = get_option('qp_settings');
         $dashboard_page_id = isset($options['dashboard_page']) ? absint($options['dashboard_page']) : 0;
         $base_dashboard_url = $dashboard_page_id ? trailingslashit(get_permalink($dashboard_page_id)) : trailingslashit(home_url());
         echo '<a href="' . esc_url($base_dashboard_url . 'courses/') . '" class="qp-button qp-button-secondary qp-back-to-courses-btn">&laquo; Back to Courses</a>';
         return;
     }
-
     $course_id = $course_post->ID;
 
-    // --- Re-check access for direct URL access ---
+    // --- Access Check ---
     if (!qp_user_can_access_course($user_id, $course_id)) {
         echo '<div class="qp-card"><div class="qp-card-content"><p>You do not have permission to view this course.</p></div></div>';
         $options = get_option('qp_settings');
@@ -229,35 +227,149 @@ private static function render_single_course_view($course_slug, $user_id) {
         return;
     }
 
-    // --- Fetch Structure Data (Port logic from AJAX handler qp_get_course_structure_ajax) ---
+    // --- Fetch Structure Data (Similar to old AJAX handler) ---
     global $wpdb;
     $sections_table = $wpdb->prefix . 'qp_course_sections';
     $items_table = $wpdb->prefix . 'qp_course_items';
-    $structure_data = [
-        'course_id' => $course_id,
-        'course_title' => get_the_title($course_id),
-        'sections' => []
-    ];
-    // ... (Add the DB queries from qp_get_course_structure_ajax to fetch sections and items) ...
-    // Example:
-     $sections = $wpdb->get_results($wpdb->prepare( "SELECT section_id, title FROM $sections_table WHERE course_id = %d ORDER BY section_order ASC", $course_id ));
-     // Fetch items, progress etc. similar to the AJAX function
+    $progress_table = $wpdb->prefix . 'qp_user_items_progress';
 
-    // --- Render Structure HTML (Port logic from JS renderCourseStructure) ---
-    // You'll need to rebuild the HTML structure generation in PHP here.
+    // Get sections
+    $sections = $wpdb->get_results($wpdb->prepare(
+        "SELECT section_id, title, description, section_order FROM $sections_table WHERE course_id = %d ORDER BY section_order ASC",
+        $course_id
+    ));
+
+    $items_by_section = [];
+    $all_items_in_course = []; // Store all items flat for progress fetching
+
+    if (!empty($sections)) {
+        $section_ids = wp_list_pluck($sections, 'section_id');
+        $ids_placeholder = implode(',', array_map('absint', $section_ids));
+
+        // Get all items for these sections
+        $items_raw = $wpdb->get_results(
+            "SELECT item_id, section_id, title, item_order, content_type, content_config
+             FROM $items_table
+             WHERE section_id IN ($ids_placeholder)
+             ORDER BY item_order ASC"
+        );
+        $all_items_in_course = $items_raw; // Store for progress lookup
+
+        // Organize items by section
+        foreach ($items_raw as $item) {
+            if (!isset($items_by_section[$item->section_id])) {
+                $items_by_section[$item->section_id] = [];
+            }
+            $items_by_section[$item->section_id][] = $item;
+        }
+    }
+
+    // Fetch user's progress for all items in this course in one query
+    $item_ids_in_course = wp_list_pluck($all_items_in_course, 'item_id');
+    $progress_data = [];
+    if (!empty($item_ids_in_course)) {
+        $item_ids_placeholder = implode(',', array_map('absint', $item_ids_in_course));
+        $progress_raw = $wpdb->get_results($wpdb->prepare(
+            "SELECT item_id, status, result_data FROM $progress_table WHERE user_id = %d AND item_id IN ($item_ids_placeholder)",
+            $user_id
+        ), OBJECT_K); // Keyed by item_id
+
+        // Process progress data to extract session_id
+        foreach ($progress_raw as $item_id => $prog) {
+            $session_id = null;
+            if (!empty($prog->result_data)) {
+                $result_data_decoded = json_decode($prog->result_data, true);
+                if (isset($result_data_decoded['session_id'])) {
+                    $session_id = absint($result_data_decoded['session_id']);
+                }
+            }
+            $progress_data[$item_id] = [
+                'status' => $prog->status,
+                'session_id' => $session_id
+            ];
+        }
+    }
+
+    // --- Render Structure HTML ---
     echo '<div class="qp-course-structure-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">';
-    echo '<h2>' . esc_html($structure_data['course_title']) . '</h2>';
+    echo '<h2>' . esc_html(get_the_title($course_id)) . '</h2>';
+    // Get base URL for back button
     $options = get_option('qp_settings');
     $dashboard_page_id = isset($options['dashboard_page']) ? absint($options['dashboard_page']) : 0;
     $base_dashboard_url = $dashboard_page_id ? trailingslashit(get_permalink($dashboard_page_id)) : trailingslashit(home_url());
     echo '<a href="' . esc_url($base_dashboard_url . 'courses/') . '" class="qp-button qp-button-secondary qp-back-to-courses-btn">&laquo; Back to Courses</a>';
-    echo '</div>';
+    echo '</div>'; // Close qp-course-structure-header
+
     echo '<div class="qp-course-structure-content">';
-    // --- Placeholder ---
-    echo "<p>TODO: Implement PHP rendering for course structure here based on fetched data.</p>";
-     // Loop through $structure_data['sections'] and $section['items'] to build HTML
-     // Use data attributes on buttons for JS interaction (start test, review results)
-    // --- End Placeholder ---
+
+    if (!empty($sections)) {
+        foreach ($sections as $section) {
+            ?>
+            <div class="qp-course-section-card qp-card">
+                <div class="qp-card-header">
+                    <h3><?php echo esc_html($section->title); ?></h3>
+                    <?php if (!empty($section->description)) : ?>
+                        <p style="font-size: 0.9em; color: var(--qp-dashboard-text-light); margin-top: 5px;"><?php echo esc_html($section->description); ?></p>
+                    <?php endif; ?>
+                </div>
+                <div class="qp-card-content qp-course-items-list">
+                    <?php
+                    $items = $items_by_section[$section->section_id] ?? [];
+                    if (!empty($items)) {
+                        foreach ($items as $item) {
+                            $item_progress = $progress_data[$item->item_id] ?? ['status' => 'not_started', 'session_id' => null];
+                            $status = $item_progress['status'];
+                            $session_id_attr = $item_progress['session_id'] ? ' data-session-id="' . esc_attr($item_progress['session_id']) . '"' : '';
+
+                            $status_icon = '';
+                            $button_text = 'Start';
+                            $button_class = 'qp-button-primary start-course-test-btn'; // Default to test start
+
+                            switch ($status) {
+                                case 'completed':
+                                    $status_icon = '<span class="dashicons dashicons-yes-alt" style="color: var(--qp-dashboard-success);"></span>';
+                                    $button_text = 'Review';
+                                    $button_class = 'qp-button-secondary view-test-results-btn';
+                                    break;
+                                case 'in_progress': // Add case for 'in_progress' if used later
+                                    $status_icon = '<span class="dashicons dashicons-marker" style="color: var(--qp-dashboard-warning-dark);"></span>';
+                                    $button_text = 'Continue';
+                                    $button_class = 'qp-button-primary start-course-test-btn';
+                                    break;
+                                default: // not_started
+                                    $status_icon = '<span class="dashicons dashicons-marker" style="color: var(--qp-dashboard-border);"></span>';
+                                    $button_text = 'Start';
+                                    $button_class = 'qp-button-primary start-course-test-btn';
+                                    break;
+                            }
+
+                            // Adjust button for non-test items
+                            if ($item->content_type !== 'test_series') {
+                               $button_class = 'qp-button-secondary view-course-content-btn'; // Generic class for other types
+                               $button_text = 'View'; // Generic text
+                               $session_id_attr = ''; // No session ID for non-tests
+                            }
+
+                            ?>
+                            <div class="qp-course-item-row" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--qp-dashboard-border-light);">
+                                <span class="qp-course-item-link" style="display: flex; align-items: center; gap: 8px;">
+                                    <?php echo $status_icon; ?>
+                                    <span style="font-weight: 500;"><?php echo esc_html($item->title); ?></span>
+                                </span>
+                                <button class="qp-button <?php echo esc_attr($button_class); ?>" data-item-id="<?php echo esc_attr($item->item_id); ?>"<?php echo $session_id_attr; ?> style="padding: 4px 10px; font-size: 12px;"><?php echo esc_html($button_text); ?></button>
+                            </div>
+                            <?php
+                        }
+                    } else {
+                        echo '<p style="text-align: center; color: var(--qp-dashboard-text-light); font-style: italic;">No items in this section.</p>';
+                    }
+                    ?>
+                </div></div><?php
+        } // end foreach section
+    } else {
+        echo '<div class="qp-card"><div class="qp-card-content"><p style="text-align: center;">This course has no content yet.</p></div></div>';
+    }
+
     echo '</div>'; // Close qp-course-structure-content
 }
 
