@@ -743,6 +743,15 @@ LIMIT {$per_page} OFFSET {$offset}";
                 }
             }
         }
+        // --- END ADDED ---
+
+        // Optional: Add admin notice
+        // add_settings_error('qp_notices', 'bulk_delete', count($question_ids) . ' questions permanently deleted.', 'success');
+
+         // Redirect after action to prevent resubmission and clear query args
+         wp_safe_redirect(remove_query_arg(['action', 'action2', '_wpnonce', 'question_ids', 'labels_to_apply', 'bulk_edit_apply', 'bulk_edit_source', 'bulk_edit_section', 'bulk_edit_topic', 'bulk_edit_exam'], wp_get_referer() ?: admin_url('admin.php?page=question-press&status=trash'))); // Redirect back, usually to trash view
+         exit;
+    }
 
         if (strpos($action, 'remove_label_') === 0) {
             // UPDATED: Target the new relationships table
