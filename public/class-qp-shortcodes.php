@@ -153,6 +153,16 @@ class QP_Shortcodes
             $subject_tax_id
         ));
 
+        // --- NEW: Filter subjects based on user scope ---
+        $user_id = get_current_user_id();
+        $allowed_subjects = qp_get_allowed_subject_ids_for_user($user_id);
+
+        if ($allowed_subjects !== 'all' && is_array($allowed_subjects)) {
+            $subjects = array_filter($subjects, function($subject) use ($allowed_subjects) {
+                return isset($subject->subject_id) && in_array($subject->subject_id, $allowed_subjects);
+            });
+        }
+
         ob_start();
     ?>
         <form id="qp-start-revision-form" method="post" action="">
@@ -252,6 +262,17 @@ class QP_Shortcodes
             $subject_tax_id
         ));
 
+        // --- NEW: Filter subjects based on user scope ---
+        $user_id = get_current_user_id();
+        $allowed_subjects = qp_get_allowed_subject_ids_for_user($user_id);
+
+        if ($allowed_subjects !== 'all' && is_array($allowed_subjects)) {
+            $subjects = array_filter($subjects, function($subject) use ($allowed_subjects) {
+                return isset($subject->subject_id) && in_array($subject->subject_id, $allowed_subjects);
+            });
+        }
+        // --- END NEW ---
+
         ob_start();
     ?>
         <form id="qp-start-mock-test-form" method="post" action="">
@@ -342,6 +363,17 @@ class QP_Shortcodes
             "SELECT term_id AS subject_id, name AS subject_name FROM {$term_table} WHERE taxonomy_id = %d AND name != 'Uncategorized' AND parent = 0 ORDER BY name ASC",
             $subject_tax_id
         ));
+
+        // --- NEW: Filter subjects based on user scope ---
+        $user_id = get_current_user_id();
+        $allowed_subjects = qp_get_allowed_subject_ids_for_user($user_id);
+
+        if ($allowed_subjects !== 'all' && is_array($allowed_subjects)) {
+            $subjects = array_filter($subjects, function($subject) use ($allowed_subjects) {
+                return isset($subject->subject_id) && in_array($subject->subject_id, $allowed_subjects);
+            });
+        }
+        // --- END NEW ---
 
         ob_start();
     ?>
@@ -699,6 +731,18 @@ $session_data['reported_info'] = $reported_info;
             "SELECT term_id AS subject_id, name AS subject_name FROM {$term_table} WHERE taxonomy_id = %d AND name != 'Uncategorized' AND parent = 0 ORDER BY name ASC",
             $subject_tax_id
         ));
+
+        // --- NEW: Filter subjects based on user scope ---
+        $user_id = get_current_user_id();
+        $allowed_subjects = qp_get_allowed_subject_ids_for_user($user_id);
+
+        if ($allowed_subjects !== 'all' && is_array($allowed_subjects)) {
+            $subjects = array_filter($subjects, function($subject) use ($allowed_subjects) {
+                // Ensure $subject has subject_id property before checking
+                return isset($subject->subject_id) && in_array($subject->subject_id, $allowed_subjects);
+            });
+        }
+        // --- END NEW ---
 
         // Get the dynamic URL for the dashboard page
         $options = get_option('qp_settings');
