@@ -2563,6 +2563,75 @@ function qp_get_allowed_subject_ids_for_user($user_id) {
 }
 
 /**
+ * Determines the allowed subject term IDs for a given user based on their scope settings.
+ * Reads _qp_allowed_exam_term_ids and _qp_allowed_subject_term_ids from usermeta.
+ *
+ * @param int $user_id The ID of the user to check.
+ * @return string|array Returns 'all' if access is unrestricted, or an array of allowed subject term IDs. Returns empty array if user_id is invalid.
+ */
+function qp_get_allowed_subject_ids_for_user($user_id) {
+    $user_id = absint($user_id);
+    if (empty($user_id)) {
+        return []; // No access for non-logged-in or invalid ID
+    }
+
+    // Admins always have full access (capability check)
+    if (user_can($user_id, 'manage_options')) {
+        return 'all';
+    }
+
+    // Get stored scope settings from user meta
+    $allowed_exams_json = get_user_meta($user_id, '_qp_allowed_exam_term_ids', true);
+    $direct_subjects_json = get_user_meta($user_id, '_qp_allowed_subject_term_ids', true);
+
+    // Decode JSON, default to empty array if invalid, null, or not set
+    $allowed_exam_ids = json_decode($allowed_exams_json, true);
+    $direct_subject_ids = json_decode($direct_subjects_json, true);
+
+    // Ensure they are arrays after decoding
+    if (!is_array($allowed_exam_ids)) { $allowed_exam_ids = []; }
+    if (!is_array($direct_subject_ids)) { $direct_subject_ids = []; }
+
+    // If both settings are empty arrays (meaning unrestricted), grant access to all subjects
+    if (empty($allowed_exam_ids) && empty($direct_subject_ids)) {
+        return 'all';
+    }
+
+    global $wpdb;
+    // Start with the directly allowed subjects
+    $final_allowed_subject_ids = $direct_subject_ids;
+
+    // If specific exams are allowed, find subjects linked to them
+    if (!empty($allowed_exam_ids)) {
+        // Ensure IDs are integers before using in query
+        $exam_ids_sanitized = array_map('absint', $allowed_exam_ids);
+        // Prevent query errors if array becomes empty after sanitization
+        if (!empty($exam_ids_sanitized)) {
+             $exam_ids_placeholder = implode(',', $exam_ids_sanitized);
+             $rel_table = $wpdb->prefix . 'qp_term_relationships';
+
+             // Find subject term_ids linked to the allowed exam object_ids
+             $subjects_from_exams = $wpdb->get_col(
+                "SELECT DISTINCT term_id
+                 FROM {$rel_table}
+                 WHERE object_type = 'exam_subject_link'
+                 AND object_id IN ($exam_ids_placeholder)"
+             );
+
+             // If subjects are found, merge them with the directly allowed ones
+             if (!empty($subjects_from_exams)) {
+                // Ensure these are also integers
+                $subjects_from_exams_int = array_map('absint', $subjects_from_exams);
+                $final_allowed_subject_ids = array_merge($final_allowed_subject_ids, $subjects_from_exams_int);
+             }
+        }
+    }
+
+    // Return the unique list of combined subject IDs (ensure all are integers)
+    return array_unique(array_map('absint', $final_allowed_subject_ids));
+}
+
+/**
  * Helper function to migrate term relationships from questions to their parent groups for a specific taxonomy.
  *
  * @param string $taxonomy_name The name of the taxonomy to process (e.g., 'subject' for topics, 'source' for sources/sections).
