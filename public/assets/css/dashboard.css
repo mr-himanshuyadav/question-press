@@ -1077,10 +1077,10 @@ ul.qp-review-list li {
     display: none; /* Hidden by default */
 }
 .qp-password-card.is-editing .qp-password-display {
-    display: none; /* Hide display text when editing */
+    display: none !important; /* Hide display text when editing */
 }
 .qp-password-card.is-editing .qp-password-edit {
-    display: block; /* Show form when editing */
+    display: block !important; /* Show form when editing */
 }
 
 /* Form field styles (reuse profile field styles) */
