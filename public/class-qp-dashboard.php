@@ -1107,56 +1107,53 @@ private static function render_single_course_view($course_slug, $user_id) {
         // --- Fetch and Process Scope ---
         $scope_description = 'All Subjects & Exams'; // Default
         $allowed_subjects_list = [];
-        $allowed_exams_list = [];
+        $allowed_exams_list = []; // <-- Initialize here
         $allowed_subject_ids_or_all = qp_get_allowed_subject_ids_for_user($user_id); // Use the existing function
 
         if ($allowed_subject_ids_or_all !== 'all') {
             global $wpdb;
             $term_table = $wpdb->prefix . 'qp_terms';
-            $rel_table = $wpdb->prefix . 'qp_term_relationships';
-            $tax_table = $wpdb->prefix . 'qp_taxonomies';
+            // $rel_table = $wpdb->prefix . 'qp_term_relationships'; // No longer needed for exams here
+            // $tax_table = $wpdb->prefix . 'qp_taxonomies'; // No longer needed for exams here
 
             $allowed_subject_ids = $allowed_subject_ids_or_all; // It's an array if not 'all'
 
-            // Get names for the allowed subjects
+            // Get names for the allowed subjects (This part is correct)
             if (!empty($allowed_subject_ids)) {
                 $subj_ids_placeholder = implode(',', array_map('absint', $allowed_subject_ids));
-                $allowed_subjects_list = $wpdb->get_col("SELECT name FROM {$term_table} WHERE term_id IN ($subj_ids_placeholder) ORDER BY name ASC");
+                // Fetch subject names directly allowed or allowed via exams included in qp_get_allowed_subject_ids_for_user
+                $allowed_subjects_list = $wpdb->get_col("SELECT name FROM {$term_table} WHERE term_id IN ($subj_ids_placeholder) AND parent = 0 ORDER BY name ASC");
             }
 
-            // Get directly allowed exams
+            // --- CORRECTED EXAM LOGIC ---
+            // Get directly allowed exams from user meta
             $direct_exams_json = get_user_meta($user_id, '_qp_allowed_exam_term_ids', true);
             $direct_exam_ids = json_decode($direct_exams_json, true);
             if (!is_array($direct_exam_ids)) $direct_exam_ids = [];
 
-            // Get exams linked to allowed subjects
-            $exams_from_subjects = [];
-            if (!empty($allowed_subject_ids)) {
-                 $subj_ids_placeholder = implode(',', array_map('absint', $allowed_subject_ids));
-                 $exams_from_subjects = $wpdb->get_col(
-                    "SELECT DISTINCT r.object_id
-                     FROM {$rel_table} r
-                     JOIN {$term_table} t ON r.object_id = t.term_id
-                     WHERE r.object_type = 'exam_subject_link'
-                     AND r.term_id IN ($subj_ids_placeholder)
-                     AND t.taxonomy_id = (SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'exam')"
-                 );
-            }
+            $final_allowed_exam_ids = array_map('absint', $direct_exam_ids); // Start with directly allowed exams
 
-            $all_allowed_exam_ids = array_unique(array_merge($direct_exam_ids, $exams_from_subjects));
+            // If specific subjects are allowed, find exams linked ONLY to those subjects
+            // Note: qp_get_allowed_subject_ids_for_user already calculated subjects allowed via exams,
+            // but here we need the EXAM names themselves for display. We only show DIRECTLY assigned exams.
+            // If you *also* wanted to show exams linked via allowed subjects, you'd add that logic back here.
+            // For now, we only display exams explicitly assigned to the user.
 
-            if (!empty($all_allowed_exam_ids)) {
-                $exam_ids_placeholder = implode(',', array_map('absint', $all_allowed_exam_ids));
+            if (!empty($final_allowed_exam_ids)) {
+                $exam_ids_placeholder = implode(',', $final_allowed_exam_ids);
                 $allowed_exams_list = $wpdb->get_col("SELECT name FROM {$term_table} WHERE term_id IN ($exam_ids_placeholder) ORDER BY name ASC");
             }
+            // --- END CORRECTED EXAM LOGIC ---
 
-            // Build the description string
+            // Build the description string (This part is correct)
             if (empty($allowed_subjects_list) && empty($allowed_exams_list)) {
-                $scope_description = 'No specific scope assigned.'; // Should ideally not happen if qp_get_allowed_subject_ids_for_user works correctly
+                $scope_description = 'No specific scope assigned.';
             } else {
                  $scope_parts = [];
-                 if(!empty($allowed_exams_list)) $scope_parts[] = "Exams: " . implode(', ', $allowed_exams_list);
-                 if(!empty($allowed_subjects_list)) $scope_parts[] = "Specific Subjects: " . implode(', ', $allowed_subjects_list);
+                 // Display only explicitly assigned exams
+                 if(!empty($allowed_exams_list)) $scope_parts[] = "Allowed Exams: " . implode(', ', array_map('esc_html', $allowed_exams_list));
+                 // Display all subjects derived from scope function
+                 if(!empty($allowed_subjects_list)) $scope_parts[] = "Accessible Subjects: " . implode(', ', array_map('esc_html', $allowed_subjects_list));
                  $scope_description = implode('; ', $scope_parts);
             }
         }
