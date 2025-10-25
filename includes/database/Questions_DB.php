@@ -117,6 +117,139 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
     }
 
     /**
+     * Inserts a new question group into the database.
+     *
+     * @param array $data Associative array of group data (e.g., 'direction_text', 'is_pyq', 'pyq_year').
+     * @return int|false The new group_id on success, false on failure.
+     */
+    public static function insert_group( $data ) {
+        $g_table = self::get_groups_table_name();
+
+        // Define expected columns and their formats for security/correctness
+        $allowed_columns = [
+            'direction_text'     => '%s',
+            'direction_image_id' => '%d',
+            'is_pyq'             => '%d',
+            'pyq_year'           => '%s',
+        ];
+        $insert_data = [];
+        $formats = [];
+
+        foreach ( $allowed_columns as $col => $format ) {
+            if ( array_key_exists( $col, $data ) ) {
+                $insert_data[$col] = $data[$col];
+                $formats[] = $format;
+            }
+        }
+
+        if ( empty( $insert_data ) ) {
+            return false; // Nothing to insert
+        }
+
+        $result = self::$wpdb->insert( $g_table, $insert_data, $formats );
+
+        return $result ? self::$wpdb->insert_id : false;
+    }
+
+    /**
+     * Updates an existing question group in the database.
+     *
+     * @param int   $group_id The ID of the group to update.
+     * @param array $data     Associative array of group data to update.
+     * @return int|false The number of rows updated (usually 1 or 0), or false on failure.
+     */
+    public static function update_group( $group_id, $data ) {
+        $g_table = self::get_groups_table_name();
+        $group_id = absint( $group_id );
+        if ( $group_id <= 0 ) {
+            return false;
+        }
+
+        // Define expected columns and their formats
+        $allowed_columns = [
+            'direction_text'     => '%s',
+            'direction_image_id' => '%d',
+            'is_pyq'             => '%d',
+            'pyq_year'           => '%s',
+        ];
+        $update_data = [];
+        $formats = [];
+
+        foreach ( $allowed_columns as $col => $format ) {
+            if ( array_key_exists( $col, $data ) ) {
+                $update_data[$col] = $data[$col];
+                $formats[] = $format;
+            }
+        }
+
+        if ( empty( $update_data ) ) {
+            return 0; // Nothing to update
+        }
+
+        return self::$wpdb->update( $g_table, $update_data, ['group_id' => $group_id], $formats, ['%d'] );
+    }
+
+    /**
+     * Deletes one or more questions and their associated options and relationships.
+     *
+     * @param int|array $question_ids A single question ID or an array of question IDs.
+     * @return int|false Number of questions deleted, or false on error.
+     */
+    public static function delete_questions( $question_ids ) {
+        if ( empty( $question_ids ) ) {
+            return 0;
+        }
+        $ids = array_map( 'absint', (array) $question_ids );
+        $ids_placeholder = implode( ',', $ids );
+
+        $q_table = self::get_questions_table_name();
+        $o_table = self::get_options_table_name();
+        $rel_table = Terms_DB::get_relationships_table_name(); // Use Terms_DB method
+
+        // Delete options
+        self::$wpdb->query( "DELETE FROM {$o_table} WHERE question_id IN ({$ids_placeholder})" );
+        // Delete term relationships (e.g., labels)
+        self::$wpdb->query( "DELETE FROM {$rel_table} WHERE object_id IN ({$ids_placeholder}) AND object_type = 'question'" );
+        // Delete questions
+        $deleted_count = self::$wpdb->query( "DELETE FROM {$q_table} WHERE question_id IN ({$ids_placeholder})" );
+
+        return $deleted_count;
+    }
+
+    /**
+     * Deletes a question group and all its associated questions, options, and relationships.
+     *
+     * @param int $group_id The ID of the group to delete.
+     * @return bool True on success, false otherwise.
+     */
+    public static function delete_group_and_contents( $group_id ) {
+        $group_id = absint( $group_id );
+        if ( $group_id <= 0 ) {
+            return false;
+        }
+
+        $g_table = self::get_groups_table_name();
+        $rel_table = Terms_DB::get_relationships_table_name(); // Use Terms_DB method
+
+        // Find questions associated with the group
+        $question_ids = self::get_questions_by_group_id( $group_id );
+        $qids_to_delete = wp_list_pluck( $question_ids, 'question_id' );
+
+        // Delete associated questions (which also handles options and question relationships)
+        if ( ! empty( $qids_to_delete ) ) {
+            self::delete_questions( $qids_to_delete );
+        }
+
+        // Delete group term relationships
+        self::$wpdb->delete( $rel_table, ['object_id' => $group_id, 'object_type' => 'group'], ['%d', '%s'] );
+
+        // Delete the group itself
+        $deleted = self::$wpdb->delete( $g_table, ['group_id' => $group_id], ['%d'] );
+
+        return (bool) $deleted;
+    }
+
+    /**
      * Saves/Updates options for a given question based on submitted data.
      * Deletes options not present in the submitted data.
      * Sets the correct answer.

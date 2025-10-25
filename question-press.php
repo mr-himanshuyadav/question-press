@@ -36,6 +36,7 @@ if ( ! defined( 'QP_PLUGIN_FILE' ) ) {
 use QuestionPress\Plugin;
 use QuestionPress\Activator; // (Keep commented for now)
 use QuestionPress\Deactivator; // (Keep commented for now)
+use QuestionPress\Database\Questions_DB;
 use QuestionPress\Database\Terms_DB;
 
 /**
@@ -2459,10 +2460,18 @@ function qp_handle_save_question_group()
     ];
 
     if ($is_editing) {
-        $wpdb->update("{$wpdb->prefix}qp_question_groups", $group_data, ['group_id' => $group_id]);
+        // Use the new update method
+        Questions_DB::update_group( $group_id, $group_data );
     } else {
-        $wpdb->insert("{$wpdb->prefix}qp_question_groups", $group_data);
-        $group_id = $wpdb->insert_id;
+        // Use the new insert method and get the new ID
+        $new_group_id = Questions_DB::insert_group( $group_data );
+        if ($new_group_id) {
+            $group_id = $new_group_id; // Assign the new ID for subsequent operations
+        } else {
+            // Handle error - maybe set an admin notice and return?
+            wp_die('Error creating question group.'); // Simple error handling for now
+            return;
+        }
     }
 
     // --- CONSOLIDATED Group-Level Term Relationship Handling ---
@@ -2569,9 +2578,6 @@ function qp_handle_save_question_group()
             if ($original_correct_option_id != $correct_option_id_set) {
                 qp_re_evaluate_question_attempts($question_id, absint($correct_option_id_set));
             }
-
-            // Handle Options (No changes needed here)
-            QuestionPress\Database\Questions_DB::save_options_for_question($question_id, $q_data);
         }
     }   
 
@@ -2586,10 +2592,11 @@ function qp_handle_save_question_group()
 
     // --- Final Redirect ---
     if ($is_editing && empty($submitted_q_ids)) {
-        $wpdb->delete("{$wpdb->prefix}qp_question_groups", ['group_id' => $group_id]);
-        wp_safe_redirect(admin_url('admin.php?page=question-press&message=1'));
-        exit;
-    }
+    // Use the new method to delete the group and its relationships
+    QuestionPress\Database\Questions_DB::delete_group_and_contents($group_id);
+    wp_safe_redirect(admin_url('admin.php?page=question-press&message=1')); // Keep redirect
+    exit;
+}
 
     $redirect_url = $is_editing
         ? admin_url('admin.php?page=qp-edit-group&group_id=' . $group_id . '&message=1')

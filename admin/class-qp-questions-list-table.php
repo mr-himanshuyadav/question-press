@@ -4,6 +4,9 @@ if (!class_exists('WP_List_Table')) {
     require_once(ABSPATH . 'wp-admin/includes/class-wp-list-table.php');
 }
 
+use QuestionPress\Database\Questions_DB;
+use QuestionPress\Database\Terms_DB;
+
 class QP_Questions_List_Table extends WP_List_Table
 {
 
@@ -706,9 +709,39 @@ LIMIT {$per_page} OFFSET {$offset}";
             $wpdb->query("UPDATE {$q_table} SET status = 'publish' WHERE question_id IN ({$ids_placeholder})");
         }
         if ('delete' === $action) {
-            $wpdb->query("DELETE FROM {$wpdb->prefix}qp_options WHERE question_id IN ({$ids_placeholder})");
-            $wpdb->query("DELETE FROM {$rel_table} WHERE object_id IN ({$ids_placeholder}) AND object_type = 'question'");
-            $wpdb->query("DELETE FROM {$q_table} WHERE question_id IN ({$ids_placeholder})");
+        check_admin_referer('bulk-' . $this->_args['plural']); // Nonce check for bulk action
+
+        global $wpdb;
+        $q_table = Questions_DB::get_questions_table_name(); // Use static method
+        $g_table = Questions_DB::get_groups_table_name(); // Use static method
+        $rel_table = Terms_DB::get_relationships_table_name(); // Use static method
+
+        // --- ADDED: Get associated group IDs BEFORE deleting questions ---
+        $group_ids_to_check = $wpdb->get_col("SELECT DISTINCT group_id FROM {$q_table} WHERE question_id IN ({$ids_placeholder}) AND group_id IS NOT NULL AND group_id > 0");
+        // --- END ADDED ---
+
+        // Delete the questions and their related data
+        Questions_DB::delete_questions( $question_ids );
+
+        // --- ADDED: Check and delete orphaned groups ---
+        if (!empty($group_ids_to_check)) {
+            $unique_group_ids = array_unique($group_ids_to_check);
+            foreach ($unique_group_ids as $gid) {
+                // Check if any *other* questions still exist for this group
+                $remaining_questions = $wpdb->get_var($wpdb->prepare(
+                    "SELECT COUNT(*) FROM {$q_table} WHERE group_id = %d",
+                    $gid
+                ));
+
+                // If no questions remain, delete the group and its relationships
+                if ($remaining_questions == 0) {
+                    // Delete group relationships
+                    $wpdb->delete($rel_table, ['object_id' => $gid, 'object_type' => 'group'], ['%d', '%s']);
+                    // Delete the group itself
+                    $wpdb->delete($g_table, ['group_id' => $gid], ['%d']);
+                    // Optional: Log deletion of orphaned group $gid
+                }
+            }
         }
 
         if (strpos($action, 'remove_label_') === 0) {
