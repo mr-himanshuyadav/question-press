@@ -147,6 +147,7 @@ body { margin: 0; }
     border-radius: 50%; /* Make avatar circular */
     border: 2px solid var(--qp-dashboard-border); /* Optional subtle border */
 }
+
 .qp-sidebar-header .qp-user-name {
     font-size: 1.1em;
     font-weight: 600;
@@ -1006,8 +1007,11 @@ ul.qp-review-list li {
 
 /* Avatar Specific Styles */
 .qp-profile-avatar-wrapper {
-    position: relative; /* Needed for positioning the change button */
+    position: relative;
     margin-bottom: 1rem;
+    display: flex; /* Arrange items vertically */
+    flex-direction: column;
+    align-items: center; /* Center items horizontally */
 }
 .qp-profile-avatar-wrapper img { /* Reuse existing styles */
     border-radius: 50%;
@@ -1016,6 +1020,11 @@ ul.qp-review-list li {
     width: 128px;
     height: 128px;
     object-fit: cover;
+}
+/* Add hover effect only when editing */
+.qp-profile-card.is-editing .qp-profile-avatar-wrapper img {
+    cursor: pointer;
+    border: 3px solid var(--qp-dashboard-primary-light); /* Highlight on hover */
 }
 .qp-change-avatar-button { /* Style for the change button */
     position: absolute;
@@ -1029,6 +1038,15 @@ ul.qp-review-list li {
 }
 .qp-change-avatar-button:hover {
     opacity: 1;
+}
+.qp-avatar-upload-actions {
+    display: none; /* Hidden by default */
+    justify-content: center;
+    width: 100%;
+}
+.qp-avatar-upload-actions .button-small { /* Adjust size */
+    padding: 4px 10px;
+    font-size: 12px;
 }
 
 /* --- Toggle Visibility Classes --- */
