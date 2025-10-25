@@ -1856,37 +1856,179 @@ function qp_render_tools_page()
 
 /**
  * Callback function to render the User Entitlements admin page.
+ * NOW INCLUDES user search and scope management section.
  */
 function qp_render_user_entitlements_page() {
-    // Instantiate the List Table
-    $entitlements_list_table = new QP_Entitlements_List_Table();
+    // --- NEW: Handle User Search ---
+    $user_id_searched = isset($_GET['user_id']) ? absint($_GET['user_id']) : 0;
+    $user_info = null;
+    if ($user_id_searched > 0) {
+        $user_info = get_userdata($user_id_searched);
+    }
+    // --- END NEW ---
 
-    // Fetch, prepare, sort, and filter our data
-    $entitlements_list_table->prepare_items();
-
-    ?>
+?>
     <div class="wrap">
-        <h1 class="wp-heading-inline"><?php _e('User Entitlements', 'question-press'); ?></h1>
-        <p><?php _e('View access entitlements granted to users.', 'question-press'); ?></p>
+        <h1 class="wp-heading-inline"><?php _e('User Entitlements & Scope', 'question-press'); ?></h1>
+        <?php // Display any notices if needed (e.g., after saving scope)
+            if (isset($_GET['message']) && $_GET['message'] === 'scope_updated') {
+                 echo '<div id="message" class="notice notice-success is-dismissible"><p>' . __('User scope updated successfully.', 'question-press') . '</p></div>';
+            }
+            settings_errors('qp_entitlements_notices');
+        ?>
+
+        <?php // --- NEW: User Search Form --- ?>
+        <form method="get" action="<?php echo admin_url('admin.php'); ?>" style="margin-bottom: 2rem;">
+            <input type="hidden" name="page" value="qp-user-entitlements" />
+            <label for="qp_user_id_search"><strong><?php _e('Enter User ID:', 'question-press'); ?></strong></label><br>
+            <input type="number" id="qp_user_id_search" name="user_id" value="<?php echo esc_attr($user_id_searched ?: ''); ?>" min="1" required>
+            <input type="submit" class="button button-secondary" value="<?php _e('Find User & Manage Scope', 'question-press'); ?>">
+             <?php if ($user_id_searched > 0 && !$user_info): ?>
+                <p style="color: red;"><?php _e('Error: User ID not found.', 'question-press'); ?></p>
+             <?php endif; ?>
+        </form>
+        <?php // --- END NEW --- ?>
+
         <hr class="wp-header-end">
 
-        <?php // Display any notices if needed ?>
-        <?php // settings_errors('qp_entitlements_notices'); ?>
+        <?php // --- NEW: Conditional Display based on user search ---
+        if ($user_id_searched > 0 && $user_info) :
+        ?>
+            <h2><?php printf(__('Managing Scope & Entitlements for: %s (#%d)', 'question-press'), esc_html($user_info->display_name), $user_id_searched); ?></h2>
 
-        <form method="get">
-            <?php // Keep existing page parameters ?>
-            <input type="hidden" name="page" value="<?php echo esc_attr($_REQUEST['page']); ?>" />
+            <?php // --- NEW: Scope Management Section Placeholder --- ?>
+            <div id="qp-user-scope-management" style="margin-bottom: 2rem; padding: 1.5rem; background-color: #f6f7f7; border: 1px solid #ccd0d4; border-radius: 4px;">
+                <h3><?php _e('User\'s Subject Scope', 'question-press'); ?></h3>
+                <p><?php _e('Define which subjects this user can access based on Exams or direct Subject assignments. Leave both sections empty to allow access to all subjects.', 'question-press'); ?></p>
+                <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+                    <?php // Nonce field will be added in Step 1.3 ?>
+                    <?php // Form fields (multi-selects) will be added in Step 1.3 ?>
+                    <?php // Save button will be added in Step 1.3 ?>
+                    <?php
+                    global $wpdb;
+                    $term_table = $wpdb->prefix . 'qp_terms';
+                    $tax_table = $wpdb->prefix . 'qp_taxonomies';
+
+                    // Get Tax IDs
+                    $exam_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'exam'");
+                    $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'subject'");
+
+                    // Get all available Exams
+                    $all_exams = [];
+                    if ($exam_tax_id) {
+                        $all_exams = $wpdb->get_results($wpdb->prepare("SELECT term_id, name FROM $term_table WHERE taxonomy_id = %d ORDER BY name ASC", $exam_tax_id));
+                    }
+
+                    // Get all available top-level Subjects
+                    $all_subjects = [];
+                    if ($subject_tax_id) {
+                        $all_subjects = $wpdb->get_results($wpdb->prepare("SELECT term_id, name FROM $term_table WHERE taxonomy_id = %d AND parent = 0 AND name != 'Uncategorized' ORDER BY name ASC", $subject_tax_id));
+                    }
+
+                    // Get current user settings from usermeta
+                    $current_allowed_exams_json = get_user_meta($user_id_searched, '_qp_allowed_exam_term_ids', true);
+                    $current_allowed_subjects_json = get_user_meta($user_id_searched, '_qp_allowed_subject_term_ids', true);
+
+                    // Decode JSON, default to empty array if invalid or null
+                    $current_allowed_exams = json_decode($current_allowed_exams_json, true);
+                    $current_allowed_subjects = json_decode($current_allowed_subjects_json, true);
+                    if (!is_array($current_allowed_exams)) { $current_allowed_exams = []; }
+                    if (!is_array($current_allowed_subjects)) { $current_allowed_subjects = []; }
+
+                    // Add Nonce and Action fields
+                    wp_nonce_field('qp_save_user_scope_nonce', '_qp_scope_nonce');
+                    ?>
+                    <input type="hidden" name="action" value="qp_save_user_scope">
+                    <input type="hidden" name="user_id_to_update" value="<?php echo esc_attr($user_id_searched); ?>">
+
+                    <table class="form-table">
+                        <tbody>
+                            <tr valign="top">
+                                <th scope="row">
+                                    <label><?php _e('Allowed Exams', 'question-press'); ?></label>
+                                </th>
+                                <td>
+                                    <fieldset style="max-height: 200px; overflow-y: auto; border: 1px solid #ccd0d4; padding: 10px; background: #fff;">
+                                        <?php if (!empty($all_exams)): ?>
+                                            <?php foreach ($all_exams as $exam): ?>
+                                                <label style="display: block; margin-bottom: 5px;">
+                                                    <input type="checkbox" name="allowed_exams[]" value="<?php echo esc_attr($exam->term_id); ?>" <?php checked(in_array($exam->term_id, $current_allowed_exams)); ?>>
+                                                    <?php echo esc_html($exam->name); ?>
+                                                </label>
+                                            <?php endforeach; ?>
+                                        <?php else: ?>
+                                            <p><em><?php _e('No exams found.', 'question-press'); ?></em></p>
+                                        <?php endif; ?>
+                                    </fieldset>
+                                    <p class="description"><?php _e('Allows access to all subjects linked to the selected exam(s).', 'question-press'); ?></p>
+                                </td>
+                            </tr>
+                            <tr valign="top">
+                                <th scope="row">
+                                    <label><?php _e('Directly Allowed Subjects', 'question-press'); ?></label>
+                                </th>
+                                <td>
+                                    <fieldset style="max-height: 200px; overflow-y: auto; border: 1px solid #ccd0d4; padding: 10px; background: #fff;">
+                                        <?php if (!empty($all_subjects)): ?>
+                                            <?php foreach ($all_subjects as $subject): ?>
+                                                <label style="display: block; margin-bottom: 5px;">
+                                                    <input type="checkbox" name="allowed_subjects[]" value="<?php echo esc_attr($subject->term_id); ?>" <?php checked(in_array($subject->term_id, $current_allowed_subjects)); ?>>
+                                                    <?php echo esc_html($subject->name); ?>
+                                                </label>
+                                            <?php endforeach; ?>
+                                        <?php else: ?>
+                                            <p><em><?php _e('No subjects found.', 'question-press'); ?></em></p>
+                                        <?php endif; ?>
+                                    </fieldset>
+                                    <p class="description"><?php _e('Allows access ONLY to these specific subjects (in addition to subjects from allowed exams).', 'question-press'); ?></p>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <p class="submit">
+                        <input type="submit" class="button button-primary" value="<?php _e('Save Scope Settings', 'question-press'); ?>">
+                    </p>
+                </form>
+            </div>
+            <?php // --- END NEW --- ?>
+
+            <hr> <?php // Separator ?>
+
+            <h3><?php _e('User\'s Entitlement Records', 'question-press'); ?></h3>
             <?php
-                // Add the search box
-                $entitlements_list_table->search_box(__('Search Entitlements'), 'entitlement');
+            // Instantiate the List Table
+            $entitlements_list_table = new QP_Entitlements_List_Table();
+
+            // --- MODIFIED: Pass user_id to prepare_items for filtering ---
+            // We will modify prepare_items in the next step to handle this. For now, just pass it.
+            $_REQUEST['user_id_filter'] = $user_id_searched; // Use a temporary request variable
+
+            // Fetch, prepare, sort, and filter data (will be filtered by user ID later)
+            $entitlements_list_table->prepare_items();
             ?>
-            <?php
-                // Display the list table
-                $entitlements_list_table->display();
-            ?>
-        </form>
+            <form method="get">
+                <?php // Keep existing page parameters ?>
+                <input type="hidden" name="page" value="<?php echo esc_attr($_REQUEST['page']); ?>" />
+                 <input type="hidden" name="user_id" value="<?php echo esc_attr($user_id_searched); ?>" /> <?php // Keep user_id in subsequent requests (sorting, pagination) ?>
+                <?php
+                    // Add the search box (will search WITHIN this user's entitlements if we modify prepare_items later)
+                    // $entitlements_list_table->search_box(__('Search Entitlements'), 'entitlement'); // Keep commented for now
+                ?>
+                <?php
+                    // Display the list table
+                    $entitlements_list_table->display();
+                ?>
+            </form>
+
+        <?php // --- NEW: End conditional display ---
+        else:
+             echo '<p>' . __('Please search for a User ID above to manage their scope and view their entitlements.', 'question-press') . '</p>';
+        endif;
+        ?>
+
     </div>
-    <?php
+<?php
 }
 
 /**
@@ -2353,6 +2495,75 @@ function qp_get_term_lineage_names($term_id, $wpdb, $term_table)
 }
 
 /**
+ * Determines the allowed subject term IDs for a given user based on their scope settings.
+ * Reads _qp_allowed_exam_term_ids and _qp_allowed_subject_term_ids from usermeta.
+ *
+ * @param int $user_id The ID of the user to check.
+ * @return string|array Returns 'all' if access is unrestricted, or an array of allowed subject term IDs. Returns empty array if user_id is invalid.
+ */
+function qp_get_allowed_subject_ids_for_user($user_id) {
+    $user_id = absint($user_id);
+    if (empty($user_id)) {
+        return []; // No access for non-logged-in or invalid ID
+    }
+
+    // Admins always have full access (capability check)
+    if (user_can($user_id, 'manage_options')) {
+        return 'all';
+    }
+
+    // Get stored scope settings from user meta
+    $allowed_exams_json = get_user_meta($user_id, '_qp_allowed_exam_term_ids', true);
+    $direct_subjects_json = get_user_meta($user_id, '_qp_allowed_subject_term_ids', true);
+
+    // Decode JSON, default to empty array if invalid, null, or not set
+    $allowed_exam_ids = json_decode($allowed_exams_json, true);
+    $direct_subject_ids = json_decode($direct_subjects_json, true);
+
+    // Ensure they are arrays after decoding
+    if (!is_array($allowed_exam_ids)) { $allowed_exam_ids = []; }
+    if (!is_array($direct_subject_ids)) { $direct_subject_ids = []; }
+
+    // If both settings are empty arrays (meaning unrestricted), grant access to all subjects
+    if (empty($allowed_exam_ids) && empty($direct_subject_ids)) {
+        return 'all';
+    }
+
+    global $wpdb;
+    // Start with the directly allowed subjects
+    $final_allowed_subject_ids = $direct_subject_ids;
+
+    // If specific exams are allowed, find subjects linked to them
+    if (!empty($allowed_exam_ids)) {
+        // Ensure IDs are integers before using in query
+        $exam_ids_sanitized = array_map('absint', $allowed_exam_ids);
+        // Prevent query errors if array becomes empty after sanitization
+        if (!empty($exam_ids_sanitized)) {
+             $exam_ids_placeholder = implode(',', $exam_ids_sanitized);
+             $rel_table = $wpdb->prefix . 'qp_term_relationships';
+
+             // Find subject term_ids linked to the allowed exam object_ids
+             $subjects_from_exams = $wpdb->get_col(
+                "SELECT DISTINCT term_id
+                 FROM {$rel_table}
+                 WHERE object_type = 'exam_subject_link'
+                 AND object_id IN ($exam_ids_placeholder)"
+             );
+
+             // If subjects are found, merge them with the directly allowed ones
+             if (!empty($subjects_from_exams)) {
+                // Ensure these are also integers
+                $subjects_from_exams_int = array_map('absint', $subjects_from_exams);
+                $final_allowed_subject_ids = array_merge($final_allowed_subject_ids, $subjects_from_exams_int);
+             }
+        }
+    }
+
+    // Return the unique list of combined subject IDs (ensure all are integers)
+    return array_unique(array_map('absint', $final_allowed_subject_ids));
+}
+
+/**
  * Helper function to migrate term relationships from questions to their parent groups for a specific taxonomy.
  *
  * @param string $taxonomy_name The name of the taxonomy to process (e.g., 'subject' for topics, 'source' for sources/sections).
@@ -2454,6 +2665,55 @@ function qp_handle_form_submissions()
     qp_handle_save_question_group();
 }
 add_action('admin_init', 'qp_handle_form_submissions');
+
+/**
+ * Handles saving the user's subject scope (allowed exams/subjects) from the User Entitlements page.
+ */
+function qp_handle_save_user_scope() {
+    // 1. Security Checks
+    if (
+        !isset($_POST['_qp_scope_nonce']) ||
+        !wp_verify_nonce($_POST['_qp_scope_nonce'], 'qp_save_user_scope_nonce')
+    ) {
+        wp_die(__('Security check failed.', 'question-press'));
+    }
+
+    if (!current_user_can('manage_options')) {
+        wp_die(__('You do not have permission to manage user scope.', 'question-press'));
+    }
+
+    // 2. Get and Sanitize User ID
+    $user_id = isset($_POST['user_id_to_update']) ? absint($_POST['user_id_to_update']) : 0;
+    if ($user_id <= 0 || !get_userdata($user_id)) {
+         wp_die(__('Invalid User ID specified.', 'question-press'));
+    }
+
+    // 3. Get and Sanitize Selected Exams and Subjects
+    // If the checkbox array is not submitted (nothing checked), default to an empty array.
+    $allowed_exams = isset($_POST['allowed_exams']) && is_array($_POST['allowed_exams'])
+                     ? array_map('absint', $_POST['allowed_exams'])
+                     : [];
+
+    $allowed_subjects = isset($_POST['allowed_subjects']) && is_array($_POST['allowed_subjects'])
+                        ? array_map('absint', $_POST['allowed_subjects'])
+                        : [];
+
+    // 4. Update User Meta
+    // Store as JSON for easier handling on retrieval
+    update_user_meta($user_id, '_qp_allowed_exam_term_ids', json_encode($allowed_exams));
+    update_user_meta($user_id, '_qp_allowed_subject_term_ids', json_encode($allowed_subjects));
+
+    // 5. Redirect back with success message
+    $redirect_url = add_query_arg([
+        'page' => 'qp-user-entitlements',
+        'user_id' => $user_id,
+        'message' => 'scope_updated' // Use this to display success notice on the page
+    ], admin_url('admin.php'));
+
+    wp_safe_redirect($redirect_url);
+    exit;
+}
+add_action('admin_post_qp_save_user_scope', 'qp_handle_save_user_scope');
 
 function qp_all_questions_page_cb()
 {
@@ -4574,6 +4834,56 @@ function qp_start_practice_session_ajax()
     $sessions_table = $wpdb->prefix . 'qp_user_sessions';
     $pauses_table = $wpdb->prefix . 'qp_session_pauses';
 
+    // --- NEW: Scope Validation ---
+    $allowed_subjects = qp_get_allowed_subject_ids_for_user($user_id);
+
+    if ($allowed_subjects !== 'all' && is_array($allowed_subjects)) {
+        $subjects_raw = isset($_POST['qp_subject']) && is_array($_POST['qp_subject']) ? $_POST['qp_subject'] : [];
+        $topics_raw = isset($_POST['qp_topic']) && is_array($_POST['qp_topic']) ? $_POST['qp_topic'] : [];
+        $section_id = isset($_POST['qp_section']) && is_numeric($_POST['qp_section']) ? absint($_POST['qp_section']) : 'all'; // Needed for section-wise
+
+        $requested_subject_ids = array_filter(array_map('absint', $subjects_raw), function($id){ return $id > 0; });
+        $requested_topic_ids = array_filter(array_map('absint', $topics_raw), function($id){ return $id > 0; });
+
+        $practice_mode = ($section_id !== 'all') ? 'Section Wise Practice' : 'normal'; // Determine mode early
+
+        // Validate requested subjects directly (only if 'all' wasn't selected)
+        if (!in_array('all', $subjects_raw)) {
+            foreach ($requested_subject_ids as $req_subj_id) {
+                if (!in_array($req_subj_id, $allowed_subjects)) {
+                    wp_send_json_error(['message' => __('You do not have permission to practice the selected subject.', 'question-press')]);
+                    return; // Stop execution
+                }
+            }
+        }
+
+        // Validate parent subject of requested topics (only if 'all' wasn't selected)
+        if (!empty($requested_topic_ids) && !in_array('all', $topics_raw)) {
+            $topic_ids_placeholder = implode(',', $requested_topic_ids);
+            $parent_subject_ids = $wpdb->get_col("SELECT DISTINCT parent FROM {$wpdb->prefix}qp_terms WHERE term_id IN ($topic_ids_placeholder) AND parent != 0");
+            foreach ($parent_subject_ids as $parent_subj_id) {
+                if (!in_array($parent_subj_id, $allowed_subjects)) {
+                     wp_send_json_error(['message' => __('You do not have permission to practice the selected topic(s).', 'question-press')]);
+                     return; // Stop execution
+                }
+            }
+        }
+        // For Section Wise Practice, check the parent subject of the selected section's topic
+         if ($practice_mode === 'Section Wise Practice' && $section_id > 0) {
+             // Find the group linked to the section, then the topic linked to the group, then the subject
+             $group_id = $wpdb->get_var($wpdb->prepare("SELECT object_id FROM {$wpdb->prefix}qp_term_relationships WHERE term_id = %d AND object_type = 'group' LIMIT 1", $section_id));
+             if ($group_id) {
+                $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$wpdb->prefix}qp_taxonomies WHERE taxonomy_name = 'subject'");
+                $topic_term = $wpdb->get_row($wpdb->prepare("SELECT t.term_id, t.parent FROM {$wpdb->prefix}qp_term_relationships r JOIN {$wpdb->prefix}qp_terms t ON r.term_id = t.term_id WHERE r.object_id = %d AND r.object_type = 'group' AND t.taxonomy_id = %d AND t.parent != 0 LIMIT 1", $group_id, $subject_tax_id));
+                if ($topic_term && !in_array($topic_term->parent, $allowed_subjects)) {
+                    wp_send_json_error(['message' => __('You do not have permission to practice this section based on your allowed subjects.', 'question-press')]);
+                    return; // Stop execution
+                }
+             }
+         }
+
+    }
+
     // --- Session Settings ---
     $subjects_raw = isset($_POST['qp_subject']) && is_array($_POST['qp_subject']) ? $_POST['qp_subject'] : [];
     $topics_raw = isset($_POST['qp_topic']) && is_array($_POST['qp_topic']) ? $_POST['qp_topic'] : [];
@@ -4834,6 +5144,44 @@ function qp_start_mock_test_session_ajax()
     }
 
     global $wpdb;
+    $user_id = get_current_user_id();
+    // --- NEW: Scope Validation ---
+    $allowed_subjects = qp_get_allowed_subject_ids_for_user($user_id);
+
+    if ($allowed_subjects !== 'all' && is_array($allowed_subjects)) {
+        $subjects_raw = isset($_POST['mock_subjects']) && is_array($_POST['mock_subjects']) ? $_POST['mock_subjects'] : [];
+        $topics_raw = isset($_POST['mock_topics']) && is_array($_POST['mock_topics']) ? $_POST['mock_topics'] : [];
+
+        $requested_subject_ids = array_filter(array_map('absint', $subjects_raw), function($id){ return $id > 0; });
+        $requested_topic_ids = array_filter(array_map('absint', $topics_raw), function($id){ return $id > 0; });
+
+        $subjects_selected = !empty($requested_subject_ids) && !in_array('all', $subjects_raw);
+        $topics_selected = !empty($requested_topic_ids) && !in_array('all', $topics_raw);
+
+        // Validate requested subjects directly (if 'all' wasn't selected)
+        if ($subjects_selected) {
+            foreach ($requested_subject_ids as $req_subj_id) {
+                if (!in_array($req_subj_id, $allowed_subjects)) {
+                    wp_send_json_error(['message' => __('You do not have permission to include the selected subject in the mock test.', 'question-press')]);
+                    return; // Stop execution
+                }
+            }
+        }
+
+        // Validate parent subject of requested topics (if 'all' wasn't selected)
+        if ($topics_selected) {
+            $topic_ids_placeholder = implode(',', $requested_topic_ids);
+            $parent_subject_ids = $wpdb->get_col("SELECT DISTINCT parent FROM {$wpdb->prefix}qp_terms WHERE term_id IN ($topic_ids_placeholder) AND parent != 0");
+            foreach ($parent_subject_ids as $parent_subj_id) {
+                if (!in_array($parent_subj_id, $allowed_subjects)) {
+                     wp_send_json_error(['message' => __('You do not have permission to include the selected topic(s) in the mock test.', 'question-press')]);
+                     return; // Stop execution
+                }
+            }
+        }
+
+        // Modify the WHERE clause later to only include allowed subjects if 'all' was selected but user is restricted
+    }
 
     // --- Settings Gathering ---
     $subjects = isset($_POST['mock_subjects']) && is_array($_POST['mock_subjects']) ? $_POST['mock_subjects'] : [];
@@ -4872,26 +5220,30 @@ function qp_start_mock_test_session_ajax()
         $where_clauses[] = "q.question_id NOT IN ($ids_placeholder)";
     }
 
-    $subjects_selected = !empty($subjects) && !in_array('all', $subjects);
-    $topics_selected = !empty($topics) && !in_array('all', $topics);
-
-    // **FIX START**: Correctly join through the group to find the topic.
+    // **REVISED FIX START**: Incorporate scope validation into WHERE clause generation
     $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'subject'");
-    // This join finds the topic (a term with a parent in the 'subject' taxonomy) linked to the group.
     $joins .= " LEFT JOIN {$rel_table} topic_rel ON g.group_id = topic_rel.object_id AND topic_rel.object_type = 'group'";
     $joins .= " LEFT JOIN {$term_table} topic_term ON topic_rel.term_id = topic_term.term_id AND topic_term.taxonomy_id = " . (int)$subject_tax_id . " AND topic_term.parent != 0";
 
-    if ($topics_selected) {
-        $term_ids_to_filter = array_map('absint', $topics);
-        $ids_placeholder = implode(',', array_fill(0, count($term_ids_to_filter), '%d'));
-        // Filter by the topic_id we found in the join.
-        $where_clauses[] = $wpdb->prepare("topic_term.term_id IN ($ids_placeholder)", $term_ids_to_filter);
-    } elseif ($subjects_selected) {
-        $term_ids_to_filter = array_map('absint', $subjects);
-        $ids_placeholder = implode(',', array_fill(0, count($term_ids_to_filter), '%d'));
-        // Filter by the topic's parent (which is the subject).
-        $where_clauses[] = $wpdb->prepare("topic_term.parent IN ($ids_placeholder)", $term_ids_to_filter);
+    if ($topics_selected) { // User explicitly selected specific topics (already validated above)
+        $term_ids_to_filter = $requested_topic_ids; // Use already sanitized IDs
+        $ids_placeholder = implode(',', $term_ids_to_filter);
+        $where_clauses[] = "topic_term.term_id IN ($ids_placeholder)";
+    } elseif ($subjects_selected) { // User explicitly selected specific subjects (already validated above)
+        $term_ids_to_filter = $requested_subject_ids; // Use already sanitized IDs
+        $ids_placeholder = implode(',', $term_ids_to_filter);
+        $where_clauses[] = "topic_term.parent IN ($ids_placeholder)";
+    } elseif ($allowed_subjects !== 'all' && is_array($allowed_subjects)) {
+         // User selected 'All' OR selected nothing, but has restrictions
+         if (!empty($allowed_subjects)) {
+            $ids_placeholder = implode(',', $allowed_subjects);
+            $where_clauses[] = "topic_term.parent IN ($ids_placeholder)";
+         } else {
+             // User has restrictions but no subjects meet them
+             $where_clauses[] = "1=0"; // Ensure no questions are found
+         }
     }
+     // If $allowed_subjects === 'all', no additional WHERE clause is needed for scope.
 
     $base_where_sql = implode(' AND ', $where_clauses);
     // The corrected query now selects the topic_id directly from the join.
@@ -6081,6 +6433,63 @@ function qp_start_revision_session_ajax()
 
     // --- Gather settings from the form ---
     $user_id = get_current_user_id();
+    // --- NEW: Scope Validation ---
+    $allowed_subjects = qp_get_allowed_subject_ids_for_user($user_id);
+
+    if ($allowed_subjects !== 'all' && is_array($allowed_subjects)) {
+        $subjects_raw = isset($_POST['revision_subjects']) && is_array($_POST['revision_subjects']) ? $_POST['revision_subjects'] : [];
+        $topics_raw = isset($_POST['revision_topics']) && is_array($_POST['revision_topics']) ? $_POST['revision_topics'] : [];
+
+        $requested_subject_ids = array_filter(array_map('absint', $subjects_raw), function($id){ return $id > 0; });
+        $requested_topic_ids = array_filter(array_map('absint', $topics_raw), function($id){ return $id > 0; });
+
+        // Determine final list of topics being queried
+        $topic_ids_to_query = [];
+        if (!empty($requested_topic_ids) && !in_array('all', $topics_raw)) {
+            $topic_ids_to_query = $requested_topic_ids;
+        } else if (!empty($requested_subject_ids) && !in_array('all', $subjects_raw)) {
+            // If subjects were selected, ensure those subjects are allowed
+            foreach ($requested_subject_ids as $req_subj_id) {
+                if (!in_array($req_subj_id, $allowed_subjects)) {
+                    wp_send_json_error(['message' => __('You do not have permission to revise the selected subject.', 'question-press')]);
+                    return; // Stop execution
+                }
+            }
+            // Get topics under the allowed selected subjects
+            $subj_ids_placeholder = implode(',', $requested_subject_ids);
+            $topic_ids_to_query = $wpdb->get_col("SELECT term_id FROM {$wpdb->prefix}qp_terms WHERE parent IN ($subj_ids_placeholder)");
+
+        } else {
+             // User selected 'All Subjects' or 'All Topics' but isn't admin/unrestricted - use only allowed subjects
+             $subj_ids_placeholder = implode(',', $allowed_subjects);
+             if (!empty($subj_ids_placeholder)) {
+                $topic_ids_to_query = $wpdb->get_col("SELECT term_id FROM {$wpdb->prefix}qp_terms WHERE parent IN ($subj_ids_placeholder)");
+             } else {
+                 $topic_ids_to_query = []; // No allowed subjects means no topics
+             }
+        }
+
+
+        // Validate the parent subjects of the final list of topics being queried
+        if (!empty($topic_ids_to_query)) {
+            $topic_ids_placeholder = implode(',', $topic_ids_to_query);
+            $parent_subject_ids = $wpdb->get_col("SELECT DISTINCT parent FROM {$wpdb->prefix}qp_terms WHERE term_id IN ($topic_ids_placeholder) AND parent != 0");
+            foreach ($parent_subject_ids as $parent_subj_id) {
+                if (!in_array($parent_subj_id, $allowed_subjects)) {
+                     // Should not happen if logic above is correct, but as a failsafe:
+                     wp_send_json_error(['message' => __('One or more topics selected fall outside your permitted subject scope.', 'question-press')]);
+                     return; // Stop execution
+                }
+            }
+        } else if (!in_array('all', $subjects_raw) || !in_array('all', $topics_raw)) {
+             // If specific subjects/topics were selected but resulted in an empty topic list (and user isn't admin/unrestricted)
+             wp_send_json_error(['message' => __('No topics found within your allowed scope for the selected criteria.', 'question-press')]);
+             return;
+        }
+
+        // Important: Override $topic_ids_to_query for the rest of the function if filtering occurred
+        // The original function uses this variable later.
+    }
     $subjects = isset($_POST['revision_subjects']) && is_array($_POST['revision_subjects']) ? $_POST['revision_subjects'] : [];
     $topics = isset($_POST['revision_topics']) && is_array($_POST['revision_topics']) ? $_POST['revision_topics'] : [];
     $questions_per_topic = isset($_POST['qp_revision_questions_per_topic']) ? absint($_POST['qp_revision_questions_per_topic']) : 10;
@@ -6107,15 +6516,13 @@ function qp_start_revision_session_ajax()
     $groups_table = $wpdb->prefix . 'qp_question_groups';
     $reports_table = $wpdb->prefix . 'qp_question_reports';
 
-    // --- Determine the final list of topics to query ---
-    $topic_ids_to_query = [];
-    if (!empty($topics) && !in_array('all', $topics)) {
-        $topic_ids_to_query = array_map('absint', array_filter($topics, 'is_numeric'));
-    } else {
-        $subject_ids_numeric = array_map('absint', array_filter($subjects, 'is_numeric'));
-        if (!empty($subject_ids_numeric)) {
-            $ids_placeholder = implode(',', $subject_ids_numeric);
-            $topic_ids_to_query = $wpdb->get_col("SELECT term_id FROM {$term_table} WHERE parent IN ($ids_placeholder)");
+    if (empty($topic_ids_to_query) && $allowed_subjects !== 'all') { // Check if scope restriction resulted in empty list
+         wp_send_json_error(['message' => 'Please select at least one subject or topic within your scope to revise.', 'question-press']);
+    } elseif (empty($topic_ids_to_query) && $allowed_subjects === 'all') {
+        // If admin/unrestricted selected nothing specific, query all topics
+        $topic_ids_to_query = $wpdb->get_col( $wpdb->prepare( "SELECT term_id FROM {$term_table} WHERE taxonomy_id = %d AND parent != 0", $subject_tax_id ) );
+        if ( empty( $topic_ids_to_query ) ) {
+            wp_send_json_error(['message' => 'No topics found in the system to revise.', 'question-press']);
         }
     }
 
