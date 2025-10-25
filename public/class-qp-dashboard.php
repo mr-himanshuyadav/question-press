@@ -1209,6 +1209,11 @@ class QP_Dashboard
                             <div class="qp-password-display">
                                 <p>Manage your account password.</p>
                                 <button type="button" class="qp-button qp-button-secondary qp-change-password-button">Change Password</button>
+                                <?php // --- ADD THIS LINK --- ?>
+                                <p class="qp-forgot-password-link-wrapper">
+                                    <a href="<?php echo esc_url(wp_lostpassword_url()); ?>" class="qp-forgot-password-link">Forgot Password?</a>
+                                </p>
+                                <?php // --- END ADDED LINK --- ?>
                             </div>
 
                             <?php // --- Edit elements (hidden by default) --- 

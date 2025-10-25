@@ -100,25 +100,32 @@ body { margin: 0; }
 /* --- Sidebar --- */
 .qp-sidebar {
 	width: var(--qp-dashboard-sidebar-width);
-	padding: 1rem 0;
+	/* REMOVE padding: 1rem 0; */
 	box-shadow: 1px 0 5px rgba(0,0,0,0.05);
 	background-color: var(--qp-dashboard-sidebar-bg);
-	border-right: 1px solid var(--qp-dashboard-border-light); /* Lighter border */
-	transition: transform 0.3s ease-in-out; /* Changed from width */
+	border-right: 1px solid var(--qp-dashboard-border-light);
+	transition: transform 0.3s ease-in-out;
 	flex-shrink: 0;
 	position: fixed;
-	top: 0px;
+	top: 0px; /* Adjust if you have a WP admin bar visible */
 	bottom: 0;
 	left: 0;
-	overflow-y: auto;
-	z-index: 1001; /* Above overlay */
+	/* overflow-y: auto; <-- REMOVE this */
+	z-index: 1001;
+    /* --- ADD Flexbox properties --- */
+    display: flex;
+    flex-direction: column;
+    height: 100vh; /* Make sidebar full viewport height */
+    /* --- END ADD --- */
 }
 
 .qp-sidebar-header {
-	 padding: 0.5rem 1.5rem 1rem 1.5rem;
-	 text-align: left;
+	 padding: 1rem 1.5rem 1rem 1.5rem;
+	 text-align: center;
 	 border-bottom: 1px solid var(--qp-dashboard-border-light);
+     position: relative;
 }
+
 .qp-sidebar-header .qp-user-name { font-size: 1.1em; font-weight: 600; display: block; }
 .qp-sidebar-header .qp-access-status {
 	font-size: 0.85em;
@@ -164,6 +171,9 @@ body { margin: 0; }
     margin-top: 0.5rem;
     list-style: none;
     padding: 0;
+    flex-grow: 1; /* Allow nav to take available space */
+    overflow-y: auto;
+    min-height: 100px;
 }
 .qp-sidebar-nav li a {
 	display: flex;
@@ -205,7 +215,7 @@ body { margin: 0; }
  }
 
 .qp-sidebar-footer {
-	position: absolute;
+	position: relative;
 	bottom: 0;
 	width: 100%;
 	padding: 1rem 15px;
@@ -213,6 +223,7 @@ body { margin: 0; }
 	background-color: var(--qp-dashboard-sidebar-bg);
 	text-align: left;
 	box-sizing: border-box;
+    flex-shrink: 0;
 }
 .qp-sidebar-footer .qp-logout-link {
 	font-size: 0.9em;
@@ -1132,4 +1143,23 @@ ul.qp-review-list li {
 }
 .qp-password-edit-actions .qp-button {
     flex-grow: 1;
+}
+
+/* --- Forgot Password Link --- */
+.qp-forgot-password-link-wrapper {
+    margin-top: 1rem; /* Space above the link */
+    text-align: center; /* Center the link below the button */
+    margin-bottom: 0; /* Remove default paragraph bottom margin */
+}
+
+.qp-forgot-password-link {
+    font-size: 0.9em; /* Slightly smaller text */
+    color: var(--qp-dashboard-text-light); /* Use secondary text color */
+    text-decoration: none;
+    transition: color 0.2s ease;
+}
+
+.qp-forgot-password-link:hover {
+    color: var(--qp-dashboard-link-hover); /* Use link hover color */
+    text-decoration: underline;
 }
