@@ -956,6 +956,83 @@ wrapper.on('click', 'a.qp-button-primary[href*="session_id="]', function(e) {
         });
     });
 
+    // Avatar Change
+
+    // --- Avatar Upload Logic ---
+    const avatarWrapper = wrapper.find('.qp-profile-avatar-wrapper');
+    const avatarPreview = avatarWrapper.find('#qp-profile-avatar-preview');
+    const fileInput = avatarWrapper.find('#qp-avatar-upload-input');
+    const changeButton = avatarWrapper.find('.qp-change-avatar-button');
+    const uploadActions = avatarWrapper.find('.qp-avatar-upload-actions');
+    const uploadButton = avatarWrapper.find('.qp-upload-avatar-button');
+    const cancelUploadButton = avatarWrapper.find('.qp-cancel-avatar-button');
+    const errorMsg = avatarWrapper.find('#qp-avatar-upload-error');
+    let originalAvatarSrc = avatarPreview.attr('src'); // Store original source
+    let selectedFile = null; // To hold the selected file temporarily
+
+    // Trigger file input when "Change Avatar" or the image itself (in edit mode) is clicked
+    wrapper.on('click', '.qp-change-avatar-button, .qp-profile-card.is-editing .qp-profile-avatar-wrapper img', function() {
+        // Ensure we are actually in edit mode before triggering
+        if (profileCard.hasClass('is-editing')) {
+            fileInput.click(); // Trigger the hidden file input
+        }
+    });
+
+    // Handle file selection
+    fileInput.on('change', function(event) {
+        errorMsg.hide().text(''); // Clear previous errors
+        selectedFile = event.target.files ? event.target.files[0] : null;
+
+        if (!selectedFile) {
+            return; // No file selected
+        }
+
+        // Client-side validation (Type & Size)
+        const allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
+        const maxSize = 2 * 1024 * 1024; // 2 MB
+
+        if (!allowedTypes.includes(selectedFile.type)) {
+            errorMsg.text('Invalid file type. Please select a JPG, PNG, or GIF.').show();
+            fileInput.val(''); // Reset file input
+            selectedFile = null;
+            return;
+        }
+
+        if (selectedFile.size > maxSize) {
+            errorMsg.text('File is too large. Maximum size is 2MB.').show();
+            fileInput.val(''); // Reset file input
+            selectedFile = null;
+            return;
+        }
+
+        // Show preview using FileReader
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            avatarPreview.attr('src', e.target.result); // Update preview image
+            changeButton.hide(); // Hide "Change Avatar" button
+            uploadActions.css('display', 'flex'); // Show "Upload New"/"Cancel" buttons using flex
+        }
+        reader.onerror = function() {
+             errorMsg.text('Error reading file for preview.').show();
+             fileInput.val('');
+             selectedFile = null;
+        }
+        reader.readAsDataURL(selectedFile);
+    });
+
+    // Handle Cancel button (after selecting a file)
+    cancelUploadButton.on('click', function() {
+        // Reset everything
+        fileInput.val(''); // Clear the file input
+        selectedFile = null;
+        avatarPreview.attr('src', originalAvatarSrc); // Restore original image
+        uploadActions.hide(); // Hide "Upload"/"Cancel"
+        changeButton.show(); // Show "Change Avatar" again
+        errorMsg.hide().text(''); // Hide errors
+    });
+
+    // Note: The "Upload New" button's AJAX logic will be added in Step 2.7.4
+
 }); // End jQuery ready
 
 /**
