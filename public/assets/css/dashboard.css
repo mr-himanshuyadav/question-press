@@ -1031,14 +1031,29 @@ ul.qp-review-list li {
     opacity: 1;
 }
 
-/* --- Toggle Visibility Classes (handled by JS later) --- */
+/* --- Toggle Visibility Classes --- */
+.qp-profile-card .qp-profile-display {
+    display: flex; /* Keep display visible by default */
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+}
+.qp-profile-card .qp-profile-edit {
+    display: none; /* Keep edit hidden by default */
+    width: 100%;
+}
 .qp-profile-card.is-editing .qp-profile-display {
-    display: none;
+    display: none !important; /* Force hide display when editing */
 }
 .qp-profile-card.is-editing .qp-profile-edit {
-    display: block;
+    display: flex !important; /* Force show edit fields (using flex) when editing */
+    flex-direction: column;
+    align-items: center;
 }
 /* Show avatar change button only when editing */
+.qp-profile-card .qp-change-avatar-button {
+     display: none; /* Hide avatar change button by default */
+}
 .qp-profile-card.is-editing .qp-change-avatar-button {
-    display: inline-block;
+    display: inline-block; /* Show only when editing */
 }
