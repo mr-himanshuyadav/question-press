@@ -13,6 +13,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 use QuestionPress\Assets;
+use QuestionPress\Post_Types;
+use QuestionPress\Taxonomies; // Just in case if migrated to native taxonomies later
 
 /**
  * Final QuestionPress Class.
@@ -85,7 +87,8 @@ final class Plugin {
         Assets::instance();
         // Ajax::instance();
         // Shortcodes::instance();
-        // Post_Types::instance();
+        Post_Types::instance();
+        Taxonomies::instance(); // Just in case if migrated to native taxonomies later
         // REST_API::instance(); // Assuming REST_API is a class handling registration
         // if ( is_admin() ) {
         //     Admin::instance();
