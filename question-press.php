@@ -2519,6 +2519,55 @@ function qp_save_profile_ajax() {
 }
 add_action('wp_ajax_qp_save_profile', 'qp_save_profile_ajax');
 
+/**
+ * AJAX handler to change user password securely.
+ */
+function qp_change_password_ajax() {
+    // 1. Security Checks
+    check_ajax_referer('qp_change_password_nonce', '_qp_password_nonce');
+    if (!is_user_logged_in()) {
+        wp_send_json_error(['message' => 'You must be logged in.'], 401);
+    }
+    $user_id = get_current_user_id();
+    $user = get_userdata($user_id);
+
+    // 2. Get and Sanitize Passwords
+    $current_password = isset($_POST['current_password']) ? wp_unslash($_POST['current_password']) : '';
+    $new_password = isset($_POST['new_password']) ? wp_unslash($_POST['new_password']) : '';
+    $confirm_password = isset($_POST['confirm_password']) ? wp_unslash($_POST['confirm_password']) : '';
+
+    // 3. Validation
+    if (empty($current_password) || empty($new_password) || empty($confirm_password)) {
+        wp_send_json_error(['message' => 'All password fields are required.'], 400);
+    }
+
+    // 4. Verify Current Password *** SECURITY CRITICAL ***
+    if (!wp_check_password($current_password, $user->user_pass, $user->ID)) {
+        wp_send_json_error(['message' => 'Your current password does not match. Please try again.'], 403); // 403 Forbidden
+    }
+
+    // 5. Verify New Passwords Match
+    if ($new_password !== $confirm_password) {
+        wp_send_json_error(['message' => 'The new passwords do not match.'], 400);
+    }
+
+    // 6. (Optional but Recommended) Add Password Strength Check
+    // You might want to add checks for minimum length, complexity, etc. here
+    // if (strlen($new_password) < 8) {
+    //     wp_send_json_error(['message' => 'New password must be at least 8 characters long.'], 400);
+    // }
+
+    // 7. Update Password
+    wp_set_password($new_password, $user->ID);
+
+    // Optional: Log the user out of other sessions for security after password change
+    // wp_logout_all_sessions();
+
+    // 8. Send Success Response
+    wp_send_json_success(['message' => 'Password updated successfully!']);
+}
+add_action('wp_ajax_qp_change_password', 'qp_change_password_ajax');
+
 // Used on export page
 
 /**

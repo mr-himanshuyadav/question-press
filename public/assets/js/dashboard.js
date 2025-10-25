@@ -855,16 +855,103 @@ wrapper.on('click', 'a.qp-button-primary[href*="session_id="]', function(e) {
                         showConfirmButton: false
                     });
                 } else {
-                    Swal.fire('Error', response.data.message || 'Could not update profile.', 'error');
+                    Swal.fire('Error Updating Profile', response.data.message || 'Could not update profile.', 'error');
                 }
             },
-            error: function() {
-                Swal.fire('Error', 'An unknown server error occurred. Please try again.', 'error');
+            error: function(jqXHR) {
+                // *** MODIFIED: Try to show specific error from backend ***
+                let errorText = 'An unknown server error occurred. Please try again.';
+                // Check if the response contains JSON with our expected error structure
+                if (jqXHR.responseJSON && jqXHR.responseJSON.data && jqXHR.responseJSON.data.message) {
+                    errorText = jqXHR.responseJSON.data.message;
+                } else if (jqXHR.statusText) {
+                    // Fallback to general status text if no specific message
+                    errorText = `Request Failed: ${jqXHR.statusText} (${jqXHR.status})`;
+                }
+                Swal.fire('Error', errorText, 'error');
             },
             complete: function() {
                 // Restore button and fields regardless of success/error
                 $saveButton.text(originalButtonText).prop('disabled', false);
                 $form.find('input').prop('readonly', false);
+            }
+        });
+    });
+
+    // --- AJAX Handler for Changing Password ---
+    wrapper.on('submit', '#qp-password-change-form', function(e) {
+        e.preventDefault();
+        const $form = $(this);
+        const $saveButton = $form.find('.qp-save-password-button');
+        const originalButtonText = $saveButton.text();
+        const $errorMsg = $('#qp-password-match-error');
+
+        // Client-side validation
+        const currentPass = $form.find('#qp_current_password').val();
+        const newPass = $form.find('#qp_new_password').val();
+        const confirmPass = $form.find('#qp_confirm_password').val();
+
+        if (!currentPass || !newPass || !confirmPass) {
+            Swal.fire('Error', 'All password fields are required.', 'error');
+            return;
+        }
+
+        if (newPass !== confirmPass) {
+            $errorMsg.text('New passwords do not match.').show();
+            // Optional: Focus the confirmation field
+            // $form.find('#qp_confirm_password').focus();
+            return; // Stop submission
+        } else {
+            $errorMsg.hide().text(''); // Clear error if they now match
+        }
+
+        // Show loading state
+        $saveButton.text('Updating...').prop('disabled', true);
+        $form.find('input[type="password"]').prop('readonly', true);
+        $form.find('.qp-cancel-change-password-button').prop('disabled', true);
+
+        $.ajax({
+            url: qp_ajax_object.ajax_url,
+            type: 'POST',
+            data: $form.serialize() + '&action=qp_change_password', // Add action parameter
+            success: function(response) {
+                if (response.success) {
+                    // Clear fields and switch back to display mode
+                    $form.find('input[type="password"]').val('');
+                    passwordCard.removeClass('is-editing');
+
+                    Swal.fire({
+                        title: 'Success!',
+                        text: response.data.message,
+                        icon: 'success',
+                        timer: 2000,
+                        showConfirmButton: false
+                    });
+                } else {
+                    // Display specific error from backend (e.g., current password incorrect)
+                    Swal.fire('Error Updating Password', response.data.message || 'Could not update password.', 'error');
+                }
+            },
+            error: function(jqXHR) {
+                // *** MODIFIED: Try to show specific error from backend ***
+                let errorText = 'An unknown server error occurred. Please try again.';
+                 // Check if the response contains JSON with our expected error structure
+                if (jqXHR.responseJSON && jqXHR.responseJSON.data && jqXHR.responseJSON.data.message) {
+                    errorText = jqXHR.responseJSON.data.message;
+                // Specific check for 403 (likely wrong current password)
+                } else if (jqXHR.status === 403) {
+                     errorText = 'Incorrect current password or permission denied.';
+                } else if (jqXHR.statusText) {
+                    // Fallback to general status text
+                    errorText = `Request Failed: ${jqXHR.statusText} (${jqXHR.status})`;
+                }
+                Swal.fire('Error', errorText, 'error');
+            },
+            complete: function() {
+                // Restore button and fields
+                $saveButton.text(originalButtonText).prop('disabled', false);
+                $form.find('input[type="password"]').prop('readonly', false);
+                $form.find('.qp-cancel-change-password-button').prop('disabled', false);
             }
         });
     });
