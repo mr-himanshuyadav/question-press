@@ -1917,7 +1917,6 @@ body.palette-overlay-open #qp-palette-sliding {
     grid-template-columns: repeat(4, 1fr);
     /* 4 columns on desktop */
     gap: 1rem;
-    margin-bottom: 1.5rem;
 }
 
 .stat-item {
@@ -2342,24 +2341,6 @@ body.palette-overlay-open #qp-palette-sliding {
     }
 }
 
-/* --- Active Session Card Styles --- */
-.qp-active-sessions-list {
-    display: grid;
-    gap: 1rem;
-    margin-bottom: 2rem;
-}
-
-.qp-active-session-card {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 1rem;
-    background-color: var(--qp-bg-light);
-    border: 1px solid var(--qp-border-color);
-    border-left: 5px solid var(--qp-primary-color);
-    border-radius: var(--qp-radius);
-}
-
 .qp-card-details {
     display: flex;
     flex-direction: column;
@@ -2378,6 +2359,16 @@ body.palette-overlay-open #qp-palette-sliding {
 
 .qp-active-session-card .qp-button {
     padding: 8px 16px;
+}
+
+.qp-no-subjects-message {
+    color: #888;
+    font-style: italic;
+    padding: 10px;
+    border: 1px dashed #ccc;
+    background-color: #f9f9f9;
+    text-align: center;
+    margin-top: 5px;
 }
 
 /* --- Review Page Styles --- */
