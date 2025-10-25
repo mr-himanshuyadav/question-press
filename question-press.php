@@ -2568,6 +2568,74 @@ function qp_change_password_ajax() {
 }
 add_action('wp_ajax_qp_change_password', 'qp_change_password_ajax');
 
+/**
+ * AJAX handler to upload a new user avatar, delete the old one, and update user meta.
+ */
+function qp_upload_avatar_ajax() {
+    // 1. Security Checks
+    // Use the nonce generated in the profile form
+    check_ajax_referer('qp_save_profile_nonce', '_qp_profile_nonce');
+    if (!is_user_logged_in()) {
+        wp_send_json_error(['message' => 'You must be logged in.'], 401);
+    }
+    $user_id = get_current_user_id();
+
+    // 2. Check if file was uploaded correctly
+    if (!isset($_FILES['qp_avatar_upload']) || $_FILES['qp_avatar_upload']['error'] !== UPLOAD_ERR_OK) {
+        $error_code = $_FILES['qp_avatar_upload']['error'] ?? UPLOAD_ERR_NO_FILE;
+        $error_messages = [
+            UPLOAD_ERR_INI_SIZE   => 'The uploaded file exceeds the upload_max_filesize directive in php.ini.',
+            UPLOAD_ERR_FORM_SIZE  => 'The uploaded file exceeds the MAX_FILE_SIZE directive specified in the HTML form.',
+            UPLOAD_ERR_PARTIAL    => 'The uploaded file was only partially uploaded.',
+            UPLOAD_ERR_NO_FILE    => 'No file was uploaded.',
+            UPLOAD_ERR_NO_TMP_DIR => 'Missing a temporary folder.',
+            UPLOAD_ERR_CANT_WRITE => 'Failed to write file to disk.',
+            UPLOAD_ERR_EXTENSION  => 'A PHP extension stopped the file upload.',
+        ];
+        wp_send_json_error(['message' => $error_messages[$error_code] ?? 'Unknown upload error.'], 400);
+        return;
+    }
+
+    $file = $_FILES['qp_avatar_upload'];
+
+    // 3. Include necessary WordPress file handling functions
+    require_once(ABSPATH . 'wp-admin/includes/image.php');
+    require_once(ABSPATH . 'wp-admin/includes/file.php');
+    require_once(ABSPATH . 'wp-admin/includes/media.php');
+
+    // 4. Handle the upload using media_handle_upload()
+    // 'qp_avatar_upload' is the name attribute of our file input
+    // 0 means the attachment is not associated with any specific post
+    $attachment_id = media_handle_upload('qp_avatar_upload', 0);
+
+    // 5. Check for upload errors
+    if (is_wp_error($attachment_id)) {
+        wp_send_json_error(['message' => 'Error uploading file: ' . $attachment_id->get_error_message()], 500);
+        return;
+    }
+
+    // 6. Get the ID of the PREVIOUS custom avatar (if any)
+    $previous_avatar_id = get_user_meta($user_id, '_qp_avatar_attachment_id', true);
+
+    // 7. Update user meta with the NEW attachment ID
+    update_user_meta($user_id, '_qp_avatar_attachment_id', $attachment_id);
+
+    // 8. Delete the PREVIOUS attachment (if it exists and is different from the new one)
+    if (!empty($previous_avatar_id) && $previous_avatar_id != $attachment_id) {
+        wp_delete_attachment($previous_avatar_id, true); // true forces delete, bypassing trash
+    }
+
+    // 9. Get the URL of the newly uploaded image (use a reasonable size)
+    $new_avatar_url = wp_get_attachment_image_url($attachment_id, 'thumbnail'); // 'thumbnail' or 'medium' size
+
+    // 10. Send Success Response
+    wp_send_json_success([
+        'message' => 'Avatar updated successfully!',
+        'new_avatar_url' => $new_avatar_url ?: get_avatar_url($user_id) // Fallback to Gravatar if URL fetch fails
+    ]);
+}
+add_action('wp_ajax_qp_upload_avatar', 'qp_upload_avatar_ajax');
+
 // Used on export page
 
 /**

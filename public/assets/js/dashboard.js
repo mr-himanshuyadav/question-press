@@ -1033,6 +1033,74 @@ wrapper.on('click', 'a.qp-button-primary[href*="session_id="]', function(e) {
 
     // Note: The "Upload New" button's AJAX logic will be added in Step 2.7.4
 
+    // Handle "Upload New" button click
+    uploadButton.on('click', function() {
+        if (!selectedFile) {
+            errorMsg.text('No file selected to upload.').show();
+            return;
+        }
+
+        const $button = $(this);
+        const originalButtonText = $button.text();
+
+        // Prepare form data for AJAX file upload
+        const formData = new FormData();
+        formData.append('action', 'qp_upload_avatar'); // AJAX action hook
+        formData.append('_qp_profile_nonce', $('#_qp_profile_nonce').val()); // Add nonce
+        formData.append('qp_avatar_upload', selectedFile); // Add the file
+
+        // Show loading state
+        $button.text('Uploading...').prop('disabled', true);
+        cancelUploadButton.prop('disabled', true);
+        errorMsg.hide().text('');
+
+        $.ajax({
+            url: qp_ajax_object.ajax_url,
+            type: 'POST',
+            data: formData,
+            processData: false, // Important: prevent jQuery from processing the data
+            contentType: false, // Important: let the browser set the correct content type for file upload
+            success: function(response) {
+                if (response.success) {
+                    // Update the preview image source
+                    avatarPreview.attr('src', response.data.new_avatar_url);
+                    // Update the stored original source in case user cancels later *without* reloading
+                    originalAvatarSrc = response.data.new_avatar_url;
+
+                    // Reset UI back to 'Change Avatar' state
+                    fileInput.val('');
+                    selectedFile = null;
+                    uploadActions.hide();
+                    changeButton.show();
+
+                    Swal.fire({
+                        title: 'Success!',
+                        text: response.data.message,
+                        icon: 'success',
+                        timer: 1500,
+                        showConfirmButton: false
+                    });
+                } else {
+                    errorMsg.text(response.data.message || 'Upload failed.').show();
+                     Swal.fire('Error', response.data.message || 'Upload failed.', 'error'); // Also show in Swal
+                }
+            },
+            error: function(jqXHR) {
+                let errorText = 'An unknown server error occurred during upload.';
+                 if (jqXHR.responseJSON && jqXHR.responseJSON.data && jqXHR.responseJSON.data.message) {
+                     errorText = jqXHR.responseJSON.data.message;
+                 }
+                errorMsg.text(errorText).show();
+                 Swal.fire('Upload Error', errorText, 'error');
+            },
+            complete: function() {
+                // Restore buttons
+                $button.text(originalButtonText).prop('disabled', false);
+                cancelUploadButton.prop('disabled', false);
+            }
+        });
+    });
+
 }); // End jQuery ready
 
 /**
