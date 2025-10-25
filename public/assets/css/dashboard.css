@@ -1028,13 +1028,17 @@ ul.qp-review-list li {
 }
 .qp-change-avatar-button { /* Style for the change button */
     position: absolute;
-    bottom: 5px; /* Position near the bottom of the avatar */
+    bottom: 5px; /* Position near the bottom */
     left: 50%;
-    transform: translateX(-50%);
+    /* REMOVE transform: translateX(-50%); */
+    margin-left: -55px; /* Adjust this value (approx half the button's width) to center */
+    width: 110px; /* Give it a defined width */
     padding: 4px 10px;
     font-size: 12px;
     opacity: 0.8;
     transition: opacity 0.2s ease;
+    text-align: center; /* Ensure text is centered */
+    box-sizing: border-box; /* Include padding in width */
 }
 .qp-change-avatar-button:hover {
     opacity: 1;
@@ -1073,7 +1077,7 @@ ul.qp-review-list li {
      display: none; /* Hide avatar change button by default */
 }
 .qp-profile-card.is-editing .qp-change-avatar-button {
-    display: inline-block; /* Show only when editing */
+    display: inline-block !important; /* Show only when editing */
 }
 
 /* --- Password Card Styles --- */
