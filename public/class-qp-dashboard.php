@@ -15,28 +15,54 @@ class QP_Dashboard
         $current_user = wp_get_current_user();
         $user_id = $current_user->ID;
 
-        // Remaining Attempts Message (Keep this)
-        $remaining_attempts = get_user_meta($user_id, 'qp_remaining_attempts', true);
+        // --- NEW: Display Entitlement Summary ---
         $access_status_message = '';
-        // --- (Keep the logic for $access_status_message as it was) ---
-        if ($remaining_attempts !== '' && (int)$remaining_attempts > 0) {
-             $access_status_message = 'Attempts remaining: <strong>' . number_format((int)$remaining_attempts) . '</strong>';
+        $shop_page_url = function_exists('wc_get_page_id') ? get_permalink(wc_get_page_id('shop')) : home_url('/');
+        $link_text = empty($shop_page_url) ? 'Purchase Access' : 'Purchase More';
+        $entitlement_summary = []; // Array to hold summary lines
+
+        global $wpdb;
+        $entitlements_table = $wpdb->prefix . 'qp_user_entitlements';
+        $current_time = current_time('mysql');
+
+        // Fetch ACTIVE entitlements, including plan names
+        $active_entitlements_for_display = $wpdb->get_results($wpdb->prepare(
+            "SELECT e.entitlement_id, e.plan_id, e.remaining_attempts, e.expiry_date, p.post_title as plan_title
+             FROM {$entitlements_table} e
+             JOIN {$wpdb->posts} p ON e.plan_id = p.ID
+             WHERE e.user_id = %d
+             AND e.status = 'active'
+             AND (e.expiry_date IS NULL OR e.expiry_date > %s)
+             ORDER BY e.expiry_date ASC, e.entitlement_id ASC", // Show soonest expiring first
+            $user_id,
+            $current_time
+        ));
+
+        if (!empty($active_entitlements_for_display)) {
+            foreach ($active_entitlements_for_display as $entitlement) {
+                $summary_line = '<strong>' . esc_html(str_replace('Auto: Access Plan for Course "', '', $entitlement->plan_title)) . '</strong>'; // Clean up auto-plan title
+                $details = [];
+                if (!is_null($entitlement->remaining_attempts)) {
+                    $details[] = number_format($entitlement->remaining_attempts) . ' attempts';
+                } else {
+                    $details[] = 'Unlimited attempts';
+                }
+                if (!is_null($entitlement->expiry_date)) {
+                    $expiry_timestamp = strtotime($entitlement->expiry_date);
+                    // Format date nicely using WordPress date format
+                    $details[] = 'expires ' . date_i18n(get_option('date_format'), $expiry_timestamp);
+                } else {
+                     $details[] = 'never expires';
+                }
+                $summary_line .= ': ' . implode(', ', $details);
+                $entitlement_summary[] = $summary_line;
+            }
+            $access_status_message = implode('<br>', $entitlement_summary); // Combine lines with breaks
         } else {
-             $shop_page_url = '';
-             if (function_exists('wc_get_page_id')) {
-                 $shop_page_id = wc_get_page_id('shop');
-                 if ($shop_page_id > 0) {
-                     $shop_page_url = get_permalink($shop_page_id);
-                 }
-             }
-             if (empty($shop_page_url)) {
-                 $shop_page_url = home_url('/');
-                 $link_text = 'Purchase Access';
-             } else {
-                 $link_text = 'Purchase More';
-             }
-             $access_status_message = 'No attempts remaining. <a href="' . esc_url($shop_page_url) . '">' . esc_html($link_text) . '</a>';
+            // No active plans found
+            $access_status_message = 'No active plan found. <a href="' . esc_url($shop_page_url) . '">' . esc_html($link_text) . '</a>';
         }
+        // --- END NEW DISPLAY LOGIC ---
 
 
         // Lifetime Stats (Keep this)
@@ -113,6 +139,7 @@ class QP_Dashboard
                         <li><a href="#history"><span class="dashicons dashicons-list-view"></span><span>History</span></a></li>
                         <li><a href="#review"><span class="dashicons dashicons-star-filled"></span><span>Review Center</span></a></li>
                         <li><a href="#progress"><span class="dashicons dashicons-chart-bar"></span><span>Progress</span></a></li>
+                        <li><a href="#courses"><span class="dashicons dashicons-welcome-learn-more"></span><span>Courses</span></a></li>
                         <?php /* Placeholder for future items */ ?>
                     </ul>
                      <div class="qp-sidebar-footer" style="position: absolute; bottom: 10px; width: 100%; text-align: center;display: flex; justify-content:center;">
@@ -144,6 +171,12 @@ class QP_Dashboard
                          <?php echo self::render_progress_content(); ?>
                          <?php // --- END MODIFIED --- ?>
                     </section>
+
+                    <?php // --- ADD THIS NEW SECTION --- ?>
+                        <section id="qp-dashboard-courses" class="qp-dashboard-section" style="display: none;">
+                            <?php echo self::render_courses_content(); // We will create this method next ?>
+                        </section>
+                    <?php // --- END NEW SECTION --- ?>
 
                      <?php /* Hidden modal (Keep from old code) */ ?>
                      <div id="qp-review-modal-backdrop" style="display: none;">
@@ -391,10 +424,30 @@ class QP_Dashboard
 
                          $row_class = $session->status === 'paused' ? 'class="qp-session-paused"' : '';
                      ?>
+                     <?php
+                         // *** START NEW CHECK ***
+                         $context_display = $subjects_display; // Default context
+                         if (isset($settings['course_id']) && isset($settings['item_id'])) {
+                             // Check if the item ID exists in the pre-fetched list (efficient)
+                             // We need to pre-fetch existing item IDs before the loop
+                             if (!isset($existing_course_item_ids)) {
+                                 $items_table = $wpdb->prefix . 'qp_course_items';
+                                 $existing_course_item_ids = $wpdb->get_col("SELECT item_id FROM $items_table");
+                                 // Convert to a hash map for quick lookups
+                                 $existing_course_item_ids = array_flip($existing_course_item_ids);
+                             }
+
+                             if (!isset($existing_course_item_ids[absint($settings['item_id'])])) {
+                                 // If item ID is NOT in the list of existing items
+                                 $context_display .= ' <em style="color:#777; font-size:0.9em;">(Item removed)</em>';
+                             }
+                         }
+                         // *** END NEW CHECK ***
+                     ?>
                      <tr <?php echo $row_class; ?>>
                          <td data-label="Date"><?php echo date_format(date_create($session->start_time), 'M j, Y, g:i a'); ?></td>
                          <td data-label="Mode"><?php echo esc_html($mode); ?></td>
-                         <td data-label="Context"><?php echo esc_html($subjects_display); ?></td>
+                         <td data-label="Context"><?php echo wp_kses_post($context_display); // Use wp_kses_post to allow <em> tag ?></td>
                          <td data-label="Result"><strong><?php echo esc_html($result_display); ?></strong></td>
                          <td data-label="Status"><?php echo esc_html($status_display); ?></td>
                          <td data-label="Actions" class="qp-actions-cell">
@@ -557,6 +610,218 @@ class QP_Dashboard
          </div>
         <?php
         return ob_get_clean();
+    }
+
+/**
+     * Renders the content specifically for the Courses section.
+     * NOW INCLUDES Enrollment Status and Progress.
+     */
+    private static function render_courses_content() {
+        if (!is_user_logged_in()) return ''; // Should not happen here, but good practice
+
+        $user_id = get_current_user_id();
+        global $wpdb;
+        $user_courses_table = $wpdb->prefix . 'qp_user_courses';
+        $items_table = $wpdb->prefix . 'qp_course_items';
+        $progress_table = $wpdb->prefix . 'qp_user_items_progress';
+
+        // Get IDs of courses the user is enrolled in
+        $enrolled_course_ids = $wpdb->get_col($wpdb->prepare(
+            "SELECT course_id FROM $user_courses_table WHERE user_id = %d",
+            $user_id
+        ));
+
+        // Get all published courses
+        $args = [
+            'post_type' => 'qp_course',
+            'post_status' => 'publish',
+            'posts_per_page' => -1,
+            'orderby' => 'menu_order title',
+            'order' => 'ASC',
+        ];
+        $courses_query = new WP_Query($args);
+
+        // Prepare data for enrolled courses (progress calculation)
+        $enrolled_courses_data = [];
+        if (!empty($enrolled_course_ids)) {
+            $ids_placeholder = implode(',', array_map('absint', $enrolled_course_ids));
+
+            // Get total item count for each enrolled course
+            $total_items_results = $wpdb->get_results(
+                "SELECT course_id, COUNT(item_id) as total_items FROM $items_table WHERE course_id IN ($ids_placeholder) GROUP BY course_id",
+                OBJECT_K // Key by course_id
+            );
+
+            // Get completed item count for the user in each enrolled course
+            $completed_items_results = $wpdb->get_results($wpdb->prepare(
+                "SELECT course_id, COUNT(user_item_id) as completed_items FROM $progress_table WHERE user_id = %d AND course_id IN ($ids_placeholder) AND status = 'completed' GROUP BY course_id",
+                $user_id
+            ), OBJECT_K); // Key by course_id
+
+            // Calculate progress
+            foreach ($enrolled_course_ids as $course_id) {
+                $total_items = $total_items_results[$course_id]->total_items ?? 0;
+                $completed_items = $completed_items_results[$course_id]->completed_items ?? 0;
+                $progress_percent = ($total_items > 0) ? round(($completed_items / $total_items) * 100) : 0;
+                $enrolled_courses_data[$course_id] = [
+                    'progress' => $progress_percent,
+                    'is_complete' => ($total_items > 0 && $completed_items >= $total_items)
+                ];
+            }
+        }
+
+
+        ob_start();
+        ?>
+        <h2>My Courses</h2>
+
+        <?php if ($courses_query->have_posts()) : ?>
+            <div class="qp-course-list"> <?php // Combined list container ?>
+                 <?php
+                 $found_enrolled = false;
+                 $found_available = false;
+                 while ($courses_query->have_posts()) : $courses_query->the_post();
+                    $course_id = get_the_ID();
+                    $is_enrolled = in_array($course_id, $enrolled_course_ids);
+
+                    // --- NEW: Check access mode and user entitlement ---
+                    $access_mode = get_post_meta($course_id, '_qp_course_access_mode', true) ?: 'free';
+                    $linked_product_id = get_post_meta($course_id, '_qp_linked_product_id', true);
+                    $product_url = $linked_product_id ? get_permalink($linked_product_id) : '#'; // Link to product page
+                    $user_has_access = qp_user_can_access_course($user_id, $course_id); // <<< CALL ACCESS CHECK FUNCTION
+
+                    $button_html = '';
+                    if ($is_enrolled) {
+                        $found_enrolled = true; // Mark that we found at least one enrolled course
+                        $course_data = $enrolled_courses_data[$course_id] ?? ['progress' => 0, 'is_complete' => false];
+                        $progress = $course_data['progress'];
+                        $is_complete = $course_data['is_complete'];
+                        $button_text = $is_complete ? __('View Results', 'question-press') : __('Continue Course', 'question-press');
+                        // Enrolled users always get the view/continue button, access check already passed implicitly
+                        $button_html = sprintf(
+                            '<button class="qp-button qp-button-primary qp-view-course-btn" data-course-id="%d">%s</button>',
+                            $course_id,
+                            esc_html($button_text)
+                        );
+                    } else {
+                        // Not enrolled - determine button based on access mode and entitlement
+                        $found_available = true; // Mark that we found at least one available course
+                        if ($access_mode === 'free') {
+                            // Free course, not enrolled yet
+                            $button_html = sprintf(
+                                '<button class="qp-button qp-button-secondary qp-enroll-course-btn" data-course-id="%d">%s</button>',
+                                $course_id,
+                                __('Enroll Free', 'question-press')
+                            );
+                        } elseif ($access_mode === 'requires_purchase') {
+                            if ($user_has_access) {
+                                // User purchased but somehow isn't enrolled? Show enroll (should ideally auto-enroll on purchase later)
+                                // Or maybe they unenrolled? Let's allow re-enrollment if they have access.
+                                $button_html = sprintf(
+                                    '<button class="qp-button qp-button-secondary qp-enroll-course-btn" data-course-id="%d">%s</button>',
+                                    $course_id,
+                                    __('Enroll Now (Purchased)', 'question-press') // Clarify they have access
+                                );
+                            } else {
+                                // Requires purchase, user does not have access -> Show Purchase button
+                                $button_html = sprintf(
+                                    '<a href="%s" class="qp-button qp-button-primary">%s</a>',
+                                    esc_url($product_url),
+                                    __('Purchase Access', 'question-press')
+                                );
+                            }
+                        }
+                    }
+
+                    // --- Render the Course Card ---
+                    ?>
+                    <div class="qp-card qp-course-item <?php echo $is_enrolled ? 'qp-enrolled' : 'qp-available'; ?>">
+                        <div class="qp-card-content">
+                            <h3 style="margin-top:0;"><?php the_title(); ?></h3>
+                            <?php if ($is_enrolled): // Show progress only if enrolled ?>
+                            <div class="qp-progress-bar-container" title="<?php echo esc_attr($progress); ?>% Complete">
+                                <div class="qp-progress-bar-fill" style="width: <?php echo esc_attr($progress); ?>%;"></div>
+                            </div>
+                            <?php endif; ?>
+                            <?php // Show excerpt ?>
+                            <?php if (has_excerpt()) : ?>
+                                <p><?php the_excerpt(); ?></p>
+                            <?php else : ?>
+                                <?php echo '<p>' . wp_trim_words(get_the_content(), 30, '...') . '</p>'; ?>
+                            <?php endif; ?>
+                        </div>
+                        <?php if ($button_html): // Only show action area if there's a button ?>
+                        <div class="qp-card-action" style="padding: 1rem 1.5rem; border-top: 1px solid var(--qp-dashboard-border-light); text-align: right;">
+                            <?php echo $button_html; // Output the generated button/link ?>
+                        </div>
+                        <?php endif; ?>
+                    </div>
+                    <?php
+                 endwhile;
+                 wp_reset_postdata();
+                 ?>
+            </div> <?php // End combined list container ?>
+
+             <?php // --- Display "No courses" messages --- ?>
+             <?php if (!$found_enrolled && !$found_available) : // No courses at all ?>
+                 <div class="qp-card"><div class="qp-card-content"><p style="text-align: center;">No courses are available at the moment.</p></div></div>
+             <?php elseif (!$found_available && $found_enrolled) : // Enrolled in all, none available ?>
+                 <div class="qp-card qp-available-courses"><div class="qp-card-content"><p style="text-align: center;">You are enrolled in all available courses.</p></div></div>
+            <?php elseif (!$found_enrolled && $found_available) : // None enrolled, but some available ?>
+                 <?php // Need to add the "Available Courses" header back if no enrolled courses were found ?>
+                 <script>jQuery(document).ready(function($){ if($('.qp-enrolled').length === 0) { $('.qp-available-courses').before('<h2>Available Courses</h2><hr class="qp-divider" style="margin: 0 0 1.5rem 0;">'); } });</script>
+             <?php endif; ?>
+
+        <?php else : // No courses query results at all ?>
+            <div class="qp-card"><div class="qp-card-content"><p style="text-align: center;">No courses are available at the moment.</p></div></div>
+        <?php endif; ?>
+
+
+        <?php // --- Add CSS specific for this new section --- ?>
+        <style>
+            .qp-course-list {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+                gap: 1.5rem;
+            }
+            .qp-course-item .qp-card-content p {
+                 color: var(--qp-dashboard-text-light);
+                 font-size: 0.95em;
+                 line-height: 1.6;
+                 margin-bottom: 1rem; /* Add margin below description */
+            }
+            .qp-progress-bar-container {
+                height: 8px;
+                background-color: var(--qp-dashboard-border-light);
+                border-radius: 4px;
+                overflow: hidden;
+                margin-bottom: 1rem; /* Space between bar and description */
+            }
+            .qp-progress-bar-fill {
+                height: 100%;
+                background-color: var(--qp-dashboard-success); /* Use success color */
+                transition: width 0.5s ease-in-out;
+                border-radius: 4px;
+            }
+        </style>
+        <?php
+        return ob_get_clean();
+    }
+
+    /**
+     * AJAX handler to get the updated course list HTML.
+     */
+    public static function get_course_list_ajax() {
+        check_ajax_referer('qp_practice_nonce', 'nonce'); // Re-use the frontend nonce for simplicity
+
+        if (!is_user_logged_in()) {
+            wp_send_json_error(['message' => 'Not logged in.']);
+        }
+
+        // We can simply call the existing render function to get the HTML
+        $course_list_html = self::render_courses_content();
+
+        wp_send_json_success(['html' => $course_list_html]);
     }
 
    /**

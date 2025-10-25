@@ -3,7 +3,7 @@
 /**
  * Plugin Name:       Question Press
  * Description:       A complete plugin for creating, managing, and practicing questions.
- * Version:           3.4.3
+ * Version:           3.4.4
  * Author:            Himanshu
  */
 
@@ -36,6 +36,7 @@ require_once QP_PLUGIN_DIR . 'admin/class-qp-question-editor-page.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-settings-page.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-logs-reports-page.php';
 require_once QP_PLUGIN_DIR . 'admin/class-qp-backup-restore-page.php';
+require_once QP_PLUGIN_DIR . 'admin/class-qp-entitlements-list-table.php';
 require_once QP_PLUGIN_DIR . 'public/class-qp-shortcodes.php';
 require_once QP_PLUGIN_DIR . 'public/class-qp-dashboard.php';
 require_once QP_PLUGIN_DIR . 'api/class-qp-rest-api.php';
@@ -264,6 +265,123 @@ function qp_activate_plugin()
     ) $charset_collate;";
     dbDelta($sql_term_meta);
 
+    // 5. Courses Table
+    $table_courses = $wpdb->prefix . 'qp_courses';
+    $sql_courses = "CREATE TABLE $table_courses (
+        course_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+        title VARCHAR(255) NOT NULL,
+        slug VARCHAR(255) NOT NULL,
+        description LONGTEXT,
+        status VARCHAR(20) NOT NULL DEFAULT 'draft',
+        author_id BIGINT(20) UNSIGNED NOT NULL,
+        created_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        modified_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        menu_order INT NOT NULL DEFAULT 0,
+        PRIMARY KEY (course_id),
+        UNIQUE KEY slug (slug(191)),
+        KEY status (status),
+        KEY author_id (author_id)
+    ) $charset_collate;";
+    dbDelta($sql_courses);
+
+    // 6. Course Sections Table
+    $table_course_sections = $wpdb->prefix . 'qp_course_sections';
+    $sql_course_sections = "CREATE TABLE $table_course_sections (
+        section_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+        course_id BIGINT(20) UNSIGNED NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        description TEXT,
+        section_order INT NOT NULL DEFAULT 0,
+        PRIMARY KEY (section_id),
+        KEY course_id (course_id),
+        KEY section_order (section_order)
+    ) $charset_collate;";
+    dbDelta($sql_course_sections);
+
+    // 7. Course Items Table
+    $table_course_items = $wpdb->prefix . 'qp_course_items';
+    $sql_course_items = "CREATE TABLE $table_course_items (
+        item_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+        section_id BIGINT(20) UNSIGNED NOT NULL,
+        course_id BIGINT(20) UNSIGNED NOT NULL, /* Denormalized for easier queries */
+        title VARCHAR(255) NOT NULL,
+        item_order INT NOT NULL DEFAULT 0,
+        content_type VARCHAR(50) NOT NULL, /* e.g., 'test_series', 'pdf', 'video', 'lesson' */
+        content_config LONGTEXT, /* JSON configuration for the item */
+        PRIMARY KEY (item_id),
+        KEY section_id (section_id),
+        KEY course_id (course_id), /* Index denormalized course_id */
+        KEY item_order (item_order)
+    ) $charset_collate;";
+    dbDelta($sql_course_items);
+
+    // 8. User Courses Table (Enrollment & Overall Progress)
+    $table_user_courses = $wpdb->prefix . 'qp_user_courses';
+    $sql_user_courses = "CREATE TABLE $table_user_courses (
+        user_course_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+        user_id BIGINT(20) UNSIGNED NOT NULL,
+        course_id BIGINT(20) UNSIGNED NOT NULL,
+        enrollment_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        completion_date DATETIME DEFAULT NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'enrolled', /* e.g., enrolled, in_progress, completed */
+        progress_percent TINYINT UNSIGNED NOT NULL DEFAULT 0,
+        last_accessed_item_id BIGINT(20) UNSIGNED DEFAULT NULL, /* Optional: For resuming */
+        PRIMARY KEY (user_course_id),
+        UNIQUE KEY user_course (user_id, course_id),
+        KEY user_id (user_id),
+        KEY course_id (course_id),
+        KEY status (status)
+    ) $charset_collate;";
+    dbDelta($sql_user_courses);
+
+    // 9. User Items Progress Table
+    $table_user_items_progress = $wpdb->prefix . 'qp_user_items_progress';
+    $sql_user_items_progress = "CREATE TABLE $table_user_items_progress (
+        user_item_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+        user_id BIGINT(20) UNSIGNED NOT NULL,
+        item_id BIGINT(20) UNSIGNED NOT NULL,
+        course_id BIGINT(20) UNSIGNED NOT NULL, /* Denormalized */
+        status VARCHAR(20) NOT NULL DEFAULT 'not_started', /* e.g., not_started, in_progress, completed */
+        completion_date DATETIME DEFAULT NULL,
+        result_data TEXT DEFAULT NULL, /* JSON for score/details */
+        last_viewed DATETIME DEFAULT NULL,
+        PRIMARY KEY (user_item_id),
+        UNIQUE KEY user_item (user_id, item_id),
+        KEY user_id (user_id),
+        KEY item_id (item_id),
+        KEY course_id (course_id), /* Index denormalized course_id */
+        KEY status (status)
+    ) $charset_collate;";
+    dbDelta($sql_user_items_progress);
+
+    // === NEW USER ENTITLEMENTS TABLE ===
+    $table_user_entitlements = $wpdb->prefix . 'qp_user_entitlements';
+    $sql_user_entitlements = "CREATE TABLE $table_user_entitlements (
+        entitlement_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+        user_id BIGINT(20) UNSIGNED NOT NULL,
+        plan_id BIGINT(20) UNSIGNED NOT NULL,
+        order_id BIGINT(20) UNSIGNED NOT NULL,
+        start_date DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00',
+        expiry_date DATETIME DEFAULT NULL,
+        remaining_attempts INT DEFAULT NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'active',
+        notes TEXT DEFAULT NULL,
+        PRIMARY KEY  (entitlement_id),
+        KEY user_id (user_id),
+        KEY plan_id (plan_id),
+        KEY order_id (order_id),
+        KEY status (status),
+        KEY expiry_date (expiry_date)
+    ) $charset_collate;";
+    dbDelta($sql_user_entitlements);
+
+    // === SCHEDULE CRON JOBS ===
+    if (!wp_next_scheduled('qp_check_entitlement_expiration_hook')) {
+        // Schedule to run daily, around midnight server time. Adjust 'daily' if needed.
+        wp_schedule_event(time(), 'daily', 'qp_check_entitlement_expiration_hook');
+        error_log("QP Cron: Scheduled entitlement expiration check.");
+    }
+
     $default_taxonomies = [
         ['taxonomy_name' => 'subject', 'taxonomy_label' => 'Subjects', 'hierarchical' => 1],
         ['taxonomy_name' => 'label', 'taxonomy_label' => 'Labels', 'hierarchical' => 0],
@@ -380,6 +498,1077 @@ function qp_deactivate_plugin() {}
 register_deactivation_hook(QP_PLUGIN_FILE, 'qp_deactivate_plugin');
 
 /**
+ * Register the 'Course' Custom Post Type.
+ */
+function qp_register_course_post_type() {
+    $labels = [
+        'name'                  => _x('Courses', 'Post type general name', 'question-press'),
+        'singular_name'         => _x('Course', 'Post type singular name', 'question-press'),
+        'menu_name'             => _x('Courses', 'Admin Menu text', 'question-press'),
+        'name_admin_bar'        => _x('Course', 'Add New on Toolbar', 'question-press'),
+        'add_new'               => __('Add New', 'question-press'),
+        'add_new_item'          => __('Add New Course', 'question-press'),
+        'new_item'              => __('New Course', 'question-press'),
+        'edit_item'             => __('Edit Course', 'question-press'),
+        'view_item'             => __('View Course', 'question-press'),
+        'all_items'             => __('All Courses', 'question-press'),
+        'search_items'          => __('Search Courses', 'question-press'),
+        'parent_item_colon'     => __('Parent Course:', 'question-press'),
+        'not_found'             => __('No courses found.', 'question-press'),
+        'not_found_in_trash'    => __('No courses found in Trash.', 'question-press'),
+        'featured_image'        => _x('Course Cover Image', 'Overrides the “Featured Image” phrase for this post type. Added in 4.3', 'question-press'),
+        'set_featured_image'    => _x('Set cover image', 'Overrides the “Set featured image” phrase for this post type. Added in 4.3', 'question-press'),
+        'remove_featured_image' => _x('Remove cover image', 'Overrides the “Remove featured image” phrase for this post type. Added in 4.3', 'question-press'),
+        'use_featured_image'    => _x('Use as cover image', 'Overrides the “Use as featured image” phrase for this post type. Added in 4.3', 'question-press'),
+        'archives'              => _x('Course archives', 'The post type archive label used in nav menus. Default “Post Archives”. Added in 4.4', 'question-press'),
+        'insert_into_item'      => _x('Insert into course', 'Overrides the “Insert into post”/”Insert into page” phrase (used when inserting media into a post). Added in 4.4', 'question-press'),
+        'uploaded_to_this_item' => _x('Uploaded to this course', 'Overrides the “Uploaded to this post”/”Uploaded to this page” phrase (used when viewing media attached to a post). Added in 4.4', 'question-press'),
+        'filter_items_list'     => _x('Filter courses list', 'Screen reader text for the filter links heading on the post type listing screen. Default “Filter posts list”/”Filter pages list”. Added in 4.4', 'question-press'),
+        'items_list_navigation' => _x('Courses list navigation', 'Screen reader text for the pagination heading on the post type listing screen. Default “Posts list navigation”/”Pages list navigation”. Added in 4.4', 'question-press'),
+        'items_list'            => _x('Courses list', 'Screen reader text for the items list heading on the post type listing screen. Default “Posts list”/”Pages list”. Added in 4.4', 'question-press'),
+    ];
+
+    $args = [
+        'labels'             => $labels,
+        'public'             => false, // Not publicly viewable on the frontend directly via its slug
+        'publicly_queryable' => false, // Not queryable in the main WP query
+        'show_ui'            => true,  // Show in the admin UI
+        'show_in_menu'       => true,  // Show as a top-level menu item
+        'query_var'          => false, // No query variable needed
+        'rewrite'            => false, // No URL rewriting needed
+        'capability_type'    => 'post', // Use standard post capabilities
+        'has_archive'        => false, // No archive page needed
+        'hierarchical'       => false, // Courses are not hierarchical like pages
+        'menu_position'      => 26,    // Position below Question Press (usually 25)
+        'menu_icon'          => 'dashicons-welcome-learn-more', // Choose an appropriate icon
+        'supports'           => ['title', 'editor', 'author'], // Features we want initially
+        'show_in_rest'       => false, // Disable Block Editor support for now
+    ];
+
+    register_post_type('qp_course', $args);
+}
+add_action('init', 'qp_register_course_post_type'); // Register the CPT on init
+
+/**
+ * Register the 'Plan' Custom Post Type for monetization.
+ */
+function qp_register_plan_post_type() {
+    $labels = [
+        'name'                  => _x('Plans', 'Post type general name', 'question-press'),
+        'singular_name'         => _x('Plan', 'Post type singular name', 'question-press'),
+        'menu_name'             => _x('Monetization Plans', 'Admin Menu text', 'question-press'),
+        'name_admin_bar'        => _x('Plan', 'Add New on Toolbar', 'question-press'),
+        'add_new'               => __('Add New Plan', 'question-press'),
+        'add_new_item'          => __('Add New Plan', 'question-press'),
+        'new_item'              => __('New Plan', 'question-press'),
+        'edit_item'             => __('Edit Plan', 'question-press'),
+        'view_item'             => __('View Plan', 'question-press'), // Should not be viewable on frontend
+        'all_items'             => __('All Plans', 'question-press'),
+        'search_items'          => __('Search Plans', 'question-press'),
+        'parent_item_colon'     => __('Parent Plan:', 'question-press'), // Not applicable, but standard label
+        'not_found'             => __('No plans found.', 'question-press'),
+        'not_found_in_trash'    => __('No plans found in Trash.', 'question-press'),
+    ];
+
+    $args = [
+        'labels'             => $labels,
+        'description'        => __('Defines access plans for Question Press features.', 'question-press'),
+        'public'             => false, // Not publicly viewable on frontend
+        'publicly_queryable' => false, // Not queryable directly
+        'show_ui'            => true,  // Show in admin UI
+        'show_in_menu'       => 'question-press', // Show under the main Question Press menu
+        'query_var'          => false,
+        'rewrite'            => false,
+        'capability_type'    => 'post', // Use standard post capabilities (adjust if needed)
+        'has_archive'        => false,
+        'hierarchical'       => false,
+        'menu_position'      => null, // Will appear as submenu
+        'supports'           => ['title', 'editor'], // Only title needed initially, details via meta
+        'show_in_rest'       => false, // Disable Gutenberg for this CPT
+    ];
+
+    register_post_type('qp_plan', $args);
+}
+add_action('init', 'qp_register_plan_post_type'); // Register the CPT on init
+
+/**
+ * Add meta box for Plan Details.
+ */
+function qp_add_plan_details_meta_box() {
+    add_meta_box(
+        'qp_plan_details_meta_box',           // Unique ID
+        __('Plan Details', 'question-press'), // Box title
+        'qp_render_plan_details_meta_box',    // Callback function
+        'qp_plan',                            // Post type
+        'normal',                             // Context (normal = main column)
+        'high'                                // Priority
+    );
+}
+add_action('add_meta_boxes_qp_plan', 'qp_add_plan_details_meta_box'); // Hook specifically for qp_plan
+
+/**
+ * Render the HTML content for the Plan Details meta box.
+ */
+function qp_render_plan_details_meta_box($post) {
+    // Add a nonce field for security
+    wp_nonce_field('qp_save_plan_details_meta', 'qp_plan_details_nonce');
+
+    // Get existing meta values
+    $plan_type = get_post_meta($post->ID, '_qp_plan_type', true);
+    $duration_value = get_post_meta($post->ID, '_qp_plan_duration_value', true);
+    $duration_unit = get_post_meta($post->ID, '_qp_plan_duration_unit', true);
+    $attempts = get_post_meta($post->ID, '_qp_plan_attempts', true);
+    $course_access_type = get_post_meta($post->ID, '_qp_plan_course_access_type', true);
+    $linked_courses_raw = get_post_meta($post->ID, '_qp_plan_linked_courses', true);
+    $linked_courses = is_array($linked_courses_raw) ? $linked_courses_raw : []; // Ensure it's an array
+    $description = get_post_meta($post->ID, '_qp_plan_description', true);
+
+    // Get all published courses for selection
+    $courses = get_posts([
+        'post_type' => 'qp_course',
+        'post_status' => 'publish',
+        'numberposts' => -1,
+        'orderby' => 'title',
+        'order' => 'ASC',
+    ]);
+
+    ?>
+    <style>
+        .qp-plan-meta-box table { width: 100%; border-collapse: collapse; }
+        .qp-plan-meta-box th, .qp-plan-meta-box td { text-align: left; padding: 10px; border-bottom: 1px solid #eee; vertical-align: top; }
+        .qp-plan-meta-box th { width: 150px; font-weight: 600; }
+        .qp-plan-meta-box select, .qp-plan-meta-box input[type="number"], .qp-plan-meta-box textarea { width: 100%; max-width: 350px; box-sizing: border-box; }
+        .qp-plan-meta-box .description { font-size: 0.9em; color: #666; }
+        .qp-plan-meta-box .conditional-field { display: none; } /* Hide conditional fields initially */
+        .qp-plan-meta-box .course-select-list { max-height: 200px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; background: #fff; }
+        .qp-plan-meta-box .course-select-list label { display: block; margin-bottom: 5px; }
+    </style>
+
+    <div class="qp-plan-meta-box">
+        <table>
+            <tbody>
+                <tr>
+                    <th><label for="qp_plan_type">Plan Type</label></th>
+                    <td>
+                        <select name="_qp_plan_type" id="qp_plan_type">
+                            <option value="">— Select Type —</option>
+                            <option value="time_limited" <?php selected($plan_type, 'time_limited'); ?>>Time Limited</option>
+                            <option value="attempt_limited" <?php selected($plan_type, 'attempt_limited'); ?>>Attempt Limited</option>
+                            <option value="course_access" <?php selected($plan_type, 'course_access'); ?>>Course Access Only</option>
+                            <option value="unlimited" <?php selected($plan_type, 'unlimited'); ?>>Unlimited (Time & Attempts)</option>
+                            <option value="combined" <?php selected($plan_type, 'combined'); ?>>Combined (Time, Attempts, Courses)</option>
+                        </select>
+                        <p class="description">Select the primary restriction type for this plan.</p>
+                    </td>
+                </tr>
+
+                <tr class="conditional-field" data-depends-on="time_limited combined">
+                    <th><label for="qp_plan_duration_value">Duration</label></th>
+                    <td>
+                        <input type="number" name="_qp_plan_duration_value" id="qp_plan_duration_value" value="<?php echo esc_attr($duration_value); ?>" min="1" style="width: 80px; margin-right: 10px;">
+                        <select name="_qp_plan_duration_unit" id="qp_plan_duration_unit">
+                            <option value="day" <?php selected($duration_unit, 'day'); ?>>Day(s)</option>
+                            <option value="month" <?php selected($duration_unit, 'month'); ?>>Month(s)</option>
+                            <option value="year" <?php selected($duration_unit, 'year'); ?>>Year(s)</option>
+                        </select>
+                        <p class="description">How long the access lasts after purchase.</p>
+                    </td>
+                </tr>
+
+                <tr class="conditional-field" data-depends-on="attempt_limited combined">
+                    <th><label for="qp_plan_attempts">Number of Attempts</label></th>
+                    <td>
+                        <input type="number" name="_qp_plan_attempts" id="qp_plan_attempts" value="<?php echo esc_attr($attempts); ?>" min="1">
+                        <p class="description">How many attempts the user gets with this plan.</p>
+                    </td>
+                </tr>
+
+                <tr class="conditional-field" data-depends-on="course_access combined">
+                    <th><label for="qp_plan_course_access_type">Course Access</label></th>
+                    <td>
+                        <select name="_qp_plan_course_access_type" id="qp_plan_course_access_type">
+                            <option value="all" <?php selected($course_access_type, 'all'); ?>>All Courses</option>
+                            <option value="specific" <?php selected($course_access_type, 'specific'); ?>>Specific Courses</option>
+                        </select>
+                    </td>
+                </tr>
+
+                <tr class="conditional-field" data-depends-on="course_access combined" data-sub-depends-on="specific">
+                    <th><label>Select Courses</label></th>
+                    <td>
+                        <div class="course-select-list">
+                            <?php if (!empty($courses)) : ?>
+                                <?php foreach ($courses as $course) : ?>
+                                    <label>
+                                        <input type="checkbox" name="_qp_plan_linked_courses[]" value="<?php echo esc_attr($course->ID); ?>" <?php checked(in_array($course->ID, $linked_courses)); ?>>
+                                        <?php echo esc_html($course->post_title); ?>
+                                    </label>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <p>No courses found. Please create courses first.</p>
+                            <?php endif; ?>
+                        </div>
+                         <p class="description">Select the specific courses included in this plan.</p>
+                    </td>
+                </tr>
+
+                 <tr>
+                    <th><label for="qp_plan_description">Description</label></th>
+                    <td>
+                        <textarea name="_qp_plan_description" id="qp_plan_description" rows="3"><?php echo esc_textarea($description); ?></textarea>
+                         <p class="description">Optional user-facing description (e.g., for display on product page or user dashboard).</p>
+                    </td>
+                </tr>
+
+            </tbody>
+        </table>
+    </div>
+
+    <script type="text/javascript">
+        jQuery(document).ready(function($) {
+            const planTypeSelect = $('#qp_plan_type');
+            const courseAccessSelect = $('#qp_plan_course_access_type');
+            const metaBox = $('.qp-plan-meta-box');
+
+            function toggleFields() {
+                const selectedType = planTypeSelect.val();
+                const selectedCourseAccess = courseAccessSelect.val();
+
+                metaBox.find('.conditional-field').each(function() {
+                    const $fieldRow = $(this);
+                    const dependsOn = $fieldRow.data('depends-on') ? $fieldRow.data('depends-on').split(' ') : [];
+                    const subDependsOn = $fieldRow.data('sub-depends-on'); // For specific course selection
+
+                    let show = false;
+                    if (dependsOn.includes(selectedType)) {
+                        show = true;
+                        // Handle sub-dependency for specific courses
+                        if (subDependsOn === 'specific' && selectedCourseAccess !== 'specific') {
+                            show = false;
+                        }
+                    }
+
+                    if (show) {
+                        $fieldRow.slideDown(200);
+                        // Make inputs required if needed (optional)
+                         //$fieldRow.find('input, select').prop('required', true);
+                    } else {
+                        $fieldRow.slideUp(200);
+                        // Remove required attribute if hidden (optional)
+                         //$fieldRow.find('input, select').prop('required', false);
+                    }
+                });
+            }
+
+            // Initial toggle on page load
+            toggleFields();
+
+            // Retoggle when plan type or course access type changes
+            planTypeSelect.on('change', toggleFields);
+            courseAccessSelect.on('change', toggleFields);
+        });
+    </script>
+    <?php
+}
+
+/**
+ * Save the meta box data when the 'qp_plan' post type is saved.
+ */
+function qp_save_plan_details_meta($post_id) {
+    // Check nonce
+    if (!isset($_POST['qp_plan_details_nonce']) || !wp_verify_nonce($_POST['qp_plan_details_nonce'], 'qp_save_plan_details_meta')) {
+        return $post_id;
+    }
+
+    // Check if the current user has permission to save the post
+    if (!current_user_can('edit_post', $post_id)) {
+        return $post_id;
+    }
+
+    // Don't save if it's an autosave
+    if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) {
+        return $post_id;
+    }
+
+    // Check post type is correct
+    if ('qp_plan' !== get_post_type($post_id)) {
+        return $post_id;
+    }
+
+    // Sanitize and save meta fields
+    $fields_to_save = [
+        '_qp_plan_type' => 'sanitize_key',
+        '_qp_plan_duration_value' => 'absint',
+        '_qp_plan_duration_unit' => 'sanitize_key',
+        '_qp_plan_attempts' => 'absint',
+        '_qp_plan_course_access_type' => 'sanitize_key',
+        '_qp_plan_description' => 'sanitize_textarea_field',
+    ];
+
+    foreach ($fields_to_save as $meta_key => $sanitize_func) {
+        if (isset($_POST[$meta_key])) {
+            $value = call_user_func($sanitize_func, $_POST[$meta_key]);
+            // Handle potentially empty values for numbers if needed
+             if (($sanitize_func === 'absint' || $sanitize_func === 'intval') && $value === 0 && !isset($_POST[$meta_key])) {
+                 // If the field wasn't submitted (e.g., hidden conditionally), don't save 0, save empty or delete meta
+                 delete_post_meta($post_id, $meta_key);
+                 continue;
+             }
+            update_post_meta($post_id, $meta_key, $value);
+        } else {
+             // If field is not set (e.g. conditional fields that are hidden), delete existing meta
+            delete_post_meta($post_id, $meta_key);
+        }
+    }
+
+    // Handle the linked courses array separately
+    if (isset($_POST['_qp_plan_linked_courses']) && is_array($_POST['_qp_plan_linked_courses'])) {
+        $linked_courses = array_map('absint', $_POST['_qp_plan_linked_courses']);
+        update_post_meta($post_id, '_qp_plan_linked_courses', $linked_courses);
+    } else {
+         // If no courses are selected or the field is hidden, ensure the meta is removed or empty
+        update_post_meta($post_id, '_qp_plan_linked_courses', []);
+    }
+}
+add_action('save_post_qp_plan', 'qp_save_plan_details_meta'); // Hook specifically for qp_plan
+
+/**
+ * Add meta box for Course Access Settings (Revised).
+ */
+function qp_add_course_access_meta_box() {
+    add_meta_box(
+        'qp_course_access_meta_box',          // Unique ID
+        __('Course Access & Monetization', 'question-press'), // Updated Box title
+        'qp_render_course_access_meta_box',   // Callback function
+        'qp_course',                          // Post type
+        'side',                               // Context (side = right column)
+        'high'                                // Priority
+    );
+}
+add_action('add_meta_boxes_qp_course', 'qp_add_course_access_meta_box'); // Hook specifically for qp_course
+
+/**
+ * Render the HTML content for the Course Access meta box (Revised).
+ */
+function qp_render_course_access_meta_box($post) {
+    // Add a nonce field for security
+    wp_nonce_field('qp_save_course_access_meta', 'qp_course_access_nonce');
+
+    // Get existing meta values
+    $access_mode = get_post_meta($post->ID, '_qp_course_access_mode', true) ?: 'free'; // Default to free
+    $duration_value = get_post_meta($post->ID, '_qp_course_access_duration_value', true);
+    $duration_unit = get_post_meta($post->ID, '_qp_course_access_duration_unit', true) ?: 'day'; // Default unit
+    $linked_product_id = get_post_meta($post->ID, '_qp_linked_product_id', true);
+    $auto_plan_id = get_post_meta($post->ID, '_qp_course_auto_plan_id', true); // Get the auto-generated plan ID
+
+    // Get all published WooCommerce products for selection
+    $products = wc_get_products([
+        'status' => 'publish',
+        'limit' => -1,
+        'orderby' => 'title',
+        'order' => 'ASC',
+        'return' => 'objects',
+    ]);
+
+    ?>
+    <style>
+        #qp_course_access_meta_box p { margin-bottom: 15px; }
+        #qp_course_access_meta_box label { font-weight: 600; display: block; margin-bottom: 5px; }
+        #qp_course_access_meta_box select,
+        #qp_course_access_meta_box input[type="number"] { width: 100%; box-sizing: border-box; margin-bottom: 5px;}
+        #qp_course_access_meta_box .duration-group { display: flex; align-items: center; gap: 10px; }
+        #qp_course_access_meta_box .duration-group input[type="number"] { width: 80px; flex-shrink: 0; }
+        #qp_course_access_meta_box .duration-group select { flex-grow: 1; }
+        #qp-purchase-fields { display: <?php echo ($access_mode === 'requires_purchase') ? 'block' : 'none'; ?>; margin-top: 15px; border-top: 1px solid #eee; padding-top: 15px;}
+        #qp_course_access_meta_box small.description { font-size: 0.9em; color: #666; display: block; margin-top: 3px; }
+        #qp-auto-plan-info { font-style: italic; color: #666; font-size: 0.9em; margin-top: 10px; padding-top: 10px; border-top: 1px dashed #ddd; }
+    </style>
+
+    <p>
+        <label for="qp_course_access_mode"><?php _e('Access Mode:', 'question-press'); ?></label>
+        <select name="_qp_course_access_mode" id="qp_course_access_mode">
+            <option value="free" <?php selected($access_mode, 'free'); ?>><?php _e('Free (Public Enrollment)', 'question-press'); ?></option>
+            <option value="requires_purchase" <?php selected($access_mode, 'requires_purchase'); ?>><?php _e('Requires Purchase', 'question-press'); ?></option>
+        </select>
+    </p>
+
+    <div id="qp-purchase-fields">
+        <p>
+            <label><?php _e('Access Duration:', 'question-press'); ?></label>
+            <div class="duration-group">
+                <input type="number" name="_qp_course_access_duration_value" value="<?php echo esc_attr($duration_value); ?>" min="1" placeholder="e.g., 30">
+                <select name="_qp_course_access_duration_unit">
+                    <option value="day" <?php selected($duration_unit, 'day'); ?>>Day(s)</option>
+                    <option value="month" <?php selected($duration_unit, 'month'); ?>>Month(s)</option>
+                    <option value="year" <?php selected($duration_unit, 'year'); ?>>Year(s)</option>
+                </select>
+            </div>
+             <small class="description"><?php _e('How long access lasts after purchase. Leave blank for lifetime access.', 'question-press'); ?></small>
+        </p>
+
+        <p>
+            <label for="qp_linked_product_id"><?php _e('Linked WooCommerce Product:', 'question-press'); ?></label>
+            <select name="_qp_linked_product_id" id="qp_linked_product_id">
+                <option value="">— <?php _e('Select Product', 'question-press'); ?> —</option>
+                <?php
+                if ($products) {
+                    foreach ($products as $product) {
+                        if ($product->is_type('simple') || $product->is_type('variable')) {
+                            printf(
+                                '<option value="%s" %s>%s</option>',
+                                esc_attr($product->get_id()),
+                                selected($linked_product_id, $product->get_id(), false),
+                                esc_html($product->get_name()) . ' (#' . $product->get_id() . ')'
+                            );
+                        }
+                    }
+                }
+                ?>
+            </select>
+            <small class="description"><?php _e('Product users click "Purchase" for. Ensure this product is linked to the correct auto-generated or manual plan.', 'question-press'); ?></small>
+        </p>
+
+        <?php if ($auto_plan_id && get_post($auto_plan_id)) : ?>
+             <p id="qp-auto-plan-info">
+                 This course automatically manages Plan ID #<?php echo esc_html($auto_plan_id); ?>.
+                 <a href="<?php echo esc_url(get_edit_post_link($auto_plan_id)); ?>" target="_blank">View Plan</a><br>
+                 Ensure your Linked Product above uses this Plan ID.
+             </p>
+        <?php elseif ($access_mode === 'requires_purchase') : ?>
+             <p id="qp-auto-plan-info">
+                 A Plan will be automatically created/updated when you save this course. Link your WC Product to that Plan ID.
+             </p>
+        <?php endif; ?>
+
+    </div>
+
+    <script type="text/javascript">
+        jQuery(document).ready(function($) {
+            $('#qp_course_access_mode').on('change', function() {
+                if ($(this).val() === 'requires_purchase') {
+                    $('#qp-purchase-fields').slideDown(200);
+                } else {
+                    $('#qp-purchase-fields').slideUp(200);
+                    // Clear fields when switching to free
+                    // $('#qp-purchase-fields input[type="number"]').val('');
+                    // $('#qp-purchase-fields select').val('');
+                }
+            }).trigger('change'); // Trigger on load to set initial state
+        });
+    </script>
+    <?php
+}
+
+/**
+ * Save the meta box data when the 'qp_course' post type is saved (Revised).
+ * This function ONLY saves the course meta. Auto-plan logic will be separate.
+ */
+function qp_save_course_access_meta($post_id) {
+    // Check nonce
+    if (!isset($_POST['qp_course_access_nonce']) || !wp_verify_nonce($_POST['qp_course_access_nonce'], 'qp_save_course_access_meta')) {
+        return $post_id;
+    }
+
+    // Check permissions, autosave, post type
+    if (!current_user_can('edit_post', $post_id) || (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) || 'qp_course' !== get_post_type($post_id)) {
+        return $post_id;
+    }
+
+    // Save Access Mode
+    $access_mode = isset($_POST['_qp_course_access_mode']) ? sanitize_key($_POST['_qp_course_access_mode']) : 'free';
+    update_post_meta($post_id, '_qp_course_access_mode', $access_mode);
+
+    // Save fields only if requires_purchase is selected
+    if ($access_mode === 'requires_purchase') {
+        // Save Duration Value (allow empty for lifetime)
+        $duration_value = isset($_POST['_qp_course_access_duration_value']) ? absint($_POST['_qp_course_access_duration_value']) : '';
+        update_post_meta($post_id, '_qp_course_access_duration_value', $duration_value);
+
+        // Save Duration Unit
+        $duration_unit = isset($_POST['_qp_course_access_duration_unit']) ? sanitize_key($_POST['_qp_course_access_duration_unit']) : 'day';
+        update_post_meta($post_id, '_qp_course_access_duration_unit', $duration_unit);
+
+        // Save Linked Product ID
+        $product_id = isset($_POST['_qp_linked_product_id']) ? absint($_POST['_qp_linked_product_id']) : '';
+        update_post_meta($post_id, '_qp_linked_product_id', $product_id);
+
+    } else {
+        // Delete monetization meta if mode is free
+        delete_post_meta($post_id, '_qp_course_access_duration_value');
+        delete_post_meta($post_id, '_qp_course_access_duration_unit');
+        delete_post_meta($post_id, '_qp_linked_product_id');
+        // We keep '_qp_course_auto_plan_id' even if switched to free,
+        // so we don't lose the link if switched back later.
+    }
+}
+// Hook *after* the structure save but *before* the auto-plan logic
+add_action('save_post_qp_course', 'qp_save_course_access_meta', 30, 1);
+
+/**
+ * Automatically creates or updates a qp_plan post based on course settings.
+ * Triggered after the course meta is saved.
+ *
+ * @param int $post_id The ID of the qp_course post being saved.
+ */
+function qp_sync_course_plan($post_id) {
+    // Basic checks (already done in qp_save_course_access_meta, but good practice)
+    if ( (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) || 'qp_course' !== get_post_type($post_id) || !current_user_can('edit_post', $post_id) ) {
+        return;
+    }
+    // Verify nonce again, just to be safe, using the nonce from the access meta save
+    if (!isset($_POST['qp_course_access_nonce']) || !wp_verify_nonce($_POST['qp_course_access_nonce'], 'qp_save_course_access_meta')) {
+        return;
+    }
+
+    $access_mode = get_post_meta($post_id, '_qp_course_access_mode', true);
+
+    // Only proceed if the course requires purchase
+    if ($access_mode !== 'requires_purchase') {
+        // Optional: If switched from paid to free, we could potentially update the linked plan's status,
+        // but for now, we'll just leave the plan as is to preserve access for past purchasers.
+        return;
+    }
+
+    // Get the course details needed for the plan
+    $course_title = get_the_title($post_id);
+    $duration_value = get_post_meta($post_id, '_qp_course_access_duration_value', true);
+    $duration_unit = get_post_meta($post_id, '_qp_course_access_duration_unit', true);
+    $existing_plan_id = get_post_meta($post_id, '_qp_course_auto_plan_id', true);
+
+    // Determine plan type based on duration
+    $plan_type = !empty($duration_value) ? 'time_limited' : 'unlimited'; // Course access implies unlimited attempts
+
+    // Prepare plan post data
+    $plan_post_args = [
+        'post_title' => 'Auto: Access Plan for Course "' . $course_title . '"',
+        'post_content' => '', // Content not needed
+        'post_status' => 'publish', // Auto-publish the plan
+        'post_type' => 'qp_plan',
+        'meta_input' => [ // Use meta_input for direct meta saving/updating
+            '_qp_is_auto_generated' => 'true', // Flag this as auto-managed
+            '_qp_plan_type' => $plan_type,
+            '_qp_plan_duration_value' => !empty($duration_value) ? absint($duration_value) : null,
+            '_qp_plan_duration_unit' => !empty($duration_value) ? sanitize_key($duration_unit) : null,
+            '_qp_plan_attempts' => null, // Course access plans grant unlimited attempts within duration
+            '_qp_plan_course_access_type' => 'specific',
+            '_qp_plan_linked_courses' => [$post_id], // Link specifically to this course ID
+            // '_qp_plan_description' => 'Automatically generated plan for ' . $course_title, // Optional description
+        ],
+    ];
+
+    $plan_id_to_save = 0;
+
+    // Check if a plan already exists and is valid
+    if (!empty($existing_plan_id)) {
+         $existing_plan_post = get_post($existing_plan_id);
+         // Check if the post exists and is indeed a qp_plan
+         if ($existing_plan_post && $existing_plan_post->post_type === 'qp_plan') {
+             // Update existing plan
+             $plan_post_args['ID'] = $existing_plan_id; // Add ID for update
+             $updated_plan_id = wp_update_post($plan_post_args, true); // true returns WP_Error on failure
+             if (!is_wp_error($updated_plan_id)) {
+                 $plan_id_to_save = $updated_plan_id;
+                 error_log("QP Auto Plan: Updated Plan ID #{$plan_id_to_save} for Course ID #{$post_id}");
+             } else {
+                 error_log("QP Auto Plan: FAILED to update Plan ID #{$existing_plan_id} for Course ID #{$post_id}. Error: " . $updated_plan_id->get_error_message());
+             }
+         } else {
+             // The linked ID was invalid, clear it and create a new one
+             delete_post_meta($post_id, '_qp_course_auto_plan_id');
+             $existing_plan_id = 0; // Force creation below
+         }
+    }
+
+    // Create new plan if no valid existing one was found/updated
+    if (empty($plan_id_to_save) && empty($existing_plan_id)) {
+        $new_plan_id = wp_insert_post($plan_post_args, true); // true returns WP_Error on failure
+        if (!is_wp_error($new_plan_id)) {
+            $plan_id_to_save = $new_plan_id;
+            // Save the new plan ID back to the course meta
+            update_post_meta($post_id, '_qp_course_auto_plan_id', $plan_id_to_save);
+            error_log("QP Auto Plan: CREATED Plan ID #{$plan_id_to_save} for Course ID #{$post_id}");
+        } else {
+            error_log("QP Auto Plan: FAILED to create new Plan for Course ID #{$post_id}. Error: " . $new_plan_id->get_error_message());
+        }
+    }
+
+}
+// Hook with a later priority, ensuring course meta is saved first
+add_action('save_post_qp_course', 'qp_sync_course_plan', 40, 1);
+
+/**
+ * Checks if a user has access to a specific course via entitlement OR existing enrollment.
+ *
+ * @param int $user_id   The ID of the user to check.
+ * @param int $course_id The ID of the course (qp_course post ID) to check access for.
+ * @return bool True if the user has access, false otherwise.
+ */
+function qp_user_can_access_course($user_id, $course_id) {
+    if (empty($user_id) || empty($course_id)) {
+        return false;
+    }
+
+    // 1. Admins always have access
+    if (user_can($user_id, 'manage_options')) {
+        return true;
+    }
+
+    // 2. Check if the course is explicitly marked as free
+    $access_mode = get_post_meta($course_id, '_qp_course_access_mode', true);
+    if ($access_mode === 'free') {
+        return true; // Free courses are always accessible
+    }
+
+    global $wpdb;
+    $entitlements_table = $wpdb->prefix . 'qp_user_entitlements';
+    $user_courses_table = $wpdb->prefix . 'qp_user_courses'; // <<< Add enrollment table name
+    $current_time = current_time('mysql');
+
+    // 3. Check for ANY active entitlement granting access
+    $active_entitlements = $wpdb->get_results($wpdb->prepare(
+        "SELECT entitlement_id, plan_id
+         FROM {$entitlements_table}
+         WHERE user_id = %d
+         AND status = 'active'
+         AND (expiry_date IS NULL OR expiry_date > %s)",
+        $user_id,
+        $current_time
+    ));
+
+    if (!empty($active_entitlements)) {
+        // Check each active plan to see if it grants access to this course
+        foreach ($active_entitlements as $entitlement) {
+            $plan_id = $entitlement->plan_id;
+            $course_access_type = get_post_meta($plan_id, '_qp_plan_course_access_type', true);
+            $linked_courses_raw = get_post_meta($plan_id, '_qp_plan_linked_courses', true);
+            $linked_courses = is_array($linked_courses_raw) ? $linked_courses_raw : [];
+
+            if ($course_access_type === 'all' || ($course_access_type === 'specific' && in_array($course_id, $linked_courses))) {
+                return true; // Access granted via entitlement
+            }
+        }
+    }
+
+    // 4. *** NEW CHECK ***: Check for existing enrollment if no entitlement granted access
+    $is_enrolled = $wpdb->get_var($wpdb->prepare(
+        "SELECT user_course_id FROM {$user_courses_table} WHERE user_id = %d AND course_id = %d",
+        $user_id,
+        $course_id
+    ));
+
+    if ($is_enrolled) {
+        return true; // Access granted due to existing enrollment
+    }
+    // --- END NEW CHECK ---
+
+    // 5. If none of the above grant access, deny.
+    return false;
+}
+
+/**
+ * Ensures the entitlement expiration cron job is scheduled.
+ * Runs on WordPress initialization.
+ */
+function qp_ensure_cron_scheduled() {
+    if (!wp_next_scheduled('qp_check_entitlement_expiration_hook')) {
+        wp_schedule_event(time(), 'daily', 'qp_check_entitlement_expiration_hook');
+        error_log("QP Cron: Re-scheduled entitlement expiration check on init.");
+    }
+}
+add_action('init', 'qp_ensure_cron_scheduled');
+
+/**
+ * The callback function executed by the WP-Cron job to update expired entitlements.
+ */
+function qp_run_entitlement_expiration_check() {
+    error_log("QP Cron: Running entitlement expiration check...");
+    global $wpdb;
+    $entitlements_table = $wpdb->prefix . 'qp_user_entitlements';
+    $current_time = current_time('mysql');
+
+    // Find entitlement records that are 'active' but whose expiry date is in the past
+    $expired_ids = $wpdb->get_col($wpdb->prepare(
+        "SELECT entitlement_id
+         FROM {$entitlements_table}
+         WHERE status = 'active'
+         AND expiry_date IS NOT NULL
+         AND expiry_date <= %s",
+        $current_time
+    ));
+
+    if (!empty($expired_ids)) {
+        $ids_placeholder = implode(',', array_map('absint', $expired_ids));
+
+        // Update the status of these records to 'expired'
+        $updated_count = $wpdb->query(
+            "UPDATE {$entitlements_table}
+             SET status = 'expired'
+             WHERE entitlement_id IN ($ids_placeholder)"
+        );
+
+        if ($updated_count !== false) {
+             error_log("QP Cron: Marked {$updated_count} entitlements as expired.");
+        } else {
+             error_log("QP Cron: Error updating expired entitlements. DB Error: " . $wpdb->last_error);
+        }
+    } else {
+        error_log("QP Cron: No expired entitlements found to update.");
+    }
+}
+// Hook the callback function to the scheduled event's action name
+add_action('qp_check_entitlement_expiration_hook', 'qp_run_entitlement_expiration_check');
+
+/**
+ * Add custom field to WooCommerce Product Data > General tab for Simple products.
+ */
+function qp_add_plan_link_to_simple_products() {
+    global $post;
+
+    // Get all published 'qp_plan' posts
+    $plans = get_posts([
+        'post_type' => 'qp_plan',
+        'post_status' => 'publish',
+        'numberposts' => -1,
+        'orderby' => 'title',
+        'order' => 'ASC',
+    ]);
+
+    $options = ['' => __('— Select a Question Press Plan —', 'question-press')];
+    if ($plans) {
+        foreach ($plans as $plan) {
+            $options[$plan->ID] = esc_html($plan->post_title);
+        }
+    }
+
+    // Output the WooCommerce field
+    woocommerce_wp_select([
+        'id'          => '_qp_linked_plan_id',
+        'label'       => __('Question Press Plan', 'question-press'),
+        'description' => __('Link this product to a Question Press monetization plan. This grants access when the order is completed.', 'question-press'),
+        'desc_tip'    => true,
+        'options'     => $options,
+        'value'       => get_post_meta($post->ID, '_qp_linked_plan_id', true), // Get current value
+    ]);
+}
+add_action('woocommerce_product_options_general_product_data', 'qp_add_plan_link_to_simple_products');
+
+/**
+ * Save the custom field for Simple products.
+ */
+function qp_save_plan_link_simple_product($post_id) {
+    $plan_id = isset($_POST['_qp_linked_plan_id']) ? absint($_POST['_qp_linked_plan_id']) : '';
+    update_post_meta($post_id, '_qp_linked_plan_id', $plan_id);
+}
+add_action('woocommerce_process_product_meta_simple', 'qp_save_plan_link_simple_product');
+// Use the generic hook as well if needed for other simple types like external etc.
+// add_action('woocommerce_process_product_meta', 'qp_save_plan_link_simple_product');
+
+/**
+ * Add custom field to WooCommerce Product Data > Variations tab for Variable products.
+ */
+function qp_add_plan_link_to_variable_products($loop, $variation_data, $variation) {
+    // Get all published 'qp_plan' posts (reuse logic or query again)
+    $plans = get_posts([
+        'post_type' => 'qp_plan',
+        'post_status' => 'publish',
+        'numberposts' => -1,
+        'orderby' => 'title',
+        'order' => 'ASC',
+    ]);
+
+    $options = ['' => __('— Select a Question Press Plan —', 'question-press')];
+    if ($plans) {
+        foreach ($plans as $plan) {
+            $options[$plan->ID] = esc_html($plan->post_title);
+        }
+    }
+
+    // Output the WooCommerce field for variations
+    woocommerce_wp_select([
+        'id'            => "_qp_linked_plan_id[{$loop}]", // Needs array index for variations
+        'label'         => __('Question Press Plan', 'question-press'),
+        'description'   => __('Link this variation to a Question Press monetization plan.', 'question-press'),
+        'desc_tip'      => true,
+        'options'       => $options,
+        'value'         => get_post_meta($variation->ID, '_qp_linked_plan_id', true), // Get value for this variation ID
+        'wrapper_class' => 'form-row form-row-full', // Ensure it takes full width in variation options
+    ]);
+}
+add_action('woocommerce_product_after_variable_attributes', 'qp_add_plan_link_to_variable_products', 10, 3);
+
+/**
+ * Save the custom field for Variable products (variations).
+ */
+function qp_save_plan_link_variable_product($variation_id, $i) {
+    $plan_id = isset($_POST['_qp_linked_plan_id'][$i]) ? absint($_POST['_qp_linked_plan_id'][$i]) : '';
+    update_post_meta($variation_id, '_qp_linked_plan_id', $plan_id);
+}
+add_action('woocommerce_save_product_variation', 'qp_save_plan_link_variable_product', 10, 2);
+
+/**
+ * Add meta box for Course Structure.
+ */
+function qp_add_course_structure_meta_box() {
+    add_meta_box(
+        'qp_course_structure_meta_box', // Unique ID
+        __('Course Structure', 'question-press'), // Box title
+        'qp_render_course_structure_meta_box', // Callback function
+        'qp_course', // Post type
+        'normal', // Context (normal = main column)
+        'high' // Priority
+    );
+}
+add_action('add_meta_boxes', 'qp_add_course_structure_meta_box');
+
+/**
+ * Render the HTML content for the Course Structure meta box.
+ * (Initial static structure - JS will make it dynamic later)
+ */
+function qp_render_course_structure_meta_box($post) {
+    // Add a nonce field for security
+    wp_nonce_field('qp_save_course_structure_meta', 'qp_course_structure_nonce');
+
+    // Basic structure - we will load saved data and make this dynamic later
+    ?>
+    <div id="qp-course-structure-container">
+        <p>Define the sections and content items for this course below. Drag and drop to reorder.</p>
+
+        <div id="qp-sections-list">
+            <?php
+            // --- Placeholder for loading existing sections/items later ---
+            // For now, it's empty, ready for JS.
+            ?>
+        </div>
+
+        <p>
+            <button type="button" id="qp-add-section-btn" class="button button-secondary">
+                <span class="dashicons dashicons-plus-alt" style="vertical-align: middle;"></span> Add Section
+            </button>
+        </p>
+    </div>
+
+    <?php
+    // --- Add some basic CSS (will be moved/refined later) ---
+    ?>
+    <style>
+        #qp-sections-list .qp-section {
+            border: 1px solid #ccd0d4;
+            margin-bottom: 15px;
+            background: #fff;
+            border-radius: 4px;
+        }
+        .qp-section-header {
+            padding: 10px 15px;
+            background: #f6f7f7;
+            border-bottom: 1px solid #ccd0d4;
+            cursor: move;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .qp-section-header h3 {
+            margin: 0;
+            font-size: 1.1em;
+            display: inline-block;
+        }
+        .qp-section-title-input {
+            font-size: 1.1em;
+            font-weight: bold;
+            border: none;
+            box-shadow: none;
+            padding: 2px 5px;
+            margin-left: 5px;
+            background: transparent;
+        }
+        .qp-section-controls button, .qp-item-controls button {
+            margin-left: 5px;
+        }
+        .qp-section-content {
+            padding: 15px;
+        }
+        .qp-items-list {
+            margin-left: 10px;
+            border-left: 3px solid #eef2f5;
+            padding-left: 15px;
+            min-height: 30px; /* Area to drop items */
+        }
+        .qp-course-item {
+            border: 1px dashed #dcdcde;
+            padding: 10px;
+            margin-bottom: 10px;
+            background: #fdfdfd;
+            border-radius: 3px;
+        }
+         .qp-item-header {
+             display: flex; justify-content: space-between; align-items: center;
+             margin-bottom: 10px; cursor: move; padding-bottom: 5px; border-bottom: 1px solid #eee;
+         }
+         .qp-item-title-input { font-weight: bold; border: none; box-shadow: none; padding: 2px 5px; background: transparent; flex-grow: 1; }
+        .qp-item-config { margin-top: 10px; padding-top: 10px; border-top: 1px solid #eee; }
+        .qp-config-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 10px; }
+        .qp-config-row label { display: block; font-weight: 500; margin-bottom: 3px; font-size: 0.9em; }
+        .qp-config-row select, .qp-config-row input { width: 100%; box-sizing: border-box; }
+        .qp-item-config .qp-marks-group { display: flex; gap: 10px; }
+        .qp-item-config .qp-marks-group > div { flex: 1; }
+    </style>
+    <?php
+}
+
+/**
+ * Save the course structure data when the 'qp_course' post type is saved.
+ * Handles updates, inserts, and deletions intelligently.
+ * Cleans up user progress for deleted items.
+ */
+function qp_save_course_structure_meta($post_id) {
+    // Check nonce
+    if (!isset($_POST['qp_course_structure_nonce']) || !wp_verify_nonce($_POST['qp_course_structure_nonce'], 'qp_save_course_structure_meta')) {
+        return $post_id;
+    }
+
+    // Check if the current user has permission to save the post
+    if (!current_user_can('edit_post', $post_id)) {
+        return $post_id;
+    }
+
+    // Don't save if it's an autosave
+    if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) {
+        return $post_id;
+    }
+
+    // Check post type
+    if ('qp_course' !== get_post_type($post_id)) {
+        return $post_id;
+    }
+
+    global $wpdb;
+    $sections_table = $wpdb->prefix . 'qp_course_sections';
+    $items_table = $wpdb->prefix . 'qp_course_items';
+    $progress_table = $wpdb->prefix . 'qp_user_items_progress';
+
+    // --- Data processing ---
+
+    // 1. Fetch Existing Structure IDs from DB
+    $existing_section_ids = $wpdb->get_col($wpdb->prepare("SELECT section_id FROM $sections_table WHERE course_id = %d", $post_id));
+    $existing_item_ids = $wpdb->get_col($wpdb->prepare("SELECT item_id FROM $items_table WHERE course_id = %d", $post_id));
+
+    $submitted_section_ids = [];
+    $submitted_item_ids = [];
+    $processed_item_ids = []; // Keep track of item IDs processed (inserted or updated)
+
+    // 2. Loop through submitted sections and items: Update or Insert
+    if (isset($_POST['course_sections']) && is_array($_POST['course_sections'])) {
+        foreach ($_POST['course_sections'] as $section_order => $section_data) {
+            $section_id = isset($section_data['section_id']) ? absint($section_data['section_id']) : 0;
+            $section_title = sanitize_text_field($section_data['title'] ?? 'Untitled Section');
+
+            $section_db_data = [
+                'course_id' => $post_id,
+                'title' => $section_title,
+                'section_order' => $section_order + 1 // Ensure correct 1-based order
+            ];
+
+            if ($section_id > 0 && in_array($section_id, $existing_section_ids)) {
+                // UPDATE existing section
+                $wpdb->update($sections_table, $section_db_data, ['section_id' => $section_id]);
+                $submitted_section_ids[] = $section_id;
+            } else {
+                // INSERT new section
+                $wpdb->insert($sections_table, $section_db_data);
+                $section_id = $wpdb->insert_id; // Get the new ID for items below
+                 if (!$section_id) {
+                    // Handle potential insert error, maybe log it
+                    continue; // Skip items for this failed section insert
+                 }
+                 $submitted_section_ids[] = $section_id;
+            }
+
+            // Process Items within this section
+            if ($section_id && isset($section_data['items']) && is_array($section_data['items'])) {
+                foreach ($section_data['items'] as $item_order => $item_data) {
+                    $item_id = isset($item_data['item_id']) ? absint($item_data['item_id']) : 0;
+                    $item_title = sanitize_text_field($item_data['title'] ?? 'Untitled Item');
+                    $content_type = sanitize_key($item_data['content_type'] ?? 'test_series'); // Default to test_series
+
+                    // --- Process Configuration ---
+                    $config = [];
+                    if ($content_type === 'test_series' && isset($item_data['config'])) {
+                         $raw_config = $item_data['config'];
+                        $config = [
+                            'time_limit'      => isset($raw_config['time_limit']) ? absint($raw_config['time_limit']) : 0,
+                            'scoring_enabled' => isset($raw_config['scoring_enabled']) ? 1 : 0,
+                            'marks_correct'   => isset($raw_config['marks_correct']) ? floatval($raw_config['marks_correct']) : 1,
+                            'marks_incorrect' => isset($raw_config['marks_incorrect']) ? floatval($raw_config['marks_incorrect']) : 0,
+                        ];
+                        // Process selected questions (string to array)
+                        if (isset($raw_config['selected_questions']) && !empty($raw_config['selected_questions'])) {
+                            $question_ids_str = sanitize_text_field($raw_config['selected_questions']);
+                            $question_ids = array_filter(array_map('absint', explode(',', $question_ids_str)));
+                            if (!empty($question_ids)) {
+                                $config['selected_questions'] = $question_ids;
+                            }
+                        }
+                    } // Add 'else if' blocks here for other content types
+
+                    $item_db_data = [
+                        'section_id' => $section_id,
+                        'course_id' => $post_id,
+                        'title' => $item_title,
+                        'item_order' => $item_order + 1,
+                        'content_type' => $content_type,
+                        'content_config' => wp_json_encode($config)
+                    ];
+
+                    if ($item_id > 0 && in_array($item_id, $existing_item_ids)) {
+                        // UPDATE existing item
+                        $wpdb->update($items_table, $item_db_data, ['item_id' => $item_id]);
+                        $submitted_item_ids[] = $item_id;
+                        $processed_item_ids[] = $item_id; // Track processed item
+                    } else {
+                        // INSERT new item
+                        $wpdb->insert($items_table, $item_db_data);
+                         $new_item_id = $wpdb->insert_id;
+                         if ($new_item_id) {
+                            $submitted_item_ids[] = $new_item_id;
+                            $processed_item_ids[] = $new_item_id; // Track processed item
+                         } else {
+                            // Handle potential insert error
+                         }
+                    }
+                } // end foreach item
+            } // end if section_id and items exist
+        } // end foreach section
+    } // end if course_sections exist
+
+    // 3. Identify Sections and Items to Delete
+    $section_ids_to_delete = array_diff($existing_section_ids, $submitted_section_ids);
+    $item_ids_to_delete = array_diff($existing_item_ids, $processed_item_ids); // Use processed_item_ids
+
+    // 4. *** CRITICAL STEP: Clean up User Progress for Deleted Items ***
+    if (!empty($item_ids_to_delete)) {
+        $ids_placeholder = implode(',', array_map('absint', $item_ids_to_delete));
+        $wpdb->query("DELETE FROM $progress_table WHERE item_id IN ($ids_placeholder)");
+        // Log this action (optional)
+        error_log('QP Course Save: Cleaned up progress for deleted item IDs: ' . $ids_placeholder);
+    }
+
+    // 5. Delete Orphaned Items (associated with kept sections but removed in UI, or from deleted sections)
+    if (!empty($item_ids_to_delete)) {
+        $ids_placeholder = implode(',', array_map('absint', $item_ids_to_delete));
+        $wpdb->query("DELETE FROM $items_table WHERE item_id IN ($ids_placeholder)");
+    }
+
+    // 6. Delete Orphaned Sections (and implicitly cascade delete remaining items if DB constraints were set, although we deleted items explicitly above)
+    if (!empty($section_ids_to_delete)) {
+        $ids_placeholder = implode(',', array_map('absint', $section_ids_to_delete));
+        // We already deleted items, just need to delete sections now
+        $wpdb->query("DELETE FROM $sections_table WHERE section_id IN ($ids_placeholder)");
+    }
+
+    // Note: No explicit return needed as this hooks into save_post action
+}
+add_action('save_post_qp_course', 'qp_save_course_structure_meta'); // Hook into the CPT's save action
+
+/**
  * Initialize all plugin features that hook into WordPress.
  */
 function qp_init_plugin()
@@ -401,6 +1590,7 @@ function qp_admin_menu()
     add_submenu_page('question-press', 'Organize', 'Organize', 'manage_options', 'qp-organization', 'qp_render_organization_page');
     add_submenu_page('question-press', 'Tools', 'Tools', 'manage_options', 'qp-tools', 'qp_render_tools_page');
     add_submenu_page('question-press', 'Reports', 'Reports', 'manage_options', 'qp-logs-reports', ['QP_Logs_Reports_Page', 'render']);
+    add_submenu_page('question-press', 'User Entitlements', 'User Entitlements', 'manage_options', 'qp-user-entitlements', 'qp_render_user_entitlements_page');
     add_submenu_page('question-press', 'Settings', 'Settings', 'manage_options', 'qp-settings', ['QP_Settings_Page', 'render']);
 
     // Hidden pages (Indirectly required)
@@ -665,6 +1855,41 @@ function qp_render_tools_page()
 }
 
 /**
+ * Callback function to render the User Entitlements admin page.
+ */
+function qp_render_user_entitlements_page() {
+    // Instantiate the List Table
+    $entitlements_list_table = new QP_Entitlements_List_Table();
+
+    // Fetch, prepare, sort, and filter our data
+    $entitlements_list_table->prepare_items();
+
+    ?>
+    <div class="wrap">
+        <h1 class="wp-heading-inline"><?php _e('User Entitlements', 'question-press'); ?></h1>
+        <p><?php _e('View access entitlements granted to users.', 'question-press'); ?></p>
+        <hr class="wp-header-end">
+
+        <?php // Display any notices if needed ?>
+        <?php // settings_errors('qp_entitlements_notices'); ?>
+
+        <form method="get">
+            <?php // Keep existing page parameters ?>
+            <input type="hidden" name="page" value="<?php echo esc_attr($_REQUEST['page']); ?>" />
+            <?php
+                // Add the search box
+                $entitlements_list_table->search_box(__('Search Entitlements'), 'entitlement');
+            ?>
+            <?php
+                // Display the list table
+                $entitlements_list_table->display();
+            ?>
+        </form>
+    </div>
+    <?php
+}
+
+/**
  * Renders the User Attempts management tool page.
  */
 function qp_render_user_attempts_tool_page() {
@@ -779,6 +2004,28 @@ function qp_add_screen_options()
     new QP_Questions_List_Table(); // Instantiate table to register columns
 }
 
+/**
+ * Add screen options for the Entitlements list table.
+ */
+function qp_add_entitlements_screen_options() {
+    $screen = get_current_screen();
+    // Check if we are on the correct screen
+    if ($screen && $screen->id === 'question-press_page_qp-user-entitlements') {
+        QP_Entitlements_List_Table::add_screen_options();
+    }
+}
+add_action('admin_head', 'qp_add_entitlements_screen_options');
+
+// Filter to save the screen option (reuse existing function if desired, or keep separate)
+function qp_save_entitlements_screen_options($status, $option, $value) {
+    if ('entitlements_per_page' === $option) {
+        return $value;
+    }
+    // Important: Return the original status for other options
+    return $status;
+}
+add_filter('set-screen-option', 'qp_save_entitlements_screen_options', 10, 3);
+
 function qp_save_screen_options($status, $option, $value)
 {
     if ('qp_questions_per_page' === $option) {
@@ -787,6 +2034,97 @@ function qp_save_screen_options($status, $option, $value)
     return $status;
 }
 add_filter('set-screen-option', 'qp_save_screen_options', 10, 3);
+
+/**
+ * Helper function to retrieve the existing course structure for the editor.
+ *
+ * @param int $course_id The ID of the course post.
+ * @return array The structured course data.
+ */
+function qp_get_course_structure_for_editor($course_id) {
+    if (!$course_id) {
+        return ['sections' => []]; // Return empty structure for new courses
+    }
+
+    global $wpdb;
+    $sections_table = $wpdb->prefix . 'qp_course_sections';
+    $items_table = $wpdb->prefix . 'qp_course_items';
+    $structure = ['sections' => []];
+
+    $sections = $wpdb->get_results($wpdb->prepare(
+        "SELECT section_id, title, description, section_order FROM $sections_table WHERE course_id = %d ORDER BY section_order ASC",
+        $course_id
+    ));
+
+    if (empty($sections)) {
+        return $structure;
+    }
+
+    $section_ids = wp_list_pluck($sections, 'section_id');
+    $ids_placeholder = implode(',', array_map('absint', $section_ids));
+
+    $items_raw = $wpdb->get_results("SELECT item_id, section_id, title, item_order, content_type, content_config FROM $items_table WHERE section_id IN ($ids_placeholder) ORDER BY item_order ASC");
+
+    $items_by_section = [];
+    foreach ($items_raw as $item) {
+        $item->content_config = json_decode($item->content_config, true); // Decode JSON
+        if (!isset($items_by_section[$item->section_id])) {
+            $items_by_section[$item->section_id] = [];
+        }
+        $items_by_section[$item->section_id][] = $item;
+    }
+
+    foreach ($sections as $section) {
+        $structure['sections'][] = [
+            'id' => $section->section_id,
+            'title' => $section->title,
+            'description' => $section->description,
+            'order' => $section->section_order,
+            'items' => $items_by_section[$section->section_id] ?? []
+        ];
+    }
+
+    return $structure;
+}
+
+/**
+ * UPDATED: qp_get_test_series_options_for_js
+ * Also fetches source terms and source-subject links needed for modal filters.
+ */
+function qp_get_test_series_options_for_js() {
+    global $wpdb;
+    $term_table = $wpdb->prefix . 'qp_terms';
+    $tax_table = $wpdb->prefix . 'qp_taxonomies';
+    $rel_table = $wpdb->prefix . 'qp_term_relationships';
+
+    $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'subject'");
+    $source_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'source'");
+
+    // Fetch ALL subjects and topics together
+    $all_subject_terms = $wpdb->get_results($wpdb->prepare(
+        "SELECT term_id as id, name, parent FROM {$term_table} WHERE taxonomy_id = %d ORDER BY name ASC",
+        $subject_tax_id
+    ), ARRAY_A); // Fetch as associative arrays for JS
+
+    // Fetch ALL source terms (including sections)
+    $all_source_terms = $wpdb->get_results($wpdb->prepare(
+        "SELECT term_id as id, name, parent FROM {$term_table} WHERE taxonomy_id = %d ORDER BY name ASC",
+        $source_tax_id
+    ), ARRAY_A);
+
+     // Fetch source-subject links
+     $source_subject_links = $wpdb->get_results(
+        "SELECT object_id AS source_id, term_id AS subject_id FROM {$rel_table} WHERE object_type = 'source_subject_link'",
+        ARRAY_A
+     );
+
+
+    return [
+        'allSubjectTerms' => $all_subject_terms,
+        'allSourceTerms' => $all_source_terms, // Add source terms
+        'sourceSubjectLinks' => $source_subject_links, // Add source-subject links
+    ];
+}
 
 
 function qp_admin_enqueue_scripts($hook_suffix)
@@ -814,6 +2152,34 @@ function qp_admin_enqueue_scripts($hook_suffix)
             'save_nonce' => wp_create_nonce('qp_save_quick_edit_nonce')
         ]);
         wp_enqueue_script('qp-multi-select-dropdown-script', QP_PLUGIN_URL . 'admin/assets/js/multi-select-dropdown.js', ['jquery'], '1.0.1', true);
+    }
+    // Check if we are on the 'Add New' or 'Edit' screen for the 'qp_course' post type
+    global $pagenow, $typenow;
+    if (($pagenow == 'post-new.php' && isset($_GET['post_type']) && $_GET['post_type'] == 'qp_course') ||
+        ($pagenow == 'post.php' && isset($_GET['post']) && get_post_type($_GET['post']) == 'qp_course')) {
+
+        // Enqueue jQuery UI Sortable
+        wp_enqueue_script('jquery-ui-sortable');
+
+        // Enqueue our new course editor script
+        $course_editor_js_version = filemtime(QP_PLUGIN_DIR . 'admin/assets/js/course-editor.js'); // For cache busting
+        wp_enqueue_script('qp-course-editor-script', QP_PLUGIN_URL . 'admin/assets/js/course-editor.js', ['jquery', 'jquery-ui-sortable'], $course_editor_js_version, true);
+
+        // Localize data needed by the script (like existing structure and dropdown options)
+        global $post; // Get the current post object
+        $course_structure_data = qp_get_course_structure_for_editor($post ? $post->ID : 0); // We will create this helper function next
+        $test_series_options = qp_get_test_series_options_for_js(); // And this one too
+
+        wp_localize_script('qp-course-editor-script', 'qpCourseEditorData', [
+            'ajax_url' => admin_url('admin-ajax.php'), // Add ajaxurl for convenience
+            'save_nonce' => wp_create_nonce('qp_save_course_structure_meta'), // Keep existing save nonce
+            'select_nonce' => wp_create_nonce('qp_course_editor_select_nonce'), // Add the NEW nonce
+            'structure' => $course_structure_data,
+            'testSeriesOptions' => $test_series_options
+        ]);
+        // Enqueue course editor CSS
+        $course_editor_css_version = filemtime(QP_PLUGIN_DIR . 'admin/assets/css/course-editor.css');
+        wp_enqueue_style('qp-course-editor-style', QP_PLUGIN_URL . 'admin/assets/css/course-editor.css', [], $course_editor_css_version);
     }
     if ($hook_suffix === 'question-press_page_qp-organization' && isset($_GET['tab']) && $_GET['tab'] === 'labels') {
         add_action('admin_footer', function () {
@@ -2740,6 +4106,8 @@ function qp_save_quick_edit_data_ajax()
 }
 add_action('wp_ajax_save_quick_edit_data', 'qp_save_quick_edit_data_ajax');
 
+
+
 function qp_admin_head_styles_for_list_table()
 {
     $screen = get_current_screen();
@@ -2901,6 +4269,8 @@ function qp_public_enqueue_scripts()
         $ajax_data = [
             'ajax_url'           => admin_url('admin-ajax.php'),
             'nonce'              => wp_create_nonce('qp_practice_nonce'),
+            'enroll_nonce'       => wp_create_nonce('qp_enroll_course_nonce'), // <-- ADD THIS
+            'start_course_test_nonce' => wp_create_nonce('qp_start_course_test_nonce'), // <-- ADD THIS
             'dashboard_page_url' => isset($options['dashboard_page']) ? get_permalink($options['dashboard_page']) : home_url('/'),
             'practice_page_url'  => isset($options['practice_page']) ? get_permalink($options['practice_page']) : home_url('/'),
             'review_page_url'    => isset($options['review_page']) ? get_permalink($options['review_page']) : home_url('/'),
@@ -4358,171 +5728,289 @@ function qp_add_report_count_to_menu()
 }
 add_action('admin_menu', 'qp_add_report_count_to_menu', 99);
 
-function qp_check_answer_ajax()
-{
+/**
+ * AJAX handler for checking an answer in non-mock test modes.
+ * Includes access check and attempt decrement logic using entitlements table.
+ */
+function qp_check_answer_ajax() {
     check_ajax_referer('qp_practice_nonce', 'nonce');
+
     // --- Access Control Check ---
     if (!is_user_logged_in()) {
         wp_send_json_error(['message' => 'You must be logged in to answer questions.', 'code' => 'not_logged_in']);
         return;
     }
     $user_id = get_current_user_id();
-    // --- Real Access Check & Decrement ---
-    $remaining_attempts = get_user_meta($user_id, 'qp_remaining_attempts', true); // Returns '' if not set
 
-    // Check if attempts are available (treat '' or < 1 as no access)
-    if ($remaining_attempts !== '' && (int)$remaining_attempts > 0) {
-        $has_access = true;
-        // Decrement attempts *before* processing the answer
-        update_user_meta($user_id, 'qp_remaining_attempts', (int)$remaining_attempts - 1);
-        error_log("QP Access Check: User #{$user_id} used an attempt. Remaining: " . ((int)$remaining_attempts - 1));
-    } else {
-        // No attempts left or meta key not set
-        $has_access = false;
-        error_log("QP Access Check: User #{$user_id} denied access. Attempts: {$remaining_attempts}");
+    // --- NEW: Entitlement Check & Decrement ---
+    global $wpdb;
+    $entitlements_table = $wpdb->prefix . 'qp_user_entitlements';
+    $current_time = current_time('mysql');
+    $entitlement_to_decrement = null;
+
+    // Find an active entitlement with attempts remaining (prioritize non-NULL attempts, maybe oldest expiry first?)
+    // For simplicity, find the first one with attempts > 0, then check for NULL if none found.
+    $active_entitlements = $wpdb->get_results($wpdb->prepare(
+        "SELECT entitlement_id, remaining_attempts
+         FROM {$entitlements_table}
+         WHERE user_id = %d
+         AND status = 'active'
+         AND (expiry_date IS NULL OR expiry_date > %s)
+         ORDER BY remaining_attempts ASC, expiry_date ASC", // Prioritize finite attempts first, then soonest expiry
+        $user_id,
+        $current_time
+    ));
+
+    $has_access = false;
+    if (!empty($active_entitlements)) {
+        foreach ($active_entitlements as $entitlement) {
+            if (!is_null($entitlement->remaining_attempts)) {
+                if ((int)$entitlement->remaining_attempts > 0) {
+                    $entitlement_to_decrement = $entitlement;
+                    $has_access = true;
+                    break; // Found one with finite attempts > 0
+                }
+                // If attempts are 0, continue checking other entitlements
+            } else {
+                // Found an unlimited attempt entitlement
+                $has_access = true;
+                // No need to decrement, but break the loop as access is confirmed
+                break;
+            }
+        }
     }
-    // --- End Real Access Check ---
 
     if (!$has_access) {
+        error_log("QP Check Answer: User #{$user_id} denied access. No suitable active entitlement found.");
         wp_send_json_error([
             'message' => 'You have run out of attempts or your subscription has expired.',
             'code' => 'access_denied'
         ]);
         return;
     }
-    // --- End Access Control Check ---
+
+    // Decrement attempts if a specific entitlement was identified
+    if ($entitlement_to_decrement) {
+        $new_attempts = max(0, (int)$entitlement_to_decrement->remaining_attempts - 1);
+        $wpdb->update(
+            $entitlements_table,
+            ['remaining_attempts' => $new_attempts],
+            ['entitlement_id' => $entitlement_to_decrement->entitlement_id]
+        );
+        error_log("QP Check Answer: User #{$user_id} used attempt from Entitlement #{$entitlement_to_decrement->entitlement_id}. Remaining on this plan: {$new_attempts}");
+    } else {
+         error_log("QP Check Answer: User #{$user_id} used attempt via an unlimited plan.");
+    }
+    // --- END NEW Entitlement Check & Decrement ---
+
+    // --- Proceed with checking the answer (Original logic, slightly adjusted) ---
     $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
     $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
     $option_id = isset($_POST['option_id']) ? absint($_POST['option_id']) : 0;
+
     if (!$session_id || !$question_id || !$option_id) {
-        wp_send_json_error(['message' => 'Invalid data submitted.']);
+        // This case should ideally not happen if access was granted, but good to keep
+        wp_send_json_error(['message' => 'Invalid data submitted after access check.']);
+        return;
     }
 
-    global $wpdb;
     $o_table = $wpdb->prefix . 'qp_options';
     $attempts_table = $wpdb->prefix . 'qp_user_attempts';
     $sessions_table = $wpdb->prefix . 'qp_user_sessions';
+    $revision_table = $wpdb->prefix . 'qp_revision_attempts'; // For revision mode
 
-    $wpdb->update($sessions_table, ['last_activity' => current_time('mysql')], ['session_id' => $session_id]);
+    // Update session activity
+    $wpdb->update($sessions_table, ['last_activity' => $current_time], ['session_id' => $session_id]);
 
+    // Check correctness
     $is_correct = (bool) $wpdb->get_var($wpdb->prepare("SELECT is_correct FROM $o_table WHERE question_id = %d AND option_id = %d", $question_id, $option_id));
     $correct_option_id = $wpdb->get_var($wpdb->prepare("SELECT option_id FROM $o_table WHERE question_id = %d AND is_correct = 1", $question_id));
 
-    $session = $wpdb->get_row($wpdb->prepare("SELECT settings_snapshot FROM $sessions_table WHERE session_id = %d", $session_id));
-    $settings = json_decode($session->settings_snapshot, true);
+    // Get session settings for revision mode check
+    $session_settings_json = $wpdb->get_var($wpdb->prepare("SELECT settings_snapshot FROM $sessions_table WHERE session_id = %d", $session_id));
+    $settings = $session_settings_json ? json_decode($session_settings_json, true) : [];
 
-    // Always record in the main attempts table
-    $wpdb->insert($attempts_table, [
-        'session_id' => $session_id,
-        'user_id' => get_current_user_id(),
-        'question_id' => $question_id,
-        'selected_option_id' => $option_id,
-        'is_correct' => $is_correct ? 1 : 0,
-        'status' => 'answered',
-        'remaining_time' => isset($_POST['remaining_time']) ? absint($_POST['remaining_time']) : null
-    ]);
+    // Record the attempt
+    $wpdb->replace( // Use REPLACE to handle potential re-attempts within the same session if needed
+        $attempts_table,
+        [
+            'session_id' => $session_id,
+            'user_id' => $user_id,
+            'question_id' => $question_id,
+            'selected_option_id' => $option_id,
+            'is_correct' => $is_correct ? 1 : 0,
+            'status' => 'answered',
+            'mock_status' => null, // Not applicable for this mode
+            'remaining_time' => isset($_POST['remaining_time']) ? absint($_POST['remaining_time']) : null,
+            'attempt_time' => $current_time // Use the time check was performed
+        ]
+    );
+     $attempt_id = $wpdb->insert_id; // Get attempt ID after insert/replace
+
 
     // If it's a revision session, also record in the revision table
     if (isset($settings['practice_mode']) && $settings['practice_mode'] === 'revision') {
-        $topic_id = $wpdb->get_var($wpdb->prepare("SELECT topic_id FROM {$wpdb->prefix}qp_questions WHERE question_id = %d", $question_id));
+         // **FIX START**: Get topic ID directly from group relationship
+         $q_table = $wpdb->prefix . 'qp_questions';
+         $rel_table = $wpdb->prefix . 'qp_term_relationships';
+         $term_table = $wpdb->prefix . 'qp_terms';
+         $tax_table = $wpdb->prefix . 'qp_taxonomies';
+         $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'subject'");
+
+         $topic_id = $wpdb->get_var($wpdb->prepare(
+             "SELECT r.term_id
+              FROM {$q_table} q
+              JOIN {$rel_table} r ON q.group_id = r.object_id AND r.object_type = 'group'
+              JOIN {$term_table} t ON r.term_id = t.term_id
+              WHERE q.question_id = %d AND t.taxonomy_id = %d AND t.parent != 0",
+             $question_id,
+             $subject_tax_id
+         ));
+         // **FIX END**
+
         if ($topic_id) {
             $wpdb->query($wpdb->prepare(
-                "INSERT INTO {$wpdb->prefix}qp_revision_attempts (user_id, question_id, topic_id) VALUES (%d, %d, %d) ON DUPLICATE KEY UPDATE attempt_date = NOW()",
-                get_current_user_id(),
+                "INSERT INTO {$revision_table} (user_id, question_id, topic_id) VALUES (%d, %d, %d) ON DUPLICATE KEY UPDATE attempt_date = NOW()",
+                $user_id,
                 $question_id,
                 $topic_id
             ));
         }
     }
-    // --- End of new logic ---
 
     wp_send_json_success([
-        'is_correct' => $is_correct, 
+        'is_correct' => $is_correct,
         'correct_option_id' => $correct_option_id,
-        'attempt_id' => $wpdb->insert_id // **NEW**: Return the ID of the attempt that was just created
+        'attempt_id' => $attempt_id // Return attempt ID
     ]);
 }
 add_action('wp_ajax_check_answer', 'qp_check_answer_ajax');
 
 /**
- * AJAX handler to save a user's selected answer during a mock test without checking it.
+ * AJAX handler to save a user's selected answer during a mock test.
+ * Includes access check and attempt decrement logic using entitlements table.
  */
-function qp_save_mock_attempt_ajax()
-{
+function qp_save_mock_attempt_ajax() {
     check_ajax_referer('qp_practice_nonce', 'nonce');
+
     // --- Access Control Check ---
     if (!is_user_logged_in()) {
         wp_send_json_error(['message' => 'You must be logged in to answer questions.', 'code' => 'not_logged_in']);
         return;
     }
     $user_id = get_current_user_id();
-    // --- Real Access Check & Decrement ---
-    $remaining_attempts = get_user_meta($user_id, 'qp_remaining_attempts', true); // Returns '' if not set
 
-    // Check if attempts are available (treat '' or < 1 as no access)
-    if ($remaining_attempts !== '' && (int)$remaining_attempts > 0) {
-        $has_access = true;
-        // Decrement attempts *before* processing the answer
-        update_user_meta($user_id, 'qp_remaining_attempts', (int)$remaining_attempts - 1);
-        error_log("QP Access Check: User #{$user_id} used an attempt. Remaining: " . ((int)$remaining_attempts - 1));
-    } else {
-        // No attempts left or meta key not set
-        $has_access = false;
-        error_log("QP Access Check: User #{$user_id} denied access. Attempts: {$remaining_attempts}");
+    // --- NEW: Entitlement Check & Decrement ---
+    global $wpdb;
+    $entitlements_table = $wpdb->prefix . 'qp_user_entitlements';
+    $current_time = current_time('mysql');
+    $entitlement_to_decrement = null;
+
+    // Find an active entitlement with attempts remaining
+    $active_entitlements = $wpdb->get_results($wpdb->prepare(
+        "SELECT entitlement_id, remaining_attempts
+         FROM {$entitlements_table}
+         WHERE user_id = %d
+         AND status = 'active'
+         AND (expiry_date IS NULL OR expiry_date > %s)
+         ORDER BY remaining_attempts ASC, expiry_date ASC",
+        $user_id,
+        $current_time
+    ));
+
+    $has_access = false;
+    if (!empty($active_entitlements)) {
+        foreach ($active_entitlements as $entitlement) {
+            if (!is_null($entitlement->remaining_attempts)) {
+                if ((int)$entitlement->remaining_attempts > 0) {
+                    $entitlement_to_decrement = $entitlement;
+                    $has_access = true;
+                    break;
+                }
+            } else {
+                $has_access = true;
+                break;
+            }
+        }
     }
-    // --- End Real Access Check ---
 
     if (!$has_access) {
+        error_log("QP Mock Save: User #{$user_id} denied access. No suitable active entitlement found.");
         wp_send_json_error([
             'message' => 'You have run out of attempts or your subscription has expired.',
             'code' => 'access_denied'
         ]);
         return;
     }
-    // --- End Access Control Check ---
+
+    // Decrement attempts if needed
+    if ($entitlement_to_decrement) {
+        $new_attempts = max(0, (int)$entitlement_to_decrement->remaining_attempts - 1);
+        $wpdb->update(
+            $entitlements_table,
+            ['remaining_attempts' => $new_attempts],
+            ['entitlement_id' => $entitlement_to_decrement->entitlement_id]
+        );
+        error_log("QP Mock Save: User #{$user_id} used attempt from Entitlement #{$entitlement_to_decrement->entitlement_id}. Remaining on this plan: {$new_attempts}");
+    } else {
+         error_log("QP Mock Save: User #{$user_id} used attempt via an unlimited plan.");
+    }
+    // --- END NEW Entitlement Check & Decrement ---
+
+    // --- Proceed with saving the mock attempt (Original logic, slightly adjusted) ---
     $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
     $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
-    $option_id = isset($_POST['option_id']) ? absint($_POST['option_id']) : 0;
+    $option_id = isset($_POST['option_id']) ? absint($_POST['option_id']) : 0; // Can be 0 if clearing response
 
-    if (!$session_id || !$question_id || !$option_id) {
-        wp_send_json_error(['message' => 'Invalid data submitted.']);
+    if (!$session_id || !$question_id) { // Option ID can be 0 when clearing
+        wp_send_json_error(['message' => 'Invalid data submitted after access check.']);
+        return;
     }
 
-    global $wpdb;
     $attempts_table = $wpdb->prefix . 'qp_user_attempts';
-    $user_id = get_current_user_id();
 
-    // --- FIX: Explicitly check for an existing attempt before inserting/updating ---
-    $existing_attempt_id = $wpdb->get_var($wpdb->prepare(
-        "SELECT attempt_id FROM {$attempts_table} WHERE session_id = %d AND question_id = %d",
+    // Check if an attempt record already exists for this question in this session
+    $existing_attempt = $wpdb->get_row($wpdb->prepare(
+        "SELECT attempt_id, mock_status FROM {$attempts_table} WHERE session_id = %d AND question_id = %d",
         $session_id,
         $question_id
     ));
 
-    if ($existing_attempt_id) {
-        // If an attempt already exists, UPDATE it with the new option
-        $wpdb->update(
-            $attempts_table,
-            [
-                'selected_option_id' => $option_id,
-                'attempt_time' => current_time('mysql'),
-                'status' => 'answered' // Ensure status is 'answered'
-            ],
-            ['attempt_id' => $existing_attempt_id]
-        );
+    // Determine the correct mock_status based on whether an option is selected and previous status
+    $current_mock_status = $existing_attempt ? $existing_attempt->mock_status : 'viewed'; // Default to viewed if no record
+    $new_mock_status = $current_mock_status; // Keep current status unless changed below
+
+    if ($option_id > 0) { // An answer is being saved
+        if ($current_mock_status == 'marked_for_review' || $current_mock_status == 'answered_and_marked_for_review') {
+            $new_mock_status = 'answered_and_marked_for_review';
+        } else {
+            $new_mock_status = 'answered';
+        }
+    }
+    // Note: Clearing the response (option_id=0) is handled by qp_update_mock_status_ajax, not this function directly.
+    // This function assumes an answer is being *selected*.
+
+    $attempt_data = [
+        'session_id' => $session_id,
+        'user_id' => $user_id,
+        'question_id' => $question_id,
+        'selected_option_id' => $option_id > 0 ? $option_id : null, // Store NULL if clearing
+        'is_correct' => null, // Graded only at the end
+        'status' => $option_id > 0 ? 'answered' : 'viewed', // Main status: 'answered' if option selected, 'viewed' if cleared
+        'mock_status' => $new_mock_status,
+        'attempt_time' => $current_time
+    ];
+
+    if ($existing_attempt) {
+        // Update existing attempt
+        $wpdb->update($attempts_table, $attempt_data, ['attempt_id' => $existing_attempt->attempt_id]);
     } else {
-        $wpdb->insert($attempts_table, [
-            'session_id' => $session_id,
-            'user_id' => $user_id,
-            'question_id' => $question_id,
-            'selected_option_id' => $option_id,
-            'is_correct' => null, // Graded at the end
-            'status' => 'answered'
-        ]);
+        // Insert new attempt
+        $wpdb->insert($attempts_table, $attempt_data);
     }
 
-    // Also update the session's last activity to keep it from timing out
-    $wpdb->update($wpdb->prefix . 'qp_user_sessions', ['last_activity' => current_time('mysql')], ['session_id' => $session_id]);
+    // Update session activity time
+    $wpdb->update($wpdb->prefix . 'qp_user_sessions', ['last_activity' => $current_time], ['session_id' => $session_id]);
 
     wp_send_json_success(['message' => 'Answer saved.']);
 }
@@ -4917,6 +6405,114 @@ function qp_finalize_and_end_session($session_id, $new_status = 'completed', $en
         'not_viewed_count' => $not_viewed_count,
         'marks_obtained' => $final_score
     ], ['session_id' => $session_id]);
+
+    // --- NEW: Update Course Item Progress if applicable ---
+    if (($new_status === 'completed' || $new_status === 'abandoned') && // Only update progress if session truly ended
+        isset($settings['course_id']) && isset($settings['item_id'])) {
+
+        $course_id = absint($settings['course_id']);
+        $item_id = absint($settings['item_id']);
+        $user_id = $session->user_id; // Get user ID from the session object
+        $progress_table = $wpdb->prefix . 'qp_user_items_progress';
+        $items_table = $wpdb->prefix . 'qp_course_items'; // <<< Keep this variable definition
+
+        // *** START NEW CHECK ***
+        // Check if the course item still exists before trying to update progress
+        $item_exists = $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$items_table} WHERE item_id = %d AND course_id = %d",
+            $item_id,
+            $course_id
+        ));
+
+        if ($item_exists) {
+            // *** Item exists, proceed with updating progress ***
+
+            // Prepare result data (customize as needed)
+            $result_data = json_encode([
+                'score' => $final_score,
+                'correct' => $correct_count,
+                'incorrect' => $incorrect_count,
+                'skipped' => $skipped_count,
+                'not_viewed' => $not_viewed_count, // Include if relevant (from mock tests)
+                'total_attempted' => $total_attempted,
+                'session_id' => $session_id // Store the session ID for potential review linking
+            ]);
+
+            // Use REPLACE INTO for simplicity
+            $wpdb->query($wpdb->prepare(
+                "REPLACE INTO {$progress_table} (user_id, item_id, course_id, status, completion_date, result_data, last_viewed)
+                 VALUES (%d, %d, %d, %s, %s, %s, %s)",
+                $user_id,
+                $item_id,
+                $course_id,
+                'completed', // Mark item as completed when session ends
+                current_time('mysql'), // Completion date
+                $result_data,
+                current_time('mysql') // Update last viewed as well
+            ));
+
+            // Note: Calculation and update of overall course progress should happen ONLY if the item exists
+            // --- Calculate and Update Overall Course Progress ---
+            $user_courses_table = $wpdb->prefix . 'qp_user_courses';
+
+            // Get total number of items in the course
+            $total_items = (int) $wpdb->get_var($wpdb->prepare(
+                "SELECT COUNT(item_id) FROM $items_table WHERE course_id = %d",
+                $course_id
+            ));
+
+            // Get number of completed items for the user in this course
+            $completed_items = (int) $wpdb->get_var($wpdb->prepare(
+                "SELECT COUNT(user_item_id) FROM $progress_table WHERE user_id = %d AND course_id = %d AND status = 'completed'",
+                $user_id,
+                $course_id
+            ));
+
+            // Calculate percentage
+            $progress_percent = ($total_items > 0) ? round(($completed_items / $total_items) * 100) : 0;
+
+            // Check if course is now fully complete
+            $new_course_status = 'in_progress'; // Default
+            if ($total_items > 0 && $completed_items >= $total_items) {
+                $new_course_status = 'completed';
+            }
+
+            // Get the current completion date (if any) to avoid overwriting it
+            $current_completion_date = $wpdb->get_var($wpdb->prepare(
+                "SELECT completion_date FROM {$user_courses_table} WHERE user_id = %d AND course_id = %d",
+                $user_id, $course_id
+            ));
+            $completion_date_to_set = $current_completion_date;
+
+            if ($new_course_status === 'completed' && is_null($current_completion_date)) {
+                $completion_date_to_set = current_time('mysql');
+            } elseif ($new_course_status !== 'completed') {
+                 $completion_date_to_set = null;
+            }
+
+            // Update the user's overall course record
+            $wpdb->update(
+                $user_courses_table,
+                [
+                    'progress_percent' => $progress_percent,
+                    'status'           => $new_course_status,
+                    'completion_date'  => $completion_date_to_set
+                ],
+                [ 'user_id'   => $user_id, 'course_id' => $course_id ],
+                ['%d', '%s', '%s'],
+                ['%d', '%d']
+            );
+            // --- End Overall Course Progress Update ---
+
+        } else {
+            // *** Item does NOT exist, skip progress update ***
+            // Optional: Log this occurrence for debugging
+            error_log("QP Session Finalize: Skipped progress update for user {$user_id}, course {$course_id}, because item {$item_id} no longer exists.");
+        }
+        // *** END NEW CHECK ***
+
+    } // This closing brace corresponds to the "if (isset($settings['course_id']) ...)" check
+    // --- END Course Item Progress Update ---
 
     return [
         'final_score' => $final_score,
@@ -5451,75 +7047,804 @@ add_action('admin_init', 'qp_handle_log_settings_forms');
 // New Development - Subscriptions
 
 /**
- * Grant Question Press attempts when a specific WooCommerce order is completed.
+ * Grant Question Press entitlement when a specific WooCommerce order is completed.
+ * Reads linked plan data and creates a record in wp_qp_user_entitlements.
  *
  * @param int $order_id The ID of the completed order.
  */
 function qp_grant_access_on_order_complete($order_id) {
+    error_log("QP Access Hook: Processing Order #{$order_id}"); // Log start
     $order = wc_get_order($order_id);
 
-    // Check if the order is valid and paid
-    if (!$order || !$order->is_paid()) {
-        error_log("QP Access Hook: Order #{$order_id} not valid/paid.");
+    // Check if the order is valid and paid (or processing if allowing access before full payment)
+    if (!$order || !$order->is_paid()) { // Stricter check: use is_paid() for completed orders
+        error_log("QP Access Hook: Order #{$order_id} not valid or not paid.");
         return;
     }
 
     $user_id = $order->get_user_id();
     if (!$user_id) {
-        error_log("QP Access Hook: No user ID for order #{$order_id}.");
-        return; // Only grant access to registered users
+        error_log("QP Access Hook: No user ID associated with Order #{$order_id}. Cannot grant entitlement.");
+        return; // Cannot grant entitlement to guest users
     }
 
-    // --- USE YOUR PRODUCT ID HERE ---
-    $attempt_pack_product_id = 136; // Product ID for the attempt pack
-    $attempts_to_add = 100; // <<< How many attempts this product gives
-    // ---------------------------------
-
-    $granted_access = false;
+    global $wpdb;
+    $entitlements_table = $wpdb->prefix . 'qp_user_entitlements';
+    $granted_entitlement = false;
 
     foreach ($order->get_items() as $item_id => $item) {
         $product_id = $item->get_product_id();
+        $variation_id = $item->get_variation_id();
+        $target_id = $variation_id > 0 ? $variation_id : $product_id; // Use variation ID if available
 
-        if ($product_id === $attempt_pack_product_id) {
-            $current_attempts = (int) get_user_meta($user_id, 'qp_remaining_attempts', true);
-            // Ensure we don't accidentally subtract if meta doesn't exist yet
-            if ($current_attempts < 0) { $current_attempts = 0; }
-            $new_total_attempts = $current_attempts + $attempts_to_add;
+        // Get the linked plan ID from product/variation meta
+        $linked_plan_id = get_post_meta($target_id, '_qp_linked_plan_id', true);
 
-            update_user_meta($user_id, 'qp_remaining_attempts', $new_total_attempts);
-            error_log("QP Access Hook: Added {$attempts_to_add} attempts via Order #{$order_id} to User #{$user_id}. New total: {$new_total_attempts}");
-            $granted_access = true;
-            break; // Stop checking items once the pack is found
+        if (!empty($linked_plan_id)) {
+            $plan_id = absint($linked_plan_id);
+            $plan_post = get_post($plan_id);
+
+            // Ensure the linked plan exists and is published
+            if ($plan_post && $plan_post->post_type === 'qp_plan' && $plan_post->post_status === 'publish') {
+                error_log("QP Access Hook: Found linked Plan ID #{$plan_id} for item in Order #{$order_id}");
+
+                // Get plan details from post meta
+                $plan_type = get_post_meta($plan_id, '_qp_plan_type', true);
+                $duration_value = get_post_meta($plan_id, '_qp_plan_duration_value', true);
+                $duration_unit = get_post_meta($plan_id, '_qp_plan_duration_unit', true);
+                $attempts = get_post_meta($plan_id, '_qp_plan_attempts', true);
+
+                $start_date = current_time('mysql');
+                $expiry_date = null;
+                $remaining_attempts = null;
+
+                // Calculate expiry date if applicable
+                if (($plan_type === 'time_limited' || $plan_type === 'combined') && !empty($duration_value) && !empty($duration_unit)) {
+                    try {
+                         // Use WordPress timezone for calculation start point
+                         $start_datetime = new DateTime($start_date, wp_timezone());
+                         $start_datetime->modify('+' . absint($duration_value) . ' ' . sanitize_key($duration_unit));
+                         $expiry_date = $start_datetime->format('Y-m-d H:i:s');
+                         error_log("QP Access Hook: Calculated expiry date for Plan ID #{$plan_id}: {$expiry_date}");
+                    } catch (Exception $e) {
+                         error_log("QP Access Hook: Error calculating expiry date for Plan ID #{$plan_id} - " . $e->getMessage());
+                         $expiry_date = null; // Fallback if calculation fails
+                    }
+                } elseif ($plan_type === 'unlimited') {
+                     $expiry_date = null; // Explicitly null for unlimited time
+                     $remaining_attempts = null; // Explicitly null for unlimited attempts
+                     error_log("QP Access Hook: Plan ID #{$plan_id} is Unlimited type.");
+                }
+
+
+                // Set remaining attempts if applicable
+                if (($plan_type === 'attempt_limited' || $plan_type === 'combined') && !empty($attempts)) {
+                    $remaining_attempts = absint($attempts);
+                    error_log("QP Access Hook: Setting attempts for Plan ID #{$plan_id}: {$remaining_attempts}");
+                } elseif ($plan_type === 'unlimited') {
+                    $remaining_attempts = null; // Explicitly null for unlimited attempts
+                }
+
+                // Insert the new entitlement record
+                $inserted = $wpdb->insert(
+                    $entitlements_table,
+                    [
+                        'user_id' => $user_id,
+                        'plan_id' => $plan_id,
+                        'order_id' => $order_id,
+                        'start_date' => $start_date,
+                        'expiry_date' => $expiry_date, // NULL if not time-based or unlimited
+                        'remaining_attempts' => $remaining_attempts, // NULL if not attempt-based or unlimited
+                        'status' => 'active',
+                    ],
+                    [ // Data formats
+                        '%d', // user_id
+                        '%d', // plan_id
+                        '%d', // order_id
+                        '%s', // start_date
+                        '%s', // expiry_date (can be NULL)
+                        '%d', // remaining_attempts (can be NULL)
+                        '%s', // status
+                    ]
+                );
+
+                if ($inserted) {
+                    error_log("QP Access Hook: Successfully inserted entitlement record for User #{$user_id}, Plan #{$plan_id}, Order #{$order_id}");
+                    $granted_entitlement = true;
+                     // Optional: Add an order note
+                     $order->add_order_note(sprintf('Granted Question Press access via Plan ID %d.', $plan_id));
+                    // Consider breaking if you only want to grant one plan per order,
+                    // or allow multiple plans if purchased together. Let's allow multiple for now.
+                    // break;
+                } else {
+                     error_log("QP Access Hook: FAILED to insert entitlement record for User #{$user_id}, Plan #{$plan_id}, Order #{$order_id}. DB Error: " . $wpdb->last_error);
+                     $order->add_order_note(sprintf('ERROR: Failed to grant Question Press access for Plan ID %d. DB Error: %s', $plan_id, $wpdb->last_error), true); // Add as private note
+                }
+            } else {
+                 error_log("QP Access Hook: Linked Plan ID #{$linked_plan_id} not found or not published for item in Order #{$order_id}");
+            }
+        } else {
+             // error_log("QP Access Hook: No QP Plan linked for product/variation ID #{$target_id} in Order #{$order_id}"); // This might be too verbose if many unrelated products are ordered.
         }
-    }
+    } // end foreach item
 
-     if (!$granted_access) {
-        error_log("QP Access Hook: Order #{$order_id} did not contain QP Product ID {$attempt_pack_product_id}.");
-     }
+    if (!$granted_entitlement) {
+        error_log("QP Access Hook: No Question Press entitlements were granted for Order #{$order_id}.");
+    }
 }
-// Hook into WooCommerce order completion
+// Ensure the hook is still present (it was, but good to double-check)
 add_action('woocommerce_order_status_completed', 'qp_grant_access_on_order_complete', 10, 1);
 
 /**
- * AJAX handler to check remaining attempts for the current user.
+ * AJAX handler to check remaining attempts/access for the current user based on entitlements table.
+ * Provides a reason code for access denial.
  */
 function qp_check_remaining_attempts_ajax() {
-    // No nonce check needed here as it's just reading data,
-    // but we MUST check if the user is logged in.
+    // No nonce check needed for reads, but login is essential.
     if (!is_user_logged_in()) {
-        wp_send_json_error(['has_access' => false, 'message' => 'Not logged in.']);
+        wp_send_json_error(['has_access' => false, 'message' => 'Not logged in.', 'reason_code' => 'not_logged_in']);
         return;
     }
 
     $user_id = get_current_user_id();
     $has_access = false;
-    $remaining_attempts = get_user_meta($user_id, 'qp_remaining_attempts', true);
+    $total_remaining = 0;
+    $has_unlimited_attempts = false;
+    $denial_reason_code = 'no_entitlements'; // Default reason if nothing is found
 
-    if ($remaining_attempts !== '' && (int)$remaining_attempts > 0) {
-        $has_access = true;
+    global $wpdb;
+    $entitlements_table = $wpdb->prefix . 'qp_user_entitlements';
+    $current_time = current_time('mysql');
+
+    // Query for ALL entitlement records for this user to determine the reason later
+    $all_user_entitlements = $wpdb->get_results($wpdb->prepare(
+        "SELECT entitlement_id, remaining_attempts, expiry_date, status
+         FROM {$entitlements_table}
+         WHERE user_id = %d",
+        $user_id
+    ));
+
+    if (!empty($all_user_entitlements)) {
+        $denial_reason_code = 'expired_or_inactive'; // Assume expired/inactive if records exist but don't grant access
+        $found_active_non_expired = false;
+
+        foreach ($all_user_entitlements as $entitlement) {
+            // Check if the entitlement is currently valid (active status and not expired)
+            $is_active = $entitlement->status === 'active';
+            $is_expired = !is_null($entitlement->expiry_date) && $entitlement->expiry_date <= $current_time;
+
+            if ($is_active && !$is_expired) {
+                $found_active_non_expired = true; // Found at least one potentially valid plan
+                $denial_reason_code = 'out_of_attempts'; // Assume out of attempts if active plans exist
+
+                if (is_null($entitlement->remaining_attempts)) {
+                    // Found an active plan with UNLIMITED attempts
+                    $has_unlimited_attempts = true;
+                    $has_access = true;
+                    $total_remaining = -1;
+                    break; // Access granted, stop checking
+                } else {
+                    // Add this plan's remaining attempts to the total
+                    $total_remaining += (int) $entitlement->remaining_attempts;
+                }
+            }
+        } // End foreach
+
+        // If no unlimited plan was found among active/non-expired ones, check the total attempts
+        if (!$has_unlimited_attempts && $found_active_non_expired && $total_remaining > 0) {
+            $has_access = true;
+        }
+        // If $found_active_non_expired is true but $total_remaining is 0, $denial_reason_code remains 'out_of_attempts'
+        // If $found_active_non_expired is false, $denial_reason_code remains 'expired_or_inactive'
+
+    } else {
+        // No entitlement records found at all for the user
+        $denial_reason_code = 'no_entitlements';
     }
 
-    wp_send_json_success(['has_access' => $has_access, 'remaining' => (int)$remaining_attempts]);
+
+    if ($has_access) {
+        wp_send_json_success(['has_access' => true, 'remaining' => $has_unlimited_attempts ? -1 : $total_remaining]);
+    } else {
+        // Send the specific reason code along with has_access = false
+        wp_send_json_success(['has_access' => false, 'remaining' => 0, 'reason_code' => $denial_reason_code]);
+    }
 }
-// Hook the AJAX action for logged-in users
+// Hook the AJAX action (this line should already exist and remain unchanged)
 add_action('wp_ajax_qp_check_remaining_attempts', 'qp_check_remaining_attempts_ajax');
+
+
+// Courses Section on Dashboard
+/**
+ * AJAX handler to fetch the structure (sections and items) for a specific course.
+ * Also fetches the user's progress for items within that course.
+ */
+function qp_get_course_structure_ajax() {
+    check_ajax_referer('qp_practice_nonce', 'nonce'); // Re-use the existing frontend nonce
+
+    if (!is_user_logged_in()) {
+        wp_send_json_error(['message' => 'Not logged in.']);
+    }
+
+    $course_id = isset($_POST['course_id']) ? absint($_POST['course_id']) : 0;
+    $user_id = get_current_user_id();
+
+    if (!$course_id) {
+        wp_send_json_error(['message' => 'Invalid course ID.']);
+    }
+
+    // --- NEW: Check if user has access to this course before proceeding ---
+    if (!qp_user_can_access_course($user_id, $course_id)) {
+        wp_send_json_error(['message' => 'You do not have access to view this course structure.', 'code' => 'access_denied']);
+        return; // Stop execution
+    }
+
+    global $wpdb;
+    $sections_table = $wpdb->prefix . 'qp_course_sections';
+    $items_table = $wpdb->prefix . 'qp_course_items';
+    $progress_table = $wpdb->prefix . 'qp_user_items_progress';
+    $course_title = get_the_title($course_id); // Get course title from wp_posts
+
+    $structure = [
+        'course_id' => $course_id,
+        'course_title' => $course_title,
+        'sections' => []
+    ];
+
+    // Get sections for the course
+    $sections = $wpdb->get_results($wpdb->prepare(
+        "SELECT section_id, title, description, section_order FROM $sections_table WHERE course_id = %d ORDER BY section_order ASC",
+        $course_id
+    ));
+
+    if (empty($sections)) {
+        wp_send_json_success($structure); // Send structure with empty sections array
+        return;
+    }
+
+    $section_ids = wp_list_pluck($sections, 'section_id');
+    $ids_placeholder = implode(',', array_map('absint', $section_ids));
+
+    // Get all items for these sections, including progress status and result data
+    $items_raw = $wpdb->get_results($wpdb->prepare(
+        "SELECT i.item_id, i.section_id, i.title, i.item_order, i.content_type, p.status, p.result_data -- <<< ADD p.result_data
+         FROM $items_table i
+         LEFT JOIN {$wpdb->prefix}qp_user_items_progress p ON i.item_id = p.item_id AND p.user_id = %d AND p.course_id = %d
+         WHERE i.section_id IN ($ids_placeholder)
+         ORDER BY i.item_order ASC",
+        $user_id,
+        $course_id
+    ));
+
+    // Organize items by section
+    $items_by_section = [];
+    foreach ($items_raw as $item) {
+        $item->status = $item->status ?? 'not_started'; // Use fetched status or default
+
+        // --- ADD THIS BLOCK ---
+        $item->session_id = null; // Default to null
+        if (!empty($item->result_data)) {
+            $result_data_decoded = json_decode($item->result_data, true);
+            if (isset($result_data_decoded['session_id'])) {
+                $item->session_id = absint($result_data_decoded['session_id']);
+            }
+        }
+        unset($item->result_data); // Don't need to send the full result data to JS for this
+        // --- END ADDED BLOCK ---
+
+        if (!isset($items_by_section[$item->section_id])) {
+            $items_by_section[$item->section_id] = [];
+        }
+        $items_by_section[$item->section_id][] = $item;
+    }
+
+    // Get user's progress for these items in this course
+    $progress_raw = $wpdb->get_results($wpdb->prepare(
+        "SELECT item_id, status FROM $progress_table WHERE user_id = %d AND course_id = %d",
+        $user_id,
+        $course_id
+    ), OBJECT_K); // Keyed by item_id for easy lookup
+
+    // Organize items by section
+    $items_by_section = [];
+    foreach ($items_raw as $item) {
+        $item->status = $progress_raw[$item->item_id]->status ?? 'not_started'; // Add status
+        if (!isset($items_by_section[$item->section_id])) {
+            $items_by_section[$item->section_id] = [];
+        }
+        $items_by_section[$item->section_id][] = $item;
+    }
+
+    // Build the final structure
+    foreach ($sections as $section) {
+        $structure['sections'][] = [
+            'id' => $section->section_id,
+            'title' => $section->title,
+            'description' => $section->description,
+            'order' => $section->section_order,
+            'items' => $items_by_section[$section->section_id] ?? []
+        ];
+    }
+
+    wp_send_json_success($structure);
+}
+add_action('wp_ajax_get_course_structure', 'qp_get_course_structure_ajax');
+
+/**
+ * AJAX handler to start a Test Series session launched from a course item.
+ * Includes access check using entitlements table. Decrement happens on first answer.
+ */
+function qp_start_course_test_series_ajax() {
+    check_ajax_referer('qp_start_course_test_nonce', 'nonce');
+
+    if (!is_user_logged_in()) {
+        wp_send_json_error(['message' => 'You must be logged in.']);
+    }
+    $user_id = get_current_user_id();
+
+    // --- NEW: Entitlement Check ONLY ---
+    // (Decrement happens when the first answer is submitted in check_answer or save_mock_attempt)
+    global $wpdb;
+
+    $items_table = $wpdb->prefix . 'qp_course_items';
+
+    // --- Get Course ID associated with the item ---
+    $course_id = $wpdb->get_var($wpdb->prepare("SELECT course_id FROM $items_table WHERE item_id = %d", $item_id));
+    if (!$course_id) {
+        wp_send_json_error(['message' => 'Could not determine the course for this item.']);
+        return;
+    }
+    // --- END Get Course ID ---
+
+
+    // --- NEW: Check Course Access FIRST ---
+    if (!qp_user_can_access_course($user_id, $course_id)) {
+        wp_send_json_error(['message' => 'You do not have access to start tests in this course.', 'code' => 'access_denied']);
+        return; // Stop execution
+    }
+    // --- Proceed with Attempt Check (Existing Logic from previous step) ---
+    $entitlements_table = $wpdb->prefix . 'qp_user_entitlements';
+    $current_time = current_time('mysql');
+    $has_access_for_attempt = false; // Renamed variable for clarity
+
+    $active_entitlements_count = $wpdb->get_var($wpdb->prepare(
+        "SELECT COUNT(entitlement_id)
+         FROM {$entitlements_table}
+         WHERE user_id = %d
+         AND status = 'active'
+         AND (expiry_date IS NULL OR expiry_date > %s)
+         AND (remaining_attempts IS NULL OR remaining_attempts > 0)",
+        $user_id,
+        $current_time
+    ));
+
+    if ($active_entitlements_count > 0) {
+        $has_access_for_attempt = true;
+    }
+
+    if (!$has_access_for_attempt) {
+        error_log("QP Course Test Start: User #{$user_id} denied access. No suitable active entitlement found for attempt.");
+        wp_send_json_error([
+            'message' => 'You have run out of attempts or your subscription has expired.',
+            'code' => 'access_denied' // Keep same code, JS handles message
+        ]);
+        return;
+    }
+    // --- END NEW Entitlement Check ---
+
+    // --- Proceed with starting the session (Original logic) ---
+    $item_id = isset($_POST['item_id']) ? absint($_POST['item_id']) : 0;
+    if (!$item_id) {
+        wp_send_json_error(['message' => 'Invalid course item ID.']);
+    }
+
+    $items_table = $wpdb->prefix . 'qp_course_items';
+
+    // Get the item details and configuration
+    $item = $wpdb->get_row($wpdb->prepare(
+        "SELECT course_id, content_config FROM $items_table WHERE item_id = %d AND content_type = 'test_series'",
+        $item_id
+    ));
+
+    if (!$item || empty($item->content_config)) {
+        wp_send_json_error(['message' => 'Could not find test configuration for this item.']);
+    }
+
+    $config = json_decode($item->content_config, true);
+    if (json_last_error() !== JSON_ERROR_NONE || empty($config)) {
+         error_log("QP Course Test Start: Invalid JSON in content_config for item ID: " . $item_id . ". Error: " . json_last_error_msg());
+        wp_send_json_error(['message' => 'Invalid test configuration data stored. Please contact an administrator.']);
+        return;
+    }
+
+    // --- Determine Question IDs ---
+    $final_question_ids = [];
+    $q_table = $wpdb->prefix . 'qp_questions';
+    $reports_table = $wpdb->prefix . 'qp_question_reports';
+
+    if (isset($config['selected_questions']) && is_array($config['selected_questions']) && !empty($config['selected_questions'])) {
+        $potential_ids = array_map('absint', $config['selected_questions']);
+        if (!empty($potential_ids)) {
+            $ids_placeholder = implode(',', $potential_ids);
+            $reported_question_ids = $wpdb->get_col("SELECT DISTINCT question_id FROM {$reports_table} WHERE status = 'open'");
+            $exclude_reported_sql = !empty($reported_question_ids) ? ' AND question_id NOT IN (' . implode(',', $reported_question_ids) . ')' : '';
+            $verified_ids = $wpdb->get_col("SELECT question_id FROM {$q_table} WHERE question_id IN ($ids_placeholder) AND status = 'publish' {$exclude_reported_sql}");
+            $final_question_ids = array_intersect($potential_ids, $verified_ids);
+        }
+    } else {
+        wp_send_json_error(['message' => 'No questions have been manually selected for this test item. Please edit the course.']);
+        return;
+    }
+
+    if (empty($final_question_ids)) {
+         wp_send_json_error(['message' => 'None of the selected questions are currently available.']);
+         return;
+    }
+
+    shuffle($final_question_ids);
+
+    // --- Prepare Session Settings ---
+    $options = get_option('qp_settings');
+    $session_page_id = isset($options['session_page']) ? absint($options['session_page']) : 0;
+    if (!$session_page_id) {
+        wp_send_json_error(['message' => 'The administrator has not configured a session page.']);
+    }
+
+    $session_settings = [
+        'practice_mode'       => 'mock_test',
+        'course_id'           => $item->course_id,
+        'item_id'             => $item_id,
+        'num_questions'       => count($final_question_ids),
+        'marks_correct'       => $config['scoring_enabled'] ? ($config['marks_correct'] ?? 1) : null,
+        'marks_incorrect'     => $config['scoring_enabled'] ? -abs($config['marks_incorrect'] ?? 0) : null,
+        'timer_enabled'       => ($config['time_limit'] > 0),
+        'timer_seconds'       => ($config['time_limit'] ?? 0) * 60,
+        'original_selection'  => $config['selected_questions'] ?? [],
+    ];
+
+    $wpdb->insert($wpdb->prefix . 'qp_user_sessions', [
+        'user_id'                 => $user_id,
+        'status'                  => 'mock_test',
+        'start_time'              => $current_time, // Use current time
+        'last_activity'           => $current_time,
+        'settings_snapshot'       => wp_json_encode($session_settings),
+        'question_ids_snapshot'   => wp_json_encode(array_values($final_question_ids))
+    ]);
+    $session_id = $wpdb->insert_id;
+
+    if (!$session_id) {
+         wp_send_json_error(['message' => 'Failed to create the session record.']);
+    }
+
+    $redirect_url = add_query_arg('session_id', $session_id, get_permalink($session_page_id));
+    wp_send_json_success(['redirect_url' => $redirect_url, 'session_id' => $session_id]);
+}
+add_action('wp_ajax_start_course_test_series', 'qp_start_course_test_series_ajax');
+
+/**
+ * AJAX handler for enrolling a user in a course.
+ * Includes check for course access entitlement if required.
+ */
+function qp_enroll_in_course_ajax() {
+    check_ajax_referer('qp_enroll_course_nonce', 'nonce');
+
+    if (!is_user_logged_in()) {
+        wp_send_json_error(['message' => 'Not logged in.']);
+    }
+
+    $course_id = isset($_POST['course_id']) ? absint($_POST['course_id']) : 0;
+    $user_id = get_current_user_id();
+
+    if (!$course_id || get_post_type($course_id) !== 'qp_course') {
+        wp_send_json_error(['message' => 'Invalid course ID.']);
+    }
+
+    // --- NEW: Check if course requires purchase AND if user has access ---
+    $access_mode = get_post_meta($course_id, '_qp_course_access_mode', true) ?: 'free';
+
+    if ($access_mode === 'requires_purchase') {
+        // If it requires purchase, verify the user has a valid entitlement
+        if (!qp_user_can_access_course($user_id, $course_id)) {
+            wp_send_json_error(['message' => 'You do not have access to enroll in this course. Please purchase it first.', 'code' => 'access_denied']);
+            return; // Stop execution
+        }
+        // If access check passes for a paid course, proceed to enrollment
+    }
+    // If access_mode is 'free', proceed to enrollment without entitlement check
+    // --- END NEW CHECK ---
+
+    global $wpdb;
+    $user_courses_table = $wpdb->prefix . 'qp_user_courses';
+
+    // Check if already enrolled (keep this check)
+    $is_enrolled = $wpdb->get_var($wpdb->prepare(
+        "SELECT user_course_id FROM $user_courses_table WHERE user_id = %d AND course_id = %d",
+        $user_id,
+        $course_id
+    ));
+
+    if ($is_enrolled) {
+        wp_send_json_success(['message' => 'Already enrolled.', 'already_enrolled' => true]);
+        return;
+    }
+
+    // Enroll the user (keep this logic)
+    $result = $wpdb->insert($user_courses_table, [
+        'user_id' => $user_id,
+        'course_id' => $course_id,
+        'enrollment_date' => current_time('mysql'),
+        'status' => 'enrolled', // Initial status, could change later if progress starts
+        'progress_percent' => 0
+    ]);
+
+    if ($result) {
+        wp_send_json_success(['message' => 'Successfully enrolled!']);
+    } else {
+        wp_send_json_error(['message' => 'Could not enroll in the course. Please try again.']);
+    }
+}
+add_action('wp_ajax_enroll_in_course', 'qp_enroll_in_course_ajax');
+add_action('wp_ajax_get_course_list_html', ['QP_Dashboard', 'get_course_list_ajax']);
+
+/**
+ * AJAX handler to search for questions for the course editor modal.
+ */
+function qp_search_questions_for_course_ajax() {
+    // 1. Security Checks
+    // Use a dedicated nonce for this action for better security
+    check_ajax_referer('qp_course_editor_select_nonce', 'nonce');
+    if (!current_user_can('manage_options')) { // Or a more specific capability if needed
+        wp_send_json_error(['message' => 'Permission denied.'], 403);
+    }
+
+    // 2. Get and Sanitize Input Parameters
+    $search_term = isset($_POST['search']) ? sanitize_text_field($_POST['search']) : '';
+    $subject_id = isset($_POST['subject_id']) ? absint($_POST['subject_id']) : 0;
+    $topic_id = isset($_POST['topic_id']) ? absint($_POST['topic_id']) : 0;
+    $source_id = isset($_POST['source_id']) ? absint($_POST['source_id']) : 0; // Assuming source filter sends term_id
+    // Add pagination parameters later if needed (e.g., $_POST['page'])
+
+    // 3. Database Setup
+    global $wpdb;
+    $q_table = $wpdb->prefix . 'qp_questions';
+    $g_table = $wpdb->prefix . 'qp_question_groups';
+    $rel_table = $wpdb->prefix . 'qp_term_relationships';
+    $term_table = $wpdb->prefix . 'qp_terms';
+    $tax_table = $wpdb->prefix . 'qp_taxonomies';
+
+    // 4. Build Query Parts
+    $select = "SELECT DISTINCT q.question_id, q.question_text"; // Select distinct to avoid duplicates if multiple terms match
+    $from = "FROM {$q_table} q";
+    $joins = " LEFT JOIN {$g_table} g ON q.group_id = g.group_id"; // Join groups needed for term relationships
+    $where = ["q.status = 'publish'"]; // Only search published questions
+    $params = [];
+    $joins_added = []; // Helper
+
+    // Add search term condition (ID or text)
+    if (!empty($search_term)) {
+        if (is_numeric($search_term)) {
+            $where[] = $wpdb->prepare("q.question_id = %d", absint($search_term));
+        } else {
+            $like_term = '%' . $wpdb->esc_like($search_term) . '%';
+            $where[] = $wpdb->prepare("q.question_text LIKE %s", $like_term);
+        }
+    }
+
+    // Add Subject/Topic filtering (similar to list table)
+    if ($topic_id) {
+        // Filter by specific topic
+        if (!in_array('topic_rel', $joins_added)) {
+            $joins .= " JOIN {$rel_table} topic_rel ON g.group_id = topic_rel.object_id AND topic_rel.object_type = 'group'";
+            $joins_added[] = 'topic_rel';
+        }
+        $where[] = $wpdb->prepare("topic_rel.term_id = %d", $topic_id);
+    } elseif ($subject_id) {
+        // Filter by subject (find all child topics)
+        $child_topic_ids = $wpdb->get_col($wpdb->prepare("SELECT term_id FROM {$term_table} WHERE parent = %d", $subject_id));
+        if (!empty($child_topic_ids)) {
+            $ids_placeholder = implode(',', $child_topic_ids);
+            if (!in_array('topic_rel', $joins_added)) {
+                $joins .= " JOIN {$rel_table} topic_rel ON g.group_id = topic_rel.object_id AND topic_rel.object_type = 'group'";
+                $joins_added[] = 'topic_rel';
+            }
+            $where[] = "topic_rel.term_id IN ($ids_placeholder)";
+        } else {
+             $where[] = "1=0"; // Subject has no topics, so no questions
+        }
+    }
+
+    // Add Source filtering (only filtering by top-level source for now, sections can be added later)
+    if ($source_id) {
+        $source_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'source'");
+        // Get all descendant IDs including the source itself
+         $descendant_ids = get_all_descendant_ids($source_id, $wpdb, $term_table); // Use the global helper
+         if (!empty($descendant_ids)) {
+             $ids_placeholder = implode(',', $descendant_ids);
+             if (!in_array('source_rel', $joins_added)) {
+                 $joins .= " JOIN {$rel_table} source_rel ON g.group_id = source_rel.object_id AND source_rel.object_type = 'group'";
+                 $joins_added[] = 'source_rel';
+             }
+             $where[] = "source_rel.term_id IN ($ids_placeholder)";
+         } else {
+             $where[] = "1=0"; // Source term not found or has no descendants
+         }
+    }
+
+    // 5. Construct and Execute Query
+    $sql = $select . " " . $from . " " . $joins . " WHERE " . implode(' AND ', $where) . " ORDER BY q.question_id DESC LIMIT 100"; // Add a LIMIT for now
+
+    $results = $wpdb->get_results($wpdb->prepare($sql, $params)); // Use prepare if you added %s/%d placeholders
+
+    // 6. Format and Send Response
+    $formatted_results = [];
+    if ($results) {
+        foreach ($results as $question) {
+            $formatted_results[] = [
+                'id' => $question->question_id,
+                // Simple text for now, strip tags and limit length
+                'text' => wp_strip_all_tags(wp_trim_words($question->question_text, 15, '...'))
+            ];
+        }
+    }
+
+    wp_send_json_success(['questions' => $formatted_results]);
+}
+add_action('wp_ajax_qp_search_questions_for_course', 'qp_search_questions_for_course_ajax');
+
+/**
+ * Cleans up related enrollment and progress data when a qp_course post is deleted.
+ * Hooks into 'before_delete_post'.
+ *
+ * @param int $post_id The ID of the post being deleted.
+ */
+function qp_cleanup_course_data_on_delete($post_id) {
+    // Check if the post being deleted is actually a 'qp_course'
+    if (get_post_type($post_id) === 'qp_course') {
+        global $wpdb;
+        $user_courses_table = $wpdb->prefix . 'qp_user_courses';
+        $progress_table = $wpdb->prefix . 'qp_user_items_progress';
+
+        // Delete item progress records associated with this course first
+        $wpdb->delete($progress_table, ['course_id' => $post_id], ['%d']);
+
+        // Then delete the main enrollment records for this course
+        $wpdb->delete($user_courses_table, ['course_id' => $post_id], ['%d']);
+    }
+}
+add_action('before_delete_post', 'qp_cleanup_course_data_on_delete', 10, 1);
+
+/**
+ * Cleans up related course enrollment and progress data when a WordPress user is deleted.
+ * Hooks into 'delete_user'.
+ *
+ * @param int $user_id The ID of the user being deleted.
+ */
+function qp_cleanup_user_data_on_delete($user_id) {
+    global $wpdb;
+    $user_courses_table = $wpdb->prefix . 'qp_user_courses';
+    $progress_table = $wpdb->prefix . 'qp_user_items_progress';
+    $sessions_table = $wpdb->prefix . 'qp_user_sessions'; // Added sessions
+    $attempts_table = $wpdb->prefix . 'qp_user_attempts'; // Added attempts
+    $review_table = $wpdb->prefix . 'qp_review_later'; // Added review later
+    $reports_table = $wpdb->prefix . 'qp_question_reports'; // Added reports
+
+    // Sanitize the user ID just in case
+    $user_id_to_delete = absint($user_id);
+    if ($user_id_to_delete <= 0) {
+        return; // Invalid user ID
+    }
+
+    // Delete item progress first
+    $wpdb->delete($progress_table, ['user_id' => $user_id_to_delete], ['%d']);
+
+    // Then delete enrollments
+    $wpdb->delete($user_courses_table, ['user_id' => $user_id_to_delete], ['%d']);
+
+    // Also delete sessions, attempts, review list, and reports by this user
+    $wpdb->delete($attempts_table, ['user_id' => $user_id_to_delete], ['%d']);
+    $wpdb->delete($sessions_table, ['user_id' => $user_id_to_delete], ['%d']);
+    $wpdb->delete($review_table, ['user_id' => $user_id_to_delete], ['%d']);
+    $wpdb->delete($reports_table, ['user_id' => $user_id_to_delete], ['%d']);
+
+}
+add_action('delete_user', 'qp_cleanup_user_data_on_delete', 10, 1);
+
+/**
+ * Recalculates overall course progress for all enrolled users when a course is saved.
+ * Hooks into 'save_post_qp_course' after the structure meta is saved.
+ *
+ * @param int $post_id The ID of the course post being saved.
+ */
+function qp_recalculate_course_progress_on_save($post_id) {
+    // Check nonce (from the meta box save action)
+    if (!isset($_POST['qp_course_structure_nonce']) || !wp_verify_nonce($_POST['qp_course_structure_nonce'], 'qp_save_course_structure_meta')) {
+        return; // Nonce check failed or not our save action
+    }
+
+    // Check if the current user has permission
+    if (!current_user_can('edit_post', $post_id)) {
+        return;
+    }
+
+    // Don't run on autosave
+    if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) {
+        return;
+    }
+
+    // Check post type is correct
+    if ('qp_course' !== get_post_type($post_id)) {
+        return;
+    }
+
+    global $wpdb;
+    $items_table = $wpdb->prefix . 'qp_course_items';
+    $user_courses_table = $wpdb->prefix . 'qp_user_courses';
+    $progress_table = $wpdb->prefix . 'qp_user_items_progress';
+    $course_id = $post_id; // For clarity
+
+    // 1. Get the NEW total number of items in this course
+    $total_items = (int) $wpdb->get_var($wpdb->prepare(
+        "SELECT COUNT(item_id) FROM $items_table WHERE course_id = %d",
+        $course_id
+    ));
+
+    // 2. Get all users enrolled in this course
+    $enrolled_user_ids = $wpdb->get_col($wpdb->prepare(
+        "SELECT user_id FROM $user_courses_table WHERE course_id = %d",
+        $course_id
+    ));
+
+    if (empty($enrolled_user_ids)) {
+        return; // No users enrolled, nothing to update
+    }
+
+    // 3. Loop through each enrolled user and update their progress
+    foreach ($enrolled_user_ids as $user_id) {
+        // Get the number of items this user has completed for this course
+        $completed_items = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(user_item_id) FROM $progress_table WHERE user_id = %d AND course_id = %d AND status = 'completed'",
+            $user_id,
+            $course_id
+        ));
+
+        // Calculate the new progress percentage
+        $progress_percent = ($total_items > 0) ? round(($completed_items / $total_items) * 100) : 0;
+
+        // Determine the new overall course status for the user
+        $new_course_status = 'in_progress'; // Default
+        if ($total_items > 0 && $completed_items >= $total_items) {
+            $new_course_status = 'completed';
+        }
+
+        // Get the current completion date (if any) to avoid overwriting it
+        $current_completion_date = $wpdb->get_var($wpdb->prepare(
+            "SELECT completion_date FROM {$user_courses_table} WHERE user_id = %d AND course_id = %d",
+            $user_id, $course_id
+        ));
+        $completion_date_to_set = $current_completion_date; // Keep existing by default
+        if ($new_course_status === 'completed' && is_null($current_completion_date)) {
+            $completion_date_to_set = current_time('mysql'); // Set completion date only if newly completed
+        } elseif ($new_course_status !== 'completed') {
+             $completion_date_to_set = null; // Reset completion date if no longer complete
+        }
+
+
+        // Update the user's course enrollment record
+        $wpdb->update(
+            $user_courses_table,
+            [
+                'progress_percent' => $progress_percent,
+                'status'           => $new_course_status,
+                'completion_date'  => $completion_date_to_set // Set potentially updated completion date
+            ],
+            [
+                'user_id'   => $user_id,
+                'course_id' => $course_id
+            ],
+            ['%d', '%s', '%s'], // Data formats
+            ['%d', '%d']  // Where formats
+        );
+    }
+}
+// Hook with a priority later than the meta box save (default is 10)
+add_action('save_post_qp_course', 'qp_recalculate_course_progress_on_save', 20, 1);
