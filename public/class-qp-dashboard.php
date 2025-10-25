@@ -1003,18 +1003,85 @@ private static function render_single_course_view($course_slug, $user_id) {
         return ob_get_clean();
     }
 
-    /**
- * Renders the content specifically for the Profile section.
- * (Placeholder - will fetch data and build layout in next steps)
- */
-private static function render_profile_content() {
-    ob_start();
-    ?>
-    <h2>My Profile</h2>
-    <p>Profile content will go here.</p>
-    <?php
-    return ob_get_clean();
-}
+/**
+     * Renders the content specifically for the Profile section.
+     * Fetches user data and displays it using cards.
+     */
+    private static function render_profile_content() {
+        if (!is_user_logged_in()) {
+            // Should not happen if page is protected, but good practice
+            return '<p>You must be logged in to view your profile.</p>';
+        }
+
+        $user_id = get_current_user_id();
+        $profile_data = self::get_profile_data($user_id); // Fetch data using our helper function
+
+        // Get WordPress profile edit URL
+        $profile_edit_url = get_edit_profile_url($user_id);
+
+        ob_start();
+        ?>
+        <div class="qp-profile-page">
+            <h2>My Profile</h2>
+
+            <div class="qp-profile-layout">
+                <div class="qp-card qp-profile-card">
+                    <div class="qp-card-content">
+                        <div class="qp-profile-avatar">
+                            <img src="<?php echo esc_url($profile_data['avatar_url']); ?>" alt="Profile Picture" width="128" height="128">
+                        </div>
+                        <h3 class="qp-profile-name"><?php echo esc_html__('Hello, ', 'question-press') . esc_html($profile_data['display_name']); ?>!</h3>
+                        <p class="qp-profile-email"><?php echo esc_html($profile_data['email']); ?></p>
+                        <a href="<?php echo esc_url($profile_edit_url); ?>" class="qp-button qp-button-secondary qp-edit-profile-button">Edit Profile</a>
+                         <p class="description" style="font-size: 12px; color: #777; margin-top: 10px;">(Name, Email, and Avatar are managed via your main WordPress profile)</p>
+                    </div>
+                </div>
+
+                <div class="qp-profile-details">
+                    <div class="qp-card qp-access-card">
+                        <div class="qp-card-header">
+                            <h3><?php esc_html_e('Your Practice Scope', 'question-press'); ?></h3>
+                        </div>
+                        <div class="qp-card-content">
+                            <p><?php echo esc_html($profile_data['scope_description']); ?></p>
+                            <?php /* Optional detailed lists (can uncomment later if needed)
+                            if (!empty($profile_data['allowed_exams_list'])) {
+                                echo '<h4>Allowed Exams:</h4><ul>';
+                                foreach($profile_data['allowed_exams_list'] as $exam_name) {
+                                    echo '<li>' . esc_html($exam_name) . '</li>';
+                                }
+                                echo '</ul>';
+                            }
+                            if (!empty($profile_data['allowed_subjects_list'])) {
+                                echo '<h4>Specifically Allowed Subjects:</h4><ul>';
+                                foreach($profile_data['allowed_subjects_list'] as $subject_name) {
+                                    echo '<li>' . esc_html($subject_name) . '</li>';
+                                }
+                                echo '</ul>';
+                            }
+                            */ ?>
+                        </div>
+                    </div>
+
+                    <?php // Placeholder for future Password Change ?>
+                    <div class="qp-card qp-password-card">
+                         <div class="qp-card-header">
+                            <h3><?php esc_html_e('Security', 'question-press'); ?></h3>
+                        </div>
+                        <div class="qp-card-content">
+                            <p>Manage your account password.</p>
+                            <a href="<?php echo esc_url(get_edit_profile_url($user_id)); ?>#password" class="qp-button qp-button-secondary">Change Password</a>
+                             <p class="description" style="font-size: 12px; color: #777; margin-top: 10px;">(Password is managed via your main WordPress profile)</p>
+                        </div>
+                    </div>
+
+                     <?php // Placeholder for future Subscription/Entitlement Management ?>
+                     </div>
+            </div>
+        </div>
+        <?php
+        return ob_get_clean();
+    }
 
 /**
      * Gathers profile data for the dashboard profile tab.
