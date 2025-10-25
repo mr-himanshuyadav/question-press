@@ -19,19 +19,6 @@ function qp_start_session() {
 }
 add_action('init', 'qp_start_session', 1); // Run early on init
 
-/**
- * Register custom query variables for dashboard routing.
- *
- * @param array $vars Existing query variables.
- * @return array Modified query variables.
- */
-function qp_register_query_vars($vars) {
-    $vars[] = 'qp_tab';          // To identify the main dashboard section (e.g., 'history', 'courses')
-    $vars[] = 'qp_course_slug'; // To identify a specific course by its slug
-    return $vars;
-}
-add_filter('query_vars', 'qp_register_query_vars');
-
 // Define constants and include files
 define('QP_PLUGIN_FILE', __FILE__);
 define('QP_PLUGIN_DIR', plugin_dir_path(QP_PLUGIN_FILE));
@@ -4511,6 +4498,96 @@ function qp_public_init()
     add_shortcode('question_press_dashboard', ['QP_Dashboard', 'render']);
 }
 add_action('init', 'qp_public_init');
+
+/**
+ * Register custom query variables for dashboard routing.
+ *
+ * @param array $vars Existing query variables.
+ * @return array Modified query variables.
+ */
+function qp_register_query_vars($vars) {
+    $vars[] = 'qp_tab';          // To identify the main dashboard section (e.g., 'history', 'courses')
+    $vars[] = 'qp_course_slug'; // To identify a specific course by its slug
+    return $vars;
+}
+add_filter('query_vars', 'qp_register_query_vars');
+
+/**
+ * Add rewrite rules for the dynamic dashboard URLs.
+ */
+function qp_add_dashboard_rewrite_rules() {
+    $options = get_option('qp_settings');
+    // Ensure 'dashboard_page' key exists before accessing it
+    $dashboard_page_id = isset($options['dashboard_page']) ? absint($options['dashboard_page']) : 0;
+
+    // Only add rules if a valid dashboard page ID is set
+    if ($dashboard_page_id > 0) {
+        // Get the slug (URL path) of the selected dashboard page
+        $dashboard_slug = get_post_field('post_name', $dashboard_page_id);
+
+        // Proceed only if we successfully retrieved the slug
+        if ($dashboard_slug) {
+            // Rule for specific course: /dashboard-slug/courses/course-slug/
+            // Maps the URL to index.php?pagename=[dashboard-slug]&qp_tab=courses&qp_course_slug=[course-slug]
+            add_rewrite_rule(
+                '^' . $dashboard_slug . '/courses/([^/]+)/?$', // Matches /dashboard-slug/courses/ANYTHING/
+                'index.php?pagename=' . $dashboard_slug . '&qp_tab=courses&qp_course_slug=$matches[1]',
+                'top' // Process this rule early
+            );
+
+            // Rule for main tab: /dashboard-slug/tab-name/
+            // Maps the URL to index.php?pagename=[dashboard-slug]&qp_tab=[tab-name]
+            add_rewrite_rule(
+                '^' . $dashboard_slug . '/([^/]+)/?$', // Matches /dashboard-slug/ANYTHING/
+                'index.php?pagename=' . $dashboard_slug . '&qp_tab=$matches[1]',
+                'top' // Process this rule early
+            );
+
+            // Optional: Rule for the base dashboard URL /dashboard-slug/
+            // WordPress might handle this automatically if the page structure is correct,
+            // but adding it explicitly can sometimes help.
+            add_rewrite_rule(
+                '^' . $dashboard_slug . '/?$', // Matches /dashboard-slug/
+                'index.php?pagename=' . $dashboard_slug, // Just load the dashboard page
+                'top'
+            );
+        } else {
+            // Log an error or add an admin notice if the slug couldn't be found
+            error_log('Question Press: Could not retrieve slug for dashboard page ID: ' . $dashboard_page_id);
+        }
+    } else {
+        // Log an error or add an admin notice if the dashboard page isn't set
+        error_log('Question Press: Dashboard page ID not set in options.');
+    }
+}
+add_action('init', 'qp_add_dashboard_rewrite_rules');
+
+/**
+ * Flush rewrite rules on plugin activation.
+ */
+function qp_flush_rewrite_rules_on_activate() {
+    // Ensure our rules are added before flushing
+    qp_add_dashboard_rewrite_rules();
+    // Flush the rules
+    flush_rewrite_rules();
+}
+// Make sure QP_PLUGIN_FILE is defined correctly (it should be from your main plugin file)
+if (defined('QP_PLUGIN_FILE')) {
+    register_activation_hook(QP_PLUGIN_FILE, 'qp_flush_rewrite_rules_on_activate');
+}
+
+
+/**
+ * Flush rewrite rules on plugin deactivation.
+ */
+function qp_flush_rewrite_rules_on_deactivate() {
+    // Flush the rules to remove ours
+    flush_rewrite_rules();
+}
+// Make sure QP_PLUGIN_FILE is defined correctly
+if (defined('QP_PLUGIN_FILE')) {
+    register_deactivation_hook(QP_PLUGIN_FILE, 'qp_flush_rewrite_rules_on_deactivate');
+}
 
 function qp_public_enqueue_scripts()
 {
