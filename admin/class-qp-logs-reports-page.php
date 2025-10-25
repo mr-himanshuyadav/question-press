@@ -1,6 +1,8 @@
 <?php
 if (!defined('ABSPATH')) exit;
 
+use QuestionPress\Database\Terms_DB;
+
 // We will create these files in the next steps
 require_once QP_PLUGIN_PATH . 'admin/class-qp-reports-list-table.php';
 require_once QP_PLUGIN_PATH . 'admin/class-qp-log-settings-list-table.php';
@@ -116,8 +118,8 @@ class QP_Logs_Reports_Page {
         if (isset($_GET['_wpnonce']) && wp_verify_nonce($_GET['_wpnonce'], 'qp_edit_reason_' . $term_id)) {
             $term_to_edit = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$term_table} WHERE term_id = %d", $term_id));
             if ($term_to_edit) {
-                $is_active_for_edit = qp_get_term_meta($term_id, 'is_active', true);
-                $type_for_edit = qp_get_term_meta($term_id, 'type', true) ?: 'report'; // Fetch the type, default to 'report' if not set
+                $is_active_for_edit = Terms_DB::get_meta($term_id, 'is_active', true);
+                $type_for_edit = Terms_DB::get_meta($term_id, 'type', true) ?: 'report'; // Fetch the type, default to 'report' if not set
             }
         }
     }

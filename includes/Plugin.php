@@ -15,6 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 use QuestionPress\Assets;
 use QuestionPress\Post_Types;
 use QuestionPress\Taxonomies; // Just in case if migrated to native taxonomies later
+use QuestionPress\Database\DB as QP_DB;
 
 /**
  * Final QuestionPress Class.
@@ -55,6 +56,7 @@ final class Plugin {
      * Constructor.
      */
     private function __construct() {
+        QP_DB::init();
         $this->define_constants();
         $this->includes();
         $this->init_hooks();

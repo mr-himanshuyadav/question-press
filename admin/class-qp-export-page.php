@@ -4,6 +4,8 @@ if (!defined('ABSPATH')) {
     exit; // Exit if accessed directly.
 }
 
+use QuestionPress\Database\Terms_DB;
+
 class QP_Export_Page
 {
 
@@ -83,7 +85,7 @@ class QP_Export_Page
     $all_descendant_ids = [];
     foreach($subject_term_ids as $sid) {
         // This function is now available globally from question-press.php
-        $descendants = get_all_descendant_ids($sid, $wpdb, $term_table);
+        $descendants = Terms_DB::get_all_descendant_ids($sid, $wpdb, $term_table);
         $all_descendant_ids = array_merge($all_descendant_ids, $descendants);
     }
     $all_descendant_ids = array_unique($all_descendant_ids);
@@ -124,11 +126,11 @@ class QP_Export_Page
         $group_subject_term_id = $wpdb->get_var($wpdb->prepare("SELECT term_id FROM $rel_table WHERE object_id = %d AND object_type = 'group' AND term_id IN (SELECT term_id FROM $term_table WHERE taxonomy_id = %d)", $group->group_id, $subject_tax_id));
         if ($group_subject_term_id) {
             // This function is now available globally from question-press.php
-            $subject_lineage_names = qp_get_term_lineage_names($group_subject_term_id, $wpdb, $term_table);
+            $subject_lineage_names = Terms_DB::get_lineage_names($group_subject_term_id, $wpdb, $term_table);
         }
 
         // Get Source/Section lineage for the group
-        $source_lineage_names = qp_get_source_hierarchy_for_question($questions_in_group[0]->question_id); // This function was already in the main plugin file
+        $source_lineage_names = Terms_DB::get_source_hierarchy_for_question($questions_in_group[0]->question_id); // This function was already in the main plugin file
         $direction_image_name = $group->direction_image_id ? basename(get_attached_file($group->direction_image_id)) : null;
 
         $group_output = [

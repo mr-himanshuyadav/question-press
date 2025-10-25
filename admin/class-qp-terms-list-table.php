@@ -3,6 +3,8 @@ if (!class_exists('WP_List_Table')) {
     require_once(ABSPATH . 'wp-admin/includes/class-wp-list-table.php');
 }
 
+use QuestionPress\Database\Terms_DB;
+
 class QP_Terms_List_Table extends WP_List_Table {
      private $taxonomy;
     private $taxonomy_label;
@@ -92,7 +94,7 @@ class QP_Terms_List_Table extends WP_List_Table {
             ['name' => $final_name, 'slug' => sanitize_title($final_name), 'parent' => $final_parent],
             ['term_id' => $destination_term_id]
         );
-        qp_update_term_meta($destination_term_id, 'description', $final_description);
+        Terms_DB::update_meta($destination_term_id, 'description', $final_description);
 
         // Set success message and redirect
         QP_Sources_Page::set_message(count($source_term_ids_to_merge) . ' item(s) were successfully merged into "' . esc_html($final_name) . '".', 'updated');

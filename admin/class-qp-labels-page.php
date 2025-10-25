@@ -1,32 +1,7 @@
 <?php
 if (!defined('ABSPATH')) exit;
 
-/**
- * Helper function to retrieve metadata for a term from our custom table.
- */
-function qp_get_term_meta($term_id, $meta_key, $single = true) {
-    global $wpdb;
-    $meta_table = $wpdb->prefix . 'qp_term_meta';
-    $value = $wpdb->get_var($wpdb->prepare("SELECT meta_value FROM $meta_table WHERE term_id = %d AND meta_key = %s", $term_id, $meta_key));
-    return $value;
-}
-
-/**
- * Helper function to update metadata for a term in our custom table.
- * Creates the meta entry if it does not exist.
- */
-function qp_update_term_meta($term_id, $meta_key, $meta_value) {
-    global $wpdb;
-    $meta_table = $wpdb->prefix . 'qp_term_meta';
-    $existing_meta_id = $wpdb->get_var($wpdb->prepare("SELECT meta_id FROM $meta_table WHERE term_id = %d AND meta_key = %s", $term_id, $meta_key));
-
-    if ($existing_meta_id) {
-        $wpdb->update($meta_table, ['meta_value' => $meta_value], ['meta_id' => $existing_meta_id]);
-    } else {
-        $wpdb->insert($meta_table, ['term_id' => $term_id, 'meta_key' => $meta_key, 'meta_value' => $meta_value]);
-    }
-}
-
+use QuestionPress\Database\Terms_DB;
 
 class QP_Labels_Page
 {
@@ -66,7 +41,7 @@ class QP_Labels_Page
                 if ($_POST['action'] === 'update_label') {
                     $term_id = absint($_POST['term_id']);
                     // **THE FIX**: Check the default status from the DB, not the form.
-                    $is_default = qp_get_term_meta($term_id, 'is_default', true);
+                    $is_default = Terms_DB::get_meta($term_id, 'is_default', true);
 
                     if (!$is_default) {
                         $wpdb->update($term_table, $term_data, ['term_id' => $term_id]);
@@ -79,8 +54,8 @@ class QP_Labels_Page
                 }
 
                 if ($term_id > 0) {
-                    qp_update_term_meta($term_id, 'color', $label_color);
-                    qp_update_term_meta($term_id, 'description', $description);
+                    Terms_DB::update_meta($term_id, 'color', $label_color);
+                    Terms_DB::update_meta($term_id, 'description', $description);
                 }
             }
             QP_Sources_Page::redirect_to_tab('labels');
@@ -89,7 +64,7 @@ class QP_Labels_Page
         // Delete Handler (Code remains the same, it was already correct)
         if (isset($_GET['action']) && $_GET['action'] === 'delete' && isset($_GET['term_id']) && check_admin_referer('qp_delete_label_' . absint($_GET['term_id']))) {
             $term_id = absint($_GET['term_id']);
-            $is_default = qp_get_term_meta($term_id, 'is_default', true);
+            $is_default = Terms_DB::get_meta($term_id, 'is_default', true);
 
             if ($is_default) {
                 QP_Sources_Page::set_message('Default labels cannot be deleted.', 'error');
@@ -128,9 +103,9 @@ class QP_Labels_Page
             if (isset($_GET['_wpnonce']) && wp_verify_nonce($_GET['_wpnonce'], 'qp_edit_label_' . $term_id)) {
                 $label_to_edit = $wpdb->get_row($wpdb->prepare("SELECT * FROM $term_table WHERE term_id = %d AND taxonomy_id = %d", $term_id, $label_tax_id));
                 if ($label_to_edit) {
-                    $edit_meta['color'] = qp_get_term_meta($term_id, 'color', true) ?: '#cccccc';
-                    $edit_meta['description'] = qp_get_term_meta($term_id, 'description', true);
-                    $edit_meta['is_default'] = qp_get_term_meta($term_id, 'is_default', true);
+                    $edit_meta['color'] = Terms_DB::get_meta($term_id, 'color', true) ?: '#cccccc';
+                    $edit_meta['description'] = Terms_DB::get_meta($term_id, 'description', true);
+                    $edit_meta['is_default'] = Terms_DB::get_meta($term_id, 'is_default', true);
                 }
             }
         }

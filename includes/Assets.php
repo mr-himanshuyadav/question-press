@@ -134,7 +134,7 @@ class Assets {
 
         // Localize session data specifically for the session page
         if (has_shortcode($post->post_content, 'question_press_session')) {
-            $session_data = QP_Shortcodes::get_session_data_for_script();
+            $session_data = \QP_Shortcodes::get_session_data_for_script();
             if ($session_data) {
                 wp_localize_script('qp-practice-script', 'qp_session_data', $session_data);
             }
@@ -183,7 +183,7 @@ class Assets {
         wp_enqueue_script('jquery-ui-sortable');
 
         // Enqueue our new course editor script
-        $course_editor_js_version = filemtime(QP_PLUGIN_PATH . 'js/course-editor.js'); // For cache busting
+        $course_editor_js_version = file_exists(QP_PLUGIN_PATH . 'assets/js/course-editor.js') ? filemtime(QP_PLUGIN_PATH . 'assets/js/course-editor.js') : QP_PLUGIN_VERSION;
         wp_enqueue_script('qp-course-editor-script', QP_ASSETS_URL . 'js/course-editor.js', ['jquery', 'jquery-ui-sortable'], $course_editor_js_version, true);
 
         // Localize data needed by the script (like existing structure and dropdown options)
@@ -199,7 +199,7 @@ class Assets {
             'testSeriesOptions' => $test_series_options
         ]);
         // Enqueue course editor CSS
-        $course_editor_css_version = filemtime(QP_PLUGIN_PATH . 'css/course-editor.css');
+        $course_editor_css_version = file_exists(QP_PLUGIN_PATH . 'assets/css/course-editor.css') ? filemtime(QP_PLUGIN_PATH . 'assets/css/course-editor.css') : QP_PLUGIN_VERSION;
         wp_enqueue_style('qp-course-editor-style', QP_ASSETS_URL . 'css/course-editor.css', [], $course_editor_css_version);
     }
     if ($hook_suffix === 'question-press_page_qp-organization' && isset($_GET['tab']) && $_GET['tab'] === 'labels') {

@@ -4,6 +4,8 @@ if (!defined('ABSPATH')) {
     exit; // Exit if accessed directly.
 }
 
+use QuestionPress\Database\Terms_DB;
+
 class QP_Importer {
 
     public function handle_import() {
@@ -122,21 +124,21 @@ class QP_Importer {
         $parent_subject_id = 0;
         if (isset($group['subject']) && is_array($group['subject'])) {
             foreach ($group['subject'] as $subject_name) {
-                $parent_subject_id = qp_get_or_create_term($subject_name, $tax_ids['subject'], $parent_subject_id);
+                $parent_subject_id = Terms_DB::get_or_create($subject_name, $tax_ids['subject'], $parent_subject_id);
                 $subject_hierarchy_ids[] = $parent_subject_id;
             }
         }
         $most_specific_subject_id = end($subject_hierarchy_ids) ?: null;
         $top_level_subject_id = $subject_hierarchy_ids[0] ?? null;
 
-        $exam_term_id = !empty($group['examName']) ? qp_get_or_create_term($group['examName'], $tax_ids['exam']) : null;
+        $exam_term_id = !empty($group['examName']) ? Terms_DB::get_or_create($group['examName'], $tax_ids['exam']) : null;
 
         // Process hierarchical source array
         $source_hierarchy_ids = [];
         $parent_source_id = 0;
         if (isset($group['source']) && is_array($group['source'])) {
             foreach ($group['source'] as $source_name) {
-                $parent_source_id = qp_get_or_create_term($source_name, $tax_ids['source'], $parent_source_id);
+                $parent_source_id = Terms_DB::get_or_create($source_name, $tax_ids['source'], $parent_source_id);
                 $source_hierarchy_ids[] = $parent_source_id;
             }
         }

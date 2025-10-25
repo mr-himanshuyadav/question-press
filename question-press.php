@@ -36,6 +36,7 @@ if ( ! defined( 'QP_PLUGIN_FILE' ) ) {
 use QuestionPress\Plugin;
 use QuestionPress\Activator; // (Keep commented for now)
 use QuestionPress\Deactivator; // (Keep commented for now)
+use QuestionPress\Database\Terms_DB;
 
 /**
  * --- NEW: Main function for returning the Plugin instance ---
@@ -1200,7 +1201,7 @@ function qp_render_merge_terms_page()
 
     // The first selected term will be the master, its data pre-fills the form
     $master_term = $terms_to_merge[0];
-    $master_description = qp_get_term_meta($master_term->term_id, 'description', true);
+    $master_description = Terms_DB::get_meta($master_term->term_id, 'description', true);
 
     // Get all possible parent terms for the dropdown (excluding the ones being merged)
     $parent_terms = $wpdb->get_results($wpdb->prepare(
@@ -1787,164 +1788,6 @@ function qp_get_test_series_options_for_js() {
     ];
 }
 
-
-function qp_admin_enqueue_scripts($hook_suffix)
-{
-    if ($hook_suffix === 'question-press_page_qp-tools') {
-        wp_enqueue_script('sweetalert2', 'https://cdn.jsdelivr.net/npm/sweetalert2@11', [], null, true);
-        wp_enqueue_script('qp-backup-restore-script', QP_PLUGIN_URL . 'admin/assets/js/backup-restore.js', ['jquery', 'sweetalert2'], '1.0.0', true);
-        wp_localize_script('qp-backup-restore-script', 'qp_backup_restore_data', [
-            'nonce' => wp_create_nonce('qp_backup_restore_nonce')
-        ]);
-    }
-
-    if (strpos($hook_suffix, 'qp-') !== false || strpos($hook_suffix, 'question-press') !== false) {
-        wp_enqueue_style('wp-color-picker');
-        wp_enqueue_script('wp-color-picker');
-    }
-    if ($hook_suffix === 'question-press_page_qp-question-editor' || $hook_suffix === 'admin_page_qp-edit-group') {
-        wp_enqueue_media();
-        wp_enqueue_script('qp-media-uploader-script', QP_PLUGIN_URL . 'admin/assets/js/media-uploader.js', ['jquery'], '1.0.0', true);
-        wp_enqueue_script('qp-editor-script', QP_PLUGIN_URL . 'admin/assets/js/question-editor.js', ['jquery'], '1.0.1', true);
-    }
-    if ($hook_suffix === 'toplevel_page_question-press') {
-        wp_enqueue_script('qp-quick-edit-script', QP_PLUGIN_URL . 'admin/assets/js/quick-edit.js', ['jquery'], '1.0.1', true);
-        wp_localize_script('qp-quick-edit-script', 'qp_quick_edit_object', [
-            'save_nonce' => wp_create_nonce('qp_save_quick_edit_nonce')
-        ]);
-        wp_enqueue_script('qp-multi-select-dropdown-script', QP_PLUGIN_URL . 'admin/assets/js/multi-select-dropdown.js', ['jquery'], '1.0.1', true);
-    }
-    // Check if we are on the 'Add New' or 'Edit' screen for the 'qp_course' post type
-    global $pagenow, $typenow;
-    if (($pagenow == 'post-new.php' && isset($_GET['post_type']) && $_GET['post_type'] == 'qp_course') ||
-        ($pagenow == 'post.php' && isset($_GET['post']) && get_post_type($_GET['post']) == 'qp_course')) {
-
-        // Enqueue jQuery UI Sortable
-        wp_enqueue_script('jquery-ui-sortable');
-
-        // Enqueue our new course editor script
-        $course_editor_js_version = filemtime(QP_PLUGIN_DIR . 'admin/assets/js/course-editor.js'); // For cache busting
-        wp_enqueue_script('qp-course-editor-script', QP_PLUGIN_URL . 'admin/assets/js/course-editor.js', ['jquery', 'jquery-ui-sortable'], $course_editor_js_version, true);
-
-        // Localize data needed by the script (like existing structure and dropdown options)
-        global $post; // Get the current post object
-        $course_structure_data = qp_get_course_structure_for_editor($post ? $post->ID : 0); // We will create this helper function next
-        $test_series_options = qp_get_test_series_options_for_js(); // And this one too
-
-        wp_localize_script('qp-course-editor-script', 'qpCourseEditorData', [
-            'ajax_url' => admin_url('admin-ajax.php'), // Add ajaxurl for convenience
-            'save_nonce' => wp_create_nonce('qp_save_course_structure_meta'), // Keep existing save nonce
-            'select_nonce' => wp_create_nonce('qp_course_editor_select_nonce'), // Add the NEW nonce
-            'structure' => $course_structure_data,
-            'testSeriesOptions' => $test_series_options
-        ]);
-        // Enqueue course editor CSS
-        $course_editor_css_version = filemtime(QP_PLUGIN_DIR . 'admin/assets/css/course-editor.css');
-        wp_enqueue_style('qp-course-editor-style', QP_PLUGIN_URL . 'admin/assets/css/course-editor.css', [], $course_editor_css_version);
-    }
-    if ($hook_suffix === 'question-press_page_qp-organization' && isset($_GET['tab']) && $_GET['tab'] === 'labels') {
-        add_action('admin_footer', function () {
-            echo '<script>jQuery(document).ready(function($){$(".qp-color-picker").wpColorPicker();});</script>';
-        });
-    }
-
-    if ($hook_suffix === 'question-press_page_qp-organization') {
-        wp_enqueue_script('qp-organization-script', QP_PLUGIN_URL . 'admin/assets/js/organization-page.js', ['jquery'], '1.0.0', true);
-    }
-
-    if ($hook_suffix === 'question-press_page_qp-settings') {
-        wp_enqueue_script('qp-settings-script', QP_PLUGIN_URL . 'admin/assets/js/settings-page.js', ['jquery'], '1.0.0', true);
-    }
-
-    if (
-        $hook_suffix === 'question-press_page_qp-settings' ||
-        $hook_suffix === 'toplevel_page_question-press' ||
-        $hook_suffix === 'question-press_page_qp-question-editor' ||
-        $hook_suffix === 'admin_page_qp-edit-group'
-    ) {
-        wp_enqueue_script('sweetalert2', 'https://cdn.jsdelivr.net/npm/sweetalert2@11', [], null, true);
-    }
-
-    if ($hook_suffix === 'toplevel_page_question-press') {
-        wp_enqueue_style('katex-css', 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css', [], '0.16.9');
-        wp_enqueue_script('katex-js', 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js', [], '0.16.9', true);
-        wp_enqueue_script('katex-auto-render', 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js', ['katex-js'], '0.16.9', true);
-
-        wp_add_inline_script('katex-auto-render', "
-        document.addEventListener('DOMContentLoaded', function() {
-            if (typeof renderMathInElement === 'function') {
-                renderMathInElement(document.getElementById('the-list'), {
-                    delimiters: [
-                        {left: '$$', right: '$$', display: true},
-                        {left: '$', right: '$', display: false},
-                        {left: '\\\\[', right: '\\\\]', display: true},
-                        {left: '\\\\(', right: '\\\\)', display: false}
-                    ],
-                    throwOnError: false
-                });
-            }
-        });
-    ");
-    }
-
-    if ($hook_suffix === 'toplevel_page_question-press') {
-        wp_enqueue_script('qp-quick-edit-script', QP_PLUGIN_URL . 'admin/assets/js/quick-edit.js', ['jquery'], '1.0.2', true);
-        // Add a nonce specifically for our new admin filters
-        wp_localize_script('qp-quick-edit-script', 'qp_admin_filter_data', [
-            'nonce' => wp_create_nonce('qp_admin_filter_nonce'),
-            'ajax_url' => admin_url('admin-ajax.php')
-        ]);
-
-        global $wpdb;
-        $term_table = $wpdb->prefix . 'qp_terms';
-        $tax_table = $wpdb->prefix . 'qp_taxonomies';
-        $rel_table = $wpdb->prefix . 'qp_term_relationships';
-
-        // Get taxonomy IDs
-        $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'subject'");
-        $source_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'source'");
-        $exam_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'exam'");
-
-        // Get all topics (terms with a parent under the subject taxonomy)
-        $all_topics = $wpdb->get_results($wpdb->prepare("SELECT term_id AS topic_id, name AS topic_name, parent AS subject_id FROM {$term_table} WHERE taxonomy_id = %d AND parent != 0", $subject_tax_id));
-
-        // all sources (top-level terms under the source taxonomy)
-        $all_sources = $wpdb->get_results($wpdb->prepare("SELECT term_id AS source_id, name AS source_name FROM {$term_table} WHERE taxonomy_id = %d AND parent = 0", $source_tax_id));
-
-        // Get all sections (child terms under the source taxonomy)
-        $all_sections = $wpdb->get_results($wpdb->prepare("SELECT term_id AS section_id, name AS section_name, parent AS source_id FROM {$term_table} WHERE taxonomy_id = %d AND parent != 0", $source_tax_id));
-
-        // Build the source-to-subject relationship map
-        $source_subject_links = $wpdb->get_results(
-            "SELECT object_id AS source_id, term_id AS subject_id
-             FROM {$rel_table}
-             WHERE object_type = 'source_subject_link'"
-        );
-
-        // Get all exams
-        $all_exams = $wpdb->get_results($wpdb->prepare("SELECT term_id AS exam_id, name AS exam_name FROM {$term_table} WHERE taxonomy_id = %d", $exam_tax_id));
-
-        // Get all exam-to-subject links
-        $exam_subject_links = $wpdb->get_results("SELECT object_id AS exam_id, term_id AS subject_id FROM {$rel_table} WHERE object_type = 'exam_subject_link'");
-
-        wp_localize_script('qp-quick-edit-script', 'qp_bulk_edit_data', [
-            'sources' => $all_sources,
-            'sections' => $all_sections,
-            'exams' => $all_exams,
-            'exam_subject_links' => $exam_subject_links,
-            'source_subject_links' => $source_subject_links,
-            'topics' => $all_topics
-        ]);
-
-        wp_localize_script('qp-quick-edit-script', 'qp_quick_edit_object', [
-            'save_nonce' => wp_create_nonce('qp_save_quick_edit_nonce'),
-            'nonce' => wp_create_nonce('qp_practice_nonce')
-        ]);
-        wp_enqueue_script('qp-multi-select-dropdown-script', QP_PLUGIN_URL . 'admin/assets/js/multi-select-dropdown.js', ['jquery'], '1.0.1', true);
-    }
-}
-add_action('admin_enqueue_scripts', 'qp_admin_enqueue_scripts');
-
 function qp_regenerate_api_key_ajax()
 {
     check_ajax_referer('qp_regenerate_api_key_nonce', 'nonce');
@@ -2131,58 +1974,6 @@ function qp_upload_avatar_ajax() {
 add_action('wp_ajax_qp_upload_avatar', 'qp_upload_avatar_ajax');
 
 // Used on export page
-
-/**
- * Helper function to get all descendant term IDs for a given parent, including the parent itself.
- *
- * @param int    $parent_id The starting term_id.
- * @param object $wpdb      The WordPress database object.
- * @param string $term_table The name of the terms table.
- * @return array An array of term IDs.
- */
-function get_all_descendant_ids($parent_id, $wpdb, $term_table)
-{
-    $descendant_ids = [$parent_id];
-    $current_parent_ids = [$parent_id];
-    for ($i = 0; $i < 10; $i++) { // Safety break
-        if (empty($current_parent_ids)) break;
-        $ids_placeholder = implode(',', $current_parent_ids);
-        $child_ids = $wpdb->get_col("SELECT term_id FROM $term_table WHERE parent IN ($ids_placeholder)");
-        if (!empty($child_ids)) {
-            $descendant_ids = array_merge($descendant_ids, $child_ids);
-            $current_parent_ids = $child_ids;
-        } else {
-            break;
-        }
-    }
-    return array_unique($descendant_ids);
-}
-
-// Used on export page
-/**
- * Helper function to trace a term's lineage back to the root and return an array of names.
- *
- * @param int    $term_id      The starting term_id.
- * @param object $wpdb         The WordPress database object.
- * @param string $term_table   The name of the terms table.
- * @return array An ordered array of names from parent to child.
- */
-function qp_get_term_lineage_names($term_id, $wpdb, $term_table)
-{
-    $lineage = [];
-    $current_id = $term_id;
-    for ($i = 0; $i < 10; $i++) { // Safety break
-        if (!$current_id) break;
-        $term = $wpdb->get_row($wpdb->prepare("SELECT name, parent FROM {$term_table} WHERE term_id = %d", $current_id));
-        if ($term) {
-            array_unshift($lineage, $term->name);
-            $current_id = $term->parent;
-        } else {
-            break;
-        }
-    }
-    return $lineage;
-}
 
 /**
  * Determines the allowed subject term IDs for a given user based on their scope settings.
@@ -2768,10 +2559,21 @@ function qp_handle_save_question_group()
                 }
             }
 
+            // Get original correct option ID BEFORE saving new options
+            $original_correct_option_id = QuestionPress\Database\Questions_DB::get_correct_option_id($question_id);
+
+            // Call the new static method to save options
+            $correct_option_id_set = QuestionPress\Database\Questions_DB::save_options_for_question($question_id, $q_data);
+
+            // --- Re-evaluation logic (moved here) ---
+            if ($original_correct_option_id != $correct_option_id_set) {
+                qp_re_evaluate_question_attempts($question_id, absint($correct_option_id_set));
+            }
+
             // Handle Options (No changes needed here)
-            process_question_options($question_id, $q_data);
+            QuestionPress\Database\Questions_DB::save_options_for_question($question_id, $q_data);
         }
-    }
+    }   
 
     // --- Clean up removed questions ---
     $questions_to_delete = array_diff($existing_q_ids, $submitted_q_ids);
@@ -2863,49 +2665,6 @@ function qp_re_evaluate_question_attempts($question_id, $new_correct_option_id)
             ],
             ['session_id' => $session_id]
         );
-    }
-}
-
-function process_question_options($question_id, $q_data)
-{
-    global $wpdb;
-    $o_table = "{$wpdb->prefix}qp_options";
-    $submitted_option_ids = [];
-    $options_text = isset($q_data['options']) ? (array)$q_data['options'] : [];
-    $option_ids = isset($q_data['option_ids']) ? (array)$q_data['option_ids'] : [];
-    $correct_option_id_from_form = isset($q_data['correct_option_id']) ? $q_data['correct_option_id'] : null;
-
-    foreach ($options_text as $index => $option_text) {
-        $option_id = isset($option_ids[$index]) ? absint($option_ids[$index]) : 0;
-        $trimmed_option_text = trim(stripslashes($option_text));
-        if (empty($trimmed_option_text)) continue;
-        $option_data = ['option_text' => sanitize_text_field($trimmed_option_text)];
-        if ($option_id > 0) {
-            $wpdb->update($o_table, $option_data, ['option_id' => $option_id]);
-            $submitted_option_ids[] = $option_id;
-        } else {
-            $option_data['question_id'] = $question_id;
-            $wpdb->insert($o_table, $option_data);
-            $new_option_id = $wpdb->insert_id;
-            $submitted_option_ids[] = $new_option_id;
-            if ($correct_option_id_from_form === 'new_' . $index) {
-                $correct_option_id_from_form = $new_option_id;
-            }
-        }
-    }
-    $existing_db_option_ids = $wpdb->get_col($wpdb->prepare("SELECT option_id FROM $o_table WHERE question_id = %d", $question_id));
-    $options_to_delete = array_diff($existing_db_option_ids, $submitted_option_ids);
-    if (!empty($options_to_delete)) {
-        $ids_placeholder = implode(',', array_map('absint', $options_to_delete));
-        $wpdb->query("DELETE FROM $o_table WHERE option_id IN ($ids_placeholder)");
-    }
-    $wpdb->update($o_table, ['is_correct' => 0], ['question_id' => $question_id]);
-    if ($correct_option_id_from_form) {
-        $wpdb->update($o_table, ['is_correct' => 1], ['option_id' => absint($correct_option_id_from_form), 'question_id' => $question_id]);
-    }
-    // If the correct answer has changed, trigger the re-evaluation function.
-    if ($original_correct_option_id != $correct_option_id_from_form) {
-        qp_re_evaluate_question_attempts($question_id, absint($correct_option_id_from_form));
     }
 }
 
@@ -3397,105 +3156,6 @@ function qp_delete_dir($dirPath)
         is_dir($file) ? qp_delete_dir($file) : unlink($file);
     }
     rmdir($dirPath);
-}
-
-/**
- * Helper function to get the full source hierarchy for a given question.
- *
- * @param int $question_id The ID of the question.
- * @return array An array containing the names of the source, section, etc., in order.
- */
-function qp_get_source_hierarchy_for_question($question_id)
-{
-    global $wpdb;
-    $rel_table = $wpdb->prefix . 'qp_term_relationships';
-    $term_table = $wpdb->prefix . 'qp_terms';
-    $tax_table = $wpdb->prefix . 'qp_taxonomies';
-    $questions_table = $wpdb->prefix . 'qp_questions';
-
-    // Step 1: Get the group_id for the given question.
-    $group_id = $wpdb->get_var($wpdb->prepare("SELECT group_id FROM {$questions_table} WHERE question_id = %d", $question_id));
-
-    if (!$group_id) {
-        return [];
-    }
-
-    // Step 2: Find the most specific source term linked to the GROUP.
-    $term_id = $wpdb->get_var($wpdb->prepare(
-        "SELECT r.term_id
-         FROM {$rel_table} r
-         JOIN {$term_table} t ON r.term_id = t.term_id
-         WHERE r.object_id = %d AND r.object_type = 'group'
-         AND t.taxonomy_id = (SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'source')
-         LIMIT 1",
-        $group_id
-    ));
-
-    if (!$term_id) {
-        return []; // Return an empty array if no source is found for the group
-    }
-
-    $lineage = [];
-    $current_term_id = $term_id;
-
-    // Step 3: Loop up the hierarchy to trace back to the top-level parent (source).
-    for ($i = 0; $i < 10; $i++) { // Safety limit to prevent infinite loops
-        if (!$current_term_id) break;
-        $term = $wpdb->get_row($wpdb->prepare("SELECT name, parent FROM {$term_table} WHERE term_id = %d", $current_term_id));
-        if ($term) {
-            array_unshift($lineage, $term->name); // Add to the beginning of the array.
-            $current_term_id = $term->parent;
-        } else {
-            break;
-        }
-    }
-
-    return $lineage; // Return the simple array of names
-}
-
-/**
- * Helper function to get or create a term in the new taxonomy system.
- *
- * @param string $name         The name of the term.
- * @param int    $taxonomy_id  The ID of the taxonomy.
- * @param int    $parent_id    Optional. The term_id of the parent.
- * @return int                 The term_id of the existing or newly created term.
- */
-function qp_get_or_create_term($name, $taxonomy_id, $parent_id = 0)
-{
-    global $wpdb;
-    $term_table = $wpdb->prefix . 'qp_terms';
-
-    // Sanitize the input
-    $name = sanitize_text_field($name);
-    if (empty($name)) {
-        return 0;
-    }
-
-    // Check if the term already exists
-    $existing_term_id = $wpdb->get_var($wpdb->prepare(
-        "SELECT term_id FROM {$term_table} WHERE name = %s AND taxonomy_id = %d AND parent = %d",
-        $name,
-        $taxonomy_id,
-        $parent_id
-    ));
-
-    if ($existing_term_id) {
-        return (int) $existing_term_id;
-    }
-
-    // If it doesn't exist, create it
-    $wpdb->insert(
-        $term_table,
-        [
-            'name'        => $name,
-            'slug'        => sanitize_title($name),
-            'taxonomy_id' => $taxonomy_id,
-            'parent'      => $parent_id,
-        ]
-    );
-
-    return (int) $wpdb->insert_id;
 }
 
 
@@ -5041,7 +4701,7 @@ function qp_get_sources_for_subject_progress_ajax()
     // --- THIS IS THE FIX ---
     // Use the existing helper function to get ALL descendant topics and sub-topics,
     // not just the direct children. This includes the parent subject ID itself.
-    $topic_ids = get_all_descendant_ids($subject_term_id, $wpdb, $term_table);
+    $topic_ids = Terms_DB::get_all_descendant_ids($subject_term_id, $wpdb, $term_table);
     // --- END FIX ---
 
     if (empty($topic_ids)) {
@@ -5198,8 +4858,8 @@ function qp_get_progress_data_ajax()
     $sessions_table = $wpdb->prefix . 'qp_user_sessions';
 
     // Step 1: Get all term IDs in both hierarchies
-    $all_subject_term_ids = get_all_descendant_ids($subject_term_id, $wpdb, $term_table);
-    $all_source_term_ids = get_all_descendant_ids($source_term_id, $wpdb, $term_table);
+    $all_subject_term_ids = Terms_DB::get_all_descendant_ids($subject_term_id, $wpdb, $term_table);
+    $all_source_term_ids = Terms_DB::get_all_descendant_ids($source_term_id, $wpdb, $term_table);
 
     $subject_terms_placeholder = implode(',', $all_subject_term_ids);
     $source_terms_placeholder = implode(',', $all_source_term_ids);
@@ -7097,8 +6757,8 @@ function qp_handle_log_settings_forms()
         }
 
         if ($term_id) {
-            qp_update_term_meta($term_id, 'is_active', $is_active);
-            qp_update_term_meta($term_id, 'type', $reason_type);
+            Terms_DB::update_meta($term_id, 'is_active', $is_active);
+            Terms_DB::update_meta($term_id, 'type', $reason_type);
         }
 
         wp_safe_redirect(admin_url('admin.php?page=qp-logs-reports&tab=log_settings&message=1'));
@@ -7748,7 +7408,7 @@ function qp_search_questions_for_course_ajax() {
     if ($source_id) {
         $source_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'source'");
         // Get all descendant IDs including the source itself
-         $descendant_ids = get_all_descendant_ids($source_id, $wpdb, $term_table); // Use the global helper
+         $descendant_ids = Terms_DB::get_all_descendant_ids($source_id, $wpdb, $term_table); // Use the global helper
          if (!empty($descendant_ids)) {
              $ids_placeholder = implode(',', $descendant_ids);
              if (!in_array('source_rel', $joins_added)) {

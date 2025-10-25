@@ -1,6 +1,8 @@
 <?php
 if (!defined('ABSPATH')) exit;
 
+use QuestionPress\Database\Terms_DB;
+
 class QP_Dashboard
 {
 
@@ -1470,7 +1472,7 @@ class QP_Dashboard
                     if ($mode === 'Section Practice') {
                         // Get source hierarchy for the first question
                         $first_question_id = $session_qids[0];
-                        $source_hierarchy = qp_get_source_hierarchy_for_question($first_question_id); // Assumes this function exists globally
+                        $source_hierarchy = Terms_DB::get_source_hierarchy_for_question($first_question_id); // Assumes this function exists globally
                         $subjects_display = !empty($source_hierarchy) ? implode(' / ', $source_hierarchy) : 'N/A';
                     } else {
                         $session_subjects = [];

@@ -1,6 +1,8 @@
 <?php
 if (!defined('ABSPATH')) exit;
 
+use QuestionPress\Database\Terms_DB;
+
 // Ensure the new list table class is included
 require_once QP_PLUGIN_PATH . 'admin/class-qp-terms-list-table.php';
 
@@ -47,7 +49,7 @@ class QP_Subjects_Page {
                     self::set_message('Subject/Topic added.', 'updated');
                 }
                 if ($term_id > 0) {
-                    qp_update_term_meta($term_id, 'description', $description);
+                    Terms_DB::update_meta($term_id, 'description', $description);
                 }
             }
             self::redirect_to_tab('subjects');
@@ -76,7 +78,7 @@ class QP_Subjects_Page {
                 ['name' => $final_name, 'slug' => sanitize_title($final_name), 'parent' => $final_parent], 
                 ['term_id' => $destination_term_id]
             );
-            qp_update_term_meta($destination_term_id, 'description', $final_description);
+            Terms_DB::update_meta($destination_term_id, 'description', $final_description);
 
             // Delete the now-empty source terms and their meta
             $wpdb->query("DELETE FROM $term_table WHERE term_id IN ($ids_placeholder)");
@@ -171,7 +173,7 @@ if (!empty($linked_exam_ids)) {
             if (isset($_GET['_wpnonce']) && wp_verify_nonce($_GET['_wpnonce'], 'qp_edit_subject_' . $term_id)) {
                 $term_to_edit = $wpdb->get_row($wpdb->prepare("SELECT * FROM $term_table WHERE term_id = %d", $term_id));
                 if ($term_to_edit) {
-                    $edit_description = qp_get_term_meta($term_id, 'description', true);
+                    $edit_description = Terms_DB::get_meta($term_id, 'description', true);
                 }
             }
         }
