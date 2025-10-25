@@ -100,25 +100,32 @@ body { margin: 0; }
 /* --- Sidebar --- */
 .qp-sidebar {
 	width: var(--qp-dashboard-sidebar-width);
-	padding: 1rem 0;
+	/* REMOVE padding: 1rem 0; */
 	box-shadow: 1px 0 5px rgba(0,0,0,0.05);
 	background-color: var(--qp-dashboard-sidebar-bg);
-	border-right: 1px solid var(--qp-dashboard-border-light); /* Lighter border */
-	transition: transform 0.3s ease-in-out; /* Changed from width */
+	border-right: 1px solid var(--qp-dashboard-border-light);
+	transition: transform 0.3s ease-in-out;
 	flex-shrink: 0;
 	position: fixed;
-	top: 0px;
+	top: 0px; /* Adjust if you have a WP admin bar visible */
 	bottom: 0;
 	left: 0;
-	overflow-y: auto;
-	z-index: 1001; /* Above overlay */
+	/* overflow-y: auto; <-- REMOVE this */
+	z-index: 1001;
+    /* --- ADD Flexbox properties --- */
+    display: flex;
+    flex-direction: column;
+    height: 100vh; /* Make sidebar full viewport height */
+    /* --- END ADD --- */
 }
 
 .qp-sidebar-header {
-	 padding: 0.5rem 1.5rem 1rem 1.5rem;
-	 text-align: left;
+	 padding: 1rem 1.5rem 1rem 1.5rem;
+	 text-align: center;
 	 border-bottom: 1px solid var(--qp-dashboard-border-light);
+     position: relative;
 }
+
 .qp-sidebar-header .qp-user-name { font-size: 1.1em; font-weight: 600; display: block; }
 .qp-sidebar-header .qp-access-status {
 	font-size: 0.85em;
@@ -133,10 +140,40 @@ body { margin: 0; }
 }
  .qp-sidebar-header .qp-access-status a:hover { text-decoration: underline; }
 
+ /* --- NEW: Sidebar Avatar and Header Centering --- */
+.qp-sidebar-header {
+	 padding: 1rem 1.5rem 1rem 1.5rem; /* Adjusted padding */
+	 text-align: center; /* Center align header content */
+	 border-bottom: 1px solid var(--qp-dashboard-border-light);
+     position: relative; /* Needed for close button positioning */
+}
+.qp-sidebar-avatar {
+    margin-bottom: 0.75rem; /* Space below avatar */
+}
+.qp-sidebar-avatar img {
+    border-radius: 50%; /* Make avatar circular */
+    border: 2px solid var(--qp-dashboard-border); /* Optional subtle border */
+}
+
+.qp-sidebar-header .qp-user-name {
+    font-size: 1.1em;
+    font-weight: 600;
+    display: block;
+    margin-bottom: 5px; /* Space below name */
+}
+/* Adjust close button position for centered header */
+.qp-sidebar-header .qp-sidebar-close-btn {
+    top: 10px;
+    right: 10px;
+}
+
 .qp-sidebar-nav {
     margin-top: 0.5rem;
     list-style: none;
     padding: 0;
+    flex-grow: 1; /* Allow nav to take available space */
+    overflow-y: auto;
+    min-height: 100px;
 }
 .qp-sidebar-nav li a {
 	display: flex;
@@ -178,7 +215,7 @@ body { margin: 0; }
  }
 
 .qp-sidebar-footer {
-	position: absolute;
+	position: relative;
 	bottom: 0;
 	width: 100%;
 	padding: 1rem 15px;
@@ -186,6 +223,7 @@ body { margin: 0; }
 	background-color: var(--qp-dashboard-sidebar-bg);
 	text-align: left;
 	box-sizing: border-box;
+    flex-shrink: 0;
 }
 .qp-sidebar-footer .qp-logout-link {
 	font-size: 0.9em;
@@ -829,4 +867,299 @@ ul.qp-review-list li {
 .qp-course-item-row .dashicons {
     font-size: 18px;
     line-height: 1;
+}
+
+/* =================================================================
+   Profile Tab Styles
+   ================================================================= */
+
+.qp-profile-page h2 {
+    margin-bottom: 2rem; /* Add more space below the main heading */
+    text-align: left; /* Align heading to the left */
+}
+
+.qp-profile-layout {
+    display: grid;
+    grid-template-columns: 300px 1fr; /* Fixed width for profile card, flexible for details */
+    gap: 1.5rem; /* Space between the two columns */
+    align-items: start; /* Align items to the top of their grid area */
+}
+
+/* --- Profile Card (Left Column) --- */
+.qp-profile-card .qp-card-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center; /* Center avatar, name, email */
+    text-align: center;
+}
+
+.qp-profile-avatar {
+    margin-bottom: 1rem;
+}
+
+.qp-profile-avatar img {
+    border-radius: 50%;
+    border: 3px solid var(--qp-dashboard-bg); /* Use page background for border */
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1); /* Subtle shadow */
+    width: 128px; /* Ensure size */
+    height: 128px;
+    object-fit: cover; /* Prevent distortion */
+}
+
+.qp-profile-name {
+    font-size: 1.4em; /* Larger name */
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+}
+
+.qp-profile-email {
+    color: var(--qp-dashboard-text-light);
+    margin-bottom: 1.5rem;
+    word-break: break-all; /* Prevent long emails overflowing */
+}
+
+.qp-edit-profile-button {
+    width: 100%; /* Make button full width */
+    margin-bottom: 0.5rem; /* Space before description */
+}
+
+/* --- Detail Cards (Right Column) --- */
+.qp-profile-details {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem; /* Space between cards in the right column */
+}
+
+.qp-access-card .qp-card-content p {
+    color: var(--qp-dashboard-text-dark); /* Darker text for scope */
+    font-size: 1em;
+    line-height: 1.6;
+}
+
+/* --- Responsive Adjustments --- */
+@media (max-width: 900px) { /* Adjust breakpoint if needed */
+    .qp-profile-layout {
+        grid-template-columns: 1fr; /* Stack columns on smaller screens */
+    }
+
+    .qp-profile-card .qp-card-content {
+        /* Keep centered layout for profile card */
+    }
+}
+
+@media (max-width: 782px) { /* Match sidebar breakpoint */
+    .qp-profile-page h2 {
+        text-align: center; /* Center heading on mobile */
+    }
+}
+
+/* --- Profile Card Form & Display/Edit States --- */
+#qp-profile-update-form {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+/* Display State (Default) */
+.qp-profile-display {
+    width: 100%;
+    text-align: center;
+}
+.qp-profile-display .qp-profile-name { /* Reuse existing name style */
+    font-size: 1.4em;
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+}
+.qp-profile-display .qp-profile-email { /* Reuse existing email style */
+    color: var(--qp-dashboard-text-light);
+    margin-bottom: 1.5rem;
+    word-break: break-all;
+}
+.qp-profile-display .qp-edit-profile-button {
+    width: 100%;
+    box-sizing: border-box; /* Include padding in width */
+}
+
+/* Edit State (Hidden by default) */
+.qp-profile-edit {
+    display: none; /* Hidden initially */
+    width: 100%;
+}
+.qp-profile-field { /* Styles for input fields in edit mode */
+    width: 100%;
+    margin-bottom: 1rem;
+    text-align: left;
+}
+.qp-profile-field label {
+    font-weight: 600;
+    font-size: 0.9em;
+    color: var(--qp-dashboard-text-light);
+    margin-bottom: 5px;
+    display: block;
+}
+.qp-profile-field input[type="text"],
+.qp-profile-field input[type="email"] {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid var(--qp-dashboard-border);
+    border-radius: 4px;
+    font-size: 1em;
+    box-sizing: border-box;
+}
+.qp-profile-edit-actions {
+    display: flex;
+    gap: 10px; /* Space between Cancel and Save */
+    margin-top: 1rem;
+}
+.qp-profile-edit-actions .qp-button {
+    flex-grow: 1; /* Make buttons share space */
+}
+
+/* Avatar Specific Styles */
+.qp-profile-avatar-wrapper {
+    position: relative;
+    margin-bottom: 1rem;
+    display: flex; /* Arrange items vertically */
+    flex-direction: column;
+    align-items: center; /* Center items horizontally */
+}
+.qp-profile-avatar-wrapper img { /* Reuse existing styles */
+    border-radius: 50%;
+    border: 3px solid var(--qp-dashboard-bg);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    width: 128px;
+    height: 128px;
+    object-fit: cover;
+}
+/* Add hover effect only when editing */
+.qp-profile-card.is-editing .qp-profile-avatar-wrapper img {
+    cursor: pointer;
+    border: 3px solid var(--qp-dashboard-primary-light); /* Highlight on hover */
+}
+.qp-change-avatar-button { /* Style for the change button */
+    position: absolute;
+    bottom: 5px; /* Position near the bottom */
+    left: 50%;
+    /* REMOVE transform: translateX(-50%); */
+    margin-left: -55px; /* Adjust this value (approx half the button's width) to center */
+    width: 110px; /* Give it a defined width */
+    padding: 4px 10px;
+    font-size: 12px;
+    opacity: 0.8;
+    transition: opacity 0.2s ease;
+    text-align: center; /* Ensure text is centered */
+    box-sizing: border-box; /* Include padding in width */
+}
+.qp-change-avatar-button:hover {
+    opacity: 1;
+}
+.qp-avatar-upload-actions {
+    display: none; /* Hidden by default */
+    justify-content: center;
+    width: 100%;
+}
+.qp-avatar-upload-actions .button-small { /* Adjust size */
+    padding: 4px 10px;
+    font-size: 12px;
+}
+
+/* --- Toggle Visibility Classes --- */
+.qp-profile-card .qp-profile-display {
+    display: flex; /* Keep display visible by default */
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+}
+.qp-profile-card .qp-profile-edit {
+    display: none; /* Keep edit hidden by default */
+    width: 100%;
+}
+.qp-profile-card.is-editing .qp-profile-display {
+    display: none !important; /* Force hide display when editing */
+}
+.qp-profile-card.is-editing .qp-profile-edit {
+    display: flex !important; /* Force show edit fields (using flex) when editing */
+    flex-direction: column;
+    align-items: center;
+}
+/* Show avatar change button only when editing */
+.qp-profile-card .qp-change-avatar-button {
+     display: none; /* Hide avatar change button by default */
+}
+.qp-profile-card.is-editing .qp-change-avatar-button {
+    display: inline-block !important; /* Show only when editing */
+}
+
+/* --- Password Card Styles --- */
+.qp-password-card .qp-card-content {
+    /* Potential specific styles for the card content if needed */
+}
+
+/* Display State */
+.qp-password-display {
+    /* Styles for the default view */
+}
+.qp-password-display p {
+    margin-bottom: 1rem;
+    color: var(--qp-dashboard-text-light);
+}
+
+/* Edit State */
+.qp-password-edit {
+    display: none; /* Hidden by default */
+}
+.qp-password-card.is-editing .qp-password-display {
+    display: none !important; /* Hide display text when editing */
+}
+.qp-password-card.is-editing .qp-password-edit {
+    display: block !important; /* Show form when editing */
+}
+
+/* Form field styles (reuse profile field styles) */
+.qp-password-edit .qp-profile-field {
+    margin-bottom: 1rem;
+    text-align: left;
+}
+.qp-password-edit .qp-profile-field label {
+    font-weight: 600;
+    font-size: 0.9em;
+    color: var(--qp-dashboard-text-light);
+    margin-bottom: 5px;
+    display: block;
+}
+.qp-password-edit .qp-profile-field input[type="password"] {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid var(--qp-dashboard-border);
+    border-radius: 4px;
+    font-size: 1em;
+    box-sizing: border-box;
+}
+.qp-password-edit-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 1.5rem; /* More space before buttons */
+}
+.qp-password-edit-actions .qp-button {
+    flex-grow: 1;
+}
+
+/* --- Forgot Password Link --- */
+.qp-forgot-password-link-wrapper {
+    margin-top: 1rem; /* Space above the link */
+    text-align: center; /* Center the link below the button */
+    margin-bottom: 0; /* Remove default paragraph bottom margin */
+}
+
+.qp-forgot-password-link {
+    font-size: 0.9em; /* Slightly smaller text */
+    color: var(--qp-dashboard-text-light); /* Use secondary text color */
+    text-decoration: none;
+    transition: color 0.2s ease;
+}
+
+.qp-forgot-password-link:hover {
+    color: var(--qp-dashboard-link-hover); /* Use link hover color */
+    text-decoration: underline;
 }

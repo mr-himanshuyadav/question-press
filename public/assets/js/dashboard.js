@@ -33,99 +33,6 @@ jQuery(document).ready(function($) {
         $sidebarToggle.attr('aria-expanded', 'false'); // Sync the toggle button state
     });
 
-    // Close sidebar when a navigation link is clicked (especially on mobile)
-    $sidebarLinks.on('click', function() {
-        // Check if the sidebar is currently open (primarily for mobile)
-        if ($body.hasClass('qp-sidebar-open')) {
-             $body.removeClass('qp-sidebar-open');
-             $sidebarToggle.attr('aria-expanded', 'false');
-        }
-        // Navigation/section switching logic will be added later
-    });
-
-    // --- NEW: Sidebar Navigation & Section Switching Logic ---
-    var $dashboardSections = $('.qp-dashboard-section'); // Cache the section elements
-    var $sidebarNavLinks = $('.qp-sidebar-nav a'); // Cache the nav links
-
-    // Function to switch sections
-    function showSection(sectionId) {
-        var targetSection = $('#' + sectionId); // Find the target section by ID
-
-        if (targetSection.length) {
-            // Update sidebar link active state
-            $sidebarNavLinks.removeClass('active');
-            $sidebarNavLinks.filter('[href="#' + sectionId.replace('qp-dashboard-', '') + '"]').addClass('active');
-
-            // Hide all sections, then show the target one
-            $dashboardSections.removeClass('active').hide(); // Hide ensures display:none is applied
-            targetSection.addClass('active').show(); // Show ensures display:block/flex etc. is applied before animation
-
-            // Update URL hash without jumping
-            history.pushState(null, null, '#' + sectionId.replace('qp-dashboard-', ''));
-
-            // If switching to the 'History' tab, maybe trigger data loading if needed
-            // if (sectionId === 'qp-dashboard-history') {
-            //     loadHistoryData(); // Example: Call a function to load history via AJAX if not already loaded
-            // }
-            // Add similar checks for 'Review' and 'Progress' if using AJAX loading
-             if (sectionId === 'qp-dashboard-progress') {
-                 // Trigger change on subject dropdown to potentially load sources if a subject is pre-selected (or just enable it)
-                 $('#qp-progress-subject').trigger('change');
-             }
-             // --- ADDED: Trigger rendering of courses when navigating to the tab ---
-             if (sectionId === 'qp-dashboard-courses') {
-                renderInitialCourseList(targetSection);
-             }
-
-        } else {
-            // Fallback to overview if the target doesn't exist
-            showSection('qp-dashboard-overview');
-        }
-    }
-
-    // Handle clicks on sidebar navigation links
-    $sidebarNavLinks.on('click', function(e) {
-        e.preventDefault(); // Prevent default anchor jump
-        var targetHash = $(this).attr('href'); // Get the href (e.g., "#history")
-        var sectionId = 'qp-dashboard-' + targetHash.substring(1); // Construct the section ID (e.g., "qp-dashboard-history")
-
-        // Close sidebar if open (mobile view) - Moved logic here
-         if ($body.hasClass('qp-sidebar-open')) {
-             $body.removeClass('qp-sidebar-open');
-             $sidebarToggle.attr('aria-expanded', 'false');
-             // Add a small delay for the sidebar to close before switching content
-             setTimeout(function() {
-                 showSection(sectionId);
-             }, 300); // Adjust delay to match CSS transition
-         } else {
-             showSection(sectionId); // Switch immediately on desktop
-         }
-    });
-
-    // Initial load: Check URL hash and show the corresponding section
-    var initialHash = window.location.hash;
-    if (initialHash) {
-        var initialSectionId = 'qp-dashboard-' + initialHash.substring(1);
-        // Small delay to ensure CSS transitions don't clash on initial load
-        setTimeout(function() {
-            showSection(initialSectionId);
-             // Special check for mobile: If navigating directly via hash, ensure sidebar is closed
-             if ($body.hasClass('qp-mobile-dashboard')) {
-                 $body.removeClass('qp-sidebar-open');
-                 $sidebarToggle.attr('aria-expanded', 'false');
-             }
-        }, 10);
-    } else {
-         // Default to overview if no hash is present
-         showSection('qp-dashboard-overview');
-    }
-
-     // Handle 'View Full History' link click
-     wrapper.on('click', '.qp-view-full-history-link', function(e) {
-         e.preventDefault();
-         showSection('qp-dashboard-history');
-     });
-
     // --- NEW: Handler for removing an item from the review list ---
     wrapper.on('click', '.qp-review-list-remove-btn', function(e) {
         e.preventDefault();
@@ -675,153 +582,141 @@ wrapper.on('click', 'a.qp-button-primary[href*="session_id="]', function(e) {
             $sectionsContainer.find('.qp-progress-item').removeClass('is-active-group');
         }
     });
+    const coursesSection = $('#qp-dashboard-courses'); // Still useful for other actions
 
-    // <<< PASTE THE NEW COURSE STRUCTURE LOGIC HERE >>>
-    // --- Course Structure Loading Logic ---
-    const coursesSection = $('#qp-dashboard-courses'); // Cache the section
+    // Click handler for "View Course" / "Continue Course" button in the list
+    // *** MODIFIED: Delegated from the main wrapper ***
+    wrapper.on('click', '.qp-view-course-btn', function(e) {
+        e.preventDefault(); // Prevent default button action
+        var courseSlug = $(this).data('course-slug');
+        var courseId = $(this).data('course-id'); // Keep courseId in case slug is missing
+        var baseDashboardUrl = qp_ajax_object.dashboard_page_url || '/'; // Get base URL
 
-    // Click handler for "View Course" button in the list
-    coursesSection.on('click', '.qp-view-course-btn', function() {
-        var courseId = $(this).data('course-id');
-        var button = $(this);
-        var originalText = button.text();
-
-        $.ajax({
-            url: qp_ajax_object.ajax_url, // Use localized ajaxurl
-            type: 'POST',
-            data: {
-                action: 'get_course_structure',
-                nonce: qp_ajax_object.nonce, // Use localized nonce
-                course_id: courseId
-            },
-            beforeSend: function() {
-                button.text('Loading...').prop('disabled', true);
-                // Optionally show a loading spinner over the whole section
-                coursesSection.html('<div class="qp-loader-spinner" style="top: 20px;"></div>');
-            },
-            success: function(response) {
-                if (response.success) {
-                    renderCourseStructure(response.data);
-                } else {
-                    coursesSection.html('<p>Error loading course structure: ' + (response.data.message || 'Unknown error') + '</p><button class="qp-button qp-button-secondary qp-back-to-courses-btn">Back to Courses</button>');
-                }
-            },
-            error: function() {
-                coursesSection.html('<p>Could not load course structure due to a server error.</p><button class="qp-button qp-button-secondary qp-back-to-courses-btn">Back to Courses</button>');
-            },
-            complete: function() {
-                // No need to reset the button text here as the button itself is replaced
-            }
-        });
-    });
-
-    // Function to render the fetched course structure
-    function renderCourseStructure(data) {
-        let html = `
-            <div class="qp-course-structure-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-                <h2>${data.course_title || 'Course Details'}</h2>
-                <button class="qp-button qp-button-secondary qp-back-to-courses-btn">&laquo; Back to Courses</button>
-            </div>
-            <div class="qp-course-structure-content">`;
-
-        if (data.sections && data.sections.length > 0) {
-            data.sections.forEach(section => {
-                html += `
-                    <div class="qp-course-section-card qp-card">
-                        <div class="qp-card-header">
-                            <h3>${section.title || 'Untitled Section'}</h3>
-                            ${section.description ? `<p style="font-size: 0.9em; color: var(--qp-dashboard-text-light); margin-top: 5px;">${section.description}</p>` : ''}
-                        </div>
-                        <div class="qp-card-content qp-course-items-list">`;
-
-                if (section.items && section.items.length > 0) {
-                    section.items.forEach(item => {
-                        let statusIcon = '';
-                        let itemClass = 'qp-course-item-link';
-                        let buttonText = 'Start';
-                        let buttonClass = 'qp-button-primary start-course-test-btn'; // Specific class for test
-                        let sessionIdAttr = ''; // <-- ***FIX: Declare and initialize here***
-
-                        switch(item.status) {
-                        case 'completed':
-                            statusIcon = '<span class="dashicons dashicons-yes-alt" style="color: var(--qp-dashboard-success);"></span>';
-                            buttonText = 'Review';
-                            buttonClass = 'qp-button-secondary view-test-results-btn';
-                            // --- ***FIX: Assign to existing variable*** ---
-                            if (item.session_id) {
-                                sessionIdAttr = `data-session-id="${item.session_id}"`;
-                            }
-                            // --- ***END FIX*** ---
-                            break;
-                        case 'in_progress': // Note: 'in_progress' isn't set yet, but plan for it
-                            statusIcon = '<span class="dashicons dashicons-marker" style="color: var(--qp-dashboard-warning-dark);"></span>';
-                            buttonText = 'Continue';
-                            buttonClass = 'qp-button-primary start-course-test-btn';
-                            break;
-                        default: // not_started
-                            statusIcon = '<span class="dashicons dashicons-marker" style="color: var(--qp-dashboard-border);"></span>';
-                            buttonText = 'Start';
-                            buttonClass = 'qp-button-primary start-course-test-btn';
-                            break;
-                    }
-
-                    if (item.content_type !== 'test_series') {
-                       buttonClass = 'qp-button-secondary view-course-content-btn';
-                       buttonText = 'View';
-                    }
-
-                    // Now sessionIdAttr will always be defined (either as an empty string or with the data attribute)
-                    html += `
-                        <div class="qp-course-item-row" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--qp-dashboard-border-light);">
-                            <span class="${itemClass}" style="display: flex; align-items: center; gap: 8px;">
-                                ${statusIcon}
-                                <span style="font-weight: 500;">${item.title || 'Untitled Item'}</span>
-                            </span>
-                            <button class="qp-button ${buttonClass}" data-item-id="${item.item_id}" ${sessionIdAttr} style="padding: 4px 10px; font-size: 12px;">${buttonText}</button>
-                        </div>`;
-                    });
-                     // Remove last border
-                     html = html.replace(/border-bottom: 1px solid var\(--qp-dashboard-border-light\);(?=<\/div>\s*<\/div>\s*<\/div>$)/, '');
-
-                } else {
-                    html += '<p style="text-align: center; color: var(--qp-dashboard-text-light); font-style: italic;">No items in this section.</p>';
-                }
-                html += `</div></div>`; // Close card-content and card
-            });
-        } else {
-            html += '<div class="qp-card"><div class="qp-card-content"><p style="text-align: center;">This course has no content yet.</p></div></div>';
+        // Ensure base URL ends with a slash
+        if (baseDashboardUrl.slice(-1) !== '/') {
+            baseDashboardUrl += '/';
         }
 
-        html += '</div>'; // Close qp-course-structure-content
-        coursesSection.html(html);
-    }
+        if (courseSlug) {
+            // Construct the URL: baseDashboardUrl + 'courses/' + courseSlug + '/'
+            var courseUrl = baseDashboardUrl + 'courses/' + courseSlug + '/';
+            console.log("Navigating to:", courseUrl); // Add console log for debugging
+            window.location.href = courseUrl; // Navigate to the course page
+        } else {
+            console.error('Course slug missing for course ID:', courseId);
+            Swal.fire('Error', 'Could not navigate to the course. Slug is missing.', 'error');
+        }
+    });
 
-    // --- NEW: Function to render the initial course list (used by back button and tab switch) ---
-    function renderInitialCourseList(targetSection) {
-        // Show a loading state
-        targetSection.html('<div class="qp-loader-spinner" style="position: absolute; top: 40px; left: 50%; margin-left: -15px;"></div><h2>My Courses</h2>'); // Added h2 back
+    // Click handler for the "Back to Courses" button (delegated from wrapper)
+    wrapper.on('click', '.qp-back-to-courses-btn', function(e) {
+        e.preventDefault(); // Prevent default button action
+        var baseDashboardUrl = qp_ajax_object.dashboard_page_url || '/'; // Get base URL
+         // Ensure base URL ends with a slash
+        if (baseDashboardUrl.slice(-1) !== '/') {
+            baseDashboardUrl += '/';
+        }
+        var coursesListUrl = baseDashboardUrl + 'courses/'; // URL for the main courses list
+        console.log("Navigating back to:", coursesListUrl); // Add console log
+        window.location.href = coursesListUrl; // Navigate back to the courses list
+    });
 
-        $.ajax({
-            url: qp_ajax_object.ajax_url,
-            type: 'POST',
-            data: {
-                action: 'get_course_list_html',
-                nonce: qp_ajax_object.nonce // Use the general frontend nonce
-            },
-            success: function(response) {
-                if (response.success && response.data.html) {
-                    targetSection.html(response.data.html);
-                    // Store the newly fetched HTML in case it's needed again without refresh
-                    initialCourseListHtml = response.data.html;
-                } else {
-                    targetSection.html('<h2>My Courses</h2><p>Error loading courses. Please try refreshing the page.</p>');
+    // Click handler for "Review Results" button (delegated from wrapper)
+    wrapper.on('click', '.view-test-results-btn', function(e) {
+        e.preventDefault();
+        var button = $(this);
+        var sessionId = button.data('session-id');
+        var reviewPageUrl = qp_ajax_object.review_page_url; // Get review page URL
+
+        if (sessionId && reviewPageUrl) {
+            var url = new URL(reviewPageUrl);
+            url.searchParams.set('session_id', sessionId);
+             console.log("Navigating to review:", url.href); // Add console log
+            window.location.href = url.href;
+        } else if (!sessionId) {
+            Swal.fire('Error', 'Could not find the session data associated with this item.', 'error');
+        } else {
+            Swal.fire('Error', 'Review page URL is not configured.', 'error');
+        }
+    });
+
+    // --- Start Test Series from Course Item (delegated from wrapper) ---
+    wrapper.on('click', '.start-course-test-btn', function() { // Ensure delegation from 'wrapper'
+        var button = $(this);
+        var itemId = button.data('item-id');
+        var originalText = button.text();
+
+        // Use the checkAttemptsBeforeAction helper
+        checkAttemptsBeforeAction(function() {
+            // This code runs ONLY if the attempt check is successful
+            $.ajax({
+                url: qp_ajax_object.ajax_url,
+                type: 'POST',
+                data: {
+                    action: 'start_course_test_series', // Correct action name
+                    nonce: qp_ajax_object.start_course_test_nonce, // Correct nonce
+                    item_id: itemId
+                },
+                beforeSend: function() {
+                    button.text('Starting Test...'); // Update text
+                },
+                success: function(response) {
+                    if (response.success && response.data.redirect_url) {
+                        window.location.href = response.data.redirect_url;
+                    } else {
+                        Swal.fire('Error!', response.data.message || 'Could not start the test session.', 'error');
+                        button.text(originalText).prop('disabled', false); // Reset button on failure
+                    }
+                },
+                error: function() {
+                    Swal.fire('Error!', 'A server error occurred while starting the test.', 'error');
+                    button.text(originalText).prop('disabled', false); // Reset button on failure
                 }
-            },
-            error: function() {
-                targetSection.html('<h2>My Courses</h2><p>Could not load courses due to a server error.</p>');
-            }
-        });
-    }
+            });
+        }, button, originalText, 'Checking Access...'); // Pass button details to the helper
+    });
+
+    // --- Enroll Button Handler (delegated from wrapper) ---
+    wrapper.on('click', '.qp-enroll-course-btn', function() { // Ensure delegation from 'wrapper'
+         var button = $(this);
+         var courseId = button.data('course-id');
+         var originalText = button.text();
+
+         $.ajax({
+             url: qp_ajax_object.ajax_url,
+             type: 'POST',
+             data: {
+                 action: 'enroll_in_course', // Correct action name
+                 nonce: qp_ajax_object.enroll_nonce, // Correct nonce
+                 course_id: courseId
+             },
+             beforeSend: function() {
+                 button.text('Enrolling...').prop('disabled', true);
+             },
+             success: function(response) {
+                 if (response.success) {
+                     Swal.fire({
+                         title: 'Enrolled!',
+                         text: response.data.message,
+                         icon: 'success',
+                         timer: 1500,
+                         showConfirmButton: false
+                     }).then(() => {
+                          // Simple page reload to refresh the course list
+                          window.location.reload();
+                     });
+                 } else {
+                     Swal.fire('Error', response.data.message || 'Could not enroll.', 'error');
+                     button.text(originalText).prop('disabled', false);
+                 }
+             },
+             error: function() {
+                 Swal.fire('Error', 'A server error occurred during enrollment.', 'error');
+                 button.text(originalText).prop('disabled', false);
+             }
+         });
+    });
+    // --- End Course Navigation & Actions ---
 
     // --- MODIFIED: Store initial HTML ---
     var initialCourseListHtml = coursesSection.html(); // Store the initial content
@@ -856,85 +751,352 @@ wrapper.on('click', 'a.qp-button-primary[href*="session_id="]', function(e) {
         }
     });
 
-    // --- Start Test Series from Course Item ---
-    coursesSection.on('click', '.start-course-test-btn', function() {
-        var button = $(this);
-        var itemId = button.data('item-id');
-        var originalText = button.text();
+    // Profile Management
+    // --- Profile Editing Toggle ---
+    const profileCard = wrapper.find('.qp-profile-card'); // Cache the profile card
+    let originalProfileName = '';
+    let originalProfileEmail = '';
 
-        // Use the checkAttemptsBeforeAction helper
-        checkAttemptsBeforeAction(function() {
-            // This code runs ONLY if the attempt check is successful
-            $.ajax({
-                url: qp_ajax_object.ajax_url,
-                type: 'POST',
-                data: {
-                    action: 'start_course_test_series',
-                    nonce: qp_ajax_object.start_course_test_nonce,
-                    item_id: itemId
-                },
-                beforeSend: function() {
-                    // Button state is already 'Checking...' or similar from checkAttemptsBeforeAction
-                    button.text('Starting Test...'); // Update text
-                },
-                success: function(response) {
-                    if (response.success && response.data.redirect_url) {
-                        window.location.href = response.data.redirect_url;
-                        // Don't reset the button text here as we are redirecting
-                    } else {
-                        // Handle errors specifically from start_course_test_series
-                        Swal.fire('Error!', response.data.message || 'Could not start the test session.', 'error');
-                        button.text(originalText).prop('disabled', false); // Reset button on failure
-                    }
-                },
-                error: function() {
-                    // Handle general AJAX errors
-                    Swal.fire('Error!', 'A server error occurred while starting the test.', 'error');
-                    button.text(originalText).prop('disabled', false); // Reset button on failure
-                }
-                // No 'complete' needed here as success handles redirect or error handles reset
-            });
-        }, button, originalText, 'Checking Access...'); // Pass button details to the helper
+    // Handle "Edit Profile" button click
+    wrapper.on('click', '.qp-edit-profile-button', function() {
+        // Store original values before showing inputs
+        originalProfileName = profileCard.find('#qp_display_name').val();
+        originalProfileEmail = profileCard.find('#qp_user_email').val();
+
+        profileCard.addClass('is-editing');
     });
 
-    // --- Enroll Button Handler ---
-    coursesSection.on('click', '.qp-enroll-course-btn', function() {
-        var button = $(this);
-        var courseId = button.data('course-id');
-        var originalText = button.text();
+    // Handle "Cancel" button click
+    wrapper.on('click', '.qp-cancel-edit-profile-button', function() {
+        // Restore original values to input fields
+        profileCard.find('#qp_display_name').val(originalProfileName);
+        profileCard.find('#qp_user_email').val(originalProfileEmail);
+
+        profileCard.removeClass('is-editing');
+    });
+
+    // Note: The "Save Changes" button's AJAX logic will be added in Step 2.4
+    // Note: The "Change Avatar" button logic will be added later
+
+    // --- Password Change Toggle ---
+    const passwordCard = wrapper.find('.qp-password-card');
+
+    // Handle "Change Password" button click
+    wrapper.on('click', '.qp-change-password-button', function() {
+        passwordCard.addClass('is-editing');
+    });
+
+    // Handle "Cancel" button click for password change
+    wrapper.on('click', '.qp-cancel-change-password-button', function() {
+        passwordCard.removeClass('is-editing');
+        // Clear password fields on cancel for security
+        passwordCard.find('#qp-password-change-form input[type="password"]').val('');
+        // Hide password mismatch error if shown
+        $('#qp-password-match-error').hide().text('');
+    });
+
+    // Add real-time password confirmation check
+    $('#qp_new_password, #qp_confirm_password').on('keyup', function() {
+        var newPass = $('#qp_new_password').val();
+        var confirmPass = $('#qp_confirm_password').val();
+        var errorMsg = $('#qp-password-match-error');
+
+        if (confirmPass.length > 0 && newPass !== confirmPass) {
+            errorMsg.text('New passwords do not match.').show();
+        } else {
+            errorMsg.hide().text('');
+        }
+    });
+
+    // Note: The "Update Password" button's AJAX logic will be added in Step 2.5
+
+    // --- AJAX Handler for Saving Profile ---
+    wrapper.on('submit', '#qp-profile-update-form', function(e) {
+        e.preventDefault();
+        const $form = $(this);
+        const $saveButton = $form.find('.qp-save-profile-button');
+        const originalButtonText = $saveButton.text();
+
+        // Basic client-side check (backend does more thorough validation)
+        const displayName = $form.find('#qp_display_name').val().trim();
+        const userEmail = $form.find('#qp_user_email').val().trim();
+
+        if (!displayName || !userEmail) {
+            Swal.fire('Error', 'Display Name and Email cannot be empty.', 'error');
+            return;
+        }
+
+        // Show loading state
+        $saveButton.text('Saving...').prop('disabled', true);
+        $form.find('input').prop('readonly', true); // Make inputs read-only during save
 
         $.ajax({
             url: qp_ajax_object.ajax_url,
             type: 'POST',
-            data: {
-                action: 'enroll_in_course',
-                nonce: qp_ajax_object.enroll_nonce,
-                course_id: courseId
-            },
-            beforeSend: function() {
-                button.text('Enrolling...').prop('disabled', true);
-            },
+            data: $form.serialize() + '&action=qp_save_profile', // Add action parameter
             success: function(response) {
                 if (response.success) {
+                    // Update display elements with new data
+                    profileCard.find('.qp-profile-display .qp-profile-name').text('Hello, ' + response.data.display_name + '!');
+                    profileCard.find('.qp-profile-display .qp-profile-email').text(response.data.user_email);
+
+                    // Update the values in the hidden form fields as well
+                    $form.find('#qp_display_name').val(response.data.display_name);
+                    $form.find('#qp_user_email').val(response.data.user_email);
+
+                    // Switch back to display mode
+                    profileCard.removeClass('is-editing');
+
                     Swal.fire({
-                        title: 'Enrolled!',
+                        title: 'Success!',
+                        text: response.data.message,
+                        icon: 'success',
+                        timer: 1500, // Auto close after 1.5 seconds
+                        showConfirmButton: false
+                    });
+                } else {
+                    Swal.fire('Error Updating Profile', response.data.message || 'Could not update profile.', 'error');
+                }
+            },
+            error: function(jqXHR) {
+                // *** MODIFIED: Try to show specific error from backend ***
+                let errorText = 'An unknown server error occurred. Please try again.';
+                // Check if the response contains JSON with our expected error structure
+                if (jqXHR.responseJSON && jqXHR.responseJSON.data && jqXHR.responseJSON.data.message) {
+                    errorText = jqXHR.responseJSON.data.message;
+                } else if (jqXHR.statusText) {
+                    // Fallback to general status text if no specific message
+                    errorText = `Request Failed: ${jqXHR.statusText} (${jqXHR.status})`;
+                }
+                Swal.fire('Error', errorText, 'error');
+            },
+            complete: function() {
+                // Restore button and fields regardless of success/error
+                $saveButton.text(originalButtonText).prop('disabled', false);
+                $form.find('input').prop('readonly', false);
+            }
+        });
+    });
+
+    // --- AJAX Handler for Changing Password ---
+    wrapper.on('submit', '#qp-password-change-form', function(e) {
+        e.preventDefault();
+        const $form = $(this);
+        const $saveButton = $form.find('.qp-save-password-button');
+        const originalButtonText = $saveButton.text();
+        const $errorMsg = $('#qp-password-match-error');
+
+        // Client-side validation
+        const currentPass = $form.find('#qp_current_password').val();
+        const newPass = $form.find('#qp_new_password').val();
+        const confirmPass = $form.find('#qp_confirm_password').val();
+
+        if (!currentPass || !newPass || !confirmPass) {
+            Swal.fire('Error', 'All password fields are required.', 'error');
+            return;
+        }
+
+        if (newPass !== confirmPass) {
+            $errorMsg.text('New passwords do not match.').show();
+            // Optional: Focus the confirmation field
+            // $form.find('#qp_confirm_password').focus();
+            return; // Stop submission
+        } else {
+            $errorMsg.hide().text(''); // Clear error if they now match
+        }
+
+        // Show loading state
+        $saveButton.text('Updating...').prop('disabled', true);
+        $form.find('input[type="password"]').prop('readonly', true);
+        $form.find('.qp-cancel-change-password-button').prop('disabled', true);
+
+        $.ajax({
+            url: qp_ajax_object.ajax_url,
+            type: 'POST',
+            data: $form.serialize() + '&action=qp_change_password', // Add action parameter
+            success: function(response) {
+                if (response.success) {
+                    // Clear fields and switch back to display mode
+                    $form.find('input[type="password"]').val('');
+                    passwordCard.removeClass('is-editing');
+
+                    Swal.fire({
+                        title: 'Success!',
+                        text: response.data.message,
+                        icon: 'success',
+                        timer: 2000,
+                        showConfirmButton: false
+                    });
+                } else {
+                    // Display specific error from backend (e.g., current password incorrect)
+                    Swal.fire('Error Updating Password', response.data.message || 'Could not update password.', 'error');
+                }
+            },
+            error: function(jqXHR) {
+                // *** MODIFIED: Try to show specific error from backend ***
+                let errorText = 'An unknown server error occurred. Please try again.';
+                 // Check if the response contains JSON with our expected error structure
+                if (jqXHR.responseJSON && jqXHR.responseJSON.data && jqXHR.responseJSON.data.message) {
+                    errorText = jqXHR.responseJSON.data.message;
+                // Specific check for 403 (likely wrong current password)
+                } else if (jqXHR.status === 403) {
+                     errorText = 'Incorrect current password or permission denied.';
+                } else if (jqXHR.statusText) {
+                    // Fallback to general status text
+                    errorText = `Request Failed: ${jqXHR.statusText} (${jqXHR.status})`;
+                }
+                Swal.fire('Error', errorText, 'error');
+            },
+            complete: function() {
+                // Restore button and fields
+                $saveButton.text(originalButtonText).prop('disabled', false);
+                $form.find('input[type="password"]').prop('readonly', false);
+                $form.find('.qp-cancel-change-password-button').prop('disabled', false);
+            }
+        });
+    });
+
+    // Avatar Change
+
+    // --- Avatar Upload Logic ---
+    const avatarWrapper = wrapper.find('.qp-profile-avatar-wrapper');
+    const avatarPreview = avatarWrapper.find('#qp-profile-avatar-preview');
+    const fileInput = avatarWrapper.find('#qp-avatar-upload-input');
+    const changeButton = avatarWrapper.find('.qp-change-avatar-button');
+    const uploadActions = avatarWrapper.find('.qp-avatar-upload-actions');
+    const uploadButton = avatarWrapper.find('.qp-upload-avatar-button');
+    const cancelUploadButton = avatarWrapper.find('.qp-cancel-avatar-button');
+    const errorMsg = avatarWrapper.find('#qp-avatar-upload-error');
+    let originalAvatarSrc = avatarPreview.attr('src'); // Store original source
+    let selectedFile = null; // To hold the selected file temporarily
+
+    // Trigger file input when "Change Avatar" or the image itself (in edit mode) is clicked
+    wrapper.on('click', '.qp-change-avatar-button, .qp-profile-card.is-editing .qp-profile-avatar-wrapper img', function() {
+        // Ensure we are actually in edit mode before triggering
+        if (profileCard.hasClass('is-editing')) {
+            fileInput.click(); // Trigger the hidden file input
+        }
+    });
+
+    // Handle file selection
+    fileInput.on('change', function(event) {
+        errorMsg.hide().text(''); // Clear previous errors
+        selectedFile = event.target.files ? event.target.files[0] : null;
+
+        if (!selectedFile) {
+            return; // No file selected
+        }
+
+        // Client-side validation (Type & Size)
+        const allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
+        const maxSize = 2 * 1024 * 1024; // 2 MB
+
+        if (!allowedTypes.includes(selectedFile.type)) {
+            errorMsg.text('Invalid file type. Please select a JPG, PNG, or GIF.').show();
+            fileInput.val(''); // Reset file input
+            selectedFile = null;
+            return;
+        }
+
+        if (selectedFile.size > maxSize) {
+            errorMsg.text('File is too large. Maximum size is 2MB.').show();
+            fileInput.val(''); // Reset file input
+            selectedFile = null;
+            return;
+        }
+
+        // Show preview using FileReader
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            avatarPreview.attr('src', e.target.result); // Update preview image
+            changeButton.hide(); // Hide "Change Avatar" button
+            uploadActions.css('display', 'flex'); // Show "Upload New"/"Cancel" buttons using flex
+        }
+        reader.onerror = function() {
+             errorMsg.text('Error reading file for preview.').show();
+             fileInput.val('');
+             selectedFile = null;
+        }
+        reader.readAsDataURL(selectedFile);
+    });
+
+    // Handle Cancel button (after selecting a file)
+    cancelUploadButton.on('click', function() {
+        // Reset everything
+        fileInput.val(''); // Clear the file input
+        selectedFile = null;
+        avatarPreview.attr('src', originalAvatarSrc); // Restore original image
+        uploadActions.hide(); // Hide "Upload"/"Cancel"
+        changeButton.show(); // Show "Change Avatar" again
+        errorMsg.hide().text(''); // Hide errors
+    });
+
+    // Note: The "Upload New" button's AJAX logic will be added in Step 2.7.4
+
+    // Handle "Upload New" button click
+    uploadButton.on('click', function() {
+        if (!selectedFile) {
+            errorMsg.text('No file selected to upload.').show();
+            return;
+        }
+
+        const $button = $(this);
+        const originalButtonText = $button.text();
+
+        // Prepare form data for AJAX file upload
+        const formData = new FormData();
+        formData.append('action', 'qp_upload_avatar'); // AJAX action hook
+        formData.append('_qp_profile_nonce', $('#_qp_profile_nonce').val()); // Add nonce
+        formData.append('qp_avatar_upload', selectedFile); // Add the file
+
+        // Show loading state
+        $button.text('Uploading...').prop('disabled', true);
+        cancelUploadButton.prop('disabled', true);
+        errorMsg.hide().text('');
+
+        $.ajax({
+            url: qp_ajax_object.ajax_url,
+            type: 'POST',
+            data: formData,
+            processData: false, // Important: prevent jQuery from processing the data
+            contentType: false, // Important: let the browser set the correct content type for file upload
+            success: function(response) {
+                if (response.success) {
+                    // Update the preview image source
+                    avatarPreview.attr('src', response.data.new_avatar_url);
+                    // Update the stored original source in case user cancels later *without* reloading
+                    originalAvatarSrc = response.data.new_avatar_url;
+
+                    // Reset UI back to 'Change Avatar' state
+                    fileInput.val('');
+                    selectedFile = null;
+                    uploadActions.hide();
+                    changeButton.show();
+
+                    Swal.fire({
+                        title: 'Success!',
                         text: response.data.message,
                         icon: 'success',
                         timer: 1500,
                         showConfirmButton: false
-                    }).then(() => {
-                        // Refresh the courses tab content to show updated lists
-                        // A simple way is to re-render, though more complex updates are possible
-                        renderInitialCourseList(coursesSection); // Re-render the list
                     });
                 } else {
-                    Swal.fire('Error', response.data.message || 'Could not enroll.', 'error');
-                    button.text(originalText).prop('disabled', false);
+                    errorMsg.text(response.data.message || 'Upload failed.').show();
+                     Swal.fire('Error', response.data.message || 'Upload failed.', 'error'); // Also show in Swal
                 }
             },
-            error: function() {
-                Swal.fire('Error', 'A server error occurred during enrollment.', 'error');
-                button.text(originalText).prop('disabled', false);
+            error: function(jqXHR) {
+                let errorText = 'An unknown server error occurred during upload.';
+                 if (jqXHR.responseJSON && jqXHR.responseJSON.data && jqXHR.responseJSON.data.message) {
+                     errorText = jqXHR.responseJSON.data.message;
+                 }
+                errorMsg.text(errorText).show();
+                 Swal.fire('Upload Error', errorText, 'error');
+            },
+            complete: function() {
+                // Restore buttons
+                $button.text(originalButtonText).prop('disabled', false);
+                cancelUploadButton.prop('disabled', false);
             }
         });
     });

@@ -1097,13 +1097,15 @@ function qp_sync_course_plan($post_id) {
 add_action('save_post_qp_course', 'qp_sync_course_plan', 40, 1);
 
 /**
- * Checks if a user has access to a specific course via entitlement OR existing enrollment.
+ * Checks if a user has access to a specific course via a relevant entitlement OR existing enrollment.
+ * Differentiates between plans granting general attempts and those granting specific course access.
  *
- * @param int $user_id   The ID of the user to check.
- * @param int $course_id The ID of the course (qp_course post ID) to check access for.
+ * @param int  $user_id              The ID of the user to check.
+ * @param int  $course_id            The ID of the course (qp_course post ID) to check access for.
+ * @param bool $ignore_enrollment_check Optional. If true, skips the check for existing enrollment. Defaults to false.
  * @return bool True if the user has access, false otherwise.
  */
-function qp_user_can_access_course($user_id, $course_id) {
+function qp_user_can_access_course($user_id, $course_id, $ignore_enrollment_check = false) {
     if (empty($user_id) || empty($course_id)) {
         return false;
     }
@@ -1121,10 +1123,13 @@ function qp_user_can_access_course($user_id, $course_id) {
 
     global $wpdb;
     $entitlements_table = $wpdb->prefix . 'qp_user_entitlements';
-    $user_courses_table = $wpdb->prefix . 'qp_user_courses'; // <<< Add enrollment table name
+    $user_courses_table = $wpdb->prefix . 'qp_user_courses';
     $current_time = current_time('mysql');
 
-    // 3. Check for ANY active entitlement granting access
+    // --- Get the auto-generated plan ID specifically linked to this course ---
+    $auto_plan_id_for_course = get_post_meta($course_id, '_qp_course_auto_plan_id', true);
+
+    // 3. Check for ACTIVE entitlements that grant access specifically to THIS course
     $active_entitlements = $wpdb->get_results($wpdb->prepare(
         "SELECT entitlement_id, plan_id
          FROM {$entitlements_table}
@@ -1136,30 +1141,50 @@ function qp_user_can_access_course($user_id, $course_id) {
     ));
 
     if (!empty($active_entitlements)) {
-        // Check each active plan to see if it grants access to this course
         foreach ($active_entitlements as $entitlement) {
             $plan_id = $entitlement->plan_id;
-            $course_access_type = get_post_meta($plan_id, '_qp_plan_course_access_type', true);
-            $linked_courses_raw = get_post_meta($plan_id, '_qp_plan_linked_courses', true);
-            $linked_courses = is_array($linked_courses_raw) ? $linked_courses_raw : [];
+            $plan_post = get_post($plan_id);
 
-            if ($course_access_type === 'all' || ($course_access_type === 'specific' && in_array($course_id, $linked_courses))) {
-                return true; // Access granted via entitlement
+            // Skip if plan doesn't exist or isn't a qp_plan
+            if (!$plan_post || $plan_post->post_type !== 'qp_plan') {
+                continue;
             }
+
+            // *** NEW CHECK: Verify the Plan Type ***
+            $plan_type = get_post_meta($plan_id, '_qp_plan_type', true);
+            $is_course_access_plan = in_array($plan_type, ['course_access', 'combined']);
+            // Check if this entitlement is for the specific auto-generated plan linked to the course
+            $is_auto_plan_for_this_course = ($auto_plan_id_for_course && $plan_id == $auto_plan_id_for_course);
+
+            // Only proceed if the plan type is suitable OR it's the specific auto-plan for this course
+            if ($is_course_access_plan || $is_auto_plan_for_this_course) {
+                // Now check if this suitable plan grants access (all or specific)
+                $course_access_type = get_post_meta($plan_id, '_qp_plan_course_access_type', true);
+                $linked_courses_raw = get_post_meta($plan_id, '_qp_plan_linked_courses', true);
+                $linked_courses = is_array($linked_courses_raw) ? $linked_courses_raw : [];
+
+                if ($course_access_type === 'all' || ($course_access_type === 'specific' && in_array($course_id, $linked_courses))) {
+                    // Found a valid entitlement of the correct type granting access to this course
+                    return true;
+                }
+            }
+            // *** END NEW CHECK ***
         }
     }
+    // If no suitable entitlement granted access, proceed to enrollment check (unless ignored)
 
-    // 4. *** NEW CHECK ***: Check for existing enrollment if no entitlement granted access
-    $is_enrolled = $wpdb->get_var($wpdb->prepare(
-        "SELECT user_course_id FROM {$user_courses_table} WHERE user_id = %d AND course_id = %d",
-        $user_id,
-        $course_id
-    ));
+    // 4. Check for existing enrollment IF the flag allows it
+    if (!$ignore_enrollment_check) {
+        $is_enrolled = $wpdb->get_var($wpdb->prepare(
+            "SELECT user_course_id FROM {$user_courses_table} WHERE user_id = %d AND course_id = %d",
+            $user_id,
+            $course_id
+        ));
 
-    if ($is_enrolled) {
-        return true; // Access granted due to existing enrollment
+        if ($is_enrolled) {
+            return true; // Access granted due to existing enrollment
+        }
     }
-    // --- END NEW CHECK ---
 
     // 5. If none of the above grant access, deny.
     return false;
@@ -2439,6 +2464,177 @@ function qp_regenerate_api_key_ajax()
     wp_send_json_success(['new_key' => $new_key]);
 }
 add_action('wp_ajax_regenerate_api_key', 'qp_regenerate_api_key_ajax');
+
+// Password
+/**
+ * AJAX handler to save user profile (display name and email).
+ */
+function qp_save_profile_ajax() {
+    // 1. Security Checks
+    check_ajax_referer('qp_save_profile_nonce', '_qp_profile_nonce');
+    if (!is_user_logged_in()) {
+        wp_send_json_error(['message' => 'You must be logged in.'], 401);
+    }
+    $user_id = get_current_user_id();
+
+    // 2. Get and Sanitize Data
+    $display_name = isset($_POST['display_name']) ? sanitize_text_field(wp_unslash($_POST['display_name'])) : '';
+    $user_email = isset($_POST['user_email']) ? sanitize_email(wp_unslash($_POST['user_email'])) : '';
+
+    // 3. Basic Validation
+    if (empty($display_name) || empty($user_email)) {
+        wp_send_json_error(['message' => 'Display Name and Email Address cannot be empty.'], 400);
+    }
+    if (!is_email($user_email)) {
+        wp_send_json_error(['message' => 'Please enter a valid Email Address.'], 400);
+    }
+
+    // 4. Check if email is used by ANOTHER user
+    $existing_user = email_exists($user_email);
+    if ($existing_user && $existing_user != $user_id) {
+        wp_send_json_error(['message' => 'This email address is already registered by another user.'], 409); // 409 Conflict
+    }
+
+    // 5. Prepare User Data for Update
+    $user_data = [
+        'ID'           => $user_id,
+        'display_name' => $display_name,
+        'user_email'   => $user_email,
+    ];
+
+    // 6. Update User
+    $result = wp_update_user($user_data);
+
+    // 7. Send Response
+    if (is_wp_error($result)) {
+        wp_send_json_error(['message' => 'Error updating profile: ' . $result->get_error_message()], 500);
+    } else {
+        // Success: Send back the updated data for the frontend
+        wp_send_json_success([
+            'message' => 'Profile updated successfully!',
+            'display_name' => $display_name,
+            'user_email' => $user_email
+        ]);
+    }
+}
+add_action('wp_ajax_qp_save_profile', 'qp_save_profile_ajax');
+
+/**
+ * AJAX handler to change user password securely.
+ */
+function qp_change_password_ajax() {
+    // 1. Security Checks
+    check_ajax_referer('qp_change_password_nonce', '_qp_password_nonce');
+    if (!is_user_logged_in()) {
+        wp_send_json_error(['message' => 'You must be logged in.'], 401);
+    }
+    $user_id = get_current_user_id();
+    $user = get_userdata($user_id);
+
+    // 2. Get and Sanitize Passwords
+    $current_password = isset($_POST['current_password']) ? wp_unslash($_POST['current_password']) : '';
+    $new_password = isset($_POST['new_password']) ? wp_unslash($_POST['new_password']) : '';
+    $confirm_password = isset($_POST['confirm_password']) ? wp_unslash($_POST['confirm_password']) : '';
+
+    // 3. Validation
+    if (empty($current_password) || empty($new_password) || empty($confirm_password)) {
+        wp_send_json_error(['message' => 'All password fields are required.'], 400);
+    }
+
+    // 4. Verify Current Password *** SECURITY CRITICAL ***
+    if (!wp_check_password($current_password, $user->user_pass, $user->ID)) {
+        wp_send_json_error(['message' => 'Your current password does not match. Please try again.'], 403); // 403 Forbidden
+    }
+
+    // 5. Verify New Passwords Match
+    if ($new_password !== $confirm_password) {
+        wp_send_json_error(['message' => 'The new passwords do not match.'], 400);
+    }
+
+    // 6. (Optional but Recommended) Add Password Strength Check
+    // You might want to add checks for minimum length, complexity, etc. here
+    // if (strlen($new_password) < 8) {
+    //     wp_send_json_error(['message' => 'New password must be at least 8 characters long.'], 400);
+    // }
+
+    // 7. Update Password
+    wp_set_password($new_password, $user->ID);
+
+    // Optional: Log the user out of other sessions for security after password change
+    // wp_logout_all_sessions();
+
+    // 8. Send Success Response
+    wp_send_json_success(['message' => 'Password updated successfully!']);
+}
+add_action('wp_ajax_qp_change_password', 'qp_change_password_ajax');
+
+/**
+ * AJAX handler to upload a new user avatar, delete the old one, and update user meta.
+ */
+function qp_upload_avatar_ajax() {
+    // 1. Security Checks
+    // Use the nonce generated in the profile form
+    check_ajax_referer('qp_save_profile_nonce', '_qp_profile_nonce');
+    if (!is_user_logged_in()) {
+        wp_send_json_error(['message' => 'You must be logged in.'], 401);
+    }
+    $user_id = get_current_user_id();
+
+    // 2. Check if file was uploaded correctly
+    if (!isset($_FILES['qp_avatar_upload']) || $_FILES['qp_avatar_upload']['error'] !== UPLOAD_ERR_OK) {
+        $error_code = $_FILES['qp_avatar_upload']['error'] ?? UPLOAD_ERR_NO_FILE;
+        $error_messages = [
+            UPLOAD_ERR_INI_SIZE   => 'The uploaded file exceeds the upload_max_filesize directive in php.ini.',
+            UPLOAD_ERR_FORM_SIZE  => 'The uploaded file exceeds the MAX_FILE_SIZE directive specified in the HTML form.',
+            UPLOAD_ERR_PARTIAL    => 'The uploaded file was only partially uploaded.',
+            UPLOAD_ERR_NO_FILE    => 'No file was uploaded.',
+            UPLOAD_ERR_NO_TMP_DIR => 'Missing a temporary folder.',
+            UPLOAD_ERR_CANT_WRITE => 'Failed to write file to disk.',
+            UPLOAD_ERR_EXTENSION  => 'A PHP extension stopped the file upload.',
+        ];
+        wp_send_json_error(['message' => $error_messages[$error_code] ?? 'Unknown upload error.'], 400);
+        return;
+    }
+
+    $file = $_FILES['qp_avatar_upload'];
+
+    // 3. Include necessary WordPress file handling functions
+    require_once(ABSPATH . 'wp-admin/includes/image.php');
+    require_once(ABSPATH . 'wp-admin/includes/file.php');
+    require_once(ABSPATH . 'wp-admin/includes/media.php');
+
+    // 4. Handle the upload using media_handle_upload()
+    // 'qp_avatar_upload' is the name attribute of our file input
+    // 0 means the attachment is not associated with any specific post
+    $attachment_id = media_handle_upload('qp_avatar_upload', 0);
+
+    // 5. Check for upload errors
+    if (is_wp_error($attachment_id)) {
+        wp_send_json_error(['message' => 'Error uploading file: ' . $attachment_id->get_error_message()], 500);
+        return;
+    }
+
+    // 6. Get the ID of the PREVIOUS custom avatar (if any)
+    $previous_avatar_id = get_user_meta($user_id, '_qp_avatar_attachment_id', true);
+
+    // 7. Update user meta with the NEW attachment ID
+    update_user_meta($user_id, '_qp_avatar_attachment_id', $attachment_id);
+
+    // 8. Delete the PREVIOUS attachment (if it exists and is different from the new one)
+    if (!empty($previous_avatar_id) && $previous_avatar_id != $attachment_id) {
+        wp_delete_attachment($previous_avatar_id, true); // true forces delete, bypassing trash
+    }
+
+    // 9. Get the URL of the newly uploaded image (use a reasonable size)
+    $new_avatar_url = wp_get_attachment_image_url($attachment_id, 'thumbnail'); // 'thumbnail' or 'medium' size
+
+    // 10. Send Success Response
+    wp_send_json_success([
+        'message' => 'Avatar updated successfully!',
+        'new_avatar_url' => $new_avatar_url ?: get_avatar_url($user_id) // Fallback to Gravatar if URL fetch fails
+    ]);
+}
+add_action('wp_ajax_qp_upload_avatar', 'qp_upload_avatar_ajax');
 
 // Used on export page
 
@@ -4498,6 +4694,103 @@ function qp_public_init()
     add_shortcode('question_press_dashboard', ['QP_Dashboard', 'render']);
 }
 add_action('init', 'qp_public_init');
+
+/**
+ * Register custom query variables for dashboard routing.
+ *
+ * @param array $vars Existing query variables.
+ * @return array Modified query variables.
+ */
+function qp_register_query_vars($vars) {
+    $vars[] = 'qp_tab';          // To identify the main dashboard section (e.g., 'history', 'courses')
+    $vars[] = 'qp_course_slug'; // To identify a specific course by its slug
+    return $vars;
+}
+add_filter('query_vars', 'qp_register_query_vars');
+
+/**
+ * Add rewrite rules for the dynamic dashboard URLs.
+ */
+function qp_add_dashboard_rewrite_rules() {
+    $options = get_option('qp_settings');
+    // Ensure 'dashboard_page' key exists before accessing it
+    $dashboard_page_id = isset($options['dashboard_page']) ? absint($options['dashboard_page']) : 0;
+
+    // Only add rules if a valid dashboard page ID is set
+    if ($dashboard_page_id > 0) {
+        // Get the slug (URL path) of the selected dashboard page
+        $dashboard_slug = get_post_field('post_name', $dashboard_page_id);
+
+        // Proceed only if we successfully retrieved the slug
+        if ($dashboard_slug) {
+            // Rule for specific course: /dashboard-slug/courses/course-slug/
+            // Maps the URL to index.php?pagename=[dashboard-slug]&qp_tab=courses&qp_course_slug=[course-slug]
+            add_rewrite_rule(
+                '^' . $dashboard_slug . '/courses/([^/]+)/?$', // Matches /dashboard-slug/courses/ANYTHING/
+                'index.php?pagename=' . $dashboard_slug . '&qp_tab=courses&qp_course_slug=$matches[1]',
+                'top' // Process this rule early
+            );
+
+            // Rule for profile tab: /dashboard-slug/profile/
+            add_rewrite_rule(
+                '^' . $dashboard_slug . '/profile/?$', // Matches /dashboard-slug/profile/
+                'index.php?pagename=' . $dashboard_slug . '&qp_tab=profile', // Map to profile tab
+                'top'
+            );
+
+            // Rule for main tab: /dashboard-slug/tab-name/
+            // Maps the URL to index.php?pagename=[dashboard-slug]&qp_tab=[tab-name]
+            add_rewrite_rule(
+                '^' . $dashboard_slug . '/([^/]+)/?$', // Matches /dashboard-slug/ANYTHING/
+                'index.php?pagename=' . $dashboard_slug . '&qp_tab=$matches[1]',
+                'top' // Process this rule early
+            );
+
+            // Optional: Rule for the base dashboard URL /dashboard-slug/
+            // WordPress might handle this automatically if the page structure is correct,
+            // but adding it explicitly can sometimes help.
+            add_rewrite_rule(
+                '^' . $dashboard_slug . '/?$', // Matches /dashboard-slug/
+                'index.php?pagename=' . $dashboard_slug, // Just load the dashboard page
+                'top'
+            );
+        } else {
+            // Log an error or add an admin notice if the slug couldn't be found
+            error_log('Question Press: Could not retrieve slug for dashboard page ID: ' . $dashboard_page_id);
+        }
+    } else {
+        // Log an error or add an admin notice if the dashboard page isn't set
+        error_log('Question Press: Dashboard page ID not set in options.');
+    }
+}
+add_action('init', 'qp_add_dashboard_rewrite_rules');
+
+/**
+ * Flush rewrite rules on plugin activation.
+ */
+function qp_flush_rewrite_rules_on_activate() {
+    // Ensure our rules are added before flushing
+    qp_add_dashboard_rewrite_rules();
+    // Flush the rules
+    flush_rewrite_rules();
+}
+// Make sure QP_PLUGIN_FILE is defined correctly (it should be from your main plugin file)
+if (defined('QP_PLUGIN_FILE')) {
+    register_activation_hook(QP_PLUGIN_FILE, 'qp_flush_rewrite_rules_on_activate');
+}
+
+
+/**
+ * Flush rewrite rules on plugin deactivation.
+ */
+function qp_flush_rewrite_rules_on_deactivate() {
+    // Flush the rules to remove ours
+    flush_rewrite_rules();
+}
+// Make sure QP_PLUGIN_FILE is defined correctly
+if (defined('QP_PLUGIN_FILE')) {
+    register_deactivation_hook(QP_PLUGIN_FILE, 'qp_flush_rewrite_rules_on_deactivate');
+}
 
 function qp_public_enqueue_scripts()
 {
@@ -7991,7 +8284,6 @@ function qp_enroll_in_course_ajax() {
     }
 }
 add_action('wp_ajax_enroll_in_course', 'qp_enroll_in_course_ajax');
-add_action('wp_ajax_get_course_list_html', ['QP_Dashboard', 'get_course_list_ajax']);
 
 /**
  * AJAX handler to search for questions for the course editor modal.
@@ -8255,3 +8547,33 @@ function qp_recalculate_course_progress_on_save($post_id) {
 }
 // Hook with a priority later than the meta box save (default is 10)
 add_action('save_post_qp_course', 'qp_recalculate_course_progress_on_save', 20, 1);
+
+
+// Profile Management
+
+/**
+ * Redirects non-admin users trying to access the default WordPress profile page
+ * to the frontend Question Press dashboard profile tab.
+ */
+function qp_redirect_wp_profile_page() {
+    // Check if we are trying to access the profile page and it's not an AJAX request
+    if (is_admin() && !defined('DOING_AJAX') && $GLOBALS['pagenow'] === 'profile.php') {
+        // Check if the current user DOES NOT have the 'manage_options' capability (adjust if needed)
+        if (!current_user_can('manage_options')) {
+            // Get the URL for the frontend dashboard profile tab
+            $options = get_option('qp_settings');
+            $dashboard_page_id = isset($options['dashboard_page']) ? absint($options['dashboard_page']) : 0;
+            $profile_url = home_url('/'); // Default fallback
+
+            if ($dashboard_page_id > 0) {
+                $base_dashboard_url = trailingslashit(get_permalink($dashboard_page_id));
+                $profile_url = $base_dashboard_url . 'profile/'; // Construct the profile tab URL
+            }
+
+            // Redirect the user
+            wp_redirect($profile_url);
+            exit; // Stop further execution
+        }
+    }
+}
+add_action('admin_init', 'qp_redirect_wp_profile_page');
