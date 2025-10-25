@@ -1253,7 +1253,18 @@ class QP_Dashboard
                     ];
                 }
 
-                $avatar_url = get_avatar_url($user_id, ['size' => 128, 'default' => 'mystery']); // Get a larger avatar
+                // Check for custom avatar first
+        $custom_avatar_id = get_user_meta($user_id, '_qp_avatar_attachment_id', true);
+        $avatar_url = '';
+        if (!empty($custom_avatar_id)) {
+            // Use a reasonable size like 'thumbnail' or 'medium'
+            $avatar_url = wp_get_attachment_image_url(absint($custom_avatar_id), 'thumbnail');
+        }
+
+        // Fallback to Gravatar if no custom avatar or URL fetch failed
+        if (empty($avatar_url)) {
+            $avatar_url = get_avatar_url($user_id, ['size' => 128, 'default' => 'mystery']); // Get a larger avatar
+        }
 
                 // --- Fetch and Process Scope ---
                 $scope_description = 'All Subjects & Exams'; // Default
