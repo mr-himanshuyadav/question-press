@@ -582,39 +582,47 @@ wrapper.on('click', 'a.qp-button-primary[href*="session_id="]', function(e) {
             $sectionsContainer.find('.qp-progress-item').removeClass('is-active-group');
         }
     });
-
-    // --- Course Navigation Logic ---
-    const coursesSection = $('#qp-dashboard-courses'); // Cache the section
+    const coursesSection = $('#qp-dashboard-courses'); // Still useful for other actions
 
     // Click handler for "View Course" / "Continue Course" button in the list
-    coursesSection.on('click', '.qp-view-course-btn', function(e) {
+    // *** MODIFIED: Delegated from the main wrapper ***
+    wrapper.on('click', '.qp-view-course-btn', function(e) {
         e.preventDefault(); // Prevent default button action
         var courseSlug = $(this).data('course-slug');
         var courseId = $(this).data('course-id'); // Keep courseId in case slug is missing
         var baseDashboardUrl = qp_ajax_object.dashboard_page_url || '/'; // Get base URL
 
+        // Ensure base URL ends with a slash
+        if (baseDashboardUrl.slice(-1) !== '/') {
+            baseDashboardUrl += '/';
+        }
+
         if (courseSlug) {
-            // Construct the URL: baseDashboardUrl should end with a slash
+            // Construct the URL: baseDashboardUrl + 'courses/' + courseSlug + '/'
             var courseUrl = baseDashboardUrl + 'courses/' + courseSlug + '/';
+            console.log("Navigating to:", courseUrl); // Add console log for debugging
             window.location.href = courseUrl; // Navigate to the course page
         } else {
             console.error('Course slug missing for course ID:', courseId);
-            // Optionally show an error to the user
             Swal.fire('Error', 'Could not navigate to the course. Slug is missing.', 'error');
         }
     });
 
-    // Click handler for the "Back to Courses" button (within the single course view)
-    // We use event delegation on the wrapper because the button is loaded dynamically by PHP
+    // Click handler for the "Back to Courses" button (delegated from wrapper)
     wrapper.on('click', '.qp-back-to-courses-btn', function(e) {
         e.preventDefault(); // Prevent default button action
         var baseDashboardUrl = qp_ajax_object.dashboard_page_url || '/'; // Get base URL
+         // Ensure base URL ends with a slash
+        if (baseDashboardUrl.slice(-1) !== '/') {
+            baseDashboardUrl += '/';
+        }
         var coursesListUrl = baseDashboardUrl + 'courses/'; // URL for the main courses list
+        console.log("Navigating back to:", coursesListUrl); // Add console log
         window.location.href = coursesListUrl; // Navigate back to the courses list
     });
 
-    // Click handler for "Review Results" button
-    coursesSection.on('click', '.view-test-results-btn', function(e) {
+    // Click handler for "Review Results" button (delegated from wrapper)
+    wrapper.on('click', '.view-test-results-btn', function(e) {
         e.preventDefault();
         var button = $(this);
         var sessionId = button.data('session-id');
@@ -623,6 +631,7 @@ wrapper.on('click', 'a.qp-button-primary[href*="session_id="]', function(e) {
         if (sessionId && reviewPageUrl) {
             var url = new URL(reviewPageUrl);
             url.searchParams.set('session_id', sessionId);
+             console.log("Navigating to review:", url.href); // Add console log
             window.location.href = url.href;
         } else if (!sessionId) {
             Swal.fire('Error', 'Could not find the session data associated with this item.', 'error');
