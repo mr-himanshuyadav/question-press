@@ -771,8 +771,9 @@ private static function render_single_course_view($course_slug, $user_id) {
                         $button_text = $is_complete ? __('View Results', 'question-press') : __('Continue Course', 'question-press');
                         // Enrolled users always get the view/continue button, access check already passed implicitly
                         $button_html = sprintf(
-                            '<button class="qp-button qp-button-primary qp-view-course-btn" data-course-id="%d">%s</button>',
+                            '<button class="qp-button qp-button-primary qp-view-course-btn" data-course-id="%d" data-course-slug="%s">%s</button>',
                             $course_id,
+                            esc_attr(get_post_field('post_name', $course_id)), // Added course slug
                             esc_html($button_text)
                         );
                     } else {
