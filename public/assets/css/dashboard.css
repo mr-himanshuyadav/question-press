@@ -941,20 +941,44 @@ ul.qp-review-list li {
     }
 }
 
-/* --- Profile Card Form --- */
+/* --- Profile Card Form & Display/Edit States --- */
 #qp-profile-update-form {
-    width: 100%; /* Ensure form takes full card width */
+    width: 100%;
     display: flex;
     flex-direction: column;
-    align-items: center; /* Center items within the form */
+    align-items: center;
 }
 
-.qp-profile-field {
-    width: 100%; /* Make form groups full width */
-    margin-bottom: 1rem; /* Space between fields */
-    text-align: left; /* Align labels left */
+/* Display State (Default) */
+.qp-profile-display {
+    width: 100%;
+    text-align: center;
+}
+.qp-profile-display .qp-profile-name { /* Reuse existing name style */
+    font-size: 1.4em;
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+}
+.qp-profile-display .qp-profile-email { /* Reuse existing email style */
+    color: var(--qp-dashboard-text-light);
+    margin-bottom: 1.5rem;
+    word-break: break-all;
+}
+.qp-profile-display .qp-edit-profile-button {
+    width: 100%;
+    box-sizing: border-box; /* Include padding in width */
 }
 
+/* Edit State (Hidden by default) */
+.qp-profile-edit {
+    display: none; /* Hidden initially */
+    width: 100%;
+}
+.qp-profile-field { /* Styles for input fields in edit mode */
+    width: 100%;
+    margin-bottom: 1rem;
+    text-align: left;
+}
 .qp-profile-field label {
     font-weight: 600;
     font-size: 0.9em;
@@ -962,7 +986,6 @@ ul.qp-review-list li {
     margin-bottom: 5px;
     display: block;
 }
-
 .qp-profile-field input[type="text"],
 .qp-profile-field input[type="email"] {
     width: 100%;
@@ -972,14 +995,50 @@ ul.qp-review-list li {
     font-size: 1em;
     box-sizing: border-box;
 }
-
-.qp-save-profile-button {
-    width: 100%; /* Make save button full width */
-    margin-top: 0.5rem; /* Space above save button */
-    margin-bottom: 0.5rem; /* Space below save button */
+.qp-profile-edit-actions {
+    display: flex;
+    gap: 10px; /* Space between Cancel and Save */
+    margin-top: 1rem;
+}
+.qp-profile-edit-actions .qp-button {
+    flex-grow: 1; /* Make buttons share space */
 }
 
-/* Remove button styles from edit link */
-.qp-edit-profile-button {
-    display: none; /* Hide the old "Edit Profile" link */
+/* Avatar Specific Styles */
+.qp-profile-avatar-wrapper {
+    position: relative; /* Needed for positioning the change button */
+    margin-bottom: 1rem;
+}
+.qp-profile-avatar-wrapper img { /* Reuse existing styles */
+    border-radius: 50%;
+    border: 3px solid var(--qp-dashboard-bg);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    width: 128px;
+    height: 128px;
+    object-fit: cover;
+}
+.qp-change-avatar-button { /* Style for the change button */
+    position: absolute;
+    bottom: 5px; /* Position near the bottom of the avatar */
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 4px 10px;
+    font-size: 12px;
+    opacity: 0.8;
+    transition: opacity 0.2s ease;
+}
+.qp-change-avatar-button:hover {
+    opacity: 1;
+}
+
+/* --- Toggle Visibility Classes (handled by JS later) --- */
+.qp-profile-card.is-editing .qp-profile-display {
+    display: none;
+}
+.qp-profile-card.is-editing .qp-profile-edit {
+    display: block;
+}
+/* Show avatar change button only when editing */
+.qp-profile-card.is-editing .qp-change-avatar-button {
+    display: inline-block;
 }

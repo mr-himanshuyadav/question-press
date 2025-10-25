@@ -1027,36 +1027,45 @@ private static function render_single_course_view($course_slug, $user_id) {
             <div class="qp-profile-layout">
                 <div class="qp-card qp-profile-card">
                     <div class="qp-card-content">
-                        <?php // Wrap profile details in a form ?>
+                        <?php // Form now includes display and edit elements ?>
                         <form id="qp-profile-update-form">
-                            <?php wp_nonce_field('qp_save_profile_nonce', '_qp_profile_nonce'); // Add nonce for security ?>
+                            <?php wp_nonce_field('qp_save_profile_nonce', '_qp_profile_nonce'); // Nonce for security ?>
 
-                            <div class="qp-profile-avatar">
+                            <div class="qp-profile-avatar qp-profile-avatar-wrapper">
                                 <img src="<?php echo esc_url($profile_data['avatar_url']); ?>" alt="Profile Picture" width="128" height="128">
-                                <?php // Placeholder for avatar change button (future) ?>
+                                <?php // Button to trigger avatar change (initially hidden in edit mode) ?>
+                                <button type="button" class="qp-change-avatar-button qp-button qp-button-secondary" style="display: none; margin-top: 10px;">Change Avatar</button>
+                                <?php // Input for file upload (hidden until implemented) ?>
                                 </div>
 
-                            <?php // Editable Display Name ?>
-                            <div class="qp-form-group qp-profile-field">
-                                <label for="qp_display_name"><?php esc_html_e('Display Name', 'question-press'); ?></label>
-                                <input type="text" id="qp_display_name" name="display_name" value="<?php echo esc_attr($profile_data['display_name']); ?>" required>
+                            <?php // --- Display elements (visible by default) --- ?>
+                            <div class="qp-profile-display">
+                                <h3 class="qp-profile-name"><?php echo esc_html__('Hello, ', 'question-press') . esc_html($profile_data['display_name']); ?>!</h3>
+                                <p class="qp-profile-email"><?php echo esc_html($profile_data['email']); ?></p>
+                                <button type="button" class="qp-button qp-button-secondary qp-edit-profile-button">Edit Profile</button>
                             </div>
 
-                            <?php // Editable Email Address ?>
-                            <div class="qp-form-group qp-profile-field">
-                                <label for="qp_user_email"><?php esc_html_e('Email Address', 'question-press'); ?></label>
-                                <input type="email" id="qp_user_email" name="user_email" value="<?php echo esc_attr($profile_data['email']); ?>" required>
+                            <?php // --- Edit elements (hidden by default) --- ?>
+                            <div class="qp-profile-edit" style="display: none; width: 100%;">
+                                <div class="qp-form-group qp-profile-field">
+                                    <label for="qp_display_name"><?php esc_html_e('Display Name', 'question-press'); ?></label>
+                                    <input type="text" id="qp_display_name" name="display_name" value="<?php echo esc_attr($profile_data['display_name']); ?>" required>
+                                </div>
+
+                                <div class="qp-form-group qp-profile-field">
+                                    <label for="qp_user_email"><?php esc_html_e('Email Address', 'question-press'); ?></label>
+                                    <input type="email" id="qp_user_email" name="user_email" value="<?php echo esc_attr($profile_data['email']); ?>" required>
+                                </div>
+
+                                <div class="qp-profile-edit-actions">
+                                    <button type="button" class="qp-button qp-button-secondary qp-cancel-edit-profile-button">Cancel</button>
+                                    <button type="submit" class="qp-button qp-button-primary qp-save-profile-button">Save Changes</button>
+                                </div>
                             </div>
 
-                            <?php // Save Button ?>
-                            <button type="submit" class="qp-button qp-button-primary qp-save-profile-button">Save Profile</button>
-
-                            <p class="description" style="font-size: 12px; color: #777; margin-top: 15px;">
-                                (Avatar is managed via <a href="https://gravatar.com/" target="_blank" rel="noopener noreferrer">Gravatar</a> based on your email address.)
-                            </p>
-                        </form>
-                    </div>
-                </div>
+                        </form> <?php // End Form ?>
+                    </div> <?php // End Card Content ?>
+                </div> <?php // End Profile Card ?>
 
                 <div class="qp-profile-details">
                     <div class="qp-card qp-access-card">

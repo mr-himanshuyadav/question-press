@@ -751,6 +751,33 @@ wrapper.on('click', 'a.qp-button-primary[href*="session_id="]', function(e) {
         }
     });
 
+    // Profile Management
+    // --- Profile Editing Toggle ---
+    const profileCard = wrapper.find('.qp-profile-card'); // Cache the profile card
+    let originalProfileName = '';
+    let originalProfileEmail = '';
+
+    // Handle "Edit Profile" button click
+    wrapper.on('click', '.qp-edit-profile-button', function() {
+        // Store original values before showing inputs
+        originalProfileName = profileCard.find('#qp_display_name').val();
+        originalProfileEmail = profileCard.find('#qp_user_email').val();
+
+        profileCard.addClass('is-editing');
+    });
+
+    // Handle "Cancel" button click
+    wrapper.on('click', '.qp-cancel-edit-profile-button', function() {
+        // Restore original values to input fields
+        profileCard.find('#qp_display_name').val(originalProfileName);
+        profileCard.find('#qp_user_email').val(originalProfileEmail);
+
+        profileCard.removeClass('is-editing');
+    });
+
+    // Note: The "Save Changes" button's AJAX logic will be added in Step 2.4
+    // Note: The "Change Avatar" button logic will be added later
+
 }); // End jQuery ready
 
 /**
