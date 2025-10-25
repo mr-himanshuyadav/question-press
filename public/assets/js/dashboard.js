@@ -810,6 +810,65 @@ wrapper.on('click', 'a.qp-button-primary[href*="session_id="]', function(e) {
 
     // Note: The "Update Password" button's AJAX logic will be added in Step 2.5
 
+    // --- AJAX Handler for Saving Profile ---
+    wrapper.on('submit', '#qp-profile-update-form', function(e) {
+        e.preventDefault();
+        const $form = $(this);
+        const $saveButton = $form.find('.qp-save-profile-button');
+        const originalButtonText = $saveButton.text();
+
+        // Basic client-side check (backend does more thorough validation)
+        const displayName = $form.find('#qp_display_name').val().trim();
+        const userEmail = $form.find('#qp_user_email').val().trim();
+
+        if (!displayName || !userEmail) {
+            Swal.fire('Error', 'Display Name and Email cannot be empty.', 'error');
+            return;
+        }
+
+        // Show loading state
+        $saveButton.text('Saving...').prop('disabled', true);
+        $form.find('input').prop('readonly', true); // Make inputs read-only during save
+
+        $.ajax({
+            url: qp_ajax_object.ajax_url,
+            type: 'POST',
+            data: $form.serialize() + '&action=qp_save_profile', // Add action parameter
+            success: function(response) {
+                if (response.success) {
+                    // Update display elements with new data
+                    profileCard.find('.qp-profile-display .qp-profile-name').text('Hello, ' + response.data.display_name + '!');
+                    profileCard.find('.qp-profile-display .qp-profile-email').text(response.data.user_email);
+
+                    // Update the values in the hidden form fields as well
+                    $form.find('#qp_display_name').val(response.data.display_name);
+                    $form.find('#qp_user_email').val(response.data.user_email);
+
+                    // Switch back to display mode
+                    profileCard.removeClass('is-editing');
+
+                    Swal.fire({
+                        title: 'Success!',
+                        text: response.data.message,
+                        icon: 'success',
+                        timer: 1500, // Auto close after 1.5 seconds
+                        showConfirmButton: false
+                    });
+                } else {
+                    Swal.fire('Error', response.data.message || 'Could not update profile.', 'error');
+                }
+            },
+            error: function() {
+                Swal.fire('Error', 'An unknown server error occurred. Please try again.', 'error');
+            },
+            complete: function() {
+                // Restore button and fields regardless of success/error
+                $saveButton.text(originalButtonText).prop('disabled', false);
+                $form.find('input').prop('readonly', false);
+            }
+        });
+    });
+
 }); // End jQuery ready
 
 /**

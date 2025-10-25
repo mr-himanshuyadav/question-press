@@ -2465,6 +2465,60 @@ function qp_regenerate_api_key_ajax()
 }
 add_action('wp_ajax_regenerate_api_key', 'qp_regenerate_api_key_ajax');
 
+// Password
+/**
+ * AJAX handler to save user profile (display name and email).
+ */
+function qp_save_profile_ajax() {
+    // 1. Security Checks
+    check_ajax_referer('qp_save_profile_nonce', '_qp_profile_nonce');
+    if (!is_user_logged_in()) {
+        wp_send_json_error(['message' => 'You must be logged in.'], 401);
+    }
+    $user_id = get_current_user_id();
+
+    // 2. Get and Sanitize Data
+    $display_name = isset($_POST['display_name']) ? sanitize_text_field(wp_unslash($_POST['display_name'])) : '';
+    $user_email = isset($_POST['user_email']) ? sanitize_email(wp_unslash($_POST['user_email'])) : '';
+
+    // 3. Basic Validation
+    if (empty($display_name) || empty($user_email)) {
+        wp_send_json_error(['message' => 'Display Name and Email Address cannot be empty.'], 400);
+    }
+    if (!is_email($user_email)) {
+        wp_send_json_error(['message' => 'Please enter a valid Email Address.'], 400);
+    }
+
+    // 4. Check if email is used by ANOTHER user
+    $existing_user = email_exists($user_email);
+    if ($existing_user && $existing_user != $user_id) {
+        wp_send_json_error(['message' => 'This email address is already registered by another user.'], 409); // 409 Conflict
+    }
+
+    // 5. Prepare User Data for Update
+    $user_data = [
+        'ID'           => $user_id,
+        'display_name' => $display_name,
+        'user_email'   => $user_email,
+    ];
+
+    // 6. Update User
+    $result = wp_update_user($user_data);
+
+    // 7. Send Response
+    if (is_wp_error($result)) {
+        wp_send_json_error(['message' => 'Error updating profile: ' . $result->get_error_message()], 500);
+    } else {
+        // Success: Send back the updated data for the frontend
+        wp_send_json_success([
+            'message' => 'Profile updated successfully!',
+            'display_name' => $display_name,
+            'user_email' => $user_email
+        ]);
+    }
+}
+add_action('wp_ajax_qp_save_profile', 'qp_save_profile_ajax');
+
 // Used on export page
 
 /**
