@@ -46,6 +46,20 @@ class Terms_DB extends DB { // Inherits from DB to get $wpdb
     }
 
     /**
+    * Helper method to get taxonomy ID by name.
+    * (You might want this in Terms_DB instead)
+    * @param string $taxonomy_name
+    * @return int|null
+    */
+   public static function get_taxonomy_id_by_name($taxonomy_name){
+         $tax_table = self::get_taxonomies_table_name(); // Use self::
+         return self::$wpdb->get_var(self::$wpdb->prepare( // Use self::$wpdb
+             "SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = %s",
+             $taxonomy_name
+         ));
+    }
+
+    /**
      * Retrieve metadata for a term from our custom table.
      * (Moved from global function qp_get_term_meta)
      *
@@ -238,6 +252,80 @@ class Terms_DB extends DB { // Inherits from DB to get $wpdb
 
         // Step 3: Use the moved lineage function
         return self::get_lineage_names($term_id);
+    }
+
+    /**
+     * Gets terms linked to a specific object ID and type for given taxonomy names.
+     * Optionally includes term meta.
+     *
+     * @param int          $object_id    The ID of the object (e.g., group_id, question_id).
+     * @param string       $object_type  The type of the object ('group', 'question').
+     * @param string|array $taxonomy_names The name(s) of the taxonomy(ies) to look for.
+     * @param array        $include_meta Optional array of meta keys to include.
+     * @return array       Array of term objects (stdClass), each potentially containing a 'meta' property. Returns empty array if taxonomy doesn't exist or no terms found.
+     */
+    public static function get_linked_terms( $object_id, $object_type, $taxonomy_names, $include_meta = [] ) {
+        $object_id = absint($object_id);
+        if ( $object_id <= 0 ) {
+            return [];
+        }
+        $taxonomy_names = (array) $taxonomy_names;
+        $tax_placeholders = implode( ',', array_fill( 0, count($taxonomy_names), '%s' ) );
+
+        $tax_table = self::get_taxonomies_table_name();
+        $term_table = self::get_terms_table_name();
+        $rel_table = self::get_relationships_table_name();
+
+        // Get relevant taxonomy IDs
+        $taxonomy_ids_query = self::$wpdb->prepare(
+            "SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name IN ({$tax_placeholders})",
+            $taxonomy_names
+        );
+        $taxonomy_ids = self::$wpdb->get_col( $taxonomy_ids_query );
+
+        if ( empty($taxonomy_ids) ) {
+            return []; // Taxonomies not found
+        }
+        $tax_ids_placeholder = implode( ',', $taxonomy_ids );
+
+        // Base query to get linked terms
+        $sql = self::$wpdb->prepare(
+            "SELECT t.term_id, t.name, t.slug, t.parent, tax.taxonomy_name
+             FROM {$term_table} t
+             JOIN {$rel_table} r ON t.term_id = r.term_id
+             JOIN {$tax_table} tax ON t.taxonomy_id = tax.taxonomy_id
+             WHERE r.object_id = %d AND r.object_type = %s AND t.taxonomy_id IN ({$tax_ids_placeholder})",
+            $object_id,
+            $object_type
+        );
+
+        $terms = self::$wpdb->get_results( $sql );
+
+        // Include meta if requested
+        if ( !empty($terms) && !empty($include_meta) ) {
+            $term_ids = wp_list_pluck( $terms, 'term_id' );
+            $term_ids_placeholder = implode( ',', array_map('absint', $term_ids) );
+            $meta_keys_placeholder = implode( ',', array_fill(0, count($include_meta), '%s') );
+            $meta_table = self::get_term_meta_table_name();
+
+            $meta_query = self::$wpdb->prepare(
+                "SELECT term_id, meta_key, meta_value FROM {$meta_table} WHERE term_id IN ({$term_ids_placeholder}) AND meta_key IN ({$meta_keys_placeholder})",
+                array_merge( [$term_ids_placeholder], $include_meta ) // Note: Placeholder %d is handled directly in SQL string
+            );
+             // Fetch meta and organize it
+            $meta_results = self::$wpdb->get_results( $meta_query );
+            $meta_by_term = [];
+            foreach ( $meta_results as $meta ) {
+                $meta_by_term[ $meta->term_id ][ $meta->meta_key ] = maybe_unserialize($meta->meta_value);
+            }
+
+            // Attach meta to terms
+            foreach ( $terms as $term ) {
+                $term->meta = $meta_by_term[ $term->term_id ] ?? [];
+            }
+        }
+
+        return $terms;
     }
 
 

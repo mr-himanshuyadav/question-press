@@ -49,7 +49,7 @@ class QP_Questions_List_Table extends WP_List_Table
     protected function get_hidden_columns()
     {
         // Hide some columns by default
-        return ['source', 'is_pyq'];
+        return [];
     }
 
 
@@ -329,215 +329,42 @@ class QP_Questions_List_Table extends WP_List_Table
 
     public function prepare_items()
     {
-        global $wpdb;
 
-        $this->process_bulk_action();
+        // Process bulk actions first (this remains)
+$this->process_bulk_action();
 
-        $columns = $this->get_columns();
-        $hidden = get_hidden_columns($this->screen);
-        $sortable = $this->get_sortable_columns();
-        $this->_column_headers = [$columns, $hidden, $sortable, 'question_id'];
+// Setup columns (this remains)
+$columns = $this->get_columns();
+$hidden = $this->get_hidden_columns(); // Use the getter method
+$sortable = $this->get_sortable_columns();
+$this->_column_headers = [$columns, $hidden, $sortable, 'question_id']; // Primary column
 
-        $per_page = $this->get_items_per_page('qp_questions_per_page', 20);
-        $current_page = $this->get_pagenum();
-        $offset = ($current_page - 1) * $per_page;
+// Prepare arguments for the DB call based on request parameters
+$args = [
+    'status'        => isset($_REQUEST['status']) ? sanitize_key($_REQUEST['status']) : 'publish',
+    'subject_id'    => !empty($_REQUEST['filter_by_subject']) ? absint($_REQUEST['filter_by_subject']) : 0,
+    'topic_id'      => !empty($_REQUEST['filter_by_topic']) ? absint($_REQUEST['filter_by_topic']) : 0,
+    'source_filter' => isset($_REQUEST['filter_by_source']) ? sanitize_text_field($_REQUEST['filter_by_source']) : '',
+    'label_ids'     => isset($_REQUEST['filter_by_label']) ? array_filter(array_map('absint', (array)$_REQUEST['filter_by_label'])) : [],
+    'search'        => isset($_REQUEST['s']) ? sanitize_text_field(stripslashes($_REQUEST['s'])) : '',
+    'orderby'       => isset($_REQUEST['orderby']) ? sanitize_key($_REQUEST['orderby']) : 'question_id',
+    'order'         => isset($_REQUEST['order']) ? sanitize_key($_REQUEST['order']) : 'desc',
+    'per_page'      => $this->get_items_per_page('qp_questions_per_page', 20),
+    'current_page'  => $this->get_pagenum(),
+];
 
-        $orderby = isset($_GET['orderby']) ? sanitize_key($_GET['orderby']) : 'question_id';
-        $order = isset($_GET['order']) ? sanitize_key($_GET['order']) : 'desc';
+// Call the new static method from Questions_DB
+$result = Questions_DB::get_questions_for_list_table( $args );
 
-        // Define new table names
-        $q_table = $wpdb->prefix . 'qp_questions';
-        $g_table = $wpdb->prefix . 'qp_question_groups';
-        $rel_table = $wpdb->prefix . 'qp_term_relationships';
-        $term_table = $wpdb->prefix . 'qp_terms';
-        $tax_table = $wpdb->prefix . 'qp_taxonomies';
+// Assign items and total count
+$this->items = $result['items'];
+$total_items = $result['total_items'];
 
-        // Base query structure
-        $query_from = "FROM {$q_table} q";
-        $query_joins = " LEFT JOIN {$g_table} g ON q.group_id = g.group_id";
-        $where_conditions = [];
-
-        // Status filter (remains the same)
-        $current_status = isset($_REQUEST['status']) ? sanitize_key($_REQUEST['status']) : 'publish';
-        $where_conditions[] = $wpdb->prepare("q.status = %s", $current_status);
-
-        $joins_added = []; // Helper to prevent duplicate joins
-
-        // Status filter (remains the same)
-        $current_status = isset($_REQUEST['status']) ? sanitize_key($_REQUEST['status']) : 'publish';
-        $where_conditions[] = $wpdb->prepare("q.status = %s", $current_status);
-
-        // In admin/class-qp-questions-list-table.php, inside prepare_items()
-
-        // Handle Subject and Topic Filters
-        $subject_id = !empty($_REQUEST['filter_by_subject']) ? absint($_REQUEST['filter_by_subject']) : 0;
-        $topic_id = !empty($_REQUEST['filter_by_topic']) ? absint($_REQUEST['filter_by_topic']) : 0;
-
-        if ($topic_id) {
-            // If a specific topic is selected, filter by it directly. This is the most specific filter.
-            if (!in_array('topic_rel', $joins_added)) {
-                $query_joins .= " JOIN {$rel_table} topic_rel ON g.group_id = topic_rel.object_id AND topic_rel.object_type = 'group'";
-                $joins_added[] = 'topic_rel';
-            }
-            $where_conditions[] = $wpdb->prepare("topic_rel.term_id = %d", $topic_id);
-        } elseif ($subject_id) {
-            // If only a subject is selected, find all topics under that subject and filter by those.
-            $child_topic_ids = $wpdb->get_col($wpdb->prepare("SELECT term_id FROM {$term_table} WHERE parent = %d", $subject_id));
-
-            if (!empty($child_topic_ids)) {
-                $ids_placeholder = implode(',', $child_topic_ids);
-                if (!in_array('topic_rel', $joins_added)) {
-                    $query_joins .= " JOIN {$rel_table} topic_rel ON g.group_id = topic_rel.object_id AND topic_rel.object_type = 'group'";
-                    $joins_added[] = 'topic_rel';
-                }
-                $where_conditions[] = "topic_rel.term_id IN ($ids_placeholder)";
-            } else {
-                // If the subject has no topics, no questions can be found.
-                $where_conditions[] = "1=0"; // This will correctly return no results.
-            }
-        }
-
-        // Handle Source/Section Filter
-        if (!empty($_REQUEST['filter_by_source'])) {
-            $filter_value = sanitize_text_field($_REQUEST['filter_by_source']);
-            $term_id_to_filter = 0;
-            if (strpos($filter_value, 'source_') === 0) {
-                $term_id_to_filter = absint(str_replace('source_', '', $filter_value));
-            } elseif (strpos($filter_value, 'section_') === 0) {
-                $term_id_to_filter = absint(str_replace('section_', '', $filter_value));
-            }
-
-            if ($term_id_to_filter > 0) {
-                // --- NEW: Logic to get all descendant term IDs ---
-                $descendant_ids = [$term_id_to_filter];
-                $current_parent_ids = [$term_id_to_filter];
-
-                // Loop to find children, grandchildren, etc. (with a safety limit of 10 levels)
-                for ($i = 0; $i < 10; $i++) {
-                    if (empty($current_parent_ids)) break;
-                    $ids_placeholder = implode(',', $current_parent_ids);
-                    $child_ids = $wpdb->get_col("SELECT term_id FROM $term_table WHERE parent IN ($ids_placeholder)");
-                    if (!empty($child_ids)) {
-                        $descendant_ids = array_merge($descendant_ids, $child_ids);
-                        $current_parent_ids = $child_ids;
-                    } else {
-                        break; // No more children found
-                    }
-                }
-                $all_term_ids_to_filter = array_unique($descendant_ids);
-                $term_ids_placeholder = implode(',', $all_term_ids_to_filter);
-                // --- END NEW LOGIC ---
-
-                if (!in_array('source_rel', $joins_added)) {
-                    // Join based on the group relationship
-                    $query_joins .= " JOIN {$rel_table} source_rel ON g.group_id = source_rel.object_id AND source_rel.object_type = 'group'";
-                    $joins_added[] = 'source_rel';
-                }
-
-                // Filter where the group is linked to the parent OR any of its descendants.
-                $where_conditions[] = "source_rel.term_id IN ($term_ids_placeholder)";
-            }
-        }
-
-        // Handle Search Filter (remains the same as old logic)
-        if (!empty($_REQUEST['s'])) {
-            $search_term = stripslashes($_REQUEST['s']);
-            if (is_numeric($search_term)) {
-                // If the search is a number, search the DB ID.
-                $where_conditions[] = $wpdb->prepare("q.question_id = %d", absint($search_term));
-            } else {
-                // Otherwise, search the question text.
-                $like_term = '%' . $wpdb->esc_like($search_term) . '%';
-                $where_conditions[] = $wpdb->prepare("q.question_text LIKE %s", $like_term);
-            }
-        }
-
-        // Handle Label Filter
-        $selected_label_ids = isset($_REQUEST['filter_by_label']) ? array_filter(array_map('absint', (array)$_REQUEST['filter_by_label'])) : [];
-        if (!empty($selected_label_ids)) {
-            $label_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'label'");
-
-            // This subquery ensures that we only get questions that have ALL of the selected labels.
-            $question_ids_with_all_labels = $wpdb->get_col($wpdb->prepare(
-                "SELECT r.object_id
-         FROM {$rel_table} r
-         JOIN {$term_table} t ON r.term_id = t.term_id
-         WHERE r.object_type = 'question' AND t.taxonomy_id = %d AND r.term_id IN (" . implode(',', $selected_label_ids) . ")
-         GROUP BY r.object_id
-         HAVING COUNT(DISTINCT r.term_id) = %d",
-                $label_tax_id,
-                count($selected_label_ids)
-            ));
-
-            if (empty($question_ids_with_all_labels)) {
-                // If no questions match, we can add a condition that will always be false to return no results.
-                $where_conditions[] = "1=0";
-            } else {
-                $ids_placeholder = implode(',', $question_ids_with_all_labels);
-                $where_conditions[] = "q.question_id IN ({$ids_placeholder})";
-            }
-        }
-
-        $where_clause = ' WHERE ' . implode(' AND ', $where_conditions);
-
-        // Get the total number of items
-        $total_items_query = "SELECT COUNT(DISTINCT q.question_id) {$query_from} {$query_joins} {$where_clause}";
-        $total_items = $wpdb->get_var($total_items_query);
-
-        // Fetch the actual data for the current page
-        // Fetch the actual data for the current page
-        $data_query = "SELECT
-    q.*,
-    g.group_id, g.direction_text, g.direction_image_id, g.is_pyq, g.pyq_year,
-    subject_term.name AS subject_name,
-    topic_term.name AS topic_name,
-    exam_term.name AS exam_name,
-    source_rel.term_id AS linked_source_term_id
-FROM {$q_table} q
-LEFT JOIN {$g_table} g ON q.group_id = g.group_id
--- Get the Topic linked to the GROUP
-LEFT JOIN {$rel_table} topic_rel ON g.group_id = topic_rel.object_id AND topic_rel.object_type = 'group' AND topic_rel.term_id IN (SELECT term_id FROM {$term_table} WHERE parent != 0 AND taxonomy_id = (SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'subject'))
-LEFT JOIN {$term_table} topic_term ON topic_rel.term_id = topic_term.term_id
--- Get the Subject by finding the Topic's parent
-LEFT JOIN {$term_table} subject_term ON topic_term.parent = subject_term.term_id
--- Get the Exam linked to the GROUP
-LEFT JOIN {$rel_table} exam_rel ON g.group_id = exam_rel.object_id AND exam_rel.object_type = 'group' AND exam_rel.term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id = (SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'exam'))
-LEFT JOIN {$term_table} exam_term ON exam_rel.term_id = exam_term.term_id
--- Get the Source/Section linked to the GROUP
-LEFT JOIN {$rel_table} source_rel ON g.group_id = source_rel.object_id AND source_rel.object_type = 'group' AND source_rel.term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id = (SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'source'))
-{$where_clause}
-GROUP BY q.question_id
-ORDER BY {$orderby} {$order}
-LIMIT {$per_page} OFFSET {$offset}";
-
-        $this->items = $wpdb->get_results($data_query, ARRAY_A);
-
-        // Fetch labels for the questions on the current page
-        $question_ids_on_page = wp_list_pluck($this->items, 'question_id');
-        if (!empty($question_ids_on_page)) {
-            $labels_placeholder = implode(',', $question_ids_on_page);
-            $labels_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'label'");
-
-            $labels_results = $wpdb->get_results($wpdb->prepare(
-                "SELECT r.object_id as question_id, t.name as label_name, m.meta_value as label_color
-         FROM {$rel_table} r
-         JOIN {$term_table} t ON r.term_id = t.term_id
-         LEFT JOIN {$wpdb->prefix}qp_term_meta m ON t.term_id = m.term_id AND m.meta_key = 'color'
-         WHERE r.object_id IN ({$labels_placeholder}) AND r.object_type = 'question' AND t.taxonomy_id = %d",
-                $labels_tax_id
-            ));
-
-            $labels_by_question_id = [];
-            foreach ($labels_results as $label) {
-                $labels_by_question_id[$label->question_id][] = $label;
-            }
-
-            foreach ($this->items as &$item) {
-                $item['labels'] = $labels_by_question_id[$item['question_id']] ?? [];
-            }
-        }
-
-        $this->set_pagination_args(['total_items' => $total_items, 'per_page' => $per_page]);
+// Set pagination arguments (this remains)
+$this->set_pagination_args([
+    'total_items' => $total_items,
+    'per_page'    => $args['per_page'],
+]);
     }
 
     public function column_subject_name($item)

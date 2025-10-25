@@ -250,6 +250,317 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
     }
 
     /**
+     * Retrieves questions for the admin list table with filtering, sorting, and pagination.
+     *
+     * @param array $args {
+     * Optional. Array of arguments.
+     *
+     * @type string $status           Question status ('publish', 'draft', 'trash'). Default 'publish'.
+     * @type int    $subject_id       Filter by parent subject term ID. Default 0.
+     * @type int    $topic_id         Filter by specific topic term ID. Default 0.
+     * @type string $source_filter    Filter by source/section value ('source_X' or 'section_Y'). Default ''.
+     * @type array  $label_ids        Array of label term IDs to filter by (AND logic). Default [].
+     * @type string $search           Search term. Default ''.
+     * @type string $orderby          Column to order by. Default 'question_id'.
+     * @type string $order            Order direction ('ASC' or 'DESC'). Default 'DESC'.
+     * @type int    $per_page         Items per page. Default 20.
+     * @type int    $current_page     Current page number. Default 1.
+     * @type bool   $count_only       If true, returns only the total count. Default false.
+     * }
+     * @return array|int Returns an array ['items' => (array), 'total_items' => (int)] or just the total count if $count_only is true.
+     */
+    public static function get_questions_for_list_table( $args = [] ) {
+        $defaults = [
+            'status'        => 'publish',
+            'subject_id'    => 0,
+            'topic_id'      => 0,
+            'source_filter' => '',
+            'label_ids'     => [],
+            'search'        => '',
+            'orderby'       => 'question_id',
+            'order'         => 'DESC',
+            'per_page'      => 20,
+            'current_page'  => 1,
+            'count_only'    => false,
+        ];
+        $args = wp_parse_args( $args, $defaults );
+
+        // Table names
+        $q_table = self::get_questions_table_name();
+        $g_table = self::get_groups_table_name();
+        $rel_table = Terms_DB::get_relationships_table_name();
+        $term_table = Terms_DB::get_terms_table_name();
+        $tax_table = Terms_DB::get_taxonomies_table_name();
+
+        // Base query structure
+        $select_sql = $args['count_only'] ? "SELECT COUNT(DISTINCT q.question_id)" : "SELECT DISTINCT q.*, g.group_id, g.direction_text, g.direction_image_id, g.is_pyq, g.pyq_year";
+        $query_from = "FROM {$q_table} q";
+        $query_joins = " LEFT JOIN {$g_table} g ON q.group_id = g.group_id";
+        $where_conditions = [];
+        $params = [];
+        $joins_added = []; // Helper
+
+        // Status filter
+        $where_conditions[] = self::$wpdb->prepare("q.status = %s", $args['status']);
+
+        // Subject/Topic Filter
+        if ( $args['topic_id'] > 0 ) {
+            if (!in_array('topic_rel', $joins_added)) {
+                $query_joins .= " JOIN {$rel_table} topic_rel ON g.group_id = topic_rel.object_id AND topic_rel.object_type = 'group'";
+                $joins_added[] = 'topic_rel';
+            }
+            $where_conditions[] = self::$wpdb->prepare("topic_rel.term_id = %d", $args['topic_id']);
+        } elseif ( $args['subject_id'] > 0 ) {
+            $child_topic_ids = Terms_DB::get_all_descendant_ids($args['subject_id']); // Use Terms_DB method
+            // Note: get_all_descendant_ids includes the parent, adjust if only children needed
+            // For filtering, we want questions linked to the subject OR its descendants
+            if (!empty($child_topic_ids)) {
+                 $ids_placeholder = implode(',', $child_topic_ids);
+                 if (!in_array('topic_rel', $joins_added)) {
+                     $query_joins .= " JOIN {$rel_table} topic_rel ON g.group_id = topic_rel.object_id AND topic_rel.object_type = 'group'";
+                     $joins_added[] = 'topic_rel';
+                 }
+                 $where_conditions[] = "topic_rel.term_id IN ($ids_placeholder)";
+            } else {
+                 $where_conditions[] = "1=0"; // Subject has no topics
+            }
+        }
+
+        // Source/Section Filter
+        if ( !empty($args['source_filter']) ) {
+            $term_id_to_filter = 0;
+            if (strpos($args['source_filter'], 'source_') === 0) {
+                $term_id_to_filter = absint(str_replace('source_', '', $args['source_filter']));
+            } elseif (strpos($args['source_filter'], 'section_') === 0) {
+                $term_id_to_filter = absint(str_replace('section_', '', $args['source_filter']));
+            }
+
+            if ($term_id_to_filter > 0) {
+                $descendant_ids = Terms_DB::get_all_descendant_ids($term_id_to_filter); // Use Terms_DB method
+                if (!empty($descendant_ids)) {
+                    $term_ids_placeholder = implode(',', $descendant_ids);
+                    if (!in_array('source_rel', $joins_added)) {
+                        $query_joins .= " JOIN {$rel_table} source_rel ON g.group_id = source_rel.object_id AND source_rel.object_type = 'group'";
+                        $joins_added[] = 'source_rel';
+                    }
+                    $where_conditions[] = "source_rel.term_id IN ($term_ids_placeholder)";
+                } else {
+                    $where_conditions[] = "1=0";
+                }
+            }
+        }
+
+        // Search Filter
+        if ( !empty($args['search']) ) {
+            $search_term = $args['search'];
+            if (is_numeric($search_term)) {
+                $where_conditions[] = self::$wpdb->prepare("q.question_id = %d", absint($search_term));
+            } else {
+                $like_term = '%' . self::$wpdb->esc_like($search_term) . '%';
+                $where_conditions[] = self::$wpdb->prepare("q.question_text LIKE %s", $like_term);
+            }
+        }
+
+        // Label Filter (AND logic)
+        if ( !empty($args['label_ids']) ) {
+            $label_tax_id = Terms_DB::get_taxonomy_id_by_name('label'); // Assuming you add this helper to Terms_DB
+            if ($label_tax_id) {
+                 $label_ids_placeholder = implode(',', array_map('absint', $args['label_ids']));
+                 // Use a subquery to find questions having ALL specified labels
+                 $where_conditions[] = "q.question_id IN (
+                     SELECT r.object_id
+                     FROM {$rel_table} r
+                     JOIN {$term_table} t ON r.term_id = t.term_id
+                     WHERE r.object_type = 'question' AND t.taxonomy_id = {$label_tax_id} AND r.term_id IN ({$label_ids_placeholder})
+                     GROUP BY r.object_id
+                     HAVING COUNT(DISTINCT r.term_id) = " . count($args['label_ids']) . "
+                 )";
+            }
+        }
+
+        // WHERE Clause
+        $where_clause = ' WHERE ' . implode(' AND ', $where_conditions);
+
+        // --- Handle Count Query ---
+        if ( $args['count_only'] ) {
+            $count_query = $select_sql . " " . $query_from . " " . $query_joins . " " . $where_clause;
+            return (int) self::$wpdb->get_var( $count_query );
+        }
+
+        // --- Handle Data Query ---
+        // Add joins needed for sorting/display *after* filtering is built
+         if ( 'subject_name' === $args['orderby'] && !in_array('topic_rel', $joins_added) ) {
+             // Need topic relationship to get parent subject
+             $query_joins .= " LEFT JOIN {$rel_table} topic_rel ON g.group_id = topic_rel.object_id AND topic_rel.object_type = 'group' AND topic_rel.term_id IN (SELECT term_id FROM {$term_table} WHERE parent != 0 AND taxonomy_id = (SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'subject'))";
+             $joins_added[] = 'topic_rel'; // Mark as added
+         }
+         if ( 'subject_name' === $args['orderby'] && !in_array('topic_term', $joins_added) ) {
+            $query_joins .= " LEFT JOIN {$term_table} topic_term ON topic_rel.term_id = topic_term.term_id";
+            $joins_added[] = 'topic_term';
+         }
+         if ( 'subject_name' === $args['orderby'] && !in_array('subject_term', $joins_added) ) {
+            $query_joins .= " LEFT JOIN {$term_table} subject_term ON topic_term.parent = subject_term.term_id";
+            $joins_added[] = 'subject_term';
+         }
+         // Add similar logic if sorting by source or exam name is needed later
+
+        // Sorting
+        $order = strtoupper($args['order']) === 'ASC' ? 'ASC' : 'DESC';
+        $orderby = 'q.question_id'; // Default safe value
+         $allowed_orderby = ['question_id', 'subject_name']; // Add other allowed columns later
+         if ( in_array($args['orderby'], $allowed_orderby) ) {
+             if ( $args['orderby'] === 'subject_name' ) {
+                 $orderby = 'subject_term.name'; // Use the alias from the JOIN
+             } else {
+                 $orderby = 'q.' . sanitize_key($args['orderby']); // Prefix question table columns
+             }
+         }
+
+        // Pagination
+        $offset = ($args['current_page'] - 1) * $args['per_page'];
+
+        // Final Data Query Assembly
+        $data_query = $select_sql . " " . $query_from . " " . $query_joins . " " . $where_clause
+                    . " ORDER BY {$orderby} {$order}"
+                    . " LIMIT %d OFFSET %d";
+
+        $items = self::$wpdb->get_results( self::$wpdb->prepare(
+            $data_query,
+            $args['per_page'],
+            $offset
+        ), ARRAY_A );
+
+         // Fetch total items count using the same filters
+         $count_query = "SELECT COUNT(DISTINCT q.question_id) " . $query_from . " " . $query_joins . " " . $where_clause;
+         $total_items = (int) self::$wpdb->get_var( $count_query );
+
+
+        // Add term data needed for display (Subject/Topic/Exam/Source)
+         if(!empty($items)){
+             self::enrich_questions_with_terms($items);
+         }
+
+
+        return [
+            'items'       => $items,
+            'total_items' => $total_items,
+        ];
+    }
+
+   /**
+    * Helper to enrich question items array with term names (Subject, Topic, Exam, Source Lineage, Labels).
+    * Modifies the input array by reference.
+    *
+    * @param array $items Array of question items fetched from DB.
+    */
+   private static function enrich_questions_with_terms(array &$items) {
+       if (empty($items)) return;
+
+       $group_ids = array_unique(wp_list_pluck($items, 'group_id'));
+       $question_ids = array_unique(wp_list_pluck($items, 'question_id'));
+
+       if (empty($group_ids) && empty($question_ids)) return;
+
+       $rel_table = Terms_DB::get_relationships_table_name();
+       $term_table = Terms_DB::get_terms_table_name();
+       $tax_table = Terms_DB::get_taxonomies_table_name();
+       $meta_table = Terms_DB::get_term_meta_table_name();
+
+       // --- Get All Relevant Relationships in One Go ---
+       $relationships = [];
+       if (!empty($group_ids)) {
+            $group_ids_placeholder = implode(',', $group_ids);
+            $group_rels = self::$wpdb->get_results("
+                 SELECT r.object_id, r.term_id, t.name, t.parent, tax.taxonomy_name
+                 FROM {$rel_table} r
+                 JOIN {$term_table} t ON r.term_id = t.term_id
+                 JOIN {$tax_table} tax ON t.taxonomy_id = tax.taxonomy_id
+                 WHERE r.object_id IN ({$group_ids_placeholder}) AND r.object_type = 'group'
+                 AND tax.taxonomy_name IN ('subject', 'source', 'exam')
+            ");
+            if ($group_rels) $relationships = array_merge($relationships, $group_rels);
+       }
+       if (!empty($question_ids)) {
+            $question_ids_placeholder = implode(',', $question_ids);
+            $label_rels = self::$wpdb->get_results("
+                 SELECT r.object_id, r.term_id, t.name, m.meta_value as color, tax.taxonomy_name
+                 FROM {$rel_table} r
+                 JOIN {$term_table} t ON r.term_id = t.term_id
+                 JOIN {$tax_table} tax ON t.taxonomy_id = tax.taxonomy_id
+                 LEFT JOIN {$meta_table} m ON r.term_id = m.term_id AND m.meta_key = 'color'
+                 WHERE r.object_id IN ({$question_ids_placeholder}) AND r.object_type = 'question'
+                 AND tax.taxonomy_name = 'label'
+            ");
+             if ($label_rels) $relationships = array_merge($relationships, $label_rels);
+       }
+
+       // --- Process Relationships and Store by Item ID ---
+       $terms_by_item = [];
+       foreach ($relationships as $rel) {
+           $item_id = $rel->object_id; // Could be group_id or question_id
+           if (!isset($terms_by_item[$item_id])) {
+                $terms_by_item[$item_id] = ['subject' => null, 'topic' => null, 'exam' => null, 'source_term_id' => null, 'labels' => []];
+           }
+           switch ($rel->taxonomy_name) {
+               case 'subject':
+                   if ($rel->parent != 0) $terms_by_item[$item_id]['topic'] = $rel;
+                   else $terms_by_item[$item_id]['subject'] = $rel;
+                   break;
+               case 'source':
+                   // Store the most specific source term ID found for the group
+                   $terms_by_item[$item_id]['source_term_id'] = $rel->term_id;
+                   break;
+               case 'exam':
+                   $terms_by_item[$item_id]['exam'] = $rel;
+                   break;
+               case 'label':
+                   // Labels are associated with question_id, not group_id
+                   $terms_by_item[$item_id]['labels'][] = (object)['label_name' => $rel->name, 'label_color' => $rel->color];
+                   break;
+           }
+       }
+
+        // --- Fill in missing Subject if only Topic exists ---
+        // Pre-fetch all subject terms for lookup
+        $all_subject_terms = [];
+        $subject_tax_id = Terms_DB::get_taxonomy_id_by_name('subject');
+        if ($subject_tax_id) {
+            $all_subject_terms_raw = self::$wpdb->get_results(self::$wpdb->prepare("SELECT term_id, name, parent FROM {$term_table} WHERE taxonomy_id = %d", $subject_tax_id), OBJECT_K);
+            if ($all_subject_terms_raw) $all_subject_terms = $all_subject_terms_raw;
+        }
+
+        foreach($terms_by_item as $item_id => &$term_data) {
+            if ($term_data['topic'] && !$term_data['subject']) {
+                $parent_id = $term_data['topic']->parent;
+                if (isset($all_subject_terms[$parent_id])) {
+                    $term_data['subject'] = $all_subject_terms[$parent_id];
+                }
+            }
+        }
+        unset($term_data); // Unset reference
+
+        // --- Enrich the original $items array ---
+        foreach ($items as &$item) {
+             $gid = $item['group_id'];
+             $qid = $item['question_id'];
+             $group_terms = $terms_by_item[$gid] ?? null;
+             $question_terms = $terms_by_item[$qid] ?? null;
+
+             $item['subject_name'] = $group_terms['subject']->name ?? null;
+             $item['topic_name'] = $group_terms['topic']->name ?? null;
+             $item['exam_name'] = $group_terms['exam']->name ?? null;
+             $item['linked_source_term_id'] = $group_terms['source_term_id'] ?? null; // Keep the ID for lineage lookup later
+             $item['labels'] = $question_terms['labels'] ?? [];
+
+              // If subject is missing but topic exists, fill subject from topic's parent (already looked up)
+             if (empty($item['subject_name']) && $group_terms['topic'] && isset($all_subject_terms[$group_terms['topic']->parent])) {
+                 $item['subject_name'] = $all_subject_terms[$group_terms['topic']->parent]->name;
+             }
+        }
+        unset($item); // Unset reference
+   }
+
+    /**
      * Saves/Updates options for a given question based on submitted data.
      * Deletes options not present in the submitted data.
      * Sets the correct answer.
