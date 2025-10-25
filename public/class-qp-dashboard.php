@@ -1093,15 +1093,41 @@ private static function render_single_course_view($course_slug, $user_id) {
                         </div>
                     </div>
 
-                    <?php // Placeholder for future Password Change ?>
+                    <?php // --- Password Change Card --- ?>
                     <div class="qp-card qp-password-card">
                          <div class="qp-card-header">
                             <h3><?php esc_html_e('Security', 'question-press'); ?></h3>
                         </div>
                         <div class="qp-card-content">
-                            <p>Manage your account password.</p>
-                            <a href="<?php echo esc_url(get_edit_profile_url($user_id)); ?>#password" class="qp-button qp-button-secondary">Change Password</a>
-                             <p class="description" style="font-size: 12px; color: #777; margin-top: 10px;">(Password is managed via your main WordPress profile)</p>
+                            <?php // --- Display elements (visible by default) --- ?>
+                            <div class="qp-password-display">
+                                <p>Manage your account password.</p>
+                                <button type="button" class="qp-button qp-button-secondary qp-change-password-button">Change Password</button>
+                            </div>
+
+                            <?php // --- Edit elements (hidden by default) --- ?>
+                            <div class="qp-password-edit" style="display: none;">
+                                <form id="qp-password-change-form">
+                                    <?php wp_nonce_field('qp_change_password_nonce', '_qp_password_nonce'); // Nonce for security ?>
+                                    <div class="qp-form-group qp-profile-field">
+                                        <label for="qp_current_password"><?php esc_html_e('Current Password', 'question-press'); ?></label>
+                                        <input type="password" id="qp_current_password" name="current_password" required autocomplete="current-password">
+                                    </div>
+                                    <div class="qp-form-group qp-profile-field">
+                                        <label for="qp_new_password"><?php esc_html_e('New Password', 'question-press'); ?></label>
+                                        <input type="password" id="qp_new_password" name="new_password" required autocomplete="new-password">
+                                    </div>
+                                    <div class="qp-form-group qp-profile-field">
+                                        <label for="qp_confirm_password"><?php esc_html_e('Confirm New Password', 'question-press'); ?></label>
+                                        <input type="password" id="qp_confirm_password" name="confirm_password" required autocomplete="new-password">
+                                        <p id="qp-password-match-error" class="qp-error-message" style="display: none; color: red; font-size: 0.9em; margin-top: 5px;"></p>
+                                    </div>
+                                    <div class="qp-password-edit-actions">
+                                        <button type="button" class="qp-button qp-button-secondary qp-cancel-change-password-button">Cancel</button>
+                                        <button type="submit" class="qp-button qp-button-primary qp-save-password-button">Update Password</button>
+                                    </div>
+                                </form>
+                            </div>
                         </div>
                     </div>
 

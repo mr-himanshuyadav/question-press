@@ -778,6 +778,38 @@ wrapper.on('click', 'a.qp-button-primary[href*="session_id="]', function(e) {
     // Note: The "Save Changes" button's AJAX logic will be added in Step 2.4
     // Note: The "Change Avatar" button logic will be added later
 
+    // --- Password Change Toggle ---
+    const passwordCard = wrapper.find('.qp-password-card');
+
+    // Handle "Change Password" button click
+    wrapper.on('click', '.qp-change-password-button', function() {
+        passwordCard.addClass('is-editing');
+    });
+
+    // Handle "Cancel" button click for password change
+    wrapper.on('click', '.qp-cancel-change-password-button', function() {
+        passwordCard.removeClass('is-editing');
+        // Clear password fields on cancel for security
+        passwordCard.find('#qp-password-change-form input[type="password"]').val('');
+        // Hide password mismatch error if shown
+        $('#qp-password-match-error').hide().text('');
+    });
+
+    // Add real-time password confirmation check
+    $('#qp_new_password, #qp_confirm_password').on('keyup', function() {
+        var newPass = $('#qp_new_password').val();
+        var confirmPass = $('#qp_confirm_password').val();
+        var errorMsg = $('#qp-password-match-error');
+
+        if (confirmPass.length > 0 && newPass !== confirmPass) {
+            errorMsg.text('New passwords do not match.').show();
+        } else {
+            errorMsg.hide().text('');
+        }
+    });
+
+    // Note: The "Update Password" button's AJAX logic will be added in Step 2.5
+
 }); // End jQuery ready
 
 /**

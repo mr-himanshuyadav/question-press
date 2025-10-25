@@ -1057,3 +1057,57 @@ ul.qp-review-list li {
 .qp-profile-card.is-editing .qp-change-avatar-button {
     display: inline-block; /* Show only when editing */
 }
+
+/* --- Password Card Styles --- */
+.qp-password-card .qp-card-content {
+    /* Potential specific styles for the card content if needed */
+}
+
+/* Display State */
+.qp-password-display {
+    /* Styles for the default view */
+}
+.qp-password-display p {
+    margin-bottom: 1rem;
+    color: var(--qp-dashboard-text-light);
+}
+
+/* Edit State */
+.qp-password-edit {
+    display: none; /* Hidden by default */
+}
+.qp-password-card.is-editing .qp-password-display {
+    display: none; /* Hide display text when editing */
+}
+.qp-password-card.is-editing .qp-password-edit {
+    display: block; /* Show form when editing */
+}
+
+/* Form field styles (reuse profile field styles) */
+.qp-password-edit .qp-profile-field {
+    margin-bottom: 1rem;
+    text-align: left;
+}
+.qp-password-edit .qp-profile-field label {
+    font-weight: 600;
+    font-size: 0.9em;
+    color: var(--qp-dashboard-text-light);
+    margin-bottom: 5px;
+    display: block;
+}
+.qp-password-edit .qp-profile-field input[type="password"] {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid var(--qp-dashboard-border);
+    border-radius: 4px;
+    font-size: 1em;
+    box-sizing: border-box;
+}
+.qp-password-edit-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 1.5rem; /* More space before buttons */
+}
+.qp-password-edit-actions .qp-button {
+    flex-grow: 1;
+}
