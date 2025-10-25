@@ -1016,6 +1016,95 @@ private static function render_profile_content() {
     return ob_get_clean();
 }
 
+/**
+     * Gathers profile data for the dashboard profile tab.
+     *
+     * @param int $user_id The ID of the user.
+     * @return array An array containing profile details.
+     */
+    private static function get_profile_data($user_id) {
+        $user_info = get_userdata($user_id);
+        if (!$user_info) {
+            return [ // Return default empty values if user not found
+                'display_name' => 'User Not Found',
+                'email' => '',
+                'avatar_url' => get_avatar_url(0), // Default avatar
+                'scope_description' => 'N/A',
+                'allowed_subjects_list' => [],
+                'allowed_exams_list' => [],
+            ];
+        }
+
+        $avatar_url = get_avatar_url($user_id, ['size' => 128, 'default' => 'mystery']); // Get a larger avatar
+
+        // --- Fetch and Process Scope ---
+        $scope_description = 'All Subjects & Exams'; // Default
+        $allowed_subjects_list = [];
+        $allowed_exams_list = [];
+        $allowed_subject_ids_or_all = qp_get_allowed_subject_ids_for_user($user_id); // Use the existing function
+
+        if ($allowed_subject_ids_or_all !== 'all') {
+            global $wpdb;
+            $term_table = $wpdb->prefix . 'qp_terms';
+            $rel_table = $wpdb->prefix . 'qp_term_relationships';
+            $tax_table = $wpdb->prefix . 'qp_taxonomies';
+
+            $allowed_subject_ids = $allowed_subject_ids_or_all; // It's an array if not 'all'
+
+            // Get names for the allowed subjects
+            if (!empty($allowed_subject_ids)) {
+                $subj_ids_placeholder = implode(',', array_map('absint', $allowed_subject_ids));
+                $allowed_subjects_list = $wpdb->get_col("SELECT name FROM {$term_table} WHERE term_id IN ($subj_ids_placeholder) ORDER BY name ASC");
+            }
+
+            // Get directly allowed exams
+            $direct_exams_json = get_user_meta($user_id, '_qp_allowed_exam_term_ids', true);
+            $direct_exam_ids = json_decode($direct_exams_json, true);
+            if (!is_array($direct_exam_ids)) $direct_exam_ids = [];
+
+            // Get exams linked to allowed subjects
+            $exams_from_subjects = [];
+            if (!empty($allowed_subject_ids)) {
+                 $subj_ids_placeholder = implode(',', array_map('absint', $allowed_subject_ids));
+                 $exams_from_subjects = $wpdb->get_col(
+                    "SELECT DISTINCT r.object_id
+                     FROM {$rel_table} r
+                     JOIN {$term_table} t ON r.object_id = t.term_id
+                     WHERE r.object_type = 'exam_subject_link'
+                     AND r.term_id IN ($subj_ids_placeholder)
+                     AND t.taxonomy_id = (SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'exam')"
+                 );
+            }
+
+            $all_allowed_exam_ids = array_unique(array_merge($direct_exam_ids, $exams_from_subjects));
+
+            if (!empty($all_allowed_exam_ids)) {
+                $exam_ids_placeholder = implode(',', array_map('absint', $all_allowed_exam_ids));
+                $allowed_exams_list = $wpdb->get_col("SELECT name FROM {$term_table} WHERE term_id IN ($exam_ids_placeholder) ORDER BY name ASC");
+            }
+
+            // Build the description string
+            if (empty($allowed_subjects_list) && empty($allowed_exams_list)) {
+                $scope_description = 'No specific scope assigned.'; // Should ideally not happen if qp_get_allowed_subject_ids_for_user works correctly
+            } else {
+                 $scope_parts = [];
+                 if(!empty($allowed_exams_list)) $scope_parts[] = "Exams: " . implode(', ', $allowed_exams_list);
+                 if(!empty($allowed_subjects_list)) $scope_parts[] = "Specific Subjects: " . implode(', ', $allowed_subjects_list);
+                 $scope_description = implode('; ', $scope_parts);
+            }
+        }
+        // --- End Scope Processing ---
+
+        return [
+            'display_name' => $user_info->display_name,
+            'email' => $user_info->user_email,
+            'avatar_url' => $avatar_url,
+            'scope_description' => $scope_description, // A user-friendly string
+            'allowed_subjects_list' => $allowed_subjects_list, // Raw list for potential detailed display
+            'allowed_exams_list' => $allowed_exams_list,       // Raw list for potential detailed display
+        ];
+    }
+
    /**
      * NEW HELPER: Prefetches lineage data needed for session lists.
      */
