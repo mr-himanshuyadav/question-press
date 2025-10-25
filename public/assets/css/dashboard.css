@@ -940,3 +940,46 @@ ul.qp-review-list li {
         text-align: center; /* Center heading on mobile */
     }
 }
+
+/* --- Profile Card Form --- */
+#qp-profile-update-form {
+    width: 100%; /* Ensure form takes full card width */
+    display: flex;
+    flex-direction: column;
+    align-items: center; /* Center items within the form */
+}
+
+.qp-profile-field {
+    width: 100%; /* Make form groups full width */
+    margin-bottom: 1rem; /* Space between fields */
+    text-align: left; /* Align labels left */
+}
+
+.qp-profile-field label {
+    font-weight: 600;
+    font-size: 0.9em;
+    color: var(--qp-dashboard-text-light);
+    margin-bottom: 5px;
+    display: block;
+}
+
+.qp-profile-field input[type="text"],
+.qp-profile-field input[type="email"] {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid var(--qp-dashboard-border);
+    border-radius: 4px;
+    font-size: 1em;
+    box-sizing: border-box;
+}
+
+.qp-save-profile-button {
+    width: 100%; /* Make save button full width */
+    margin-top: 0.5rem; /* Space above save button */
+    margin-bottom: 0.5rem; /* Space below save button */
+}
+
+/* Remove button styles from edit link */
+.qp-edit-profile-button {
+    display: none; /* Hide the old "Edit Profile" link */
+}

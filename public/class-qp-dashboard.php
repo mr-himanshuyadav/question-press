@@ -1027,13 +1027,34 @@ private static function render_single_course_view($course_slug, $user_id) {
             <div class="qp-profile-layout">
                 <div class="qp-card qp-profile-card">
                     <div class="qp-card-content">
-                        <div class="qp-profile-avatar">
-                            <img src="<?php echo esc_url($profile_data['avatar_url']); ?>" alt="Profile Picture" width="128" height="128">
-                        </div>
-                        <h3 class="qp-profile-name"><?php echo esc_html__('Hello, ', 'question-press') . esc_html($profile_data['display_name']); ?>!</h3>
-                        <p class="qp-profile-email"><?php echo esc_html($profile_data['email']); ?></p>
-                        <a href="<?php echo esc_url($profile_edit_url); ?>" class="qp-button qp-button-secondary qp-edit-profile-button">Edit Profile</a>
-                         <p class="description" style="font-size: 12px; color: #777; margin-top: 10px;">(Name, Email, and Avatar are managed via your main WordPress profile)</p>
+                        <?php // Wrap profile details in a form ?>
+                        <form id="qp-profile-update-form">
+                            <?php wp_nonce_field('qp_save_profile_nonce', '_qp_profile_nonce'); // Add nonce for security ?>
+
+                            <div class="qp-profile-avatar">
+                                <img src="<?php echo esc_url($profile_data['avatar_url']); ?>" alt="Profile Picture" width="128" height="128">
+                                <?php // Placeholder for avatar change button (future) ?>
+                                </div>
+
+                            <?php // Editable Display Name ?>
+                            <div class="qp-form-group qp-profile-field">
+                                <label for="qp_display_name"><?php esc_html_e('Display Name', 'question-press'); ?></label>
+                                <input type="text" id="qp_display_name" name="display_name" value="<?php echo esc_attr($profile_data['display_name']); ?>" required>
+                            </div>
+
+                            <?php // Editable Email Address ?>
+                            <div class="qp-form-group qp-profile-field">
+                                <label for="qp_user_email"><?php esc_html_e('Email Address', 'question-press'); ?></label>
+                                <input type="email" id="qp_user_email" name="user_email" value="<?php echo esc_attr($profile_data['email']); ?>" required>
+                            </div>
+
+                            <?php // Save Button ?>
+                            <button type="submit" class="qp-button qp-button-primary qp-save-profile-button">Save Profile</button>
+
+                            <p class="description" style="font-size: 12px; color: #777; margin-top: 15px;">
+                                (Avatar is managed via <a href="https://gravatar.com/" target="_blank" rel="noopener noreferrer">Gravatar</a> based on your email address.)
+                            </p>
+                        </form>
                     </div>
                 </div>
 
