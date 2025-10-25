@@ -172,13 +172,24 @@ class QP_Shortcodes
             <div class="qp-form-group">
                 <label for="qp_subject_dropdown_revision">Select Subject(s):</label>
                 <div class="qp-multi-select-dropdown" id="qp_subject_dropdown_revision">
-                    <button type="button" class="qp-multi-select-button">-- Please select --</button>
-                    <div class="qp-multi-select-list">
-                        <label><input type="checkbox" name="revision_subjects[]" value="all"> All Subjects</label>
-                        <?php foreach ($subjects as $subject) : ?>
-                            <label><input type="checkbox" name="revision_subjects[]" value="<?php echo esc_attr($subject->subject_id); ?>"> <?php echo esc_html($subject->subject_name); ?></label>
-                        <?php endforeach; ?>
-                    </div>
+                    <?php if (empty($subjects) && $allowed_subjects !== 'all') : // Check if filtered list is empty AND user has restrictions ?>
+                        <p class="qp-no-subjects-message"><?php _e('No subjects are currently available based on your assigned scope. Please contact an administrator.', 'question-press'); ?></p>
+                        <?php // Disable the button visually and functionally
+                            $multiSelectDisabled = true; ?>
+                        <button type="button" class="qp-multi-select-button" disabled>-- No Subjects Available --</button>
+                        <div class="qp-multi-select-list" style="display: none;"></div> <?php // Empty list container ?>
+                    <?php else: ?>
+                        <?php // User has subjects or is admin/unrestricted ?>
+                        <button type="button" class="qp-multi-select-button">-- Please select --</button>
+                        <div class="qp-multi-select-list">
+                            <?php if ($allowed_subjects === 'all' || !empty($subjects)) : // Show 'All' only if unrestricted or subjects exist ?>
+                                <label><input type="checkbox" name="qp_subject[]" value="all"> All Subjects</label>
+                            <?php endif; ?>
+                            <?php foreach ($subjects as $subject) : ?>
+                                <label><input type="checkbox" name="qp_subject[]" value="<?php echo esc_attr($subject->subject_id); ?>"> <?php echo esc_html($subject->subject_name); ?></label>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
                 </div>
             </div>
 
@@ -243,7 +254,7 @@ class QP_Shortcodes
             </div>
 
             <div class="qp-form-group qp-action-buttons">
-                <input type="submit" name="qp_start_revision" value="Start Revision" class="qp-button qp-button-primary">
+                <input type="submit" name="qp_start_revision" value="Start Revision" class="qp-button qp-button-primary" <?php if (isset($multiSelectDisabled) && $multiSelectDisabled) echo 'disabled'; ?>>
             </div>
         </form>
     <?php
@@ -282,13 +293,24 @@ class QP_Shortcodes
             <div class="qp-form-group">
                 <label for="qp_subject_dropdown_mock">Select Subject(s):</label>
                 <div class="qp-multi-select-dropdown" id="qp_subject_dropdown_mock">
-                    <button type="button" class="qp-multi-select-button">-- Please select --</button>
-                    <div class="qp-multi-select-list">
-                        <label><input type="checkbox" name="mock_subjects[]" value="all"> All Subjects</label>
-                        <?php foreach ($subjects as $subject) : ?>
-                            <label><input type="checkbox" name="mock_subjects[]" value="<?php echo esc_attr($subject->subject_id); ?>"> <?php echo esc_html($subject->subject_name); ?></label>
-                        <?php endforeach; ?>
-                    </div>
+                    <?php if (empty($subjects) && $allowed_subjects !== 'all') : // Check if filtered list is empty AND user has restrictions ?>
+                        <p class="qp-no-subjects-message"><?php _e('No subjects are currently available based on your assigned scope. Please contact an administrator.', 'question-press'); ?></p>
+                        <?php // Disable the button visually and functionally
+                            $multiSelectDisabled = true; ?>
+                        <button type="button" class="qp-multi-select-button" disabled>-- No Subjects Available --</button>
+                        <div class="qp-multi-select-list" style="display: none;"></div> <?php // Empty list container ?>
+                    <?php else: ?>
+                        <?php // User has subjects or is admin/unrestricted ?>
+                        <button type="button" class="qp-multi-select-button">-- Please select --</button>
+                        <div class="qp-multi-select-list">
+                            <?php if ($allowed_subjects === 'all' || !empty($subjects)) : // Show 'All' only if unrestricted or subjects exist ?>
+                                <label><input type="checkbox" name="qp_subject[]" value="all"> All Subjects</label>
+                            <?php endif; ?>
+                            <?php foreach ($subjects as $subject) : ?>
+                                <label><input type="checkbox" name="qp_subject[]" value="<?php echo esc_attr($subject->subject_id); ?>"> <?php echo esc_html($subject->subject_name); ?></label>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
                 </div>
             </div>
 
@@ -345,7 +367,7 @@ class QP_Shortcodes
             </div>
 
             <div class="qp-form-group qp-action-buttons">
-                <input type="submit" name="qp_start_mock_test" value="Start Mock Test" class="qp-button qp-button-primary">
+                <input type="submit" name="qp_start_mock_test" value="Start Mock Test" class="qp-button qp-button-primary" <?php if (isset($multiSelectDisabled) && $multiSelectDisabled) echo 'disabled'; ?>>
             </div>
         </form>
     <?php
@@ -383,16 +405,24 @@ class QP_Shortcodes
 
             <div class="qp-form-group">
                 <label for="qp_section_subject">Select Subject:</label>
+                <?php if (empty($subjects) && $allowed_subjects !== 'all') : // Check if filtered list is empty AND user has restrictions ?>
+                <p class="qp-no-subjects-message"><?php _e('No subjects are currently available based on your assigned scope. Please contact an administrator.', 'question-press'); ?></p>
+                <?php // Hide subsequent dropdowns and disable submit button
+                    $sectionWiseDisabled = true; ?>
+                <select name="qp_section_subject" id="qp_section_subject" disabled style="display: none;"></select> <?php // Hide dropdown ?>
+            <?php else: ?>
                 <select name="qp_section_subject" id="qp_section_subject">
                     <option value="">— Select a Subject —</option>
                     <?php foreach ($subjects as $subject) : ?>
                         <option value="<?php echo esc_attr($subject->subject_id); ?>"><?php echo esc_html($subject->subject_name); ?></option>
                     <?php endforeach; ?>
                 </select>
+            <?php endif; ?>
             </div>
 
-            <div id="qp-section-cascading-dropdowns-container">
-                </div>
+            <div id="qp-section-cascading-dropdowns-container" <?php if (isset($sectionWiseDisabled) && $sectionWiseDisabled) echo 'style="display: none;"'; ?>>
+            <?php // Container for AJAX-loaded dropdowns ?>
+        </div>
 
             <div class="qp-form-group qp-checkbox-group">
                 <label class="qp-custom-checkbox">
@@ -434,7 +464,7 @@ class QP_Shortcodes
             </div>
 
             <div class="qp-form-group qp-action-buttons">
-                <input type="submit" name="qp_start_section_practice" value="Start Practice" class="qp-button qp-button-primary" disabled>
+                <input type="submit" name="qp_start_section_practice" value="Start Practice" class="qp-button qp-button-primary" disabled <?php if (isset($sectionWiseDisabled) && $sectionWiseDisabled) echo 'style="display: none;"'; // Also hide if no subjects ?>>
             </div>
         </form>
     <?php
@@ -760,13 +790,24 @@ $session_data['reported_info'] = $reported_info;
                 <div class="qp-form-group">
                     <label for="qp_subject_dropdown">Select Subject(s):</label>
                     <div class="qp-multi-select-dropdown" id="qp_subject_dropdown">
-                        <button type="button" class="qp-multi-select-button">-- Please select --</button>
-                        <div class="qp-multi-select-list">
-                            <label><input type="checkbox" name="qp_subject[]" value="all"> All Subjects</label>
-                            <?php foreach ($subjects as $subject) : ?>
-                                <label><input type="checkbox" name="qp_subject[]" value="<?php echo esc_attr($subject->subject_id); ?>"> <?php echo esc_html($subject->subject_name); ?></label>
-                            <?php endforeach; ?>
-                        </div>
+                        <?php if (empty($subjects) && $allowed_subjects !== 'all') : // Check if filtered list is empty AND user has restrictions ?>
+                        <p class="qp-no-subjects-message"><?php _e('No subjects are currently available based on your assigned scope. Please contact an administrator.', 'question-press'); ?></p>
+                        <?php // Disable the button visually and functionally
+                            $multiSelectDisabled = true; ?>
+                        <button type="button" class="qp-multi-select-button" disabled>-- No Subjects Available --</button>
+                        <div class="qp-multi-select-list" style="display: none;"></div> <?php // Empty list container ?>
+                        <?php else: ?>
+                            <?php // User has subjects or is admin/unrestricted ?>
+                            <button type="button" class="qp-multi-select-button">-- Please select --</button>
+                            <div class="qp-multi-select-list">
+                                <?php if ($allowed_subjects === 'all' || !empty($subjects)) : // Show 'All' only if unrestricted or subjects exist ?>
+                                    <label><input type="checkbox" name="qp_subject[]" value="all"> All Subjects</label>
+                                <?php endif; ?>
+                                <?php foreach ($subjects as $subject) : ?>
+                                    <label><input type="checkbox" name="qp_subject[]" value="<?php echo esc_attr($subject->subject_id); ?>"> <?php echo esc_html($subject->subject_name); ?></label>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php endif; ?>
                     </div>
                 </div>
 
@@ -827,7 +868,7 @@ $session_data['reported_info'] = $reported_info;
                 </div>
 
                 <div class="qp-form-group qp-action-buttons">
-                    <input type="submit" name="qp_start_practice" value="Start Practice" class="qp-button qp-button-primary">
+                    <input type="submit" name="qp_start_practice" value="Start Practice" class="qp-button qp-button-primary" <?php if (isset($multiSelectDisabled) && $multiSelectDisabled) echo 'disabled'; ?>>
                 </div>
             </form>
         </div>

@@ -2361,6 +2361,16 @@ body.palette-overlay-open #qp-palette-sliding {
     padding: 8px 16px;
 }
 
+.qp-no-subjects-message {
+    color: #888;
+    font-style: italic;
+    padding: 10px;
+    border: 1px dashed #ccc;
+    background-color: #f9f9f9;
+    text-align: center;
+    margin-top: 5px;
+}
+
 /* --- Review Page Styles --- */
 .qp-review-summary {
     background-color: var(--qp-bg-light);
