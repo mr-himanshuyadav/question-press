@@ -180,9 +180,24 @@ class QP_Dashboard
             <?php // --- NEW: Added Avatar --- 
             ?>
             <div class="qp-sidebar-avatar">
-                <?php echo get_avatar($current_user->ID, 64); // Display 64x64 avatar 
-                ?>
-            </div>
+             <?php
+                 // --- UPDATED: Check for custom avatar ---
+                 $custom_avatar_id = get_user_meta($current_user->ID, '_qp_avatar_attachment_id', true);
+                 $sidebar_avatar_url = '';
+                 if (!empty($custom_avatar_id)) {
+                     // Get URL for a smaller size suitable for the sidebar
+                     $sidebar_avatar_url = wp_get_attachment_image_url(absint($custom_avatar_id), [64, 64]); // Request 64x64
+                 }
+
+                 // Display custom avatar if found, otherwise fall back to Gravatar
+                 if (!empty($sidebar_avatar_url)) {
+                     echo '<img src="' . esc_url($sidebar_avatar_url) . '" alt="Profile Picture" width="64" height="64" class="avatar avatar-64 photo">'; // Added classes for WP styling consistency
+                 } else {
+                     echo get_avatar($current_user->ID, 64); // Fallback to Gravatar
+                 }
+                 // --- END UPDATE ---
+             ?>
+         </div>
             <?php // --- MODIFIED: Added Greeting --- 
             ?>
             <span class="qp-user-name"><?php echo esc_html__('Hello, ', 'question-press') . esc_html($current_user->display_name); ?>!</span><br>
