@@ -53,9 +53,9 @@ class Assets {
         wp_enqueue_style('dashicons');
 
         // File versions for cache busting
-        $css_version = filemtime(QP_PLUGIN_DIR . 'public/assets/css/practice.css');
-        $practice_js_version = filemtime(QP_PLUGIN_DIR . 'public/assets/js/practice.js');
-        $dashboard_js_version = filemtime(QP_PLUGIN_DIR . 'public/assets/js/dashboard.js');
+        $css_version = file_exists( QP_PLUGIN_PATH . 'assets/css/practice.css' ) ? filemtime( QP_PLUGIN_PATH . 'assets/css/practice.css' ) : QP_PLUGIN_VERSION;
+        $practice_js_version = file_exists( QP_PLUGIN_PATH . 'assets/js/practice.js' ) ? filemtime( QP_PLUGIN_PATH . 'assets/js/practice.js' ) : QP_PLUGIN_VERSION;
+        $dashboard_js_version = file_exists( QP_PLUGIN_PATH . 'assets/js/dashboard.js' ) ? filemtime( QP_PLUGIN_PATH . 'assets/js/dashboard.js' ) : QP_PLUGIN_VERSION;
         $user = wp_get_current_user();
         $user_roles = (array) $user->roles;
         $allowed_roles = isset($options['can_delete_history_roles']) ? $options['can_delete_history_roles'] : ['administrator'];
@@ -63,10 +63,10 @@ class Assets {
         // Check if the user's roles intersect with the allowed roles
         $can_delete = !empty(array_intersect($user_roles, $allowed_roles));
 
-        wp_enqueue_style('qp-practice-styles', QP_ASSETS_URL . 'public/assets/css/practice.css', [], $css_version);
+        wp_enqueue_style('qp-practice-styles', QP_ASSETS_URL . 'css/practice.css', [], $css_version);
         if (has_shortcode($post->post_content, 'question_press_dashboard')) {
-            $dashboard_css_version = filemtime(QP_PLUGIN_DIR . 'public/assets/css/dashboard.css'); // Get version for cache busting
-            wp_enqueue_style('qp-dashboard-styles', QP_ASSETS_URL . 'public/assets/css/dashboard.css', ['qp-practice-styles'], $dashboard_css_version); // Make it dependent on practice styles
+            $dashboard_css_version = file_exists( QP_PLUGIN_PATH . 'assets/css/dashboard.css' ) ? filemtime( QP_PLUGIN_PATH . 'assets/css/dashboard.css' ) : QP_PLUGIN_VERSION; // Get version for cache busting
+            wp_enqueue_style('qp-dashboard-styles', QP_ASSETS_URL . 'css/dashboard.css', ['qp-practice-styles'], $dashboard_css_version); // Make it dependent on practice styles
         }
         wp_enqueue_script('sweetalert2', 'https://cdn.jsdelivr.net/npm/sweetalert2@11', [], null, true);
 
@@ -91,7 +91,7 @@ class Assets {
         // Load dashboard script if the dashboard shortcode is present
         if (has_shortcode($post->post_content, 'question_press_dashboard')) {
             wp_enqueue_script('sweetalert2', 'https://cdn.jsdelivr.net/npm/sweetalert2@11', [], null, true);
-            wp_enqueue_script('qp-dashboard-script', QP_ASSETS_URL . 'public/assets/js/dashboard.js', ['jquery', 'sweetalert2'], $dashboard_js_version, true);
+            wp_enqueue_script('qp-dashboard-script', QP_ASSETS_URL . 'js/dashboard.js', ['jquery', 'sweetalert2'], $dashboard_js_version, true);
             wp_localize_script('qp-dashboard-script', 'qp_ajax_object', $ajax_data);
         }
 
@@ -99,7 +99,7 @@ class Assets {
         if (has_shortcode($post->post_content, 'question_press_practice') || has_shortcode($post->post_content, 'question_press_session') || has_shortcode($post->post_content, 'question_press_review')) {
 
             wp_enqueue_script('hammer-js', 'https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js', [], '2.0.8', true);
-            wp_enqueue_script('qp-practice-script', QP_ASSETS_URL . 'public/assets/js/practice.js', ['jquery', 'hammer-js'], $practice_js_version, true);
+            wp_enqueue_script('qp-practice-script', QP_ASSETS_URL . 'js/practice.js', ['jquery', 'hammer-js'], $practice_js_version, true);
             wp_localize_script('qp-practice-script', 'qp_ajax_object', $ajax_data);
             $qp_settings = get_option('qp_settings');
             wp_localize_script('qp-practice-script', 'qp_practice_settings', [
@@ -152,7 +152,7 @@ class Assets {
 
         if ($hook_suffix === 'question-press_page_qp-tools') {
         wp_enqueue_script('sweetalert2', 'https://cdn.jsdelivr.net/npm/sweetalert2@11', [], null, true);
-        wp_enqueue_script('qp-backup-restore-script', QP_ASSETS_URL . 'admin/assets/js/backup-restore.js', ['jquery', 'sweetalert2'], '1.0.0', true);
+        wp_enqueue_script('qp-backup-restore-script', QP_ASSETS_URL . 'js/backup-restore.js', ['jquery', 'sweetalert2'], '1.0.0', true);
         wp_localize_script('qp-backup-restore-script', 'qp_backup_restore_data', [
             'nonce' => wp_create_nonce('qp_backup_restore_nonce')
         ]);
@@ -164,15 +164,15 @@ class Assets {
     }
     if ($hook_suffix === 'question-press_page_qp-question-editor' || $hook_suffix === 'admin_page_qp-edit-group') {
         wp_enqueue_media();
-        wp_enqueue_script('qp-media-uploader-script', QP_ASSETS_URL . 'admin/assets/js/media-uploader.js', ['jquery'], '1.0.0', true);
-        wp_enqueue_script('qp-editor-script', QP_ASSETS_URL . 'admin/assets/js/question-editor.js', ['jquery'], '1.0.1', true);
+        wp_enqueue_script('qp-media-uploader-script', QP_ASSETS_URL . 'js/media-uploader.js', ['jquery'], '1.0.0', true);
+        wp_enqueue_script('qp-editor-script', QP_ASSETS_URL . 'js/question-editor.js', ['jquery'], '1.0.1', true);
     }
     if ($hook_suffix === 'toplevel_page_question-press') {
-        wp_enqueue_script('qp-quick-edit-script', QP_ASSETS_URL . 'admin/assets/js/quick-edit.js', ['jquery'], '1.0.1', true);
+        wp_enqueue_script('qp-quick-edit-script', QP_ASSETS_URL . 'js/quick-edit.js', ['jquery'], '1.0.1', true);
         wp_localize_script('qp-quick-edit-script', 'qp_quick_edit_object', [
             'save_nonce' => wp_create_nonce('qp_save_quick_edit_nonce')
         ]);
-        wp_enqueue_script('qp-multi-select-dropdown-script', QP_ASSETS_URL . 'admin/assets/js/multi-select-dropdown.js', ['jquery'], '1.0.1', true);
+        wp_enqueue_script('qp-multi-select-dropdown-script', QP_ASSETS_URL . 'js/multi-select-dropdown.js', ['jquery'], '1.0.1', true);
     }
     // Check if we are on the 'Add New' or 'Edit' screen for the 'qp_course' post type
     global $pagenow, $typenow;
@@ -183,8 +183,8 @@ class Assets {
         wp_enqueue_script('jquery-ui-sortable');
 
         // Enqueue our new course editor script
-        $course_editor_js_version = filemtime(QP_PLUGIN_DIR . 'admin/assets/js/course-editor.js'); // For cache busting
-        wp_enqueue_script('qp-course-editor-script', QP_ASSETS_URL . 'admin/assets/js/course-editor.js', ['jquery', 'jquery-ui-sortable'], $course_editor_js_version, true);
+        $course_editor_js_version = filemtime(QP_PLUGIN_PATH . 'js/course-editor.js'); // For cache busting
+        wp_enqueue_script('qp-course-editor-script', QP_ASSETS_URL . 'js/course-editor.js', ['jquery', 'jquery-ui-sortable'], $course_editor_js_version, true);
 
         // Localize data needed by the script (like existing structure and dropdown options)
         global $post; // Get the current post object
@@ -199,8 +199,8 @@ class Assets {
             'testSeriesOptions' => $test_series_options
         ]);
         // Enqueue course editor CSS
-        $course_editor_css_version = filemtime(QP_PLUGIN_DIR . 'admin/assets/css/course-editor.css');
-        wp_enqueue_style('qp-course-editor-style', QP_ASSETS_URL . 'admin/assets/css/course-editor.css', [], $course_editor_css_version);
+        $course_editor_css_version = filemtime(QP_PLUGIN_PATH . 'css/course-editor.css');
+        wp_enqueue_style('qp-course-editor-style', QP_ASSETS_URL . 'css/course-editor.css', [], $course_editor_css_version);
     }
     if ($hook_suffix === 'question-press_page_qp-organization' && isset($_GET['tab']) && $_GET['tab'] === 'labels') {
         add_action('admin_footer', function () {
@@ -209,11 +209,11 @@ class Assets {
     }
 
     if ($hook_suffix === 'question-press_page_qp-organization') {
-        wp_enqueue_script('qp-organization-script', QP_ASSETS_URL . 'admin/assets/js/organization-page.js', ['jquery'], '1.0.0', true);
+        wp_enqueue_script('qp-organization-script', QP_ASSETS_URL . 'js/organization-page.js', ['jquery'], '1.0.0', true);
     }
 
     if ($hook_suffix === 'question-press_page_qp-settings') {
-        wp_enqueue_script('qp-settings-script', QP_ASSETS_URL . 'admin/assets/js/settings-page.js', ['jquery'], '1.0.0', true);
+        wp_enqueue_script('qp-settings-script', QP_ASSETS_URL . 'js/settings-page.js', ['jquery'], '1.0.0', true);
     }
 
     if (
@@ -248,7 +248,7 @@ class Assets {
     }
 
     if ($hook_suffix === 'toplevel_page_question-press') {
-        wp_enqueue_script('qp-quick-edit-script', QP_ASSETS_URL . 'admin/assets/js/quick-edit.js', ['jquery'], '1.0.2', true);
+        wp_enqueue_script('qp-quick-edit-script', QP_ASSETS_URL . 'js/quick-edit.js', ['jquery'], '1.0.2', true);
         // Add a nonce specifically for our new admin filters
         wp_localize_script('qp-quick-edit-script', 'qp_admin_filter_data', [
             'nonce' => wp_create_nonce('qp_admin_filter_nonce'),
@@ -300,7 +300,7 @@ class Assets {
             'save_nonce' => wp_create_nonce('qp_save_quick_edit_nonce'),
             'nonce' => wp_create_nonce('qp_practice_nonce')
         ]);
-        wp_enqueue_script('qp-multi-select-dropdown-script', QP_ASSETS_URL . 'admin/assets/js/multi-select-dropdown.js', ['jquery'], '1.0.1', true);
+        wp_enqueue_script('qp-multi-select-dropdown-script', QP_ASSETS_URL . 'js/multi-select-dropdown.js', ['jquery'], '1.0.1', true);
     }
     }
 
