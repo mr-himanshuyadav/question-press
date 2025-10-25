@@ -640,8 +640,8 @@ wrapper.on('click', 'a.qp-button-primary[href*="session_id="]', function(e) {
         }
     });
 
-    // --- Start Test Series from Course Item ---
-    coursesSection.on('click', '.start-course-test-btn', function() {
+    // --- Start Test Series from Course Item (delegated from wrapper) ---
+    wrapper.on('click', '.start-course-test-btn', function() { // Ensure delegation from 'wrapper'
         var button = $(this);
         var itemId = button.data('item-id');
         var originalText = button.text();
@@ -653,68 +653,68 @@ wrapper.on('click', 'a.qp-button-primary[href*="session_id="]', function(e) {
                 url: qp_ajax_object.ajax_url,
                 type: 'POST',
                 data: {
-                    action: 'start_course_test_series',
-                    nonce: qp_ajax_object.start_course_test_nonce,
+                    action: 'start_course_test_series', // Correct action name
+                    nonce: qp_ajax_object.start_course_test_nonce, // Correct nonce
                     item_id: itemId
                 },
                 beforeSend: function() {
-                    button.text('Starting Test...');
+                    button.text('Starting Test...'); // Update text
                 },
                 success: function(response) {
                     if (response.success && response.data.redirect_url) {
                         window.location.href = response.data.redirect_url;
                     } else {
                         Swal.fire('Error!', response.data.message || 'Could not start the test session.', 'error');
-                        button.text(originalText).prop('disabled', false);
+                        button.text(originalText).prop('disabled', false); // Reset button on failure
                     }
                 },
                 error: function() {
                     Swal.fire('Error!', 'A server error occurred while starting the test.', 'error');
-                    button.text(originalText).prop('disabled', false);
+                    button.text(originalText).prop('disabled', false); // Reset button on failure
                 }
             });
-        }, button, originalText, 'Checking Access...');
+        }, button, originalText, 'Checking Access...'); // Pass button details to the helper
     });
 
-    // --- Enroll Button Handler ---
-    coursesSection.on('click', '.qp-enroll-course-btn', function() {
-        var button = $(this);
-        var courseId = button.data('course-id');
-        var originalText = button.text();
+    // --- Enroll Button Handler (delegated from wrapper) ---
+    wrapper.on('click', '.qp-enroll-course-btn', function() { // Ensure delegation from 'wrapper'
+         var button = $(this);
+         var courseId = button.data('course-id');
+         var originalText = button.text();
 
-        $.ajax({
-            url: qp_ajax_object.ajax_url,
-            type: 'POST',
-            data: {
-                action: 'enroll_in_course',
-                nonce: qp_ajax_object.enroll_nonce,
-                course_id: courseId
-            },
-            beforeSend: function() {
-                button.text('Enrolling...').prop('disabled', true);
-            },
-            success: function(response) {
-                if (response.success) {
-                    Swal.fire({
-                        title: 'Enrolled!',
-                        text: response.data.message,
-                        icon: 'success',
-                        timer: 1500,
-                        showConfirmButton: false
-                    }).then(() => {
-                         // Simple page reload to refresh the course list
-                         window.location.reload();
-                    });
-                } else {
-                    Swal.fire('Error', response.data.message || 'Could not enroll.', 'error');
-                    button.text(originalText).prop('disabled', false);
-                }
-            },
-            error: function() {
-                Swal.fire('Error', 'A server error occurred during enrollment.', 'error');
-                button.text(originalText).prop('disabled', false);
-            }
-        });
+         $.ajax({
+             url: qp_ajax_object.ajax_url,
+             type: 'POST',
+             data: {
+                 action: 'enroll_in_course', // Correct action name
+                 nonce: qp_ajax_object.enroll_nonce, // Correct nonce
+                 course_id: courseId
+             },
+             beforeSend: function() {
+                 button.text('Enrolling...').prop('disabled', true);
+             },
+             success: function(response) {
+                 if (response.success) {
+                     Swal.fire({
+                         title: 'Enrolled!',
+                         text: response.data.message,
+                         icon: 'success',
+                         timer: 1500,
+                         showConfirmButton: false
+                     }).then(() => {
+                          // Simple page reload to refresh the course list
+                          window.location.reload();
+                     });
+                 } else {
+                     Swal.fire('Error', response.data.message || 'Could not enroll.', 'error');
+                     button.text(originalText).prop('disabled', false);
+                 }
+             },
+             error: function() {
+                 Swal.fire('Error', 'A server error occurred during enrollment.', 'error');
+                 button.text(originalText).prop('disabled', false);
+             }
+         });
     });
     // --- End Course Navigation & Actions ---
 
@@ -749,89 +749,6 @@ wrapper.on('click', 'a.qp-button-primary[href*="session_id="]', function(e) {
         } else {
             Swal.fire('Error', 'Review page URL is not configured.', 'error');
         }
-    });
-
-    // --- Start Test Series from Course Item ---
-    coursesSection.on('click', '.start-course-test-btn', function() {
-        var button = $(this);
-        var itemId = button.data('item-id');
-        var originalText = button.text();
-
-        // Use the checkAttemptsBeforeAction helper
-        checkAttemptsBeforeAction(function() {
-            // This code runs ONLY if the attempt check is successful
-            $.ajax({
-                url: qp_ajax_object.ajax_url,
-                type: 'POST',
-                data: {
-                    action: 'start_course_test_series',
-                    nonce: qp_ajax_object.start_course_test_nonce,
-                    item_id: itemId
-                },
-                beforeSend: function() {
-                    // Button state is already 'Checking...' or similar from checkAttemptsBeforeAction
-                    button.text('Starting Test...'); // Update text
-                },
-                success: function(response) {
-                    if (response.success && response.data.redirect_url) {
-                        window.location.href = response.data.redirect_url;
-                        // Don't reset the button text here as we are redirecting
-                    } else {
-                        // Handle errors specifically from start_course_test_series
-                        Swal.fire('Error!', response.data.message || 'Could not start the test session.', 'error');
-                        button.text(originalText).prop('disabled', false); // Reset button on failure
-                    }
-                },
-                error: function() {
-                    // Handle general AJAX errors
-                    Swal.fire('Error!', 'A server error occurred while starting the test.', 'error');
-                    button.text(originalText).prop('disabled', false); // Reset button on failure
-                }
-                // No 'complete' needed here as success handles redirect or error handles reset
-            });
-        }, button, originalText, 'Checking Access...'); // Pass button details to the helper
-    });
-
-    // --- Enroll Button Handler ---
-    coursesSection.on('click', '.qp-enroll-course-btn', function() {
-        var button = $(this);
-        var courseId = button.data('course-id');
-        var originalText = button.text();
-
-        $.ajax({
-            url: qp_ajax_object.ajax_url,
-            type: 'POST',
-            data: {
-                action: 'enroll_in_course',
-                nonce: qp_ajax_object.enroll_nonce,
-                course_id: courseId
-            },
-            beforeSend: function() {
-                button.text('Enrolling...').prop('disabled', true);
-            },
-            success: function(response) {
-                if (response.success) {
-                    Swal.fire({
-                        title: 'Enrolled!',
-                        text: response.data.message,
-                        icon: 'success',
-                        timer: 1500,
-                        showConfirmButton: false
-                    }).then(() => {
-                        // Refresh the courses tab content to show updated lists
-                        // A simple way is to re-render, though more complex updates are possible
-                        renderInitialCourseList(coursesSection); // Re-render the list
-                    });
-                } else {
-                    Swal.fire('Error', response.data.message || 'Could not enroll.', 'error');
-                    button.text(originalText).prop('disabled', false);
-                }
-            },
-            error: function() {
-                Swal.fire('Error', 'A server error occurred during enrollment.', 'error');
-                button.text(originalText).prop('disabled', false);
-            }
-        });
     });
 
 }); // End jQuery ready

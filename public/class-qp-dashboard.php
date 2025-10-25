@@ -162,7 +162,7 @@ private static function render_sidebar($current_user, $access_status_message, $a
     $tabs = [
         'overview' => ['label' => 'Overview', 'icon' => 'chart-pie'],
         'history' => ['label' => 'History', 'icon' => 'list-view'],
-        'review' => ['label' => 'Review Center', 'icon' => 'star-filled'],
+        'review' => ['label' => 'Review', 'icon' => 'star-filled'],
         'progress' => ['label' => 'Progress', 'icon' => 'chart-bar'],
         'courses' => ['label' => 'Courses', 'icon' => 'welcome-learn-more'],
     ];
