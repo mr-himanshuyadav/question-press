@@ -13,9 +13,57 @@ class QP_Dashboard
     // --- Fetch common data needed for header/sidebar ---
     $current_user = wp_get_current_user();
     $user_id = $current_user->ID;
-    // --- (Keep your existing logic for fetching $access_status_message here if needed for the sidebar) ---
-    // Example placeholder:
-    $access_status_message = 'Access status placeholder.'; // Replace with your actual logic later
+    // --- NEW: Display Entitlement Summary ---
+$access_status_message = '';
+$shop_page_url = function_exists('wc_get_page_id') ? get_permalink(wc_get_page_id('shop')) : home_url('/');
+$link_text = empty($shop_page_url) ? 'Purchase Access' : 'Purchase More';
+$entitlement_summary = []; // Array to hold summary lines
+
+global $wpdb; // Ensure $wpdb is available
+$entitlements_table = $wpdb->prefix . 'qp_user_entitlements';
+$current_time = current_time('mysql');
+
+// Fetch ACTIVE entitlements, including plan names
+$active_entitlements_for_display = $wpdb->get_results($wpdb->prepare(
+    "SELECT e.entitlement_id, e.plan_id, e.remaining_attempts, e.expiry_date, p.post_title as plan_title
+     FROM {$entitlements_table} e
+     LEFT JOIN {$wpdb->posts} p ON e.plan_id = p.ID
+     WHERE e.user_id = %d
+     AND e.status = 'active'
+     AND (e.expiry_date IS NULL OR e.expiry_date > %s)
+     ORDER BY e.expiry_date ASC, e.entitlement_id ASC", // Show soonest expiring first
+    $user_id,
+    $current_time
+));
+
+if (!empty($active_entitlements_for_display)) {
+    foreach ($active_entitlements_for_display as $entitlement) {
+        // Clean up auto-plan title: Remove 'Auto: Access Plan for Course "' and the trailing '"'
+        $clean_plan_title = preg_replace('/^Auto: Access Plan for Course "([^"]+)"$/', '$1', $entitlement->plan_title);
+
+        $summary_line = '<strong>' . esc_html($clean_plan_title) . '</strong>'; // Use cleaned title
+        $details = [];
+        if (!is_null($entitlement->remaining_attempts)) {
+            $details[] = number_format_i18n($entitlement->remaining_attempts) . ' attempts left'; // Use WP number format
+        } else {
+            $details[] = 'Unlimited attempts';
+        }
+        if (!is_null($entitlement->expiry_date)) {
+            $expiry_timestamp = strtotime($entitlement->expiry_date);
+            // Format date nicely using WordPress date format
+            $details[] = 'expires ' . date_i18n(get_option('date_format'), $expiry_timestamp);
+        } else {
+             $details[] = 'never expires';
+        }
+        $summary_line .= ': ' . implode(', ', $details);
+        $entitlement_summary[] = $summary_line;
+    }
+    $access_status_message = implode('<br>', $entitlement_summary); // Combine lines with breaks
+} else {
+    // No active plans found
+    $access_status_message = 'No active plan found. <a href="' . esc_url($shop_page_url) . '">' . esc_html($link_text) . '</a>';
+}
+// --- END Entitlement Summary Logic ---
 
     // --- Determine which tab/view to render based on query vars ---
     $current_tab = get_query_var('qp_tab', 'overview'); // Default to 'overview' if qp_tab is not set
