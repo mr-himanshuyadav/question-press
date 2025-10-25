@@ -110,6 +110,7 @@ jQuery(document).ready(function($) {
                     button.text(originalText).prop('disabled', false);
                 }
             });
+        }, button, originalText, 'Starting...');
     });
 
     // --- NEW: Handler for starting a section practice from the Progress tab ---
@@ -120,7 +121,8 @@ jQuery(document).ready(function($) {
 
         // This AJAX call now sends only the essential data to create a default
         // section-wise practice session, matching your required snapshot.
-        $.ajax({
+        checkAttemptsBeforeAction(function() {
+            $.ajax({
             url: qp_ajax_object.ajax_url,
             type: 'POST',
             data: {
@@ -145,7 +147,27 @@ jQuery(document).ready(function($) {
                 button.text('Start').prop('disabled', false);
             }
         });
+        }, button, button.text(), 'Starting...');
     });
+
+    // --- Check Attempts Before Resuming ---
+wrapper.on('click', 'a.qp-button-primary[href*="session_id="]', function(e) {
+     // Check if this is specifically a "Resume" link from the history or active list
+     var linkText = $(this).text().trim();
+     if (linkText !== 'Resume' && linkText !== 'Continue') {
+         return; // Allow other links (like Review) to pass through
+     }
+
+     e.preventDefault(); // Stop the link from navigating immediately
+     var resumeUrl = $(this).attr('href');
+     var button = $(this); // Treat the link like a button for the helper
+     var originalText = button.text();
+
+     checkAttemptsBeforeAction(function() {
+         // If check passes, navigate to the resume URL
+         window.location.href = resumeUrl;
+     }, button, originalText, 'Checking...'); // Pass link element
+});
 
     // --- NEW: Tab Switching Logic with URL Hash ---
     function switchTab(tab_id) {
@@ -457,7 +479,7 @@ jQuery(document).ready(function($) {
                 Swal.fire('Error!', 'A server error occurred.', 'error');
                 button.text(originalText).prop('disabled', false);
             }
-        });
+        });}, button, originalText, 'Preparing Session...');
     });
 
     // --- Progress Tab AJAX ---
