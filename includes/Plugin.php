@@ -12,6 +12,8 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
+use QuestionPress\Assets;
+
 /**
  * Final QuestionPress Class.
  * Prevents class extension.
@@ -80,7 +82,7 @@ final class Plugin {
          require_once QP_PLUGIN_PATH . 'includes/functions/qp-core-functions.php';
 
         // Example: Instantiate core components (we'll add these classes later)
-        // Assets::instance();
+        Assets::instance();
         // Ajax::instance();
         // Shortcodes::instance();
         // Post_Types::instance();
