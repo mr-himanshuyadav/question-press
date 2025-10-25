@@ -19,6 +19,19 @@ function qp_start_session() {
 }
 add_action('init', 'qp_start_session', 1); // Run early on init
 
+/**
+ * Register custom query variables for dashboard routing.
+ *
+ * @param array $vars Existing query variables.
+ * @return array Modified query variables.
+ */
+function qp_register_query_vars($vars) {
+    $vars[] = 'qp_tab';          // To identify the main dashboard section (e.g., 'history', 'courses')
+    $vars[] = 'qp_course_slug'; // To identify a specific course by its slug
+    return $vars;
+}
+add_filter('query_vars', 'qp_register_query_vars');
+
 // Define constants and include files
 define('QP_PLUGIN_FILE', __FILE__);
 define('QP_PLUGIN_DIR', plugin_dir_path(QP_PLUGIN_FILE));
