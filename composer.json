@@ -1,0 +1,26 @@
+{
+    "name": "mr-himanshuyadav/question-press",
+    "description": "A complete plugin for creating, managing, and practicing questions.",
+    "type": "wordpress-plugin",
+    "license": "GPL-2.0-or-later",
+    "authors": [
+        {
+            "name": "Himanshu",
+            "homepage": "https://himanshuyadav.org"
+        }
+    ],
+    "require": {
+        "php": ">=7.4",
+        "firebase/php-jwt": "^6.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "QuestionPress\\": "includes/"
+        }
+    },
+    "config": {
+        "allow-plugins": {
+            "composer/installers": true
+        }
+    }
+}

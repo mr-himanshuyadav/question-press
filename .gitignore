@@ -7,6 +7,7 @@ wp-config.php
 # Dependencies
 node_modules/
 vendor/
+composer.lock
 
 # OS generated files
 .DS_Store

@@ -19,6 +19,20 @@ function qp_start_session() {
 }
 add_action('init', 'qp_start_session', 1); // Run early on init
 
+// Load Composer autoloader
+if ( file_exists( plugin_dir_path( __FILE__ ) . 'vendor/autoload.php' ) ) {
+    require_once plugin_dir_path( __FILE__ ) . 'vendor/autoload.php';
+} else {
+    // Optional: Add an admin notice if vendor/autoload.php is missing
+    add_action( 'admin_notices', function() {
+        echo '<div class="notice notice-error"><p>';
+        echo esc_html__( 'Question Press requires Composer dependencies. Please run "composer install" in the plugin directory.', 'question-press' );
+        echo '</p></div>';
+    });
+    // You might want to prevent further execution if dependencies are missing
+    // return;
+}
+
 // Define constants and include files
 define('QP_PLUGIN_FILE', __FILE__);
 define('QP_PLUGIN_DIR', plugin_dir_path(QP_PLUGIN_FILE));
