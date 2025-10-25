@@ -2,8 +2,8 @@
 if (!defined('ABSPATH')) exit;
 
 // Manually include the JWT library files
-require_once QP_PLUGIN_DIR . 'lib/JWT.php';
-require_once QP_PLUGIN_DIR . 'lib/Key.php';
+require_once QP_PLUGIN_PATH . 'lib/JWT.php';
+require_once QP_PLUGIN_PATH . 'lib/Key.php';
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
 

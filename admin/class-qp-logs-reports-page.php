@@ -2,8 +2,8 @@
 if (!defined('ABSPATH')) exit;
 
 // We will create these files in the next steps
-require_once QP_PLUGIN_DIR . 'admin/class-qp-reports-list-table.php';
-require_once QP_PLUGIN_DIR . 'admin/class-qp-log-settings-list-table.php';
+require_once QP_PLUGIN_PATH . 'admin/class-qp-reports-list-table.php';
+require_once QP_PLUGIN_PATH . 'admin/class-qp-log-settings-list-table.php';
 
 class QP_Logs_Reports_Page {
 

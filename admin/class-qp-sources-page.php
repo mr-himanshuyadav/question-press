@@ -2,7 +2,7 @@
 if (!defined('ABSPATH')) exit;
 
 // This class was already included in the Subjects page, but it's good practice to ensure it's here.
-require_once QP_PLUGIN_DIR . 'admin/class-qp-terms-list-table.php';
+require_once QP_PLUGIN_PATH . 'admin/class-qp-terms-list-table.php';
 
 class QP_Sources_Page {
 

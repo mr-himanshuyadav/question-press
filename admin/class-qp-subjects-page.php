@@ -2,7 +2,7 @@
 if (!defined('ABSPATH')) exit;
 
 // Ensure the new list table class is included
-require_once QP_PLUGIN_DIR . 'admin/class-qp-terms-list-table.php';
+require_once QP_PLUGIN_PATH . 'admin/class-qp-terms-list-table.php';
 
 class QP_Subjects_Page {
 
