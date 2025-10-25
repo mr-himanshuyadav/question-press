@@ -1904,7 +1904,91 @@ function qp_render_user_entitlements_page() {
                     <?php // Nonce field will be added in Step 1.3 ?>
                     <?php // Form fields (multi-selects) will be added in Step 1.3 ?>
                     <?php // Save button will be added in Step 1.3 ?>
-                    <p><em><?php _e('(Scope selection form will appear here in the next step)', 'question-press'); ?></em></p>
+                    <?php
+                    global $wpdb;
+                    $term_table = $wpdb->prefix . 'qp_terms';
+                    $tax_table = $wpdb->prefix . 'qp_taxonomies';
+
+                    // Get Tax IDs
+                    $exam_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'exam'");
+                    $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'subject'");
+
+                    // Get all available Exams
+                    $all_exams = [];
+                    if ($exam_tax_id) {
+                        $all_exams = $wpdb->get_results($wpdb->prepare("SELECT term_id, name FROM $term_table WHERE taxonomy_id = %d ORDER BY name ASC", $exam_tax_id));
+                    }
+
+                    // Get all available top-level Subjects
+                    $all_subjects = [];
+                    if ($subject_tax_id) {
+                        $all_subjects = $wpdb->get_results($wpdb->prepare("SELECT term_id, name FROM $term_table WHERE taxonomy_id = %d AND parent = 0 AND name != 'Uncategorized' ORDER BY name ASC", $subject_tax_id));
+                    }
+
+                    // Get current user settings from usermeta
+                    $current_allowed_exams_json = get_user_meta($user_id_searched, '_qp_allowed_exam_term_ids', true);
+                    $current_allowed_subjects_json = get_user_meta($user_id_searched, '_qp_allowed_subject_term_ids', true);
+
+                    // Decode JSON, default to empty array if invalid or null
+                    $current_allowed_exams = json_decode($current_allowed_exams_json, true);
+                    $current_allowed_subjects = json_decode($current_allowed_subjects_json, true);
+                    if (!is_array($current_allowed_exams)) { $current_allowed_exams = []; }
+                    if (!is_array($current_allowed_subjects)) { $current_allowed_subjects = []; }
+
+                    // Add Nonce and Action fields
+                    wp_nonce_field('qp_save_user_scope_nonce', '_qp_scope_nonce');
+                    ?>
+                    <input type="hidden" name="action" value="qp_save_user_scope">
+                    <input type="hidden" name="user_id_to_update" value="<?php echo esc_attr($user_id_searched); ?>">
+
+                    <table class="form-table">
+                        <tbody>
+                            <tr valign="top">
+                                <th scope="row">
+                                    <label><?php _e('Allowed Exams', 'question-press'); ?></label>
+                                </th>
+                                <td>
+                                    <fieldset style="max-height: 200px; overflow-y: auto; border: 1px solid #ccd0d4; padding: 10px; background: #fff;">
+                                        <?php if (!empty($all_exams)): ?>
+                                            <?php foreach ($all_exams as $exam): ?>
+                                                <label style="display: block; margin-bottom: 5px;">
+                                                    <input type="checkbox" name="allowed_exams[]" value="<?php echo esc_attr($exam->term_id); ?>" <?php checked(in_array($exam->term_id, $current_allowed_exams)); ?>>
+                                                    <?php echo esc_html($exam->name); ?>
+                                                </label>
+                                            <?php endforeach; ?>
+                                        <?php else: ?>
+                                            <p><em><?php _e('No exams found.', 'question-press'); ?></em></p>
+                                        <?php endif; ?>
+                                    </fieldset>
+                                    <p class="description"><?php _e('Allows access to all subjects linked to the selected exam(s).', 'question-press'); ?></p>
+                                </td>
+                            </tr>
+                            <tr valign="top">
+                                <th scope="row">
+                                    <label><?php _e('Directly Allowed Subjects', 'question-press'); ?></label>
+                                </th>
+                                <td>
+                                    <fieldset style="max-height: 200px; overflow-y: auto; border: 1px solid #ccd0d4; padding: 10px; background: #fff;">
+                                        <?php if (!empty($all_subjects)): ?>
+                                            <?php foreach ($all_subjects as $subject): ?>
+                                                <label style="display: block; margin-bottom: 5px;">
+                                                    <input type="checkbox" name="allowed_subjects[]" value="<?php echo esc_attr($subject->term_id); ?>" <?php checked(in_array($subject->term_id, $current_allowed_subjects)); ?>>
+                                                    <?php echo esc_html($subject->name); ?>
+                                                </label>
+                                            <?php endforeach; ?>
+                                        <?php else: ?>
+                                            <p><em><?php _e('No subjects found.', 'question-press'); ?></em></p>
+                                        <?php endif; ?>
+                                    </fieldset>
+                                    <p class="description"><?php _e('Allows access ONLY to these specific subjects (in addition to subjects from allowed exams).', 'question-press'); ?></p>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <p class="submit">
+                        <input type="submit" class="button button-primary" value="<?php _e('Save Scope Settings', 'question-press'); ?>">
+                    </p>
                 </form>
             </div>
             <?php // --- END NEW --- ?>
