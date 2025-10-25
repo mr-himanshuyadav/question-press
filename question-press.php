@@ -2597,6 +2597,55 @@ function qp_handle_form_submissions()
 }
 add_action('admin_init', 'qp_handle_form_submissions');
 
+/**
+ * Handles saving the user's subject scope (allowed exams/subjects) from the User Entitlements page.
+ */
+function qp_handle_save_user_scope() {
+    // 1. Security Checks
+    if (
+        !isset($_POST['_qp_scope_nonce']) ||
+        !wp_verify_nonce($_POST['_qp_scope_nonce'], 'qp_save_user_scope_nonce')
+    ) {
+        wp_die(__('Security check failed.', 'question-press'));
+    }
+
+    if (!current_user_can('manage_options')) {
+        wp_die(__('You do not have permission to manage user scope.', 'question-press'));
+    }
+
+    // 2. Get and Sanitize User ID
+    $user_id = isset($_POST['user_id_to_update']) ? absint($_POST['user_id_to_update']) : 0;
+    if ($user_id <= 0 || !get_userdata($user_id)) {
+         wp_die(__('Invalid User ID specified.', 'question-press'));
+    }
+
+    // 3. Get and Sanitize Selected Exams and Subjects
+    // If the checkbox array is not submitted (nothing checked), default to an empty array.
+    $allowed_exams = isset($_POST['allowed_exams']) && is_array($_POST['allowed_exams'])
+                     ? array_map('absint', $_POST['allowed_exams'])
+                     : [];
+
+    $allowed_subjects = isset($_POST['allowed_subjects']) && is_array($_POST['allowed_subjects'])
+                        ? array_map('absint', $_POST['allowed_subjects'])
+                        : [];
+
+    // 4. Update User Meta
+    // Store as JSON for easier handling on retrieval
+    update_user_meta($user_id, '_qp_allowed_exam_term_ids', json_encode($allowed_exams));
+    update_user_meta($user_id, '_qp_allowed_subject_term_ids', json_encode($allowed_subjects));
+
+    // 5. Redirect back with success message
+    $redirect_url = add_query_arg([
+        'page' => 'qp-user-entitlements',
+        'user_id' => $user_id,
+        'message' => 'scope_updated' // Use this to display success notice on the page
+    ], admin_url('admin.php'));
+
+    wp_safe_redirect($redirect_url);
+    exit;
+}
+add_action('admin_post_qp_save_user_scope', 'qp_handle_save_user_scope');
+
 function qp_all_questions_page_cb()
 {
     $list_table = new QP_Questions_List_Table();
