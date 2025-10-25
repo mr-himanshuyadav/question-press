@@ -872,7 +872,7 @@ private static function render_single_course_view($course_slug, $user_id) {
                     $access_mode = get_post_meta($course_id, '_qp_course_access_mode', true) ?: 'free';
                     $linked_product_id = get_post_meta($course_id, '_qp_linked_product_id', true);
                     $product_url = $linked_product_id ? get_permalink($linked_product_id) : '#'; // Link to product page
-                    $user_has_access = qp_user_can_access_course($user_id, $course_id); // <<< CALL ACCESS CHECK FUNCTION
+                    $user_has_access = qp_user_can_access_course($user_id, $course_id, true); // <<< CALL ACCESS CHECK FUNCTION
 
                     $button_html = '';
                     if ($is_enrolled) {

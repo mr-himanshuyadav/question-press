@@ -1098,12 +1098,14 @@ add_action('save_post_qp_course', 'qp_sync_course_plan', 40, 1);
 
 /**
  * Checks if a user has access to a specific course via entitlement OR existing enrollment.
+ * NOW includes an optional flag to ignore the enrollment check, useful for the course list button logic.
  *
- * @param int $user_id   The ID of the user to check.
- * @param int $course_id The ID of the course (qp_course post ID) to check access for.
+ * @param int  $user_id              The ID of the user to check.
+ * @param int  $course_id            The ID of the course (qp_course post ID) to check access for.
+ * @param bool $ignore_enrollment_check Optional. If true, skips the check for existing enrollment. Defaults to false.
  * @return bool True if the user has access, false otherwise.
  */
-function qp_user_can_access_course($user_id, $course_id) {
+function qp_user_can_access_course($user_id, $course_id, $ignore_enrollment_check = false) { // Added $ignore_enrollment_check parameter
     if (empty($user_id) || empty($course_id)) {
         return false;
     }
@@ -1121,10 +1123,10 @@ function qp_user_can_access_course($user_id, $course_id) {
 
     global $wpdb;
     $entitlements_table = $wpdb->prefix . 'qp_user_entitlements';
-    $user_courses_table = $wpdb->prefix . 'qp_user_courses'; // <<< Add enrollment table name
+    $user_courses_table = $wpdb->prefix . 'qp_user_courses';
     $current_time = current_time('mysql');
 
-    // 3. Check for ANY active entitlement granting access
+    // 3. Check for ANY active entitlement granting access specifically to THIS course
     $active_entitlements = $wpdb->get_results($wpdb->prepare(
         "SELECT entitlement_id, plan_id
          FROM {$entitlements_table}
@@ -1139,27 +1141,37 @@ function qp_user_can_access_course($user_id, $course_id) {
         // Check each active plan to see if it grants access to this course
         foreach ($active_entitlements as $entitlement) {
             $plan_id = $entitlement->plan_id;
+            // Ensure the plan post exists and is a qp_plan before checking meta
+            $plan_post = get_post($plan_id);
+            if (!$plan_post || $plan_post->post_type !== 'qp_plan') {
+                continue; // Skip if plan doesn't exist or isn't the right type
+            }
+
             $course_access_type = get_post_meta($plan_id, '_qp_plan_course_access_type', true);
             $linked_courses_raw = get_post_meta($plan_id, '_qp_plan_linked_courses', true);
             $linked_courses = is_array($linked_courses_raw) ? $linked_courses_raw : [];
 
+            // Check if THIS SPECIFIC entitlement grants access to THIS course
             if ($course_access_type === 'all' || ($course_access_type === 'specific' && in_array($course_id, $linked_courses))) {
-                return true; // Access granted via entitlement
+                // Found a valid entitlement granting access to this course
+                return true;
             }
         }
     }
+    // If no entitlement granted access, proceed to enrollment check (unless ignored)
 
-    // 4. *** NEW CHECK ***: Check for existing enrollment if no entitlement granted access
-    $is_enrolled = $wpdb->get_var($wpdb->prepare(
-        "SELECT user_course_id FROM {$user_courses_table} WHERE user_id = %d AND course_id = %d",
-        $user_id,
-        $course_id
-    ));
+    // 4. Check for existing enrollment IF the flag allows it
+    if (!$ignore_enrollment_check) {
+        $is_enrolled = $wpdb->get_var($wpdb->prepare(
+            "SELECT user_course_id FROM {$user_courses_table} WHERE user_id = %d AND course_id = %d",
+            $user_id,
+            $course_id
+        ));
 
-    if ($is_enrolled) {
-        return true; // Access granted due to existing enrollment
+        if ($is_enrolled) {
+            return true; // Access granted due to existing enrollment
+        }
     }
-    // --- END NEW CHECK ---
 
     // 5. If none of the above grant access, deny.
     return false;
