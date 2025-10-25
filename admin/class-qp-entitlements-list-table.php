@@ -105,12 +105,20 @@ class QP_Entitlements_List_Table extends WP_List_Table {
         if (!empty($where_clauses)) {
             $total_items_query .= " WHERE " . implode(' AND ', $where_clauses);
         }
-        $total_items = $wpdb->get_var($wpdb->prepare($total_items_query, $params));
+        // Get total items count for pagination...
+        // Clone params *before* adding limit/offset for the total count query
+        $count_params = $params;
+        $total_items = $wpdb->get_var($wpdb->prepare($total_items_query, $count_params));
 
-        // Add ordering and pagination to the main query
-        $query .= $wpdb->prepare(" ORDER BY {$orderby} {$order} LIMIT %d OFFSET %d", $per_page, $offset);
+        // Add ordering and pagination to the main query string
+        // Make sure orderby and order are sanitized (they are by sanitize_key earlier)
+        $query .= " ORDER BY {$orderby} {$order} LIMIT %d OFFSET %d";
 
-        // Fetch the items
+        // Add the pagination params to the $params array
+        $params[] = $per_page;
+        $params[] = $offset;
+
+        // Prepare and fetch the items *once* with all params
         $this->items = $wpdb->get_results($wpdb->prepare($query, $params), ARRAY_A);
 
         // Set pagination arguments
