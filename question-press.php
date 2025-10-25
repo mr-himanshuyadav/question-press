@@ -4560,6 +4560,13 @@ function qp_add_dashboard_rewrite_rules() {
                 'top' // Process this rule early
             );
 
+            // Rule for profile tab: /dashboard-slug/profile/
+            add_rewrite_rule(
+                '^' . $dashboard_slug . '/profile/?$', // Matches /dashboard-slug/profile/
+                'index.php?pagename=' . $dashboard_slug . '&qp_tab=profile', // Map to profile tab
+                'top'
+            );
+
             // Rule for main tab: /dashboard-slug/tab-name/
             // Maps the URL to index.php?pagename=[dashboard-slug]&qp_tab=[tab-name]
             add_rewrite_rule(

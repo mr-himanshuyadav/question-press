@@ -111,7 +111,11 @@ if (!empty($active_entitlements_for_display)) {
                     // --- Render the progress tracker tab ---
                     echo self::render_progress_content(); // Existing function
 
-                } else {
+                } elseif ($current_tab === 'profile') { // <-- ADD THIS ELSEIF BLOCK
+                // --- Render the profile tab ---
+                echo self::render_profile_content(); // We will create this function next
+
+                }   else {
                     // --- Default to rendering the overview tab ---
                     // Fetch data needed *only* for overview here
                     global $wpdb;
@@ -165,6 +169,7 @@ private static function render_sidebar($current_user, $access_status_message, $a
         'review' => ['label' => 'Review', 'icon' => 'star-filled'],
         'progress' => ['label' => 'Progress', 'icon' => 'chart-bar'],
         'courses' => ['label' => 'Courses', 'icon' => 'welcome-learn-more'],
+        'profile' => ['label' => 'Profile', 'icon' => 'admin-users'],
     ];
     ?>
      <div class="qp-sidebar-header">
@@ -997,6 +1002,19 @@ private static function render_single_course_view($course_slug, $user_id) {
         <?php
         return ob_get_clean();
     }
+
+    /**
+ * Renders the content specifically for the Profile section.
+ * (Placeholder - will fetch data and build layout in next steps)
+ */
+private static function render_profile_content() {
+    ob_start();
+    ?>
+    <h2>My Profile</h2>
+    <p>Profile content will go here.</p>
+    <?php
+    return ob_get_clean();
+}
 
    /**
      * NEW HELPER: Prefetches lineage data needed for session lists.
