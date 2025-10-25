@@ -881,22 +881,6 @@ private static function render_single_course_view($course_slug, $user_id) {
         return ob_get_clean();
     }
 
-    /**
-     * AJAX handler to get the updated course list HTML.
-     */
-    public static function get_course_list_ajax() {
-        check_ajax_referer('qp_practice_nonce', 'nonce'); // Re-use the frontend nonce for simplicity
-
-        if (!is_user_logged_in()) {
-            wp_send_json_error(['message' => 'Not logged in.']);
-        }
-
-        // We can simply call the existing render function to get the HTML
-        $course_list_html = self::render_courses_content();
-
-        wp_send_json_success(['html' => $course_list_html]);
-    }
-
    /**
      * NEW HELPER: Prefetches lineage data needed for session lists.
      */

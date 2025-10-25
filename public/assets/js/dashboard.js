@@ -583,152 +583,131 @@ wrapper.on('click', 'a.qp-button-primary[href*="session_id="]', function(e) {
         }
     });
 
-    // <<< PASTE THE NEW COURSE STRUCTURE LOGIC HERE >>>
-    // --- Course Structure Loading Logic ---
+    // --- Course Navigation Logic ---
     const coursesSection = $('#qp-dashboard-courses'); // Cache the section
 
-    // Click handler for "View Course" button in the list
-    coursesSection.on('click', '.qp-view-course-btn', function() {
-        var courseId = $(this).data('course-id');
-        var button = $(this);
-        var originalText = button.text();
+    // Click handler for "View Course" / "Continue Course" button in the list
+    coursesSection.on('click', '.qp-view-course-btn', function(e) {
+        e.preventDefault(); // Prevent default button action
+        var courseSlug = $(this).data('course-slug');
+        var courseId = $(this).data('course-id'); // Keep courseId in case slug is missing
+        var baseDashboardUrl = qp_ajax_object.dashboard_page_url || '/'; // Get base URL
 
-        $.ajax({
-            url: qp_ajax_object.ajax_url, // Use localized ajaxurl
-            type: 'POST',
-            data: {
-                action: 'get_course_structure',
-                nonce: qp_ajax_object.nonce, // Use localized nonce
-                course_id: courseId
-            },
-            beforeSend: function() {
-                button.text('Loading...').prop('disabled', true);
-                // Optionally show a loading spinner over the whole section
-                coursesSection.html('<div class="qp-loader-spinner" style="top: 20px;"></div>');
-            },
-            success: function(response) {
-                if (response.success) {
-                    renderCourseStructure(response.data);
-                } else {
-                    coursesSection.html('<p>Error loading course structure: ' + (response.data.message || 'Unknown error') + '</p><button class="qp-button qp-button-secondary qp-back-to-courses-btn">Back to Courses</button>');
-                }
-            },
-            error: function() {
-                coursesSection.html('<p>Could not load course structure due to a server error.</p><button class="qp-button qp-button-secondary qp-back-to-courses-btn">Back to Courses</button>');
-            },
-            complete: function() {
-                // No need to reset the button text here as the button itself is replaced
-            }
-        });
+        if (courseSlug) {
+            // Construct the URL: baseDashboardUrl should end with a slash
+            var courseUrl = baseDashboardUrl + 'courses/' + courseSlug + '/';
+            window.location.href = courseUrl; // Navigate to the course page
+        } else {
+            console.error('Course slug missing for course ID:', courseId);
+            // Optionally show an error to the user
+            Swal.fire('Error', 'Could not navigate to the course. Slug is missing.', 'error');
+        }
     });
 
-    // Function to render the fetched course structure
-    function renderCourseStructure(data) {
-        let html = `
-            <div class="qp-course-structure-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-                <h2>${data.course_title || 'Course Details'}</h2>
-                <button class="qp-button qp-button-secondary qp-back-to-courses-btn">&laquo; Back to Courses</button>
-            </div>
-            <div class="qp-course-structure-content">`;
+    // Click handler for the "Back to Courses" button (within the single course view)
+    // We use event delegation on the wrapper because the button is loaded dynamically by PHP
+    wrapper.on('click', '.qp-back-to-courses-btn', function(e) {
+        e.preventDefault(); // Prevent default button action
+        var baseDashboardUrl = qp_ajax_object.dashboard_page_url || '/'; // Get base URL
+        var coursesListUrl = baseDashboardUrl + 'courses/'; // URL for the main courses list
+        window.location.href = coursesListUrl; // Navigate back to the courses list
+    });
 
-        if (data.sections && data.sections.length > 0) {
-            data.sections.forEach(section => {
-                html += `
-                    <div class="qp-course-section-card qp-card">
-                        <div class="qp-card-header">
-                            <h3>${section.title || 'Untitled Section'}</h3>
-                            ${section.description ? `<p style="font-size: 0.9em; color: var(--qp-dashboard-text-light); margin-top: 5px;">${section.description}</p>` : ''}
-                        </div>
-                        <div class="qp-card-content qp-course-items-list">`;
+    // Click handler for "Review Results" button
+    coursesSection.on('click', '.view-test-results-btn', function(e) {
+        e.preventDefault();
+        var button = $(this);
+        var sessionId = button.data('session-id');
+        var reviewPageUrl = qp_ajax_object.review_page_url; // Get review page URL
 
-                if (section.items && section.items.length > 0) {
-                    section.items.forEach(item => {
-                        let statusIcon = '';
-                        let itemClass = 'qp-course-item-link';
-                        let buttonText = 'Start';
-                        let buttonClass = 'qp-button-primary start-course-test-btn'; // Specific class for test
-                        let sessionIdAttr = ''; // <-- ***FIX: Declare and initialize here***
-
-                        switch(item.status) {
-                        case 'completed':
-                            statusIcon = '<span class="dashicons dashicons-yes-alt" style="color: var(--qp-dashboard-success);"></span>';
-                            buttonText = 'Review';
-                            buttonClass = 'qp-button-secondary view-test-results-btn';
-                            // --- ***FIX: Assign to existing variable*** ---
-                            if (item.session_id) {
-                                sessionIdAttr = `data-session-id="${item.session_id}"`;
-                            }
-                            // --- ***END FIX*** ---
-                            break;
-                        case 'in_progress': // Note: 'in_progress' isn't set yet, but plan for it
-                            statusIcon = '<span class="dashicons dashicons-marker" style="color: var(--qp-dashboard-warning-dark);"></span>';
-                            buttonText = 'Continue';
-                            buttonClass = 'qp-button-primary start-course-test-btn';
-                            break;
-                        default: // not_started
-                            statusIcon = '<span class="dashicons dashicons-marker" style="color: var(--qp-dashboard-border);"></span>';
-                            buttonText = 'Start';
-                            buttonClass = 'qp-button-primary start-course-test-btn';
-                            break;
-                    }
-
-                    if (item.content_type !== 'test_series') {
-                       buttonClass = 'qp-button-secondary view-course-content-btn';
-                       buttonText = 'View';
-                    }
-
-                    // Now sessionIdAttr will always be defined (either as an empty string or with the data attribute)
-                    html += `
-                        <div class="qp-course-item-row" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--qp-dashboard-border-light);">
-                            <span class="${itemClass}" style="display: flex; align-items: center; gap: 8px;">
-                                ${statusIcon}
-                                <span style="font-weight: 500;">${item.title || 'Untitled Item'}</span>
-                            </span>
-                            <button class="qp-button ${buttonClass}" data-item-id="${item.item_id}" ${sessionIdAttr} style="padding: 4px 10px; font-size: 12px;">${buttonText}</button>
-                        </div>`;
-                    });
-                     // Remove last border
-                     html = html.replace(/border-bottom: 1px solid var\(--qp-dashboard-border-light\);(?=<\/div>\s*<\/div>\s*<\/div>$)/, '');
-
-                } else {
-                    html += '<p style="text-align: center; color: var(--qp-dashboard-text-light); font-style: italic;">No items in this section.</p>';
-                }
-                html += `</div></div>`; // Close card-content and card
-            });
+        if (sessionId && reviewPageUrl) {
+            var url = new URL(reviewPageUrl);
+            url.searchParams.set('session_id', sessionId);
+            window.location.href = url.href;
+        } else if (!sessionId) {
+            Swal.fire('Error', 'Could not find the session data associated with this item.', 'error');
         } else {
-            html += '<div class="qp-card"><div class="qp-card-content"><p style="text-align: center;">This course has no content yet.</p></div></div>';
+            Swal.fire('Error', 'Review page URL is not configured.', 'error');
         }
+    });
 
-        html += '</div>'; // Close qp-course-structure-content
-        coursesSection.html(html);
-    }
+    // --- Start Test Series from Course Item ---
+    coursesSection.on('click', '.start-course-test-btn', function() {
+        var button = $(this);
+        var itemId = button.data('item-id');
+        var originalText = button.text();
 
-    // --- NEW: Function to render the initial course list (used by back button and tab switch) ---
-    function renderInitialCourseList(targetSection) {
-        // Show a loading state
-        targetSection.html('<div class="qp-loader-spinner" style="position: absolute; top: 40px; left: 50%; margin-left: -15px;"></div><h2>My Courses</h2>'); // Added h2 back
+        // Use the checkAttemptsBeforeAction helper
+        checkAttemptsBeforeAction(function() {
+            // This code runs ONLY if the attempt check is successful
+            $.ajax({
+                url: qp_ajax_object.ajax_url,
+                type: 'POST',
+                data: {
+                    action: 'start_course_test_series',
+                    nonce: qp_ajax_object.start_course_test_nonce,
+                    item_id: itemId
+                },
+                beforeSend: function() {
+                    button.text('Starting Test...');
+                },
+                success: function(response) {
+                    if (response.success && response.data.redirect_url) {
+                        window.location.href = response.data.redirect_url;
+                    } else {
+                        Swal.fire('Error!', response.data.message || 'Could not start the test session.', 'error');
+                        button.text(originalText).prop('disabled', false);
+                    }
+                },
+                error: function() {
+                    Swal.fire('Error!', 'A server error occurred while starting the test.', 'error');
+                    button.text(originalText).prop('disabled', false);
+                }
+            });
+        }, button, originalText, 'Checking Access...');
+    });
+
+    // --- Enroll Button Handler ---
+    coursesSection.on('click', '.qp-enroll-course-btn', function() {
+        var button = $(this);
+        var courseId = button.data('course-id');
+        var originalText = button.text();
 
         $.ajax({
             url: qp_ajax_object.ajax_url,
             type: 'POST',
             data: {
-                action: 'get_course_list_html',
-                nonce: qp_ajax_object.nonce // Use the general frontend nonce
+                action: 'enroll_in_course',
+                nonce: qp_ajax_object.enroll_nonce,
+                course_id: courseId
+            },
+            beforeSend: function() {
+                button.text('Enrolling...').prop('disabled', true);
             },
             success: function(response) {
-                if (response.success && response.data.html) {
-                    targetSection.html(response.data.html);
-                    // Store the newly fetched HTML in case it's needed again without refresh
-                    initialCourseListHtml = response.data.html;
+                if (response.success) {
+                    Swal.fire({
+                        title: 'Enrolled!',
+                        text: response.data.message,
+                        icon: 'success',
+                        timer: 1500,
+                        showConfirmButton: false
+                    }).then(() => {
+                         // Simple page reload to refresh the course list
+                         window.location.reload();
+                    });
                 } else {
-                    targetSection.html('<h2>My Courses</h2><p>Error loading courses. Please try refreshing the page.</p>');
+                    Swal.fire('Error', response.data.message || 'Could not enroll.', 'error');
+                    button.text(originalText).prop('disabled', false);
                 }
             },
             error: function() {
-                targetSection.html('<h2>My Courses</h2><p>Could not load courses due to a server error.</p>');
+                Swal.fire('Error', 'A server error occurred during enrollment.', 'error');
+                button.text(originalText).prop('disabled', false);
             }
         });
-    }
+    });
+    // --- End Course Navigation & Actions ---
 
     // --- MODIFIED: Store initial HTML ---
     var initialCourseListHtml = coursesSection.html(); // Store the initial content
