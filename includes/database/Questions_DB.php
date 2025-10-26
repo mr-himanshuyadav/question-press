@@ -453,7 +453,7 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
         *
         * @param array $items Array of question items fetched from DB.
         */
-    private static function enrich_questions_with_terms(array &$items) {
+    public static function enrich_questions_with_terms(array &$items) {
         if (empty($items)) return;
 
         $group_ids = array_unique(wp_list_pluck($items, 'group_id'));

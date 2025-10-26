@@ -43,6 +43,7 @@ use QuestionPress\Database\Terms_DB;
 use QuestionPress\Ajax\Profile_Ajax;
 use QuestionPress\Ajax\Session_Ajax;
 use QuestionPress\Ajax\Practice_Ajax;
+use QuestionPress\Ajax\Admin_Ajax;
 
 
 /**
@@ -92,6 +93,55 @@ require_once QP_PLUGIN_PATH . 'admin/class-qp-entitlements-list-table.php';
 require_once QP_PLUGIN_PATH . 'public/class-qp-shortcodes.php';
 require_once QP_PLUGIN_PATH . 'public/class-qp-dashboard.php';
 require_once QP_PLUGIN_PATH . 'api/class-qp-rest-api.php'; // <-- Use QP_PLUGIN_PATH
+
+// Temporary add action calls
+
+add_action('wp_ajax_qp_save_profile', [Profile_Ajax::class, 'save_profile']);
+add_action('wp_ajax_qp_change_password', [Profile_Ajax::class, 'change_password']);
+add_action('wp_ajax_qp_upload_avatar', [Profile_Ajax::class, 'upload_avatar']);
+add_action('wp_ajax_start_practice_session', [Session_Ajax::class, 'start_practice_session']);
+add_action('wp_ajax_qp_start_incorrect_practice_session', [Session_Ajax::class, 'start_incorrect_practice_session']);
+add_action('wp_ajax_qp_start_mock_test_session', [Session_Ajax::class, 'start_mock_test_session']);
+add_action('wp_ajax_start_revision_session', [Session_Ajax::class, 'start_revision_session']);
+add_action('wp_ajax_qp_start_review_session', [Session_Ajax::class, 'start_review_session']);
+add_action('wp_ajax_update_session_activity', [Session_Ajax::class, 'update_session_activity']);
+add_action('wp_ajax_end_practice_session', [Session_Ajax::class, 'end_practice_session']);
+add_action('wp_ajax_delete_empty_session', [Session_Ajax::class, 'delete_empty_session']);
+add_action('wp_ajax_delete_user_session', [Session_Ajax::class, 'delete_user_session']);
+add_action('wp_ajax_delete_revision_history', [Session_Ajax::class, 'delete_revision_history']);
+add_action('wp_ajax_qp_pause_session', [Session_Ajax::class, 'pause_session']);
+add_action('wp_ajax_qp_terminate_session', [Session_Ajax::class, 'terminate_session']);
+add_action('wp_ajax_start_course_test_series', [Session_Ajax::class, 'start_course_test_series']);
+add_action('wp_ajax_check_answer', [Practice_Ajax::class, 'check_answer']);
+add_action('wp_ajax_qp_save_mock_attempt', [Practice_Ajax::class, 'save_mock_attempt']);
+add_action('wp_ajax_qp_update_mock_status', [Practice_Ajax::class, 'update_mock_status']);
+add_action('wp_ajax_expire_question', [Practice_Ajax::class, 'expire_question']);
+add_action('wp_ajax_skip_question', [Practice_Ajax::class, 'skip_question']);
+add_action('wp_ajax_qp_toggle_review_later', [Practice_Ajax::class, 'toggle_review_later']);
+add_action('wp_ajax_get_single_question_for_review', [Practice_Ajax::class, 'get_single_question_for_review']);
+add_action('wp_ajax_submit_question_report', [Practice_Ajax::class, 'submit_question_report']);
+add_action('wp_ajax_get_report_reasons', [Practice_Ajax::class, 'get_report_reasons']);
+add_action('wp_ajax_get_unattempted_counts', [Practice_Ajax::class, 'get_unattempted_counts']);
+add_action('wp_ajax_get_question_data', [Practice_Ajax::class, 'get_question_data']);
+add_action('wp_ajax_get_topics_for_subject', [Practice_Ajax::class, 'get_topics_for_subject']);
+add_action('wp_ajax_get_sections_for_subject', [Practice_Ajax::class, 'get_sections_for_subject']);
+// Renamed handlers for cascading dropdowns
+add_action('wp_ajax_get_sources_for_subject', [Practice_Ajax::class, 'get_sources_for_subject_cascading']);
+add_action('wp_ajax_get_child_terms', [Practice_Ajax::class, 'get_child_terms_cascading']);
+// Keep specific names for progress tab handlers
+add_action('wp_ajax_get_progress_data', [Practice_Ajax::class, 'get_progress_data']);
+add_action('wp_ajax_get_sources_for_subject_progress', [Practice_Ajax::class, 'get_sources_for_subject_progress']);
+add_action('wp_ajax_qp_check_remaining_attempts', [Practice_Ajax::class, 'check_remaining_attempts']);
+add_action('wp_ajax_enroll_in_course', [Practice_Ajax::class, 'enroll_in_course']);
+add_action('wp_ajax_qp_search_questions_for_course', [Practice_Ajax::class, 'search_questions_for_course']);
+add_action('wp_ajax_get_topics_for_list_table_filter', [Admin_Ajax::class, 'get_topics_for_list_table_filter']);
+add_action('wp_ajax_get_sources_for_list_table_filter', [Admin_Ajax::class, 'get_sources_for_list_table_filter']);
+add_action('wp_ajax_qp_get_quick_edit_form', [Admin_Ajax::class, 'get_quick_edit_form']);
+add_action('wp_ajax_save_quick_edit_data', [Admin_Ajax::class, 'save_quick_edit_data']);
+add_action('wp_ajax_qp_create_backup', [Admin_Ajax::class, 'create_backup']);
+add_action('wp_ajax_qp_delete_backup', [Admin_Ajax::class, 'delete_backup']);
+add_action('wp_ajax_qp_restore_backup', [Admin_Ajax::class, 'restore_backup']);
+add_action('wp_ajax_regenerate_api_key', [Admin_Ajax::class, 'regenerate_api_key']);
 
 /**
  * Add meta box for Plan Details.
@@ -1685,61 +1735,6 @@ function qp_get_test_series_options_for_js() {
     ];
 }
 
-function qp_regenerate_api_key_ajax()
-{
-    check_ajax_referer('qp_regenerate_api_key_nonce', 'nonce');
-    if (!current_user_can('manage_options')) {
-        wp_send_json_error(['message' => 'Permission denied.']);
-    }
-
-    $new_key = wp_generate_password(64, true, true);
-    update_option('qp_jwt_secret_key', $new_key);
-
-    wp_send_json_success(['new_key' => $new_key]);
-}
-add_action('wp_ajax_regenerate_api_key', 'qp_regenerate_api_key_ajax');
-
-// Temporary add action calls
-
-add_action('wp_ajax_qp_save_profile', [Profile_Ajax::class, 'save_profile']);
-add_action('wp_ajax_qp_change_password', [Profile_Ajax::class, 'change_password']);
-add_action('wp_ajax_qp_upload_avatar', [Profile_Ajax::class, 'upload_avatar']);
-add_action('wp_ajax_start_practice_session', [Session_Ajax::class, 'start_practice_session']);
-add_action('wp_ajax_qp_start_incorrect_practice_session', [Session_Ajax::class, 'start_incorrect_practice_session']);
-add_action('wp_ajax_qp_start_mock_test_session', [Session_Ajax::class, 'start_mock_test_session']);
-add_action('wp_ajax_start_revision_session', [Session_Ajax::class, 'start_revision_session']);
-add_action('wp_ajax_qp_start_review_session', [Session_Ajax::class, 'start_review_session']);
-add_action('wp_ajax_update_session_activity', [Session_Ajax::class, 'update_session_activity']);
-add_action('wp_ajax_end_practice_session', [Session_Ajax::class, 'end_practice_session']);
-add_action('wp_ajax_delete_empty_session', [Session_Ajax::class, 'delete_empty_session']);
-add_action('wp_ajax_delete_user_session', [Session_Ajax::class, 'delete_user_session']);
-add_action('wp_ajax_delete_revision_history', [Session_Ajax::class, 'delete_revision_history']);
-add_action('wp_ajax_qp_pause_session', [Session_Ajax::class, 'pause_session']);
-add_action('wp_ajax_qp_terminate_session', [Session_Ajax::class, 'terminate_session']);
-add_action('wp_ajax_start_course_test_series', [Session_Ajax::class, 'start_course_test_series']);
-add_action('wp_ajax_check_answer', [Practice_Ajax::class, 'check_answer']);
-add_action('wp_ajax_qp_save_mock_attempt', [Practice_Ajax::class, 'save_mock_attempt']);
-add_action('wp_ajax_qp_update_mock_status', [Practice_Ajax::class, 'update_mock_status']);
-add_action('wp_ajax_expire_question', [Practice_Ajax::class, 'expire_question']);
-add_action('wp_ajax_skip_question', [Practice_Ajax::class, 'skip_question']);
-add_action('wp_ajax_qp_toggle_review_later', [Practice_Ajax::class, 'toggle_review_later']);
-add_action('wp_ajax_get_single_question_for_review', [Practice_Ajax::class, 'get_single_question_for_review']);
-add_action('wp_ajax_submit_question_report', [Practice_Ajax::class, 'submit_question_report']);
-add_action('wp_ajax_get_report_reasons', [Practice_Ajax::class, 'get_report_reasons']);
-add_action('wp_ajax_get_unattempted_counts', [Practice_Ajax::class, 'get_unattempted_counts']);
-add_action('wp_ajax_get_question_data', [Practice_Ajax::class, 'get_question_data']);
-add_action('wp_ajax_get_topics_for_subject', [Practice_Ajax::class, 'get_topics_for_subject']);
-add_action('wp_ajax_get_sections_for_subject', [Practice_Ajax::class, 'get_sections_for_subject']);
-// Renamed handlers for cascading dropdowns
-add_action('wp_ajax_get_sources_for_subject', [Practice_Ajax::class, 'get_sources_for_subject_cascading']);
-add_action('wp_ajax_get_child_terms', [Practice_Ajax::class, 'get_child_terms_cascading']);
-// Keep specific names for progress tab handlers
-add_action('wp_ajax_get_progress_data', [Practice_Ajax::class, 'get_progress_data']);
-add_action('wp_ajax_get_sources_for_subject_progress', [Practice_Ajax::class, 'get_sources_for_subject_progress']);
-add_action('wp_ajax_qp_check_remaining_attempts', [Practice_Ajax::class, 'check_remaining_attempts']);
-add_action('wp_ajax_enroll_in_course', [Practice_Ajax::class, 'enroll_in_course']);
-add_action('wp_ajax_qp_search_questions_for_course', [Practice_Ajax::class, 'search_questions_for_course']);
-
 // Used on export page
 
 /**
@@ -2034,132 +2029,6 @@ function qp_all_questions_page_cb()
     echo qp_get_template_html( 'all-questions-page', 'admin', $args );
 }
 
-/**
- * AJAX handler for the admin list table.
- * Gets child topics for a given parent subject term.
- */
-function qp_get_topics_for_list_table_filter_ajax()
-{
-    check_ajax_referer('qp_admin_filter_nonce', 'nonce');
-    $subject_term_id = isset($_POST['subject_id']) ? absint($_POST['subject_id']) : 0;
-
-    if (!$subject_term_id) {
-        wp_send_json_success(['topics' => []]);
-    }
-
-    global $wpdb;
-    $term_table = $wpdb->prefix . 'qp_terms';
-
-    // This query finds terms that are children of the selected subject term.
-    $topics = $wpdb->get_results($wpdb->prepare(
-        "SELECT term_id as topic_id, name as topic_name
-         FROM {$term_table}
-         WHERE parent = %d
-         ORDER BY name ASC",
-        $subject_term_id
-    ));
-
-    wp_send_json_success(['topics' => $topics]);
-}
-add_action('wp_ajax_get_topics_for_list_table_filter', 'qp_get_topics_for_list_table_filter_ajax');
-
-
-/**
- * AJAX handler for the admin list table.
- * Gets sources/sections that have questions for a given subject and topic.
- */
-function qp_get_sources_for_list_table_filter_ajax()
-{
-    check_ajax_referer('qp_admin_filter_nonce', 'nonce');
-    $subject_id = isset($_POST['subject_id']) ? absint($_POST['subject_id']) : 0;
-    $topic_id = isset($_POST['topic_id']) ? absint($_POST['topic_id']) : 0;
-
-    if (!$subject_id) {
-        wp_send_json_success(['sources' => []]);
-        return;
-    }
-
-    global $wpdb;
-    $term_table = $wpdb->prefix . 'qp_terms';
-    $rel_table = $wpdb->prefix . 'qp_term_relationships';
-    $tax_table = $wpdb->prefix . 'qp_taxonomies';
-    $source_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'source'");
-
-    // Step 1: Get the relevant group IDs based on subject/topic filter
-    $term_ids_to_check = [];
-    if ($topic_id > 0) {
-        $term_ids_to_check = [$topic_id];
-    } else {
-        $term_ids_to_check = $wpdb->get_col($wpdb->prepare("SELECT term_id FROM $term_table WHERE parent = %d", $subject_id));
-    }
-
-    $group_ids = [];
-    if (!empty($term_ids_to_check)) {
-        $term_ids_placeholder = implode(',', $term_ids_to_check);
-        $group_ids = $wpdb->get_col("SELECT object_id FROM $rel_table WHERE term_id IN ($term_ids_placeholder) AND object_type = 'group'");
-    }
-
-    if (empty($group_ids)) {
-        wp_send_json_success(['sources' => []]);
-        return;
-    }
-    $group_ids_placeholder = implode(',', $group_ids);
-
-    // Step 2: Find all source/section terms linked to questions within those groups
-    $linked_term_ids = $wpdb->get_col($wpdb->prepare(
-        "SELECT DISTINCT t.term_id
-         FROM {$term_table} t
-         JOIN {$rel_table} r ON t.term_id = r.term_id
-         WHERE r.object_id IN ($group_ids_placeholder) AND r.object_type = 'group' AND t.taxonomy_id = %d",
-        $source_tax_id
-    ));
-
-    if (empty($linked_term_ids)) {
-        wp_send_json_success(['sources' => []]);
-        return;
-    }
-
-    // Step 3: Fetch the full lineage (parents) for every linked term
-    $full_lineage_ids = [];
-    foreach ($linked_term_ids as $term_id) {
-        $current_id = $term_id;
-        for ($i = 0; $i < 10; $i++) { // Safety break
-            if (!$current_id || in_array($current_id, $full_lineage_ids)) break;
-            $full_lineage_ids[] = $current_id;
-            $current_id = $wpdb->get_var($wpdb->prepare("SELECT parent FROM $term_table WHERE term_id = %d", $current_id));
-        }
-    }
-    $all_relevant_term_ids = array_unique($full_lineage_ids);
-    $all_relevant_term_ids_placeholder = implode(',', $all_relevant_term_ids);
-
-    // Step 4: Fetch all details for the relevant terms
-    $all_terms_data = $wpdb->get_results("SELECT term_id, name, parent FROM $term_table WHERE term_id IN ($all_relevant_term_ids_placeholder)");
-
-    // Step 5: Build a hierarchical tree from the flat list
-    $terms_by_id = [];
-    foreach ($all_terms_data as $term) {
-        $terms_by_id[$term->term_id] = $term;
-        $term->children = [];
-    }
-
-    $tree = [];
-    foreach ($terms_by_id as $term_id => &$term) {
-        if ($term->parent != 0 && isset($terms_by_id[$term->parent])) {
-            $terms_by_id[$term->parent]->children[] = &$term;
-        } elseif ($term->parent == 0) {
-            $tree[] = &$term;
-        }
-    }
-
-    // Sort the top-level sources by name
-    usort($tree, function ($a, $b) {
-        return strcmp($a->name, $b->name);
-    });
-
-    wp_send_json_success(['sources' => $tree]);
-}
-add_action('wp_ajax_get_sources_for_list_table_filter', 'qp_get_sources_for_list_table_filter_ajax');
-
 function qp_handle_save_question_group()
 {
     if (!isset($_POST['save_group']) || !isset($_POST['_wpnonce']) || !wp_verify_nonce($_POST['_wpnonce'], 'qp_save_question_group_nonce')) {
@@ -2408,27 +2277,6 @@ function qp_re_evaluate_question_attempts($question_id, $new_correct_option_id)
 }
 
 /**
- * AJAX handler to create a new backup.
- */
-function qp_create_backup_ajax()
-{
-    check_ajax_referer('qp_backup_restore_nonce', 'nonce');
-    if (!current_user_can('manage_options')) {
-        wp_send_json_error(['message' => 'Permission denied.']);
-    }
-
-    $result = qp_perform_backup('manual');
-
-    if ($result['success']) {
-        $backups_html = qp_get_local_backups_html();
-        wp_send_json_success(['backups_html' => $backups_html]);
-    } else {
-        wp_send_json_error(['message' => $result['message']]);
-    }
-}
-add_action('wp_ajax_qp_create_backup', 'qp_create_backup_ajax');
-
-/**
  * Performs the core backup creation process and saves the file locally.
  *
  * @param string $type The type of backup ('manual' or 'auto').
@@ -2656,66 +2504,6 @@ function qp_get_local_backups_html()
 }
 
 /**
- * AJAX handler to delete a local backup file.
- */
-function qp_delete_backup_ajax()
-{
-    check_ajax_referer('qp_backup_restore_nonce', 'nonce');
-    if (!current_user_can('manage_options')) {
-        wp_send_json_error(['message' => 'Permission denied.']);
-    }
-
-    $filename = isset($_POST['filename']) ? sanitize_file_name($_POST['filename']) : '';
-
-    if (empty($filename) || (strpos($filename, 'qp-backup-') !== 0 && strpos($filename, 'qp-auto-backup-') !== 0 && strpos($filename, 'uploaded-') !== 0) || pathinfo($filename, PATHINFO_EXTENSION) !== 'zip') {
-        wp_send_json_error(['message' => 'Invalid or malicious filename provided.']);
-    }
-
-    $upload_dir = wp_upload_dir();
-    $backup_dir = trailingslashit($upload_dir['basedir']) . 'qp-backups';
-    $file_path = trailingslashit($backup_dir) . $filename;
-
-    if (file_exists($file_path)) {
-        if (unlink($file_path)) {
-            // Deletion successful, send back the updated list
-            $backups_html = qp_get_local_backups_html();
-            wp_send_json_success(['backups_html' => $backups_html, 'message' => 'Backup deleted successfully.']);
-        } else {
-            wp_send_json_error(['message' => 'Could not delete the file. Please check file permissions.']);
-        }
-    } else {
-        wp_send_json_error(['message' => 'File not found. It may have already been deleted.']);
-    }
-}
-add_action('wp_ajax_qp_delete_backup', 'qp_delete_backup_ajax');
-
-/**
- * AJAX handler to restore a backup from a local file.
- * This version is optimized for performance and reliability.
- */
-function qp_restore_backup_ajax()
-{
-    check_ajax_referer('qp_backup_restore_nonce', 'nonce');
-    if (!current_user_can('manage_options')) {
-        wp_send_json_error(['message' => 'Permission denied.']);
-    }
-
-    $filename = isset($_POST['filename']) ? sanitize_file_name($_POST['filename']) : '';
-    if (empty($filename)) {
-        wp_send_json_error(['message' => 'Invalid filename.']);
-    }
-
-    $result = qp_perform_restore($filename);
-
-    if ($result['success']) {
-        wp_send_json_success(['message' => 'Data has been successfully restored.', 'stats' => $result['stats']]);
-    } else {
-        wp_send_json_error(['message' => $result['message']]);
-    }
-}
-add_action('wp_ajax_qp_restore_backup', 'qp_restore_backup_ajax');
-
-/**
  * Performs the core backup restore process from a given filename.
  *
  * @param string $filename The name of the backup .zip file in the qp-backups directory.
@@ -2896,361 +2684,6 @@ function qp_delete_dir($dirPath)
     }
     rmdir($dirPath);
 }
-
-
-
-function qp_get_quick_edit_form_ajax()
-{
-    // 1. Security & Basic Validation
-    check_ajax_referer('qp_get_quick_edit_form_nonce', 'nonce');
-    $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
-    if (!$question_id) {
-        wp_send_json_error(['message' => 'No Question ID provided.']);
-    }
-
-    // 2. Fetch ALL Data using the DB Method
-    $data = QuestionPress\Database\Questions_DB::get_data_for_quick_edit($question_id);
-
-    if (!$data) {
-        wp_send_json_error(['message' => 'Could not retrieve data for this question.']);
-    }
-
-    // Extract data into variables for easier use in the template
-    $question = $data['question']; // This is an object containing group info too
-    $options = $data['options'];
-    $current_terms = $data['current_terms'];
-    $all_terms = $data['all_terms'];
-    $links = $data['links'];
-
-    // 3. Generate Form HTML using Output Buffering
-    ob_start();
-    ?>
-    <script>
-        // Localize necessary data for the quick-edit.js dropdown logic
-        var qp_quick_edit_data = <?php echo wp_json_encode([
-                                        // Pass only what the JS needs for dropdowns and current selections
-                                        'all_subjects'        => $all_terms['subjects'],        // Array of {subject_id, subject_name}
-                                        'all_subject_terms'   => $all_terms['subject_terms'],   // Array of {id, name, parent}
-                                        'all_source_terms'    => $all_terms['source_terms'],    // Array of {id, name, parent_id}
-                                        'all_exams'           => $all_terms['exams'],           // Array of {exam_id, exam_name}
-                                        'all_labels'          => $all_terms['labels'],          // Array of {label_id, label_name}
-                                        'exam_subject_links'  => $links['exam_subject_links'],
-                                        'source_subject_links' => $links['source_subject_links'],
-                                        'current_subject_id'  => $current_terms['subject'],
-                                        'current_topic_id'    => $current_terms['topic'],
-                                        'current_source_id'   => $current_terms['source'],
-                                        'current_section_id'  => $current_terms['section'],
-                                        'current_exam_id'     => $current_terms['exam'],
-                                        'current_labels'      => $current_terms['labels'],     // Array of label IDs
-                                    ]); ?>;
-    </script>
-
-    <form class="quick-edit-form-wrapper">
-        <?php wp_nonce_field('qp_save_quick_edit_nonce', 'qp_save_quick_edit_nonce_field'); ?>
-
-        <div class="quick-edit-display-text">
-            <?php // Display Direction and Question Text (already sanitized in DB method) ?>
-            <?php if (!empty($question->direction_text)) : ?>
-                <div class="display-group">
-                    <strong>Direction:</strong>
-                    <p><?php echo $question->direction_text; ?></p>
-                </div>
-            <?php endif; ?>
-            <div class="display-group">
-                <strong>Question:</strong>
-                <p><?php echo $question->question_text; ?></p>
-            </div>
-        </div>
-
-        <input type="hidden" name="question_id" value="<?php echo esc_attr($question_id); ?>">
-
-        <div class="quick-edit-main-container">
-            <div class="quick-edit-col-left">
-                <label><strong>Correct Answer</strong></label>
-                <div class="options-group">
-                    <?php foreach ($options as $option) : ?>
-                        <label class="option-label">
-                            <input type="radio" name="correct_option_id" value="<?php echo esc_attr($option->option_id); ?>" <?php checked($option->is_correct, 1); ?>>
-                            <?php // Option text is already sanitized in DB method ?>
-                            <input type="text" readonly value="<?php echo esc_attr($option->option_text); ?>">
-                        </label>
-                    <?php endforeach; ?>
-                </div>
-            </div>
-
-            <div class="quick-edit-col-right">
-                <?php // Dropdowns will be populated by JS using qp_quick_edit_data ?>
-                <div class="form-row-flex">
-                    <div class="form-group-half qe-right-dropdowns">
-                        <label for="qe-subject-<?php echo esc_attr($question_id); ?>"><strong>Subject</strong></label>
-                        <select name="subject_id" id="qe-subject-<?php echo esc_attr($question_id); ?>" class="qe-subject-select">
-                            <?php // Options populated by JS ?>
-                             <option value="">— Select Subject —</option>
-                             <?php foreach ($all_terms['subjects'] as $subject) : ?>
-                                <option value="<?php echo esc_attr($subject->subject_id); ?>" <?php selected($subject->subject_id, $current_terms['subject']); ?>>
-                                    <?php echo esc_html($subject->subject_name); ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div class="form-group-half qe-right-dropdowns">
-                        <label for="qe-topic-<?php echo esc_attr($question_id); ?>"><strong>Topic</strong></label>
-                        <select name="topic_id" id="qe-topic-<?php echo esc_attr($question_id); ?>" class="qe-topic-select" disabled>
-                            <option value="">— Select subject first —</option>
-                            <?php // Options populated by JS ?>
-                        </select>
-                    </div>
-                </div>
-
-                <div class="form-row-flex">
-                    <div class="form-group-half qe-right-dropdowns">
-                        <label for="qe-source-<?php echo esc_attr($question_id); ?>"><strong>Source</strong></label>
-                        <select name="source_id" id="qe-source-<?php echo esc_attr($question_id); ?>" class="qe-source-select" disabled>
-                            <option value="">— Select Subject First —</option>
-                             <?php // Options populated by JS ?>
-                        </select>
-                    </div>
-                    <div class="form-group-half qe-right-dropdowns">
-                        <label for="qe-section-<?php echo esc_attr($question_id); ?>"><strong>Section</strong></label>
-                        <select name="section_id" id="qe-section-<?php echo esc_attr($question_id); ?>" class="qe-section-select" disabled>
-                            <option value="">— Select Source First —</option>
-                             <?php // Options populated by JS ?>
-                        </select>
-                    </div>
-                </div>
-
-                <div class="form-row-flex qe-pyq-fields-wrapper" style="align-items: center;">
-                    <div class="form-group-shrink">
-                        <label class="inline-checkbox">
-                            <input type="checkbox" name="is_pyq" value="1" class="qe-is-pyq-checkbox" <?php checked($question->is_pyq, 1); ?>> Is PYQ?
-                        </label>
-                    </div>
-                    <div class="form-group-expand qe-pyq-fields" style="<?php echo $question->is_pyq ? '' : 'display: none;'; ?>">
-                        <div class="form-group-half">
-                            <select name="exam_id" class="qe-exam-select" <?php echo !$current_terms['subject'] ? 'disabled' : ''; ?>>
-                                <option value="">— Select Exam —</option>
-                                <?php // Options populated by JS ?>
-                            </select>
-                        </div>
-                        <div class="form-group-half">
-                            <input type="number" name="pyq_year" value="<?php echo esc_attr($question->pyq_year); ?>" placeholder="Year (e.g., 2023)">
-                        </div>
-                    </div>
-                </div>
-
-                <div class="form-row">
-                    <label><strong>Labels</strong></label>
-                    <div class="labels-group">
-                        <?php foreach ($all_terms['labels'] as $label) : ?>
-                            <label class="inline-checkbox">
-                                <input type="checkbox" name="labels[]" value="<?php echo esc_attr($label->label_id); ?>" <?php checked(in_array($label->label_id, $current_terms['labels'])); ?>>
-                                <?php echo esc_html($label->label_name); ?>
-                            </label>
-                        <?php endforeach; ?>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <p class="submit inline-edit-save">
-            <button type="button" class="button-secondary cancel">Cancel</button>
-            <button type="button" class="button-primary save">Update</button>
-        </p>
-    </form>
-
-    <?php // Include the same CSS block as before ?>
-    <style>
-        /* ... Paste the same CSS block from the original function here ... */
-         .quick-edit-display-text { background-color: #f6f7f7; border: 1px solid #e0e0e0; padding: 10px 20px; margin: 20px 20px 10px; border-radius: 4px }
-        .quick-edit-display-text .display-group { margin-bottom: 10px }
-        .options-group label:last-child, .quick-edit-display-text .display-group:last-child, .quick-edit-form-wrapper .form-row:last-child { margin-bottom: 0 }
-        .quick-edit-display-text p { margin: 5px 0 0; padding-left: 10px; border-left: 3px solid #ccc; color: #555; font-style: italic }
-        .quick-edit-form-wrapper h4 { font-size: 16px; margin-top: 20px; margin-bottom: 10px; padding: 10px 20px }
-        .inline-edit-row .submit { padding: 20px }
-        .quick-edit-form-wrapper .title { font-size: 15px; font-weight: 500; color: #555 }
-        .quick-edit-form-wrapper .form-row, .quick-edit-form-wrapper .form-row-flex { margin-bottom: 1rem }
-        .quick-edit-form-wrapper label, .quick-edit-form-wrapper strong { font-weight: 600; display: block; margin-bottom: 0rem }
-        .quick-edit-form-wrapper select { width: 100% }
-        .quick-edit-main-container { display: flex; gap: 20px; margin-bottom: 1rem; padding: 0 20px }
-        .form-row-flex .qe-pyq-fields { display: flex; gap: 1rem; }
-        .form-row-flex .qe-right-dropdowns { display: flex; flex-direction: column; gap: 0.5rem; flex: 1; }
-        .labels-group, .options-group { display: flex; padding: .5rem; border: 1px solid #ddd; background: #fff }
-        .quick-edit-col-left { flex: 0 0 40% }
-        .form-group-half, .quick-edit-col-right { flex: 1 }
-        .options-group { flex-direction: column; justify-content: space-between; height: auto; box-sizing: border-box; gap: 10px; }
-        .option-label { display: flex; align-items: center; gap: .5rem; margin-bottom: .5rem }
-        .option-label input[type=radio] { margin-top: 0; align-self: center }
-        .option-label input[type=text] { width: 90%; background-color: #f0f0f1 }
-        .form-row-flex { display: flex; gap: 1rem }
-        .quick-edit-form-wrapper p.submit button.button-secondary { margin-right: 10px }
-        .labels-group { flex-wrap: wrap; gap: .5rem 1rem }
-        .inline-checkbox { white-space: nowrap }
-    </style>
-    <?php
-    $form_html = ob_get_clean();
-
-    // 4. Send JSON Response
-    wp_send_json_success(['form' => $form_html]);
-}
-add_action('wp_ajax_qp_get_quick_edit_form', 'qp_get_quick_edit_form_ajax');
-
-/**
- * AJAX handler to save the data from the quick edit form.
- *
- * This function is rewritten to correctly update the new taxonomy system. It handles:
- * - Updating group-level data (PYQ status).
- * - Updating group-level term relationships (Subject, Exam).
- * - Updating question-level term relationships (Topic, Source/Section, Labels).
- * - Updating the correct answer option.
- * - Re-rendering the updated table row and sending it back to the browser.
- */
-function qp_save_quick_edit_data_ajax()
-{
-    // Step 1: Security check and data validation
-    check_ajax_referer('qp_save_quick_edit_nonce', 'qp_save_quick_edit_nonce_field');
-
-    $data = $_POST;
-    $question_id = isset($data['question_id']) ? absint($data['question_id']) : 0;
-    if (!$question_id) {
-        wp_send_json_error(['message' => 'Invalid Question ID provided.']);
-    }
-
-    // Step 2: Setup database variables
-    global $wpdb;
-    $q_table = $wpdb->prefix . 'qp_questions';
-    $g_table = $wpdb->prefix . 'qp_question_groups';
-    $o_table = $wpdb->prefix . 'qp_options';
-    $rel_table = $wpdb->prefix . 'qp_term_relationships';
-    $term_table = $wpdb->prefix . 'qp_terms';
-    $tax_table = $wpdb->prefix . 'qp_taxonomies';
-
-    // Step 3: Get necessary IDs for processing
-    $group_id = $wpdb->get_var($wpdb->prepare("SELECT group_id FROM $q_table WHERE question_id = %d", $question_id));
-
-    // Step 4: Update Group-Level Data (PYQ status)
-    if ($group_id) {
-        $wpdb->update($g_table, [
-            'is_pyq' => isset($data['is_pyq']) ? 1 : 0,
-            'pyq_year' => (isset($data['is_pyq']) && !empty($data['pyq_year'])) ? sanitize_text_field($data['pyq_year']) : null
-        ], ['group_id' => $group_id]);
-    }
-
-    // Step 5: CONSOLIDATED Group and Question-Level Term Relationships
-    if ($group_id) {
-        // --- 5a: Handle ALL Group-Level Relationships ---
-        $group_taxonomies = ['subject', 'source', 'exam'];
-        $tax_ids_to_clear = [];
-
-        foreach ($group_taxonomies as $tax_name) {
-            $tax_id = $wpdb->get_var($wpdb->prepare("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = %s", $tax_name));
-            if ($tax_id) $tax_ids_to_clear[] = $tax_id;
-        }
-
-        // Delete all existing group relationships for these taxonomies in one query
-        if (!empty($tax_ids_to_clear)) {
-            $tax_ids_placeholder = implode(',', $tax_ids_to_clear);
-            $wpdb->query($wpdb->prepare(
-                "DELETE FROM {$rel_table} 
-                 WHERE object_id = %d AND object_type = 'group' 
-                 AND term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id IN ($tax_ids_placeholder))",
-                $group_id
-            ));
-        }
-
-        // Insert new relationships for the group
-        $group_terms_to_apply = [];
-        // Subject/Topic: Link the group to the most specific topic selected.
-        if (!empty($data['topic_id'])) $group_terms_to_apply[] = absint($data['topic_id']);
-
-        // Source/Section: Link the group to the most specific term (section > source).
-        if (!empty($data['section_id'])) {
-            $group_terms_to_apply[] = absint($data['section_id']);
-        } elseif (!empty($data['source_id'])) {
-            $group_terms_to_apply[] = absint($data['source_id']);
-        }
-
-        // Exam: Link the group if it's a PYQ and an exam is selected
-        if (isset($data['is_pyq']) && !empty($data['exam_id'])) {
-            $group_terms_to_apply[] = absint($data['exam_id']);
-        }
-
-        // Insert all new group relationships
-        foreach (array_unique($group_terms_to_apply) as $term_id) {
-            if ($term_id > 0) {
-                $wpdb->insert($rel_table, ['object_id' => $group_id, 'term_id' => $term_id, 'object_type' => 'group']);
-            }
-        }
-    }
-
-    // --- 5b: Handle Question-Level Relationships (Labels) ---
-    // (This part remains the same as it correctly targets the question)
-    $label_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'label'");
-    if ($label_tax_id) {
-        $wpdb->query($wpdb->prepare(
-            "DELETE FROM {$rel_table} 
-             WHERE object_id = %d AND object_type = 'question' 
-             AND term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id = %d)",
-            $question_id,
-            $label_tax_id
-        ));
-    }
-
-    if (!empty($data['labels']) && is_array($data['labels'])) {
-        foreach ($data['labels'] as $label_id) {
-            if (absint($label_id) > 0) {
-                $wpdb->insert($rel_table, ['object_id' => $question_id, 'term_id' => absint($label_id), 'object_type' => 'question']);
-            }
-        }
-    }
-
-    // Step 6: Update the Correct Answer Option and Re-evaluate
-    $new_correct_option_id = isset($data['correct_option_id']) ? absint($data['correct_option_id']) : 0;
-    if ($new_correct_option_id > 0) {
-        // Get the original correct option ID before making any changes.
-        $original_correct_option_id = $wpdb->get_var($wpdb->prepare("SELECT option_id FROM {$o_table} WHERE question_id = %d AND is_correct = 1", $question_id));
-
-        // Update the database
-        $wpdb->update($o_table, ['is_correct' => 0], ['question_id' => $question_id]);
-        $wpdb->update($o_table, ['is_correct' => 1], ['option_id' => $new_correct_option_id, 'question_id' => $question_id]);
-
-        // If the correct answer has changed, trigger the re-evaluation.
-        if ($original_correct_option_id != $new_correct_option_id) {
-            qp_re_evaluate_question_attempts($question_id, $new_correct_option_id);
-        }
-    }
-
-    // Step 7: Re-render the updated table row and send it back
-    $list_table = new QP_Questions_List_Table();
-    $filters = ['status', 'filter_by_subject', 'filter_by_topic', 'filter_by_source', 'filter_by_label', 's'];
-    foreach ($filters as $filter) {
-        if ($filter === 'status' && isset($_POST['status'])) {
-            $_REQUEST[$filter] = sanitize_key($_POST['status']);
-        } elseif (isset($_POST[$filter])) {
-            $_REQUEST[$filter] = $_POST[$filter];
-        }
-    }
-
-    $list_table->prepare_items();
-    $found_item = null;
-    foreach ($list_table->items as $item) {
-        if ($item['question_id'] == $question_id) {
-            $found_item = $item;
-            break;
-        }
-    }
-
-    if ($found_item) {
-        ob_start();
-        $list_table->single_row($found_item);
-        $row_html = ob_get_clean();
-        wp_send_json_success(['row_html' => $row_html]);
-    } else {
-        wp_send_json_success(['row_html' => '']);
-    }
-
-    wp_send_json_error(['message' => 'Could not retrieve the updated row data. Please refresh the page.']);
-}
-add_action('wp_ajax_save_quick_edit_data', 'qp_save_quick_edit_data_ajax');
 
 
 
