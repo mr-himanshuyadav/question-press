@@ -15,36 +15,22 @@ class QP_Logs_Reports_Page {
             'log_settings' => ['label' => 'Log Settings', 'callback' => [self::class, 'render_log_settings_tab']],
         ];
         $active_tab = isset($_GET['tab']) && array_key_exists($_GET['tab'], $tabs) ? $_GET['tab'] : 'reports';
-?>
-        <div class="wrap">
-            <h1 class="wp-heading-inline">Reports</h1>
-            <p>Review questions reported by users and manage the reasons available for reporting.</p>
-            <?php
-            // Display settings errors and messages from the session
-            if (isset($_SESSION['qp_admin_message'])) {
-                $message = html_entity_decode($_SESSION['qp_admin_message']);
-                echo '<div id="message" class="notice notice-' . esc_attr($_SESSION['qp_admin_message_type']) . ' is-dismissible"><p>' . $message . '</p></div>';
-                unset($_SESSION['qp_admin_message'], $_SESSION['qp_admin_message_type']);
-            }
-            ?>
-            <hr class="wp-header-end">
 
-            <nav class="nav-tab-wrapper wp-clearfix" aria-label="Secondary menu">
-                <?php
-                foreach ($tabs as $tab_id => $tab_data) {
-                    $class = ($tab_id === $active_tab) ? ' nav-tab-active' : '';
-                    echo '<a href="?page=qp-logs-reports&tab=' . esc_attr($tab_id) . '" class="nav-tab' . esc_attr($class) . '">' . esc_html($tab_data['label']) . '</a>';
-                }
-                ?>
-            </nav>
+        // --- Capture the output of the active tab's render function ---
+        ob_start();
+        call_user_func($tabs[$active_tab]['callback']);
+        $tab_content_html = ob_get_clean();
+        // --- End capturing ---
 
-            <div class="tab-content" style="margin-top: 1.5rem;">
-                <?php
-                call_user_func($tabs[$active_tab]['callback']);
-                ?>
-            </div>
-        </div>
-<?php
+        // Prepare arguments for the wrapper template
+        $args = [
+            'tabs'             => $tabs,
+            'active_tab'       => $active_tab,
+            'tab_content_html' => $tab_content_html,
+        ];
+        
+        // Load and echo the wrapper template
+        echo qp_get_template_html( 'reports-page-wrapper', 'admin', $args );
     }
 
     public static function render_reports_tab() {
