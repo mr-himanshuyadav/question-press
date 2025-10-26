@@ -99,147 +99,22 @@ class QP_Backup_Restore_Page
     }
 
 
-    /**
-     * Renders the Backup & Restore tab content.
-     */
     public static function render()
     {
-        // In future steps, we will add logic here to fetch local backups.
-        $local_backups = []; // Placeholder for now.
-?>
-        <style>
-            .qp-backups-table th.column-date {
-                width: 18%;
-            }
+        // Display any notices (like restore success/error) at the top
+        settings_errors('qp_backup_notices'); 
+        
+        // Fetch data needed for the template
+        $schedule = get_option('qp_auto_backup_schedule', false);
+        $backups_html = qp_get_local_backups_html(); // Call the helper to get the table rows
 
-            .qp-backups-table th.column-name {
-                width: 45%;
-            }
-
-            .qp-backups-table th.column-size {
-                width: 7%;
-            }
-
-            .qp-backups-table th.column-actions {
-                width: 30%;
-            }
-
-            .qp-backups-table .column-actions .button {
-                white-space: nowrap;
-                font-weight: 600;
-            }
-            #qp-local-backups-list .qp-delete-backup-btn{
-                border-color: #d63638;
-            }
-            #qp-local-backups-list td{
-                display: table-cell;
-                vertical-align: middle;
-            }
-        </style>
-        <?php settings_errors('qp_backup_notices'); ?>
-        <div id="col-container" class="wp-clearfix">
-            <div id="col-left">
-                <div class="col-wrap">
-                    <div class="form-wrap" style="margin-bottom: 30px;">
-                        <h2>Create New Backup</h2>
-                        <p>Click the button below to generate a full backup (Complete Database Backup)</p>
-                        <p>
-                            <a href="#" class="button button-primary submit" id="qp-create-backup-btn">Create New Backup</a>
-                        </p>
-                    </div>
-                    <hr>
-                    <div class="form-wrap">
-                        <h2>Restore from Backup</h2>
-                        <p>Upload a <code>.zip</code> backup file</p>
-                        <p> <strong>Warning:</strong> This action will overwrite existing data.</p>
-                        <p><strong>Filename Format: qp(-auto)-backup-YYYY-MM-DD_HH-MM-SS_IST.zip</strong></p>
-                        <form id="qp-restore-form" method="post" enctype="multipart/form-data" action="<?php echo esc_url(admin_url('admin.php?page=qp-tools&tab=backup_restore')); ?>">
-                            <input type="hidden" name="action" value="qp_restore_from_upload">
-                            <?php wp_nonce_field('qp_restore_nonce_action', 'qp_restore_nonce_field'); ?>
-                            <div class="form-field">
-                                <label for="backup_zip_file"></label>
-                                <input type="file" name="backup_zip_file" id="backup_zip_file" accept=".zip,application/zip" required>
-                            </div>
-                            <p class="submit">
-                                <input type="submit" class="button button-danger" value="Upload and Restore">
-                            </p>
-                        </form>
-                    </div>
-                    <hr>
-                    <div class="form-wrap">
-                        <h2>Auto Backup Settings</h2>
-                        <p>Automatically create a local backup at a scheduled interval. The WordPress cron system requires site visits to trigger events, so schedules may not be exact.</p>
-                        <?php $schedule = get_option('qp_auto_backup_schedule', false); ?>
-                        <form id="qp-auto-backup-form" method="post" action="<?php echo esc_url(admin_url('admin.php?page=qp-tools&tab=backup_restore')); ?>">
-                            <input type="hidden" name="action" value="qp_save_auto_backup_settings">
-                            <?php wp_nonce_field('qp_auto_backup_nonce_action', 'qp_auto_backup_nonce_field'); ?>
-
-                            <div class="auto-backup-fields" style="display: flex; flex-direction: column; gap: 15px; align-items: flex-start;">
-                                <div style="display: flex; gap: 15px; align-items: flex-start;flex-direction:column;">
-                                    <div style="display: flex; align-items: center;">
-                                        <span style="margin-right: 5px;">Every</span>
-                                        <input type="number" name="auto_backup_interval" min="1" value="<?php echo esc_attr($schedule && isset($schedule['interval']) ? $schedule['interval'] : 1); ?>" style="width: 70px;">
-                                        <select name="auto_backup_frequency">
-                                            <option value="daily" <?php selected($schedule && isset($schedule['frequency']) ? $schedule['frequency'] : '', 'daily'); ?>>Day(s)</option>
-                                            <option value="weekly" <?php selected($schedule && isset($schedule['frequency']) ? $schedule['frequency'] : '', 'weekly'); ?>>Week(s)</option>
-                                            <option value="monthly" <?php selected($schedule && isset($schedule['frequency']) ? $schedule['frequency'] : '', 'monthly'); ?>>Month(s)</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <span>Number of backups to keep:</span>
-                                        <input type="number" name="auto_backup_keep" min="1" value="<?php echo esc_attr($schedule && isset($schedule['keep']) ? $schedule['keep'] : 5); ?>" style="width: 70px;">
-                                    </div>
-                                </div>
-                                <div>
-                                    <label>
-                                        <input type="checkbox" name="auto_backup_prune_manual" value="1" <?php checked($schedule && !empty($schedule['prune_manual'])); ?>>
-                                        Also delete manual backups during auto-pruning.
-                                    </label>
-                                </div>
-                            </div>
-
-                            <?php if ($schedule && wp_next_scheduled('qp_scheduled_backup_hook')) : ?>
-                                <div class="notice notice-info inline" style="margin-top: 1rem;">
-                                    <p><strong>Status:</strong> Active. Next backup is scheduled for <?php echo esc_html(get_date_from_gmt(date('Y-m-d H:i:s', wp_next_scheduled('qp_scheduled_backup_hook')), 'M j, Y, g:i a')); ?>.</p>
-                                </div>
-                            <?php else: ?>
-                                <div class="notice notice-warning inline" style="margin-top: 1rem;">
-                                    <p><strong>Status:</strong> Inactive.</p>
-                                </div>
-                            <?php endif; ?>
-
-                            <p class="submit">
-                                <input type="submit" class="button button-primary" id="qp-save-schedule-btn" value="<?php echo $schedule ? 'Update Schedule' : 'Save Schedule'; ?>" <?php if ($schedule) echo 'disabled'; ?>>
-
-                                <button type="button" class="button button-secondary" id="qp-disable-auto-backup-btn" <?php if (!$schedule) echo 'disabled'; ?>>Disable</button>
-                            </p>
-                        </form>
-                        <form id="qp-disable-backup-form" method="post" action="<?php echo esc_url(admin_url('admin.php?page=qp-tools&tab=backup_restore')); ?>" style="display: none;">
-                            <input type="hidden" name="action" value="qp_disable_auto_backup">
-                            <?php wp_nonce_field('qp_auto_backup_nonce_action', 'qp_auto_backup_nonce_field'); ?>
-                        </form>
-                    </div>
-                </div>
-            </div>
-            <div id="col-right">
-                <div class="col-wrap">
-                    <h3>Backups</h3>
-                    <table class="wp-list-table widefat fixed striped qp-backups-table">
-                        <thead>
-                            <tr>
-                                <th class="column-date">Backup Date</th>
-                                <th class="column-name">Backup Name</th>
-                                <th class="column-size">Size</th>
-                                <th class="column-actions">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="qp-local-backups-list">
-                            <?php echo qp_get_local_backups_html(); ?>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-<?php
+        // Prepare arguments for the template
+        $args = [
+            'schedule'     => $schedule,
+            'backups_html' => $backups_html,
+        ];
+        
+        // Load and echo the template
+        echo qp_get_template_html( 'tools-backup-restore', 'admin', $args );
     }
 }
