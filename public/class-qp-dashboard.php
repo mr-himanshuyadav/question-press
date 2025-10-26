@@ -179,7 +179,7 @@ class QP_Dashboard
         ];
 
         // Load and return the template HTML
-        return qp_get_template_html('dashboard/dashboard-sidebar', 'frontend', $args);
+        return qp_get_template_html('dashboard/sidebar', 'frontend', $args);
     }
 
     /**
@@ -547,67 +547,48 @@ public static function render_history_content() // <-- Already changed to public
         return qp_get_template_html( 'dashboard/review', 'frontend', $args );
     }
 
-            /**
-             * Renders the content specifically for the Progress section.
-             */
-            public static function render_progress_content()
-            {
-                global $wpdb;
-                $term_table = $wpdb->prefix . 'qp_terms';
-                $tax_table = $wpdb->prefix . 'qp_taxonomies';
-                $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'subject'");
-                $subjects = [];
-                if ($subject_tax_id) {
-                    $subjects = $wpdb->get_results($wpdb->prepare(
-                        "SELECT term_id, name FROM {$term_table} WHERE taxonomy_id = %d AND name != 'Uncategorized' AND parent = 0 ORDER BY name ASC",
-                        $subject_tax_id
-                    ));
-                }
+    /**
+     * Renders the content specifically for the Progress section by loading a template.
+     * NOW PUBLIC STATIC and RETURNS HTML.
+     */
+    public static function render_progress_content() // <-- Already changed to public static previously
+    {
+        global $wpdb;
+        $term_table = $wpdb->prefix . 'qp_terms';
+        $tax_table = $wpdb->prefix . 'qp_taxonomies';
+        $subject_tax_id = $wpdb->get_var( $wpdb->prepare( "SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = %s", 'subject' ) );
+        $subjects = [];
+        if ( $subject_tax_id ) {
+            // --- NEW: Filter subjects based on user scope ---
+            $user_id = get_current_user_id();
+            $allowed_subjects_or_all = qp_get_allowed_subject_ids_for_user( $user_id );
 
-                ob_start();
-    ?>
-        <h2>Progress Tracker</h2>
-        <p style="text-align: center; font-style: italic; color: var(--qp-dashboard-text-light);">Track your completion progress by subject and source.</p>
-
-        <div class="qp-card"> <?php // Wrap filters in a card 
-                                ?>
-            <div class="qp-card-content">
-                <div class="qp-progress-filters">
-                    <div class="qp-form-group">
-                        <label for="qp-progress-subject">Select Subject</label>
-                        <select name="qp-progress-subject" id="qp-progress-subject">
-                            <option value="">— Select a Subject —</option>
-                            <?php foreach ($subjects as $subject) : ?>
-                                <option value="<?php echo esc_attr($subject->term_id); ?>"><?php echo esc_html($subject->name); ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div class="qp-form-group">
-                        <label for="qp-progress-source">Select Source</label>
-                        <select name="qp-progress-source" id="qp-progress-source" disabled>
-                            <option value="">— Select a Subject First —</option>
-                        </select>
-                    </div>
-                    <div class="qp-form-group" style="align-self: flex-end;"> <?php // Align checkbox lower 
-                                                                                ?>
-                        <label class="qp-custom-checkbox">
-                            <input type="checkbox" id="qp-exclude-incorrect-cb" name="exclude_incorrect_attempts" value="1">
-                            <span></span>
-                            Count Correct Only
-                        </label>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div id="qp-progress-results-container" style="margin-top: 1.5rem;">
-            <?php // Results will be loaded here via AJAX 
-            ?>
-            <p style="text-align: center; color: var(--qp-dashboard-text-light);">Please select a subject and source to view your progress.</p>
-        </div>
-    <?php
-                return ob_get_clean();
+            if ( $allowed_subjects_or_all === 'all' ) {
+                // User has access to all, fetch all subjects
+                $subjects = $wpdb->get_results( $wpdb->prepare(
+                    "SELECT term_id, name FROM {$term_table} WHERE taxonomy_id = %d AND name != 'Uncategorized' AND parent = 0 ORDER BY name ASC",
+                    $subject_tax_id
+                ) );
+            } elseif ( is_array( $allowed_subjects_or_all ) && ! empty( $allowed_subjects_or_all ) ) {
+                // User has specific access, fetch only those subjects
+                $ids_placeholder = implode( ',', array_map( 'absint', $allowed_subjects_or_all ) );
+                $subjects = $wpdb->get_results( $wpdb->prepare(
+                    "SELECT term_id, name FROM {$term_table} WHERE taxonomy_id = %d AND term_id IN ($ids_placeholder) AND parent = 0 ORDER BY name ASC",
+                    $subject_tax_id
+                ) );
             }
+            // If $allowed_subjects_or_all is an empty array, $subjects remains empty, which is correct.
+            // --- END NEW SCOPE FILTER ---
+        }
+
+        // Prepare arguments for the template
+        $args = [
+            'subjects' => $subjects,
+        ];
+
+        // Load and return the template HTML
+        return qp_get_template_html( 'dashboard/progress', 'frontend', $args );
+    }
 
             /**
              * Renders the content specifically for the Courses section.
