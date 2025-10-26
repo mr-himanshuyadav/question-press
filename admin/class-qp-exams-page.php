@@ -88,9 +88,6 @@ class QP_Exams_Page {
         }   
     }
 
-    /**
-     * Renders the HTML for the Exams tab using the new taxonomy system.
-     */
     public static function render() {
         global $wpdb;
         $term_table = $wpdb->prefix . 'qp_terms';
@@ -139,98 +136,23 @@ class QP_Exams_Page {
             $subjects_by_exam[$link->exam_term_id][] = $link->subject_name;
         }
 
+        // Display session messages before loading the template
         if (isset($_SESSION['qp_admin_message'])) {
             $message = html_entity_decode($_SESSION['qp_admin_message']);
             echo '<div id="message" class="notice notice-' . esc_attr($_SESSION['qp_admin_message_type']) . ' is-dismissible"><p>' . $message . '</p></div>';
             unset($_SESSION['qp_admin_message'], $_SESSION['qp_admin_message_type']);
         }
-    ?>
-    <div id="col-container" class="wp-clearfix">
-        <div id="col-left">
-            <div class="col-wrap">
-                <div class="form-wrap">
-                    <h2><?php echo $exam_to_edit ? 'Edit Exam' : 'Add New Exam'; ?></h2>
-                    <form method="post" action="admin.php?page=qp-organization&tab=exams">
-                        <?php wp_nonce_field('qp_add_edit_exam_nonce'); ?>
-                        <input type="hidden" name="action" value="<?php echo $exam_to_edit ? 'update_exam' : 'add_exam'; ?>">
-                        <?php if ($exam_to_edit) : ?>
-                            <input type="hidden" name="term_id" value="<?php echo esc_attr($exam_to_edit->term_id); ?>">
-                        <?php endif; ?>
-                        
-                        <div class="form-field form-required">
-                            <label for="exam-name">Exam Name</label>
-                            <input name="exam_name" id="exam-name" type="text" value="<?php echo $exam_to_edit ? esc_attr($exam_to_edit->name) : ''; ?>" size="40" required>
-                            <p>e.g., UPSC Prelims, NEET, GATE Civil</p>
-                        </div>
-                        
-                        <div class="form-field">
-                            <label>Linked Subjects</label>
-                            <div class="subjects-checkbox-group" style="padding: 10px; border: 1px solid #ddd; background: #fff; max-height: 200px; overflow-y: auto;">
-                            <?php foreach ($all_subjects as $subject): 
-                                $checked = in_array($subject->term_id, $linked_subjects_for_edit);
-                            ?>
-                                <label style="display: block; margin-bottom: 5px;">
-                                    <input type="checkbox" name="linked_subjects[]" value="<?php echo esc_attr($subject->term_id); ?>" <?php checked($checked); ?>>
-                                    <?php echo esc_html($subject->name); ?>
-                                </label>
-                            <?php endforeach; ?>
-                            </div>
-                            <p>Select all subjects that are part of this exam.</p>
-                        </div>
 
-                        <p class="submit">
-                            <input type="submit" class="button button-primary" value="<?php echo $exam_to_edit ? 'Update Exam' : 'Add New Exam'; ?>">
-                            <?php if ($exam_to_edit) : ?>
-                                <a href="admin.php?page=qp-organization&tab=exams" class="button button-secondary">Cancel Edit</a>
-                            <?php endif; ?>
-                        </p>
-                    </form>
-                </div>
-            </div>
-        </div>
-        <div id="col-right">
-            <div class="col-wrap">
-                <table class="wp-list-table widefat fixed striped">
-                    <thead>
-                        <tr>
-                            <th>Exam</th>
-                            <th>Linked Subjects</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php if (!empty($exams)) : foreach ($exams as $exam) : ?>
-                            <tr>
-                                <td>
-                                    <strong><?php echo esc_html($exam->name); ?></strong>
-                                </td>
-                                <td>
-                                    <?php 
-                                        if (!empty($subjects_by_exam[$exam->term_id])) {
-                                            echo implode(', ', array_map('esc_html', $subjects_by_exam[$exam->term_id]));
-                                        } else {
-                                            echo '<em>None</em>';
-                                        }
-                                    ?>
-                                </td>
-                                <td>
-                                    <?php
-                                        $edit_nonce = wp_create_nonce('qp_edit_exam_' . $exam->term_id);
-                                        $delete_nonce = wp_create_nonce('qp_delete_exam_' . $exam->term_id);
-                                        $edit_link = sprintf('<a href="?page=qp-organization&tab=exams&action=edit&term_id=%s&_wpnonce=%s">Edit</a>', $exam->term_id, $edit_nonce);
-                                        $delete_link = sprintf('<a href="?page=qp-organization&tab=exams&action=delete&term_id=%s&_wpnonce=%s" style="color:#a00;">Delete</a>', $exam->term_id, $delete_nonce);
-                                        echo $edit_link . ' | ' . $delete_link;
-                                    ?>
-                                </td>
-                            </tr>
-                        <?php endforeach; else : ?>
-                            <tr class="no-items"><td colspan="3">No exams found.</td></tr>
-                        <?php endif; ?>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-    <?php
+        // Prepare arguments for the template
+        $args = [
+            'exam_to_edit'             => $exam_to_edit,
+            'linked_subjects_for_edit' => $linked_subjects_for_edit,
+            'all_subjects'             => $all_subjects,
+            'exams'                    => $exams,
+            'subjects_by_exam'         => $subjects_by_exam,
+        ];
+        
+        // Load and echo the template
+        echo qp_get_template_html( 'organization-tab-exams', 'admin', $args );
     }
 }
