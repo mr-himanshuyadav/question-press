@@ -197,8 +197,15 @@ class Terms_DB extends DB { // Inherits from DB to get $wpdb
 
         for ($i = 0; $i < 10; $i++) { // Safety break
             if (empty($current_parent_ids)) break;
-            $ids_placeholder = implode(',', $current_parent_ids);
-            $child_ids = self::$wpdb->get_col("SELECT term_id FROM $term_table WHERE parent IN ($ids_placeholder)"); // Note: No prepare needed for IN clause with known safe integers
+
+            // Create a placeholder string like '%d, %d, %d'
+            $placeholders = implode(',', array_fill(0, count($current_parent_ids), '%d'));
+
+            // Prepare the query safely
+            $child_ids = self::$wpdb->get_col( self::$wpdb->prepare(
+                "SELECT term_id FROM $term_table WHERE parent IN ($placeholders)",
+                $current_parent_ids
+            ) );
 
             if (!empty($child_ids)) {
                 // Ensure child IDs are integers before merging

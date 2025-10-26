@@ -643,7 +643,7 @@ class QP_Questions_List_Table extends WP_List_Table
 
     public function column_question_text($item)
     {
-        $page = esc_attr($_REQUEST['page']);
+        $page = isset($_REQUEST['page']) ? esc_attr($_REQUEST['page']) : 'question-press'; // Default to a safe value
         $status = isset($_REQUEST['status']) ? sanitize_key($_REQUEST['status']) : 'all';
         $group_id = isset($item['group_id']) ? $item['group_id'] : 0; // Ensure group_id is available
 

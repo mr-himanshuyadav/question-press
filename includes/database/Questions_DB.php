@@ -1401,6 +1401,102 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
         return self::$wpdb->get_col( self::$wpdb->prepare( $query, $params ) );
     }
 
+    /**
+     * Checks if a single, enriched question item matches a set of list table filters.
+     * Used by Quick Edit to determine if the row should remain visible.
+     *
+     * @param array $item    The enriched question item (must include 'status', 'question_id', 'question_text', 'subject_id', 'topic_id', 'linked_source_term_id', 'labels').
+     * @param array $filters The array of filter values from the list table (e.g., $_REQUEST).
+     * @return bool True if the item matches all active filters, false otherwise.
+     */
+    public static function check_question_matches_filters($item, $filters) {
+        // 1. Check Status
+        if (!empty($filters['status']) && $item['status'] !== $filters['status']) {
+            return false;
+        }
+
+        // 2. Check Search
+        if (!empty($filters['search'])) {
+            $search_term = $filters['search'];
+            if (is_numeric($search_term)) {
+                if ($item['question_id'] != $search_term) {
+                    return false; // Does not match numeric ID search
+                }
+            } else {
+                // Check if search term is in the question text
+                if (stripos($item['question_text'], $search_term) === false) {
+                    return false; // Does not match text search
+                }
+            }
+        }
+
+        // 3. Check Subject
+        if (!empty($filters['subject_id'])) {
+            // Get all descendant IDs for the filtered subject
+            $subject_and_topic_ids = Terms_DB::get_all_descendant_ids($filters['subject_id']);
+            
+            // Check if the item's topic_id (most specific) OR subject_id is in the filter list
+            $item_term_id = $item['topic_id'] ?? $item['subject_id']; // Use topic, fallback to subject
+            if (!$item_term_id || !in_array($item_term_id, $subject_and_topic_ids)) {
+                 return false;
+            }
+        }
+
+        // 4. Check Topic (This is a more specific filter)
+        if (!empty($filters['topic_id'])) {
+            if ($item['topic_id'] != $filters['topic_id']) {
+                return false;
+            }
+        }
+
+        // 5. Check Source/Section
+        if (!empty($filters['source_filter'])) {
+            $term_id_to_filter = 0;
+            if (strpos($filters['source_filter'], 'source_') === 0) {
+                $term_id_to_filter = absint(str_replace('source_', '', $filters['source_filter']));
+            } elseif (strpos($filters['source_filter'], 'section_') === 0) {
+                $term_id_to_filter = absint(str_replace('section_', '', $filters['source_filter']));
+            }
+
+            if ($term_id_to_filter > 0) {
+                // Get all descendants of the filter term
+                $source_and_section_ids = Terms_DB::get_all_descendant_ids($term_id_to_filter);
+                // Check if the item's linked term is one of them
+                if (empty($item['linked_source_term_id']) || !in_array($item['linked_source_term_id'], $source_and_section_ids)) {
+                    return false;
+                }
+            }
+        }
+
+        // 6. Check Labels
+        if (!empty($filters['label_ids'])) {
+            $item_label_ids = wp_list_pluck($item['labels'], 'label_id'); // 'label_id' might not be set, let's check enrich...
+            // enrich_questions_with_terms adds 'labels' as an array of objects: [ (object)['label_name', 'label_color'] ]
+            // This is a bug in my previous code. enrich_questions_with_terms needs to add label_id.
+            
+            // Let's assume for a moment the label IDs are NOT available on $item['labels']
+            // We must re-fetch them. This is inefficient but will work.
+            global $wpdb;
+            $label_tax_id = Terms_DB::get_taxonomy_id_by_name('label');
+            $item_label_ids = $wpdb->get_col($wpdb->prepare(
+                "SELECT term_id FROM " . Terms_DB::get_relationships_table_name() . " 
+                 WHERE object_id = %d AND object_type = 'question' 
+                 AND term_id IN (SELECT term_id FROM " . Terms_DB::get_terms_table_name() . " WHERE taxonomy_id = %d)",
+                 $item['question_id'], $label_tax_id
+            ));
+            $item_label_ids = array_map('intval', $item_label_ids);
+            
+            // Check if all required labels are present in the item's labels
+            $missing_labels = array_diff($filters['label_ids'], $item_label_ids);
+            if (!empty($missing_labels)) {
+                return false; // Item is missing one or more required labels
+            }
+        }
+
+        // If all checks passed, the item matches
+        return true;
+    }
+
     // --- More methods for saving, updating, deleting will be added below ---
 
 } // End class Questions_DB
