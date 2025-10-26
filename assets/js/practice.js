@@ -325,31 +325,57 @@ jQuery(document).ready(function ($) {
       correct: 0,
       incorrect: 0,
       skipped: 0,
-      not_attempted: 0,
-      reported: 0, // Initialize reported count to 0
+      not_attempted: 0, // Keep this for section-wise
+      reported: 0, // Ensure reported count is initialized
     };
 
     sessionQuestionIDs.forEach(function (qid) {
       var state = answeredStates[qid];
       if (!state) {
         counts.not_viewed++;
-        counts.not_attempted++;
+        // Check if it should be counted as not_attempted (only for section-wise)
+        if (sessionSettings.practice_mode === "Section Wise Practice") {
+             counts.not_attempted++;
+        }
       } else {
-        if (state.reported) {
+        // --- THIS IS THE KEY CHANGE ---
+        // Prioritize reported status for counting
+        if (state.reported_info && state.reported_info.has_report) {
           counts.reported++;
+        // --- END CHANGE ---
         } else if (isMockTest && state.mock_status) {
           counts[state.mock_status]++;
+           // Also count not_viewed for mock test if applicable
+           if (state.mock_status === 'not_viewed') {
+                counts.not_attempted++; // Mock tests use 'not_attempted' synonymously here
+           }
         } else if (!isMockTest && state.type) {
           if (state.type === "answered") {
             if (state.is_correct) counts.correct++;
             else counts.incorrect++;
           } else if (state.type === "skipped") {
-            counts.skipped++;
+            // Only count skipped if NOT section-wise practice
+             if (sessionSettings.practice_mode !== "Section Wise Practice") {
+                counts.skipped++;
+             } else {
+                counts.not_attempted++; // Count as not attempted in section-wise
+             }
+          } else {
+             // Catch other states like 'expired' if needed, or count as not_attempted
+             if (sessionSettings.practice_mode === "Section Wise Practice") {
+                counts.not_attempted++;
+             }
           }
+        } else {
+            // If state exists but has no type/mock_status (e.g., just reported_info for suggestion), count as not_attempted if section-wise
+            if (sessionSettings.practice_mode === "Section Wise Practice") {
+                 counts.not_attempted++;
+            }
         }
       }
     });
 
+    // Update legend display (no changes needed here)
     for (var status in counts) {
       if (counts.hasOwnProperty(status)) {
         $('.qp-palette-legend .legend-item[data-status="' + status + '"]')
@@ -1049,7 +1075,7 @@ jQuery(document).ready(function ($) {
             var reviewPageQuestionId = $("#qp-report-question-id-field").val();
 
             if (reviewPageQuestionId) {
-              // Logic for the Review Page
+              // Logic for the Review Page (Unchanged)
               var buttonToDisable = $(
                 '.qp-report-btn-review[data-question-id="' +
                   reviewPageQuestionId +
@@ -1057,64 +1083,89 @@ jQuery(document).ready(function ($) {
               );
               buttonToDisable.prop("disabled", true).text("Reported");
               $("#qp-report-question-id-field").val("");
-              form.find('textarea[name="report_comment"]').val(''); // Reset comment textarea
+              form.find('textarea[name="report_comment"]').val('');
             } else {
-              // --- NEW, CONSOLIDATED LOGIC for the Practice Session Page ---
+              // --- REVISED LOGIC for the Practice Session Page ---
               var questionID = sessionQuestionIDs[currentQuestionIndex];
+              var newReportInfo = response.data.reported_info || { has_report: false, has_suggestion: false }; // Get report info from response
 
-              // 1. Update the local state with the new report info from the server
+              // 1. Update the local state
               if (typeof answeredStates[questionID] === "undefined") {
                 answeredStates[questionID] = {};
               }
-              answeredStates[questionID].reported_info =
-                response.data.reported_info;
+              answeredStates[questionID].reported_info = newReportInfo; // Update state
 
-              // 2. Hide the report button immediately, regardless of type
+              // 2. Hide the report button
               $("#qp-report-btn").hide();
 
-              // 3. Update the palette to the gray "reported" state
-              if (response.data.reported_info.has_report) {
-                updatePaletteButton(questionID, "reported");
+              // 3. Update Palette and Legend
+              // Determine palette status: 'reported' takes precedence over suggestion
+              var paletteStatus = 'viewed'; // Default if neither flag is set (shouldn't happen on success, but safe fallback)
+              if (newReportInfo.has_report) {
+                  paletteStatus = 'reported';
+              } else if (newReportInfo.has_suggestion) {
+                  // If only a suggestion, keep existing status (correct, incorrect, skipped etc.)
+                  // OR decide on a specific 'suggestion' status if needed. Let's keep existing for now.
+                  // For simplicity, we won't change the main color for just a suggestion,
+                  // but we *will* update the legend. If has_report is true, it overrides.
+                   paletteStatus = answeredStates[questionID].type === 'answered'
+                                    ? (answeredStates[questionID].is_correct ? 'correct' : 'incorrect')
+                                    : (answeredStates[questionID].type || 'viewed'); // Use existing status or default to viewed
+              }
+
+              // Update the specific button only if it needs changing based on report status
+              if (newReportInfo.has_report) {
+                 updatePaletteButton(questionID, 'reported');
               }
               scrollPaletteToCurrent();
-              updateLegendCounts(); // Update the legend count for reported items
+              updateLegendCounts(); // This should now correctly count reported items too
 
-              // 4. Update the indicators
+              // 4. Update Indicators based *only* on the new state
               var showIndicatorBar = false;
+              // Clear previous indicator states explicitly before showing new ones
               $("#qp-reported-indicator, #qp-suggestion-indicator").hide();
-              if (response.data.reported_info.has_report) {
+              $(".qp-indicator-bar").hide(); // Hide the bar itself initially
+
+              if (newReportInfo.has_report) {
                 $("#qp-reported-indicator").show();
                 showIndicatorBar = true;
               }
-              if (response.data.reported_info.has_suggestion) {
-                $("#qp-suggestion-indicator").show();
-                showIndicatorBar = true;
+              if (newReportInfo.has_suggestion) {
+                // Only show suggestion indicator if there isn't a critical report
+                if (!newReportInfo.has_report) {
+                     $("#qp-suggestion-indicator").show();
+                     showIndicatorBar = true;
+                }
               }
+              // Show the bar *after* determining which indicators should be visible
               if (showIndicatorBar) {
                 $(".qp-indicator-bar").show();
               }
 
-              // 5. Conditionally lock the UI only if a critical 'report' was submitted
-              if (response.data.reported_info.has_report) {
+              // 5. Conditionally lock UI and advance *only* if a critical 'report' was submitted
+              if (newReportInfo.has_report) {
                 $(".qp-options-area")
                   .addClass("disabled")
                   .find('input[type="radio"]')
                   .prop("disabled", true);
                 $("#qp-skip-btn, #qp-check-answer-btn").prop("disabled", true);
-                $("#qp-next-btn").prop("disabled", false);
-                $('#qp-next-btn').click();
+                $("#qp-next-btn").prop("disabled", false); // Ensure next is enabled
+                // Call loadNextQuestion() instead of just clicking the button
+                // to ensure palette updates correctly
+                loadNextQuestion();
               }
-              // If it was only a suggestion, the UI remains active as desired.
+              // No 'else' needed - if only suggestion, UI stays active
 
               form.find('textarea[name="report_comment"]').val(''); // Reset comment textarea
             }
           });
         } else {
-          Swal.fire(
-            "Error!",
-            response.data.message || "Could not submit the report.",
-            "error"
-          );
+            // Standard error handling (Unchanged)
+            Swal.fire(
+                "Error!",
+                response.data.message || "Could not submit the report.",
+                "error"
+            );
         }
       },
       error: function () {
