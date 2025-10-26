@@ -4,34 +4,50 @@ if (!defined('ABSPATH')) exit;
 class QP_Settings_Page
 {
 
-    /**
-     * Renders the main settings page wrapper and form.
-     */
     public static function render()
     {
-?>
-        <div class="wrap">
-            <h1>Question Press Settings</h1>
-            <?php
-            // Display settings errors and messages
-            if (isset($_SESSION['qp_admin_message'])) {
-                $message = html_entity_decode($_SESSION['qp_admin_message']);
-                echo '<div id="message" class="notice notice-' . esc_attr($_SESSION['qp_admin_message_type']) . ' is-dismissible"><p>' . $message . '</p></div>';
-                unset($_SESSION['qp_admin_message'], $_SESSION['qp_admin_message_type']);
-            }
-            settings_errors();
-            ?>
-            <form action="options.php" method="post">
-                <?php
-                settings_fields('qp_settings_group');
-                // Add the top save button
-                submit_button('Save Settings', 'primary', 'submit_top', false);
-                do_settings_sections('qp-settings-page');
-                submit_button('Save Settings');
-                ?>
-            </form>
-        </div>
-    <?php
+        // Display settings errors and messages first, outside the template
+        if (isset($_SESSION['qp_admin_message'])) {
+            $message = html_entity_decode($_SESSION['qp_admin_message']);
+            echo '<div id="message" class="notice notice-' . esc_attr($_SESSION['qp_admin_message_type']) . ' is-dismissible"><p>' . $message . '</p></div>';
+            unset($_SESSION['qp_admin_message'], $_SESSION['qp_admin_message_type']);
+        }
+        settings_errors();
+
+        // --- Capture WordPress settings functions output ---
+        
+        // Capture settings_fields()
+        ob_start();
+        settings_fields('qp_settings_group');
+        $settings_fields_html = ob_get_clean();
+
+        // Capture top submit_button()
+        ob_start();
+        submit_button('Save Settings', 'primary', 'submit_top', false);
+        $submit_button_top = ob_get_clean();
+        
+        // Capture do_settings_sections()
+        ob_start();
+        do_settings_sections('qp-settings-page');
+        $sections_html = ob_get_clean();
+
+        // Capture bottom submit_button()
+        ob_start();
+        submit_button('Save Settings');
+        $submit_button_bottom = ob_get_clean();
+        
+        // --- End capturing ---
+
+        // Prepare arguments for the template
+        $args = [
+            'settings_fields_html' => $settings_fields_html,
+            'submit_button_top'    => $submit_button_top,
+            'sections_html'        => $sections_html,
+            'submit_button_bottom' => $submit_button_bottom,
+        ];
+        
+        // Load and echo the template
+        echo qp_get_template_html( 'settings-page-wrapper', 'admin', $args );
     }
 
     /**

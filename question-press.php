@@ -1348,7 +1348,6 @@ function qp_render_tools_page()
         'import' => ['label' => 'Import', 'callback' => ['QP_Import_Page', 'render']],
         'export'   => ['label' => 'Export', 'callback' => ['QP_Export_Page', 'render']],
         'backup_restore'   => ['label' => 'Backup & Restore', 'callback' => ['QP_Backup_Restore_Page', 'render']],
-        'user_attempts'    => ['label' => 'User Attempts', 'callback' => 'qp_render_user_attempts_tool_page'],
     ];
     $active_tab = isset($_GET['tab']) && array_key_exists($_GET['tab'], $tabs) ? $_GET['tab'] : 'import';
 ?>
@@ -1547,109 +1546,6 @@ function qp_render_user_entitlements_page() {
              echo '<p>' . __('Please search for a User ID above to manage their scope and view their entitlements.', 'question-press') . '</p>';
         endif;
         ?>
-
-    </div>
-<?php
-}
-
-/**
- * Renders the User Attempts management tool page.
- */
-function qp_render_user_attempts_tool_page() {
-    // --- Form Handling Logic ---
-    $user_id_searched = null;
-    $current_attempts = 'N/A';
-    $user_info = null;
-
-    // Check if the user search form was submitted
-    // Check if the update attempts form was submitted
-if (isset($_POST['action']) && $_POST['action'] === 'qp_update_attempts' && isset($_POST['user_id_to_update'])) {
-    // Verify the nonce for the update action
-    check_admin_referer('qp_update_user_attempts_nonce');
-
-    $user_id_to_update = absint($_POST['user_id_to_update']);
-    // Make sure the new attempts value is a non-negative integer
-    $new_attempts = isset($_POST['qp_new_attempts']) ? max(0, intval($_POST['qp_new_attempts'])) : 0;
-
-    if ($user_id_to_update > 0) {
-        $user_info = get_userdata($user_id_to_update); // Get user data again to confirm existence
-        if ($user_info) {
-            // Update the user meta value
-            update_user_meta($user_id_to_update, 'qp_remaining_attempts', $new_attempts);
-            add_settings_error('qp_user_attempts_notices', 'attempts_updated', 'Attempts updated successfully for ' . esc_html($user_info->display_name) . '. New count: ' . $new_attempts, 'success');
-            // We need to re-set these variables so the form displays the *updated* info immediately
-            $user_id_searched = $user_id_to_update;
-            $current_attempts = $new_attempts;
-        } else {
-            add_settings_error('qp_user_attempts_notices', 'update_user_not_found', 'Error: Could not update attempts because User ID ' . esc_html($user_id_to_update) . ' was not found.', 'error');
-        }
-    } else {
-         add_settings_error('qp_user_attempts_notices', 'update_invalid_user_id', 'Error: Invalid User ID for update.', 'error');
-    }
-}
-    elseif (isset($_POST['action']) && $_POST['action'] === 'qp_search_user' && isset($_POST['qp_user_id_search'])) {
-        // Verify the nonce
-        check_admin_referer('qp_search_user_attempts_nonce');
-
-        $user_id_searched = absint($_POST['qp_user_id_search']);
-        if ($user_id_searched > 0) {
-            $user_info = get_userdata($user_id_searched); // Fetch user data object
-
-            if ($user_info) {
-                // User found, get their attempts meta
-                $attempts_meta = get_user_meta($user_id_searched, 'qp_remaining_attempts', true);
-                // Set current attempts (handle case where meta doesn't exist yet)
-                $current_attempts = ($attempts_meta !== '') ? (int)$attempts_meta : 0;
-                add_settings_error('qp_user_attempts_notices', 'user_found', 'User found: ' . esc_html($user_info->display_name), 'success');
-            } else {
-                // User ID entered, but no user found
-                add_settings_error('qp_user_attempts_notices', 'user_not_found', 'Error: User ID ' . esc_html($user_id_searched) . ' not found.', 'error');
-                $user_id_searched = absint($_POST['qp_user_id_search']); // Keep the searched ID for display
-            }
-        } else {
-            add_settings_error('qp_user_attempts_notices', 'invalid_user_id', 'Error: Please enter a valid User ID.', 'error');
-        }
-    }
-     // --- End Form Handling Logic ---
-
-
-    // --- Display the Form ---
-?>
-    <div class="wrap">
-        <h2>Manage User Attempts</h2>
-        <p>View and update the number of remaining question attempts for a specific user.</p>
-
-        <?php settings_errors('qp_user_attempts_notices'); // Display feedback messages ?>
-
-        <form method="post" action="admin.php?page=qp-tools&tab=user_attempts" style="margin-bottom: 2rem;">
-            <?php wp_nonce_field('qp_search_user_attempts_nonce'); ?>
-            <input type="hidden" name="action" value="qp_search_user">
-            <label for="qp_user_id_search"><strong>Enter User ID:</strong></label><br>
-            <input type="number" id="qp_user_id_search" name="qp_user_id_search" value="<?php echo esc_attr($user_id_searched); ?>" min="1" required>
-            <input type="submit" class="button button-secondary" value="Find User">
-        </form>
-
-        <?php if ($user_id_searched): // Only show update form if a user *ID* was searched for ?>
-            <hr>
-            <h3>Update Attempts for User: <?php echo esc_html($user_info ? $user_info->display_name . ' (ID: ' . $user_id_searched . ')' : 'Not Found'); ?></h3>
-            <?php if ($user_info): // Only show update fields if the user was actually found ?>
-                <form method="post" action="admin.php?page=qp-tools&tab=user_attempts">
-                    <?php wp_nonce_field('qp_update_user_attempts_nonce'); ?>
-                    <input type="hidden" name="action" value="qp_update_attempts">
-                    <input type="hidden" name="user_id_to_update" value="<?php echo esc_attr($user_id_searched); ?>">
-
-                    <p><strong>Current Remaining Attempts:</strong> <?php echo esc_html($current_attempts); ?></p>
-
-                    <label for="qp_new_attempts"><strong>Set New Attempt Count:</strong></label><br>
-                    <input type="number" id="qp_new_attempts" name="qp_new_attempts" value="<?php echo esc_attr($current_attempts !== 'N/A' ? $current_attempts : 0); ?>" min="0" required>
-                    <p class="description">Enter the total number of attempts the user should have. Use 0 to remove access.</p>
-
-                    <input type="submit" class="button button-primary" value="Update Attempts">
-                </form>
-            <?php else: ?>
-                <?php // Error message is handled by settings_errors() above ?>
-            <?php endif; ?>
-        <?php endif; ?>
 
     </div>
 <?php
