@@ -2087,109 +2087,75 @@ function qp_handle_save_user_scope() {
 }
 add_action('admin_post_qp_save_user_scope', 'qp_handle_save_user_scope');
 
+/**
+ * Callback function to render the main "All Questions" admin page using a template.
+ */
 function qp_all_questions_page_cb()
 {
+    // Instantiate the list table
     $list_table = new QP_Questions_List_Table();
+    // Prepare items (fetches data based on current request parameters)
     $list_table->prepare_items();
-?>
-    <div class="wrap">
-        <h1 class="wp-heading-inline">All Questions</h1>
-        <a href="<?php echo admin_url('admin.php?page=qp-question-editor'); ?>" class="page-title-action">Add New</a>
-        <?php
-        if (isset($_SESSION['qp_admin_message'])) {
-            $message = html_entity_decode($_SESSION['qp_admin_message']);
-            echo '<div id="message" class="notice notice-' . esc_attr($_SESSION['qp_admin_message_type']) . ' is-dismissible"><p>' . $message . '</p></div>';
-            unset($_SESSION['qp_admin_message'], $_SESSION['qp_admin_message_type']);
+
+    // Capture session messages
+    ob_start();
+    if (isset($_SESSION['qp_admin_message'])) {
+        $message = html_entity_decode($_SESSION['qp_admin_message']);
+        echo '<div id="message" class="notice notice-' . esc_attr($_SESSION['qp_admin_message_type']) . ' is-dismissible"><p>' . wp_kses_post($message) . '</p></div>';
+        unset($_SESSION['qp_admin_message'], $_SESSION['qp_admin_message_type']);
+    }
+    // Handle standard WordPress update/save messages
+    if (isset($_GET['message'])) {
+        $messages = ['1' => 'Question(s) updated successfully.', '2' => 'Question(s) saved successfully.'];
+        $message_id = absint($_GET['message']);
+        if (isset($messages[$message_id])) {
+            echo '<div id="message" class="notice notice-success is-dismissible"><p>' . esc_html($messages[$message_id]) . '</p></div>';
         }
-        if (isset($_GET['message'])) {
-            $messages = ['1' => 'Question(s) updated successfully.', '2' => 'Question(s) saved successfully.'];
-            $message_id = absint($_GET['message']);
-            if (isset($messages[$message_id])) {
-                echo '<div id="message" class="notice notice-success is-dismissible"><p>' . esc_html($messages[$message_id]) . '</p></div>';
-            }
-        }
-        // NEW: Check for our bulk edit confirmation message
-        if (isset($_GET['bulk_edit_message']) && $_GET['bulk_edit_message'] === '1') {
-            echo '<div id="message" class="notice notice-success is-dismissible"><p>Questions have been bulk updated successfully.</p></div>';
-        }
+    }
+    $session_message_html = ob_get_clean();
 
-        ?>
-        <hr class="wp-header-end">
-        <?php $list_table->views(); ?>
-        <form method="get">
-            <input type="hidden" name="page" value="<?php echo esc_attr($_REQUEST['page']); ?>" />
-            <?php $list_table->search_box('Search Questions', 'question'); ?>
-            <?php $list_table->display(); ?>
-        </form>
-        <?php $list_table->display_view_modal(); ?>
-        <style type="text/css">
-            #post-query-submit {
-                margin-left: 8px;
-            }
+    // Capture bulk edit message
+    ob_start();
+    if (isset($_GET['bulk_edit_message']) && $_GET['bulk_edit_message'] === '1') {
+        echo '<div id="message" class="notice notice-success is-dismissible"><p>Questions have been bulk updated successfully.</p></div>';
+    }
+    $bulk_edit_message_html = ob_get_clean();
 
-            .wp-list-table .column-custom_question_id {
-                width: 5%;
-            }
 
-            .wp-list-table .column-question_text {
-                width: 50%;
-            }
+    // Capture list table views
+    ob_start();
+    $list_table->views();
+    $views_html = ob_get_clean();
 
-            .wp-list-table .column-subject_name {
-                width: 15%;
-            }
+    // Capture search box
+    ob_start();
+    $list_table->search_box('Search Questions', 'question');
+    $search_box_html = ob_get_clean();
 
-            .wp-list-table .column-source {
-                width: 15%;
-            }
+    // Capture list table display
+    ob_start();
+    $list_table->display();
+    $list_table_display_html = ob_get_clean();
 
-            .wp-list-table .column-import_date {
-                width: 10%;
-            }
+    // Capture view modal HTML
+    ob_start();
+    $list_table->display_view_modal();
+    $view_modal_html = ob_get_clean();
 
-            .wp-list-table.questions #the-list tr td {
-                border-bottom: 1px solid rgb(174, 174, 174);
-            }
+    // Prepare arguments for the template
+    $args = [
+        'add_new_url'            => admin_url('admin.php?page=qp-question-editor'),
+        'session_message_html'   => $session_message_html,
+        'bulk_edit_message_html' => $bulk_edit_message_html,
+        'views_html'             => $views_html,
+        'search_box_html'        => $search_box_html,
+        'list_table_display_html'=> $list_table_display_html,
+        'view_modal_html'        => $view_modal_html,
+        'page_slug'              => isset($_REQUEST['page']) ? esc_attr($_REQUEST['page']) : 'question-press', // Pass current page slug
+    ];
 
-            #qp-view-modal-backdrop {
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                background-color: rgba(0, 0, 0, 0.6);
-                z-index: 1001;
-                display: none;
-                /* Initially hidden */
-                justify-content: center;
-                align-items: center;
-            }
-
-            #qp-view-modal-content {
-                background: #fff;
-                padding: 2rem;
-                border-radius: 8px;
-                max-width: 90%;
-                width: 700px;
-                max-height: 90vh;
-                overflow-y: auto;
-                position: relative;
-                font: normal 1.5em KaTeX_Main, Times New Roman, serif;
-            }
-
-            .qp-modal-close-btn {
-                position: absolute;
-                top: 1rem;
-                right: 1rem;
-                font-size: 24px;
-                background: none;
-                border: none;
-                cursor: pointer;
-                color: #50575e;
-            }
-        </style>
-    </div>
-    <?php
+    // Load and echo the template
+    echo qp_get_template_html( 'all-questions-page', 'admin', $args );
 }
 
 /**
