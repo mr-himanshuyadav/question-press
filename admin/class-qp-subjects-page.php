@@ -180,71 +180,32 @@ if (!empty($linked_exam_ids)) {
         
         $parent_subjects = $wpdb->get_results($wpdb->prepare("SELECT term_id, name FROM $term_table WHERE taxonomy_id = %d AND parent = 0 ORDER BY name ASC", $subject_tax_id));
 
+        // Prepare the list table
         $list_table = new QP_Terms_List_Table('subject', 'Subject/Topic', 'subjects');
         $list_table->prepare_items();
         
+        // Capture the list table's HTML
+        ob_start();
+        $list_table->display();
+        $list_table_html = ob_get_clean();
+
+        // Display session messages before loading the template
         if (isset($_SESSION['qp_admin_message'])) {
             $message = html_entity_decode($_SESSION['qp_admin_message']);
             echo '<div id="message" class="notice notice-' . esc_attr($_SESSION['qp_admin_message_type']) . ' is-dismissible"><p>' . $message . '</p></div>';
             unset($_SESSION['qp_admin_message'], $_SESSION['qp_admin_message_type']);
         }
-        ?>
-        <div id="col-container" class="wp-clearfix">
-            <div id="col-left">
-                <div class="col-wrap">
-                    <div class="form-wrap">
-                        <h2><?php echo $term_to_edit ? 'Edit Subject/Topic' : 'Add New Subject/Topic'; ?></h2>
-                        <form method="post" action="admin.php?page=qp-organization&tab=subjects">
-                            <?php wp_nonce_field('qp_add_edit_subject_nonce'); ?>
-                            <input type="hidden" name="action" value="<?php echo $term_to_edit ? 'update_term' : 'add_term'; ?>">
-                            <?php if ($term_to_edit) : ?>
-                                <input type="hidden" name="term_id" value="<?php echo esc_attr($term_to_edit->term_id); ?>">
-                            <?php endif; ?>
-                            
-                            <div class="form-field form-required">
-                                <label for="term-name">Name</label>
-                                <input name="term_name" id="term-name" type="text" value="<?php echo $term_to_edit ? esc_attr($term_to_edit->name) : ''; ?>" size="40" required <?php echo ($term_to_edit && strtolower($term_to_edit->name) === 'uncategorized') ? 'readonly' : ''; ?>>
-                            </div>
-
-                            <div class="form-field">
-                                <label for="parent-subject">Parent Subject</label>
-                                <select name="parent" id="parent-subject">
-                                    <option value="0">— None —</option>
-                                    <?php foreach ($parent_subjects as $subject) : ?>
-                                        <option value="<?php echo esc_attr($subject->term_id); ?>" <?php selected($term_to_edit ? $term_to_edit->parent : 0, $subject->term_id); ?>>
-                                            <?php echo esc_html($subject->name); ?>
-                                        </option>
-                                    <?php endforeach; ?>
-                                </select>
-                                <p>Assign a parent term to create a hierarchy. For example, "Optics" would have "Physics" as its parent.</p>
-                            </div>
-
-                            <div class="form-field">
-                                <label for="term-description">Description</label>
-                                <textarea name="term_description" id="term-description" rows="3" cols="40"><?php echo esc_textarea($edit_description); ?></textarea>
-                            </div>
-
-                            <p class="submit">
-                                <input type="submit" class="button button-primary" value="<?php echo $term_to_edit ? 'Update Item' : 'Add New Item'; ?>">
-                                <?php if ($term_to_edit) : ?>
-                                    <a href="admin.php?page=qp-organization&tab=subjects" class="button button-secondary">Cancel Edit</a>
-                                <?php endif; ?>
-                            </p>
-                        </form>
-                    </div>
-                </div>
-            </div>
-            <div id="col-right">
-                <div class="col-wrap">
-                    <form method="get">
-                        <input type="hidden" name="page" value="<?php echo esc_attr($_REQUEST['page']); ?>" />
-                        <input type="hidden" name="tab" value="subjects" />
-                        <?php $list_table->display(); ?>
-                    </form>
-                </div>
-            </div>
-        </div>
-        <?php
+        
+        // Prepare arguments for the template
+        $args = [
+            'term_to_edit'      => $term_to_edit,
+            'edit_description'  => $edit_description,
+            'parent_subjects'   => $parent_subjects,
+            'list_table_html'   => $list_table_html,
+        ];
+        
+        // Load and echo the template
+        echo qp_get_template_html( 'organization-tab-subjects', 'admin', $args );
     }
 
     public static function set_message($message, $type) {
