@@ -23,64 +23,64 @@ class QP_Rest_Api {
     public static function register_routes() {
         // --- Authentication Endpoint (Public) ---
         register_rest_route('questionpress/v1', '/token', [
-            'methods' => WP_REST_Server::CREATABLE, // This is equivalent to POST
-            'callback' => [AuthController::class, 'get_auth_token'], // CHANGED
+            'methods' => WP_REST_Server::CREATABLE,
+            'callback' => [AuthController::class, 'get_auth_token'],
             'permission_callback' => '__return_true'
         ]);
 
         // --- Subjects Endpoint (Protected) ---
         register_rest_route('questionpress/v1', '/subjects', [
-            'methods' => WP_REST_Server::READABLE, // This is equivalent to GET
-            'callback' => [self::class, 'get_subjects'],
-            'permission_callback' => [AuthController::class, 'check_auth_token'] // CHANGED
+            'methods' => WP_REST_Server::READABLE,
+            'callback' => [DataController::class, 'get_subjects'], // CHANGED
+            'permission_callback' => [AuthController::class, 'check_auth_token']
         ]);
 
         // --- Topics Endpoint (Protected) ---
         register_rest_route('questionpress/v1', '/topics', [
-            'methods' => WP_REST_Server::READABLE, // GET
-            'callback' => [self::class, 'get_topics'],
-            'permission_callback' => [AuthController::class, 'check_auth_token'] // CHANGED
+            'methods' => WP_REST_Server::READABLE,
+            'callback' => [DataController::class, 'get_topics'], // CHANGED
+            'permission_callback' => [AuthController::class, 'check_auth_token']
         ]);
 
         // --- Exams Endpoint (Protected) ---
         register_rest_route('questionpress/v1', '/exams', [
-            'methods' => WP_REST_Server::READABLE, // GET
-            'callback' => [self::class, 'get_exams'],
-            'permission_callback' => [AuthController::class, 'check_auth_token'] // CHANGED
+            'methods' => WP_REST_Server::READABLE,
+            'callback' => [DataController::class, 'get_exams'], // CHANGED
+            'permission_callback' => [AuthController::class, 'check_auth_token']
         ]);
 
         // --- Sources Endpoint (Protected) ---
         register_rest_route('questionpress/v1', '/sources', [
-            'methods' => WP_REST_Server::READABLE, // GET
-            'callback' => [self::class, 'get_sources'],
-            'permission_callback' => [AuthController::class, 'check_auth_token'] // CHANGED
+            'methods' => WP_REST_Server::READABLE,
+            'callback' => [DataController::class, 'get_sources'], // CHANGED
+            'permission_callback' => [AuthController::class, 'check_auth_token']
         ]);
 
         // --- Labels Endpoint (Protected) ---
         register_rest_route('questionpress/v1', '/labels', [
-            'methods' => WP_REST_Server::READABLE, // GET
-            'callback' => [self::class, 'get_labels'],
-            'permission_callback' => [AuthController::class, 'check_auth_token'] // CHANGED
+            'methods' => WP_REST_Server::READABLE,
+            'callback' => [DataController::class, 'get_labels'], // CHANGED
+            'permission_callback' => [AuthController::class, 'check_auth_token']
         ]);
 
         // --- Add Question Group Endpoint (Protected) ---
         register_rest_route('questionpress/v1', '/questions/add', [
-            'methods' => WP_REST_Server::CREATABLE, // POST
+            'methods' => WP_REST_Server::CREATABLE,
             'callback' => [self::class, 'add_question_group'],
-            'permission_callback' => [AuthController::class, 'check_auth_token'] // CHANGED
+            'permission_callback' => [AuthController::class, 'check_auth_token']
         ]);
-        
+
         // --- Start Session / Get Questions Endpoint (Protected) ---
         register_rest_route('questionpress/v1', '/start-session', [
-            'methods' => WP_REST_Server::CREATABLE, // POST
+            'methods' => WP_REST_Server::CREATABLE,
             'callback' => [self::class, 'start_session_and_get_questions'],
-            'permission_callback' => [AuthController::class, 'check_auth_token'] // CHANGED
+            'permission_callback' => [AuthController::class, 'check_auth_token']
         ]);
-        
+
         register_rest_route('questionpress/v1', '/question/(?P<id>\d+)', [
-            'methods' => WP_REST_Server::READABLE, // GET
+            'methods' => WP_REST_Server::READABLE,
             'callback' => [self::class, 'get_single_question_by_id'],
-            'permission_callback' => [AuthController::class, 'check_auth_token'], // CHANGED
+            'permission_callback' => [AuthController::class, 'check_auth_token'],
             'args' => [
                 'id' => [
                     'validate_callback' => function($param, $request, $key) {
@@ -90,43 +90,25 @@ class QP_Rest_Api {
             ],
         ]);
 
-        // --- NEW: Session Management Endpoints (Protected) ---
+        // --- Session Management Endpoints (Protected) ---
         register_rest_route('questionpress/v1', '/session/create', [
-            'methods' => WP_REST_Server::CREATABLE, // POST
+            'methods' => WP_REST_Server::CREATABLE,
             'callback' => [self::class, 'create_session'],
-            'permission_callback' => [AuthController::class, 'check_auth_token'] // CHANGED
+            'permission_callback' => [AuthController::class, 'check_auth_token']
         ]);
 
         register_rest_route('questionpress/v1', '/session/attempt', [
-            'methods' => WP_REST_Server::CREATABLE, // POST
+            'methods' => WP_REST_Server::CREATABLE,
             'callback' => [self::class, 'record_attempt'],
-            'permission_callback' => [AuthController::class, 'check_auth_token'] // CHANGED
+            'permission_callback' => [AuthController::class, 'check_auth_token']
         ]);
 
         register_rest_route('questionpress/v1', '/session/end', [
-            'methods' => WP_REST_Server::CREATABLE, // POST
+            'methods' => WP_REST_Server::CREATABLE,
             'callback' => [self::class, 'end_session'],
-            'permission_callback' => [AuthController::class, 'check_auth_token'] // CHANGED
+            'permission_callback' => [AuthController::class, 'check_auth_token']
         ]);
     }
-
-    public static function get_subjects() {
-        global $wpdb;
-        $tax_table = $wpdb->prefix . 'qp_taxonomies';
-        $term_table = $wpdb->prefix . 'qp_terms';
-
-        $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'subject'");
-
-        if (!$subject_tax_id) {
-            return new WP_REST_Response([], 200);
-        }
-
-        $results = $wpdb->get_results($wpdb->prepare(
-            "SELECT term_id AS subject_id, name AS subject_name FROM {$term_table} WHERE taxonomy_id = %d AND parent = 0 ORDER BY name ASC",
-            $subject_tax_id
-        ));
-        return new WP_REST_Response($results, 200);
-    }   
     
     public static function start_session_and_get_questions(WP_REST_Request $request) {
         // 1. Sanitize Parameters
@@ -263,85 +245,6 @@ class QP_Rest_Api {
         $wpdb->update($sessions_table, ['end_time' => current_time('mysql', 1), 'total_attempted' => $total_attempted, 'correct_count' => $correct_count, 'incorrect_count' => $incorrect_count, 'skipped_count' => $skipped_count, 'marks_obtained' => $final_score], ['session_id' => $session_id]);
 
         return new WP_REST_Response(['message' => 'Session ended successfully.', 'final_score' => $final_score], 200);
-    }
-
-    public static function get_topics() {
-        global $wpdb;
-        $tax_table = $wpdb->prefix . 'qp_taxonomies';
-        $term_table = $wpdb->prefix . 'qp_terms';
-
-        $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'subject'");
-
-        if (!$subject_tax_id) {
-            return new WP_REST_Response([], 200);
-        }
-
-        $results = $wpdb->get_results($wpdb->prepare(
-            "SELECT term_id AS topic_id, name AS topic_name, parent AS subject_id FROM {$term_table} WHERE taxonomy_id = %d AND parent != 0 ORDER BY name ASC",
-            $subject_tax_id
-        ));
-        return new WP_REST_Response($results, 200);
-    }
-
-    public static function get_exams() {
-        global $wpdb;
-        $tax_table = $wpdb->prefix . 'qp_taxonomies';
-        $term_table = $wpdb->prefix . 'qp_terms';
-
-        $exam_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'exam'");
-
-        if (!$exam_tax_id) {
-            return new WP_REST_Response([], 200); // Return empty if taxonomy doesn't exist
-        }
-
-        $results = $wpdb->get_results($wpdb->prepare(
-            "SELECT term_id as exam_id, name as exam_name FROM {$term_table} WHERE taxonomy_id = %d ORDER BY name ASC",
-            $exam_tax_id
-        ));
-
-        return new WP_REST_Response($results, 200);
-    }
-
-    public static function get_sources() {
-        global $wpdb;
-        $tax_table = $wpdb->prefix . 'qp_taxonomies';
-        $term_table = $wpdb->prefix . 'qp_terms';
-
-        $source_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'source'");
-
-        if (!$source_tax_id) {
-            return new WP_REST_Response([], 200);
-        }
-
-        $results = $wpdb->get_results($wpdb->prepare(
-            "SELECT term_id AS source_id, name AS source_name, parent AS parent_id FROM {$term_table} WHERE taxonomy_id = %d ORDER BY name ASC",
-            $source_tax_id
-        ));
-        return new WP_REST_Response($results, 200);
-    }
-
-    public static function get_labels() {
-        global $wpdb;
-        $tax_table = $wpdb->prefix . 'qp_taxonomies';
-        $term_table = $wpdb->prefix . 'qp_terms';
-        $meta_table = $wpdb->prefix . 'qp_term_meta';
-
-        $label_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'label'");
-
-        if (!$label_tax_id) {
-            return new WP_REST_Response([], 200);
-        }
-
-        $results = $wpdb->get_results($wpdb->prepare(
-            "SELECT t.term_id as label_id, t.name as label_name, m.meta_value as label_color
-             FROM {$term_table} t
-             LEFT JOIN {$meta_table} m ON t.term_id = m.term_id AND m.meta_key = 'color'
-             WHERE t.taxonomy_id = %d 
-             ORDER BY t.name ASC",
-            $label_tax_id
-        ));
-
-        return new WP_REST_Response($results, 200);
     }
 
     public static function add_question_group(WP_REST_Request $request) {
