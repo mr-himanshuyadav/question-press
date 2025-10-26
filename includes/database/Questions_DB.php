@@ -1333,6 +1333,74 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
         return $question_data;
     }
 
+    /**
+     * Retrieves an array of published question IDs for starting a session via the API.
+     *
+     * @param array $args {
+     * Optional. Array of arguments.
+     *
+     * @type int|string $subject_id Filter by parent subject term ID, or 'all'. Default 'all'.
+     * @type bool       $pyq_only   Whether to only include PYQ questions. Default false.
+     * }
+     * @return array An array of question IDs.
+     */
+    public static function get_question_ids_for_api_session( $args = [] ) {
+        $defaults = [
+            'subject_id' => 'all',
+            'pyq_only'   => false,
+        ];
+        $args = wp_parse_args( $args, $defaults );
+
+        // Table names
+        $q_table = self::get_questions_table_name();
+        $g_table = self::get_groups_table_name();
+        $rel_table = Terms_DB::get_relationships_table_name();
+        $term_table = Terms_DB::get_terms_table_name(); // Needed for hierarchy
+        $tax_table = Terms_DB::get_taxonomies_table_name(); // Needed for tax id
+
+        // Base query
+        $select_sql = "SELECT q.question_id";
+        $from_sql = " FROM {$q_table} q";
+        $joins_sql = " LEFT JOIN {$g_table} g ON q.group_id = g.group_id";
+        $where_conditions = ["q.status = 'publish'"];
+        $params = [];
+        $joins_added = [];
+
+        // Subject filter (includes descendants)
+        if ( $args['subject_id'] !== 'all' ) {
+            $subject_id = absint( $args['subject_id'] );
+            if ($subject_id > 0) {
+                // Get all descendant topic IDs including the subject itself if needed for direct links
+                $term_ids_to_filter = Terms_DB::get_all_descendant_ids($subject_id);
+
+                if (!empty($term_ids_to_filter)) {
+                    $ids_placeholder = implode(',', $term_ids_to_filter);
+                    if ( ! in_array( 'subject_rel', $joins_added ) ) {
+                        $joins_sql .= " JOIN {$rel_table} subject_rel ON g.group_id = subject_rel.object_id AND subject_rel.object_type = 'group'";
+                        $joins_added[] = 'subject_rel';
+                    }
+                    $where_conditions[] = "subject_rel.term_id IN ($ids_placeholder)";
+                } else {
+                    $where_conditions[] = "1=0"; // Subject not found or has no descendants linked
+                }
+            } else {
+                 $where_conditions[] = "1=0"; // Invalid subject ID passed
+            }
+        }
+
+        // PYQ filter
+        if ( $args['pyq_only'] ) {
+            $where_conditions[] = "g.is_pyq = 1";
+        }
+
+        // Construct final query
+        $where_sql = ' WHERE ' . implode( ' AND ', $where_conditions );
+        $query = $select_sql . $from_sql . $joins_sql . $where_sql . " ORDER BY RAND()"; // Order randomly for sessions
+
+        // Execute and return IDs
+        return self::$wpdb->get_col( self::$wpdb->prepare( $query, $params ) );
+    }
+
     // --- More methods for saving, updating, deleting will be added below ---
 
 } // End class Questions_DB

@@ -193,36 +193,36 @@ class QP_Rest_Api {
     }   
     
     public static function start_session_and_get_questions(WP_REST_Request $request) {
-        $subject_id = $request->get_param('subject_id') ?? 'all';
-        $pyq_only = $request->get_param('pyq_only') ?? false;
+        // 1. Sanitize Parameters
+        $subject_param = $request->get_param('subject_id');
+        $subject_id = ($subject_param === 'all' || empty($subject_param)) ? 'all' : absint($subject_param);
 
-        global $wpdb;
-        $q_table = $wpdb->prefix . 'qp_questions';
-        $g_table = $wpdb->prefix . 'qp_question_groups';
-        $rel_table = $wpdb->prefix . 'qp_term_relationships';
-        $where_clauses = ["q.status = 'publish'"];
-        $query_args = [];
-        $joins = " LEFT JOIN {$g_table} g ON q.group_id = g.group_id";
+        $pyq_only_param = $request->get_param('pyq_only');
+        // Treat various truthy values (e.g., 'true', '1') as true
+        $pyq_only = filter_var($pyq_only_param, FILTER_VALIDATE_BOOLEAN);
 
-        if ($subject_id !== 'all') {
-            $joins .= " JOIN {$rel_table} subject_rel ON g.group_id = subject_rel.object_id AND subject_rel.object_type = 'group'";
-            $where_clauses[] = "subject_rel.term_id = %d";
-            $query_args[] = absint($subject_id);
+        // 2. Prepare Arguments for DB Method
+        $args = [
+            'subject_id' => $subject_id,
+            'pyq_only'   => $pyq_only,
+        ];
+
+        // 3. Call DB Method
+        $question_ids = QuestionPress\Database\Questions_DB::get_question_ids_for_api_session( $args );
+
+        // Ensure IDs are integers
+        $question_ids = array_map('intval', $question_ids);
+
+
+        // 4. Handle Response
+        if ( empty( $question_ids ) ) {
+            // No error, just return an empty array if no questions match
+            return new WP_REST_Response( ['question_ids' => []], 200 );
+            // Or return 404 if preferred:
+            // return new WP_Error('no_questions_found', 'No questions found matching your criteria.', ['status' => 404]);
         }
 
-        if ($pyq_only) {
-            $where_clauses[] = "g.is_pyq = 1";
-        }
-
-        $where_sql = implode(' AND ', $where_clauses);
-        $query = "SELECT q.question_id FROM {$q_table} q {$joins} WHERE {$where_sql} ORDER BY RAND()";
-        $question_ids = $wpdb->get_col($wpdb->prepare($query, $query_args));
-
-        if (empty($question_ids)) {
-            return new WP_Error('no_questions_found', 'No questions found matching your criteria.', ['status' => 404]);
-        }
-
-        return new WP_REST_Response(['question_ids' => $question_ids], 200);
+        return new WP_REST_Response( ['question_ids' => $question_ids], 200 );
     }
 
     
