@@ -28,13 +28,14 @@ class QP_Dashboard
              LEFT JOIN {$wpdb->posts} p ON e.plan_id = p.ID
              WHERE e.user_id = %d AND e.status = 'active' AND (e.expiry_date IS NULL OR e.expiry_date > %s)
              ORDER BY e.expiry_date ASC, e.entitlement_id ASC",
-            $user_id, $current_time
+            $user_id,
+            $current_time
         ));
         // ... (existing logic to build $access_status_message) ...
         $shop_page_url = function_exists('wc_get_page_id') ? get_permalink(wc_get_page_id('shop')) : home_url('/');
         $link_text = empty($shop_page_url) ? 'Purchase Access' : 'Purchase More';
         $entitlement_summary = [];
-         if (!empty($active_entitlements_for_display)) {
+        if (!empty($active_entitlements_for_display)) {
             foreach ($active_entitlements_for_display as $entitlement) {
                 $clean_plan_title = preg_replace('/^Auto: Access Plan for Course "([^"]+)"$/', '$1', $entitlement->plan_title);
                 $summary_line = '<strong>' . esc_html($clean_plan_title) . '</strong>';
@@ -85,14 +86,14 @@ class QP_Dashboard
             echo self::render_profile_content();
         } else {
             $attempts_table = $wpdb->prefix . 'qp_user_attempts';
-            $stats = $wpdb->get_row($wpdb->prepare( "SELECT COUNT(CASE WHEN status = 'answered' THEN 1 END) as total_attempted, COUNT(CASE WHEN is_correct = 1 THEN 1 END) as total_correct, COUNT(CASE WHEN is_correct = 0 THEN 1 END) as total_incorrect FROM {$attempts_table} WHERE user_id = %d", $user_id)); // Added incorrect count
+            $stats = $wpdb->get_row($wpdb->prepare("SELECT COUNT(CASE WHEN status = 'answered' THEN 1 END) as total_attempted, COUNT(CASE WHEN is_correct = 1 THEN 1 END) as total_correct, COUNT(CASE WHEN is_correct = 0 THEN 1 END) as total_incorrect FROM {$attempts_table} WHERE user_id = %d", $user_id)); // Added incorrect count
             $total_attempted = $stats->total_attempted ?? 0;
             $total_correct = $stats->total_correct ?? 0;
             $overall_accuracy = ($total_attempted > 0) ? ($total_correct / $total_attempted) * 100 : 0;
             $sessions_table = $wpdb->prefix . 'qp_user_sessions';
-            $active_sessions = $wpdb->get_results($wpdb->prepare( "SELECT * FROM $sessions_table WHERE user_id = %d AND status IN ('active', 'mock_test', 'paused') ORDER BY start_time DESC", $user_id));
-            $recent_history = $wpdb->get_results($wpdb->prepare( "SELECT * FROM $sessions_table WHERE user_id = %d AND status IN ('completed', 'abandoned') ORDER BY start_time DESC LIMIT 5", $user_id));
-            $review_count = $wpdb->get_var($wpdb->prepare( "SELECT COUNT(*) FROM {$wpdb->prefix}qp_review_later WHERE user_id = %d", $user_id));
+            $active_sessions = $wpdb->get_results($wpdb->prepare("SELECT * FROM $sessions_table WHERE user_id = %d AND status IN ('active', 'mock_test', 'paused') ORDER BY start_time DESC", $user_id));
+            $recent_history = $wpdb->get_results($wpdb->prepare("SELECT * FROM $sessions_table WHERE user_id = %d AND status IN ('completed', 'abandoned') ORDER BY start_time DESC LIMIT 5", $user_id));
+            $review_count = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$wpdb->prefix}qp_review_later WHERE user_id = %d", $user_id));
             $correctly_answered_qids = $wpdb->get_col($wpdb->prepare("SELECT DISTINCT question_id FROM {$attempts_table} WHERE user_id = %d AND is_correct = 1", $user_id));
             $all_answered_qids = $wpdb->get_col($wpdb->prepare("SELECT DISTINCT question_id FROM {$attempts_table} WHERE user_id = %d AND status = 'answered'", $user_id));
             $never_correct_qids = array_diff($all_answered_qids, $correctly_answered_qids);
@@ -103,14 +104,25 @@ class QP_Dashboard
             $review_page_url = isset($options['review_page']) ? get_permalink($options['review_page']) : home_url('/');
 
             // Call overview rendering (Keep as is - echoes internally)
-            self::render_overview_content($stats, $overall_accuracy, $active_sessions, $recent_history, $review_count, $never_correct_count, $practice_page_url, $session_page_url, $review_page_url);
+            // *** ENSURE THIS LINE HAS 'echo' ***
+            echo self::render_overview_content(
+                $stats,
+                $overall_accuracy,
+                $active_sessions,
+                $recent_history,
+                $review_count,
+                $never_correct_count,
+                $practice_page_url,
+                $session_page_url,
+                $review_page_url
+            );
         }
         $main_content_html = ob_get_clean();
         // --- End Main Content HTML ---
 
         // --- Load Wrapper Template ---
         // Pass sidebar and main content HTML to the wrapper template
-        return qp_get_template_html('dashboard-wrapper', 'frontend', [
+        return qp_get_template_html('dashboard/dashboard-wrapper', 'frontend', [
             'sidebar_html' => $sidebar_html,
             'main_content_html' => $main_content_html
         ]);
@@ -125,7 +137,7 @@ class QP_Dashboard
      * @param string   $active_tab          Slug of the active tab.
      * @return string  The rendered sidebar HTML.
      */
-    private static function render_sidebar($current_user, $access_status_message, $active_tab)
+    public static function render_sidebar($current_user, $access_status_message, $active_tab)
     {
         $options = get_option('qp_settings');
         $dashboard_page_id = isset($options['dashboard_page']) ? absint($options['dashboard_page']) : 0;
@@ -158,7 +170,7 @@ class QP_Dashboard
         // Prepare arguments for the template
         $args = [
             'current_user'         => $current_user,
-            'access_status_message'=> $access_status_message,
+            'access_status_message' => $access_status_message,
             'active_tab'           => $active_tab,
             'tabs'                 => $tabs,
             'base_dashboard_url'   => $base_dashboard_url,
@@ -167,13 +179,13 @@ class QP_Dashboard
         ];
 
         // Load and return the template HTML
-        return qp_get_template_html('dashboard-sidebar', 'frontend', $args);
+        return qp_get_template_html('dashboard/dashboard-sidebar', 'frontend', $args);
     }
 
     /**
      * Renders the view for a single specific course, fetching its structure and user progress.
      */
-    private static function render_single_course_view($course_slug, $user_id)
+    public static function render_single_course_view($course_slug, $user_id)
     {
         $course_post = get_page_by_path($course_slug, OBJECT, 'qp_course'); // Get course WP_Post object by slug
 
@@ -275,7 +287,7 @@ class QP_Dashboard
 
         if (!empty($sections)) {
             foreach ($sections as $section) {
-        ?>
+?>
                 <div class="qp-course-section-card qp-card">
                     <div class="qp-card-header">
                         <h3><?php echo esc_html($section->title); ?></h3>
@@ -345,306 +357,144 @@ class QP_Dashboard
                 echo '</div>'; // Close qp-course-structure-content
             }
 
-            /**
-             * NEW: Renders the content specifically for the Overview section.
-             */
-            private static function render_overview_content($stats, $overall_accuracy, $active_sessions, $recent_history, $review_count, $never_correct_count, $practice_page_url, $session_page_url, $review_page_url)
-            {
-                global $wpdb; // Ensure $wpdb is available
-                $user_id = get_current_user_id();
-                $sessions_table = $wpdb->prefix . 'qp_user_sessions';
-                $attempts_table = $wpdb->prefix . 'qp_user_attempts';
-                $term_table = $wpdb->prefix . 'qp_terms';
-                $rel_table = $wpdb->prefix . 'qp_term_relationships';
-                $questions_table = $wpdb->prefix . 'qp_questions';
+/**
+     * Renders the content specifically for the Overview section by loading a template.
+     * NOW RETURNS the HTML string.
+     *
+     * @param object $stats                Stats object from DB.
+     * @param float  $overall_accuracy     Calculated accuracy.
+     * @param array  $active_sessions      Array of active/paused sessions.
+     * @param array  $recent_history       Array of recent completed sessions.
+     * @param int    $review_count         Count of review items.
+     * @param int    $never_correct_count  Count of never-correct items.
+     * @param string $practice_page_url    Practice page URL.
+     * @param string $session_page_url     Session page URL.
+     * @param string $review_page_url      Review page URL.
+     * @return string Rendered HTML content.
+     */
+    public static function render_overview_content($stats, $overall_accuracy, $active_sessions, $recent_history, $review_count, $never_correct_count, $practice_page_url, $session_page_url, $review_page_url)
+    {
+        // --- Prefetch lineage data needed for the recent history table ---
+        list($lineage_cache, $group_to_topic_map, $question_to_group_map) = self::prefetch_lineage_data($recent_history);
 
-                        ?>
-        <div class="qp-card">
-            <div class="qp-card-header">
-                <h3>Lifetime Stats</h3>
-            </div>
-            <div class="qp-card-content">
-                <div class="qp-overall-stats">
-                    <div class="stat-item">
-                        <span class="stat-label">Accuracy</span>
-                        <span class="stat-value"><?php echo round($overall_accuracy, 1); ?>%</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-label">Attempted</span>
-                        <span class="stat-value"><?php echo (int)($stats->total_attempted ?? 0); ?></span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-label">Correct</span>
-                        <span class="stat-value"><?php echo (int)($stats->total_correct ?? 0); ?></span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-label">Incorrect</span>
-                        <span class="stat-value"><?php echo (int)($stats->total_incorrect ?? 0); ?></span>
-                    </div>
-                </div>
-            </div>
-        </div>
+        // Prepare arguments array for the template
+        $args = [
+            'stats'                 => $stats,
+            'overall_accuracy'      => $overall_accuracy,
+            'active_sessions'       => $active_sessions,
+            'recent_history'        => $recent_history,
+            'review_count'          => $review_count,
+            'never_correct_count'   => $never_correct_count,
+            'practice_page_url'     => $practice_page_url,
+            'session_page_url'      => $session_page_url,
+            'review_page_url'       => $review_page_url,
+            'lineage_cache'         => $lineage_cache, // Pass prefetched data
+            'group_to_topic_map'    => $group_to_topic_map,
+            'question_to_group_map' => $question_to_group_map,
+        ];
 
-        <div class="qp-card">
-            <div class="qp-card-header">
-                <h3>Quick Actions</h3>
-            </div>
-            <div class="qp-card-content qp-quick-actions">
-                <a href="<?php echo esc_url($practice_page_url); ?>" class="qp-button qp-button-primary">
-                    <span class="dashicons dashicons-edit"></span> Start New Practice
-                </a>
-                <button id="qp-start-incorrect-practice-btn" class="qp-button qp-button-secondary" <?php disabled($never_correct_count, 0); ?>>
-                    <span class="dashicons dashicons-warning"></span> Practice Mistakes (<?php echo (int)$never_correct_count; ?>)
-                </button>
-                <button id="qp-start-reviewing-btn" class="qp-button qp-button-secondary" <?php disabled($review_count, 0); ?>>
-                    <span class="dashicons dashicons-star-filled"></span> Review Marked (<?php echo (int)$review_count; ?>)
-                </button>
-            </div>
-            <?php // Hidden checkbox for practice mistakes mode 
-            ?>
-            <div style="display: none;">
-                <label class="qp-custom-checkbox">
-                    <input type="checkbox" id="qp-include-all-incorrect-cb" name="include_all_incorrect" value="1">
-                    <span></span> Include all past mistakes
-                </label>
-            </div>
-        </div>
+        // *** ADD DEBUG CHECK (TEMPORARY) ***
+        // error_log("Args passed to overview template: " . print_r($args, true));
 
-        <?php if (!empty($active_sessions)) : ?>
-            <div class="qp-card">
-                <div class="qp-card-header">
-                    <h3>Active / Paused Sessions</h3>
-                </div>
-                <div class="qp-card-content">
-                    <div class="qp-active-sessions-list">
-                        <?php
-                        foreach ($active_sessions as $session) {
-                            $settings = json_decode($session->settings_snapshot, true);
-                            $mode = self::get_session_mode_name($session, $settings); // Use helper
-                            $row_class = $session->status === 'paused' ? 'qp-session-paused-card' : ''; // Add class for paused
-                        ?>
-                            <div class="qp-active-session-card <?php echo $row_class; ?>">
-                                <div class="qp-card-details">
-                                    <span class="qp-card-subject"><?php echo esc_html($mode); ?></span>
-                                    <span class="qp-card-date">Started: <?php echo date_format(date_create($session->start_time), 'M j, Y, g:i a'); ?></span>
-                                </div>
-                                <div class="qp-card-actions">
-                                    <?php if ($mode !== 'Section Practice') : ?>
-                                        <button class="qp-button qp-button-danger qp-terminate-session-btn" data-session-id="<?php echo esc_attr($session->session_id); ?>">Terminate</button>
-                                    <?php endif; ?>
-                                    <a href="<?php echo esc_url(add_query_arg('session_id', $session->session_id, $session_page_url)); ?>" class="qp-button qp-button-primary"><?php echo ($session->status === 'paused' ? 'Resume' : 'Continue'); ?></a>
-                                </div>
-                            </div>
-                        <?php } ?>
-                    </div>
-                </div>
-            </div>
-        <?php endif; ?>
+        // Load and return the template HTML - Check path 'dashboard/overview'
+        $html = qp_get_template_html('dashboard/overview', 'frontend', $args);
 
-        <div class="qp-card">
-            <div class="qp-card-header">
-                <h3>Recent History</h3>
-            </div>
-            <div class="qp-card-content">
-                <?php if (!empty($recent_history)) : ?>
-                    <table class="qp-dashboard-table qp-recent-history-table">
-                        <thead>
-                            <tr>
-                                <th>Date</th>
-                                <th>Mode</th>
-                                <th>Subjects</th>
-                                <th>Result</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php
-                            // Fetch lineage data needed for recent history efficiently
-                            list($lineage_cache, $group_to_topic_map, $question_to_group_map) = self::prefetch_lineage_data($recent_history);
-                            foreach ($recent_history as $session) :
-                                $settings = json_decode($session->settings_snapshot, true);
-                                $mode = self::get_session_mode_name($session, $settings);
-                                $subjects_display = self::get_session_subjects_display($session, $settings, $lineage_cache, $group_to_topic_map, $question_to_group_map); // Use helper
-                                $result_display = self::get_session_result_display($session, $settings); // Use helper
-                            ?>
-                                <tr>
-                                    <td data-label="Date"><?php echo date_format(date_create($session->start_time), 'M j, Y'); ?></td>
-                                    <td data-label="Mode"><?php echo esc_html($mode); ?></td>
-                                    <td data-label="Subjects"><?php echo esc_html($subjects_display); ?></td>
-                                    <td data-label="Result"><strong><?php echo esc_html($result_display); ?></strong></td>
-                                    <td data-label="Actions" class="qp-actions-cell">
-                                        <a href="<?php echo esc_url(add_query_arg('session_id', $session->session_id, $review_page_url)); ?>" class="qp-button qp-button-secondary">Review</a>
-                                        <?php /* Add delete button if needed, checking permissions */ ?>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                    <p style="text-align: right; margin-top: 1rem;"><a href="#history" class="qp-view-full-history-link">View Full History &rarr;</a></p>
-                <?php else : ?>
-                    <p style="text-align: center;">No completed sessions yet.</p>
-                <?php endif; ?>
-            </div>
-        </div>
-    <?php
-            }
+        // *** ADD ANOTHER DEBUG CHECK (TEMPORARY) ***
+        if (empty(trim($html)) || strpos($html, 'Template not found') !== false) {
+             error_log("Error loading dashboard/overview template or it's empty. Path checked: " . QP_TEMPLATES_DIR . 'frontend/dashboard/overview.php');
+             return '<p style="color:red;">Error: Overview template could not be loaded.</p>'; // Return error message
+        }
 
-            /**
-             * Renders the content specifically for the History section.
-             * (Formerly part of render_sessions_tab_content)
-             */
-            private static function render_history_content()
-            {
-                global $wpdb;
-                $user_id = get_current_user_id();
-                $sessions_table = $wpdb->prefix . 'qp_user_sessions';
-                $attempts_table = $wpdb->prefix . 'qp_user_attempts'; // Needed for accuracy calc
+        // Load and return the template HTML
+        return $html;
+    }
 
-                $options = get_option('qp_settings');
-                $session_page_url = isset($options['session_page']) ? get_permalink($options['session_page']) : home_url('/');
-                $review_page_url = isset($options['review_page']) ? get_permalink($options['review_page']) : home_url('/');
-                $practice_page_url = isset($options['practice_page']) ? get_permalink($options['practice_page']) : home_url('/');
+    /**
+ * Renders the content specifically for the History section by loading a template.
+ * NOW PUBLIC STATIC and RETURNS HTML.
+ */
+public static function render_history_content() // <-- Already changed to public static previously
+{
+    global $wpdb;
+    $user_id = get_current_user_id();
+    $sessions_table = $wpdb->prefix . 'qp_user_sessions';
+    $attempts_table = $wpdb->prefix . 'qp_user_attempts';
+    $items_table = $wpdb->prefix . 'qp_course_items'; // <-- Add items table
 
-                $user = wp_get_current_user();
-                $user_roles = (array) $user->roles;
-                $allowed_roles = isset($options['can_delete_history_roles']) ? $options['can_delete_history_roles'] : ['administrator'];
-                $can_delete = !empty(array_intersect($user_roles, $allowed_roles));
+    $options = get_option('qp_settings');
+    $session_page_url = isset($options['session_page']) ? get_permalink($options['session_page']) : home_url('/');
+    $review_page_url = isset($options['review_page']) ? get_permalink($options['review_page']) : home_url('/');
+    $practice_page_url = isset($options['practice_page']) ? get_permalink($options['practice_page']) : home_url('/');
 
-                // Fetch Paused Sessions (Order them first)
-                $paused_sessions = $wpdb->get_results($wpdb->prepare(
-                    "SELECT * FROM $sessions_table WHERE user_id = %d AND status = 'paused' ORDER BY start_time DESC",
-                    $user_id
-                ));
+    $user = wp_get_current_user();
+    $user_roles = (array) $user->roles;
+    $allowed_roles = isset($options['can_delete_history_roles']) ? $options['can_delete_history_roles'] : ['administrator'];
+    $can_delete = !empty(array_intersect($user_roles, $allowed_roles));
 
-                // Fetch Completed/Abandoned Sessions (Order them after paused)
-                $session_history = $wpdb->get_results($wpdb->prepare(
-                    "SELECT * FROM $sessions_table WHERE user_id = %d AND status IN ('completed', 'abandoned') ORDER BY start_time DESC",
-                    $user_id
-                ));
+    // Fetch Paused Sessions
+    $paused_sessions = $wpdb->get_results($wpdb->prepare(
+        "SELECT * FROM $sessions_table WHERE user_id = %d AND status = 'paused' ORDER BY start_time DESC",
+        $user_id
+    ));
 
-                // Combine paused and history
-                $all_sessions_for_history = array_merge($paused_sessions, $session_history);
+    // Fetch Completed/Abandoned Sessions
+    $session_history = $wpdb->get_results($wpdb->prepare(
+        "SELECT * FROM $sessions_table WHERE user_id = %d AND status IN ('completed', 'abandoned') ORDER BY start_time DESC",
+        $user_id
+    ));
 
+    $all_sessions_for_history = array_merge($paused_sessions, $session_history);
 
-                // Pre-fetch lineage data
-                list($lineage_cache, $group_to_topic_map, $question_to_group_map) = self::prefetch_lineage_data($all_sessions_for_history);
+    // Pre-fetch lineage data
+    list($lineage_cache, $group_to_topic_map, $question_to_group_map) = self::prefetch_lineage_data($all_sessions_for_history);
 
-                // Fetch accuracy stats efficiently
-                $session_ids_history = wp_list_pluck($all_sessions_for_history, 'session_id');
-                $accuracy_stats = [];
-                if (!empty($session_ids_history)) {
-                    $ids_placeholder = implode(',', array_map('absint', $session_ids_history));
-                    $results = $wpdb->get_results(
-                        "SELECT session_id,
-                     COUNT(CASE WHEN is_correct = 1 THEN 1 END) as correct,
-                     COUNT(CASE WHEN is_correct = 0 THEN 1 END) as incorrect
-              FROM {$attempts_table}
-              WHERE session_id IN ({$ids_placeholder}) AND status = 'answered'
-              GROUP BY session_id"
-                    );
-                    foreach ($results as $result) {
-                        $total_attempted = $result->correct + $result->incorrect;
-                        $accuracy = ($total_attempted > 0) ? (($result->correct / $total_attempted) * 100) : 0;
-                        $accuracy_stats[$result->session_id] = number_format($accuracy, 2) . '%';
-                    }
-                }
+    // Fetch accuracy stats
+    $session_ids_history = wp_list_pluck($all_sessions_for_history, 'session_id');
+    $accuracy_stats = [];
+    if (!empty($session_ids_history)) {
+        $ids_placeholder = implode(',', array_map('absint', $session_ids_history));
+        $results = $wpdb->get_results(
+            "SELECT session_id,
+             COUNT(CASE WHEN is_correct = 1 THEN 1 END) as correct,
+             COUNT(CASE WHEN is_correct = 0 THEN 1 END) as incorrect
+             FROM {$attempts_table}
+             WHERE session_id IN ({$ids_placeholder}) AND status = 'answered'
+             GROUP BY session_id"
+        );
+        foreach ($results as $result) {
+            $total_attempted = (int)$result->correct + (int)$result->incorrect;
+            $accuracy = ($total_attempted > 0) ? (((int)$result->correct / $total_attempted) * 100) : 0;
+            $accuracy_stats[$result->session_id] = number_format($accuracy, 2) . '%';
+        }
+    }
 
+    // --- NEW: Pre-fetch existing course item IDs ---
+    $existing_course_item_ids = $wpdb->get_col("SELECT item_id FROM $items_table");
+    $existing_course_item_ids = array_flip($existing_course_item_ids); // Convert to hash map
+    // --- END NEW ---
 
-                ob_start();
-    ?>
-        <div class="qp-history-header">
-            <h2 style="margin:0;">Practice History</h2>
-            <div class="qp-history-actions">
-                <a href="<?php echo esc_url($practice_page_url); ?>" class="qp-button qp-button-primary">Start New Practice</a>
-                <?php if ($can_delete) : ?>
-                    <button id="qp-delete-history-btn" class="qp-button qp-button-danger">Clear History</button>
-                <?php endif; ?>
-            </div>
-        </div>
+    // Prepare arguments for the template
+    $args = [
+        'practice_page_url'     => $practice_page_url,
+        'can_delete'            => $can_delete,
+        'all_sessions'          => $all_sessions_for_history,
+        'session_page_url'      => $session_page_url,
+        'review_page_url'       => $review_page_url,
+        'lineage_cache'         => $lineage_cache,
+        'group_to_topic_map'    => $group_to_topic_map,
+        'question_to_group_map' => $question_to_group_map,
+        'accuracy_stats'        => $accuracy_stats,
+        'existing_course_item_ids' => $existing_course_item_ids // <-- Pass the item IDs
+    ];
 
-        <table class="qp-dashboard-table qp-full-history-table">
-            <thead>
-                <tr>
-                    <th>Date</th>
-                    <th>Mode</th>
-                    <th>Context</th>
-                    <th>Result</th>
-                    <th>Status</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php if (!empty($all_sessions_for_history)) : ?>
-                    <?php foreach ($all_sessions_for_history as $session) :
-                        $settings = json_decode($session->settings_snapshot, true);
-                        $mode = self::get_session_mode_name($session, $settings);
-                        $subjects_display = self::get_session_subjects_display($session, $settings, $lineage_cache, $group_to_topic_map, $question_to_group_map);
-                        // Use pre-calculated stats for accuracy, otherwise fallback for scored sessions
-                        if (isset($accuracy_stats[$session->session_id]) && !$is_scored) {
-                            $result_display = $accuracy_stats[$session->session_id];
-                        } else {
-                            $result_display = self::get_session_result_display($session, $settings);
-                        }
-                        $status_display = ucfirst($session->status);
-                        if ($session->status === 'abandoned') $status_display = 'Abandoned';
-                        if ($session->end_reason === 'autosubmitted_timer') $status_display = 'Auto-Submitted';
-
-                        $row_class = $session->status === 'paused' ? 'class="qp-session-paused"' : '';
-                    ?>
-                        <?php
-                        // *** START NEW CHECK ***
-                        $context_display = $subjects_display; // Default context
-                        if (isset($settings['course_id']) && isset($settings['item_id'])) {
-                            // Check if the item ID exists in the pre-fetched list (efficient)
-                            // We need to pre-fetch existing item IDs before the loop
-                            if (!isset($existing_course_item_ids)) {
-                                $items_table = $wpdb->prefix . 'qp_course_items';
-                                $existing_course_item_ids = $wpdb->get_col("SELECT item_id FROM $items_table");
-                                // Convert to a hash map for quick lookups
-                                $existing_course_item_ids = array_flip($existing_course_item_ids);
-                            }
-
-                            if (!isset($existing_course_item_ids[absint($settings['item_id'])])) {
-                                // If item ID is NOT in the list of existing items
-                                $context_display .= ' <em style="color:#777; font-size:0.9em;">(Item removed)</em>';
-                            }
-                        }
-                        // *** END NEW CHECK ***
-                        ?>
-                        <tr <?php echo $row_class; ?>>
-                            <td data-label="Date"><?php echo date_format(date_create($session->start_time), 'M j, Y, g:i a'); ?></td>
-                            <td data-label="Mode"><?php echo esc_html($mode); ?></td>
-                            <td data-label="Context"><?php echo wp_kses_post($context_display); // Use wp_kses_post to allow <em> tag 
-                                                        ?></td>
-                            <td data-label="Result"><strong><?php echo esc_html($result_display); ?></strong></td>
-                            <td data-label="Status"><?php echo esc_html($status_display); ?></td>
-                            <td data-label="Actions" class="qp-actions-cell">
-                                <?php if ($session->status === 'paused') : ?>
-                                    <a href="<?php echo esc_url(add_query_arg('session_id', $session->session_id, $session_page_url)); ?>" class="qp-button qp-button-primary">Resume</a>
-                                <?php else : ?>
-                                    <a href="<?php echo esc_url(add_query_arg('session_id', $session->session_id, $review_page_url)); ?>" class="qp-button qp-button-secondary">Review</a>
-                                <?php endif; ?>
-                                <?php if ($can_delete) : ?>
-                                    <button class="qp-delete-session-btn" data-session-id="<?php echo esc_attr($session->session_id); ?>">Delete</button>
-                                <?php endif; ?>
-                            </td>
-                        </tr>
-                    <?php endforeach; ?>
-                <?php else : ?>
-                    <tr>
-                        <td colspan="6" style="text-align: center; padding: 2rem;">You have no practice sessions yet.</td>
-                    </tr>
-                <?php endif; ?>
-            </tbody>
-        </table>
-    <?php
-                return ob_get_clean();
-            }
+    // Load and return the template HTML
+    return qp_get_template_html('dashboard/history', 'frontend', $args);
+}
 
             /**
              * Renders the content specifically for the Review section.
              */
-            private static function render_review_content()
+            public static function render_review_content()
             {
                 global $wpdb;
                 $user_id = get_current_user_id();
@@ -735,7 +585,7 @@ class QP_Dashboard
             /**
              * Renders the content specifically for the Progress section.
              */
-            private static function render_progress_content()
+            public static function render_progress_content()
             {
                 global $wpdb;
                 $term_table = $wpdb->prefix . 'qp_terms';
@@ -798,7 +648,7 @@ class QP_Dashboard
              * Renders the content specifically for the Courses section.
              * NOW INCLUDES Enrollment Status and Progress.
              */
-            private static function render_courses_content()
+            public static function render_courses_content()
             {
                 if (!is_user_logged_in()) return ''; // Should not happen here, but good practice
 
@@ -1033,7 +883,7 @@ class QP_Dashboard
              * Renders the content specifically for the Profile section.
              * Fetches user data and displays it using cards.
              */
-            private static function render_profile_content()
+            public static function render_profile_content()
             {
                 if (!is_user_logged_in()) {
                     // Should not happen if page is protected, but good practice
@@ -1061,19 +911,23 @@ class QP_Dashboard
                             ?>
 
                             <div class="qp-profile-avatar qp-profile-avatar-wrapper">
-                                <?php // Avatar display (will be updated by JS) ?>
+                                <?php // Avatar display (will be updated by JS) 
+                                ?>
                                 <img id="qp-profile-avatar-preview" src="<?php echo esc_url($profile_data['avatar_url']); ?>" alt="Profile Picture" width="128" height="128">
 
-                                <?php // Hidden file input - triggered by button ?>
+                                <?php // Hidden file input - triggered by button 
+                                ?>
                                 <input type="file" id="qp-avatar-upload-input" name="qp_avatar_upload" accept="image/jpeg, image/png, image/gif" style="display: none;">
 
-                                <?php // Button shown only in edit mode ?>
+                                <?php // Button shown only in edit mode 
+                                ?>
                                 <button type="button" class="qp-change-avatar-button qp-button qp-button-secondary" style="display: none; margin-top: 10px;">Change Avatar</button>
 
-                                <?php // Upload/Remove buttons shown after selection (controlled by JS) ?>
+                                <?php // Upload/Remove buttons shown after selection (controlled by JS) 
+                                ?>
                                 <div class="qp-avatar-upload-actions" style="display: none; margin-top: 10px; gap: 5px;">
-                                     <button type="button" class="qp-upload-avatar-button qp-button qp-button-primary button-small">Upload New</button>
-                                     <button type="button" class="qp-cancel-avatar-button qp-button qp-button-secondary button-small">Cancel</button>
+                                    <button type="button" class="qp-upload-avatar-button qp-button qp-button-primary button-small">Upload New</button>
+                                    <button type="button" class="qp-cancel-avatar-button qp-button qp-button-secondary button-small">Cancel</button>
                                 </div>
                                 <p id="qp-avatar-upload-error" class="qp-error-message" style="display: none; color: red; font-size: 0.9em; margin-top: 5px;"></p>
                             </div>
@@ -1150,11 +1004,13 @@ class QP_Dashboard
                             <div class="qp-password-display">
                                 <p>Manage your account password.</p>
                                 <button type="button" class="qp-button qp-button-secondary qp-change-password-button">Change Password</button>
-                                <?php // --- ADD THIS LINK --- ?>
+                                <?php // --- ADD THIS LINK --- 
+                                ?>
                                 <p class="qp-forgot-password-link-wrapper">
                                     <a href="<?php echo esc_url(wp_lostpassword_url()); ?>" class="qp-forgot-password-link">Forgot Password?</a>
                                 </p>
-                                <?php // --- END ADDED LINK --- ?>
+                                <?php // --- END ADDED LINK --- 
+                                ?>
                             </div>
 
                             <?php // --- Edit elements (hidden by default) --- 
@@ -1215,17 +1071,17 @@ class QP_Dashboard
                 }
 
                 // Check for custom avatar first
-        $custom_avatar_id = get_user_meta($user_id, '_qp_avatar_attachment_id', true);
-        $avatar_url = '';
-        if (!empty($custom_avatar_id)) {
-            // Use a reasonable size like 'thumbnail' or 'medium'
-            $avatar_url = wp_get_attachment_image_url(absint($custom_avatar_id), 'thumbnail');
-        }
+                $custom_avatar_id = get_user_meta($user_id, '_qp_avatar_attachment_id', true);
+                $avatar_url = '';
+                if (!empty($custom_avatar_id)) {
+                    // Use a reasonable size like 'thumbnail' or 'medium'
+                    $avatar_url = wp_get_attachment_image_url(absint($custom_avatar_id), 'thumbnail');
+                }
 
-        // Fallback to Gravatar if no custom avatar or URL fetch failed
-        if (empty($avatar_url)) {
-            $avatar_url = get_avatar_url($user_id, ['size' => 128, 'default' => 'mystery']); // Get a larger avatar
-        }
+                // Fallback to Gravatar if no custom avatar or URL fetch failed
+                if (empty($avatar_url)) {
+                    $avatar_url = get_avatar_url($user_id, ['size' => 128, 'default' => 'mystery']); // Get a larger avatar
+                }
 
                 // --- Fetch and Process Scope ---
                 $scope_description = 'All Subjects & Exams'; // Default
@@ -1368,7 +1224,7 @@ class QP_Dashboard
             /**
              * NEW HELPER: Determines the display name for a session's mode.
              */
-            private static function get_session_mode_name($session, $settings)
+            public static function get_session_mode_name($session, $settings)
             {
                 $mode = 'Practice'; // Default
                 if ($session->status === 'paused') {
@@ -1397,7 +1253,7 @@ class QP_Dashboard
             /**
              * NEW HELPER: Gets the subject display string for a session.
              */
-            private static function get_session_subjects_display($session, $settings, $lineage_cache, $group_to_topic_map, $question_to_group_map)
+            public static function get_session_subjects_display($session, $settings, $lineage_cache, $group_to_topic_map, $question_to_group_map)
             {
                 global $wpdb;
                 $term_table = $wpdb->prefix . 'qp_terms';
@@ -1432,7 +1288,7 @@ class QP_Dashboard
             /**
              * NEW HELPER: Gets the result display string for a session.
              */
-            private static function get_session_result_display($session, $settings)
+            public static function get_session_result_display($session, $settings)
             {
                 if ($session->status === 'paused') return '-'; // No result for paused
 
@@ -1449,7 +1305,7 @@ class QP_Dashboard
             }
 
             // --- Keep the render_sessions_tab_content function, but make it private ---
-            private static function render_sessions_tab_content()
+            public static function render_sessions_tab_content()
             {
                 global $wpdb;
                 $user_id = get_current_user_id();

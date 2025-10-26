@@ -32,7 +32,7 @@ class QP_Shortcodes
 
         // --- Load template parts ---
         // Step 1 data is just the dashboard URL
-        $step_1_html = qp_get_template_html('practice-form-step-1-mode', 'frontend', ['dashboard_page_url' => $dashboard_page_url]);
+        $step_1_html = qp_get_template_html('practice/practice-form-step-1-mode', 'frontend', ['dashboard_page_url' => $dashboard_page_url]);
 
         // Call the other render methods which will now also use qp_get_template_html
         $step_2_html = self::render_settings_form();
@@ -41,7 +41,7 @@ class QP_Shortcodes
         $step_5_html = self::render_section_wise_practice_form();
 
         // --- Load the main wrapper template ---
-        return qp_get_template_html('practice-form-wrapper', 'frontend', [
+        return qp_get_template_html('practice/practice-form-wrapper', 'frontend', [
             'dashboard_page_url' => $dashboard_page_url, // Pass again if needed directly in wrapper
             'step_1_html' => $step_1_html,
             'step_2_html' => $step_2_html,
@@ -92,7 +92,7 @@ class QP_Shortcodes
         ];
 
         // Load and return the template HTML
-        return qp_get_template_html('practice-form-step-2-normal', 'frontend', $args);
+        return qp_get_template_html('practice/practice-form-step-2-normal', 'frontend', $args);
     }
 
     public static function render_revision_mode_form()
@@ -134,7 +134,7 @@ class QP_Shortcodes
         ];
 
         // Load and return the template HTML
-        return qp_get_template_html('practice-form-step-3-revision', 'frontend', $args);
+        return qp_get_template_html('practice/practice-form-step-3-revision', 'frontend', $args);
     }
 
     public static function render_mock_test_form()
@@ -176,7 +176,7 @@ class QP_Shortcodes
         ];
 
         // Load and return the template HTML
-        return qp_get_template_html('practice-form-step-4-mock', 'frontend', $args);
+        return qp_get_template_html('practice/practice-form-step-4-mock', 'frontend', $args);
     }
 
     public static function render_section_wise_practice_form()
@@ -218,7 +218,7 @@ class QP_Shortcodes
         ];
 
         // Load and return the template HTML
-        return qp_get_template_html('practice-form-step-5-section', 'frontend', $args);
+        return qp_get_template_html('practice/practice-form-step-5-section', 'frontend', $args);
     }
 
 
@@ -560,7 +560,7 @@ class QP_Shortcodes
         ];
 
         // Load and return the template HTML
-        return qp_get_template_html('practice-ui', 'frontend', $args);
+        return qp_get_template_html('practice/practice-ui', 'frontend', $args);
     }
 
     public static function render_review_page()

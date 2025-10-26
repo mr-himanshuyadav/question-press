@@ -26,28 +26,41 @@ if ( ! function_exists( 'qp_get_template_html' ) ) {
      * @return string               The output of the template file.
      */
     function qp_get_template_html( $template_name, $folder = 'frontend', $args = [] ) {
-        // Construct the full path to the template file
-        $template_path = QP_TEMPLATES_DIR . trailingslashit( sanitize_key( $folder ) ) . sanitize_key( $template_name ) . '.php';
+        // --- NEW LOGIC TO HANDLE SUBDIRECTORIES ---
+        $template_name = ltrim( $template_name, '/' ); // Remove leading slash if any
+        $folder        = sanitize_key( $folder ); // Sanitize the main folder ('frontend' or 'admin')
 
-        if ( ! file_exists( $template_path ) ) {
-            // Optional: Log an error or return an error message
-            // error_log( "Question Press Template Error: Template not found at {$template_path}" );
-            return "";
+        // Separate potential subdirectories from the filename
+        $path_parts = explode( '/', $template_name );
+        $filename   = sanitize_key( array_pop( $path_parts ) ); // Get and sanitize the last part (filename)
+        $sub_path   = '';
+
+        // Sanitize and rejoin any subdirectory parts
+        if ( ! empty( $path_parts ) ) {
+            $sanitized_parts = array_map( 'sanitize_key', $path_parts );
+            $sub_path        = implode( '/', $sanitized_parts ) . '/'; // Reconstruct sub-path with trailing slash
         }
 
-        // Extract the arguments array into individual variables
+        // Construct the full path correctly
+        $template_path = QP_TEMPLATES_DIR . trailingslashit( $folder ) . $sub_path . $filename . '.php';
+        // --- END NEW LOGIC ---
+
+        // Debugging: Log the final path being checked
+        // error_log("Checking template path: " . $template_path);
+
+        if ( ! file_exists( $template_path ) ) {
+            error_log( "Question Press Template Error: Template not found at {$template_path}" ); // Keep error log active
+            return ""; // Use original name in comment for clarity
+        }
+
+        // --- Extract and include logic remains the same ---
         if ( is_array( $args ) && ! empty( $args ) ) {
             extract( $args ); // phpcs:ignore WordPress.PHP.DontExtract.extract_extract
         }
-
-        // Start output buffering
         ob_start();
-
-        // Include the template file
         include $template_path;
-
-        // Get the buffered content and clean the buffer
         $content = ob_get_clean();
+        // --- End Extract and include ---
 
         return $content;
     }
