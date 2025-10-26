@@ -9,50 +9,43 @@ class QP_Dashboard
     public static function render()
     {
         if (!is_user_logged_in()) {
+            // Keep login message logic here for now
             return '<p>You must be logged in to view your dashboard. <a href="' . wp_login_url(get_permalink()) . '">Click here to log in.</a></p>';
         }
 
-        // --- Fetch common data needed for header/sidebar ---
+        // --- Fetch common data ---
         $current_user = wp_get_current_user();
         $user_id = $current_user->ID;
-        // --- NEW: Display Entitlement Summary ---
+        // --- Entitlement Summary Logic (Keep as is) ---
         $access_status_message = '';
-        $shop_page_url = function_exists('wc_get_page_id') ? get_permalink(wc_get_page_id('shop')) : home_url('/');
-        $link_text = empty($shop_page_url) ? 'Purchase Access' : 'Purchase More';
-        $entitlement_summary = []; // Array to hold summary lines
-
+        // ... (existing logic to fetch and format $access_status_message) ...
         global $wpdb; // Ensure $wpdb is available
         $entitlements_table = $wpdb->prefix . 'qp_user_entitlements';
         $current_time = current_time('mysql');
-
-        // Fetch ACTIVE entitlements, including plan names
-        $active_entitlements_for_display = $wpdb->get_results($wpdb->prepare(
+        $active_entitlements_for_display = $wpdb->get_results($wpdb->prepare( /* ... existing query ... */
             "SELECT e.entitlement_id, e.plan_id, e.remaining_attempts, e.expiry_date, p.post_title as plan_title
-     FROM {$entitlements_table} e
-     LEFT JOIN {$wpdb->posts} p ON e.plan_id = p.ID
-     WHERE e.user_id = %d
-     AND e.status = 'active'
-     AND (e.expiry_date IS NULL OR e.expiry_date > %s)
-     ORDER BY e.expiry_date ASC, e.entitlement_id ASC", // Show soonest expiring first
-            $user_id,
-            $current_time
+             FROM {$entitlements_table} e
+             LEFT JOIN {$wpdb->posts} p ON e.plan_id = p.ID
+             WHERE e.user_id = %d AND e.status = 'active' AND (e.expiry_date IS NULL OR e.expiry_date > %s)
+             ORDER BY e.expiry_date ASC, e.entitlement_id ASC",
+            $user_id, $current_time
         ));
-
-        if (!empty($active_entitlements_for_display)) {
+        // ... (existing logic to build $access_status_message) ...
+        $shop_page_url = function_exists('wc_get_page_id') ? get_permalink(wc_get_page_id('shop')) : home_url('/');
+        $link_text = empty($shop_page_url) ? 'Purchase Access' : 'Purchase More';
+        $entitlement_summary = [];
+         if (!empty($active_entitlements_for_display)) {
             foreach ($active_entitlements_for_display as $entitlement) {
-                // Clean up auto-plan title: Remove 'Auto: Access Plan for Course "' and the trailing '"'
                 $clean_plan_title = preg_replace('/^Auto: Access Plan for Course "([^"]+)"$/', '$1', $entitlement->plan_title);
-
-                $summary_line = '<strong>' . esc_html($clean_plan_title) . '</strong>'; // Use cleaned title
+                $summary_line = '<strong>' . esc_html($clean_plan_title) . '</strong>';
                 $details = [];
                 if (!is_null($entitlement->remaining_attempts)) {
-                    $details[] = number_format_i18n($entitlement->remaining_attempts) . ' attempts left'; // Use WP number format
+                    $details[] = number_format_i18n($entitlement->remaining_attempts) . ' attempts left';
                 } else {
                     $details[] = 'Unlimited attempts';
                 }
                 if (!is_null($entitlement->expiry_date)) {
                     $expiry_timestamp = strtotime($entitlement->expiry_date);
-                    // Format date nicely using WordPress date format
                     $details[] = 'expires ' . date_i18n(get_option('date_format'), $expiry_timestamp);
                 } else {
                     $details[] = 'never expires';
@@ -60,175 +53,121 @@ class QP_Dashboard
                 $summary_line .= ': ' . implode(', ', $details);
                 $entitlement_summary[] = $summary_line;
             }
-            $access_status_message = implode('<br>', $entitlement_summary); // Combine lines with breaks
+            $access_status_message = implode('<br>', $entitlement_summary);
         } else {
-            // No active plans found
             $access_status_message = 'No active plan found. <a href="' . esc_url($shop_page_url) . '">' . esc_html($link_text) . '</a>';
         }
-        // --- END Entitlement Summary Logic ---
 
-        // --- Determine which tab/view to render based on query vars ---
-        $current_tab = get_query_var('qp_tab', 'overview'); // Default to 'overview' if qp_tab is not set
-        $current_course_slug = get_query_var('qp_course_slug'); // Will be empty if not viewing a specific course
 
-        // --- Start Output Buffer ---
+        // --- Determine active tab ---
+        $current_tab = get_query_var('qp_tab', 'overview');
+        $current_course_slug = get_query_var('qp_course_slug');
+
+        // --- Get Sidebar HTML ---
+        // Call the refactored method which now returns HTML
+        $sidebar_html = self::render_sidebar($current_user, $access_status_message, $current_tab);
+
+        // --- Get Main Content HTML ---
+        // This part still uses output buffering within the specific content methods for now
         ob_start();
-?>
-        <div id="qp-practice-app-wrapper">
-            <div id="qp-mobile-header">
-                <button class="qp-sidebar-toggle" aria-label="Toggle Navigation" aria-expanded="false">
-                    <span class="dashicons dashicons-menu-alt"></span>
-                </button>
-                <span class="qp-mobile-header-title"><?php bloginfo('name'); ?></span>
-            </div>
-            <div class="qp-dashboard-layout">
-                <div class="qp-sidebar-overlay"></div>
-                <aside class="qp-sidebar">
-                    <?php
-                    // --- Call the new sidebar rendering function ---
-                    self::render_sidebar($current_user, $access_status_message, $current_tab);
-                    ?>
-                </aside>
+        // --- Main Conditional Rendering Logic (Keep as is) ---
+        if ($current_tab === 'courses' && !empty($current_course_slug)) {
+            self::render_single_course_view($current_course_slug, $user_id);
+        } elseif ($current_tab === 'courses') {
+            echo self::render_courses_content();
+        } elseif ($current_tab === 'history') {
+            echo self::render_history_content();
+        } elseif ($current_tab === 'review') {
+            echo self::render_review_content();
+        } elseif ($current_tab === 'progress') {
+            echo self::render_progress_content();
+        } elseif ($current_tab === 'profile') {
+            echo self::render_profile_content();
+        } else {
+            $attempts_table = $wpdb->prefix . 'qp_user_attempts';
+            $stats = $wpdb->get_row($wpdb->prepare( "SELECT COUNT(CASE WHEN status = 'answered' THEN 1 END) as total_attempted, COUNT(CASE WHEN is_correct = 1 THEN 1 END) as total_correct, COUNT(CASE WHEN is_correct = 0 THEN 1 END) as total_incorrect FROM {$attempts_table} WHERE user_id = %d", $user_id)); // Added incorrect count
+            $total_attempted = $stats->total_attempted ?? 0;
+            $total_correct = $stats->total_correct ?? 0;
+            $overall_accuracy = ($total_attempted > 0) ? ($total_correct / $total_attempted) * 100 : 0;
+            $sessions_table = $wpdb->prefix . 'qp_user_sessions';
+            $active_sessions = $wpdb->get_results($wpdb->prepare( "SELECT * FROM $sessions_table WHERE user_id = %d AND status IN ('active', 'mock_test', 'paused') ORDER BY start_time DESC", $user_id));
+            $recent_history = $wpdb->get_results($wpdb->prepare( "SELECT * FROM $sessions_table WHERE user_id = %d AND status IN ('completed', 'abandoned') ORDER BY start_time DESC LIMIT 5", $user_id));
+            $review_count = $wpdb->get_var($wpdb->prepare( "SELECT COUNT(*) FROM {$wpdb->prefix}qp_review_later WHERE user_id = %d", $user_id));
+            $correctly_answered_qids = $wpdb->get_col($wpdb->prepare("SELECT DISTINCT question_id FROM {$attempts_table} WHERE user_id = %d AND is_correct = 1", $user_id));
+            $all_answered_qids = $wpdb->get_col($wpdb->prepare("SELECT DISTINCT question_id FROM {$attempts_table} WHERE user_id = %d AND status = 'answered'", $user_id));
+            $never_correct_qids = array_diff($all_answered_qids, $correctly_answered_qids);
+            $never_correct_count = count($never_correct_qids);
+            $options = get_option('qp_settings');
+            $practice_page_url = isset($options['practice_page']) ? get_permalink($options['practice_page']) : home_url('/');
+            $session_page_url = isset($options['session_page']) ? get_permalink($options['session_page']) : home_url('/');
+            $review_page_url = isset($options['review_page']) ? get_permalink($options['review_page']) : home_url('/');
 
-                <main class="qp-main-content">
-                    <?php
-                    // --- Main Conditional Rendering Logic ---
-                    if ($current_tab === 'courses' && !empty($current_course_slug)) {
-                        // --- Render the view for a single specific course ---
-                        self::render_single_course_view($current_course_slug, $user_id);
-                    } elseif ($current_tab === 'courses') {
-                        // --- Render the main list of courses ---
-                        echo self::render_courses_content(); // Existing function
+            // Call overview rendering (Keep as is - echoes internally)
+            self::render_overview_content($stats, $overall_accuracy, $active_sessions, $recent_history, $review_count, $never_correct_count, $practice_page_url, $session_page_url, $review_page_url);
+        }
+        $main_content_html = ob_get_clean();
+        // --- End Main Content HTML ---
 
-                    } elseif ($current_tab === 'history') {
-                        // --- Render the full history tab ---
-                        echo self::render_history_content(); // Existing function
-
-                    } elseif ($current_tab === 'review') {
-                        // --- Render the review center tab ---
-                        echo self::render_review_content(); // Existing function
-
-                    } elseif ($current_tab === 'progress') {
-                        // --- Render the progress tracker tab ---
-                        echo self::render_progress_content(); // Existing function
-
-                    } elseif ($current_tab === 'profile') { // <-- ADD THIS ELSEIF BLOCK
-                        // --- Render the profile tab ---
-                        echo self::render_profile_content(); // We will create this function next
-
-                    } else {
-                        // --- Default to rendering the overview tab ---
-                        // Fetch data needed *only* for overview here
-                        global $wpdb;
-                        $attempts_table = $wpdb->prefix . 'qp_user_attempts';
-                        $stats = $wpdb->get_row($wpdb->prepare( /* Your existing query for stats */"SELECT COUNT(CASE WHEN status = 'answered' THEN 1 END) as total_attempted, COUNT(CASE WHEN is_correct = 1 THEN 1 END) as total_correct FROM {$attempts_table} WHERE user_id = %d", $user_id));
-                        $total_attempted = $stats->total_attempted ?? 0;
-                        $total_correct = $stats->total_correct ?? 0;
-                        $overall_accuracy = ($total_attempted > 0) ? ($total_correct / $total_attempted) * 100 : 0;
-                        $sessions_table = $wpdb->prefix . 'qp_user_sessions';
-                        $active_sessions = $wpdb->get_results($wpdb->prepare( /* Your query for active sessions */"SELECT * FROM $sessions_table WHERE user_id = %d AND status IN ('active', 'mock_test', 'paused') ORDER BY start_time DESC", $user_id));
-                        $recent_history = $wpdb->get_results($wpdb->prepare( /* Your query for recent history */"SELECT * FROM $sessions_table WHERE user_id = %d AND status IN ('completed', 'abandoned') ORDER BY start_time DESC LIMIT 5", $user_id));
-                        $review_count = $wpdb->get_var($wpdb->prepare( /* Your query for review count */"SELECT COUNT(*) FROM {$wpdb->prefix}qp_review_later WHERE user_id = %d", $user_id));
-                        $correctly_answered_qids = $wpdb->get_col($wpdb->prepare("SELECT DISTINCT question_id FROM {$attempts_table} WHERE user_id = %d AND is_correct = 1", $user_id));
-                        $all_answered_qids = $wpdb->get_col($wpdb->prepare("SELECT DISTINCT question_id FROM {$attempts_table} WHERE user_id = %d AND status = 'answered'", $user_id));
-                        $never_correct_qids = array_diff($all_answered_qids, $correctly_answered_qids);
-                        $never_correct_count = count($never_correct_qids);
-                        $options = get_option('qp_settings');
-                        $practice_page_url = isset($options['practice_page']) ? get_permalink($options['practice_page']) : home_url('/');
-                        $session_page_url = isset($options['session_page']) ? get_permalink($options['session_page']) : home_url('/');
-                        $review_page_url = isset($options['review_page']) ? get_permalink($options['review_page']) : home_url('/');
-
-                        // Call the overview rendering function with fetched data
-                        self::render_overview_content($stats, $overall_accuracy, $active_sessions, $recent_history, $review_count, $never_correct_count, $practice_page_url, $session_page_url, $review_page_url);
-                    }
-                    ?>
-                    <?php /* Keep the hidden modal */ ?>
-                    <div id="qp-review-modal-backdrop" style="display: none;">
-                        <div id="qp-review-modal-content"></div>
-                    </div>
-                </main>
-            </div>
-        </div> <?php // End #qp-practice-app-wrapper 
-                ?>
-    <?php
-        return ob_get_clean();
+        // --- Load Wrapper Template ---
+        // Pass sidebar and main content HTML to the wrapper template
+        return qp_get_template_html('dashboard-wrapper', 'frontend', [
+            'sidebar_html' => $sidebar_html,
+            'main_content_html' => $main_content_html
+        ]);
     }
 
     /**
-     * NEW HELPER: Renders the sidebar HTML with correct links and active state.
+     * Renders the sidebar HTML by loading the template.
+     * NOW RETURNS the HTML string.
+     *
+     * @param \WP_User $current_user        The current user object.
+     * @param string   $access_status_message HTML access status message.
+     * @param string   $active_tab          Slug of the active tab.
+     * @return string  The rendered sidebar HTML.
      */
     private static function render_sidebar($current_user, $access_status_message, $active_tab)
     {
         $options = get_option('qp_settings');
-        // Ensure 'dashboard_page' key exists before accessing it
         $dashboard_page_id = isset($options['dashboard_page']) ? absint($options['dashboard_page']) : 0;
-        // Get the base URL for the dashboard page, ensuring it ends with a slash
         $base_dashboard_url = $dashboard_page_id ? trailingslashit(get_permalink($dashboard_page_id)) : trailingslashit(home_url());
 
-        // Define the tabs/sections
         $tabs = [
             'overview' => ['label' => 'Overview', 'icon' => 'chart-pie'],
-            'history' => ['label' => 'History', 'icon' => 'list-view'],
-            'review' => ['label' => 'Review', 'icon' => 'star-filled'],
+            'history'  => ['label' => 'History', 'icon' => 'list-view'],
+            'review'   => ['label' => 'Review', 'icon' => 'star-filled'],
             'progress' => ['label' => 'Progress', 'icon' => 'chart-bar'],
-            'courses' => ['label' => 'Courses', 'icon' => 'welcome-learn-more'],
-            'profile' => ['label' => 'Profile', 'icon' => 'admin-users'],
+            'courses'  => ['label' => 'Courses', 'icon' => 'welcome-learn-more'],
+            'profile'  => ['label' => 'Profile', 'icon' => 'admin-users'],
         ];
-    ?>
-        <div class="qp-sidebar-header">
-            <button class="qp-sidebar-close-btn" aria-label="Close Navigation">
-                <span class="dashicons dashicons-no-alt"></span>
-            </button>
-            <?php // --- NEW: Added Avatar --- 
-            ?>
-            <div class="qp-sidebar-avatar">
-             <?php
-                 // --- UPDATED: Check for custom avatar ---
-                 $custom_avatar_id = get_user_meta($current_user->ID, '_qp_avatar_attachment_id', true);
-                 $sidebar_avatar_url = '';
-                 if (!empty($custom_avatar_id)) {
-                     // Get URL for a smaller size suitable for the sidebar
-                     $sidebar_avatar_url = wp_get_attachment_image_url(absint($custom_avatar_id), [64, 64]); // Request 64x64
-                 }
 
-                 // Display custom avatar if found, otherwise fall back to Gravatar
-                 if (!empty($sidebar_avatar_url)) {
-                     echo '<img src="' . esc_url($sidebar_avatar_url) . '" alt="Profile Picture" width="64" height="64" class="avatar avatar-64 photo">'; // Added classes for WP styling consistency
-                 } else {
-                     echo get_avatar($current_user->ID, 64); // Fallback to Gravatar
-                 }
-                 // --- END UPDATE ---
-             ?>
-         </div>
-            <?php // --- MODIFIED: Added Greeting --- 
-            ?>
-            <span class="qp-user-name"><?php echo esc_html__('Hello, ', 'question-press') . esc_html($current_user->display_name); ?>!</span><br>
-            <span class="qp-access-status">
-                <?php echo wp_kses_post($access_status_message); ?>
-            </span>
-        </div>
-        <ul class="qp-sidebar-nav">
-            <?php foreach ($tabs as $slug => $details):
-                // Check if the current slug matches the active tab from the query variable
-                $is_active = ($slug === $active_tab);
-                // Construct the full URL for the link
-                // For 'overview', link to the base dashboard URL. For others, append the slug.
-                $url = ($slug === 'overview') ? $base_dashboard_url : $base_dashboard_url . $slug . '/';
-            ?>
-                <li>
-                    <a href="<?php echo esc_url($url); ?>" class="<?php echo $is_active ? 'active' : ''; ?>">
-                        <span class="dashicons dashicons-<?php echo esc_attr($details['icon']); ?>"></span>
-                        <span><?php echo esc_html($details['label']); ?></span>
-                    </a>
-                </li>
-            <?php endforeach; ?>
-        </ul>
-        <div class="qp-sidebar-footer">
-            <a href="<?php echo wp_logout_url(get_permalink()); ?>" class="qp-logout-link">
-                <span class="dashicons dashicons-exit"></span> Logout
-            </a>
-        </div>
-        <?php
+        // --- Get Avatar HTML ---
+        $custom_avatar_id = get_user_meta($current_user->ID, '_qp_avatar_attachment_id', true);
+        $sidebar_avatar_url = '';
+        if (!empty($custom_avatar_id)) {
+            $sidebar_avatar_url = wp_get_attachment_image_url(absint($custom_avatar_id), [64, 64]);
+        }
+        if (!empty($sidebar_avatar_url)) {
+            $avatar_html = '<img src="' . esc_url($sidebar_avatar_url) . '" alt="Profile Picture" width="64" height="64" class="avatar avatar-64 photo">';
+        } else {
+            $avatar_html = get_avatar($current_user->ID, 64);
+        }
+        // --- End Avatar HTML ---
+
+        $logout_url = wp_logout_url(get_permalink()); // Use current page as redirect_to
+
+        // Prepare arguments for the template
+        $args = [
+            'current_user'         => $current_user,
+            'access_status_message'=> $access_status_message,
+            'active_tab'           => $active_tab,
+            'tabs'                 => $tabs,
+            'base_dashboard_url'   => $base_dashboard_url,
+            'logout_url'           => $logout_url,
+            'avatar_html'          => $avatar_html
+        ];
+
+        // Load and return the template HTML
+        return qp_get_template_html('dashboard-sidebar', 'frontend', $args);
     }
 
     /**

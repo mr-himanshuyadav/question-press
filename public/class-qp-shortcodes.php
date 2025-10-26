@@ -22,7 +22,7 @@ class QP_Shortcodes
         if (isset($_GET['start_section_practice']) && $_GET['start_section_practice'] === 'true') {
             // ... (keep existing pre-fill script logic) ...
             // Directly render the settings form using its *new* template loader call
-             return '<div id="qp-practice-app-wrapper">' . self::render_settings_form() . '</div>';
+            return '<div id="qp-practice-app-wrapper">' . self::render_settings_form() . '</div>';
         }
 
         // --- Prepare data for the wrapper template ---
@@ -61,7 +61,7 @@ class QP_Shortcodes
 
         $subjects = [];
         if ($subject_tax_id) {
-             $subjects = $wpdb->get_results($wpdb->prepare(
+            $subjects = $wpdb->get_results($wpdb->prepare(
                 "SELECT term_id AS subject_id, name AS subject_name FROM {$term_table} WHERE taxonomy_id = %d AND name != 'Uncategorized' AND parent = 0 ORDER BY name ASC",
                 $subject_tax_id
             ));
@@ -75,13 +75,13 @@ class QP_Shortcodes
 
         if ($allowed_subjects_or_all !== 'all' && is_array($allowed_subjects_or_all)) {
             $allowed_subjects_array = $allowed_subjects_or_all;
-            $subjects = array_filter($subjects, function($subject) use ($allowed_subjects_array) {
+            $subjects = array_filter($subjects, function ($subject) use ($allowed_subjects_array) {
                 return isset($subject->subject_id) && in_array($subject->subject_id, $allowed_subjects_array);
             });
-             // Check if the filtered list is empty AND user has restrictions
-             if (empty($subjects)) {
+            // Check if the filtered list is empty AND user has restrictions
+            if (empty($subjects)) {
                 $multiSelectDisabled = true;
-             }
+            }
         }
 
         // Prepare arguments for the template
@@ -104,7 +104,7 @@ class QP_Shortcodes
 
         $subjects = [];
         if ($subject_tax_id) {
-             $subjects = $wpdb->get_results($wpdb->prepare(
+            $subjects = $wpdb->get_results($wpdb->prepare(
                 "SELECT term_id AS subject_id, name AS subject_name FROM {$term_table} WHERE taxonomy_id = %d AND name != 'Uncategorized' AND parent = 0 ORDER BY name ASC",
                 $subject_tax_id
             ));
@@ -118,7 +118,7 @@ class QP_Shortcodes
 
         if ($allowed_subjects_or_all !== 'all' && is_array($allowed_subjects_or_all)) {
             $allowed_subjects_array = $allowed_subjects_or_all;
-            $subjects = array_filter($subjects, function($subject) use ($allowed_subjects_array) {
+            $subjects = array_filter($subjects, function ($subject) use ($allowed_subjects_array) {
                 return isset($subject->subject_id) && in_array($subject->subject_id, $allowed_subjects_array);
             });
             if (empty($subjects)) {
@@ -146,7 +146,7 @@ class QP_Shortcodes
 
         $subjects = [];
         if ($subject_tax_id) {
-             $subjects = $wpdb->get_results($wpdb->prepare(
+            $subjects = $wpdb->get_results($wpdb->prepare(
                 "SELECT term_id AS subject_id, name AS subject_name FROM {$term_table} WHERE taxonomy_id = %d AND name != 'Uncategorized' AND parent = 0 ORDER BY name ASC",
                 $subject_tax_id
             ));
@@ -160,12 +160,12 @@ class QP_Shortcodes
 
         if ($allowed_subjects_or_all !== 'all' && is_array($allowed_subjects_or_all)) {
             $allowed_subjects_array = $allowed_subjects_or_all;
-            $subjects = array_filter($subjects, function($subject) use ($allowed_subjects_array) {
+            $subjects = array_filter($subjects, function ($subject) use ($allowed_subjects_array) {
                 return isset($subject->subject_id) && in_array($subject->subject_id, $allowed_subjects_array);
             });
-             if (empty($subjects)) {
+            if (empty($subjects)) {
                 $multiSelectDisabled = true;
-             }
+            }
         }
 
         // Prepare arguments for the template
@@ -188,7 +188,7 @@ class QP_Shortcodes
 
         $subjects = [];
         if ($subject_tax_id) {
-             $subjects = $wpdb->get_results($wpdb->prepare(
+            $subjects = $wpdb->get_results($wpdb->prepare(
                 "SELECT term_id AS subject_id, name AS subject_name FROM {$term_table} WHERE taxonomy_id = %d AND name != 'Uncategorized' AND parent = 0 ORDER BY name ASC",
                 $subject_tax_id
             ));
@@ -202,7 +202,7 @@ class QP_Shortcodes
 
         if ($allowed_subjects_or_all !== 'all' && is_array($allowed_subjects_or_all)) {
             $allowed_subjects_array = $allowed_subjects_or_all;
-            $subjects = array_filter($subjects, function($subject) use ($allowed_subjects_array) {
+            $subjects = array_filter($subjects, function ($subject) use ($allowed_subjects_array) {
                 return isset($subject->subject_id) && in_array($subject->subject_id, $allowed_subjects_array);
             });
             if (empty($subjects)) {
@@ -382,50 +382,50 @@ class QP_Shortcodes
         $session_data['attempt_history'] = $attempt_history;
 
         // --- NEW: Fetch detailed report info, including the type ---
-$reports_table = $wpdb->prefix . 'qp_question_reports';
-$terms_table = $wpdb->prefix . 'qp_terms';
-$meta_table = $wpdb->prefix . 'qp_term_meta';
+        $reports_table = $wpdb->prefix . 'qp_question_reports';
+        $terms_table = $wpdb->prefix . 'qp_terms';
+        $meta_table = $wpdb->prefix . 'qp_term_meta';
 
-// Get all individual open reports for the user
-$all_user_reports = $wpdb->get_results($wpdb->prepare("
-    SELECT
-        r.question_id,
-        r.reason_term_ids
-    FROM {$reports_table} r
-    WHERE r.user_id = %d AND r.status = 'open'
-", $user_id));
+        // Get all individual open reports for the user
+        $all_user_reports = $wpdb->get_results($wpdb->prepare("
+            SELECT
+                r.question_id,
+                r.reason_term_ids
+            FROM {$reports_table} r
+            WHERE r.user_id = %d AND r.status = 'open'
+        ", $user_id));
 
-// Process the raw reports into the structured format JS expects
-$reported_info = [];
-foreach ($all_user_reports as $report) {
-    if (!isset($reported_info[$report->question_id])) {
-        $reported_info[$report->question_id] = [
-            'has_report' => false,
-            'has_suggestion' => false,
-        ];
-    }
-    
-    // Get the types for the reasons in this specific report
-    $reason_ids = array_filter(explode(',', $report->reason_term_ids));
-    if (!empty($reason_ids)) {
-        $ids_placeholder = implode(',', array_map('absint', $reason_ids));
-        $reason_types = $wpdb->get_col("
+        // Process the raw reports into the structured format JS expects
+        $reported_info = [];
+        foreach ($all_user_reports as $report) {
+            if (!isset($reported_info[$report->question_id])) {
+                $reported_info[$report->question_id] = [
+                    'has_report' => false,
+                    'has_suggestion' => false,
+                ];
+            }
+
+            // Get the types for the reasons in this specific report
+            $reason_ids = array_filter(explode(',', $report->reason_term_ids));
+            if (!empty($reason_ids)) {
+                $ids_placeholder = implode(',', array_map('absint', $reason_ids));
+                $reason_types = $wpdb->get_col("
             SELECT m.meta_value 
             FROM {$terms_table} t
             JOIN {$meta_table} m ON t.term_id = m.term_id AND m.meta_key = 'type'
             WHERE t.term_id IN ($ids_placeholder)
         ");
 
-        if (in_array('report', $reason_types)) {
-            $reported_info[$report->question_id]['has_report'] = true;
+                if (in_array('report', $reason_types)) {
+                    $reported_info[$report->question_id]['has_report'] = true;
+                }
+                if (in_array('suggestion', $reason_types)) {
+                    $reported_info[$report->question_id]['has_suggestion'] = true;
+                }
+            }
         }
-        if (in_array('suggestion', $reason_types)) {
-            $reported_info[$report->question_id]['has_suggestion'] = true;
-        }
-    }
-}
 
-$session_data['reported_info'] = $reported_info;
+        $session_data['reported_info'] = $reported_info;
 
         self::$session_data_for_script = $session_data;
 
@@ -451,7 +451,7 @@ $session_data['reported_info'] = $reported_info;
         $is_scored_session = isset($settings['marks_correct']);
 
         ob_start();
-    ?>
+?>
         <div class="qp-summary-wrapper">
             <h2>Session Summary</h2>
 
@@ -506,8 +506,8 @@ $session_data['reported_info'] = $reported_info;
         // Ensure session data is available (it should be set by render_session_page)
         $session_data = self::$session_data_for_script;
         if (!$session_data || !isset($session_data['settings'])) {
-             // Handle error: Session data not found
-             return '<div class="qp-container"><p>Error: Practice session data is missing or corrupt. Cannot render UI.</p></div>';
+            // Handle error: Session data not found
+            return '<div class="qp-container"><p>Error: Practice session data is missing or corrupt. Cannot render UI.</p></div>';
         }
         $session_settings = $session_data['settings'];
 
@@ -750,7 +750,7 @@ $session_data['reported_info'] = $reported_info;
                     <p style="margin: 0; color: #50575e; font-size: 14px;"><strong>Session ID:</strong> <?php echo esc_html($session_id); ?></p>
                     <?php if ($is_course_item_deleted): ?>
                         <em style="color:#777; font-size:13px;">(Original course item removed)</em>
-                     <?php endif; ?>
+                    <?php endif; ?>
                 </div>
             </div>
 
@@ -788,7 +788,8 @@ $session_data['reported_info'] = $reported_info;
                             <div class="value"><?php echo (int)$session->not_viewed_count; ?></div>
                             <div class="label">Not Viewed</div>
                         </div>
-                    <?php elseif (!$is_section_wise_practice) : // *** THIS IS THE FIX *** ?>
+                    <?php elseif (!$is_section_wise_practice) : // *** THIS IS THE FIX *** 
+                    ?>
                         <div class="stat">
                             <div class="value"><?php echo (int)$session->skipped_count; ?></div>
                             <div class="label">Skipped</div>
@@ -818,7 +819,9 @@ $session_data['reported_info'] = $reported_info;
                     <div class="qp-review-question-item">
                         <div class="qp-review-question-meta" style="display: flex; justify-content: space-between; align-items: flex-start;">
                             <div class="meta-left" style="display: flex; flex-direction: column; gap: 5px;">
-                                <span><strong>Question ID: </strong><?php echo esc_html($attempt->question_id); ?><?php if (!empty($attempt->attempt_id)) { echo ' | <strong>Attempt ID: </strong>' . esc_html($attempt->attempt_id); } ?></span>
+                                <span><strong>Question ID: </strong><?php echo esc_html($attempt->question_id); ?><?php if (!empty($attempt->attempt_id)) {
+                                                                                                                        echo ' | <strong>Attempt ID: </strong>' . esc_html($attempt->attempt_id);
+                                                                                                                    } ?></span>
                                 <span>
                                     <strong>Topic: </strong>
                                     <?php echo esc_html(implode(' / ', $attempt->subject_lineage)); ?>
@@ -855,11 +858,11 @@ $session_data['reported_info'] = $reported_info;
                             <span class="qp-review-label">Your Answer:</span>
                             <span class="qp-review-answer <?php echo $answer_class; ?>">
                                 <?php
-                                    if ($is_skipped) {
-                                        echo esc_html($answer_display_text);
-                                    } else {
-                                        echo esc_html($attempt->selected_answer);
-                                    }
+                                if ($is_skipped) {
+                                    echo esc_html($answer_display_text);
+                                } else {
+                                    echo esc_html($attempt->selected_answer);
+                                }
                                 ?>
                             </span>
                         </div>
