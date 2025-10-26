@@ -855,6 +855,177 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
         ];
     }
 
+    /**
+     * Retrieves detailed data for a single question for the frontend practice UI.
+     * Includes group data, options (text only), lineage, and user-specific statuses.
+     *
+     * @param int $question_id The ID of the question.
+     * @param int $user_id     The ID of the current user.
+     * @param int $session_id  The ID of the current practice session (optional, used for context).
+     * @return array|null An associative array containing question details, or null if not found.
+     * Structure:
+     * [
+     * 'question' => [
+     * 'question_id' => int,
+     * 'question_text' => string,
+     * 'question_number_in_section' => string|null,
+     * 'group_id' => int,
+     * 'direction_text' => string|null,
+     * 'direction_image_url' => string|null,
+     * 'subject_lineage' => array, // Names [Subject, Topic]
+     * 'source_lineage' => array, // Names [Source, Section, ...]
+     * 'options' => [ ['option_id' => int, 'option_text' => string], ... ]
+     * ],
+     * 'correct_option_id' => int|null, // Only returned by check_answer, fetched separately here
+     * 'attempt_id' => int|null, // ID of the attempt in *this* session
+     * 'previous_attempt_count' => int, // Count of attempts in *other* sessions
+     * 'is_revision' => bool,
+     * 'is_admin' => bool, // Or role check
+     * 'is_marked_for_review' => bool,
+     * 'reported_info' => ['has_report' => bool, 'has_suggestion' => bool]
+     * ]
+     */
+    public static function get_question_details_for_practice( int $question_id, int $user_id, int $session_id = 0 ) {
+        if ($question_id <= 0 || $user_id <= 0) {
+            return null;
+        }
+
+        // 1. Fetch Basic Question & Group Data
+        $question_base = self::get_question_by_id($question_id);
+        if (!$question_base) {
+            return null; // Question not found
+        }
+
+        $question_data = (array) $question_base; // Convert object to array for easier modification
+        $group_id = $question_data['group_id'];
+
+        // Add direction image URL
+        $question_data['direction_image_url'] = $question_data['direction_image_id']
+            ? wp_get_attachment_url($question_data['direction_image_id'])
+            : null;
+        unset($question_data['direction_image_id']); // Don't send ID to frontend
+
+        // 2. Get Subject/Topic & Source/Section Lineage Names
+        $question_data['subject_lineage'] = [];
+        $question_data['source_lineage'] = [];
+
+        if ($group_id) {
+            $group_terms = Terms_DB::get_linked_terms($group_id, 'group', ['subject', 'source']);
+            foreach ($group_terms as $term) {
+                $lineage = Terms_DB::get_lineage_names($term->term_id); // Use the DB class method
+                if ($term->taxonomy_name === 'subject') {
+                    $question_data['subject_lineage'] = $lineage;
+                } elseif ($term->taxonomy_name === 'source') {
+                    $question_data['source_lineage'] = $lineage;
+                }
+            }
+        }
+
+        // 3. Get Options (Text and ID only for practice)
+        $o_table = self::get_options_table_name();
+        $options_raw = self::$wpdb->get_results( self::$wpdb->prepare(
+            "SELECT option_id, option_text FROM {$o_table} WHERE question_id = %d ORDER BY option_id ASC",
+            $question_id
+        ), ARRAY_A);
+        // Apply nl2br and kses_post here
+        $question_data['options'] = array_map(function($opt) {
+            $opt['option_text'] = wp_kses_post(nl2br(stripslashes($opt['option_text'])));
+            return $opt;
+        }, $options_raw);
+
+
+        // Get Correct Option ID separately (needed for check_answer, but good to have)
+        $correct_option_id = self::get_correct_option_id($question_id);
+
+        // 4. Apply nl2br/kses_post to question/direction text
+        if (!empty($question_data['question_text'])) {
+            $question_data['question_text'] = wp_kses_post(nl2br(stripslashes($question_data['question_text'])));
+        }
+        if (!empty($question_data['direction_text'])) {
+            $question_data['direction_text'] = wp_kses_post(nl2br(stripslashes($question_data['direction_text'])));
+        }
+
+
+        // 5. Get User-Specific Statuses
+        $a_table = self::$wpdb->prefix . 'qp_user_attempts';
+        $review_table = self::$wpdb->prefix . 'qp_review_later';
+        $reports_table = self::$wpdb->prefix . 'qp_question_reports';
+        $meta_table = Terms_DB::get_term_meta_table_name();
+        $term_table_rel = Terms_DB::get_relationships_table_name(); // Alias for clarity if needed
+
+        // Check attempt in *this* session
+        $attempt_in_session = null;
+        if ($session_id > 0) {
+            $attempt_in_session = self::$wpdb->get_row( self::$wpdb->prepare(
+                "SELECT attempt_id FROM {$a_table} WHERE user_id = %d AND question_id = %d AND session_id = %d",
+                $user_id, $question_id, $session_id
+            ));
+        }
+
+        // Count previous attempts in *other* sessions
+        $previous_attempt_count = (int) self::$wpdb->get_var( self::$wpdb->prepare(
+            "SELECT COUNT(*) FROM {$a_table} WHERE user_id = %d AND question_id = %d AND session_id != %d AND status = 'answered'", // Count only answered attempts
+            $user_id, $question_id, $session_id
+        ));
+
+        // Check if marked for review
+        $is_marked = (bool) self::$wpdb->get_var( self::$wpdb->prepare(
+            "SELECT COUNT(*) FROM {$review_table} WHERE user_id = %d AND question_id = %d",
+            $user_id, $question_id
+        ));
+
+        // Check report status (more detailed)
+        $report_info = ['has_report' => false, 'has_suggestion' => false];
+        $open_reports = self::$wpdb->get_results( self::$wpdb->prepare(
+             "SELECT report_id, reason_term_ids FROM {$reports_table} WHERE user_id = %d AND question_id = %d AND status = 'open'",
+             $user_id, $question_id
+        ));
+
+        if (!empty($open_reports)) {
+             $all_reason_ids = [];
+             foreach ($open_reports as $report) {
+                 $ids = array_filter(array_map('absint', explode(',', $report->reason_term_ids)));
+                 if (!empty($ids)) {
+                    $all_reason_ids = array_merge($all_reason_ids, $ids);
+                 }
+             }
+             $all_reason_ids = array_unique($all_reason_ids);
+
+             if (!empty($all_reason_ids)) {
+                 $ids_placeholder = implode(',', $all_reason_ids);
+                 $reason_types = self::$wpdb->get_col(
+                    "SELECT meta_value FROM {$meta_table} WHERE meta_key = 'type' AND term_id IN ($ids_placeholder)"
+                 );
+                 if (in_array('report', $reason_types)) $report_info['has_report'] = true;
+                 if (in_array('suggestion', $reason_types)) $report_info['has_suggestion'] = true;
+             }
+        }
+
+        // Check admin/role permission (simplified example)
+        $user = get_userdata($user_id);
+        $options = get_option('qp_settings');
+        $allowed_roles = isset($options['show_source_meta_roles']) ? $options['show_source_meta_roles'] : [];
+        $user_can_view_source = !empty(array_intersect((array)($user->roles ?? []), (array)$allowed_roles));
+
+        // Remove source info if user lacks permission
+        if (!$user_can_view_source) {
+            unset($question_data['source_lineage']);
+            unset($question_data['question_number_in_section']);
+        }
+
+        // 6. Assemble Final Result Array
+        return [
+            'question'             => $question_data,
+            'correct_option_id'    => $correct_option_id, // Send correct ID separately
+            'attempt_id'           => $attempt_in_session ? (int) $attempt_in_session->attempt_id : null,
+            'previous_attempt_count' => $previous_attempt_count,
+            'is_revision'          => ($previous_attempt_count > 0),
+            'is_admin'             => $user_can_view_source, // Re-purpose this flag for source visibility
+            'is_marked_for_review' => $is_marked,
+            'reported_info'        => $report_info
+        ];
+    }
+
     // --- More methods for saving, updating, deleting will be added below ---
 
 } // End class Questions_DB

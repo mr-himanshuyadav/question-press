@@ -5069,161 +5069,30 @@ add_action('wp_ajax_get_progress_data', 'qp_get_progress_data_ajax');
 function qp_get_question_data_ajax()
 {
     check_ajax_referer('qp_practice_nonce', 'nonce');
+
+    if (!is_user_logged_in()) {
+         wp_send_json_error(['message' => 'Not logged in.']); // Add login check
+    }
+
     $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
+    $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0; // Get session_id from POST
+    $user_id = get_current_user_id();
+
     if (!$question_id) {
         wp_send_json_error(['message' => 'Invalid Question ID.']);
     }
 
-    global $wpdb;
-    $q_table = $wpdb->prefix . 'qp_questions';
-    $g_table = $wpdb->prefix . 'qp_question_groups';
-    $o_table = $wpdb->prefix . 'qp_options';
-    $a_table = $wpdb->prefix . 'qp_user_attempts';
-    $rel_table = $wpdb->prefix . 'qp_term_relationships';
-    $term_table = $wpdb->prefix . 'qp_terms';
-    $tax_table = $wpdb->prefix . 'qp_taxonomies';
-    $user_id = get_current_user_id();
+    // --- Call the new DB method ---
+    $result_data = QuestionPress\Database\Questions_DB::get_question_details_for_practice($question_id, $user_id, $session_id);
+    // --- End call ---
 
-    // 1. Fetch the basic question data first
-    $question_data = $wpdb->get_row($wpdb->prepare(
-        "SELECT q.question_id, q.question_text, q.question_number_in_section, g.group_id, g.direction_text, g.direction_image_id
-         FROM {$q_table} q
-         LEFT JOIN {$g_table} g ON q.group_id = g.group_id
-         WHERE q.question_id = %d",
-        $question_id
-    ), ARRAY_A);
-
-    if (!$question_data) {
-        wp_send_json_error(['message' => 'Question not found.']);
+    if ($result_data) {
+        // Data fetched successfully
+        wp_send_json_success($result_data);
+    } else {
+        // Question not found or other error in DB method
+        wp_send_json_error(['message' => 'Question not found or could not be loaded.']);
     }
-
-    $group_id = $question_data['group_id'];
-
-    // 2. Get Subject/Topic Hierarchy
-    $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'subject'");
-    $subject_term_id = $wpdb->get_var($wpdb->prepare("SELECT term_id FROM {$rel_table} WHERE object_id = %d AND object_type = 'group' AND term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id = %d)", $group_id, $subject_tax_id));
-    $question_data['subject_lineage'] = $subject_term_id ? qp_get_term_lineage_names($subject_term_id, $wpdb, $term_table) : [];
-
-    // 3. Get Source/Section Hierarchy
-    $source_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'source'");
-    $source_term_id = $wpdb->get_var($wpdb->prepare("SELECT term_id FROM {$rel_table} WHERE object_id = %d AND object_type = 'group' AND term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id = %d)", $group_id, $source_tax_id));
-    $question_data['source_lineage'] = $source_term_id ? qp_get_term_lineage_names($source_term_id, $wpdb, $term_table) : [];
-
-    $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
-    $previous_attempt_count = $wpdb->get_var($wpdb->prepare(
-        "SELECT COUNT(*) FROM {$a_table} WHERE user_id = %d AND question_id = %d AND session_id != %d",
-        $user_id,
-        $question_id,
-        $session_id
-    ));
-
-    if (!$question_data) {
-        wp_send_json_error(['message' => 'Question not found.']);
-    }
-
-    $options = get_option('qp_settings');
-    $allowed_roles = isset($options['show_source_meta_roles']) ? $options['show_source_meta_roles'] : [];
-    $user = wp_get_current_user();
-    $user_can_view = !empty(array_intersect((array)$user->roles, (array)$allowed_roles));
-
-    if (!$user_can_view) {
-        // Unset the source lineage if the user doesn't have permission.
-        unset($question_data['source_lineage']);
-        unset($question_data['question_number_in_section']);
-    }
-
-    $question_data['direction_image_url'] = $question_data['direction_image_id'] ? wp_get_attachment_url($question_data['direction_image_id']) : null;
-    unset($question_data['direction_image_id']); // Clean up data sent to frontend
-
-    // Fetch the 'is_correct' status along with the options
-    $options_from_db = $wpdb->get_results($wpdb->prepare("SELECT option_id, option_text, is_correct FROM {$o_table} WHERE question_id = %d", $question_id), ARRAY_A);
-
-    $correct_option_id = null;
-    $options_for_frontend = [];
-    foreach ($options_from_db as $option) {
-        if ($option['is_correct']) {
-            $correct_option_id = (int) $option['option_id'];
-        }
-        // We only send the text and id to the frontend, not the answer status
-        $options_for_frontend[] = [
-            'option_id' => $option['option_id'],
-            'option_text' => $option['option_text']
-        ];
-    }
-    $question_data['options'] = $options_for_frontend;
-
-    if (!empty($question_data['question_text'])) {
-        $question_data['question_text'] = wp_kses_post(nl2br($question_data['question_text']));
-    }
-    if (!empty($question_data['direction_text'])) {
-        $question_data['direction_text'] = wp_kses_post(nl2br($question_data['direction_text']));
-    }
-
-    // --- State Checks ---
-    $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
-    $attempt = $wpdb->get_row($wpdb->prepare("SELECT attempt_id FROM $a_table WHERE user_id = %d AND question_id = %d AND session_id = %d", $user_id, $question_id, $session_id));
-    $attempt_count = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $a_table WHERE user_id = %d AND question_id = %d AND status = 'answered' AND session_id != %d", $user_id, $question_id, $session_id));
-    $review_table = $wpdb->prefix . 'qp_review_later';
-    $is_marked = (bool) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$review_table} WHERE user_id = %d AND question_id = %d", $user_id, $question_id));
-
-    // --- CORRECTED: Fetch detailed report info ---
-    $reports_table = $wpdb->prefix . 'qp_question_reports';
-    $terms_table = $wpdb->prefix . 'qp_terms';
-    $meta_table = $wpdb->prefix . 'qp_term_meta';
-
-    // Get all reason ID strings for open reports for this question by this user
-    $reason_id_strings = $wpdb->get_col($wpdb->prepare(
-        "SELECT reason_term_ids FROM {$reports_table} WHERE user_id = %d AND status = 'open' AND question_id = %d",
-        $user_id,
-        $question_id
-    ));
-
-    $report_info = [
-        'has_report' => false,
-        'has_suggestion' => false,
-    ];
-    $all_reason_ids = [];
-
-    // Collect all unique reason IDs from all reports for this question
-    foreach ($reason_id_strings as $id_string) {
-        $ids = array_filter(explode(',', $id_string));
-        if (!empty($ids)) {
-            $all_reason_ids = array_merge($all_reason_ids, $ids);
-        }
-    }
-    $all_reason_ids = array_unique(array_map('absint', $all_reason_ids));
-
-    // If there are any reason IDs, query their types
-    if (!empty($all_reason_ids)) {
-        $ids_placeholder = implode(',', $all_reason_ids);
-        $reason_types = $wpdb->get_col("
-            SELECT m.meta_value
-            FROM {$terms_table} t
-            JOIN {$meta_table} m ON t.term_id = m.term_id AND m.meta_key = 'type'
-            WHERE t.term_id IN ({$ids_placeholder})
-        ");
-
-        if (in_array('report', $reason_types)) {
-            $report_info['has_report'] = true;
-        }
-        if (in_array('suggestion', $reason_types)) {
-            $report_info['has_suggestion'] = true;
-        }
-    }
-    // --- END CORRECTION ---
-
-
-    // --- Send Final Response ---
-    wp_send_json_success([
-        'question'             => $question_data,
-        'correct_option_id'    => $correct_option_id,
-        'attempt_id'           => $attempt ? (int) $attempt->attempt_id : null,
-        'previous_attempt_count' => (int) $attempt_count,
-        'is_revision'          => ($attempt_count > 0),
-        'is_admin'             => $user_can_view,
-        'is_marked_for_review' => $is_marked,
-        'reported_info'  => $report_info
-    ]);
 }
 add_action('wp_ajax_get_question_data', 'qp_get_question_data_ajax');
 
