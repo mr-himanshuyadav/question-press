@@ -7015,98 +7015,31 @@ add_action('wp_ajax_enroll_in_course', 'qp_enroll_in_course_ajax');
  */
 function qp_search_questions_for_course_ajax() {
     // 1. Security Checks
-    // Use a dedicated nonce for this action for better security
     check_ajax_referer('qp_course_editor_select_nonce', 'nonce');
-    if (!current_user_can('manage_options')) { // Or a more specific capability if needed
+    if (!current_user_can('manage_options')) { // Use appropriate capability
         wp_send_json_error(['message' => 'Permission denied.'], 403);
     }
 
-    // 2. Get and Sanitize Input Parameters
-    $search_term = isset($_POST['search']) ? sanitize_text_field($_POST['search']) : '';
-    $subject_id = isset($_POST['subject_id']) ? absint($_POST['subject_id']) : 0;
-    $topic_id = isset($_POST['topic_id']) ? absint($_POST['topic_id']) : 0;
-    $source_id = isset($_POST['source_id']) ? absint($_POST['source_id']) : 0; // Assuming source filter sends term_id
-    // Add pagination parameters later if needed (e.g., $_POST['page'])
+    // 2. Sanitize Input Parameters
+    $search_args = [
+        'search'     => isset($_POST['search']) ? sanitize_text_field(wp_unslash($_POST['search'])) : '',
+        'subject_id' => isset($_POST['subject_id']) ? absint($_POST['subject_id']) : 0,
+        'topic_id'   => isset($_POST['topic_id']) ? absint($_POST['topic_id']) : 0,
+        'source_id'  => isset($_POST['source_id']) ? absint($_POST['source_id']) : 0,
+        'limit'      => 100 // Keep the limit for performance
+    ];
 
-    // 3. Database Setup
-    global $wpdb;
-    $q_table = $wpdb->prefix . 'qp_questions';
-    $g_table = $wpdb->prefix . 'qp_question_groups';
-    $rel_table = $wpdb->prefix . 'qp_term_relationships';
-    $term_table = $wpdb->prefix . 'qp_terms';
-    $tax_table = $wpdb->prefix . 'qp_taxonomies';
+    // 3. Call the DB Method
+    $results = QuestionPress\Database\Questions_DB::search_questions($search_args);
 
-    // 4. Build Query Parts
-    $select = "SELECT DISTINCT q.question_id, q.question_text"; // Select distinct to avoid duplicates if multiple terms match
-    $from = "FROM {$q_table} q";
-    $joins = " LEFT JOIN {$g_table} g ON q.group_id = g.group_id"; // Join groups needed for term relationships
-    $where = ["q.status = 'publish'"]; // Only search published questions
-    $params = [];
-    $joins_added = []; // Helper
-
-    // Add search term condition (ID or text)
-    if (!empty($search_term)) {
-        if (is_numeric($search_term)) {
-            $where[] = $wpdb->prepare("q.question_id = %d", absint($search_term));
-        } else {
-            $like_term = '%' . $wpdb->esc_like($search_term) . '%';
-            $where[] = $wpdb->prepare("q.question_text LIKE %s", $like_term);
-        }
-    }
-
-    // Add Subject/Topic filtering (similar to list table)
-    if ($topic_id) {
-        // Filter by specific topic
-        if (!in_array('topic_rel', $joins_added)) {
-            $joins .= " JOIN {$rel_table} topic_rel ON g.group_id = topic_rel.object_id AND topic_rel.object_type = 'group'";
-            $joins_added[] = 'topic_rel';
-        }
-        $where[] = $wpdb->prepare("topic_rel.term_id = %d", $topic_id);
-    } elseif ($subject_id) {
-        // Filter by subject (find all child topics)
-        $child_topic_ids = $wpdb->get_col($wpdb->prepare("SELECT term_id FROM {$term_table} WHERE parent = %d", $subject_id));
-        if (!empty($child_topic_ids)) {
-            $ids_placeholder = implode(',', $child_topic_ids);
-            if (!in_array('topic_rel', $joins_added)) {
-                $joins .= " JOIN {$rel_table} topic_rel ON g.group_id = topic_rel.object_id AND topic_rel.object_type = 'group'";
-                $joins_added[] = 'topic_rel';
-            }
-            $where[] = "topic_rel.term_id IN ($ids_placeholder)";
-        } else {
-             $where[] = "1=0"; // Subject has no topics, so no questions
-        }
-    }
-
-    // Add Source filtering (only filtering by top-level source for now, sections can be added later)
-    if ($source_id) {
-        $source_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'source'");
-        // Get all descendant IDs including the source itself
-         $descendant_ids = Terms_DB::get_all_descendant_ids($source_id, $wpdb, $term_table); // Use the global helper
-         if (!empty($descendant_ids)) {
-             $ids_placeholder = implode(',', $descendant_ids);
-             if (!in_array('source_rel', $joins_added)) {
-                 $joins .= " JOIN {$rel_table} source_rel ON g.group_id = source_rel.object_id AND source_rel.object_type = 'group'";
-                 $joins_added[] = 'source_rel';
-             }
-             $where[] = "source_rel.term_id IN ($ids_placeholder)";
-         } else {
-             $where[] = "1=0"; // Source term not found or has no descendants
-         }
-    }
-
-    // 5. Construct and Execute Query
-    $sql = $select . " " . $from . " " . $joins . " WHERE " . implode(' AND ', $where) . " ORDER BY q.question_id DESC LIMIT 100"; // Add a LIMIT for now
-
-    $results = $wpdb->get_results($wpdb->prepare($sql, $params)); // Use prepare if you added %s/%d placeholders
-
-    // 6. Format and Send Response
+    // 4. Format and Send Response
     $formatted_results = [];
     if ($results) {
         foreach ($results as $question) {
             $formatted_results[] = [
                 'id' => $question->question_id,
-                // Simple text for now, strip tags and limit length
-                'text' => wp_strip_all_tags(wp_trim_words($question->question_text, 15, '...'))
+                // Apply formatting here before sending
+                'text' => wp_strip_all_tags(wp_trim_words(stripslashes($question->question_text), 15, '...'))
             ];
         }
     }

@@ -1136,6 +1136,110 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
         ];
     }
 
+    /**
+     * Searches for published questions based on various criteria.
+     * Used by the course editor modal.
+     *
+     * @param array $args {
+     * Optional. Array of search arguments.
+     *
+     * @type string $search       Search term (for ID or text). Default ''.
+     * @type int    $subject_id   Filter by parent subject term ID. Default 0.
+     * @type int    $topic_id     Filter by specific topic term ID. Default 0.
+     * @type int    $source_id    Filter by top-level source term ID (includes descendants). Default 0.
+     * @type int    $limit        Maximum number of results to return. Default 100.
+     * }
+     * @return array Array of matching question objects, each containing 'question_id' and 'question_text'.
+     */
+    public static function search_questions( $args = [] ) {
+        $defaults = [
+            'search'     => '',
+            'subject_id' => 0,
+            'topic_id'   => 0,
+            'source_id'  => 0,
+            'limit'      => 100,
+        ];
+        $args = wp_parse_args( $args, $defaults );
+
+        // Table names
+        $q_table = self::get_questions_table_name();
+        $g_table = self::get_groups_table_name();
+        $rel_table = Terms_DB::get_relationships_table_name();
+        $term_table = Terms_DB::get_terms_table_name();
+        $tax_table = Terms_DB::get_taxonomies_table_name();
+
+        // Base query structure
+        $select_sql = "SELECT DISTINCT q.question_id, q.question_text";
+        $query_from = "FROM {$q_table} q";
+        $query_joins = " LEFT JOIN {$g_table} g ON q.group_id = g.group_id";
+        $where_conditions = ["q.status = 'publish'"]; // Only published questions
+        $params = [];
+        $joins_added = []; // Helper to avoid duplicate joins
+
+        // Search term filter (ID or text)
+        if ( ! empty( $args['search'] ) ) {
+            $search_term = $args['search'];
+            if ( is_numeric( $search_term ) ) {
+                $where_conditions[] = self::$wpdb->prepare( "q.question_id = %d", absint( $search_term ) );
+            } else {
+                $like_term = '%' . self::$wpdb->esc_like( $search_term ) . '%';
+                $where_conditions[] = self::$wpdb->prepare( "q.question_text LIKE %s", $like_term );
+            }
+        }
+
+        // Subject/Topic filter
+        if ( $args['topic_id'] > 0 ) {
+            // Filter by specific topic
+            if ( ! in_array( 'topic_rel', $joins_added ) ) {
+                $query_joins .= " JOIN {$rel_table} topic_rel ON g.group_id = topic_rel.object_id AND topic_rel.object_type = 'group'";
+                $joins_added[] = 'topic_rel';
+            }
+            $where_conditions[] = self::$wpdb->prepare( "topic_rel.term_id = %d", $args['topic_id'] );
+        } elseif ( $args['subject_id'] > 0 ) {
+            // Filter by subject (find all child topics)
+            $child_topic_ids = Terms_DB::get_all_descendant_ids( $args['subject_id'] ); // Includes parent
+             // We only want to filter by actual topics (children), not the parent subject itself
+            $child_topic_ids = array_filter($child_topic_ids, function($tid) use ($args) {
+                return $tid != $args['subject_id'];
+            });
+
+            if ( ! empty( $child_topic_ids ) ) {
+                $ids_placeholder = implode( ',', $child_topic_ids );
+                if ( ! in_array( 'topic_rel', $joins_added ) ) {
+                    $query_joins .= " JOIN {$rel_table} topic_rel ON g.group_id = topic_rel.object_id AND topic_rel.object_type = 'group'";
+                    $joins_added[] = 'topic_rel';
+                }
+                $where_conditions[] = "topic_rel.term_id IN ($ids_placeholder)";
+            } else {
+                // Subject selected, but it has no child topics
+                $where_conditions[] = "1=0"; // Ensure no results
+            }
+        }
+
+        // Source filter (includes descendants)
+        if ( $args['source_id'] > 0 ) {
+            $descendant_ids = Terms_DB::get_all_descendant_ids( $args['source_id'] );
+            if ( ! empty( $descendant_ids ) ) {
+                $ids_placeholder = implode( ',', $descendant_ids );
+                if ( ! in_array( 'source_rel', $joins_added ) ) {
+                    $query_joins .= " JOIN {$rel_table} source_rel ON g.group_id = source_rel.object_id AND source_rel.object_type = 'group'";
+                    $joins_added[] = 'source_rel';
+                }
+                 $where_conditions[] = "source_rel.term_id IN ($ids_placeholder)";
+            } else {
+                $where_conditions[] = "1=0"; // Source term not found or has no descendants
+            }
+        }
+
+        // Construct final query
+        $where_clause = ' WHERE ' . implode( ' AND ', $where_conditions );
+        $limit_clause = self::$wpdb->prepare( " LIMIT %d", absint( $args['limit'] ) );
+        $sql = $select_sql . " " . $query_from . " " . $query_joins . " " . $where_clause . " ORDER BY q.question_id DESC" . $limit_clause;
+
+        // Execute query
+        return self::$wpdb->get_results( self::$wpdb->prepare( $sql, $params ), OBJECT ); // Return objects
+    }
+
     // --- More methods for saving, updating, deleting will be added below ---
 
 } // End class Questions_DB
