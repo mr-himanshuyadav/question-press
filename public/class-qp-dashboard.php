@@ -590,509 +590,186 @@ public static function render_history_content() // <-- Already changed to public
         return qp_get_template_html( 'dashboard/progress', 'frontend', $args );
     }
 
-            /**
-             * Renders the content specifically for the Courses section.
-             * NOW INCLUDES Enrollment Status and Progress.
-             */
-            public static function render_courses_content()
-            {
-                if (!is_user_logged_in()) return ''; // Should not happen here, but good practice
+    /**
+     * Renders the content specifically for the Courses section by loading a template.
+     * NOW PUBLIC STATIC and RETURNS HTML.
+     * Includes Enrollment Status and Progress.
+     */
+    public static function render_courses_content() // <-- Already changed to public static previously
+    {
+        if ( ! is_user_logged_in() ) return '';
 
-                $user_id = get_current_user_id();
-                global $wpdb;
-                $user_courses_table = $wpdb->prefix . 'qp_user_courses';
-                $items_table = $wpdb->prefix . 'qp_course_items';
-                $progress_table = $wpdb->prefix . 'qp_user_items_progress';
+        $user_id = get_current_user_id();
+        global $wpdb;
+        $user_courses_table = $wpdb->prefix . 'qp_user_courses';
+        $items_table = $wpdb->prefix . 'qp_course_items';
+        $progress_table = $wpdb->prefix . 'qp_user_items_progress';
 
-                // Get IDs of courses the user is enrolled in
-                $enrolled_course_ids = $wpdb->get_col($wpdb->prepare(
-                    "SELECT course_id FROM $user_courses_table WHERE user_id = %d",
-                    $user_id
-                ));
+        // Get enrolled course IDs
+        $enrolled_course_ids = $wpdb->get_col( $wpdb->prepare(
+            "SELECT course_id FROM $user_courses_table WHERE user_id = %d",
+            $user_id
+        ) );
+        if (!is_array($enrolled_course_ids)) $enrolled_course_ids = []; // Ensure it's an array
 
-                // Get all published courses
-                $args = [
-                    'post_type' => 'qp_course',
-                    'post_status' => 'publish',
-                    'posts_per_page' => -1,
-                    'orderby' => 'menu_order title',
-                    'order' => 'ASC',
-                ];
-                $courses_query = new WP_Query($args);
+        // Get all published courses
+        $args = [
+            'post_type' => 'qp_course',
+            'post_status' => 'publish',
+            'posts_per_page' => -1,
+            'orderby' => 'menu_order title',
+            'order' => 'ASC',
+        ];
+        $courses_query = new WP_Query( $args );
 
-                // Prepare data for enrolled courses (progress calculation)
-                $enrolled_courses_data = [];
-                if (!empty($enrolled_course_ids)) {
-                    $ids_placeholder = implode(',', array_map('absint', $enrolled_course_ids));
+        // Prepare progress data
+        $enrolled_courses_data = [];
+        $found_enrolled = false;
+        $found_available = false;
 
-                    // Get total item count for each enrolled course
-                    $total_items_results = $wpdb->get_results(
-                        "SELECT course_id, COUNT(item_id) as total_items FROM $items_table WHERE course_id IN ($ids_placeholder) GROUP BY course_id",
-                        OBJECT_K // Key by course_id
-                    );
+        if ( ! empty( $enrolled_course_ids ) ) {
+            $ids_placeholder = implode( ',', array_map( 'absint', $enrolled_course_ids ) );
+            $total_items_results = $wpdb->get_results(
+                "SELECT course_id, COUNT(item_id) as total_items FROM $items_table WHERE course_id IN ($ids_placeholder) GROUP BY course_id",
+                OBJECT_K
+            );
+            $completed_items_results = $wpdb->get_results( $wpdb->prepare(
+                "SELECT course_id, COUNT(user_item_id) as completed_items FROM $progress_table WHERE user_id = %d AND course_id IN ($ids_placeholder) AND status = 'completed' GROUP BY course_id",
+                $user_id
+            ), OBJECT_K );
 
-                    // Get completed item count for the user in each enrolled course
-                    $completed_items_results = $wpdb->get_results($wpdb->prepare(
-                        "SELECT course_id, COUNT(user_item_id) as completed_items FROM $progress_table WHERE user_id = %d AND course_id IN ($ids_placeholder) AND status = 'completed' GROUP BY course_id",
-                        $user_id
-                    ), OBJECT_K); // Key by course_id
-
-                    // Calculate progress
-                    foreach ($enrolled_course_ids as $course_id) {
-                        $total_items = $total_items_results[$course_id]->total_items ?? 0;
-                        $completed_items = $completed_items_results[$course_id]->completed_items ?? 0;
-                        $progress_percent = ($total_items > 0) ? round(($completed_items / $total_items) * 100) : 0;
-                        $enrolled_courses_data[$course_id] = [
-                            'progress' => $progress_percent,
-                            'is_complete' => ($total_items > 0 && $completed_items >= $total_items)
-                        ];
-                    }
-                }
-
-
-                ob_start();
-    ?>
-        <h2>My Courses</h2>
-
-        <?php if ($courses_query->have_posts()) : ?>
-            <div class="qp-course-list"> <?php // Combined list container 
-                                            ?>
-                <?php
-                    $found_enrolled = false;
-                    $found_available = false;
-                    while ($courses_query->have_posts()) : $courses_query->the_post();
-                        $course_id = get_the_ID();
-                        $is_enrolled = in_array($course_id, $enrolled_course_ids);
-
-                        // --- NEW: Check access mode and user entitlement ---
-                        $access_mode = get_post_meta($course_id, '_qp_course_access_mode', true) ?: 'free';
-                        $linked_product_id = get_post_meta($course_id, '_qp_linked_product_id', true);
-                        $product_url = $linked_product_id ? get_permalink($linked_product_id) : '#'; // Link to product page
-                        $user_has_access = qp_user_can_access_course($user_id, $course_id, true); // <<< CALL ACCESS CHECK FUNCTION
-
-                        $button_html = '';
-                        if ($is_enrolled) {
-                            $found_enrolled = true; // Mark that we found at least one enrolled course
-                            $course_data = $enrolled_courses_data[$course_id] ?? ['progress' => 0, 'is_complete' => false];
-                            $progress = $course_data['progress'];
-                            $is_complete = $course_data['is_complete'];
-                            $button_text = $is_complete ? __('View Results', 'question-press') : __('Continue Course', 'question-press');
-                            // Enrolled users always get the view/continue button, access check already passed implicitly
-                            $button_html = sprintf(
-                                '<button class="qp-button qp-button-primary qp-view-course-btn" data-course-id="%d" data-course-slug="%s">%s</button>',
-                                $course_id,
-                                esc_attr(get_post_field('post_name', $course_id)), // Added course slug
-                                esc_html($button_text)
-                            );
-                        } else {
-                            // Not enrolled - determine button based on access mode and entitlement
-                            $found_available = true; // Mark that we found at least one available course
-                            if ($access_mode === 'free') {
-                                // Free course, not enrolled yet
-                                $button_html = sprintf(
-                                    '<button class="qp-button qp-button-secondary qp-enroll-course-btn" data-course-id="%d">%s</button>',
-                                    $course_id,
-                                    __('Enroll Free', 'question-press')
-                                );
-                            } elseif ($access_mode === 'requires_purchase') {
-                                if ($user_has_access) {
-                                    // User purchased but somehow isn't enrolled? Show enroll (should ideally auto-enroll on purchase later)
-                                    // Or maybe they unenrolled? Let's allow re-enrollment if they have access.
-                                    $button_html = sprintf(
-                                        '<button class="qp-button qp-button-secondary qp-enroll-course-btn" data-course-id="%d">%s</button>',
-                                        $course_id,
-                                        __('Enroll Now (Purchased)', 'question-press') // Clarify they have access
-                                    );
-                                } else {
-                                    // Requires purchase, user does not have access -> Show Purchase button
-                                    $button_html = sprintf(
-                                        '<a href="%s" class="qp-button qp-button-primary">%s</a>',
-                                        esc_url($product_url),
-                                        __('Purchase Access', 'question-press')
-                                    );
-                                }
-                            }
-                        }
-
-                        // --- Render the Course Card ---
-                ?>
-                    <div class="qp-card qp-course-item <?php echo $is_enrolled ? 'qp-enrolled' : 'qp-available'; ?>">
-                        <div class="qp-card-content">
-                            <h3 style="margin-top:0;"><?php the_title(); ?></h3>
-                            <?php if ($is_enrolled): // Show progress only if enrolled 
-                            ?>
-                                <div class="qp-progress-bar-container" title="<?php echo esc_attr($progress); ?>% Complete">
-                                    <div class="qp-progress-bar-fill" style="width: <?php echo esc_attr($progress); ?>%;"></div>
-                                </div>
-                            <?php endif; ?>
-                            <?php // Show excerpt 
-                            ?>
-                            <?php if (has_excerpt()) : ?>
-                                <p><?php the_excerpt(); ?></p>
-                            <?php else : ?>
-                                <?php echo '<p>' . wp_trim_words(get_the_content(), 30, '...') . '</p>'; ?>
-                            <?php endif; ?>
-                        </div>
-                        <?php if ($button_html): // Only show action area if there's a button 
-                        ?>
-                            <div class="qp-card-action" style="padding: 1rem 1.5rem; border-top: 1px solid var(--qp-dashboard-border-light); text-align: right;">
-                                <?php echo $button_html; // Output the generated button/link 
-                                ?>
-                            </div>
-                        <?php endif; ?>
-                    </div>
-                <?php
-                    endwhile;
-                    wp_reset_postdata();
-                ?>
-            </div> <?php // End combined list container 
-                    ?>
-
-            <?php // --- Display "No courses" messages --- 
-            ?>
-            <?php if (!$found_enrolled && !$found_available) : // No courses at all 
-            ?>
-                <div class="qp-card">
-                    <div class="qp-card-content">
-                        <p style="text-align: center;">No courses are available at the moment.</p>
-                    </div>
-                </div>
-            <?php elseif (!$found_available && $found_enrolled) : // Enrolled in all, none available 
-            ?>
-                <div class="qp-card qp-available-courses">
-                    <div class="qp-card-content">
-                        <p style="text-align: center;">You are enrolled in all available courses.</p>
-                    </div>
-                </div>
-            <?php elseif (!$found_enrolled && $found_available) : // None enrolled, but some available 
-            ?>
-                <?php // Need to add the "Available Courses" header back if no enrolled courses were found 
-                ?>
-                <script>
-                    jQuery(document).ready(function($) {
-                        if ($('.qp-enrolled').length === 0) {
-                            $('.qp-available-courses').before('<h2>Available Courses</h2><hr class="qp-divider" style="margin: 0 0 1.5rem 0;">');
-                        }
-                    });
-                </script>
-            <?php endif; ?>
-
-        <?php else : // No courses query results at all 
-        ?>
-            <div class="qp-card">
-                <div class="qp-card-content">
-                    <p style="text-align: center;">No courses are available at the moment.</p>
-                </div>
-            </div>
-        <?php endif; ?>
-
-
-        <?php // --- Add CSS specific for this new section --- 
-        ?>
-        <style>
-            .qp-course-list {
-                display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-                gap: 1.5rem;
-            }
-
-            .qp-course-item .qp-card-content p {
-                color: var(--qp-dashboard-text-light);
-                font-size: 0.95em;
-                line-height: 1.6;
-                margin-bottom: 1rem;
-                /* Add margin below description */
-            }
-
-            .qp-progress-bar-container {
-                height: 8px;
-                background-color: var(--qp-dashboard-border-light);
-                border-radius: 4px;
-                overflow: hidden;
-                margin-bottom: 1rem;
-                /* Space between bar and description */
-            }
-
-            .qp-progress-bar-fill {
-                height: 100%;
-                background-color: var(--qp-dashboard-success);
-                /* Use success color */
-                transition: width 0.5s ease-in-out;
-                border-radius: 4px;
-            }
-        </style>
-    <?php
-                return ob_get_clean();
-            }
-
-            /**
-             * Renders the content specifically for the Profile section.
-             * Fetches user data and displays it using cards.
-             */
-            public static function render_profile_content()
-            {
-                if (!is_user_logged_in()) {
-                    // Should not happen if page is protected, but good practice
-                    return '<p>You must be logged in to view your profile.</p>';
-                }
-
-                $user_id = get_current_user_id();
-                $profile_data = self::get_profile_data($user_id); // Fetch data using our helper function
-
-                // Get WordPress profile edit URL
-                $profile_edit_url = get_edit_profile_url($user_id);
-
-                ob_start();
-    ?>
-        <div class="qp-profile-page">
-            <h2>My Profile</h2>
-
-            <div class="qp-profile-layout">
-                <div class="qp-card qp-profile-card">
-                    <div class="qp-card-content">
-                        <?php // Form now includes display and edit elements 
-                        ?>
-                        <form id="qp-profile-update-form">
-                            <?php wp_nonce_field('qp_save_profile_nonce', '_qp_profile_nonce'); // Nonce for security 
-                            ?>
-
-                            <div class="qp-profile-avatar qp-profile-avatar-wrapper">
-                                <?php // Avatar display (will be updated by JS) 
-                                ?>
-                                <img id="qp-profile-avatar-preview" src="<?php echo esc_url($profile_data['avatar_url']); ?>" alt="Profile Picture" width="128" height="128">
-
-                                <?php // Hidden file input - triggered by button 
-                                ?>
-                                <input type="file" id="qp-avatar-upload-input" name="qp_avatar_upload" accept="image/jpeg, image/png, image/gif" style="display: none;">
-
-                                <?php // Button shown only in edit mode 
-                                ?>
-                                <button type="button" class="qp-change-avatar-button qp-button qp-button-secondary" style="display: none; margin-top: 10px;">Change Avatar</button>
-
-                                <?php // Upload/Remove buttons shown after selection (controlled by JS) 
-                                ?>
-                                <div class="qp-avatar-upload-actions" style="display: none; margin-top: 10px; gap: 5px;">
-                                    <button type="button" class="qp-upload-avatar-button qp-button qp-button-primary button-small">Upload New</button>
-                                    <button type="button" class="qp-cancel-avatar-button qp-button qp-button-secondary button-small">Cancel</button>
-                                </div>
-                                <p id="qp-avatar-upload-error" class="qp-error-message" style="display: none; color: red; font-size: 0.9em; margin-top: 5px;"></p>
-                            </div>
-
-                            <?php // --- Display elements (visible by default) --- 
-                            ?>
-                            <div class="qp-profile-display">
-                                <h3 class="qp-profile-name"><?php echo esc_html__('Hello, ', 'question-press') . esc_html($profile_data['display_name']); ?>!</h3>
-                                <p class="qp-profile-email"><?php echo esc_html($profile_data['email']); ?></p>
-                                <button type="button" class="qp-button qp-button-secondary qp-edit-profile-button">Edit Profile</button>
-                            </div>
-
-                            <?php // --- Edit elements (hidden by default) --- 
-                            ?>
-                            <div class="qp-profile-edit" style="display: none; width: 100%;">
-                                <div class="qp-form-group qp-profile-field">
-                                    <label for="qp_display_name"><?php esc_html_e('Display Name', 'question-press'); ?></label>
-                                    <input type="text" id="qp_display_name" name="display_name" value="<?php echo esc_attr($profile_data['display_name']); ?>" required>
-                                </div>
-
-                                <div class="qp-form-group qp-profile-field">
-                                    <label for="qp_user_email"><?php esc_html_e('Email Address', 'question-press'); ?></label>
-                                    <input type="email" id="qp_user_email" name="user_email" value="<?php echo esc_attr($profile_data['email']); ?>" required>
-                                </div>
-
-                                <div class="qp-profile-edit-actions">
-                                    <button type="button" class="qp-button qp-button-secondary qp-cancel-edit-profile-button">Cancel</button>
-                                    <button type="submit" class="qp-button qp-button-primary qp-save-profile-button">Save Changes</button>
-                                </div>
-                            </div>
-
-                        </form> <?php // End Form 
-                                ?>
-                    </div> <?php // End Card Content 
-                            ?>
-                </div> <?php // End Profile Card 
-                        ?>
-
-                <div class="qp-profile-details">
-                    <div class="qp-card qp-access-card">
-                        <div class="qp-card-header">
-                            <h3><?php esc_html_e('Your Practice Scope', 'question-press'); ?></h3>
-                        </div>
-                        <div class="qp-card-content">
-                            <p><?php echo esc_html($profile_data['scope_description']); ?></p>
-                            <?php /* Optional detailed lists (can uncomment later if needed)
-                            if (!empty($profile_data['allowed_exams_list'])) {
-                                echo '<h4>Allowed Exams:</h4><ul>';
-                                foreach($profile_data['allowed_exams_list'] as $exam_name) {
-                                    echo '<li>' . esc_html($exam_name) . '</li>';
-                                }
-                                echo '</ul>';
-                            }
-                            if (!empty($profile_data['allowed_subjects_list'])) {
-                                echo '<h4>Specifically Allowed Subjects:</h4><ul>';
-                                foreach($profile_data['allowed_subjects_list'] as $subject_name) {
-                                    echo '<li>' . esc_html($subject_name) . '</li>';
-                                }
-                                echo '</ul>';
-                            }
-                            */ ?>
-                        </div>
-                    </div>
-
-                    <?php // --- Password Change Card --- 
-                    ?>
-                    <div class="qp-card qp-password-card">
-                        <div class="qp-card-header">
-                            <h3><?php esc_html_e('Security', 'question-press'); ?></h3>
-                        </div>
-                        <div class="qp-card-content">
-                            <?php // --- Display elements (visible by default) --- 
-                            ?>
-                            <div class="qp-password-display">
-                                <p>Manage your account password.</p>
-                                <button type="button" class="qp-button qp-button-secondary qp-change-password-button">Change Password</button>
-                                <?php // --- ADD THIS LINK --- 
-                                ?>
-                                <p class="qp-forgot-password-link-wrapper">
-                                    <a href="<?php echo esc_url(wp_lostpassword_url()); ?>" class="qp-forgot-password-link">Forgot Password?</a>
-                                </p>
-                                <?php // --- END ADDED LINK --- 
-                                ?>
-                            </div>
-
-                            <?php // --- Edit elements (hidden by default) --- 
-                            ?>
-                            <div class="qp-password-edit" style="display: none;">
-                                <form id="qp-password-change-form">
-                                    <?php wp_nonce_field('qp_change_password_nonce', '_qp_password_nonce'); // Nonce for security 
-                                    ?>
-                                    <div class="qp-form-group qp-profile-field">
-                                        <label for="qp_current_password"><?php esc_html_e('Current Password', 'question-press'); ?></label>
-                                        <input type="password" id="qp_current_password" name="current_password" required autocomplete="current-password">
-                                    </div>
-                                    <div class="qp-form-group qp-profile-field">
-                                        <label for="qp_new_password"><?php esc_html_e('New Password', 'question-press'); ?></label>
-                                        <input type="password" id="qp_new_password" name="new_password" required autocomplete="new-password">
-                                    </div>
-                                    <div class="qp-form-group qp-profile-field">
-                                        <label for="qp_confirm_password"><?php esc_html_e('Confirm New Password', 'question-press'); ?></label>
-                                        <input type="password" id="qp_confirm_password" name="confirm_password" required autocomplete="new-password">
-                                        <p id="qp-password-match-error" class="qp-error-message" style="display: none; color: red; font-size: 0.9em; margin-top: 5px;"></p>
-                                    </div>
-                                    <div class="qp-password-edit-actions">
-                                        <button type="button" class="qp-button qp-button-secondary qp-cancel-change-password-button">Cancel</button>
-                                        <button type="submit" class="qp-button qp-button-primary qp-save-password-button">Update Password</button>
-                                    </div>
-                                </form>
-                            </div>
-                        </div>
-                    </div>
-
-                    <?php // Placeholder for future Subscription/Entitlement Management 
-                    ?>
-                </div>
-            </div>
-        </div>
-<?php
-                return ob_get_clean();
-            }
-
-            /**
-             * Gathers profile data for the dashboard profile tab.
-             *
-             * @param int $user_id The ID of the user.
-             * @return array An array containing profile details.
-             */
-            private static function get_profile_data($user_id)
-            {
-                $user_info = get_userdata($user_id);
-                if (!$user_info) {
-                    return [ // Return default empty values if user not found
-                        'display_name' => 'User Not Found',
-                        'email' => '',
-                        'avatar_url' => get_avatar_url(0), // Default avatar
-                        'scope_description' => 'N/A',
-                        'allowed_subjects_list' => [],
-                        'allowed_exams_list' => [],
-                    ];
-                }
-
-                // Check for custom avatar first
-                $custom_avatar_id = get_user_meta($user_id, '_qp_avatar_attachment_id', true);
-                $avatar_url = '';
-                if (!empty($custom_avatar_id)) {
-                    // Use a reasonable size like 'thumbnail' or 'medium'
-                    $avatar_url = wp_get_attachment_image_url(absint($custom_avatar_id), 'thumbnail');
-                }
-
-                // Fallback to Gravatar if no custom avatar or URL fetch failed
-                if (empty($avatar_url)) {
-                    $avatar_url = get_avatar_url($user_id, ['size' => 128, 'default' => 'mystery']); // Get a larger avatar
-                }
-
-                // --- Fetch and Process Scope ---
-                $scope_description = 'All Subjects & Exams'; // Default
-                $allowed_subjects_list = [];
-                $allowed_exams_list = []; // <-- Initialize here
-                $allowed_subject_ids_or_all = qp_get_allowed_subject_ids_for_user($user_id); // Use the existing function
-
-                if ($allowed_subject_ids_or_all !== 'all') {
-                    global $wpdb;
-                    $term_table = $wpdb->prefix . 'qp_terms';
-                    // $rel_table = $wpdb->prefix . 'qp_term_relationships'; // No longer needed for exams here
-                    // $tax_table = $wpdb->prefix . 'qp_taxonomies'; // No longer needed for exams here
-
-                    $allowed_subject_ids = $allowed_subject_ids_or_all; // It's an array if not 'all'
-
-                    // Get names for the allowed subjects (This part is correct)
-                    if (!empty($allowed_subject_ids)) {
-                        $subj_ids_placeholder = implode(',', array_map('absint', $allowed_subject_ids));
-                        // Fetch subject names directly allowed or allowed via exams included in qp_get_allowed_subject_ids_for_user
-                        $allowed_subjects_list = $wpdb->get_col("SELECT name FROM {$term_table} WHERE term_id IN ($subj_ids_placeholder) AND parent = 0 ORDER BY name ASC");
-                    }
-
-                    // --- CORRECTED EXAM LOGIC ---
-                    // Get directly allowed exams from user meta
-                    $direct_exams_json = get_user_meta($user_id, '_qp_allowed_exam_term_ids', true);
-                    $direct_exam_ids = json_decode($direct_exams_json, true);
-                    if (!is_array($direct_exam_ids)) $direct_exam_ids = [];
-
-                    $final_allowed_exam_ids = array_map('absint', $direct_exam_ids); // Start with directly allowed exams
-
-                    // If specific subjects are allowed, find exams linked ONLY to those subjects
-                    // Note: qp_get_allowed_subject_ids_for_user already calculated subjects allowed via exams,
-                    // but here we need the EXAM names themselves for display. We only show DIRECTLY assigned exams.
-                    // If you *also* wanted to show exams linked via allowed subjects, you'd add that logic back here.
-                    // For now, we only display exams explicitly assigned to the user.
-
-                    if (!empty($final_allowed_exam_ids)) {
-                        $exam_ids_placeholder = implode(',', $final_allowed_exam_ids);
-                        $allowed_exams_list = $wpdb->get_col("SELECT name FROM {$term_table} WHERE term_id IN ($exam_ids_placeholder) ORDER BY name ASC");
-                    }
-                    // --- END CORRECTED EXAM LOGIC ---
-
-                    // Build the description string (This part is correct)
-                    if (empty($allowed_subjects_list) && empty($allowed_exams_list)) {
-                        $scope_description = 'No specific scope assigned.';
-                    } else {
-                        $scope_parts = [];
-                        // Display only explicitly assigned exams
-                        if (!empty($allowed_exams_list)) $scope_parts[] = "Allowed Exams: " . implode(', ', array_map('esc_html', $allowed_exams_list));
-                        // Display all subjects derived from scope function
-                        if (!empty($allowed_subjects_list)) $scope_parts[] = "Accessible Subjects: " . implode(', ', array_map('esc_html', $allowed_subjects_list));
-                        $scope_description = implode('; ', $scope_parts);
-                    }
-                }
-                // --- End Scope Processing ---
-
-                return [
-                    'display_name' => $user_info->display_name,
-                    'email' => $user_info->user_email,
-                    'avatar_url' => $avatar_url,
-                    'scope_description' => $scope_description, // A user-friendly string
-                    'allowed_subjects_list' => $allowed_subjects_list, // Raw list for potential detailed display
-                    'allowed_exams_list' => $allowed_exams_list,       // Raw list for potential detailed display
+            foreach ( $enrolled_course_ids as $course_id ) {
+                $total_items = $total_items_results[ $course_id ]->total_items ?? 0;
+                $completed_items = $completed_items_results[ $course_id ]->completed_items ?? 0;
+                $progress_percent = ( $total_items > 0 ) ? round( ( $completed_items / $total_items ) * 100 ) : 0;
+                $enrolled_courses_data[ $course_id ] = [
+                    'progress' => $progress_percent,
+                    'is_complete' => ( $total_items > 0 && $completed_items >= $total_items )
                 ];
             }
+        }
+
+        // Determine if enrolled/available courses exist (for messages in template)
+        if ($courses_query->have_posts()) {
+            foreach ($courses_query->posts as $course_post) {
+                if (in_array($course_post->ID, $enrolled_course_ids)) {
+                    $found_enrolled = true;
+                } else {
+                    $found_available = true;
+                }
+                if ($found_enrolled && $found_available) break; // Optimization
+            }
+        }
+
+        // Prepare arguments for the template
+        $template_args = [
+            'courses_query'         => $courses_query,
+            'enrolled_course_ids'   => $enrolled_course_ids,
+            'enrolled_courses_data' => $enrolled_courses_data,
+            'found_enrolled'        => $found_enrolled,
+            'found_available'       => $found_available,
+            'user_id'               => $user_id, // Pass user ID to template for access checks
+        ];
+
+        // Load and return the template HTML
+        return qp_get_template_html( 'dashboard/courses', 'frontend', $template_args );
+    }
+
+    /**
+     * Renders the content specifically for the Profile section by loading a template.
+     * NOW PUBLIC STATIC and RETURNS HTML.
+     * Fetches user data and displays it using cards.
+     */
+    public static function render_profile_content() // <-- Already changed to public static previously
+    {
+        if ( ! is_user_logged_in() ) {
+            return '<p>' . esc_html__( 'You must be logged in to view your profile.', 'question-press' ) . '</p>';
+        }
+
+        $user_id = get_current_user_id();
+        $profile_data = self::get_profile_data( $user_id ); // Use the existing helper
+
+        // Prepare arguments for the template
+        $args = [
+            'profile_data' => $profile_data,
+        ];
+
+        // Load and return the template HTML
+        return qp_get_template_html( 'dashboard/profile', 'frontend', $args );
+
+        /* --- REMOVE OLD ob_start() and HTML generation ---
+        ob_start();
+        // ... Old HTML generation ...
+        return ob_get_clean();
+        */
+    }
+
+    /**
+     * Gathers profile data for the dashboard profile tab.
+     * (Keep this helper method as is - no changes needed here)
+     *
+     * @param int $user_id The ID of the user.
+     * @return array An array containing profile details.
+     */
+    private static function get_profile_data( $user_id ) { // <-- Keep this private, it's only used internally now
+        // ... Function content remains exactly the same ...
+        $user_info = get_userdata($user_id);
+        if (!$user_info) {
+            return [ // Return default empty values if user not found
+                'display_name' => 'User Not Found',
+                'email' => '',
+                'avatar_url' => get_avatar_url(0), // Default avatar
+                'scope_description' => 'N/A',
+                'allowed_subjects_list' => [],
+                'allowed_exams_list' => [],
+            ];
+        }
+        $custom_avatar_id = get_user_meta($user_id, '_qp_avatar_attachment_id', true);
+        $avatar_url = '';
+        if (!empty($custom_avatar_id)) {
+            $avatar_url = wp_get_attachment_image_url(absint($custom_avatar_id), 'thumbnail');
+        }
+        if (empty($avatar_url)) {
+            $avatar_url = get_avatar_url($user_id, ['size' => 128, 'default' => 'mystery']);
+        }
+        $scope_description = 'All Subjects & Exams';
+        $allowed_subjects_list = [];
+        $allowed_exams_list = [];
+        $allowed_subject_ids_or_all = qp_get_allowed_subject_ids_for_user($user_id);
+        if ($allowed_subject_ids_or_all !== 'all') {
+             global $wpdb;
+             $term_table = $wpdb->prefix . 'qp_terms';
+             $allowed_subject_ids = $allowed_subject_ids_or_all;
+             if (!empty($allowed_subject_ids)) {
+                 $subj_ids_placeholder = implode(',', array_map('absint', $allowed_subject_ids));
+                 $allowed_subjects_list = $wpdb->get_col("SELECT name FROM {$term_table} WHERE term_id IN ($subj_ids_placeholder) AND parent = 0 ORDER BY name ASC");
+             }
+             $direct_exams_json = get_user_meta($user_id, '_qp_allowed_exam_term_ids', true);
+             $direct_exam_ids = json_decode($direct_exams_json, true);
+             if (!is_array($direct_exam_ids)) $direct_exam_ids = [];
+             $final_allowed_exam_ids = array_map('absint', $direct_exam_ids);
+             if (!empty($final_allowed_exam_ids)) {
+                 $exam_ids_placeholder = implode(',', $final_allowed_exam_ids);
+                 $allowed_exams_list = $wpdb->get_col("SELECT name FROM {$term_table} WHERE term_id IN ($exam_ids_placeholder) ORDER BY name ASC");
+             }
+            if (empty($allowed_subjects_list) && empty($allowed_exams_list)) {
+                $scope_description = 'No specific scope assigned.';
+            } else {
+                $scope_parts = [];
+                if (!empty($allowed_exams_list)) $scope_parts[] = "Allowed Exams: " . implode(', ', array_map('esc_html', $allowed_exams_list));
+                if (!empty($allowed_subjects_list)) $scope_parts[] = "Accessible Subjects: " . implode(', ', array_map('esc_html', $allowed_subjects_list));
+                $scope_description = implode('; ', $scope_parts);
+            }
+        }
+        return [
+            'display_name' => $user_info->display_name,
+            'email' => $user_info->user_email,
+            'avatar_url' => $avatar_url,
+            'scope_description' => $scope_description,
+            'allowed_subjects_list' => $allowed_subjects_list,
+            'allowed_exams_list' => $allowed_exams_list,
+        ];
+    }
 
             /**
              * NEW HELPER: Prefetches lineage data needed for session lists.
