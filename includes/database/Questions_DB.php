@@ -1240,6 +1240,99 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
         return self::$wpdb->get_results( self::$wpdb->prepare( $sql, $params ), OBJECT ); // Return objects
     }
 
+    /**
+     * Retrieves detailed data for a single question for the REST API.
+     * Includes group data, options (ID and text only), and term lineage.
+     * Excludes user-specific data and correct answer flags.
+     *
+     * @param int $question_id The ID of the question.
+     * @return array|null An associative array containing question details, or null if not found/published.
+     * Structure:
+     * [
+     * 'question_id' => int,
+     * 'question_text' => string,
+     * 'direction_text' => string|null,
+     * 'direction_image_url' => string|null,
+     * 'subject_lineage' => array, // Names [Subject, Topic]
+     * 'source_lineage' => array, // Names [Source, Section, ...]
+     * 'options' => [ ['option_id' => int, 'option_text' => string], ... ]
+     * ]
+     */
+    public static function get_question_details_for_api( int $question_id ) {
+        if ( $question_id <= 0 ) {
+            return null;
+        }
+
+        // 1. Fetch Basic Question & Group Data (only if published)
+        $q_table = self::get_questions_table_name();
+        $g_table = self::get_groups_table_name();
+        $question_base = self::$wpdb->get_row( self::$wpdb->prepare(
+            "SELECT q.question_id, q.question_text, q.status, g.group_id, g.direction_text, g.direction_image_id
+             FROM {$q_table} q
+             LEFT JOIN {$g_table} g ON q.group_id = g.group_id
+             WHERE q.question_id = %d",
+            $question_id
+        ) );
+
+        // Return null if question not found or not published
+        if ( ! $question_base || $question_base->status !== 'publish' ) {
+            return null;
+        }
+
+        $question_data = (array) $question_base;
+        $group_id = $question_data['group_id'];
+
+        // Add direction image URL
+        $question_data['direction_image_url'] = $question_data['direction_image_id']
+            ? wp_get_attachment_url( $question_data['direction_image_id'] )
+            : null;
+        unset( $question_data['direction_image_id'], $question_data['group_id'], $question_data['status'] ); // Clean up internal fields
+
+        // 2. Get Subject/Topic & Source/Section Lineage Names
+        $question_data['subject_lineage'] = [];
+        $question_data['source_lineage'] = [];
+        if ( $group_id ) {
+            $group_terms = Terms_DB::get_linked_terms( $group_id, 'group', ['subject', 'source'] );
+            foreach ( $group_terms as $term ) {
+                $lineage = Terms_DB::get_lineage_names( $term->term_id );
+                if ( $term->taxonomy_name === 'subject' ) {
+                    $question_data['subject_lineage'] = $lineage;
+                } elseif ( $term->taxonomy_name === 'source' ) {
+                    $question_data['source_lineage'] = $lineage;
+                }
+            }
+        }
+
+        // 3. Get Options (ID and Text only)
+        $o_table = self::get_options_table_name();
+        $options_raw = self::$wpdb->get_results( self::$wpdb->prepare(
+            "SELECT option_id, option_text FROM {$o_table} WHERE question_id = %d ORDER BY option_id ASC", // You might want ORDER BY RAND() here for the API
+            $question_id
+        ), ARRAY_A );
+        // Apply basic sanitization/formatting
+        $question_data['options'] = array_map(function($opt) {
+            $opt['option_text'] = wp_kses_post(nl2br(stripslashes($opt['option_text'])));
+             // Ensure option_id is an integer
+            $opt['option_id'] = (int) $opt['option_id'];
+            return $opt;
+        }, $options_raw);
+
+
+        // 4. Apply formatting to question/direction text
+        if (!empty($question_data['question_text'])) {
+            $question_data['question_text'] = wp_kses_post(nl2br(stripslashes($question_data['question_text'])));
+        }
+        if (!empty($question_data['direction_text'])) {
+            $question_data['direction_text'] = wp_kses_post(nl2br(stripslashes($question_data['direction_text'])));
+        }
+
+        // Ensure question_id is an integer
+        $question_data['question_id'] = (int) $question_data['question_id'];
+
+
+        return $question_data;
+    }
+
     // --- More methods for saving, updating, deleting will be added below ---
 
 } // End class Questions_DB

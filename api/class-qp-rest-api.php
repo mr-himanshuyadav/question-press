@@ -226,54 +226,25 @@ class QP_Rest_Api {
     }
 
     
-    /**
-     * UPDATED: Callback now fetches question by its custom ID.
-     */
     public static function get_single_question_by_id(WP_REST_Request $request) {
-        $question_db_id = (int) $request['id'];
+        // Get the question's actual database ID from the URL parameter
+        $question_id = (int) $request['id'];
 
-        global $wpdb;
-        $q_table = $wpdb->prefix . 'qp_questions';
-        $g_table = $wpdb->prefix . 'qp_question_groups';
-        $o_table = $wpdb->prefix . 'qp_options';
-        $rel_table = $wpdb->prefix . 'qp_term_relationships';
-        $term_table = $wpdb->prefix . 'qp_terms';
-        $tax_table = $wpdb->prefix . 'qp_taxonomies';
-
-        $question_data = $wpdb->get_row($wpdb->prepare(
-            "SELECT q.question_id, q.question_text, g.group_id, g.direction_text, g.direction_image_id
-             FROM {$q_table} q 
-             LEFT JOIN {$g_table} g ON q.group_id = g.group_id
-             WHERE q.custom_question_id = %d AND q.status = 'publish'",
-            $custom_question_id
-        ), ARRAY_A);
-
-        if (!$question_data) {
-            return new WP_Error('rest_question_not_found', 'Question not found.', ['status' => 404]);
+        if ($question_id <= 0) {
+             return new WP_Error('rest_invalid_id', 'Invalid Question ID provided.', ['status' => 400]);
         }
 
-        $question_id = $question_data['question_id'];
-        $group_id = $question_data['group_id'];
+        // Call the new DB method
+        $question_data = QuestionPress\Database\Questions_DB::get_question_details_for_api($question_id);
 
-        // Get Subject/Topic Hierarchy
-        $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'subject'");
-        $subject_term_id = $wpdb->get_var($wpdb->prepare("SELECT term_id FROM {$rel_table} WHERE object_id = %d AND object_type = 'group' AND term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id = %d)", $group_id, $subject_tax_id));
-        $question_data['subject_lineage'] = $subject_term_id ? qp_get_term_lineage_names($subject_term_id, $wpdb, $term_table) : [];
-        
-        // Get Source/Section Hierarchy
-        $source_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'source'");
-        $source_term_id = $wpdb->get_var($wpdb->prepare("SELECT term_id FROM {$rel_table} WHERE object_id = %d AND object_type = 'group' AND term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id = %d)", $group_id, $source_tax_id));
-        $question_data['source_lineage'] = $source_term_id ? qp_get_term_lineage_names($source_term_id, $wpdb, $term_table) : [];
-
-
-        $question_data['direction_image_url'] = $question_data['direction_image_id'] ? wp_get_attachment_url($question_data['direction_image_id']) : null;
-        unset($question_data['direction_image_id']);
-        unset($question_data['group_id']); // No need to expose group_id in API response
-
-        $options = $wpdb->get_results($wpdb->prepare("SELECT option_id, option_text FROM {$o_table} WHERE question_id = %d ORDER BY RAND()", $question_id), ARRAY_A);
-        $question_data['options'] = $options;
-
-        return new WP_REST_Response($question_data, 200);
+        // Check the result
+        if ( $question_data ) {
+            // Found and formatted data successfully
+            return new WP_REST_Response( $question_data, 200 );
+        } else {
+            // Question not found or not published
+            return new WP_Error( 'rest_question_not_found', 'Question not found or is not published.', ['status' => 404] );
+        }
     }
 
 
