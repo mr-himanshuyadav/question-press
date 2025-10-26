@@ -491,96 +491,61 @@ public static function render_history_content() // <-- Already changed to public
     return qp_get_template_html('dashboard/history', 'frontend', $args);
 }
 
-            /**
-             * Renders the content specifically for the Review section.
-             */
-            public static function render_review_content()
-            {
-                global $wpdb;
-                $user_id = get_current_user_id();
-                $attempts_table = $wpdb->prefix . 'qp_user_attempts';
+    /**
+     * Renders the content specifically for the Review section by loading a template.
+     * NOW PUBLIC STATIC and RETURNS HTML.
+     */
+    public static function render_review_content() // <-- Already changed to public static previously
+    {
+        global $wpdb;
+        $user_id = get_current_user_id();
+        $attempts_table = $wpdb->prefix . 'qp_user_attempts';
+        $review_table = $wpdb->prefix . 'qp_review_later';
+        $questions_table = $wpdb->prefix . 'qp_questions';
+        $groups_table = $wpdb->prefix . 'qp_question_groups';
+        $rel_table = $wpdb->prefix . 'qp_term_relationships';
+        $term_table = $wpdb->prefix . 'qp_terms';
+        $tax_table = $wpdb->prefix . 'qp_taxonomies';
 
-                // Fetch Review Later questions
-                $review_questions = $wpdb->get_results($wpdb->prepare(
-                    "SELECT
-                 q.question_id, q.question_text,
-                 subject_term.name as subject_name
-              FROM {$wpdb->prefix}qp_review_later rl
-              JOIN {$wpdb->prefix}qp_questions q ON rl.question_id = q.question_id
-              LEFT JOIN {$wpdb->prefix}qp_question_groups g ON q.group_id = g.group_id
-              LEFT JOIN {$wpdb->prefix}qp_term_relationships topic_rel ON g.group_id = topic_rel.object_id AND topic_rel.object_type = 'group' AND topic_rel.term_id IN (SELECT term_id FROM {$wpdb->prefix}qp_terms WHERE parent != 0 AND taxonomy_id = (SELECT taxonomy_id FROM {$wpdb->prefix}qp_taxonomies WHERE taxonomy_name = 'subject'))
-               LEFT JOIN {$wpdb->prefix}qp_terms topic_term ON topic_rel.term_id = topic_term.term_id
-              LEFT JOIN {$wpdb->prefix}qp_terms subject_term ON topic_term.parent = subject_term.term_id
-              WHERE rl.user_id = %d
-              ORDER BY rl.review_id DESC",
-                    $user_id
-                ));
+        // Fetch Review Later questions (JOIN to get subject name efficiently)
+        $subject_tax_id = $wpdb->get_var( $wpdb->prepare( "SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = %s", 'subject' ) );
+        $review_questions = $wpdb->get_results( $wpdb->prepare(
+            "SELECT
+             q.question_id, q.question_text,
+             COALESCE(parent_term.name, 'Uncategorized') as subject_name -- Use COALESCE for fallback
+             FROM {$review_table} rl
+             JOIN {$questions_table} q ON rl.question_id = q.question_id
+             LEFT JOIN {$groups_table} g ON q.group_id = g.group_id
+             LEFT JOIN {$rel_table} topic_rel ON g.group_id = topic_rel.object_id AND topic_rel.object_type = 'group'
+             LEFT JOIN {$term_table} topic_term ON topic_rel.term_id = topic_term.term_id AND topic_term.taxonomy_id = %d AND topic_term.parent != 0
+             LEFT JOIN {$term_table} parent_term ON topic_term.parent = parent_term.term_id
+             WHERE rl.user_id = %d
+             ORDER BY rl.review_id DESC",
+            $subject_tax_id,
+            $user_id
+        ) );
 
-                // Calculate counts for "Practice Your Mistakes"
-                $total_incorrect_count = $wpdb->get_var($wpdb->prepare(
-                    "SELECT COUNT(DISTINCT question_id) FROM {$attempts_table} WHERE user_id = %d AND is_correct = 0",
-                    $user_id
-                ));
-                $correctly_answered_qids = $wpdb->get_col($wpdb->prepare("SELECT DISTINCT question_id FROM {$attempts_table} WHERE user_id = %d AND is_correct = 1", $user_id));
-                $all_answered_qids = $wpdb->get_col($wpdb->prepare("SELECT DISTINCT question_id FROM {$attempts_table} WHERE user_id = %d AND status = 'answered'", $user_id));
-                $never_correct_qids = array_diff($all_answered_qids, $correctly_answered_qids);
-                $never_correct_count = count($never_correct_qids);
 
-                ob_start();
-    ?>
-        <h2>Review Center</h2>
-        <div class="qp-practice-card qp-card"> <?php // Add qp-card class 
-                                                ?>
-            <div class="qp-card-content">
-                <h4 id="qp-incorrect-practice-heading"
-                    data-never-correct-count="<?php echo (int)$never_correct_count; ?>"
-                    data-total-incorrect-count="<?php echo (int)$total_incorrect_count; ?>">
-                    Practice Your Mistakes (<span><?php echo (int)$never_correct_count; ?></span>)
-                </h4>
-                <p>Create a session from questions you have not yet answered correctly, or optionally include all past mistakes.</p>
-            </div>
-            <div class="qp-card-action">
-                <button id="qp-start-incorrect-practice-btn" class="qp-button qp-button-primary" <?php disabled($never_correct_count + $total_incorrect_count, 0); ?>>Start Practice</button>
-                <label class="qp-custom-checkbox">
-                    <input type="checkbox" id="qp-include-all-incorrect-cb" name="include_all_incorrect" value="1">
-                    <span></span>
-                    Include all past mistakes
-                </label>
-            </div>
-        </div>
+        // Calculate counts for "Practice Your Mistakes"
+        $total_incorrect_count = (int) $wpdb->get_var( $wpdb->prepare(
+            "SELECT COUNT(DISTINCT question_id) FROM {$attempts_table} WHERE user_id = %d AND is_correct = 0",
+            $user_id
+        ) );
+        $correctly_answered_qids = $wpdb->get_col( $wpdb->prepare( "SELECT DISTINCT question_id FROM {$attempts_table} WHERE user_id = %d AND is_correct = 1", $user_id ) );
+        $all_answered_qids = $wpdb->get_col( $wpdb->prepare( "SELECT DISTINCT question_id FROM {$attempts_table} WHERE user_id = %d AND status = 'answered'", $user_id ) );
+        $never_correct_qids = array_diff( $all_answered_qids, $correctly_answered_qids );
+        $never_correct_count = count( $never_correct_qids );
 
-        <hr class="qp-divider">
+        // Prepare arguments for the template
+        $args = [
+            'review_questions'      => $review_questions,
+            'never_correct_count'   => $never_correct_count,
+            'total_incorrect_count' => $total_incorrect_count,
+        ];
 
-        <?php if (!empty($review_questions)) : ?>
-            <div class="qp-review-list-header">
-                <h3 style="margin: 0;">Marked for Review (<?php echo count($review_questions); ?>)</h3>
-                <button id="qp-start-reviewing-btn" class="qp-button qp-button-primary">Start Reviewing All</button>
-            </div>
-            <ul class="qp-review-list">
-                <?php foreach ($review_questions as $index => $q) : ?>
-                    <li data-question-id="<?php echo esc_attr($q->question_id); ?>">
-                        <div class="qp-review-list-q-text">
-                            <strong>Q<?php echo $index + 1; ?>:</strong> <?php echo wp_trim_words(esc_html(strip_tags($q->question_text)), 25, '...'); // Strip tags for display 
-                                                                            ?>
-                            <small>ID: <?php echo esc_html($q->question_id); ?> | Subject: <?php echo esc_html($q->subject_name ?: 'N/A'); ?></small>
-                        </div>
-                        <div class="qp-review-list-actions">
-                            <button class="qp-review-list-view-btn qp-button qp-button-secondary">View</button>
-                            <button class="qp-review-list-remove-btn qp-button qp-button-danger">Remove</button>
-                        </div>
-                    </li>
-                <?php endforeach; ?>
-            </ul>
-        <?php else : ?>
-            <div class="qp-card">
-                <div class="qp-card-content">
-                    <p style="text-align: center;">You haven't marked any questions for review yet.</p>
-                </div>
-            </div>
-        <?php endif; ?>
-    <?php
-                return ob_get_clean();
-            }
+        // Load and return the template HTML
+        return qp_get_template_html( 'dashboard/review', 'frontend', $args );
+    }
 
             /**
              * Renders the content specifically for the Progress section.
