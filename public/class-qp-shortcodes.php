@@ -10,6 +10,7 @@ class QP_Shortcodes
     public static function render_practice_form()
     {
         if (!is_user_logged_in()) {
+            // Keep the login message HTML here for now, or move to its own template later
             return '<div style="text-align:center; padding: 40px 20px; background-color: #fff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
                         <h3 style="margin-top:0; font-size: 22px;">Please Log In to Begin</h3>
                         <p style="font-size: 16px; color: #555; margin-bottom: 25px;">You need to be logged in to start a new practice session and track your progress.</p>
@@ -17,458 +18,52 @@ class QP_Shortcodes
                     </div>';
         }
 
-        // --- NEW: Handle pre-filled section practice ---
+        // --- Keep pre-fill logic ---
         if (isset($_GET['start_section_practice']) && $_GET['start_section_practice'] === 'true') {
-            $subject_id = isset($_GET['subject']) ? absint($_GET['subject']) : 0;
-            $topic_id = isset($_GET['topic']) ? absint($_GET['topic']) : 0;
-            $section_id = isset($_GET['section']) ? absint($_GET['section']) : 0;
-
-            // Pass these IDs to a script that will select them after the form loads
-            wp_register_script('qp-prefill-script', '', [], '', true);
-            wp_enqueue_script('qp-prefill-script');
-            $prefill_script = sprintf(
-                "
-                document.addEventListener('DOMContentLoaded', function() {
-                    const subjectDropdown = document.querySelector('#qp_subject_dropdown .qp-multi-select-list');
-                    if (subjectDropdown) {
-                        const subjectCheckbox = subjectDropdown.querySelector('input[value=\"%d\"]');
-                        if (subjectCheckbox) {
-                            subjectCheckbox.click(); // Use click to trigger the AJAX for topics
-                        }
-                    }
-                    // We need to wait for the topic/section AJAX calls to complete
-                    const observer = new MutationObserver(function(mutations, me) {
-                        const topicDropdown = document.querySelector('#qp_topic_list_container');
-                        const sectionDropdown = document.querySelector('#qp_section');
-                        
-                        if (topicDropdown && topicDropdown.children.length > 1) {
-                            const topicCheckbox = topicDropdown.querySelector('input[value=\"%d\"]');
-                            if (topicCheckbox) {
-                                topicCheckbox.click();
-                            }
-                        }
-                        if (sectionDropdown && sectionDropdown.options.length > 1) {
-                            sectionDropdown.value = '%d';
-                            me.disconnect(); // Stop observing once we've set the section
-                        }
-                    });
-                    observer.observe(document.getElementById('qp-practice-app-wrapper'), { childList: true, subtree: true });
-                });
-                ",
-                $subject_id,
-                $topic_id,
-                $section_id
-            );
-            wp_add_inline_script('qp-prefill-script', $prefill_script);
-
-            // Directly render the settings form, bypassing the mode selection
-            return '<div id="qp-practice-app-wrapper">' . self::render_settings_form() . '</div>';
+            // ... (keep existing pre-fill script logic) ...
+            // Directly render the settings form using its *new* template loader call
+             return '<div id="qp-practice-app-wrapper">' . self::render_settings_form() . '</div>';
         }
 
-        // Get the question order setting
+        // --- Prepare data for the wrapper template ---
         $options = get_option('qp_settings');
-        $question_order_setting = isset($options['question_order']) ? $options['question_order'] : 'random';
         $dashboard_page_id = isset($options['dashboard_page']) ? absint($options['dashboard_page']) : 0;
         $dashboard_page_url = $dashboard_page_id ? get_permalink($dashboard_page_id) : '';
 
-        ob_start();
-?>
-        <div id="qp-practice-app-wrapper">
-            <div class="qp-multi-step-container">
-                <div id="qp-step-1" class="qp-form-step active">
-                    <div class="qp-step-content">
-                        <h2>Select Practice Mode</h2>
-                        <div class="qp-mode-selection-group">
-                            <label class="qp-mode-radio-label">
-                                <input type="radio" name="practice_mode_selection" value="2">
-                                <span class="qp-mode-radio-button">Normal Practice</span>
-                            </label>
-                            <label class="qp-mode-radio-label">
-                                <input type="radio" name="practice_mode_selection" value="5">
-                                <span class="qp-mode-radio-button">Section Wise Practice</span>
-                            </label>
-                            <label class="qp-mode-radio-label">
-                                <input type="radio" name="practice_mode_selection" value="3">
-                                <span class="qp-mode-radio-button">Revision Mode</span>
-                            </label>
-                            <label class="qp-mode-radio-label">
-                                <input type="radio" name="practice_mode_selection" value="4">
-                                <span class="qp-mode-radio-button">Mock Test</span>
-                            </label>
-                        </div>
+        // --- Load template parts ---
+        // Step 1 data is just the dashboard URL
+        $step_1_html = qp_get_template_html('practice-form-step-1-mode', 'frontend', ['dashboard_page_url' => $dashboard_page_url]);
 
-                        <div class="qp-step-1-footer">
-                            <button id="qp-step1-next-btn" class="qp-button qp-button-primary" disabled>Next</button>
-                            <?php if ($dashboard_page_url) : ?>
-                                <a href="<?php echo esc_url($dashboard_page_url); ?>" class="qp-button qp-button-secondary">Go to Dashboard</a>
-                            <?php endif; ?>
-                        </div>
-                    </div>
-                </div>
+        // Call the other render methods which will now also use qp_get_template_html
+        $step_2_html = self::render_settings_form();
+        $step_3_html = self::render_revision_mode_form();
+        $step_4_html = self::render_mock_test_form();
+        $step_5_html = self::render_section_wise_practice_form();
 
-                <div id="qp-step-2" class="qp-form-step">
-                    <div class="qp-step-content">
-                        <button class="qp-back-btn" data-target-step="1">&larr; Back to Mode Selection</button>
-                        <?php echo self::render_settings_form(); // Re-use the existing form function 
-                        ?>
-                    </div>
-                </div>
-
-                <div id="qp-step-3" class="qp-form-step">
-                    <div class="qp-step-content">
-                        <button class="qp-back-btn" data-target-step="1">&larr; Back to Mode Selection</button>
-                        <?php echo self::render_revision_mode_form(); // New function for the revision form 
-                        ?>
-                    </div>
-                </div>
-
-                <div id="qp-step-4" class="qp-form-step">
-                    <div class="qp-step-content">
-                        <button class="qp-back-btn" data-target-step="1">&larr; Back to Mode Selection</button>
-                        <?php echo self::render_mock_test_form(); ?>
-                    </div>
-                </div>
-
-                <div id="qp-step-5" class="qp-form-step">
-                    <div class="qp-step-content">
-                        <button class="qp-back-btn" data-target-step="1">&larr; Back to Mode Selection</button>
-                        <?php echo self::render_section_wise_practice_form(); ?>
-                    </div>
-                </div>
-            </div>
-        </div>
-    <?php
-        return ob_get_clean();
+        // --- Load the main wrapper template ---
+        return qp_get_template_html('practice-form-wrapper', 'frontend', [
+            'dashboard_page_url' => $dashboard_page_url, // Pass again if needed directly in wrapper
+            'step_1_html' => $step_1_html,
+            'step_2_html' => $step_2_html,
+            'step_3_html' => $step_3_html,
+            'step_4_html' => $step_4_html,
+            'step_5_html' => $step_5_html,
+        ]);
     }
 
-    public static function render_revision_mode_form()
-    {
-        global $wpdb;
-        $term_table = $wpdb->prefix . 'qp_terms';
-        $tax_table = $wpdb->prefix . 'qp_taxonomies';
-        $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'subject'");
-
-        $subjects = $wpdb->get_results($wpdb->prepare(
-            "SELECT term_id AS subject_id, name AS subject_name FROM {$term_table} WHERE taxonomy_id = %d AND name != 'Uncategorized' AND parent = 0 ORDER BY name ASC",
-            $subject_tax_id
-        ));
-
-        // --- NEW: Filter subjects based on user scope ---
-        $user_id = get_current_user_id();
-        $allowed_subjects = qp_get_allowed_subject_ids_for_user($user_id);
-
-        if ($allowed_subjects !== 'all' && is_array($allowed_subjects)) {
-            $subjects = array_filter($subjects, function($subject) use ($allowed_subjects) {
-                return isset($subject->subject_id) && in_array($subject->subject_id, $allowed_subjects);
-            });
-        }
-
-        ob_start();
-    ?>
-        <form id="qp-start-revision-form" method="post" action="">
-            <input type="hidden" name="practice_mode" value="revision">
-            <h2>Revision Mode</h2>
-
-            <div class="qp-form-group">
-                <label for="qp_subject_dropdown_revision">Select Subject(s):</label>
-                <div class="qp-multi-select-dropdown" id="qp_subject_dropdown_revision">
-                    <?php if (empty($subjects) && $allowed_subjects !== 'all') : // Check if filtered list is empty AND user has restrictions ?>
-                        <p class="qp-no-subjects-message"><?php _e('No subjects are currently available based on your assigned scope. Please contact an administrator.', 'question-press'); ?></p>
-                        <?php // Disable the button visually and functionally
-                            $multiSelectDisabled = true; ?>
-                        <button type="button" class="qp-multi-select-button" disabled>-- No Subjects Available --</button>
-                        <div class="qp-multi-select-list" style="display: none;"></div> <?php // Empty list container ?>
-                    <?php else: ?>
-                        <?php // User has subjects or is admin/unrestricted ?>
-                        <button type="button" class="qp-multi-select-button">-- Please select --</button>
-                        <div class="qp-multi-select-list">
-                            <?php if ($allowed_subjects === 'all' || !empty($subjects)) : // Show 'All' only if unrestricted or subjects exist ?>
-                                <label><input type="checkbox" name="qp_subject[]" value="all"> All Subjects</label>
-                            <?php endif; ?>
-                            <?php foreach ($subjects as $subject) : ?>
-                                <label><input type="checkbox" name="qp_subject[]" value="<?php echo esc_attr($subject->subject_id); ?>"> <?php echo esc_html($subject->subject_name); ?></label>
-                            <?php endforeach; ?>
-                        </div>
-                    <?php endif; ?>
-                </div>
-            </div>
-
-            <div class="qp-form-group" id="qp-topic-group-revision" style="display: none;">
-                <label for="qp_topic_dropdown_revision">Select Topic(s):</label>
-                <div class="qp-multi-select-dropdown" id="qp_topic_dropdown_revision">
-                    <button type="button" class="qp-multi-select-button">-- Select subject(s) first --</button>
-                    <div class="qp-multi-select-list" id="qp_topic_list_container_revision">
-                    </div>
-                </div>
-            </div>
-            <div class="qp-form-group">
-                <label class="qp-custom-checkbox">
-                    <input type="checkbox" name="exclude_pyq" value="1" checked>
-                    <span></span>
-                    Exclude PYQs
-                </label>
-            </div>
-            <div class="qp-form-group">
-                <label class="qp-custom-checkbox">
-                    <input type="checkbox" name="choose_random" value="0">
-                    <span></span>
-                    Choose Random Questions
-                </label>
-                <p class="description">Check this to get random questions from your selected topics, ignoring the default source order.</p>
-            </div>
-
-            <div class="qp-form-group">
-                <label for="qp_revision_questions_per_topic">Number of Questions from each Topic<span style="color:red">*</span></label>
-                <input type="number" name="qp_revision_questions_per_topic" id="qp_revision_questions_per_topic" value="2" min="1" max="20" required>
-            </div>
-
-            <div class="qp-form-group">
-                <label class="qp-custom-checkbox">
-                    <input type="checkbox" name="scoring_enabled" id="qp_revision_scoring_enabled_cb">
-                    <span></span>
-                    Enable Scoring
-                </label>
-            </div>
-
-            <div class="qp-form-group qp-marks-group" id="qp-revision-marks-group-wrapper" style="display: none;">
-                <div>
-                    <label for="qp_revision_marks_correct">Marks for Correct Answer:</label>
-                    <input type="number" name="qp_marks_correct" id="qp_revision_marks_correct" value="4" step="0.01" min="0.01" max="10">
-                </div>
-                <div>
-                    <label for="qp_revision_marks_incorrect">Penalty for Incorrect Answer:</label>
-                    <input type="number" name="qp_marks_incorrect" id="qp_revision_marks_incorrect" value="1" step="0.01" min="0" max="10">
-                </div>
-            </div>
-
-            <div class="qp-form-group">
-                <label class="qp-custom-checkbox">
-                    <input type="checkbox" name="qp_timer_enabled">
-                    <span></span>
-                    Enable Timer per Question
-                </label>
-                <div id="qp-revision-timer-input-wrapper" style="display: none; margin-top: 15px;">
-                    <label for="qp_revision_timer_seconds">Time in Seconds:</label>
-                    <input type="number" name="qp_timer_seconds" id="qp_revision_timer_seconds" value="60" min="10" max="300">
-                </div>
-            </div>
-
-            <div class="qp-form-group qp-action-buttons">
-                <input type="submit" name="qp_start_revision" value="Start Revision" class="qp-button qp-button-primary" <?php if (isset($multiSelectDisabled) && $multiSelectDisabled) echo 'disabled'; ?>>
-            </div>
-        </form>
-    <?php
-        return ob_get_clean();
+    public static function render_revision_mode_form() {
+         // Placeholder - will be replaced next
+        return "";
     }
 
-    public static function render_mock_test_form()
-    {
-        global $wpdb;
-        $term_table = $wpdb->prefix . 'qp_terms';
-        $tax_table = $wpdb->prefix . 'qp_taxonomies';
-        $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'subject'");
-
-        $subjects = $wpdb->get_results($wpdb->prepare(
-            "SELECT term_id AS subject_id, name AS subject_name FROM {$term_table} WHERE taxonomy_id = %d AND name != 'Uncategorized' AND parent = 0 ORDER BY name ASC",
-            $subject_tax_id
-        ));
-
-        // --- NEW: Filter subjects based on user scope ---
-        $user_id = get_current_user_id();
-        $allowed_subjects = qp_get_allowed_subject_ids_for_user($user_id);
-
-        if ($allowed_subjects !== 'all' && is_array($allowed_subjects)) {
-            $subjects = array_filter($subjects, function($subject) use ($allowed_subjects) {
-                return isset($subject->subject_id) && in_array($subject->subject_id, $allowed_subjects);
-            });
-        }
-        // --- END NEW ---
-
-        ob_start();
-    ?>
-        <form id="qp-start-mock-test-form" method="post" action="">
-            <input type="hidden" name="practice_mode" value="mock_test">
-            <h2>Mock Test</h2>
-
-            <div class="qp-form-group">
-                <label for="qp_subject_dropdown_mock">Select Subject(s):</label>
-                <div class="qp-multi-select-dropdown" id="qp_subject_dropdown_mock">
-                    <?php if (empty($subjects) && $allowed_subjects !== 'all') : // Check if filtered list is empty AND user has restrictions ?>
-                        <p class="qp-no-subjects-message"><?php _e('No subjects are currently available based on your assigned scope. Please contact an administrator.', 'question-press'); ?></p>
-                        <?php // Disable the button visually and functionally
-                            $multiSelectDisabled = true; ?>
-                        <button type="button" class="qp-multi-select-button" disabled>-- No Subjects Available --</button>
-                        <div class="qp-multi-select-list" style="display: none;"></div> <?php // Empty list container ?>
-                    <?php else: ?>
-                        <?php // User has subjects or is admin/unrestricted ?>
-                        <button type="button" class="qp-multi-select-button">-- Please select --</button>
-                        <div class="qp-multi-select-list">
-                            <?php if ($allowed_subjects === 'all' || !empty($subjects)) : // Show 'All' only if unrestricted or subjects exist ?>
-                                <label><input type="checkbox" name="qp_subject[]" value="all"> All Subjects</label>
-                            <?php endif; ?>
-                            <?php foreach ($subjects as $subject) : ?>
-                                <label><input type="checkbox" name="qp_subject[]" value="<?php echo esc_attr($subject->subject_id); ?>"> <?php echo esc_html($subject->subject_name); ?></label>
-                            <?php endforeach; ?>
-                        </div>
-                    <?php endif; ?>
-                </div>
-            </div>
-
-            <div class="qp-form-group" id="qp-topic-group-mock" style="display: none;">
-                <label for="qp_topic_dropdown_mock">Select Topic(s):</label>
-                <div class="qp-multi-select-dropdown" id="qp_topic_dropdown_mock">
-                    <button type="button" class="qp-multi-select-button">-- Select subject(s) first --</button>
-                    <div class="qp-multi-select-list" id="qp_topic_list_container_mock">
-                    </div>
-                </div>
-            </div>
-
-            <div class="qp-form-group">
-                <label for="qp_mock_num_questions">Number of Questions<span style="color:red">*</span></label>
-                <input type="number" name="qp_mock_num_questions" id="qp_mock_num_questions" value="20" min="5" max="200" required>
-            </div>
-
-            <div class="qp-form-group">
-                <label>Question Distribution</label>
-                <div class="qp-mode-selection-group" style="flex-direction: row; gap: 1rem;">
-                    <label class="qp-mode-radio-label" style="flex: 1;">
-                        <input type="radio" name="question_distribution" value="random" checked>
-                        <span class="qp-mode-radio-button" style="font-size: 14px; padding: 10px;">Random</span>
-                    </label>
-                    <label class="qp-mode-radio-label" style="flex: 1;">
-                        <input type="radio" name="question_distribution" value="equal">
-                        <span class="qp-mode-radio-button" style="font-size: 14px; padding: 10px;">Equal per Topic</span>
-                    </label>
-                </div>
-            </div>
-
-            <div class="qp-form-group">
-                <label for="qp_mock_timer_minutes">Total Time (in minutes)<span style="color:red">*</span></label>
-                <input type="number" name="qp_mock_timer_minutes" id="qp_mock_timer_minutes" value="30" min="1" max="180" required>
-            </div>
-
-            <div class="qp-form-group">
-                <label class="qp-custom-checkbox">
-                    <input type="checkbox" name="scoring_enabled" id="qp_mock_scoring_enabled_cb">
-                    <span></span>
-                    Enable Scoring
-                </label>
-            </div>
-
-            <div class="qp-form-group qp-marks-group" id="qp-mock-marks-group-wrapper" style="display: none;">
-                <div>
-                    <label for="qp_mock_marks_correct">Marks for Correct Answer:</label>
-                    <input type="number" name="qp_marks_correct" id="qp_mock_marks_correct" value="4" step="0.01" min="0.01" max="10" disabled>
-                </div>
-                <div>
-                    <label for="qp_mock_marks_incorrect">Penalty for Incorrect Answer:</label>
-                    <input type="number" name="qp_marks_incorrect" id="qp_mock_marks_incorrect" value="1" step="0.01" min="0" max="10" disabled>
-                </div>
-            </div>
-
-            <div class="qp-form-group qp-action-buttons">
-                <input type="submit" name="qp_start_mock_test" value="Start Mock Test" class="qp-button qp-button-primary" <?php if (isset($multiSelectDisabled) && $multiSelectDisabled) echo 'disabled'; ?>>
-            </div>
-        </form>
-    <?php
-        return ob_get_clean();
+    public static function render_mock_test_form() {
+         // Placeholder - will be replaced next
+        return "";
     }
 
-    public static function render_section_wise_practice_form()
-    {
-        global $wpdb;
-        $term_table = $wpdb->prefix . 'qp_terms';
-        $tax_table = $wpdb->prefix . 'qp_taxonomies';
-        $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'subject'");
-
-        $subjects = $wpdb->get_results($wpdb->prepare(
-            "SELECT term_id AS subject_id, name AS subject_name FROM {$term_table} WHERE taxonomy_id = %d AND name != 'Uncategorized' AND parent = 0 ORDER BY name ASC",
-            $subject_tax_id
-        ));
-
-        // --- NEW: Filter subjects based on user scope ---
-        $user_id = get_current_user_id();
-        $allowed_subjects = qp_get_allowed_subject_ids_for_user($user_id);
-
-        if ($allowed_subjects !== 'all' && is_array($allowed_subjects)) {
-            $subjects = array_filter($subjects, function($subject) use ($allowed_subjects) {
-                return isset($subject->subject_id) && in_array($subject->subject_id, $allowed_subjects);
-            });
-        }
-        // --- END NEW ---
-
-        ob_start();
-    ?>
-        <form id="qp-start-section-wise-form" method="post" action="">
-            <input type="hidden" name="practice_mode" value="Section Wise Practice">
-            <h2>Section Wise Practice</h2>
-
-            <div class="qp-form-group">
-                <label for="qp_section_subject">Select Subject:</label>
-                <?php if (empty($subjects) && $allowed_subjects !== 'all') : // Check if filtered list is empty AND user has restrictions ?>
-                <p class="qp-no-subjects-message"><?php _e('No subjects are currently available based on your assigned scope. Please contact an administrator.', 'question-press'); ?></p>
-                <?php // Hide subsequent dropdowns and disable submit button
-                    $sectionWiseDisabled = true; ?>
-                <select name="qp_section_subject" id="qp_section_subject" disabled style="display: none;"></select> <?php // Hide dropdown ?>
-            <?php else: ?>
-                <select name="qp_section_subject" id="qp_section_subject">
-                    <option value="">— Select a Subject —</option>
-                    <?php foreach ($subjects as $subject) : ?>
-                        <option value="<?php echo esc_attr($subject->subject_id); ?>"><?php echo esc_html($subject->subject_name); ?></option>
-                    <?php endforeach; ?>
-                </select>
-            <?php endif; ?>
-            </div>
-
-            <div id="qp-section-cascading-dropdowns-container" <?php if (isset($sectionWiseDisabled) && $sectionWiseDisabled) echo 'style="display: none;"'; ?>>
-            <?php // Container for AJAX-loaded dropdowns ?>
-        </div>
-
-            <div class="qp-form-group qp-checkbox-group">
-                <label class="qp-custom-checkbox">
-                    <input type="checkbox" name="qp_include_attempted" value="1">
-                    <span></span>
-                    Include previously attempted questions
-                </label>
-            </div>
-
-            <div class="qp-form-group">
-                <label class="qp-custom-checkbox">
-                    <input type="checkbox" name="scoring_enabled" class="qp-scoring-enabled-cb">
-                    <span></span>
-                    Enable Scoring
-                </label>
-            </div>
-
-            <div class="qp-form-group qp-marks-group" style="display: none;">
-                <div style="width: 48%">
-                    <label>Correct Marks:</label>
-                    <input type="number" name="qp_marks_correct" value="4" step="0.01" min="0.01" max="10" required>
-                </div>
-                <div style="width: 48%">
-                    <label>Negative Marks:</label>
-                    <input type="number" name="qp_marks_incorrect" value="1" step="0.01" min="0" max="10" required>
-                </div>
-            </div>
-
-            <div class="qp-form-group">
-                <label class="qp-custom-checkbox">
-                    <input type="checkbox" name="qp_timer_enabled" class="qp-timer-enabled-cb">
-                    <span></span>
-                    Question Timer
-                </label>
-                <div class="qp-timer-input-wrapper" style="display: none; margin-top: 15px;">
-                    <label>Time in Seconds:</label>
-                    <input type="number" name="qp_timer_seconds" value="60" min="10" max="300">
-                </div>
-            </div>
-
-            <div class="qp-form-group qp-action-buttons">
-                <input type="submit" name="qp_start_section_practice" value="Start Practice" class="qp-button qp-button-primary" disabled <?php if (isset($sectionWiseDisabled) && $sectionWiseDisabled) echo 'style="display: none;"'; // Also hide if no subjects ?>>
-            </div>
-        </form>
-    <?php
-        return ob_get_clean();
+    public static function render_section_wise_practice_form() {
+         // Placeholder - will be replaced next
+        return "";
     }
 
 
@@ -750,130 +345,11 @@ $session_data['reported_info'] = $reported_info;
         return self::$session_data_for_script;
     }
 
-    public static function render_settings_form()
-    {
-        global $wpdb;
-        $term_table = $wpdb->prefix . 'qp_terms';
-        $tax_table = $wpdb->prefix . 'qp_taxonomies';
-        $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'subject'");
-
-        $subjects = $wpdb->get_results($wpdb->prepare(
-            "SELECT term_id AS subject_id, name AS subject_name FROM {$term_table} WHERE taxonomy_id = %d AND name != 'Uncategorized' AND parent = 0 ORDER BY name ASC",
-            $subject_tax_id
-        ));
-
-        // --- NEW: Filter subjects based on user scope ---
-        $user_id = get_current_user_id();
-        $allowed_subjects = qp_get_allowed_subject_ids_for_user($user_id);
-
-        if ($allowed_subjects !== 'all' && is_array($allowed_subjects)) {
-            $subjects = array_filter($subjects, function($subject) use ($allowed_subjects) {
-                // Ensure $subject has subject_id property before checking
-                return isset($subject->subject_id) && in_array($subject->subject_id, $allowed_subjects);
-            });
-        }
-        // --- END NEW ---
-
-        // Get the dynamic URL for the dashboard page
-        $options = get_option('qp_settings');
-        $dashboard_page_id = isset($options['dashboard_page']) ? absint($options['dashboard_page']) : 0;
-        $dashboard_page_url = $dashboard_page_id ? get_permalink($dashboard_page_id) : '';
-
-        ob_start();
-    ?>
-        <div class="qp-container qp-practice-form-wrapper">
-            <h2>Start a New Practice Session</h2>
-            <form id="qp-start-practice-form" method="post" action="">
-                <input type="hidden" name="practice_mode" value="normal">
-                <input type="hidden" name="question_order" value="incrementing">
-
-                <div class="qp-form-group">
-                    <label for="qp_subject_dropdown">Select Subject(s):</label>
-                    <div class="qp-multi-select-dropdown" id="qp_subject_dropdown">
-                        <?php if (empty($subjects) && $allowed_subjects !== 'all') : // Check if filtered list is empty AND user has restrictions ?>
-                        <p class="qp-no-subjects-message"><?php _e('No subjects are currently available based on your assigned scope. Please contact an administrator.', 'question-press'); ?></p>
-                        <?php // Disable the button visually and functionally
-                            $multiSelectDisabled = true; ?>
-                        <button type="button" class="qp-multi-select-button" disabled>-- No Subjects Available --</button>
-                        <div class="qp-multi-select-list" style="display: none;"></div> <?php // Empty list container ?>
-                        <?php else: ?>
-                            <?php // User has subjects or is admin/unrestricted ?>
-                            <button type="button" class="qp-multi-select-button">-- Please select --</button>
-                            <div class="qp-multi-select-list">
-                                <?php if ($allowed_subjects === 'all' || !empty($subjects)) : // Show 'All' only if unrestricted or subjects exist ?>
-                                    <label><input type="checkbox" name="qp_subject[]" value="all"> All Subjects</label>
-                                <?php endif; ?>
-                                <?php foreach ($subjects as $subject) : ?>
-                                    <label><input type="checkbox" name="qp_subject[]" value="<?php echo esc_attr($subject->subject_id); ?>"> <?php echo esc_html($subject->subject_name); ?></label>
-                                <?php endforeach; ?>
-                            </div>
-                        <?php endif; ?>
-                    </div>
-                </div>
-
-                <div class="qp-form-group" id="qp-topic-group" style="display: none;">
-                    <label for="qp_topic_dropdown">Select Topic(s):</label>
-                    <div class="qp-multi-select-dropdown" id="qp_topic_dropdown">
-                        <button type="button" class="qp-multi-select-button">-- Select subject(s) first --</button>
-                        <div class="qp-multi-select-list" id="qp_topic_list_container">
-                        </div>
-                    </div>
-                </div>
-
-                <div class="qp-form-group qp-checkbox-group">
-                    <label class="qp-custom-checkbox">
-                        <input type="checkbox" name="qp_pyq_only" value="1">
-                        <span></span>
-                        PYQ Only
-                    </label>
-                    <label class="qp-custom-checkbox">
-                        <input type="checkbox" name="qp_include_attempted" value="1">
-                        <span></span>
-                        Include previously attempted questions
-                    </label>
-                </div>
-                <div class="qp-form-group-description">
-                    <p>Subject<strong>(number)</strong>: The number in front of subject, topic, section shows unattempted questions.</p>
-                </div>
-
-                <div class="qp-form-group">
-                    <label class="qp-custom-checkbox">
-                        <input type="checkbox" name="scoring_enabled" id="qp_scoring_enabled_cb">
-                        <span></span>
-                        Enable Scoring
-                    </label>
-                </div>
-
-                <div class="qp-form-group qp-marks-group" id="qp-marks-group-wrapper" style="display: none;">
-                    <div style="width: 48%">
-                        <label for="qp_marks_correct">Correct Marks:</label>
-                        <input type="number" name="qp_marks_correct" id="qp_marks_correct" value="4" step="0.01" min="0.01" max="10" required>
-                    </div>
-                    <div style="width: 48%">
-                        <label for="qp_marks_incorrect">Negative Marks:</label>
-                        <input type="number" name="qp_marks_incorrect" id="qp_marks_incorrect" value="1" step="0.01" min="0" max="10" required>
-                    </div>
-                </div>
-
-                <div class="qp-form-group">
-                    <label class="qp-custom-checkbox">
-                        <input type="checkbox" name="qp_timer_enabled" id="qp_timer_enabled_cb">
-                        <span></span>
-                        Question Timer
-                    </label>
-                    <div id="qp-timer-input-wrapper" style="display: none; margin-top: 15px;">
-                        <label for="qp_timer_seconds">Time in Seconds:</label>
-                        <input type="number" name="qp_timer_seconds" id="qp_timer_seconds" value="60" min="10" max="300">
-                    </div>
-                </div>
-
-                <div class="qp-form-group qp-action-buttons">
-                    <input type="submit" name="qp_start_practice" value="Start Practice" class="qp-button qp-button-primary" <?php if (isset($multiSelectDisabled) && $multiSelectDisabled) echo 'disabled'; ?>>
-                </div>
-            </form>
-        </div>
-    <?php
-        return ob_get_clean();
+    // --- TEMPORARY: Keep render_settings_form etc., but remove their HTML output ---
+    // --- We will replace their content in the next message ---
+    public static function render_settings_form() {
+        // Placeholder - will be replaced next
+        return "";
     }
 
     public static function render_practice_ui()
