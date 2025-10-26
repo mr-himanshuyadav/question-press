@@ -179,9 +179,46 @@ class QP_Shortcodes
         return qp_get_template_html('practice-form-step-4-mock', 'frontend', $args);
     }
 
-    public static function render_section_wise_practice_form() {
-         // Placeholder - will be replaced next
-        return "";
+    public static function render_section_wise_practice_form()
+    {
+        global $wpdb;
+        $term_table = $wpdb->prefix . 'qp_terms';
+        $tax_table = $wpdb->prefix . 'qp_taxonomies';
+        $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'subject'");
+
+        $subjects = [];
+        if ($subject_tax_id) {
+             $subjects = $wpdb->get_results($wpdb->prepare(
+                "SELECT term_id AS subject_id, name AS subject_name FROM {$term_table} WHERE taxonomy_id = %d AND name != 'Uncategorized' AND parent = 0 ORDER BY name ASC",
+                $subject_tax_id
+            ));
+        }
+
+        // --- Filter subjects based on user scope ---
+        $user_id = get_current_user_id();
+        $allowed_subjects_or_all = qp_get_allowed_subject_ids_for_user($user_id);
+        $allowed_subjects_array = [];
+        $sectionWiseDisabled = false; // Changed variable name
+
+        if ($allowed_subjects_or_all !== 'all' && is_array($allowed_subjects_or_all)) {
+            $allowed_subjects_array = $allowed_subjects_or_all;
+            $subjects = array_filter($subjects, function($subject) use ($allowed_subjects_array) {
+                return isset($subject->subject_id) && in_array($subject->subject_id, $allowed_subjects_array);
+            });
+            if (empty($subjects)) {
+                $sectionWiseDisabled = true; // Use the new variable name
+            }
+        }
+
+        // Prepare arguments for the template
+        $args = [
+            'subjects'            => $subjects,
+            'allowed_subjects'    => $allowed_subjects_or_all === 'all' ? 'all' : wp_json_encode($allowed_subjects_array),
+            'sectionWiseDisabled' => $sectionWiseDisabled // Use the new variable name
+        ];
+
+        // Load and return the template HTML
+        return qp_get_template_html('practice-form-step-5-section', 'frontend', $args);
     }
 
 
