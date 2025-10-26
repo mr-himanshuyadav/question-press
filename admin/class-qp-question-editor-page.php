@@ -59,87 +59,53 @@ class QP_Question_Editor_Page
 
 
         if ($is_editing) {
-            $g_table = $wpdb->prefix . 'qp_question_groups';
-            $q_table = $wpdb->prefix . 'qp_questions';
-            $o_table = $wpdb->prefix . 'qp_options';
-            $rel_table = $wpdb->prefix . 'qp_term_relationships';
-            $term_table = $wpdb->prefix . 'qp_terms';
-            $tax_table = $wpdb->prefix . 'qp_taxonomies';
+            // --- NEW: Fetch all data using the DB class method ---
+            $editor_data = QuestionPress\Database\Questions_DB::get_group_details_for_editor($group_id);
 
-            $group_data = $wpdb->get_row($wpdb->prepare("SELECT * FROM $g_table WHERE group_id = %d", $group_id));
-            if ($group_data) {
+            if ($editor_data && $editor_data['group']) {
+                $group_data = $editor_data['group']; // The group object
+                $group_terms = $editor_data['terms']; // The processed term IDs array
+
                 $direction_text = $group_data->direction_text;
                 $direction_image_id = $group_data->direction_image_id;
                 $is_pyq_group = !empty($group_data->is_pyq);
                 $current_pyq_year = $group_data->pyq_year ?? '';
 
-                $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'subject'");
-                $source_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'source'");
-                $exam_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'exam'");
+                // Assign term IDs directly from the processed array
+                $current_subject_id = $group_terms['subject'];
+                $current_topic_id = $group_terms['topic'];
+                $current_source_id = $group_terms['source'];
+                $current_section_id = $group_terms['section'];
+                $current_exam_id = $group_terms['exam'];
 
-                // --- NEW HIERARCHICAL TERM LOOKUP ---
-                // Find the most specific topic/subject term linked to the group
-                $linked_subject_term_id = $wpdb->get_var($wpdb->prepare("SELECT term_id FROM {$rel_table} WHERE object_id = %d AND object_type = 'group' AND term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id = %d)", $group_id, $subject_tax_id));
+                // Questions array is already populated with options and labels
+                $questions_in_group = $editor_data['questions'];
 
-                $current_topic_id = $linked_subject_term_id; // The most specific child is the "topic"
-                $current_subject_id = 0; // This will be the top-level parent
-
-                if ($linked_subject_term_id) {
-                    $parent_id = $wpdb->get_var($wpdb->prepare("SELECT parent FROM $term_table WHERE term_id = %d", $linked_subject_term_id));
-                    if ($parent_id == 0) { // It's a top-level term
-                        $current_subject_id = $linked_subject_term_id;
-                    } else { // Trace up to find the top-level parent
-                        for ($i = 0; $i < 10; $i++) {
-                            $parent_term = $wpdb->get_row($wpdb->prepare("SELECT term_id, parent FROM $term_table WHERE term_id = %d", $parent_id));
-                            if (!$parent_term || $parent_term->parent == 0) {
-                                $current_subject_id = $parent_id;
-                                break;
-                            }
-                            $parent_id = $parent_term->parent;
-                        }
-                    }
-                }
-
-                // Find the most specific source/section term linked to the group
-                $linked_source_term_id = $wpdb->get_var($wpdb->prepare("SELECT term_id FROM {$rel_table} WHERE object_id = %d AND object_type = 'group' AND term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id = %d)", $group_id, $source_tax_id));
-
-                $current_section_id = $linked_source_term_id; // The most specific child is the "section"
-                $current_source_id = 0;
-
-                if ($linked_source_term_id) {
-                    $parent_id = $wpdb->get_var($wpdb->prepare("SELECT parent FROM $term_table WHERE term_id = %d", $linked_source_term_id));
-                    if ($parent_id == 0) {
-                        $current_source_id = $linked_source_term_id;
-                    } else {
-                        for ($i = 0; $i < 10; $i++) {
-                            $parent_term = $wpdb->get_row($wpdb->prepare("SELECT term_id, parent FROM $term_table WHERE term_id = %d", $parent_id));
-                            if (!$parent_term || $parent_term->parent == 0) {
-                                $current_source_id = $parent_id;
-                                break;
-                            }
-                            $parent_id = $parent_term->parent;
-                        }
-                    }
-                }
-
-                // Get the current exam for the group (existing logic is correct)
-                $current_exam_id = $wpdb->get_var($wpdb->prepare("SELECT term_id FROM {$rel_table} WHERE object_id = %d AND object_type = 'group' AND term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id = %d)", $group_id, $exam_tax_id));
-
-                // Load questions and their options/labels (existing logic is correct)
-                $questions_in_group = $wpdb->get_results($wpdb->prepare("SELECT * FROM {$q_table} WHERE group_id = %d ORDER BY question_id ASC", $group_id));
+                // Determine group status and check for draft questions
                 if (!empty($questions_in_group)) {
-                    $group_status = $questions_in_group[0]->status;
-                    foreach ($questions_in_group as $q) {
-                        $q->options = $wpdb->get_results($wpdb->prepare("SELECT * FROM $o_table WHERE question_id = %d ORDER BY option_id ASC", $q->question_id));
-                        $label_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'label'");
-                        $q->labels = $wpdb->get_results($wpdb->prepare("SELECT t.term_id AS label_id, t.name AS label_name, m.meta_value AS label_color FROM {$term_table} t JOIN {$rel_table} r ON t.term_id = r.term_id LEFT JOIN {$wpdb->prefix}qp_term_meta m ON t.term_id = m.term_id AND m.meta_key = 'color' WHERE r.object_id = %d AND r.object_type = 'question' AND t.taxonomy_id = %d", $q->question_id, $label_tax_id));
+                    $group_status = $questions_in_group[0]->status; // Get status from first question
+                    foreach($questions_in_group as $q) {
+                        if ($q->status === 'draft') {
+                            $has_draft_question = true;
+                            break;
+                        }
                     }
                 }
+
+            } else {
+                // Handle case where group wasn't found - maybe show an error and return?
+                echo '<div class="notice notice-error"><p>Error: Could not load question group data.</p></div>';
+                return;
             }
+            // --- END NEW DATA FETCHING ---
         }
 
+        // --- Keep the logic for initializing an empty question if $questions_in_group is still empty ---
         if (empty($questions_in_group)) {
             $questions_in_group[] = (object)['question_id' => 0, 'question_text' => '', 'options' => [], 'labels' => []];
+            // Set default status if adding new
+            $group_status = 'draft';
+            $has_draft_question = true;
         }
 
         // --- Fetch ALL data needed for the form dropdowns from the new taxonomy system ---

@@ -724,6 +724,137 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
         }
     } // End re_evaluate_attempts method
 
+    /**
+     * Retrieves all necessary data for rendering the question group editor page.
+     * Includes group details, questions, options, labels, and term relationships.
+     *
+     * @param int $group_id The ID of the question group.
+     * @return array|null An associative array containing all group details, or null if group not found.
+     * Structure:
+     * [
+     * 'group' => (object) Group data from qp_question_groups,
+     * 'questions' => [
+     * (object) Question data (incl. options array, labels array)
+     * ...
+     * ],
+     * 'terms' => [ // Term IDs linked to the GROUP
+     * 'subject' => (int|null) Top-level subject ID,
+     * 'topic' => (int|null) Specific topic ID (if applicable),
+     * 'source' => (int|null) Top-level source ID,
+     * 'section' => (int|null) Specific section ID (if applicable),
+     * 'exam' => (int|null) Exam ID (if applicable)
+     * ]
+     * ]
+     */
+    public static function get_group_details_for_editor( int $group_id ) {
+        if ( $group_id <= 0 ) {
+            return null;
+        }
+
+        // 1. Get Group Data
+        $group_data = self::get_group_by_id( $group_id );
+        if ( ! $group_data ) {
+            return null; // Group not found
+        }
+
+        // 2. Get Questions in Group
+        $questions_in_group = self::get_questions_by_group_id( $group_id );
+        if ( empty( $questions_in_group ) ) {
+            // Group exists but has no questions (maybe an edge case during save)
+             return [
+                 'group' => $group_data,
+                 'questions' => [],
+                 'terms' => [
+                    'subject' => null, 'topic' => null, 'source' => null, 'section' => null, 'exam' => null
+                 ]
+             ];
+        }
+
+        $question_ids = wp_list_pluck( $questions_in_group, 'question_id' );
+        $ids_placeholder = implode( ',', array_map( 'absint', $question_ids ) );
+
+        // 3. Get All Options for these Questions
+        $o_table = self::get_options_table_name();
+        $all_options_raw = self::$wpdb->get_results( "SELECT * FROM {$o_table} WHERE question_id IN ($ids_placeholder) ORDER BY question_id, option_id ASC" );
+        $options_by_question = [];
+        foreach ( $all_options_raw as $option ) {
+            $options_by_question[ $option->question_id ][] = $option;
+        }
+
+        // 4. Get All Labels for these Questions (including color)
+        $label_tax_id = Terms_DB::get_taxonomy_id_by_name('label');
+        $labels_by_question = [];
+        if ($label_tax_id) {
+            $label_results = Terms_DB::get_linked_terms($question_ids, 'question', 'label', ['color']);
+            // Reorganize labels by question ID
+            foreach ($label_results as $label_term) {
+                // Find which question ID this label belongs to by checking relationships again (or adjust get_linked_terms later)
+                 $q_ids_for_label = self::$wpdb->get_col(self::$wpdb->prepare(
+                     "SELECT object_id FROM " . Terms_DB::get_relationships_table_name() . " WHERE term_id = %d AND object_type = 'question' AND object_id IN ($ids_placeholder)",
+                     $label_term->term_id
+                 ));
+                 foreach ($q_ids_for_label as $qid) {
+                    $labels_by_question[$qid][] = (object) [ // Match expected structure
+                        'label_id' => $label_term->term_id,
+                        'label_name' => $label_term->name,
+                        'label_color' => $label_term->meta['color'] ?? '#cccccc'
+                    ];
+                 }
+            }
+        }
+
+
+        // 5. Populate Questions with Options and Labels
+        foreach ( $questions_in_group as $question ) {
+            $question->options = $options_by_question[ $question->question_id ] ?? [];
+            $question->labels = $labels_by_question[ $question->question_id ] ?? [];
+        }
+
+        // 6. Get Group Term Relationships (Subject/Topic, Source/Section, Exam)
+        $group_terms_raw = Terms_DB::get_linked_terms( $group_id, 'group', ['subject', 'source', 'exam'] );
+        $group_terms_processed = [
+             'subject' => null, 'topic' => null, 'source' => null, 'section' => null, 'exam' => null
+        ];
+
+        // Process terms to identify hierarchy
+        $term_lineage_cache = []; // Cache to avoid redundant DB calls
+
+        foreach ($group_terms_raw as $term) {
+             if (!isset($term_lineage_cache[$term->term_id])) {
+                $term_lineage_cache[$term->term_id] = Terms_DB::get_lineage_names($term->term_id); // Fetch lineage
+             }
+             $lineage_names = $term_lineage_cache[$term->term_id]; // Names from parent->child
+             $lineage_ids = []; // We need IDs for hierarchy check
+
+             // Simple way to get IDs (could be optimized if Terms_DB::get_lineage returns IDs too)
+             $current_id = $term->term_id;
+             for ($i=0; $i < 10; $i++){
+                if (!$current_id) break;
+                array_unshift($lineage_ids, $current_id);
+                $current_id = self::$wpdb->get_var( self::$wpdb->prepare("SELECT parent FROM ".Terms_DB::get_terms_table_name()." WHERE term_id = %d", $current_id) );
+             }
+
+
+             if ($term->taxonomy_name === 'subject') {
+                 $group_terms_processed['subject'] = $lineage_ids[0] ?? null; // First ID is top-level subject
+                 $group_terms_processed['topic'] = ($term->parent != 0) ? $term->term_id : null; // If it has a parent, it's a topic
+             } elseif ($term->taxonomy_name === 'source') {
+                 $group_terms_processed['source'] = $lineage_ids[0] ?? null; // First ID is top-level source
+                 $group_terms_processed['section'] = ($term->parent != 0) ? $term->term_id : null; // If it has a parent, it's a section
+             } elseif ($term->taxonomy_name === 'exam') {
+                 $group_terms_processed['exam'] = $term->term_id;
+             }
+        }
+
+
+        // 7. Return structured data
+        return [
+            'group'     => $group_data,
+            'questions' => $questions_in_group,
+            'terms'     => $group_terms_processed
+        ];
+    }
+
     // --- More methods for saving, updating, deleting will be added below ---
 
 } // End class Questions_DB

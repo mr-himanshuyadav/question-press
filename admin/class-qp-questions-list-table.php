@@ -331,40 +331,40 @@ class QP_Questions_List_Table extends WP_List_Table
     {
 
         // Process bulk actions first (this remains)
-$this->process_bulk_action();
+        $this->process_bulk_action();
 
-// Setup columns (this remains)
-$columns = $this->get_columns();
-$hidden = $this->get_hidden_columns(); // Use the getter method
-$sortable = $this->get_sortable_columns();
-$this->_column_headers = [$columns, $hidden, $sortable, 'question_id']; // Primary column
+        // Setup columns (this remains)
+        $columns = $this->get_columns();
+        $hidden = $this->get_hidden_columns(); // Use the getter method
+        $sortable = $this->get_sortable_columns();
+        $this->_column_headers = [$columns, $hidden, $sortable, 'question_id']; // Primary column
 
-// Prepare arguments for the DB call based on request parameters
-$args = [
-    'status'        => isset($_REQUEST['status']) ? sanitize_key($_REQUEST['status']) : 'publish',
-    'subject_id'    => !empty($_REQUEST['filter_by_subject']) ? absint($_REQUEST['filter_by_subject']) : 0,
-    'topic_id'      => !empty($_REQUEST['filter_by_topic']) ? absint($_REQUEST['filter_by_topic']) : 0,
-    'source_filter' => isset($_REQUEST['filter_by_source']) ? sanitize_text_field($_REQUEST['filter_by_source']) : '',
-    'label_ids'     => isset($_REQUEST['filter_by_label']) ? array_filter(array_map('absint', (array)$_REQUEST['filter_by_label'])) : [],
-    'search'        => isset($_REQUEST['s']) ? sanitize_text_field(stripslashes($_REQUEST['s'])) : '',
-    'orderby'       => isset($_REQUEST['orderby']) ? sanitize_key($_REQUEST['orderby']) : 'question_id',
-    'order'         => isset($_REQUEST['order']) ? sanitize_key($_REQUEST['order']) : 'desc',
-    'per_page'      => $this->get_items_per_page('qp_questions_per_page', 20),
-    'current_page'  => $this->get_pagenum(),
-];
+        // Prepare arguments for the DB call based on request parameters
+        $args = [
+            'status'        => isset($_REQUEST['status']) ? sanitize_key($_REQUEST['status']) : 'publish',
+            'subject_id'    => !empty($_REQUEST['filter_by_subject']) ? absint($_REQUEST['filter_by_subject']) : 0,
+            'topic_id'      => !empty($_REQUEST['filter_by_topic']) ? absint($_REQUEST['filter_by_topic']) : 0,
+            'source_filter' => isset($_REQUEST['filter_by_source']) ? sanitize_text_field($_REQUEST['filter_by_source']) : '',
+            'label_ids'     => isset($_REQUEST['filter_by_label']) ? array_filter(array_map('absint', (array)$_REQUEST['filter_by_label'])) : [],
+            'search'        => isset($_REQUEST['s']) ? sanitize_text_field(stripslashes($_REQUEST['s'])) : '',
+            'orderby'       => isset($_REQUEST['orderby']) ? sanitize_key($_REQUEST['orderby']) : 'question_id',
+            'order'         => isset($_REQUEST['order']) ? sanitize_key($_REQUEST['order']) : 'desc',
+            'per_page'      => $this->get_items_per_page('qp_questions_per_page', 20),
+            'current_page'  => $this->get_pagenum(),
+        ];
 
-// Call the new static method from Questions_DB
-$result = Questions_DB::get_questions_for_list_table( $args );
+        // Call the new static method from Questions_DB
+        $result = Questions_DB::get_questions_for_list_table($args);
 
-// Assign items and total count
-$this->items = $result['items'];
-$total_items = $result['total_items'];
+        // Assign items and total count
+        $this->items = $result['items'];
+        $total_items = $result['total_items'];
 
-// Set pagination arguments (this remains)
-$this->set_pagination_args([
-    'total_items' => $total_items,
-    'per_page'    => $args['per_page'],
-]);
+        // Set pagination arguments (this remains)
+        $this->set_pagination_args([
+            'total_items' => $total_items,
+            'per_page'    => $args['per_page'],
+        ]);
     }
 
     public function column_subject_name($item)
@@ -536,49 +536,49 @@ $this->set_pagination_args([
             $wpdb->query("UPDATE {$q_table} SET status = 'publish' WHERE question_id IN ({$ids_placeholder})");
         }
         if ('delete' === $action) {
-        check_admin_referer('bulk-' . $this->_args['plural']); // Nonce check for bulk action
+            check_admin_referer('bulk-' . $this->_args['plural']); // Nonce check for bulk action
 
-        global $wpdb;
-        $q_table = Questions_DB::get_questions_table_name(); // Use static method
-        $g_table = Questions_DB::get_groups_table_name(); // Use static method
-        $rel_table = Terms_DB::get_relationships_table_name(); // Use static method
+            global $wpdb;
+            $q_table = Questions_DB::get_questions_table_name(); // Use static method
+            $g_table = Questions_DB::get_groups_table_name(); // Use static method
+            $rel_table = Terms_DB::get_relationships_table_name(); // Use static method
 
-        // --- ADDED: Get associated group IDs BEFORE deleting questions ---
-        $group_ids_to_check = $wpdb->get_col("SELECT DISTINCT group_id FROM {$q_table} WHERE question_id IN ({$ids_placeholder}) AND group_id IS NOT NULL AND group_id > 0");
-        // --- END ADDED ---
+            // --- ADDED: Get associated group IDs BEFORE deleting questions ---
+            $group_ids_to_check = $wpdb->get_col("SELECT DISTINCT group_id FROM {$q_table} WHERE question_id IN ({$ids_placeholder}) AND group_id IS NOT NULL AND group_id > 0");
+            // --- END ADDED ---
 
-        // Delete the questions and their related data
-        Questions_DB::delete_questions( $question_ids );
+            // Delete the questions and their related data
+            Questions_DB::delete_questions($question_ids);
 
-        // --- ADDED: Check and delete orphaned groups ---
-        if (!empty($group_ids_to_check)) {
-            $unique_group_ids = array_unique($group_ids_to_check);
-            foreach ($unique_group_ids as $gid) {
-                // Check if any *other* questions still exist for this group
-                $remaining_questions = $wpdb->get_var($wpdb->prepare(
-                    "SELECT COUNT(*) FROM {$q_table} WHERE group_id = %d",
-                    $gid
-                ));
+            // --- ADDED: Check and delete orphaned groups ---
+            if (!empty($group_ids_to_check)) {
+                $unique_group_ids = array_unique($group_ids_to_check);
+                foreach ($unique_group_ids as $gid) {
+                    // Check if any *other* questions still exist for this group
+                    $remaining_questions = $wpdb->get_var($wpdb->prepare(
+                        "SELECT COUNT(*) FROM {$q_table} WHERE group_id = %d",
+                        $gid
+                    ));
 
-                // If no questions remain, delete the group and its relationships
-                if ($remaining_questions == 0) {
-                    // Delete group relationships
-                    $wpdb->delete($rel_table, ['object_id' => $gid, 'object_type' => 'group'], ['%d', '%s']);
-                    // Delete the group itself
-                    $wpdb->delete($g_table, ['group_id' => $gid], ['%d']);
-                    // Optional: Log deletion of orphaned group $gid
+                    // If no questions remain, delete the group and its relationships
+                    if ($remaining_questions == 0) {
+                        // Delete group relationships
+                        $wpdb->delete($rel_table, ['object_id' => $gid, 'object_type' => 'group'], ['%d', '%s']);
+                        // Delete the group itself
+                        $wpdb->delete($g_table, ['group_id' => $gid], ['%d']);
+                        // Optional: Log deletion of orphaned group $gid
+                    }
                 }
             }
+            // --- END ADDED ---
+
+            // Optional: Add admin notice
+            // add_settings_error('qp_notices', 'bulk_delete', count($question_ids) . ' questions permanently deleted.', 'success');
+
+            // Redirect after action to prevent resubmission and clear query args
+            wp_safe_redirect(remove_query_arg(['action', 'action2', '_wpnonce', 'question_ids', 'labels_to_apply', 'bulk_edit_apply', 'bulk_edit_source', 'bulk_edit_section', 'bulk_edit_topic', 'bulk_edit_exam'], wp_get_referer() ?: admin_url('admin.php?page=question-press&status=trash'))); // Redirect back, usually to trash view
+            exit;
         }
-        // --- END ADDED ---
-
-        // Optional: Add admin notice
-        // add_settings_error('qp_notices', 'bulk_delete', count($question_ids) . ' questions permanently deleted.', 'success');
-
-         // Redirect after action to prevent resubmission and clear query args
-         wp_safe_redirect(remove_query_arg(['action', 'action2', '_wpnonce', 'question_ids', 'labels_to_apply', 'bulk_edit_apply', 'bulk_edit_source', 'bulk_edit_section', 'bulk_edit_topic', 'bulk_edit_exam'], wp_get_referer() ?: admin_url('admin.php?page=question-press&status=trash'))); // Redirect back, usually to trash view
-         exit;
-    }
 
         if (strpos($action, 'remove_label_') === 0) {
             // UPDATED: Target the new relationships table
