@@ -32,36 +32,14 @@ class QP_Export_Page
                 $subject_tax_id
             ));
         }
-?>
-        <div class="wrap">
-            <h1 class="wp-heading-inline">Export Questions</h1>
-            <hr class="wp-header-end">
 
-            <p>Select the subjects you wish to export. All questions within the selected subjects will be exported into a single <code>.zip</code> file conforming to schema v2.2.</p>
+        // Prepare arguments for the template
+        $args = [
+            'subjects' => $subjects,
+        ];
 
-            <form method="post" action="admin.php?page=qp-tools&tab=export">
-                <?php wp_nonce_field('qp_export_nonce_action', 'qp_export_nonce_field'); ?>
-
-                <h2>Select Subjects</h2>
-                <fieldset>
-                    <?php if (!empty($subjects)) : ?>
-                        <?php foreach ($subjects as $subject) : ?>
-                            <label style="display: block; margin-bottom: 5px;">
-                                <input type="checkbox" name="subject_ids[]" value="<?php echo esc_attr($subject->term_id); ?>">
-                                <?php echo esc_html($subject->name); ?>
-                            </label>
-                        <?php endforeach; ?>
-                    <?php else: ?>
-                        <p>No subjects found.</p>
-                    <?php endif; ?>
-                </fieldset>
-
-                <p class="submit">
-                    <input type="submit" name="export_questions" class="button button-primary" value="Export Questions">
-                </p>
-            </form>
-        </div>
-<?php
+        // Load and echo the template
+        echo qp_get_template_html( 'tools-export', 'admin', $args );
     }
 
     private static function generate_zip()
