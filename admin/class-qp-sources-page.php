@@ -177,7 +177,12 @@ class QP_Sources_Page {
         $list_table = new QP_Terms_List_Table('source', 'Source/Section', 'sources');
         $list_table->prepare_items();
 
-        // --- NEW: Fetch data needed for subject linking ---
+        // Capture the list table's HTML
+        ob_start();
+        $list_table->display();
+        $list_table_html = ob_get_clean();
+
+        // --- Fetch data needed for subject linking ---
         $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'subject'");
         $all_subjects = $wpdb->get_results($wpdb->prepare(
             "SELECT term_id, name FROM $term_table WHERE taxonomy_id = %d AND parent = 0 AND name != 'Uncategorized' ORDER BY name ASC",
@@ -191,112 +196,27 @@ class QP_Sources_Page {
                 $term_to_edit->term_id
             ));
         }
-        // --- END NEW ---
+        // --- END ---
         
+        // Display session messages before loading the template
         if (isset($_SESSION['qp_admin_message'])) {
             $message = html_entity_decode($_SESSION['qp_admin_message']);
             echo '<div id="message" class="notice notice-' . esc_attr($_SESSION['qp_admin_message_type']) . ' is-dismissible"><p>' . $message . '</p></div>';
             unset($_SESSION['qp_admin_message'], $_SESSION['qp_admin_message_type']);
         }
-        ?>
-        <div id="col-container" class="wp-clearfix">
-            <div id="col-left">
-                <div class="col-wrap">
-                    <div class="form-wrap">
-                        <h2><?php echo $term_to_edit ? 'Edit Source/Section' : 'Add New Source/Section'; ?></h2>
-                        <form method="post" action="admin.php?page=qp-organization&tab=sources">
-                            <?php wp_nonce_field('qp_add_edit_source_nonce'); ?>
-                            <input type="hidden" name="action" value="<?php echo $term_to_edit ? 'update_term' : 'add_term'; ?>">
-                            <?php if ($term_to_edit) : ?>
-                                <input type="hidden" name="term_id" value="<?php echo esc_attr($term_to_edit->term_id); ?>">
-                            <?php endif; ?>
-                            
-                            <div class="form-field form-required">
-                                <label for="term-name">Name</label>
-                                <input name="term_name" id="term-name" type="text" value="<?php echo $term_to_edit ? esc_attr($term_to_edit->name) : ''; ?>" size="40" required>
-                                <p>The name of the source (e.g., a book title) or a section within it (e.g., Chapter 5).</p>
-                            </div>
 
-                            <div class="form-field">
-                                <label for="parent-source">Parent Item</label>
-                                <select name="parent" id="parent-source">
-                                    <option value="0">— None (Top-Level Source) —</option>
-                                    <?php
-                                        // A simple function to recursively display options
-                                        function qp_source_dropdown_options($terms, $parent_id = 0, $level = 0, $selected = 0) {
-                                            // Use a more visually distinct prefix for indentation
-                                            $prefix = str_repeat('— ', $level);
-                                            foreach ($terms as $term) {
-                                                if ($term->parent == $parent_id) {
-                                                    printf(
-                                                        '<option value="%s" %s>%s%s</option>',
-                                                        esc_attr($term->term_id),
-                                                        selected($selected, $term->term_id, false),
-                                                        $prefix, // Use the new prefix here
-                                                        esc_html($term->name)
-                                                    );
-                                                    // The recursive call remains the same
-                                                    qp_source_dropdown_options($terms, $term->term_id, $level + 1, $selected);
-                                                }
-                                            }
-                                        }
-                                        qp_source_dropdown_options($all_source_terms, 0, 0, $term_to_edit ? $term_to_edit->parent : 0);
-                                    ?>
-                                </select>
-                                <p>Assign a parent to create a hierarchy. A "Chapter" should have a "Book" as its parent.</p>
-                            </div>
+        // Prepare arguments for the template
+        $args = [
+            'term_to_edit'       => $term_to_edit,
+            'edit_description'   => $edit_description,
+            'all_source_terms'   => $all_source_terms,
+            'all_subjects'       => $all_subjects,
+            'linked_subject_ids' => $linked_subject_ids,
+            'list_table_html'    => $list_table_html,
+        ];
 
-                            <div class="form-field" id="linked-subjects-field" style="<?php echo ($term_to_edit && $term_to_edit->parent != 0) ? 'display:none;' : ''; ?>">
-                                <label for="linked-subjects">Linked Subjects</label>
-                                <div class="subjects-checkbox-group" style="padding: 10px; border: 1px solid #ddd; background: #fff; max-height: 150px; overflow-y: auto;">
-                                    <?php foreach ($all_subjects as $subject) : ?>
-                                        <label style="display: block; margin-bottom: 5px;">
-                                            <input type="checkbox" name="linked_subjects[]" value="<?php echo esc_attr($subject->term_id); ?>" <?php checked(in_array($subject->term_id, $linked_subject_ids)); ?>>
-                                            <?php echo esc_html($subject->name); ?>
-                                        </label>
-                                    <?php endforeach; ?>
-                                </div>
-                                <p>Select the subjects this source should be available under. This only applies to top-level sources.</p>
-                            </div>
-
-                            <script>
-                                jQuery(document).ready(function($) {
-                                    $('#parent-source').on('change', function() {
-                                        if ($(this).val() == '0') {
-                                            $('#linked-subjects-field').slideDown();
-                                        } else {
-                                            $('#linked-subjects-field').slideUp();
-                                        }
-                                    });
-                                });
-                            </script>
-
-                            <div class="form-field">
-                                <label for="term-description">Description</label>
-                                <textarea name="term_description" id="term-description" rows="3" cols="40"><?php echo esc_textarea($edit_description); ?></textarea>
-                            </div>
-
-                            <p class="submit">
-                                <input type="submit" class="button button-primary" value="<?php echo $term_to_edit ? 'Update Item' : 'Add New Item'; ?>">
-                                <?php if ($term_to_edit) : ?>
-                                    <a href="admin.php?page=qp-organization&tab=sources" class="button button-secondary">Cancel Edit</a>
-                                <?php endif; ?>
-                            </p>
-                        </form>
-                    </div>
-                </div>
-            </div>
-            <div id="col-right">
-                <div class="col-wrap">
-                    <form method="get">
-                        <input type="hidden" name="page" value="<?php echo esc_attr($_REQUEST['page']); ?>" />
-                        <input type="hidden" name="tab" value="sources" />
-                        <?php $list_table->display(); ?>
-                    </form>
-                </div>
-            </div>
-        </div>
-        <?php
+        // Load and echo the template
+        echo qp_get_template_html( 'organization-tab-sources', 'admin', $args );
     }
 
     // Helper functions can be kept for consistency or moved to a central file later
