@@ -88,12 +88,12 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
         ) );
     }
 
-     /**
-     * Get basic group data by ID.
-     *
-     * @param int $group_id
-     * @return object|null
-     */
+    /**
+        * Get basic group data by ID.
+        *
+        * @param int $group_id
+        * @return object|null
+        */
     public static function get_group_by_id( $group_id ) {
         $g_table = self::get_groups_table_name();
         return self::$wpdb->get_row( self::$wpdb->prepare(
@@ -447,118 +447,118 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
         ];
     }
 
-   /**
-    * Helper to enrich question items array with term names (Subject, Topic, Exam, Source Lineage, Labels).
-    * Modifies the input array by reference.
-    *
-    * @param array $items Array of question items fetched from DB.
-    */
-   private static function enrich_questions_with_terms(array &$items) {
-       if (empty($items)) return;
+    /**
+        * Helper to enrich question items array with term names (Subject, Topic, Exam, Source Lineage, Labels).
+        * Modifies the input array by reference.
+        *
+        * @param array $items Array of question items fetched from DB.
+        */
+    private static function enrich_questions_with_terms(array &$items) {
+        if (empty($items)) return;
 
-       $group_ids = array_unique(wp_list_pluck($items, 'group_id'));
-       $question_ids = array_unique(wp_list_pluck($items, 'question_id'));
+        $group_ids = array_unique(wp_list_pluck($items, 'group_id'));
+        $question_ids = array_unique(wp_list_pluck($items, 'question_id'));
 
-       if (empty($group_ids) && empty($question_ids)) return;
+        if (empty($group_ids) && empty($question_ids)) return;
 
-       $rel_table = Terms_DB::get_relationships_table_name();
-       $term_table = Terms_DB::get_terms_table_name();
-       $tax_table = Terms_DB::get_taxonomies_table_name();
-       $meta_table = Terms_DB::get_term_meta_table_name();
+        $rel_table = Terms_DB::get_relationships_table_name();
+        $term_table = Terms_DB::get_terms_table_name();
+        $tax_table = Terms_DB::get_taxonomies_table_name();
+        $meta_table = Terms_DB::get_term_meta_table_name();
 
-       // --- Get All Relevant Relationships in One Go ---
-       $relationships = [];
-       if (!empty($group_ids)) {
-            $group_ids_placeholder = implode(',', $group_ids);
-            $group_rels = self::$wpdb->get_results("
-                 SELECT r.object_id, r.term_id, t.name, t.parent, tax.taxonomy_name
-                 FROM {$rel_table} r
-                 JOIN {$term_table} t ON r.term_id = t.term_id
-                 JOIN {$tax_table} tax ON t.taxonomy_id = tax.taxonomy_id
-                 WHERE r.object_id IN ({$group_ids_placeholder}) AND r.object_type = 'group'
-                 AND tax.taxonomy_name IN ('subject', 'source', 'exam')
-            ");
-            if ($group_rels) $relationships = array_merge($relationships, $group_rels);
-       }
-       if (!empty($question_ids)) {
-            $question_ids_placeholder = implode(',', $question_ids);
-            $label_rels = self::$wpdb->get_results("
-                 SELECT r.object_id, r.term_id, t.name, m.meta_value as color, tax.taxonomy_name
-                 FROM {$rel_table} r
-                 JOIN {$term_table} t ON r.term_id = t.term_id
-                 JOIN {$tax_table} tax ON t.taxonomy_id = tax.taxonomy_id
-                 LEFT JOIN {$meta_table} m ON r.term_id = m.term_id AND m.meta_key = 'color'
-                 WHERE r.object_id IN ({$question_ids_placeholder}) AND r.object_type = 'question'
-                 AND tax.taxonomy_name = 'label'
-            ");
-             if ($label_rels) $relationships = array_merge($relationships, $label_rels);
-       }
-
-       // --- Process Relationships and Store by Item ID ---
-       $terms_by_item = [];
-       foreach ($relationships as $rel) {
-           $item_id = $rel->object_id; // Could be group_id or question_id
-           if (!isset($terms_by_item[$item_id])) {
-                $terms_by_item[$item_id] = ['subject' => null, 'topic' => null, 'exam' => null, 'source_term_id' => null, 'labels' => []];
-           }
-           switch ($rel->taxonomy_name) {
-               case 'subject':
-                   if ($rel->parent != 0) $terms_by_item[$item_id]['topic'] = $rel;
-                   else $terms_by_item[$item_id]['subject'] = $rel;
-                   break;
-               case 'source':
-                   // Store the most specific source term ID found for the group
-                   $terms_by_item[$item_id]['source_term_id'] = $rel->term_id;
-                   break;
-               case 'exam':
-                   $terms_by_item[$item_id]['exam'] = $rel;
-                   break;
-               case 'label':
-                   // Labels are associated with question_id, not group_id
-                   $terms_by_item[$item_id]['labels'][] = (object)['label_name' => $rel->name, 'label_color' => $rel->color];
-                   break;
-           }
-       }
-
-        // --- Fill in missing Subject if only Topic exists ---
-        // Pre-fetch all subject terms for lookup
-        $all_subject_terms = [];
-        $subject_tax_id = Terms_DB::get_taxonomy_id_by_name('subject');
-        if ($subject_tax_id) {
-            $all_subject_terms_raw = self::$wpdb->get_results(self::$wpdb->prepare("SELECT term_id, name, parent FROM {$term_table} WHERE taxonomy_id = %d", $subject_tax_id), OBJECT_K);
-            if ($all_subject_terms_raw) $all_subject_terms = $all_subject_terms_raw;
+        // --- Get All Relevant Relationships in One Go ---
+        $relationships = [];
+        if (!empty($group_ids)) {
+                $group_ids_placeholder = implode(',', $group_ids);
+                $group_rels = self::$wpdb->get_results("
+                    SELECT r.object_id, r.term_id, t.name, t.parent, tax.taxonomy_name
+                    FROM {$rel_table} r
+                    JOIN {$term_table} t ON r.term_id = t.term_id
+                    JOIN {$tax_table} tax ON t.taxonomy_id = tax.taxonomy_id
+                    WHERE r.object_id IN ({$group_ids_placeholder}) AND r.object_type = 'group'
+                    AND tax.taxonomy_name IN ('subject', 'source', 'exam')
+                ");
+                if ($group_rels) $relationships = array_merge($relationships, $group_rels);
+        }
+        if (!empty($question_ids)) {
+                $question_ids_placeholder = implode(',', $question_ids);
+                $label_rels = self::$wpdb->get_results("
+                    SELECT r.object_id, r.term_id, t.name, m.meta_value as color, tax.taxonomy_name
+                    FROM {$rel_table} r
+                    JOIN {$term_table} t ON r.term_id = t.term_id
+                    JOIN {$tax_table} tax ON t.taxonomy_id = tax.taxonomy_id
+                    LEFT JOIN {$meta_table} m ON r.term_id = m.term_id AND m.meta_key = 'color'
+                    WHERE r.object_id IN ({$question_ids_placeholder}) AND r.object_type = 'question'
+                    AND tax.taxonomy_name = 'label'
+                ");
+                if ($label_rels) $relationships = array_merge($relationships, $label_rels);
         }
 
-        foreach($terms_by_item as $item_id => &$term_data) {
-            if ($term_data['topic'] && !$term_data['subject']) {
-                $parent_id = $term_data['topic']->parent;
-                if (isset($all_subject_terms[$parent_id])) {
-                    $term_data['subject'] = $all_subject_terms[$parent_id];
-                }
+        // --- Process Relationships and Store by Item ID ---
+        $terms_by_item = [];
+        foreach ($relationships as $rel) {
+            $item_id = $rel->object_id; // Could be group_id or question_id
+            if (!isset($terms_by_item[$item_id])) {
+                    $terms_by_item[$item_id] = ['subject' => null, 'topic' => null, 'exam' => null, 'source_term_id' => null, 'labels' => []];
+            }
+            switch ($rel->taxonomy_name) {
+                case 'subject':
+                    if ($rel->parent != 0) $terms_by_item[$item_id]['topic'] = $rel;
+                    else $terms_by_item[$item_id]['subject'] = $rel;
+                    break;
+                case 'source':
+                    // Store the most specific source term ID found for the group
+                    $terms_by_item[$item_id]['source_term_id'] = $rel->term_id;
+                    break;
+                case 'exam':
+                    $terms_by_item[$item_id]['exam'] = $rel;
+                    break;
+                case 'label':
+                    // Labels are associated with question_id, not group_id
+                    $terms_by_item[$item_id]['labels'][] = (object)['label_name' => $rel->name, 'label_color' => $rel->color];
+                    break;
             }
         }
-        unset($term_data); // Unset reference
 
-        // --- Enrich the original $items array ---
-        foreach ($items as &$item) {
-             $gid = $item['group_id'];
-             $qid = $item['question_id'];
-             $group_terms = $terms_by_item[$gid] ?? null;
-             $question_terms = $terms_by_item[$qid] ?? null;
+            // --- Fill in missing Subject if only Topic exists ---
+            // Pre-fetch all subject terms for lookup
+            $all_subject_terms = [];
+            $subject_tax_id = Terms_DB::get_taxonomy_id_by_name('subject');
+            if ($subject_tax_id) {
+                $all_subject_terms_raw = self::$wpdb->get_results(self::$wpdb->prepare("SELECT term_id, name, parent FROM {$term_table} WHERE taxonomy_id = %d", $subject_tax_id), OBJECT_K);
+                if ($all_subject_terms_raw) $all_subject_terms = $all_subject_terms_raw;
+            }
 
-             $item['subject_name'] = $group_terms['subject']->name ?? null;
-             $item['topic_name'] = $group_terms['topic']->name ?? null;
-             $item['exam_name'] = $group_terms['exam']->name ?? null;
-             $item['linked_source_term_id'] = $group_terms['source_term_id'] ?? null; // Keep the ID for lineage lookup later
-             $item['labels'] = $question_terms['labels'] ?? [];
+            foreach($terms_by_item as $item_id => &$term_data) {
+                if ($term_data['topic'] && !$term_data['subject']) {
+                    $parent_id = $term_data['topic']->parent;
+                    if (isset($all_subject_terms[$parent_id])) {
+                        $term_data['subject'] = $all_subject_terms[$parent_id];
+                    }
+                }
+            }
+            unset($term_data); // Unset reference
 
-              // If subject is missing but topic exists, fill subject from topic's parent (already looked up)
-             if (empty($item['subject_name']) && $group_terms['topic'] && isset($all_subject_terms[$group_terms['topic']->parent])) {
-                 $item['subject_name'] = $all_subject_terms[$group_terms['topic']->parent]->name;
-             }
-        }
-        unset($item); // Unset reference
-   }
+            // --- Enrich the original $items array ---
+            foreach ($items as &$item) {
+                $gid = $item['group_id'];
+                $qid = $item['question_id'];
+                $group_terms = $terms_by_item[$gid] ?? null;
+                $question_terms = $terms_by_item[$qid] ?? null;
+
+                $item['subject_name'] = $group_terms['subject']->name ?? null;
+                $item['topic_name'] = $group_terms['topic']->name ?? null;
+                $item['exam_name'] = $group_terms['exam']->name ?? null;
+                $item['linked_source_term_id'] = $group_terms['source_term_id'] ?? null; // Keep the ID for lineage lookup later
+                $item['labels'] = $question_terms['labels'] ?? [];
+
+                // If subject is missing but topic exists, fill subject from topic's parent (already looked up)
+                if (empty($item['subject_name']) && $group_terms['topic'] && isset($all_subject_terms[$group_terms['topic']->parent])) {
+                    $item['subject_name'] = $all_subject_terms[$group_terms['topic']->parent]->name;
+                }
+            }
+            unset($item); // Unset reference
+    }
 
     /**
      * Saves/Updates options for a given question based on submitted data.
@@ -642,7 +642,7 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
         return $final_correct_option_id;
         // --- Removed the call to qp_re_evaluate_question_attempts ---
 
-    } // End save_options_for_question method
+    }
 
     /**
      * Re-evaluates all attempts for a specific question after its correct answer has changed.
@@ -722,7 +722,7 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
                 ['session_id' => $session_id]
             );
         }
-    } // End re_evaluate_attempts method
+    }
 
     /**
      * Retrieves all necessary data for rendering the question group editor page.
@@ -1023,6 +1023,116 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
             'is_admin'             => $user_can_view_source, // Re-purpose this flag for source visibility
             'is_marked_for_review' => $is_marked,
             'reported_info'        => $report_info
+        ];
+    }
+
+    /**
+     * Retrieves all necessary data for rendering the quick edit form row for a question.
+     *
+     * @param int $question_id The ID of the question to get data for.
+     * @return array|null An associative array containing all necessary data, or null if question not found.
+     * Structure includes: 'question', 'group', 'options', 'current_terms', 'all_terms', 'links'
+     */
+    public static function get_data_for_quick_edit( int $question_id ) {
+        if ( $question_id <= 0 ) {
+            return null;
+        }
+
+        // 1. Get Core Question and Group Data
+        $question = self::get_question_by_id( $question_id );
+        if ( ! $question ) {
+            return null; // Question not found
+        }
+        $group_id = $question->group_id;
+
+        // 2. Get Options for the Question
+        $options = self::get_options_for_question( $question_id );
+
+        // 3. Get Current Term Relationships
+        $current_terms = [
+            'subject' => null, 'topic' => null, 'source' => null, 'section' => null, 'exam' => null, 'labels' => []
+        ];
+        if ($group_id) {
+            $group_terms_raw = Terms_DB::get_linked_terms( $group_id, 'group', ['subject', 'source', 'exam'] );
+            // Process group terms to find specific IDs (similar logic as in get_group_details_for_editor)
+            $term_lineage_cache = [];
+            foreach ($group_terms_raw as $term) {
+                 if (!isset($term_lineage_cache[$term->term_id])) {
+                    $lineage_ids = [];
+                    $current_id = $term->term_id;
+                    for ($i=0; $i < 10; $i++){
+                        if (!$current_id) break;
+                        array_unshift($lineage_ids, $current_id);
+                        $current_id = self::$wpdb->get_var( self::$wpdb->prepare("SELECT parent FROM ".Terms_DB::get_terms_table_name()." WHERE term_id = %d", $current_id) );
+                    }
+                    $term_lineage_cache[$term->term_id] = $lineage_ids;
+                 }
+                 $lineage_ids = $term_lineage_cache[$term->term_id];
+
+                 if ($term->taxonomy_name === 'subject') {
+                     $current_terms['subject'] = $lineage_ids[0] ?? null;
+                     $current_terms['topic'] = ($term->parent != 0) ? $term->term_id : null;
+                 } elseif ($term->taxonomy_name === 'source') {
+                     $current_terms['source'] = $lineage_ids[0] ?? null;
+                     $current_terms['section'] = ($term->parent != 0) ? $term->term_id : null;
+                 } elseif ($term->taxonomy_name === 'exam') {
+                     $current_terms['exam'] = $term->term_id;
+                 }
+            }
+        }
+        // Get question-specific labels
+        $current_terms['labels'] = wp_list_pluck(Terms_DB::get_linked_terms($question_id, 'question', 'label'), 'term_id');
+
+        // 4. Get All Terms needed for Dropdowns
+        $all_terms_data = [
+            'subjects' => [], 'subject_terms' => [], 'source_terms' => [], 'exams' => [], 'labels' => []
+        ];
+        $tax_ids = [
+            'subject' => Terms_DB::get_taxonomy_id_by_name('subject'),
+            'source'  => Terms_DB::get_taxonomy_id_by_name('source'),
+            'exam'    => Terms_DB::get_taxonomy_id_by_name('exam'),
+            'label'   => Terms_DB::get_taxonomy_id_by_name('label'),
+        ];
+        $term_table = Terms_DB::get_terms_table_name();
+
+        if ($tax_ids['subject']) {
+            $all_terms_data['subjects'] = self::$wpdb->get_results(self::$wpdb->prepare(
+                "SELECT term_id AS subject_id, name AS subject_name FROM {$term_table} WHERE taxonomy_id = %d AND parent = 0 ORDER BY name ASC", $tax_ids['subject']
+            ));
+            $all_terms_data['subject_terms'] = self::$wpdb->get_results(self::$wpdb->prepare(
+                "SELECT term_id as id, name, parent FROM {$term_table} WHERE taxonomy_id = %d ORDER BY name ASC", $tax_ids['subject']
+            ));
+        }
+        if ($tax_ids['source']) {
+            $all_terms_data['source_terms'] = self::$wpdb->get_results(self::$wpdb->prepare(
+                "SELECT term_id as id, name, parent as parent_id FROM {$term_table} WHERE taxonomy_id = %d ORDER BY name ASC", $tax_ids['source']
+            ));
+        }
+        if ($tax_ids['exam']) {
+            $all_terms_data['exams'] = self::$wpdb->get_results(self::$wpdb->prepare(
+                "SELECT term_id AS exam_id, name AS exam_name FROM {$term_table} WHERE taxonomy_id = %d ORDER BY name ASC", $tax_ids['exam']
+            ));
+        }
+        if ($tax_ids['label']) {
+            $all_terms_data['labels'] = self::$wpdb->get_results(self::$wpdb->prepare(
+                "SELECT term_id as label_id, name as label_name FROM {$term_table} WHERE taxonomy_id = %d ORDER BY name ASC", $tax_ids['label']
+            ));
+        }
+
+        // 5. Get Relationship Links for JS Filtering
+        $rel_table = Terms_DB::get_relationships_table_name();
+        $link_data = [
+             'exam_subject_links'  => self::$wpdb->get_results("SELECT object_id AS exam_id, term_id AS subject_id FROM {$rel_table} WHERE object_type = 'exam_subject_link'", ARRAY_A),
+             'source_subject_links' => self::$wpdb->get_results("SELECT object_id AS source_id, term_id AS subject_id FROM {$rel_table} WHERE object_type = 'source_subject_link'", ARRAY_A)
+        ];
+
+        // 6. Assemble Result
+        return [
+            'question'      => $question, // Contains group info like direction_text, is_pyq etc.
+            'options'       => $options,
+            'current_terms' => $current_terms,
+            'all_terms'     => $all_terms_data,
+            'links'         => $link_data
         ];
     }
 

@@ -3169,145 +3169,47 @@ function qp_delete_dir($dirPath)
 
 function qp_get_quick_edit_form_ajax()
 {
-    // =========================================================================
-    // Step 0: Initial Setup & Security
-    // =========================================================================
+    // 1. Security & Basic Validation
     check_ajax_referer('qp_get_quick_edit_form_nonce', 'nonce');
-
     $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
     if (!$question_id) {
         wp_send_json_error(['message' => 'No Question ID provided.']);
     }
 
-    global $wpdb;
-    $term_table = $wpdb->prefix . 'qp_terms';
-    $tax_table = $wpdb->prefix . 'qp_taxonomies';
-    $rel_table = $wpdb->prefix . 'qp_term_relationships';
-    $questions_table = $wpdb->prefix . 'qp_questions';
-    $groups_table = $wpdb->prefix . 'qp_question_groups';
-    $options_table = $wpdb->prefix . 'qp_options';
+    // 2. Fetch ALL Data using the DB Method
+    $data = QuestionPress\Database\Questions_DB::get_data_for_quick_edit($question_id);
 
-    // =========================================================================
-    // Step 1: Fetch Current Data & Determine Subject/Topic Hierarchy
-    // =========================================================================
-    $question = $wpdb->get_row($wpdb->prepare("SELECT q.question_text, q.group_id, g.direction_text, g.is_pyq, g.pyq_year FROM {$questions_table} q LEFT JOIN {$groups_table} g ON q.group_id = g.group_id WHERE q.question_id = %d", $question_id));
-    if (!$question) {
-        wp_send_json_error(['message' => 'Question not found.']);
-    }
-    $group_id = $question->group_id;
-
-    // --- 1a: Find the most specific topic linked to the group and trace its lineage ---
-    $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'subject'");
-    $linked_topic_id = $wpdb->get_var($wpdb->prepare("SELECT term_id FROM {$rel_table} WHERE object_id = %d AND object_type = 'group' AND term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id = %d AND parent != 0)", $group_id, $subject_tax_id));
-
-    $current_topic_id = 0;
-    $current_subject_id = 0;
-
-    if ($linked_topic_id) {
-        $current_topic_id = $linked_topic_id;
-        $parent_id = $wpdb->get_var($wpdb->prepare("SELECT parent FROM $term_table WHERE term_id = %d", $linked_topic_id));
-        // Trace upwards to find the top-level subject (where parent = 0)
-        for ($i = 0; $i < 10; $i++) { // Safety break
-            if ($parent_id == 0) {
-                $current_subject_id = $wpdb->get_var($wpdb->prepare("SELECT term_id FROM $term_table WHERE term_id = %d", $linked_topic_id));
-                break;
-            }
-            $current_term = $wpdb->get_row($wpdb->prepare("SELECT term_id, parent FROM $term_table WHERE term_id = %d", $parent_id));
-            if (!$current_term) break;
-            $linked_topic_id = $current_term->term_id;
-            $parent_id = $current_term->parent;
-        }
-    } else {
-        // If no topic is linked, check for a direct subject link
-        $current_subject_id = $wpdb->get_var($wpdb->prepare("SELECT term_id FROM {$rel_table} WHERE object_id = %d AND object_type = 'group' AND term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id = %d AND parent = 0)", $group_id, $subject_tax_id));
+    if (!$data) {
+        wp_send_json_error(['message' => 'Could not retrieve data for this question.']);
     }
 
+    // Extract data into variables for easier use in the template
+    $question = $data['question']; // This is an object containing group info too
+    $options = $data['options'];
+    $current_terms = $data['current_terms'];
+    $all_terms = $data['all_terms'];
+    $links = $data['links'];
 
-    // --- 1b: Fetch group-level source/section and trace its lineage ---
-    $source_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'source'");
-    $linked_source_term_id = $wpdb->get_var($wpdb->prepare(
-        "SELECT term_id FROM {$rel_table} WHERE object_id = %d AND object_type = 'group' AND term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id = %d)",
-        $group_id,
-        $source_tax_id
-    ));
-
-    $current_source_id = 0;
-    $current_section_id = 0;
-
-    if ($linked_source_term_id) {
-        $term = $wpdb->get_row($wpdb->prepare("SELECT term_id, parent FROM $term_table WHERE term_id = %d", $linked_source_term_id));
-        if ($term && $term->parent != 0) {
-            // It's a section or subsection, so this is our selected "section"
-            $current_section_id = $term->term_id;
-
-            // Now, find its top-level parent (the source)
-            $parent_id = $term->parent;
-            for ($i = 0; $i < 10; $i++) { // Safety break
-                $parent_term = $wpdb->get_row($wpdb->prepare("SELECT term_id, parent FROM $term_table WHERE term_id = %d", $parent_id));
-                if (!$parent_term || $parent_term->parent == 0) {
-                    $current_source_id = $parent_id;
-                    break;
-                }
-                $parent_id = $parent_term->parent;
-            }
-        } else if ($term) {
-            // It's a top-level source
-            $current_source_id = $term->term_id;
-        }
-    }
-
-    // --- 1c: Fetch other term relationships (Labels, Exam) ---
-    // (This part of the original function remains the same)
-    $question_terms_raw = $wpdb->get_results($wpdb->prepare("SELECT t.term_id, t.parent, tax.taxonomy_name FROM {$rel_table} r JOIN {$term_table} t ON r.term_id = t.term_id JOIN {$tax_table} tax ON t.taxonomy_id = tax.taxonomy_id WHERE r.object_id = %d AND r.object_type = 'question'", $question_id));
-    $current_labels = [];
-    foreach ($question_terms_raw as $term) {
-        if ($term->taxonomy_name === 'label') {
-            $current_labels[] = $term->term_id;
-        }
-    }
-    $exam_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'exam'");
-    $current_exam_id = $wpdb->get_var($wpdb->prepare("SELECT term_id FROM {$rel_table} WHERE object_id = %d AND object_type = 'group' AND term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id = %d)", $group_id, $exam_tax_id));
-
-
-    // =========================================================================
-    // Step 2: Fetch All Possible Terms for Form Dropdowns
-    // =========================================================================
-    $all_subjects = $wpdb->get_results($wpdb->prepare("SELECT term_id AS subject_id, name AS subject_name FROM {$term_table} WHERE taxonomy_id = %d AND parent = 0", $subject_tax_id));
-    // Fetch ALL subjects and topics together for JS to build the hierarchy
-    $all_subject_terms = $wpdb->get_results($wpdb->prepare("SELECT term_id as id, name, parent FROM {$term_table} WHERE taxonomy_id = %d", $subject_tax_id));
-
-    $source_tax_id  = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'source'");
-    $all_source_terms = $wpdb->get_results($wpdb->prepare("SELECT term_id as id, name, parent as parent_id FROM {$term_table} WHERE taxonomy_id = %d", $source_tax_id));
-
-    $all_exams    = $wpdb->get_results($wpdb->prepare("SELECT term_id AS exam_id, name AS exam_name FROM {$term_table} WHERE taxonomy_id = %d", $exam_tax_id));
-    $label_tax_id   = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'label'");
-    $all_labels   = $wpdb->get_results($wpdb->prepare("SELECT term_id as label_id, name as label_name FROM {$term_table} WHERE taxonomy_id = %d", $label_tax_id));
-
-    $exam_subject_links   = $wpdb->get_results("SELECT object_id AS exam_id, term_id AS subject_id FROM {$rel_table} WHERE object_type = 'exam_subject_link'");
-    $source_subject_links = $wpdb->get_results("SELECT object_id AS source_id, term_id AS subject_id FROM {$rel_table} WHERE object_type = 'source_subject_link'");
-    $options = $wpdb->get_results($wpdb->prepare("SELECT option_id, option_text, is_correct FROM {$options_table} WHERE question_id = %d ORDER BY option_id ASC", $question_id));
-
-    // =========================================================================
-    // Step 3 & 4: Prepare Data and Send Form HTML
-    // =========================================================================
+    // 3. Generate Form HTML using Output Buffering
     ob_start();
     ?>
     <script>
-        // This global object holds all the data our dynamic form needs.
+        // Localize necessary data for the quick-edit.js dropdown logic
         var qp_quick_edit_data = <?php echo wp_json_encode([
-                                        'all_subjects'        => $all_subjects,
-                                        'all_subject_terms'   => $all_subject_terms, // Used to build topic hierarchy
-                                        'all_source_terms'    => $all_source_terms,
-                                        'all_exams'           => $all_exams,
-                                        'all_labels'          => $all_labels,
-                                        'exam_subject_links'  => $exam_subject_links,
-                                        'source_subject_links' => $source_subject_links,
-                                        'current_subject_id'  => $current_subject_id,
-                                        'current_topic_id'    => $current_topic_id,
-                                        'current_source_id'   => $current_source_id,
-                                        'current_section_id'  => $current_section_id,
-                                        'current_exam_id'     => $current_exam_id,
-                                        'current_labels'      => $current_labels,
+                                        // Pass only what the JS needs for dropdowns and current selections
+                                        'all_subjects'        => $all_terms['subjects'],        // Array of {subject_id, subject_name}
+                                        'all_subject_terms'   => $all_terms['subject_terms'],   // Array of {id, name, parent}
+                                        'all_source_terms'    => $all_terms['source_terms'],    // Array of {id, name, parent_id}
+                                        'all_exams'           => $all_terms['exams'],           // Array of {exam_id, exam_name}
+                                        'all_labels'          => $all_terms['labels'],          // Array of {label_id, label_name}
+                                        'exam_subject_links'  => $links['exam_subject_links'],
+                                        'source_subject_links' => $links['source_subject_links'],
+                                        'current_subject_id'  => $current_terms['subject'],
+                                        'current_topic_id'    => $current_terms['topic'],
+                                        'current_source_id'   => $current_terms['source'],
+                                        'current_section_id'  => $current_terms['section'],
+                                        'current_exam_id'     => $current_terms['exam'],
+                                        'current_labels'      => $current_terms['labels'],     // Array of label IDs
                                     ]); ?>;
     </script>
 
@@ -3315,15 +3217,16 @@ function qp_get_quick_edit_form_ajax()
         <?php wp_nonce_field('qp_save_quick_edit_nonce', 'qp_save_quick_edit_nonce_field'); ?>
 
         <div class="quick-edit-display-text">
+            <?php // Display Direction and Question Text (already sanitized in DB method) ?>
             <?php if (!empty($question->direction_text)) : ?>
                 <div class="display-group">
                     <strong>Direction:</strong>
-                    <p><?php echo wp_kses_post(nl2br($question->direction_text)); ?></p>
+                    <p><?php echo $question->direction_text; ?></p>
                 </div>
             <?php endif; ?>
             <div class="display-group">
                 <strong>Question:</strong>
-                <p><?php echo wp_kses_post(nl2br($question->question_text)); ?></p>
+                <p><?php echo $question->question_text; ?></p>
             </div>
         </div>
 
@@ -3336,6 +3239,7 @@ function qp_get_quick_edit_form_ajax()
                     <?php foreach ($options as $option) : ?>
                         <label class="option-label">
                             <input type="radio" name="correct_option_id" value="<?php echo esc_attr($option->option_id); ?>" <?php checked($option->is_correct, 1); ?>>
+                            <?php // Option text is already sanitized in DB method ?>
                             <input type="text" readonly value="<?php echo esc_attr($option->option_text); ?>">
                         </label>
                     <?php endforeach; ?>
@@ -3343,12 +3247,15 @@ function qp_get_quick_edit_form_ajax()
             </div>
 
             <div class="quick-edit-col-right">
+                <?php // Dropdowns will be populated by JS using qp_quick_edit_data ?>
                 <div class="form-row-flex">
                     <div class="form-group-half qe-right-dropdowns">
                         <label for="qe-subject-<?php echo esc_attr($question_id); ?>"><strong>Subject</strong></label>
                         <select name="subject_id" id="qe-subject-<?php echo esc_attr($question_id); ?>" class="qe-subject-select">
-                            <?php foreach ($all_subjects as $subject) : ?>
-                                <option value="<?php echo esc_attr($subject->subject_id); ?>" <?php selected($subject->subject_id, $current_subject_id); ?>>
+                            <?php // Options populated by JS ?>
+                             <option value="">— Select Subject —</option>
+                             <?php foreach ($all_terms['subjects'] as $subject) : ?>
+                                <option value="<?php echo esc_attr($subject->subject_id); ?>" <?php selected($subject->subject_id, $current_terms['subject']); ?>>
                                     <?php echo esc_html($subject->subject_name); ?>
                                 </option>
                             <?php endforeach; ?>
@@ -3358,6 +3265,7 @@ function qp_get_quick_edit_form_ajax()
                         <label for="qe-topic-<?php echo esc_attr($question_id); ?>"><strong>Topic</strong></label>
                         <select name="topic_id" id="qe-topic-<?php echo esc_attr($question_id); ?>" class="qe-topic-select" disabled>
                             <option value="">— Select subject first —</option>
+                            <?php // Options populated by JS ?>
                         </select>
                     </div>
                 </div>
@@ -3367,12 +3275,14 @@ function qp_get_quick_edit_form_ajax()
                         <label for="qe-source-<?php echo esc_attr($question_id); ?>"><strong>Source</strong></label>
                         <select name="source_id" id="qe-source-<?php echo esc_attr($question_id); ?>" class="qe-source-select" disabled>
                             <option value="">— Select Subject First —</option>
+                             <?php // Options populated by JS ?>
                         </select>
                     </div>
                     <div class="form-group-half qe-right-dropdowns">
                         <label for="qe-section-<?php echo esc_attr($question_id); ?>"><strong>Section</strong></label>
                         <select name="section_id" id="qe-section-<?php echo esc_attr($question_id); ?>" class="qe-section-select" disabled>
                             <option value="">— Select Source First —</option>
+                             <?php // Options populated by JS ?>
                         </select>
                     </div>
                 </div>
@@ -3385,13 +3295,9 @@ function qp_get_quick_edit_form_ajax()
                     </div>
                     <div class="form-group-expand qe-pyq-fields" style="<?php echo $question->is_pyq ? '' : 'display: none;'; ?>">
                         <div class="form-group-half">
-                            <select name="exam_id" class="qe-exam-select">
+                            <select name="exam_id" class="qe-exam-select" <?php echo !$current_terms['subject'] ? 'disabled' : ''; ?>>
                                 <option value="">— Select Exam —</option>
-                                <?php foreach ($all_exams as $exam) : ?>
-                                    <option value="<?php echo esc_attr($exam->exam_id); ?>" <?php selected($exam->exam_id, $current_exam_id); ?>>
-                                        <?php echo esc_html($exam->exam_name); ?>
-                                    </option>
-                                <?php endforeach; ?>
+                                <?php // Options populated by JS ?>
                             </select>
                         </div>
                         <div class="form-group-half">
@@ -3403,9 +3309,9 @@ function qp_get_quick_edit_form_ajax()
                 <div class="form-row">
                     <label><strong>Labels</strong></label>
                     <div class="labels-group">
-                        <?php foreach ($all_labels as $label) : ?>
+                        <?php foreach ($all_terms['labels'] as $label) : ?>
                             <label class="inline-checkbox">
-                                <input type="checkbox" name="labels[]" value="<?php echo esc_attr($label->label_id); ?>" <?php checked(in_array($label->label_id, $current_labels)); ?>>
+                                <input type="checkbox" name="labels[]" value="<?php echo esc_attr($label->label_id); ?>" <?php checked(in_array($label->label_id, $current_terms['labels'])); ?>>
                                 <?php echo esc_html($label->label_name); ?>
                             </label>
                         <?php endforeach; ?>
@@ -3420,148 +3326,39 @@ function qp_get_quick_edit_form_ajax()
         </p>
     </form>
 
+    <?php // Include the same CSS block as before ?>
     <style>
-        .quick-edit-display-text {
-            background-color: #f6f7f7;
-            border: 1px solid #e0e0e0;
-            padding: 10px 20px;
-            margin: 20px 20px 10px;
-            border-radius: 4px
-        }
-
-        .quick-edit-display-text .display-group {
-            margin-bottom: 10px
-        }
-
-        .options-group label:last-child,
-        .quick-edit-display-text .display-group:last-child,
-        .quick-edit-form-wrapper .form-row:last-child {
-            margin-bottom: 0
-        }
-
-        .quick-edit-display-text p {
-            margin: 5px 0 0;
-            padding-left: 10px;
-            border-left: 3px solid #ccc;
-            color: #555;
-            font-style: italic
-        }
-
-        .quick-edit-form-wrapper h4 {
-            font-size: 16px;
-            margin-top: 20px;
-            margin-bottom: 10px;
-            padding: 10px 20px
-        }
-
-        .inline-edit-row .submit {
-            padding: 20px
-        }
-
-        .quick-edit-form-wrapper .title {
-            font-size: 15px;
-            font-weight: 500;
-            color: #555
-        }
-
-        .quick-edit-form-wrapper .form-row,
-        .quick-edit-form-wrapper .form-row-flex {
-            margin-bottom: 1rem
-        }
-
-        .quick-edit-form-wrapper label,
-        .quick-edit-form-wrapper strong {
-            font-weight: 600;
-            display: block;
-            margin-bottom: 0rem
-        }
-
-        .quick-edit-form-wrapper select {
-            width: 100%
-        }
-
-        .quick-edit-main-container {
-            display: flex;
-            gap: 20px;
-            margin-bottom: 1rem;
-            padding: 0 20px
-        }
-
-        .form-row-flex .qe-pyq-fields {
-            display: flex;
-            gap: 1rem;
-        }
-
-        .form-row-flex .qe-right-dropdowns {
-            display: flex;
-            flex-direction: column;
-            gap: 0.5rem;
-            flex: 1;
-        }
-
-        .labels-group,
-        .options-group {
-            display: flex;
-            padding: .5rem;
-            border: 1px solid #ddd;
-            background: #fff
-        }
-
-        .quick-edit-col-left {
-            flex: 0 0 40%
-        }
-
-        .form-group-half,
-        .quick-edit-col-right {
-            flex: 1
-        }
-
-        .options-group {
-            flex-direction: column;
-            justify-content: space-between;
-            height: auto;
-            box-sizing: border-box;
-            gap: 10px;
-        }
-
-        .option-label {
-            display: flex;
-            align-items: center;
-            gap: .5rem;
-            margin-bottom: .5rem
-        }
-
-        .option-label input[type=radio] {
-            margin-top: 0;
-            align-self: center
-        }
-
-        .option-label input[type=text] {
-            width: 90%;
-            background-color: #f0f0f1
-        }
-
-        .form-row-flex {
-            display: flex;
-            gap: 1rem
-        }
-
-        .quick-edit-form-wrapper p.submit button.button-secondary {
-            margin-right: 10px
-        }
-
-        .labels-group {
-            flex-wrap: wrap;
-            gap: .5rem 1rem
-        }
-
-        .inline-checkbox {
-            white-space: nowrap
-        }
+        /* ... Paste the same CSS block from the original function here ... */
+         .quick-edit-display-text { background-color: #f6f7f7; border: 1px solid #e0e0e0; padding: 10px 20px; margin: 20px 20px 10px; border-radius: 4px }
+        .quick-edit-display-text .display-group { margin-bottom: 10px }
+        .options-group label:last-child, .quick-edit-display-text .display-group:last-child, .quick-edit-form-wrapper .form-row:last-child { margin-bottom: 0 }
+        .quick-edit-display-text p { margin: 5px 0 0; padding-left: 10px; border-left: 3px solid #ccc; color: #555; font-style: italic }
+        .quick-edit-form-wrapper h4 { font-size: 16px; margin-top: 20px; margin-bottom: 10px; padding: 10px 20px }
+        .inline-edit-row .submit { padding: 20px }
+        .quick-edit-form-wrapper .title { font-size: 15px; font-weight: 500; color: #555 }
+        .quick-edit-form-wrapper .form-row, .quick-edit-form-wrapper .form-row-flex { margin-bottom: 1rem }
+        .quick-edit-form-wrapper label, .quick-edit-form-wrapper strong { font-weight: 600; display: block; margin-bottom: 0rem }
+        .quick-edit-form-wrapper select { width: 100% }
+        .quick-edit-main-container { display: flex; gap: 20px; margin-bottom: 1rem; padding: 0 20px }
+        .form-row-flex .qe-pyq-fields { display: flex; gap: 1rem; }
+        .form-row-flex .qe-right-dropdowns { display: flex; flex-direction: column; gap: 0.5rem; flex: 1; }
+        .labels-group, .options-group { display: flex; padding: .5rem; border: 1px solid #ddd; background: #fff }
+        .quick-edit-col-left { flex: 0 0 40% }
+        .form-group-half, .quick-edit-col-right { flex: 1 }
+        .options-group { flex-direction: column; justify-content: space-between; height: auto; box-sizing: border-box; gap: 10px; }
+        .option-label { display: flex; align-items: center; gap: .5rem; margin-bottom: .5rem }
+        .option-label input[type=radio] { margin-top: 0; align-self: center }
+        .option-label input[type=text] { width: 90%; background-color: #f0f0f1 }
+        .form-row-flex { display: flex; gap: 1rem }
+        .quick-edit-form-wrapper p.submit button.button-secondary { margin-right: 10px }
+        .labels-group { flex-wrap: wrap; gap: .5rem 1rem }
+        .inline-checkbox { white-space: nowrap }
     </style>
     <?php
-    // Send the captured HTML back as a successful JSON response.
-    wp_send_json_success(['form' => ob_get_clean()]);
+    $form_html = ob_get_clean();
+
+    // 4. Send JSON Response
+    wp_send_json_success(['form' => $form_html]);
 }
 add_action('wp_ajax_qp_get_quick_edit_form', 'qp_get_quick_edit_form_ajax');
 
