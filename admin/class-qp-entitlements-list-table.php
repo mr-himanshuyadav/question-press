@@ -108,7 +108,12 @@ class QP_Entitlements_List_Table extends WP_List_Table {
         // Get total items count for pagination...
         // Clone params *before* adding limit/offset for the total count query
         $count_params = $params;
-        $total_items = $wpdb->get_var($wpdb->prepare($total_items_query, $count_params));
+        if ( ! empty( $count_params ) ) {
+             $total_items = $wpdb->get_var( $wpdb->prepare( $total_items_query, $count_params ) );
+        } else {
+             // Run unprepared query only if there are truly no parameters to substitute
+             $total_items = $wpdb->get_var( $total_items_query );
+        }
 
         // Add ordering and pagination to the main query string
         // Make sure orderby and order are sanitized (they are by sanitize_key earlier)
