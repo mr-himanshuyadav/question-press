@@ -106,6 +106,7 @@ final class Plugin {
      */
     private function init_hooks() {
         // Actions
+        add_action('plugins_loaded', [$this, 'load_plugin_textdomain']); // CORRECT - Use plugins_loaded hook
         add_action('init', 'qp_start_session', 1);
         add_action('init', 'qp_ensure_cron_scheduled');
         add_action('init', 'qp_init_plugin');
@@ -209,6 +210,17 @@ final class Plugin {
         // Actions to perform on WordPress init hook
         // Example: load_plugin_textdomain( 'question-press', false, dirname( QP_PLUGIN_BASENAME ) . '/languages' );
     // }
+
+    /**
+     * Load the plugin text domain for translation.
+     */
+    public function load_plugin_textdomain() {
+        load_plugin_textdomain(
+            'question-press', // Your text domain
+            false,            // Deprecated argument
+            dirname( plugin_basename( QP_PLUGIN_FILE ) ) . '/languages/' // Path to the languages folder
+        );
+    }
 
     /**
      * Cloning is forbidden.
