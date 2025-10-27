@@ -147,7 +147,7 @@ final class Plugin {
         add_action('woocommerce_save_product_variation', 'qp_save_plan_link_variable_product', 10, 2);
         add_action('woocommerce_order_status_completed', 'qp_grant_access_on_order_complete', 10, 1);
         add_action('qp_scheduled_backup_hook', 'qp_run_scheduled_backup_event');
-        add_action('admin_head', 'qp_add_entitlements_screen_options');
+        add_action('admin_head', [\QuestionPress\Admin\Views\User_Entitlements_Page::class, 'add_screen_options']);
         add_action('admin_head', 'qp_admin_head_styles_for_list_table');
         add_action('wp', 'qp_schedule_session_cleanup');
         add_action('qp_cleanup_abandoned_sessions_event', 'qp_cleanup_abandoned_sessions');

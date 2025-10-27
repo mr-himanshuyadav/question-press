@@ -1079,17 +1079,6 @@ function qp_add_page_indicator($post_states, $post)
     return $post_states;
 }
 
-/**
- * Add screen options for the Entitlements list table.
- */
-function qp_add_entitlements_screen_options() {
-    $screen = get_current_screen();
-    // Check if we are on the correct screen
-    if ($screen && $screen->id === 'question-press_page_qp-user-entitlements') {
-        QP_Entitlements_List_Table::add_screen_options();
-    }
-}
-
 // Filter to save the screen option (reuse existing function if desired, or keep separate)
 function qp_save_entitlements_screen_options($status, $option, $value) {
     if ('entitlements_per_page' === $option) {
