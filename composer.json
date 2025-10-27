@@ -16,7 +16,12 @@
     "autoload": {
         "psr-4": {
             "QuestionPress\\": "includes/"
-        }
+        },
+        "classmap": [
+            "public/",
+            "admin/",
+            "api/"
+        ]
     },
     "config": {
         "allow-plugins": {
