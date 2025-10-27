@@ -6,6 +6,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+use QuestionPress\Admin\Views\All_Questions_Page;
+
 /**
  * Handles the registration of WordPress admin menu items.
  */
@@ -22,7 +24,7 @@ class Admin_Menu {
 			'Question Press',               // Menu title
 			'manage_options',               // Capability
 			'question-press',               // Menu slug
-			'qp_all_questions_page_cb',     // Callback function (still global for now)
+			[All_Questions_Page::class, 'render'], // CHANGED CALLBACK
 			'dashicons-forms',              // Icon
 			25                              // Position
 		);
@@ -39,7 +41,7 @@ class Admin_Menu {
 			'All Questions',                // Menu title
 			'manage_options',               // Capability
 			'question-press',               // Menu slug (same as parent for default page)
-			'qp_all_questions_page_cb'      // Callback function (still global)
+			[All_Questions_Page::class, 'render'] // CHANGED CALLBACK
 		);
 		add_submenu_page(
 			'question-press',
