@@ -15,6 +15,25 @@ use \QP_Questions_List_Table;
 class All_Questions_Page {
 
 	/**
+     * Adds screen options for the "All Questions" list table.
+     * Hooked into the load action for the page.
+     * Replaces the old qp_add_screen_options function.
+     */
+    public static function add_screen_options() {
+        $option = 'per_page';
+        $args   = [
+            'label'   => 'Questions per page',
+            'default' => 20,
+            'option'  => 'qp_questions_per_page' // Matches the option name used elsewhere
+        ];
+        add_screen_option( $option, $args );
+
+        // Instantiate the table here to ensure columns are registered for screen options.
+        // We still need the global class name until the List Table itself is refactored.
+        new \QP_Questions_List_Table();
+    }
+
+	/**
 	 * Renders the main "All Questions" admin page using a template.
 	 * This method replaces the old qp_all_questions_page_cb function.
 	 */

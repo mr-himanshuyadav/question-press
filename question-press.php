@@ -1079,18 +1079,6 @@ function qp_add_page_indicator($post_states, $post)
     return $post_states;
 }
 
-function qp_add_screen_options()
-{
-    $option = 'per_page';
-    $args = [
-        'label'   => 'Questions per page',
-        'default' => 20,
-        'option'  => 'qp_questions_per_page'
-    ];
-    add_screen_option($option, $args);
-    new QP_Questions_List_Table(); // Instantiate table to register columns
-}
-
 /**
  * Add screen options for the Entitlements list table.
  */

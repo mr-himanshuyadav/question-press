@@ -34,9 +34,7 @@ class Admin_Menu {
 		);
 
 		// Screen Options for All questions page
-		// Note: The callback 'qp_add_screen_options' is still global for now.
-		// We hook it here, associated with the specific page load hook.
-		add_action( "load-{$hook}", 'qp_add_screen_options' );
+        add_action( "load-{$hook}", [All_Questions_Page::class, 'add_screen_options'] ); // CHANGED CALLBACK
 
 		// Add submenu pages under the main "Question Press" menu
 		add_submenu_page(
