@@ -9,7 +9,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 use QuestionPress\Admin\Views\All_Questions_Page;
 use QuestionPress\Admin\Views\Organization_Page;
 use QuestionPress\Admin\Views\Tools_Page;
-use QuestionPress\Admin\Views\Merge_Terms_Page;  
+use QuestionPress\Admin\Views\Merge_Terms_Page;
+use QuestionPress\Admin\Views\User_Entitlements_Page;
 
 /**
  * Handles the registration of WordPress admin menu items.
@@ -84,7 +85,7 @@ class Admin_Menu {
 			'User Entitlements',
 			'manage_options',
 			'qp-user-entitlements',
-			'qp_render_user_entitlements_page' // Callback function (still global)
+			[User_Entitlements_Page::class, 'render']
 		);
 		add_submenu_page(
 			'question-press',
