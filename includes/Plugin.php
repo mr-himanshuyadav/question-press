@@ -205,8 +205,8 @@ final class Plugin {
         // Filters
         add_filter('query_vars', 'qp_register_query_vars');
         add_filter('display_post_states', 'qp_add_page_indicator', 10, 2);
-        add_filter('set-screen-option', 'qp_save_entitlements_screen_options', 10, 3);
-        add_filter('set-screen-option', 'qp_save_screen_options', 10, 3);
+        add_filter('set-screen-option', [\QuestionPress\Admin\Views\User_Entitlements_Page::class, 'save_screen_options'], 10, 3);
+        add_filter('set-screen-option', [\QuestionPress\Admin\Views\All_Questions_Page::class, 'save_screen_options'], 10, 3);
 
         // Activation hook is registered in main file, but flush is needed here too
         // Ensure QP_PLUGIN_FILE is available or replace with __FILE__ relative path if needed

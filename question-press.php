@@ -1079,23 +1079,6 @@ function qp_add_page_indicator($post_states, $post)
     return $post_states;
 }
 
-// Filter to save the screen option (reuse existing function if desired, or keep separate)
-function qp_save_entitlements_screen_options($status, $option, $value) {
-    if ('entitlements_per_page' === $option) {
-        return $value;
-    }
-    // Important: Return the original status for other options
-    return $status;
-}
-
-function qp_save_screen_options($status, $option, $value)
-{
-    if ('qp_questions_per_page' === $option) {
-        return $value;
-    }
-    return $status;
-}
-
 /**
  * Helper function to retrieve the existing course structure for the editor.
  *

@@ -34,6 +34,24 @@ class All_Questions_Page {
     }
 
 	/**
+     * Saves the screen options for the "All Questions" list table.
+     * Hooked into the 'set-screen-option' filter.
+     * Replaces the old qp_save_screen_options function.
+     *
+     * @param mixed  $status Screen option value. Default false to skip.
+     * @param string $option The option name.
+     * @param mixed  $value  The new value.
+     * @return mixed The validated value to save, or false to skip saving.
+     */
+    public static function save_screen_options( $status, $option, $value ) {
+        if ( 'qp_questions_per_page' === $option ) {
+            return $value; // Return the value to save it
+        }
+        // Important: Return the original status for other options
+        return $status;
+    }
+
+	/**
 	 * Renders the main "All Questions" admin page using a template.
 	 * This method replaces the old qp_all_questions_page_cb function.
 	 */

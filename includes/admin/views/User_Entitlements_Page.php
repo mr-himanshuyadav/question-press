@@ -31,6 +31,25 @@ class User_Entitlements_Page {
     }
 
 	/**
+     * Saves the screen options for the "User Entitlements" list table.
+     * Hooked into the 'set-screen-option' filter.
+     * Replaces the old qp_save_entitlements_screen_options function.
+     *
+     * @param mixed  $status Screen option value. Default false to skip.
+     * @param string $option The option name.
+     * @param mixed  $value  The new value.
+     * @return mixed The validated value to save, or false to skip saving.
+     */
+    public static function save_screen_options( $status, $option, $value ) {
+        // Check if the option being saved is the one for entitlements per page
+        if ( 'entitlements_per_page' === $option ) {
+            return $value; // Return the value to save it
+        }
+        // Important: Return the original status for other options
+        return $status;
+    }
+
+	/**
 	 * Renders the "User Entitlements & Scope" admin page.
 	 * Replaces the old qp_render_user_entitlements_page function.
 	 */
