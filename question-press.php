@@ -67,24 +67,6 @@ function qp_start_session() {
     }
 }
 
-// define('QP_PLUGIN_DIR', plugin_dir_path(QP_PLUGIN_FILE));
-// define('QP_PLUGIN_URL', plugin_dir_url(QP_PLUGIN_FILE));
-
-require_once QP_PLUGIN_PATH . 'admin/class-qp-subjects-page.php';
-require_once QP_PLUGIN_PATH . 'admin/class-qp-labels-page.php';
-require_once QP_PLUGIN_PATH . 'admin/class-qp-exams-page.php';
-require_once QP_PLUGIN_PATH . 'admin/class-qp-sources-page.php';
-require_once QP_PLUGIN_PATH . 'admin/class-qp-import-page.php';
-require_once QP_PLUGIN_PATH . 'admin/class-qp-importer.php';
-require_once QP_PLUGIN_PATH . 'admin/class-qp-export-page.php';
-require_once QP_PLUGIN_PATH . 'admin/class-qp-questions-list-table.php';
-require_once QP_PLUGIN_PATH . 'admin/class-qp-question-editor-page.php';
-require_once QP_PLUGIN_PATH . 'admin/class-qp-settings-page.php';
-require_once QP_PLUGIN_PATH . 'admin/class-qp-logs-reports-page.php';
-require_once QP_PLUGIN_PATH . 'admin/class-qp-backup-restore-page.php';
-require_once QP_PLUGIN_PATH . 'admin/class-qp-entitlements-list-table.php';
-require_once QP_PLUGIN_PATH . 'api/class-qp-rest-api.php'; // <-- Use QP_PLUGIN_PATH
-
 /**
  * Add meta box for Plan Details.
  */
@@ -1067,27 +1049,6 @@ function qp_save_course_structure_meta($post_id) {
     }
 
     // Note: No explicit return needed as this hooks into save_post action
-}
-
-function qp_admin_menu()
-{
-    // Add top-level menu page for "All Questions" and store the hook
-    $hook = add_menu_page('All Questions', 'Question Press', 'manage_options', 'question-press', 'qp_all_questions_page_cb', 'dashicons-forms', 25);
-
-    // Screen Options for All questions page
-    add_action("load-{$hook}", 'qp_add_screen_options');
-
-    add_submenu_page('question-press', 'All Questions', 'All Questions', 'manage_options', 'question-press', 'qp_all_questions_page_cb');
-    add_submenu_page('question-press', 'Add New', 'Add New', 'manage_options', 'qp-question-editor', ['QP_Question_Editor_Page', 'render']);
-    add_submenu_page('question-press', 'Organize', 'Organize', 'manage_options', 'qp-organization', 'qp_render_organization_page');
-    add_submenu_page('question-press', 'Tools', 'Tools', 'manage_options', 'qp-tools', 'qp_render_tools_page');
-    add_submenu_page('question-press', 'Reports', 'Reports', 'manage_options', 'qp-logs-reports', ['QP_Logs_Reports_Page', 'render']);
-    add_submenu_page('question-press', 'User Entitlements', 'User Entitlements', 'manage_options', 'qp-user-entitlements', 'qp_render_user_entitlements_page');
-    add_submenu_page('question-press', 'Settings', 'Settings', 'manage_options', 'qp-settings', ['QP_Settings_Page', 'render']);
-
-    // Hidden pages (Indirectly required)
-    add_submenu_page(null, 'Edit Question', 'Edit Question', 'manage_options', 'qp-edit-group', ['QP_Question_Editor_Page', 'render']);
-    add_submenu_page(null, 'Merge Terms', 'Merge Terms', 'manage_options', 'qp-merge-terms', 'qp_render_merge_terms_page');
 }
 
 

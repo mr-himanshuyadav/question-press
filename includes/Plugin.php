@@ -16,6 +16,7 @@ use QuestionPress\Assets;
 use QuestionPress\Post_Types;
 use QuestionPress\Taxonomies; // Just in case if migrated to native taxonomies later
 use QuestionPress\Database\DB as QP_DB;
+use QuestionPress\Admin\Admin_Menu; // ADD THIS LINE
 
 /**
  * Final QuestionPress Class.
@@ -92,9 +93,10 @@ final class Plugin {
         Post_Types::instance();
         Taxonomies::instance(); // Just in case if migrated to native taxonomies later
         // REST_API::instance(); // Assuming REST_API is a class handling registration
-        // if ( is_admin() ) {
-        //     Admin::instance();
-        // }
+        if ( is_admin() ) {
+            $this->admin_menu = new Admin_Menu();
+            // Admin::instance();
+        }
         // If WooCommerce is active
         // if ( class_exists( 'WooCommerce' ) ) {
         //    Integrations\WooCommerce::instance();
@@ -118,7 +120,10 @@ final class Plugin {
         add_action('admin_init', 'qp_handle_log_settings_forms');
         add_action('admin_init', 'qp_redirect_wp_profile_page');
         add_action('admin_post_qp_save_user_scope', 'qp_handle_save_user_scope');
-        add_action('admin_menu', 'qp_admin_menu');
+        // Register admin menus if in admin area
+        if ( is_admin() && isset($this->admin_menu) ) {
+             add_action('admin_menu', [$this->admin_menu, 'register_menus']);
+        }
         add_action('admin_menu', 'qp_add_report_count_to_menu', 99);
         add_action('add_meta_boxes_qp_plan', 'qp_add_plan_details_meta_box');
         add_action('save_post_qp_plan', 'qp_save_plan_details_meta');
