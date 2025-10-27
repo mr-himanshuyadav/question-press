@@ -109,8 +109,7 @@ final class Plugin {
         add_action('plugins_loaded', [$this, 'load_plugin_textdomain']); // CORRECT - Use plugins_loaded hook
         add_action('init', 'qp_start_session', 1);
         add_action('init', 'qp_ensure_cron_scheduled');
-        add_action('init', 'qp_init_plugin');
-        add_action('init', 'qp_public_init');
+        add_action('init', [$this, 'register_shortcodes']); // Register shortcodes via class method
         add_action('init', 'qp_add_dashboard_rewrite_rules');
         add_action('rest_api_init', ['\QP_Rest_Api', 'register_routes']);
         add_action('admin_init', 'qp_handle_form_submissions');
@@ -211,6 +210,19 @@ final class Plugin {
         // Actions to perform on WordPress init hook
         // Example: load_plugin_textdomain( 'question-press', false, dirname( QP_PLUGIN_BASENAME ) . '/languages' );
     // }
+
+    /**
+     * Register frontend shortcodes.
+     */
+    public function register_shortcodes() {
+        // Use placeholder classes for now, assuming they exist in the global namespace
+        // We will create/move these later and update namespaces.
+        // If QP_Shortcodes and QP_Dashboard are already namespaced, update the use statements at the top.
+        add_shortcode('question_press_practice', ['\QP_Shortcodes', 'render_practice_form']);
+        add_shortcode('question_press_session', ['\QP_Shortcodes', 'render_session_page']);
+        add_shortcode('question_press_review', ['\QP_Shortcodes', 'render_review_page']);
+        add_shortcode('question_press_dashboard', ['\QP_Dashboard', 'render']);
+    }
 
     /**
      * Load the plugin text domain for translation.

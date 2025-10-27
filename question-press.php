@@ -83,8 +83,6 @@ require_once QP_PLUGIN_PATH . 'admin/class-qp-settings-page.php';
 require_once QP_PLUGIN_PATH . 'admin/class-qp-logs-reports-page.php';
 require_once QP_PLUGIN_PATH . 'admin/class-qp-backup-restore-page.php';
 require_once QP_PLUGIN_PATH . 'admin/class-qp-entitlements-list-table.php';
-require_once QP_PLUGIN_PATH . 'public/class-qp-shortcodes.php';
-require_once QP_PLUGIN_PATH . 'public/class-qp-dashboard.php';
 require_once QP_PLUGIN_PATH . 'api/class-qp-rest-api.php'; // <-- Use QP_PLUGIN_PATH
 
 /**
@@ -1069,14 +1067,6 @@ function qp_save_course_structure_meta($post_id) {
     }
 
     // Note: No explicit return needed as this hooks into save_post action
-}
-
-/**
- * Initialize all plugin features that hook into WordPress.
- */
-function qp_init_plugin()
-{
-    // QP_Rest_Api::init();
 }
 
 function qp_admin_menu()
@@ -2714,20 +2704,6 @@ function qp_handle_resolve_from_editor()
     // Redirect back to the editor page with a success message
     wp_safe_redirect(admin_url('admin.php?page=qp-edit-group&group_id=' . $group_id . '&message=1'));
     exit;
-}
-
-// 
-// 
-// Public-facing hooks and AJAX handlers
-// 
-// 
-
-function qp_public_init()
-{
-    add_shortcode('question_press_practice', ['QP_Shortcodes', 'render_practice_form']);
-    add_shortcode('question_press_session', ['QP_Shortcodes', 'render_session_page']);
-    add_shortcode('question_press_review', ['QP_Shortcodes', 'render_review_page']);
-    add_shortcode('question_press_dashboard', ['QP_Dashboard', 'render']);
 }
 
 /**
