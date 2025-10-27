@@ -7,7 +7,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 use QuestionPress\Admin\Views\All_Questions_Page;
-use QuestionPress\Admin\Views\Organization_Page;    
+use QuestionPress\Admin\Views\Organization_Page;
+use QuestionPress\Admin\Views\Tools_Page;    
 
 /**
  * Handles the registration of WordPress admin menu items.
@@ -66,7 +67,7 @@ class Admin_Menu {
 			'Tools',
 			'manage_options',
 			'qp-tools',
-			'qp_render_tools_page' // Callback function (still global)
+			[Tools_Page::class, 'render']
 		);
 		add_submenu_page(
 			'question-press',

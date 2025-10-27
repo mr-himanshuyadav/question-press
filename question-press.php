@@ -1239,38 +1239,6 @@ function qp_render_merge_terms_page()
 <?php
 }
 
-function qp_render_tools_page()
-{
-    $tabs = [
-        'import' => ['label' => 'Import', 'callback' => ['QP_Import_Page', 'render']],
-        'export'   => ['label' => 'Export', 'callback' => ['QP_Export_Page', 'render']],
-        'backup_restore'   => ['label' => 'Backup & Restore', 'callback' => ['QP_Backup_Restore_Page', 'render']],
-    ];
-    $active_tab = isset($_GET['tab']) && array_key_exists($_GET['tab'], $tabs) ? $_GET['tab'] : 'import';
-?>
-    <div class="wrap">
-        <h1 class="wp-heading-inline">Tools</h1>
-        <p>Import, export, and manage your Question Press data.</p>
-        <hr class="wp-header-end">
-
-        <nav class="nav-tab-wrapper wp-clearfix" aria-label="Secondary menu">
-            <?php
-            foreach ($tabs as $tab_id => $tab_data) {
-                $class = ($tab_id === $active_tab) ? ' nav-tab-active' : '';
-                echo '<a href="?page=qp-tools&tab=' . esc_attr($tab_id) . '" class="nav-tab' . esc_attr($class) . '">' . esc_html($tab_data['label']) . '</a>';
-            }
-            ?>
-        </nav>
-
-        <div class="tab-content" style="margin-top: 1.5rem;">
-            <?php
-            call_user_func($tabs[$active_tab]['callback']);
-            ?>
-        </div>
-    </div>
-<?php
-}
-
 /**
  * Callback function to render the User Entitlements admin page.
  * NOW INCLUDES user search and scope management section.
