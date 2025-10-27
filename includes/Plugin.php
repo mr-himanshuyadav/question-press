@@ -112,6 +112,7 @@ final class Plugin {
         add_action('init', 'qp_init_plugin');
         add_action('init', 'qp_public_init');
         add_action('init', 'qp_add_dashboard_rewrite_rules');
+        add_action('rest_api_init', ['\QP_Rest_Api', 'register_routes']);
         add_action('admin_init', 'qp_handle_form_submissions');
         add_action('admin_init', 'qp_handle_report_actions');
         add_action('admin_init', 'qp_handle_resolve_from_editor');

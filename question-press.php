@@ -34,8 +34,8 @@ if ( ! defined( 'QP_PLUGIN_FILE' ) ) {
 
 // --- NEW: Use statements for namespaced classes we will create ---
 use QuestionPress\Plugin;
-use QuestionPress\Activator;
-use QuestionPress\Deactivator;
+use QuestionPress\Activator; // (Keep commented for now)
+use QuestionPress\Deactivator; // (Keep commented for now)
 use QuestionPress\Database\Questions_DB;
 use QuestionPress\Database\Terms_DB;
 
@@ -66,6 +66,26 @@ function qp_start_session() {
         session_start();
     }
 }
+
+// define('QP_PLUGIN_DIR', plugin_dir_path(QP_PLUGIN_FILE));
+// define('QP_PLUGIN_URL', plugin_dir_url(QP_PLUGIN_FILE));
+
+require_once QP_PLUGIN_PATH . 'admin/class-qp-subjects-page.php';
+require_once QP_PLUGIN_PATH . 'admin/class-qp-labels-page.php';
+require_once QP_PLUGIN_PATH . 'admin/class-qp-exams-page.php';
+require_once QP_PLUGIN_PATH . 'admin/class-qp-sources-page.php';
+require_once QP_PLUGIN_PATH . 'admin/class-qp-import-page.php';
+require_once QP_PLUGIN_PATH . 'admin/class-qp-importer.php';
+require_once QP_PLUGIN_PATH . 'admin/class-qp-export-page.php';
+require_once QP_PLUGIN_PATH . 'admin/class-qp-questions-list-table.php';
+require_once QP_PLUGIN_PATH . 'admin/class-qp-question-editor-page.php';
+require_once QP_PLUGIN_PATH . 'admin/class-qp-settings-page.php';
+require_once QP_PLUGIN_PATH . 'admin/class-qp-logs-reports-page.php';
+require_once QP_PLUGIN_PATH . 'admin/class-qp-backup-restore-page.php';
+require_once QP_PLUGIN_PATH . 'admin/class-qp-entitlements-list-table.php';
+require_once QP_PLUGIN_PATH . 'public/class-qp-shortcodes.php';
+require_once QP_PLUGIN_PATH . 'public/class-qp-dashboard.php';
+require_once QP_PLUGIN_PATH . 'api/class-qp-rest-api.php'; // <-- Use QP_PLUGIN_PATH
 
 /**
  * Add meta box for Plan Details.
@@ -1056,7 +1076,7 @@ function qp_save_course_structure_meta($post_id) {
  */
 function qp_init_plugin()
 {
-    QP_Rest_Api::init();
+    // QP_Rest_Api::init();
 }
 
 function qp_admin_menu()
