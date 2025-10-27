@@ -1051,34 +1051,6 @@ function qp_save_course_structure_meta($post_id) {
     // Note: No explicit return needed as this hooks into save_post action
 }
 
-
-
-/**
- * Adds a "(Question Press)" indicator to the plugin's pages in the admin list.
- *
- * @param array   $post_states An array of post states.
- * @param WP_Post $post        The current post object.
- * @return array  The modified array of post states.
- */
-function qp_add_page_indicator($post_states, $post)
-{
-    // Get the saved IDs of our plugin's pages
-    $qp_settings = get_option('qp_settings', []);
-    $qp_page_ids = [
-        $qp_settings['practice_page'] ?? 0,
-        $qp_settings['dashboard_page'] ?? 0,
-        $qp_settings['session_page'] ?? 0,
-        $qp_settings['review_page'] ?? 0,
-    ];
-
-    // Check if the current page's ID is one of our plugin's pages
-    if (in_array($post->ID, $qp_page_ids)) {
-        $post_states['question_press_page'] = 'Question Press';
-    }
-
-    return $post_states;
-}
-
 /**
  * Helper function to retrieve the existing course structure for the editor.
  *

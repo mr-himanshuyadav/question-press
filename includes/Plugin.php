@@ -16,7 +16,8 @@ use QuestionPress\Assets;
 use QuestionPress\Post_Types;
 use QuestionPress\Taxonomies; // Just in case if migrated to native taxonomies later
 use QuestionPress\Database\DB as QP_DB;
-use QuestionPress\Admin\Admin_Menu; // ADD THIS LINE
+use QuestionPress\Admin\Admin_Menu;
+use QuestionPress\Admin\Admin_Utils; // ADD THIS LINE
 
 /**
  * Final QuestionPress Class.
@@ -204,7 +205,9 @@ final class Plugin {
 
         // Filters
         add_filter('query_vars', 'qp_register_query_vars');
-        add_filter('display_post_states', 'qp_add_page_indicator', 10, 2);
+        if ( is_admin() ) {
+            add_filter('display_post_states', [Admin_Utils::class, 'add_page_indicator'], 10, 2); // CHANGED CALLBACK
+        }
         add_filter('set-screen-option', [\QuestionPress\Admin\Views\User_Entitlements_Page::class, 'save_screen_options'], 10, 3);
         add_filter('set-screen-option', [\QuestionPress\Admin\Views\All_Questions_Page::class, 'save_screen_options'], 10, 3);
 
