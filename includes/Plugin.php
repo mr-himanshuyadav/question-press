@@ -17,7 +17,8 @@ use QuestionPress\Post_Types;
 use QuestionPress\Taxonomies; // Just in case if migrated to native taxonomies later
 use QuestionPress\Database\DB as QP_DB;
 use QuestionPress\Admin\Admin_Menu;
-use QuestionPress\Admin\Admin_Utils; // ADD THIS LINE
+use QuestionPress\Admin\Admin_Utils;
+use QuestionPress\Admin\Meta_Boxes;
 
 /**
  * Final QuestionPress Class.
@@ -132,9 +133,13 @@ final class Plugin {
         if ( is_admin() && isset($this->admin_menu) ) {
              add_action('admin_menu', [$this->admin_menu, 'register_menus']);
         }
+
+        // Register Meta Boxes (only in admin)
         add_action('admin_menu', 'qp_add_report_count_to_menu', 99);
-        add_action('add_meta_boxes_qp_plan', 'qp_add_plan_details_meta_box');
-        add_action('save_post_qp_plan', 'qp_save_plan_details_meta');
+        if ( is_admin() ) {
+            add_action('add_meta_boxes_qp_plan', [Meta_Boxes::class, 'add_plan_details']);
+            add_action('save_post_qp_plan', [Meta_Boxes::class, 'save_plan_details']);
+        }
         add_action('add_meta_boxes_qp_course', 'qp_add_course_access_meta_box');
         add_action('save_post_qp_course', 'qp_save_course_access_meta', 30, 1);
         add_action('save_post_qp_course', 'qp_sync_course_plan', 40, 1);
@@ -149,7 +154,7 @@ final class Plugin {
         add_action('woocommerce_order_status_completed', 'qp_grant_access_on_order_complete', 10, 1);
         add_action('qp_scheduled_backup_hook', 'qp_run_scheduled_backup_event');
         add_action('admin_head', [\QuestionPress\Admin\Views\User_Entitlements_Page::class, 'add_screen_options']);
-        add_action('admin_head', 'qp_admin_head_styles_for_list_table');
+        add_action('admin_head', [Assets::instance(), 'enqueue_dynamic_admin_styles']); // CHANGED CALLBACK
         add_action('wp', 'qp_schedule_session_cleanup');
         add_action('qp_cleanup_abandoned_sessions_event', 'qp_cleanup_abandoned_sessions');
         add_action('before_delete_post', 'qp_cleanup_course_data_on_delete', 10, 1);

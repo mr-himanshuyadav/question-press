@@ -305,6 +305,63 @@ class Assets {
     }
 
     /**
+     * Enqueues dynamic styles in the admin head, e.g., for list tables.
+     * Hooked to 'admin_head'.
+     * Replaces the old qp_admin_head_styles_for_list_table function.
+     */
+    public function enqueue_dynamic_admin_styles() {
+        $screen = get_current_screen();
+        // Check if we are on the 'All Questions' list table page
+        if ($screen && $screen->id === 'toplevel_page_question-press') {
+            // Original function content starts here
+            ?>
+            <style type="text/css">
+                .qp-multi-select-dropdown {
+                    position: relative;
+                    display: inline-block;
+                    vertical-align: middle;
+                }
+
+                .qp-multi-select-list {
+                    display: none;
+                    position: absolute;
+                    background-color: white;
+                    border: 1px solid #ccc;
+                    z-index: 1000;
+                    padding: 10px;
+                    max-height: 250px;
+                    overflow-y: auto;
+                }
+
+                .qp-multi-select-list label {
+                    display: block;
+                    white-space: nowrap;
+                    padding: 5px;
+                }
+
+                .qp-multi-select-list label:hover {
+                    background-color: #f1f1f1;
+                }
+
+                .qp-organization-table .column-name {
+                    width: 35%;
+                }
+
+                .qp-organization-table .column-description {
+                    width: 50%;
+                }
+
+                .qp-organization-table .column-count {
+                    width: 15%;
+                    text-align: center;
+                }
+            </style>
+            <?php
+            // Original function content ends here
+        }
+    }
+
+    /**
      * Cloning is forbidden.
      */
     public function __clone() {
