@@ -7,6 +7,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 use QuestionPress\Admin\Views\All_Questions_Page;
+use QuestionPress\Admin\Views\Organization_Page;    
 
 /**
  * Handles the registration of WordPress admin menu items.
@@ -57,7 +58,7 @@ class Admin_Menu {
 			'Organize',
 			'manage_options',
 			'qp-organization',
-			'qp_render_organization_page' // Callback function (still global)
+			[Organization_Page::class, 'render']
 		);
 		add_submenu_page(
 			'question-press',

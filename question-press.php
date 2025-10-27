@@ -1079,32 +1079,6 @@ function qp_add_page_indicator($post_states, $post)
     return $post_states;
 }
 
-function qp_render_organization_page()
-{
-    $tabs = [
-        'subjects' => ['label' => 'Subjects', 'callback' => ['QP_Subjects_Page', 'render']],
-        'labels'   => ['label' => 'Labels', 'callback' => ['QP_Labels_Page', 'render']],
-        'exams'    => ['label' => 'Exams', 'callback' => ['QP_Exams_Page', 'render']],
-        'sources'  => ['label' => 'Sources', 'callback' => ['QP_Sources_Page', 'render']],
-    ];
-    $active_tab = isset($_GET['tab']) && array_key_exists($_GET['tab'], $tabs) ? $_GET['tab'] : 'subjects';
-
-    // --- Capture the output of the active tab's render function ---
-    ob_start();
-    call_user_func($tabs[$active_tab]['callback']);
-    $tab_content_html = ob_get_clean();
-    // --- End capturing ---
-    // Prepare arguments for the wrapper template
-    $args = [
-        'tabs'             => $tabs,
-        'active_tab'       => $active_tab,
-        'tab_content_html' => $tab_content_html,
-    ];
-
-    // Load and echo the wrapper template
-    echo qp_get_template_html( 'organization-page-wrapper', 'admin', $args );
-}
-
 function qp_render_merge_terms_page()
 {
     global $wpdb;
