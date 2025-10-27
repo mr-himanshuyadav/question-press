@@ -8,7 +8,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 use QuestionPress\Admin\Views\All_Questions_Page;
 use QuestionPress\Admin\Views\Organization_Page;
-use QuestionPress\Admin\Views\Tools_Page;    
+use QuestionPress\Admin\Views\Tools_Page;
+use QuestionPress\Admin\Views\Merge_Terms_Page;  
 
 /**
  * Handles the registration of WordPress admin menu items.
@@ -109,7 +110,7 @@ class Admin_Menu {
 			'Merge Terms',
 			'manage_options',
 			'qp-merge-terms',
-			'qp_render_merge_terms_page' // Callback
+			[Merge_Terms_Page::class, 'render']
 		);
 	}
 }
