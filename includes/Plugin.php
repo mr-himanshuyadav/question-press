@@ -39,6 +39,13 @@ final class Plugin {
     private static $_instance = null;
 
     /**
+     * Instance of the Admin Menu handler.
+     *
+     * @var Admin_Menu|null
+     */
+    private $admin_menu = null;
+
+    /**
      * Main Plugin Instance.
      *
      * Ensures only one instance of the plugin class is loaded or can be loaded.
