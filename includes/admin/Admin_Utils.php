@@ -42,4 +42,27 @@ class Admin_Utils {
 		return $post_states;
 	}
 
+	/**
+	 * Sets a session-based admin notice.
+	 *
+	 * @param string $message The message to display.
+	 * @param string $type    The notice type (e.g., 'updated', 'error', 'success', 'info').
+	 */
+	public static function set_message( $message, $type ) {
+		if ( session_status() === PHP_SESSION_ACTIVE ) {
+			$_SESSION['qp_admin_message'] = $message;
+			$_SESSION['qp_admin_message_type'] = $type;
+		}
+	}
+
+	/**
+	 * Redirects to a specific admin page tab.
+	 *
+	 * @param string $tab The slug of the tab to redirect to.
+	 */
+	public static function redirect_to_tab( $tab ) {
+		wp_safe_redirect( admin_url( 'admin.php?page=qp-organization&tab=' . $tab ) );
+		exit;
+	}
+
 } // End class Admin_Utils

@@ -34,7 +34,7 @@ class QP_Subjects_Page {
             $parent = absint($_POST['parent']);
 
             if (empty($term_name)) {
-                self::set_message('Name cannot be empty.', 'error');
+                \QuestionPress\Admin\Admin_Utils::set_message('Name cannot be empty.', 'error');
             } else {
                 $data = ['name' => $term_name, 'slug' => sanitize_title($term_name), 'parent' => $parent, 'taxonomy_id' => $source_tax_id];
                 $term_id = 0;
@@ -42,17 +42,17 @@ class QP_Subjects_Page {
                 if ($_POST['action'] === 'update_term') {
                     $term_id = absint($_POST['term_id']);
                     $wpdb->update($term_table, $data, ['term_id' => $term_id]);
-                    self::set_message('Subject/Topic updated.', 'updated');
+                    \QuestionPress\Admin\Admin_Utils::set_message('Subject/Topic updated.', 'updated');
                 } else {
                     $wpdb->insert($term_table, $data);
                     $term_id = $wpdb->insert_id;
-                    self::set_message('Subject/Topic added.', 'updated');
+                    \QuestionPress\Admin\Admin_Utils::set_message('Subject/Topic added.', 'updated');
                 }
                 if ($term_id > 0) {
                     Terms_DB::update_meta($term_id, 'description', $description);
                 }
             }
-            self::redirect_to_tab('subjects');
+            \QuestionPress\Admin\Admin_Utils::redirect_to_tab('subjects');
         }
 
         // Merge Handler
@@ -84,8 +84,8 @@ class QP_Subjects_Page {
             $wpdb->query("DELETE FROM $term_table WHERE term_id IN ($ids_placeholder)");
             $wpdb->query("DELETE FROM $meta_table WHERE term_id IN ($ids_placeholder)");
             
-            self::set_message(count($source_term_ids) . ' item(s) were successfully merged into "' . esc_html($final_name) . '".', 'updated');
-            self::redirect_to_tab('subjects');
+            \QuestionPress\Admin\Admin_Utils::set_message(count($source_term_ids) . ' item(s) were successfully merged into "' . esc_html($final_name) . '".', 'updated');
+            \QuestionPress\Admin\Admin_Utils::redirect_to_tab('subjects');
         }
 
         // Delete Handler
@@ -148,13 +148,13 @@ if (!empty($linked_exam_ids)) {
 
             if (!empty($error_messages)) {
                 $message = "This item cannot be deleted for the following reasons:<br>" . implode('<br>', $error_messages);
-                self::set_message($message, 'error');
+                \QuestionPress\Admin\Admin_Utils::set_message($message, 'error');
             } else {
                 $wpdb->delete($term_table, ['term_id' => $term_id]);
                 $wpdb->delete($meta_table, ['term_id' => $term_id]);
-                self::set_message('Subject/Topic deleted successfully.', 'updated');
+                \QuestionPress\Admin\Admin_Utils::set_message('Subject/Topic deleted successfully.', 'updated');
             }
-            self::redirect_to_tab('subjects');
+            \QuestionPress\Admin\Admin_Utils::redirect_to_tab('subjects');
         }
     }
 
@@ -206,17 +206,5 @@ if (!empty($linked_exam_ids)) {
         
         // Load and echo the template
         echo qp_get_template_html( 'organization-tab-subjects', 'admin', $args );
-    }
-
-    public static function set_message($message, $type) {
-        if (session_status() === PHP_SESSION_ACTIVE) {
-            $_SESSION['qp_admin_message'] = $message;
-            $_SESSION['qp_admin_message_type'] = $type;
-        }
-    }
-
-    public static function redirect_to_tab($tab) {
-        wp_safe_redirect(admin_url('admin.php?page=qp-organization&tab=' . $tab));
-        exit;
     }
 }
