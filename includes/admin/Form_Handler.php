@@ -60,4 +60,43 @@ class Form_Handler {
 		// --- End logic from qp_handle_report_actions() ---
 	}
 
+	/**
+     * Handles resolving all open reports for a group from the question editor page.
+     * Replaces the old qp_handle_resolve_from_editor function.
+     * Hooked to 'admin_init'.
+     */
+    public static function handle_resolve_from_editor() {
+        // --- Logic copied from qp_handle_resolve_from_editor() ---
+        if ( isset( $_POST['action'] ) && $_POST['action'] === 'resolve_all_reports' && isset( $_POST['group_id_to_resolve'] ) ) {
+            // Check nonce
+            if ( ! isset( $_POST['qp_resolve_reports_nonce'] ) || ! wp_verify_nonce( $_POST['qp_resolve_reports_nonce'], 'qp_resolve_reports_for_group_' . absint( $_POST['group_id_to_resolve'] ) ) ) {
+                wp_die( 'Security check failed.' );
+            }
+            // Check capability
+            if ( ! current_user_can( 'manage_options' ) ) {
+                wp_die( 'You do not have permission to perform this action.' );
+            }
+
+            global $wpdb;
+            $group_id      = absint( $_POST['group_id_to_resolve'] );
+            $reports_table = $wpdb->prefix . 'qp_question_reports';
+
+            // Get all question IDs in the group
+            $question_ids = $wpdb->get_col( $wpdb->prepare( "SELECT question_id FROM {$wpdb->prefix}qp_questions WHERE group_id = %d", $group_id ) );
+
+            if ( ! empty( $question_ids ) ) {
+                $ids_placeholder = implode( ',', $question_ids );
+                // Only update 'open' reports
+                $wpdb->query( "UPDATE $reports_table SET status = 'resolved' WHERE question_id IN ($ids_placeholder) AND status = 'open'" );
+            }
+
+            // Redirect back to the editor
+            $redirect_url = admin_url( 'admin.php?page=qp-edit-group&group_id=' . $group_id );
+            $redirect_url = add_query_arg( ['message' => 'reports_resolved'], $redirect_url );
+            wp_safe_redirect( $redirect_url );
+            exit;
+        }
+        // --- End logic from qp_handle_resolve_from_editor() ---
+    }
+
 }

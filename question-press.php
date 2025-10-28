@@ -1323,33 +1323,6 @@ function qp_handle_report_actions()
 }
 
 /**
- * Handles resolving all open reports for a group from the question editor page.
- */
-function qp_handle_resolve_from_editor()
-{
-    if (!isset($_GET['page']) || $_GET['page'] !== 'qp-edit-group' || !isset($_GET['action']) || $_GET['action'] !== 'resolve_group_reports') {
-        return;
-    }
-
-    $group_id = isset($_GET['group_id']) ? absint($_GET['group_id']) : 0;
-    if (!$group_id) return;
-
-    check_admin_referer('qp_resolve_group_reports_' . $group_id);
-
-    global $wpdb;
-    $questions_in_group_ids = $wpdb->get_col($wpdb->prepare("SELECT question_id FROM {$wpdb->prefix}qp_questions WHERE group_id = %d", $group_id));
-
-    if (!empty($questions_in_group_ids)) {
-        $ids_placeholder = implode(',', $questions_in_group_ids);
-        $wpdb->query("UPDATE {$wpdb->prefix}qp_question_reports SET status = 'resolved' WHERE question_id IN ({$ids_placeholder}) AND status = 'open'");
-    }
-
-    // Redirect back to the editor page with a success message
-    wp_safe_redirect(admin_url('admin.php?page=qp-edit-group&group_id=' . $group_id . '&message=1'));
-    exit;
-}
-
-/**
  * Register custom query variables for dashboard routing.
  *
  * @param array $vars Existing query variables.
@@ -2260,34 +2233,5 @@ function qp_recalculate_course_progress_on_save($post_id) {
             ['%d', '%s', '%s'], // Data formats
             ['%d', '%d']  // Where formats
         );
-    }
-}
-
-
-// Profile Management
-
-/**
- * Redirects non-admin users trying to access the default WordPress profile page
- * to the frontend Question Press dashboard profile tab.
- */
-function qp_redirect_wp_profile_page() {
-    // Check if we are trying to access the profile page and it's not an AJAX request
-    if (is_admin() && !defined('DOING_AJAX') && $GLOBALS['pagenow'] === 'profile.php') {
-        // Check if the current user DOES NOT have the 'manage_options' capability (adjust if needed)
-        if (!current_user_can('manage_options')) {
-            // Get the URL for the frontend dashboard profile tab
-            $options = get_option('qp_settings');
-            $dashboard_page_id = isset($options['dashboard_page']) ? absint($options['dashboard_page']) : 0;
-            $profile_url = home_url('/'); // Default fallback
-
-            if ($dashboard_page_id > 0) {
-                $base_dashboard_url = trailingslashit(get_permalink($dashboard_page_id));
-                $profile_url = $base_dashboard_url . 'profile/'; // Construct the profile tab URL
-            }
-
-            // Redirect the user
-            wp_redirect($profile_url);
-            exit; // Stop further execution
-        }
     }
 }

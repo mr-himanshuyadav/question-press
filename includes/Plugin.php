@@ -129,9 +129,9 @@ final class Plugin {
         add_action('admin_init', ['\QP_Exams_Page', 'handle_forms']);
         add_action('admin_init', ['\QP_Sources_Page', 'handle_forms']);
         add_action('admin_init', [Form_Handler::class, 'handle_report_actions']);
-        add_action('admin_init', 'qp_handle_resolve_from_editor');
+        add_action('admin_init', [Form_Handler::class, 'handle_resolve_from_editor']);
         add_action('admin_init', 'qp_handle_log_settings_forms');
-        add_action('admin_init', 'qp_redirect_wp_profile_page');
+        add_action('admin_init', [Admin_Utils::class, 'redirect_wp_profile_page']);
         add_action('admin_post_qp_save_user_scope', [\QuestionPress\Admin\Views\User_Entitlements_Page::class, 'handle_save_scope']); // CHANGED CALLBACK
         // Register admin menus if in admin area
         if ( is_admin() && isset($this->admin_menu) ) {

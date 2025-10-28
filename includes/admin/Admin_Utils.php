@@ -43,6 +43,37 @@ class Admin_Utils {
 	}
 
 	/**
+     * Redirects non-admin users trying to access the default WordPress profile page
+     * (profile.php or user-edit.php) to the frontend dashboard's profile tab.
+     * Replaces the old qp_redirect_wp_profile_page function.
+     * Hooked to 'admin_init'.
+     */
+    public static function redirect_wp_profile_page() {
+        // --- Logic copied from qp_redirect_wp_profile_page() ---
+        global $pagenow;
+        // Check if we're on the profile.php or user-edit.php page
+        if ( $pagenow === 'profile.php' || $pagenow === 'user-edit.php' ) {
+            // Check if the user is NOT an administrator (or can't manage_options)
+            if ( ! current_user_can( 'manage_options' ) ) {
+                // Get the dashboard page ID from settings
+                $qp_settings = get_option( 'qp_settings', [] );
+                $dashboard_page_id = isset( $qp_settings['dashboard_page'] ) ? absint( $qp_settings['dashboard_page'] ) : 0;
+
+                if ( $dashboard_page_id > 0 ) {
+                    $dashboard_url = get_permalink( $dashboard_page_id );
+                    if ( $dashboard_url ) {
+                        // Append the profile tab query var
+                        $profile_url = add_query_arg( 'qp_tab', 'profile', $dashboard_url );
+                        wp_safe_redirect( $profile_url );
+                        exit;
+                    }
+                }
+            }
+        }
+        // --- End logic from qp_redirect_wp_profile_page() ---
+    }
+
+	/**
 	 * Sets a session-based admin notice.
 	 *
 	 * @param string $message The message to display.
