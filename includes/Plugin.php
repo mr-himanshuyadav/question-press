@@ -139,9 +139,11 @@ final class Plugin {
         if ( is_admin() ) {
             add_action('add_meta_boxes_qp_plan', [Meta_Boxes::class, 'add_plan_details']);
             add_action('save_post_qp_plan', [Meta_Boxes::class, 'save_plan_details']);
+
+            // Course Access Meta Box (NEW)
+            add_action('add_meta_boxes_qp_course', [Meta_Boxes::class, 'add_course_access']); // CHANGED CALLBACK
+            add_action('save_post_qp_course', [Meta_Boxes::class, 'save_course_access'], 30, 1); // CHANGED CALLBACK
         }
-        add_action('add_meta_boxes_qp_course', 'qp_add_course_access_meta_box');
-        add_action('save_post_qp_course', 'qp_save_course_access_meta', 30, 1);
         add_action('save_post_qp_course', 'qp_sync_course_plan', 40, 1);
         add_action('save_post_qp_course', 'qp_save_course_structure_meta');
         add_action('save_post_qp_course', 'qp_recalculate_course_progress_on_save', 20, 1);
