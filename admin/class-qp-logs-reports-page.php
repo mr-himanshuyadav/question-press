@@ -112,4 +112,78 @@ class QP_Logs_Reports_Page {
         // Load and echo the template
         echo qp_get_template_html( 'reports-tab-log-settings', 'admin', $args );
     }
+
+    /**
+     * Handles form submissions for the "Log Settings" (Report Reasons) tab.
+     * Replaces the old qp_handle_log_settings_forms function.
+     * Hooked to 'admin_init'.
+     */
+    public static function handle_log_settings_forms() {
+        if (!isset($_GET['page']) || $_GET['page'] !== 'qp-logs-reports' || !isset($_GET['tab']) || $_GET['tab'] !== 'log_settings') {
+            return;
+        }
+
+        global $wpdb;
+        $term_table = $wpdb->prefix . 'qp_terms';
+
+        // Add/Update Reason
+        if (isset($_POST['action']) && ($_POST['action'] === 'add_reason' || $_POST['action'] === 'update_reason') && check_admin_referer('qp_add_edit_reason_nonce')) {
+            $reason_text = sanitize_text_field($_POST['reason_text']);
+            $is_active = isset($_POST['is_active']) ? 1 : 0;
+            $reason_type = isset($_POST['reason_type']) ? sanitize_key($_POST['reason_type']) : 'report';
+            $taxonomy_id = absint($_POST['taxonomy_id']);
+
+            $term_data = [
+                'name' => $reason_text,
+                'slug' => sanitize_title($reason_text),
+                'taxonomy_id' => $taxonomy_id,
+            ];
+
+            if ($_POST['action'] === 'update_reason') {
+                $term_id = absint($_POST['term_id']);
+                $wpdb->update($term_table, $term_data, ['term_id' => $term_id]);
+            } else {
+                $wpdb->insert($term_table, $term_data);
+                $term_id = $wpdb->insert_id;
+            }
+
+            if ($term_id) {
+                // Use the namespaced Terms_DB class
+                \QuestionPress\Database\Terms_DB::update_meta($term_id, 'is_active', $is_active);
+                \QuestionPress\Database\Terms_DB::update_meta($term_id, 'type', $reason_type);
+            }
+
+            wp_safe_redirect(admin_url('admin.php?page=qp-logs-reports&tab=log_settings&message=1'));
+            exit;
+        }
+
+        // Delete Reason
+        if (isset($_GET['action']) && $_GET['action'] === 'delete' && isset($_GET['reason_id']) && check_admin_referer('qp_delete_reason_' . absint($_GET['reason_id']))) {
+            $term_id_to_delete = absint($_GET['reason_id']);
+            $reports_table = $wpdb->prefix . 'qp_question_reports';
+
+            // Check if the reason is in use by any reports
+            // **FIX**: The original function checked 'reason_term_id'. The new table uses 'reason_term_ids' (plural, comma-separated)
+            $usage_count = $wpdb->get_var($wpdb->prepare(
+                "SELECT COUNT(*) FROM {$reports_table} WHERE FIND_IN_SET(%d, reason_term_ids)",
+                $term_id_to_delete
+            ));
+
+            if ($usage_count > 0) {
+                // If it's in use, set an error message and redirect
+                $message = sprintf('This reason cannot be deleted because it is currently used in %d report(s).', $usage_count);
+                // **FIX**: Use Admin_Utils for message
+                \QuestionPress\Admin\Admin_Utils::set_message($message, 'error');
+            } else {
+                // If not in use, proceed with deletion
+                $wpdb->delete($wpdb->prefix . 'qp_term_meta', ['term_id' => $term_id_to_delete]);
+                $wpdb->delete($term_table, ['term_id' => $term_id_to_delete]);
+                // **FIX**: Use Admin_Utils for message
+                \QuestionPress\Admin\Admin_Utils::set_message('Reason deleted successfully.', 'updated');
+            }
+
+            wp_safe_redirect(admin_url('admin.php?page=qp-logs-reports&tab=log_settings'));
+            exit;
+        }
+    }
 }

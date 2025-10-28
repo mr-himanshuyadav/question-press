@@ -66,10 +66,11 @@ class Form_Handler {
      * Hooked to 'admin_init'.
      */
     public static function handle_resolve_from_editor() {
-        // --- Logic copied from qp_handle_resolve_from_editor() ---
-        if ( isset( $_POST['action'] ) && $_POST['action'] === 'resolve_all_reports' && isset( $_POST['group_id_to_resolve'] ) ) {
+        if ( isset( $_GET['action'] ) && $_GET['action'] === 'resolve_group_reports' && isset( $_GET['group_id'] ) ) {
+            $group_id = absint( $_GET['group_id'] );
+
             // Check nonce
-            if ( ! isset( $_POST['qp_resolve_reports_nonce'] ) || ! wp_verify_nonce( $_POST['qp_resolve_reports_nonce'], 'qp_resolve_reports_for_group_' . absint( $_POST['group_id_to_resolve'] ) ) ) {
+            if ( ! isset( $_GET['_wpnonce'] ) || ! wp_verify_nonce( $_GET['_wpnonce'], 'qp_resolve_group_reports_' . $group_id ) ) {
                 wp_die( 'Security check failed.' );
             }
             // Check capability
@@ -78,7 +79,6 @@ class Form_Handler {
             }
 
             global $wpdb;
-            $group_id      = absint( $_POST['group_id_to_resolve'] );
             $reports_table = $wpdb->prefix . 'qp_question_reports';
 
             // Get all question IDs in the group
@@ -92,11 +92,11 @@ class Form_Handler {
 
             // Redirect back to the editor
             $redirect_url = admin_url( 'admin.php?page=qp-edit-group&group_id=' . $group_id );
-            $redirect_url = add_query_arg( ['message' => 'reports_resolved'], $redirect_url );
+            $redirect_url = add_query_arg( ['message' => 'reports_resolved'], $redirect_url ); // Use WP's message system
             wp_safe_redirect( $redirect_url );
             exit;
         }
-        // --- End logic from qp_handle_resolve_from_editor() ---
+        // --- End corrected logic ---
     }
 
 }
