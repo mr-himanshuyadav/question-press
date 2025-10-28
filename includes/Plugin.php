@@ -128,7 +128,7 @@ final class Plugin {
         add_action('admin_init', 'qp_handle_resolve_from_editor');
         add_action('admin_init', 'qp_handle_log_settings_forms');
         add_action('admin_init', 'qp_redirect_wp_profile_page');
-        add_action('admin_post_qp_save_user_scope', 'qp_handle_save_user_scope');
+        add_action('admin_post_qp_save_user_scope', [\QuestionPress\Admin\Views\User_Entitlements_Page::class, 'handle_save_scope']); // CHANGED CALLBACK
         // Register admin menus if in admin area
         if ( is_admin() && isset($this->admin_menu) ) {
              add_action('admin_menu', [$this->admin_menu, 'register_menus']);

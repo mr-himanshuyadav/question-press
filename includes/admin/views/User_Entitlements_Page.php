@@ -73,4 +73,57 @@ class User_Entitlements_Page {
 
 	} // End render()
 
+	/**
+     * Handles saving the user's subject scope from the User Entitlements page.
+     * Hooked to 'admin_post_qp_save_user_scope'.
+     * Replaces the old qp_handle_save_user_scope function.
+     */
+    public static function handle_save_scope() {
+        // 1. Check Nonce (copied from original function)
+        if ( ! isset( $_POST['_qp_scope_nonce'] ) || ! wp_verify_nonce( $_POST['_qp_scope_nonce'], 'qp_save_user_scope_nonce' ) ) {
+            wp_die( 'Security check failed. Please try again.' );
+        }
+
+        // 2. Check Capability (copied from original function)
+        if ( ! current_user_can( 'manage_options' ) ) { // Or a more specific capability if you have one
+            wp_die( 'You do not have permission to perform this action.' );
+        }
+
+        // 3. Get and Sanitize Data (copied from original function)
+        $user_id_to_update = isset( $_POST['user_id_to_update'] ) ? absint( $_POST['user_id_to_update'] ) : 0;
+        if ( $user_id_to_update === 0 ) {
+            wp_die( 'Invalid User ID. Please go back and try again.' );
+        }
+
+        // Sanitize allowed exams
+        $allowed_exams = [];
+        if ( isset( $_POST['allowed_exams'] ) && is_array( $_POST['allowed_exams'] ) ) {
+            $allowed_exams = array_map( 'absint', $_POST['allowed_exams'] );
+        }
+
+        // Sanitize allowed subjects
+        $allowed_subjects = [];
+        if ( isset( $_POST['allowed_subjects'] ) && is_array( $_POST['allowed_subjects'] ) ) {
+            $allowed_subjects = array_map( 'absint', $_POST['allowed_subjects'] );
+        }
+
+        // 4. Update Usermeta (copied from original function)
+        // Note: Storing as JSON-encoded strings
+        update_user_meta( $user_id_to_update, '_qp_allowed_exam_term_ids', wp_json_encode( $allowed_exams ) );
+        update_user_meta( $user_id_to_update, '_qp_allowed_subject_term_ids', wp_json_encode( $allowed_subjects ) );
+
+        // 5. Redirect back (copied from original function)
+        $redirect_url = add_query_arg(
+            [
+                'page'      => 'qp-user-entitlements',
+                'user_id'   => $user_id_to_update,
+                'message'   => 'scope_updated', // Add a success message query arg
+            ],
+            admin_url( 'admin.php' )
+        );
+
+        wp_safe_redirect( $redirect_url );
+        exit;
+    }
+
 } // End class
