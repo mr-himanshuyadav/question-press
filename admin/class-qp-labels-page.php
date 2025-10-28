@@ -29,7 +29,7 @@ class QP_Labels_Page
             $description = sanitize_textarea_field($_POST['label_description']);
             
             if (empty($label_name) || empty($label_color)) {
-                QP_Sources_Page::set_message('Label name and color are required.', 'error');
+                self::set_message('Label name and color are required.', 'error');
             } else {
                 $term_data = [
                     'taxonomy_id' => $label_tax_id,
@@ -46,11 +46,11 @@ class QP_Labels_Page
                     if (!$is_default) {
                         $wpdb->update($term_table, $term_data, ['term_id' => $term_id]);
                     }
-                    QP_Sources_Page::set_message('Label updated.', 'updated');
+                    self::set_message('Label updated.', 'updated');
                 } else {
                     $wpdb->insert($term_table, $term_data);
                     $term_id = $wpdb->insert_id;
-                    QP_Sources_Page::set_message('Label added.', 'updated');
+                    self::set_message('Label added.', 'updated');
                 }
 
                 if ($term_id > 0) {
@@ -58,7 +58,7 @@ class QP_Labels_Page
                     Terms_DB::update_meta($term_id, 'description', $description);
                 }
             }
-            QP_Sources_Page::redirect_to_tab('labels');
+            self::redirect_to_tab('labels');
         }
 
         // Delete Handler (Code remains the same, it was already correct)
@@ -67,19 +67,19 @@ class QP_Labels_Page
             $is_default = Terms_DB::get_meta($term_id, 'is_default', true);
 
             if ($is_default) {
-                QP_Sources_Page::set_message('Default labels cannot be deleted.', 'error');
+                self::set_message('Default labels cannot be deleted.', 'error');
             } else {
                 $usage_count = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $rel_table WHERE term_id = %d AND object_type = 'question'", $term_id));
                 if ($usage_count > 0) {
                     $formatted_count = "<strong><span style='color:red;'>{$usage_count} question(s).</span></strong>";
-                    QP_Sources_Page::set_message("This label cannot be deleted because it is in use by {$formatted_count}", 'error');
+                    self::set_message("This label cannot be deleted because it is in use by {$formatted_count}", 'error');
                 } else {
                     $wpdb->delete($term_table, ['term_id' => $term_id]);
                     $wpdb->delete($meta_table, ['term_id' => $term_id]);
-                    QP_Sources_Page::set_message('Label deleted successfully.', 'updated');
+                    self::set_message('Label deleted successfully.', 'updated');
                 }
             }
-            QP_Sources_Page::redirect_to_tab('labels');
+            self::redirect_to_tab('labels');
         }
     }
 
@@ -138,5 +138,18 @@ class QP_Labels_Page
         
         // Load and echo the template
         echo qp_get_template_html( 'organization-tab-labels', 'admin', $args );
+    }
+
+    // ADD THESE TWO HELPER FUNCTIONS
+    public static function set_message($message, $type) {
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            $_SESSION['qp_admin_message'] = $message;
+            $_SESSION['qp_admin_message_type'] = $type;
+        }
+    }
+
+    public static function redirect_to_tab($tab) {
+        wp_safe_redirect(admin_url('admin.php?page=qp-organization&tab=' . $tab));
+        exit;
     }
 }

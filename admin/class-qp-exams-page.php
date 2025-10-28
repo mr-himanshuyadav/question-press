@@ -25,7 +25,7 @@ class QP_Exams_Page {
             $linked_subject_term_ids = isset($_POST['linked_subjects']) ? array_map('absint', $_POST['linked_subjects']) : [];
 
             if (empty($exam_name)) {
-                QP_Sources_Page::set_message('Exam name cannot be empty.', 'error');
+                self::set_message('Exam name cannot be empty.', 'error');
             } else {
                 $term_data = [
                     'taxonomy_id' => $exam_tax_id,
@@ -37,11 +37,11 @@ class QP_Exams_Page {
                 if ($_POST['action'] === 'update_exam') {
                     $term_id = absint($_POST['term_id']);
                     $wpdb->update($term_table, $term_data, ['term_id' => $term_id]);
-                    QP_Sources_Page::set_message('Exam updated successfully.', 'updated');
+                    self::set_message('Exam updated successfully.', 'updated');
                 } else {
                     $wpdb->insert($term_table, $term_data);
                     $term_id = $wpdb->insert_id;
-                    QP_Sources_Page::set_message('Exam added successfully.', 'updated');
+                    self::set_message('Exam added successfully.', 'updated');
                 }
 
                 if ($term_id > 0) {
@@ -59,7 +59,7 @@ class QP_Exams_Page {
                     }
                 }
             }
-            QP_Sources_Page::redirect_to_tab('exams');
+            self::redirect_to_tab('exams');
         }
 
         // Delete Handler
@@ -77,14 +77,14 @@ class QP_Exams_Page {
             
             if ($usage_count > 0) {
                 $formatted_count = "<strong><span style='color:red;'>{$usage_count} question(s).</span></strong>";
-                QP_Sources_Page::set_message("This exam cannot be deleted because it is in use by {$formatted_count}", 'error');
+                self::set_message("This exam cannot be deleted because it is in use by {$formatted_count}", 'error');
             } else {
                 // Delete the term and its relationships (like linked subjects)
                 $wpdb->delete($term_table, ['term_id' => $term_id]);
                 $wpdb->delete($rel_table, ['object_id' => $term_id, 'object_type' => 'exam_subject_link']);
-                QP_Sources_Page::set_message('Exam deleted successfully.', 'updated');
+                self::set_message('Exam deleted successfully.', 'updated');
             }
-            QP_Sources_Page::redirect_to_tab('exams');
+            self::redirect_to_tab('exams');
         }   
     }
 
@@ -154,5 +154,17 @@ class QP_Exams_Page {
         
         // Load and echo the template
         echo qp_get_template_html( 'organization-tab-exams', 'admin', $args );
+    }
+
+    public static function set_message($message, $type) {
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            $_SESSION['qp_admin_message'] = $message;
+            $_SESSION['qp_admin_message_type'] = $type;
+        }
+    }
+
+    public static function redirect_to_tab($tab) {
+        wp_safe_redirect(admin_url('admin.php?page=qp-organization&tab=' . $tab));
+        exit;
     }
 }

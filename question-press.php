@@ -631,21 +631,6 @@ function qp_migrate_taxonomy_relationships($taxonomy_name, $log_prefix)
     return ['migrated' => $migrated_count, 'deleted' => $deleted_count, 'skipped' => $skipped];
 }
 
-// FORM & ACTION HANDLERS
-function qp_handle_form_submissions()
-{
-    if (isset($_GET['page']) && $_GET['page'] === 'qp-organization') {
-        QP_Sources_Page::handle_forms();
-        QP_Subjects_Page::handle_forms();
-        QP_Labels_Page::handle_forms();
-        QP_Exams_Page::handle_forms();
-    }
-    QP_Export_Page::handle_export_submission();
-    QP_Backup_Restore_Page::handle_forms();
-    QP_Settings_Page::register_settings();
-    qp_handle_save_question_group();
-}
-
 function qp_handle_save_question_group()
 {
     if (!isset($_POST['save_group']) || !isset($_POST['_wpnonce']) || !wp_verify_nonce($_POST['_wpnonce'], 'qp_save_question_group_nonce')) {

@@ -19,6 +19,7 @@ use QuestionPress\Database\DB as QP_DB;
 use QuestionPress\Admin\Admin_Menu;
 use QuestionPress\Admin\Admin_Utils;
 use QuestionPress\Admin\Meta_Boxes;
+use QuestionPress\Admin\Form_Handler;
 
 /**
  * Final QuestionPress Class.
@@ -123,8 +124,11 @@ final class Plugin {
         add_action('init', [$this, 'register_shortcodes']); // Register shortcodes via class method
         add_action('init', 'qp_add_dashboard_rewrite_rules');
         add_action('rest_api_init', ['\QP_Rest_Api', 'register_routes']);
-        add_action('admin_init', 'qp_handle_form_submissions');
-        add_action('admin_init', 'qp_handle_report_actions');
+        add_action('admin_init', ['\QP_Subjects_Page', 'handle_forms']);
+        add_action('admin_init', ['\QP_Labels_Page', 'handle_forms']);
+        add_action('admin_init', ['\QP_Exams_Page', 'handle_forms']);
+        add_action('admin_init', ['\QP_Sources_Page', 'handle_forms']);
+        add_action('admin_init', [Form_Handler::class, 'handle_report_actions']);
         add_action('admin_init', 'qp_handle_resolve_from_editor');
         add_action('admin_init', 'qp_handle_log_settings_forms');
         add_action('admin_init', 'qp_redirect_wp_profile_page');
