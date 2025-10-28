@@ -126,37 +126,6 @@ class QP_Logs_Reports_Page {
         global $wpdb;
         $term_table = $wpdb->prefix . 'qp_terms';
 
-        // Add/Update Reason
-        if (isset($_POST['action']) && ($_POST['action'] === 'add_reason' || $_POST['action'] === 'update_reason') && check_admin_referer('qp_add_edit_reason_nonce')) {
-            $reason_text = sanitize_text_field($_POST['reason_text']);
-            $is_active = isset($_POST['is_active']) ? 1 : 0;
-            $reason_type = isset($_POST['reason_type']) ? sanitize_key($_POST['reason_type']) : 'report';
-            $taxonomy_id = absint($_POST['taxonomy_id']);
-
-            $term_data = [
-                'name' => $reason_text,
-                'slug' => sanitize_title($reason_text),
-                'taxonomy_id' => $taxonomy_id,
-            ];
-
-            if ($_POST['action'] === 'update_reason') {
-                $term_id = absint($_POST['term_id']);
-                $wpdb->update($term_table, $term_data, ['term_id' => $term_id]);
-            } else {
-                $wpdb->insert($term_table, $term_data);
-                $term_id = $wpdb->insert_id;
-            }
-
-            if ($term_id) {
-                // Use the namespaced Terms_DB class
-                \QuestionPress\Database\Terms_DB::update_meta($term_id, 'is_active', $is_active);
-                \QuestionPress\Database\Terms_DB::update_meta($term_id, 'type', $reason_type);
-            }
-
-            wp_safe_redirect(admin_url('admin.php?page=qp-logs-reports&tab=log_settings&message=1'));
-            exit;
-        }
-
         // Delete Reason
         if (isset($_GET['action']) && $_GET['action'] === 'delete' && isset($_GET['reason_id']) && check_admin_referer('qp_delete_reason_' . absint($_GET['reason_id']))) {
             $term_id_to_delete = absint($_GET['reason_id']);
@@ -185,5 +154,75 @@ class QP_Logs_Reports_Page {
             wp_safe_redirect(admin_url('admin.php?page=qp-logs-reports&tab=log_settings'));
             exit;
         }
+    }
+
+    /**
+     * NEW: Handles the 'admin_post_qp_add_report_reason' action.
+     */
+    public static function handle_add_reason() {
+        if (!isset($_POST['action']) || $_POST['action'] !== 'qp_add_report_reason' || !check_admin_referer('qp_add_edit_reason_nonce')) {
+            wp_die('Security check failed.');
+        }
+        if (!current_user_can('manage_options')) wp_die('Permission denied.');
+
+        global $wpdb;
+        $term_table = $wpdb->prefix . 'qp_terms';
+        
+        $reason_text = sanitize_text_field($_POST['reason_text']);
+        $is_active = isset($_POST['is_active']) ? 1 : 0;
+        $reason_type = isset($_POST['reason_type']) ? sanitize_key($_POST['reason_type']) : 'report';
+        $taxonomy_id = absint($_POST['taxonomy_id']);
+
+        $term_data = [
+            'name' => $reason_text,
+            'slug' => sanitize_title($reason_text),
+            'taxonomy_id' => $taxonomy_id,
+        ];
+
+        $wpdb->insert($term_table, $term_data);
+        $term_id = $wpdb->insert_id;
+
+        if ($term_id) {
+            \QuestionPress\Database\Terms_DB::update_meta($term_id, 'is_active', $is_active);
+            \QuestionPress\Database\Terms_DB::update_meta($term_id, 'type', $reason_type);
+        }
+
+        wp_safe_redirect(admin_url('admin.php?page=qp-logs-reports&tab=log_settings&message=1'));
+        exit;
+    }
+
+    /**
+     * NEW: Handles the 'admin_post_qp_update_report_reason' action.
+     */
+    public static function handle_update_reason() {
+        if (!isset($_POST['action']) || $_POST['action'] !== 'qp_update_report_reason' || !check_admin_referer('qp_add_edit_reason_nonce')) {
+            wp_die('Security check failed.');
+        }
+        if (!current_user_can('manage_options')) wp_die('Permission denied.');
+        
+        global $wpdb;
+        $term_table = $wpdb->prefix . 'qp_terms';
+
+        $reason_text = sanitize_text_field($_POST['reason_text']);
+        $is_active = isset($_POST['is_active']) ? 1 : 0;
+        $reason_type = isset($_POST['reason_type']) ? sanitize_key($_POST['reason_type']) : 'report';
+        $taxonomy_id = absint($_POST['taxonomy_id']);
+        $term_id = absint($_POST['term_id']);
+
+        $term_data = [
+            'name' => $reason_text,
+            'slug' => sanitize_title($reason_text),
+            'taxonomy_id' => $taxonomy_id,
+        ];
+
+        $wpdb->update($term_table, $term_data, ['term_id' => $term_id]);
+
+        if ($term_id) {
+            \QuestionPress\Database\Terms_DB::update_meta($term_id, 'is_active', $is_active);
+            \QuestionPress\Database\Terms_DB::update_meta($term_id, 'type', $reason_type);
+        }
+
+        wp_safe_redirect(admin_url('admin.php?page=qp-logs-reports&tab=log_settings&message=1'));
+        exit;
     }
 }

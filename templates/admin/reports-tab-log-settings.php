@@ -20,9 +20,9 @@ if ( ! defined( 'ABSPATH' ) ) {
         <div class="col-wrap">
             <div class="form-wrap">
                 <h2><?php echo $term_to_edit ? esc_html__( 'Edit Reason', 'question-press' ) : esc_html__( 'Add New Reason', 'question-press' ); ?></h2>
-                <form method="post" action="admin.php?page=qp-logs-reports&tab=log_settings">
+                <form method="post" action="<?php echo esc_url( admin_url('admin-post.php') ); ?>">
                     <?php wp_nonce_field( 'qp_add_edit_reason_nonce' ); ?>
-                    <input type="hidden" name="action" value="<?php echo $term_to_edit ? 'update_reason' : 'add_reason'; ?>">
+                    <input type="hidden" name="action" value="<?php echo $term_to_edit ? 'qp_update_report_reason' : 'qp_add_report_reason'; ?>">
                     <input type="hidden" name="taxonomy_id" value="<?php echo esc_attr( $reason_tax_id ); ?>">
                     <?php if ( $term_to_edit ): ?><input type="hidden" name="term_id" value="<?php echo esc_attr( $term_to_edit->term_id ); ?>"><?php endif; ?>
 
