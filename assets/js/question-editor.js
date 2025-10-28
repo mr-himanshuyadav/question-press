@@ -561,7 +561,7 @@ function updateSections() {
                     tinymce.triggerSave();
                 }
                 return $.ajax({
-                    url: $form.attr('action') || window.location.href,
+                    url: ajaxurl,
                     type: 'POST',
                     data: $form.serialize() + '&save_group=1', // Add the save_group flag
                     // We don't need success/error here, preConfirm handles it

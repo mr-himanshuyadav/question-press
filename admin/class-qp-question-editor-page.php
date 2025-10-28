@@ -3,6 +3,174 @@ if (!defined('ABSPATH')) exit;
 
 class QP_Question_Editor_Page
 {
+    public static function handle_save_group()
+    {
+        // wp_send_json_success(['message' => 'DEBUG: Handler was reached']);
+        // die();
+
+        // 1. Security Checks
+        if (!isset($_POST['save_group']) || !isset($_POST['_wpnonce']) || !wp_verify_nonce($_POST['_wpnonce'], 'qp_save_question_group_nonce')) {
+            wp_send_json_error(['message' => 'Security check failed.'], 403);
+        }
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(['message' => 'Permission denied.'], 403);
+        }
+
+        global $wpdb;
+        $group_id = isset($_POST['group_id']) ? absint($_POST['group_id']) : 0;
+        $is_editing = $group_id > 0;
+
+        // --- Get group-level data from the form ---
+        $direction_text = isset($_POST['direction_text']) ? stripslashes($_POST['direction_text']) : '';
+        $direction_image_id = absint($_POST['direction_image_id']);
+        $is_pyq = isset($_POST['is_pyq']) ? 1 : 0;
+        $pyq_year = isset($_POST['pyq_year']) ? sanitize_text_field($_POST['pyq_year']) : '';
+        $questions_from_form = isset($_POST['questions']) ? (array) $_POST['questions'] : [];
+
+        // 2. Validation
+        if (empty($_POST['subject_id'])) {
+            wp_send_json_error(['message' => 'A subject is required to save a group.'], 400);
+        }
+        if (empty($questions_from_form)) {
+             wp_send_json_error(['message' => 'At least one question is required to save a group.'], 400);
+        }
+
+        // --- 3. Save Group Data ---
+        $group_data = [
+            'direction_text'     => wp_kses_post($direction_text),
+            'direction_image_id' => $direction_image_id,
+            'is_pyq'             => $is_pyq,
+            'pyq_year'           => $is_pyq ? $pyq_year : null,
+        ];
+
+        if ($is_editing) {
+            \QuestionPress\Database\Questions_DB::update_group( $group_id, $group_data );
+        } else {
+            $new_group_id = \QuestionPress\Database\Questions_DB::insert_group( $group_data );
+            if ($new_group_id) {
+                $group_id = $new_group_id;
+            } else {
+                wp_send_json_error(['message' => 'Error creating question group in database.'], 500);
+            }
+        }
+
+        // --- 4. CONSOLIDATED Group-Level Term Relationship Handling ---
+        if ($group_id) {
+            $rel_table = "{$wpdb->prefix}qp_term_relationships";
+            $term_table = "{$wpdb->prefix}qp_terms";
+            $tax_table = "{$wpdb->prefix}qp_taxonomies";
+
+            $group_taxonomies_to_manage = ['subject', 'source', 'exam'];
+            $tax_ids_to_clear = [];
+            foreach ($group_taxonomies_to_manage as $tax_name) {
+                $tax_id = $wpdb->get_var($wpdb->prepare("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = %s", $tax_name));
+                if ($tax_id) $tax_ids_to_clear[] = $tax_id;
+            }
+
+            if (!empty($tax_ids_to_clear)) {
+                $tax_ids_placeholder = implode(',', $tax_ids_to_clear);
+                $wpdb->query($wpdb->prepare(
+                    "DELETE FROM {$rel_table} WHERE object_id = %d AND object_type = 'group' AND term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id IN ($tax_ids_placeholder))",
+                    $group_id
+                ));
+            }
+
+            $terms_to_apply_to_group = [];
+            if (!empty($_POST['topic_id'])) {
+                $terms_to_apply_to_group[] = absint($_POST['topic_id']);
+            } elseif (!empty($_POST['subject_id'])) {
+                $terms_to_apply_to_group[] = absint($_POST['subject_id']);
+            }
+            if (!empty($_POST['section_id'])) {
+                $terms_to_apply_to_group[] = absint($_POST['section_id']);
+            } elseif (!empty($_POST['source_id'])) {
+                $terms_to_apply_to_group[] = absint($_POST['source_id']);
+            }
+            if ($is_pyq && !empty($_POST['exam_id'])) {
+                $terms_to_apply_to_group[] = absint($_POST['exam_id']);
+            }
+
+            foreach (array_unique($terms_to_apply_to_group) as $term_id) {
+                if ($term_id > 0) {
+                    $wpdb->insert($rel_table, ['object_id' => $group_id, 'term_id' => $term_id, 'object_type' => 'group']);
+                }
+            }
+        }
+
+        // --- 5. Process Individual Questions (and their Label relationships) ---
+        $q_table = "{$wpdb->prefix}qp_questions";
+        $o_table = "{$wpdb->prefix}qp_options";
+        $existing_q_ids = $is_editing ? $wpdb->get_col($wpdb->prepare("SELECT question_id FROM $q_table WHERE group_id = %d", $group_id)) : [];
+        $submitted_q_ids = [];
+
+        foreach ($questions_from_form as $q_data) {
+            $question_text = isset($q_data['question_text']) ? stripslashes($q_data['question_text']) : '';
+            if (empty(trim($question_text))) continue;
+
+            $question_id = isset($q_data['question_id']) ? absint($q_data['question_id']) : 0;
+            $is_question_complete = !empty($q_data['correct_option_id']);
+
+            $question_db_data = [
+                'group_id' => $group_id,
+                'question_number_in_section' => isset($q_data['question_number_in_section']) ? sanitize_text_field($q_data['question_number_in_section']) : '',
+                'question_text' => wp_kses_post($question_text),
+                'question_text_hash' => md5(strtolower(trim(preg_replace('/\s+/', '', $question_text)))),
+                'status' => $is_question_complete ? 'publish' : 'draft',
+            ];
+
+            if ($question_id > 0 && in_array($question_id, $existing_q_ids)) {
+                $wpdb->update($q_table, $question_db_data, ['question_id' => $question_id]);
+            } else {
+                $wpdb->insert($q_table, $question_db_data);
+                $question_id = $wpdb->insert_id;
+            }
+            $submitted_q_ids[] = $question_id;
+
+            if ($question_id > 0) {
+                // Handle Question-Level Relationships (LABELS ONLY)
+                $label_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'label'");
+                if ($label_tax_id) {
+                    $wpdb->query($wpdb->prepare("DELETE FROM {$rel_table} WHERE object_id = %d AND object_type = 'question' AND term_id IN (SELECT term_id FROM {$term_table} WHERE taxonomy_id = %d)", $question_id, $label_tax_id));
+                }
+                $labels = isset($q_data['labels']) ? array_map('absint', $q_data['labels']) : [];
+                foreach ($labels as $label_id) {
+                    if ($label_id > 0) {
+                        $wpdb->insert($rel_table, ['object_id' => $question_id, 'term_id' => $label_id, 'object_type' => 'question']);
+                    }
+                }
+
+                $original_correct_option_id = \QuestionPress\Database\Questions_DB::get_correct_option_id($question_id);
+                $correct_option_id_set = \QuestionPress\Database\Questions_DB::save_options_for_question($question_id, $q_data);
+
+                if ($original_correct_option_id != $correct_option_id_set) {
+                    \qp_re_evaluate_question_attempts($question_id, absint($correct_option_id_set));
+                }
+            }
+        }   
+
+        // --- 6. Clean up removed questions ---
+        $questions_to_delete = array_diff($existing_q_ids, $submitted_q_ids);
+        if (!empty($questions_to_delete)) {
+            $ids_placeholder = implode(',', array_map('absint', $questions_to_delete));
+            $wpdb->query("DELETE FROM $o_table WHERE question_id IN ($ids_placeholder)");
+            $wpdb->query("DELETE FROM $rel_table WHERE object_id IN ($ids_placeholder) AND object_type = 'question'");
+            $wpdb->query("DELETE FROM $q_table WHERE question_id IN ($ids_placeholder)");
+        }
+
+        // --- 7. Final JSON Response ---
+        if ($is_editing && empty($submitted_q_ids)) {
+            \QuestionPress\Database\Questions_DB::delete_group_and_contents($group_id);
+            // Send a success response with a redirect URL to the main page
+            wp_send_json_success(['redirect_url' => admin_url('admin.php?page=question-press&message=1')]);
+        }
+
+        $redirect_url = $is_editing
+            ? admin_url('admin.php?page=qp-edit-group&group_id=' . $group_id . '&message=1')
+            : admin_url('admin.php?page=qp-edit-group&group_id=' . $group_id . '&message=2');
+
+        // Always send a JSON success response
+        wp_send_json_success(['redirect_url' => $redirect_url]);
+    }
 
     public static function render()
     {
@@ -195,6 +363,7 @@ class QP_Question_Editor_Page
             <hr class="wp-header-end">
 
             <form method="post" action="" class='qp-question-editor-form-wrapper'>
+                <input type="hidden" name="action" value="qp_save_question_group">
                 <?php wp_nonce_field('qp_save_question_group_nonce'); ?>
                 <input type="hidden" name="group_id" value="<?php echo esc_attr($group_id); ?>">
 
