@@ -27,38 +27,7 @@ class QP_Subjects_Page {
         $source_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'subject'");
         if (!$source_tax_id) return;
 
-        // Merge Handler
-        if (isset($_POST['action']) && $_POST['action'] === 'perform_merge' && check_admin_referer('qp_perform_merge_nonce')) {
-            $destination_term_id = absint($_POST['destination_term_id']);
-            $source_term_ids = array_map('absint', $_POST['source_term_ids']);
-            $final_name = sanitize_text_field($_POST['term_name']);
-            $final_parent = absint($_POST['parent']);
-            $final_description = sanitize_textarea_field($_POST['term_description']);
-
-            // Remove the destination from the list of sources to avoid deleting it
-            $source_term_ids = array_diff($source_term_ids, [$destination_term_id]);
-            $ids_placeholder = implode(',', $source_term_ids);
-
-            // Re-assign relationships from source terms to the destination term
-            $wpdb->query($wpdb->prepare(
-                "UPDATE $rel_table SET term_id = %d WHERE term_id IN ($ids_placeholder)",
-                $destination_term_id
-            ));
-            
-            // Update the destination term with the new details
-            $wpdb->update($term_table, 
-                ['name' => $final_name, 'slug' => sanitize_title($final_name), 'parent' => $final_parent], 
-                ['term_id' => $destination_term_id]
-            );
-            Terms_DB::update_meta($destination_term_id, 'description', $final_description);
-
-            // Delete the now-empty source terms and their meta
-            $wpdb->query("DELETE FROM $term_table WHERE term_id IN ($ids_placeholder)");
-            $wpdb->query("DELETE FROM $meta_table WHERE term_id IN ($ids_placeholder)");
-            
-            \QuestionPress\Admin\Admin_Utils::set_message(count($source_term_ids) . ' item(s) were successfully merged into "' . esc_html($final_name) . '".', 'updated');
-            \QuestionPress\Admin\Admin_Utils::redirect_to_tab('subjects');
-        }
+        
 
         // Delete Handler
         if (isset($_GET['action']) && $_GET['action'] === 'delete' && isset($_GET['term_id']) && check_admin_referer('qp_delete_subject_' . absint($_GET['term_id']))) {

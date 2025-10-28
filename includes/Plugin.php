@@ -139,6 +139,7 @@ final class Plugin {
         add_action('admin_post_qp_update_source_term', ['\QP_Sources_Page', 'handle_update_term']);
         add_action('admin_post_qp_add_report_reason', ['\QP_Logs_Reports_Page', 'handle_add_reason']);
         add_action('admin_post_qp_update_report_reason', ['\QP_Logs_Reports_Page', 'handle_update_reason']);
+        add_action('admin_post_qp_perform_merge', [\QuestionPress\Admin\Form_Handler::class, 'handle_perform_merge']);
         
         add_action('admin_init', [Form_Handler::class, 'handle_report_actions']);
         add_action('admin_init', [Form_Handler::class, 'handle_resolve_from_editor']);

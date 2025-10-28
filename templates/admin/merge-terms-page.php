@@ -22,9 +22,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 	<h1><?php printf( esc_html__( 'Merge %s', 'question-press' ), esc_html( $taxonomy_label ) ); ?></h1>
 	<p><?php esc_html_e( 'You are about to merge multiple items. All associated data (like questions linked via groups) will be reassigned to the final destination item.', 'question-press' ); ?></p>
 
-	<form method="post" action="<?php echo esc_url( admin_url( 'admin.php?page=qp-organization&tab=' . $taxonomy_name . 's' ) ); // Redirect back to the correct tab ?>">
-		<?php wp_nonce_field( 'qp_perform_merge_nonce' ); ?>
-		<input type="hidden" name="action" value="perform_merge">
+	<form method="post" action="<?php echo esc_url( admin_url('admin-post.php') ); ?>">
+        <?php wp_nonce_field( 'qp_perform_merge_nonce' ); ?>
+        <input type="hidden" name="action" value="qp_perform_merge">
+		<input type="hidden" name="taxonomy_name" value="<?php echo esc_attr( $taxonomy_name ); ?>">
 		<?php foreach ( $term_ids_to_merge as $term_id ) : ?>
 			<input type="hidden" name="source_term_ids[]" value="<?php echo esc_attr( $term_id ); ?>">
 		<?php endforeach; ?>
