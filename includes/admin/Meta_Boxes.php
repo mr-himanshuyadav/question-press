@@ -400,6 +400,202 @@ class Meta_Boxes {
 		}
 	}
 
-	// --- We will add Course Structure Meta Box methods here next ---
+    /**
+	 * Adds the meta box container for Course Structure.
+	 * Hooked to 'add_meta_boxes'. Note: This hooks on ALL post types.
+	 * Replaces qp_add_course_structure_meta_box().
+	 */
+	public static function add_course_structure() {
+		// Only add the box on the 'qp_course' post type screen
+		$screen = get_current_screen();
+		if ( $screen && $screen->id === 'qp_course' ) {
+			add_meta_box(
+				'qp_course_structure_meta_box', // Unique ID
+				__( 'Course Structure', 'question-press' ), // Box title
+				[ self::class, 'render_course_structure' ], // Callback function
+				'qp_course',                         // Post type
+				'normal',                            // Context
+				'high'                               // Priority
+			);
+		}
+	}
+
+	/**
+	 * Renders the HTML content for the Course Structure meta box.
+	 * Replaces qp_render_course_structure_meta_box().
+	 *
+	 * @param \WP_Post $post The post object.
+	 */
+	public static function render_course_structure( $post ) {
+		// Add a nonce field for security
+		wp_nonce_field( 'qp_save_course_structure_meta', 'qp_course_structure_nonce' );
+
+		// --- Output the HTML (copied directly from original function) ---
+		?>
+		<div id="qp-course-structure-container">
+			<p><?php esc_html_e( 'Define the sections and content items for this course below. Drag and drop to reorder.', 'question-press' ); ?></p>
+
+			<div id="qp-sections-list">
+				<?php
+				// Placeholder for loading existing sections/items later via JS
+				?>
+			</div>
+
+			<p>
+				<button type="button" id="qp-add-section-btn" class="button button-secondary">
+					<span class="dashicons dashicons-plus-alt" style="vertical-align: middle;"></span> <?php esc_html_e( 'Add Section', 'question-press' ); ?>
+				</button>
+			</p>
+		</div>
+
+		<?php // Keep styles here for now ?>
+		<style>
+			#qp-sections-list .qp-section { /* ... styles ... */ }
+            /* ... (Copy ALL styles from the original qp_render_course_structure_meta_box function here) ... */
+            border: 1px solid #ccd0d4; margin-bottom: 15px; background: #fff; border-radius: 4px;
+            .qp-section-header { padding: 10px 15px; background: #f6f7f7; border-bottom: 1px solid #ccd0d4; cursor: move; display: flex; justify-content: space-between; align-items: center; }
+            .qp-section-header h3 { margin: 0; font-size: 1.1em; display: inline-block; }
+            .qp-section-title-input { font-size: 1.1em; font-weight: bold; border: none; box-shadow: none; padding: 2px 5px; margin-left: 5px; background: transparent; }
+            .qp-section-controls button, .qp-item-controls button { margin-left: 5px; }
+            .qp-section-content { padding: 15px; }
+            .qp-items-list { margin-left: 10px; border-left: 3px solid #eef2f5; padding-left: 15px; min-height: 30px; }
+            .qp-course-item { border: 1px dashed #dcdcde; padding: 10px; margin-bottom: 10px; background: #fdfdfd; border-radius: 3px; }
+            .qp-item-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; cursor: move; padding-bottom: 5px; border-bottom: 1px solid #eee; }
+            .qp-item-title-input { font-weight: bold; border: none; box-shadow: none; padding: 2px 5px; background: transparent; flex-grow: 1; }
+            .qp-item-config { margin-top: 10px; padding-top: 10px; border-top: 1px solid #eee; }
+            .qp-config-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 10px; }
+            .qp-config-row label { display: block; font-weight: 500; margin-bottom: 3px; font-size: 0.9em; }
+            .qp-config-row select, .qp-config-row input { width: 100%; box-sizing: border-box; }
+            .qp-item-config .qp-marks-group { display: flex; gap: 10px; }
+            .qp-item-config .qp-marks-group > div { flex: 1; }
+		</style>
+		<?php
+		// --- End HTML Output ---
+	}
+
+	/**
+	 * Saves the course structure data when the 'qp_course' post type is saved.
+	 * Replaces qp_save_course_structure_meta().
+	 * Hooked into 'save_post_qp_course'.
+	 *
+	 * @param int $post_id The ID of the post being saved.
+	 */
+	public static function save_course_structure( $post_id ) {
+		// Check nonce, permissions, autosave, post type (copied from original function)
+		if (!isset($_POST['qp_course_structure_nonce']) || !wp_verify_nonce($_POST['qp_course_structure_nonce'], 'qp_save_course_structure_meta')) return $post_id;
+		if (!current_user_can('edit_post', $post_id)) return $post_id;
+		if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) return $post_id;
+		if ('qp_course' !== get_post_type($post_id)) return $post_id;
+
+		// --- Data processing logic (copied directly from original function) ---
+		global $wpdb;
+		$sections_table = $wpdb->prefix . 'qp_course_sections';
+		$items_table = $wpdb->prefix . 'qp_course_items';
+		$progress_table = $wpdb->prefix . 'qp_user_items_progress';
+
+		// 1. Fetch Existing Structure IDs
+		$existing_section_ids = $wpdb->get_col( $wpdb->prepare( "SELECT section_id FROM $sections_table WHERE course_id = %d", $post_id ) );
+		$existing_item_ids    = $wpdb->get_col( $wpdb->prepare( "SELECT item_id FROM $items_table WHERE course_id = %d", $post_id ) );
+
+		$submitted_section_ids = [];
+		$submitted_item_ids = [];
+		$processed_item_ids = [];
+
+		// 2. Loop through submitted sections and items: Update or Insert
+		if ( isset( $_POST['course_sections'] ) && is_array( $_POST['course_sections'] ) ) {
+			foreach ( $_POST['course_sections'] as $section_order => $section_data ) {
+				$section_id    = isset( $section_data['section_id'] ) ? absint( $section_data['section_id'] ) : 0;
+				$section_title = sanitize_text_field( $section_data['title'] ?? 'Untitled Section' );
+				$section_db_data = [ /* ... section data ... */
+					'course_id' => $post_id,
+					'title' => $section_title,
+					'section_order' => $section_order + 1
+				];
+
+				if ( $section_id > 0 && in_array( $section_id, $existing_section_ids ) ) {
+					// UPDATE
+					$wpdb->update( $sections_table, $section_db_data, ['section_id' => $section_id] );
+					$submitted_section_ids[] = $section_id;
+				} else {
+					// INSERT
+					$wpdb->insert( $sections_table, $section_db_data );
+					$section_id = $wpdb->insert_id;
+					if (!$section_id) continue; // Skip items on insert failure
+					$submitted_section_ids[] = $section_id;
+				}
+
+				// Process Items within this section
+				if ( $section_id && isset( $section_data['items'] ) && is_array( $section_data['items'] ) ) {
+					foreach ( $section_data['items'] as $item_order => $item_data ) {
+						$item_id      = isset( $item_data['item_id'] ) ? absint( $item_data['item_id'] ) : 0;
+						$item_title   = sanitize_text_field( $item_data['title'] ?? 'Untitled Item' );
+						$content_type = sanitize_key( $item_data['content_type'] ?? 'test_series' );
+						$config = [];
+						if ($content_type === 'test_series' && isset($item_data['config'])) {
+                            // ... (config processing logic from original function) ...
+							$raw_config = $item_data['config'];
+							$config = [
+								'time_limit'      => isset($raw_config['time_limit']) ? absint($raw_config['time_limit']) : 0,
+								'scoring_enabled' => isset($raw_config['scoring_enabled']) ? 1 : 0,
+								'marks_correct'   => isset($raw_config['marks_correct']) ? floatval($raw_config['marks_correct']) : 1,
+								'marks_incorrect' => isset($raw_config['marks_incorrect']) ? floatval($raw_config['marks_incorrect']) : 0,
+							];
+							if (isset($raw_config['selected_questions']) && !empty($raw_config['selected_questions'])) {
+								$question_ids_str = sanitize_text_field($raw_config['selected_questions']);
+								$question_ids = array_filter(array_map('absint', explode(',', $question_ids_str)));
+								if (!empty($question_ids)) $config['selected_questions'] = $question_ids;
+							}
+						}
+						$item_db_data = [ /* ... item data ... */
+							'section_id' => $section_id,
+							'course_id' => $post_id,
+							'title' => $item_title,
+							'item_order' => $item_order + 1,
+							'content_type' => $content_type,
+							'content_config' => wp_json_encode($config)
+						];
+
+						if ( $item_id > 0 && in_array( $item_id, $existing_item_ids ) ) {
+							// UPDATE
+							$wpdb->update( $items_table, $item_db_data, ['item_id' => $item_id] );
+							$submitted_item_ids[] = $item_id;
+							$processed_item_ids[] = $item_id;
+						} else {
+							// INSERT
+							$wpdb->insert( $items_table, $item_db_data );
+							$new_item_id = $wpdb->insert_id;
+							if ($new_item_id) {
+								$submitted_item_ids[] = $new_item_id;
+								$processed_item_ids[] = $new_item_id;
+							}
+						}
+					} // end foreach item
+				} // end if section_id and items exist
+			} // end foreach section
+		} // end if course_sections exist
+
+		// 3. Identify Sections and Items to Delete
+		$section_ids_to_delete = array_diff( $existing_section_ids, $submitted_section_ids );
+		$item_ids_to_delete    = array_diff( $existing_item_ids, $processed_item_ids );
+
+		// 4. Clean up User Progress for Deleted Items
+		if ( ! empty( $item_ids_to_delete ) ) {
+			$ids_placeholder = implode( ',', array_map( 'absint', $item_ids_to_delete ) );
+			$wpdb->query( "DELETE FROM $progress_table WHERE item_id IN ($ids_placeholder)" );
+		}
+
+		// 5. Delete Orphaned Items
+		if ( ! empty( $item_ids_to_delete ) ) {
+			$ids_placeholder = implode( ',', array_map( 'absint', $item_ids_to_delete ) );
+			$wpdb->query( "DELETE FROM $items_table WHERE item_id IN ($ids_placeholder)" );
+		}
+
+		// 6. Delete Orphaned Sections
+		if ( ! empty( $section_ids_to_delete ) ) {
+			$ids_placeholder = implode( ',', array_map( 'absint', $section_ids_to_delete ) );
+			$wpdb->query( "DELETE FROM $sections_table WHERE section_id IN ($ids_placeholder)" );
+		}
+		// --- End data processing logic ---
+	}
 
 } // End class Meta_Boxes

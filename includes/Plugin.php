@@ -143,11 +143,13 @@ final class Plugin {
             // Course Access Meta Box (NEW)
             add_action('add_meta_boxes_qp_course', [Meta_Boxes::class, 'add_course_access']); // CHANGED CALLBACK
             add_action('save_post_qp_course', [Meta_Boxes::class, 'save_course_access'], 30, 1); // CHANGED CALLBACK
+
+            // Course Structure Meta Box (NEW)
+            add_action('add_meta_boxes', [Meta_Boxes::class, 'add_course_structure']);
+            add_action('save_post_qp_course', [Meta_Boxes::class, 'save_course_structure']);
         }
         add_action('save_post_qp_course', 'qp_sync_course_plan', 40, 1);
-        add_action('save_post_qp_course', 'qp_save_course_structure_meta');
         add_action('save_post_qp_course', 'qp_recalculate_course_progress_on_save', 20, 1);
-        add_action('add_meta_boxes', 'qp_add_course_structure_meta_box'); // Note: This hooks on ALL post types, might need refinement later
         add_action('qp_check_entitlement_expiration_hook', 'qp_run_entitlement_expiration_check');
         add_action('woocommerce_product_options_general_product_data', 'qp_add_plan_link_to_simple_products');
         add_action('woocommerce_process_product_meta_simple', 'qp_save_plan_link_simple_product');
