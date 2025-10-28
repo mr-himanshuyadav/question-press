@@ -22,45 +22,6 @@ class QP_Labels_Page
         $label_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'label'");
         if (!$label_tax_id) return;
 
-        // Add/Update Handler
-        if (isset($_POST['action']) && ($_POST['action'] === 'add_label' || $_POST['action'] === 'update_label') && check_admin_referer('qp_add_edit_label_nonce')) {
-            $label_name = sanitize_text_field($_POST['label_name']);
-            $label_color = sanitize_hex_color($_POST['label_color']);
-            $description = sanitize_textarea_field($_POST['label_description']);
-            
-            if (empty($label_name) || empty($label_color)) {
-                \QuestionPress\Admin\Admin_Utils::set_message('Label name and color are required.', 'error');
-            } else {
-                $term_data = [
-                    'taxonomy_id' => $label_tax_id,
-                    'name' => $label_name,
-                    'slug' => sanitize_title($label_name)
-                ];
-                $term_id = 0;
-
-                if ($_POST['action'] === 'update_label') {
-                    $term_id = absint($_POST['term_id']);
-                    // **THE FIX**: Check the default status from the DB, not the form.
-                    $is_default = Terms_DB::get_meta($term_id, 'is_default', true);
-
-                    if (!$is_default) {
-                        $wpdb->update($term_table, $term_data, ['term_id' => $term_id]);
-                    }
-                    \QuestionPress\Admin\Admin_Utils::set_message('Label updated.', 'updated');
-                } else {
-                    $wpdb->insert($term_table, $term_data);
-                    $term_id = $wpdb->insert_id;
-                    \QuestionPress\Admin\Admin_Utils::set_message('Label added.', 'updated');
-                }
-
-                if ($term_id > 0) {
-                    Terms_DB::update_meta($term_id, 'color', $label_color);
-                    Terms_DB::update_meta($term_id, 'description', $description);
-                }
-            }
-            \QuestionPress\Admin\Admin_Utils::redirect_to_tab('labels');
-        }
-
         // Delete Handler (Code remains the same, it was already correct)
         if (isset($_GET['action']) && $_GET['action'] === 'delete' && isset($_GET['term_id']) && check_admin_referer('qp_delete_label_' . absint($_GET['term_id']))) {
             $term_id = absint($_GET['term_id']);
@@ -81,6 +42,75 @@ class QP_Labels_Page
             }
             \QuestionPress\Admin\Admin_Utils::redirect_to_tab('labels');
         }
+    }
+
+    /**
+     * NEW: Handles the 'admin_post_qp_add_label_term' action.
+     */
+    public static function handle_add_term() {
+        if (!isset($_POST['action']) || $_POST['action'] !== 'qp_add_label_term' || !check_admin_referer('qp_add_edit_label_nonce')) {
+            wp_die('Security check failed.');
+        }
+        if (!current_user_can('manage_options')) wp_die('Permission denied.');
+        
+        global $wpdb;
+        $term_table = $wpdb->prefix . 'qp_terms';
+        $tax_table = $wpdb->prefix . 'qp_taxonomies';
+        $label_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'label'");
+
+        $label_name = sanitize_text_field($_POST['label_name']);
+        $label_color = sanitize_hex_color($_POST['label_color']);
+        $description = sanitize_textarea_field($_POST['label_description']);
+            
+        if (empty($label_name) || empty($label_color)) {
+            \QuestionPress\Admin\Admin_Utils::set_message('Label name and color are required.', 'error');
+        } else {
+            $term_data = ['taxonomy_id' => $label_tax_id, 'name' => $label_name, 'slug' => sanitize_title($label_name)];
+            $wpdb->insert($term_table, $term_data);
+            $term_id = $wpdb->insert_id;
+
+            if ($term_id > 0) {
+                Terms_DB::update_meta($term_id, 'color', $label_color);
+                Terms_DB::update_meta($term_id, 'description', $description);
+                \QuestionPress\Admin\Admin_Utils::set_message('Label added.', 'updated');
+            }
+        }
+        \QuestionPress\Admin\Admin_Utils::redirect_to_tab('labels');
+    }
+
+    /**
+     * NEW: Handles the 'admin_post_qp_update_label_term' action.
+     */
+    public static function handle_update_term() {
+        if (!isset($_POST['action']) || $_POST['action'] !== 'qp_update_label_term' || !check_admin_referer('qp_add_edit_label_nonce')) {
+            wp_die('Security check failed.');
+        }
+        if (!current_user_can('manage_options')) wp_die('Permission denied.');
+
+        global $wpdb;
+        $term_table = $wpdb->prefix . 'qp_terms';
+        $tax_table = $wpdb->prefix . 'qp_taxonomies';
+        $label_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'label'");
+
+        $label_name = sanitize_text_field($_POST['label_name']);
+        $label_color = sanitize_hex_color($_POST['label_color']);
+        $description = sanitize_textarea_field($_POST['label_description']);
+        $term_id = absint($_POST['term_id']);
+            
+        if (empty($label_name) || empty($label_color)) {
+            \QuestionPress\Admin\Admin_Utils::set_message('Label name and color are required.', 'error');
+        } else {
+            $term_data = ['taxonomy_id' => $label_tax_id, 'name' => $label_name, 'slug' => sanitize_title($label_name)];
+            
+            $is_default = Terms_DB::get_meta($term_id, 'is_default', true);
+            if (!$is_default) {
+                $wpdb->update($term_table, $term_data, ['term_id' => $term_id]);
+            }
+            Terms_DB::update_meta($term_id, 'color', $label_color);
+            Terms_DB::update_meta($term_id, 'description', $description);
+            \QuestionPress\Admin\Admin_Utils::set_message('Label updated.', 'updated');
+        }
+        \QuestionPress\Admin\Admin_Utils::redirect_to_tab('labels');
     }
 
     public static function render()

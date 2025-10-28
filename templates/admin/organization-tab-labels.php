@@ -18,9 +18,9 @@ if ( ! defined( 'ABSPATH' ) ) {
         <div class="col-wrap">
             <div class="form-wrap">
                 <h2><?php echo $label_to_edit ? esc_html__( 'Edit Label', 'question-press' ) : esc_html__( 'Add New Label', 'question-press' ); ?></h2>
-                <form method="post" action="admin.php?page=qp-organization&tab=labels">
+                <form method="post" action="<?php echo esc_url( admin_url('admin-post.php') ); ?>">
                     <?php wp_nonce_field( 'qp_add_edit_label_nonce' ); ?>
-                    <input type="hidden" name="action" value="<?php echo $label_to_edit ? 'update_label' : 'add_label'; ?>">
+                    <input type="hidden" name="action" value="<?php echo $label_to_edit ? 'qp_update_label_term' : 'qp_add_label_term'; ?>">
                     <?php if ( $label_to_edit ) : ?>
                         <input type="hidden" name="term_id" value="<?php echo esc_attr( $label_to_edit->term_id ); ?>">
                     <?php endif; ?>

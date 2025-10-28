@@ -27,34 +27,6 @@ class QP_Subjects_Page {
         $source_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'subject'");
         if (!$source_tax_id) return;
 
-        // Add/Update Handler
-        if (isset($_POST['action']) && ($_POST['action'] === 'add_term' || $_POST['action'] === 'update_term') && check_admin_referer('qp_add_edit_subject_nonce')) {
-            $term_name = sanitize_text_field($_POST['term_name']);
-            $description = sanitize_textarea_field($_POST['term_description']);
-            $parent = absint($_POST['parent']);
-
-            if (empty($term_name)) {
-                \QuestionPress\Admin\Admin_Utils::set_message('Name cannot be empty.', 'error');
-            } else {
-                $data = ['name' => $term_name, 'slug' => sanitize_title($term_name), 'parent' => $parent, 'taxonomy_id' => $source_tax_id];
-                $term_id = 0;
-
-                if ($_POST['action'] === 'update_term') {
-                    $term_id = absint($_POST['term_id']);
-                    $wpdb->update($term_table, $data, ['term_id' => $term_id]);
-                    \QuestionPress\Admin\Admin_Utils::set_message('Subject/Topic updated.', 'updated');
-                } else {
-                    $wpdb->insert($term_table, $data);
-                    $term_id = $wpdb->insert_id;
-                    \QuestionPress\Admin\Admin_Utils::set_message('Subject/Topic added.', 'updated');
-                }
-                if ($term_id > 0) {
-                    Terms_DB::update_meta($term_id, 'description', $description);
-                }
-            }
-            \QuestionPress\Admin\Admin_Utils::redirect_to_tab('subjects');
-        }
-
         // Merge Handler
         if (isset($_POST['action']) && $_POST['action'] === 'perform_merge' && check_admin_referer('qp_perform_merge_nonce')) {
             $destination_term_id = absint($_POST['destination_term_id']);
@@ -94,28 +66,28 @@ class QP_Subjects_Page {
             $error_messages = [];
 
             // NEW Check 1: Prevent deletion if it's linked to any sources
-    $linked_source_ids = $wpdb->get_col($wpdb->prepare("SELECT object_id FROM $rel_table WHERE term_id = %d AND object_type = 'source_subject_link'", $term_id));
-    if (!empty($linked_source_ids)) {
-    $source_count = count($linked_source_ids);
-    $ids_placeholder = implode(',', $linked_source_ids);
-    $source_names = $wpdb->get_col("SELECT name FROM $term_table WHERE term_id IN ($ids_placeholder)");
-    $formatted_count = "<strong><span style='color:red;'>{$source_count} source(s)</span></strong>";
-    // Wrap each name in a <strong> tag
-    $formatted_names = implode(', ', array_map(function($name) { return '<strong>' . esc_html($name) . '</strong>'; }, $source_names));
-    $error_messages[] = "{$formatted_count} are linked to it. Linked Source(s): " . $formatted_names . ".";
-}
+                $linked_source_ids = $wpdb->get_col($wpdb->prepare("SELECT object_id FROM $rel_table WHERE term_id = %d AND object_type = 'source_subject_link'", $term_id));
+                if (!empty($linked_source_ids)) {
+                $source_count = count($linked_source_ids);
+                $ids_placeholder = implode(',', $linked_source_ids);
+                $source_names = $wpdb->get_col("SELECT name FROM $term_table WHERE term_id IN ($ids_placeholder)");
+                $formatted_count = "<strong><span style='color:red;'>{$source_count} source(s)</span></strong>";
+                // Wrap each name in a <strong> tag
+                $formatted_names = implode(', ', array_map(function($name) { return '<strong>' . esc_html($name) . '</strong>'; }, $source_names));
+                $error_messages[] = "{$formatted_count} are linked to it. Linked Source(s): " . $formatted_names . ".";
+            }
 
-    // NEW Check 2: Prevent deletion if it's linked to any exams
-    $linked_exam_ids = $wpdb->get_col($wpdb->prepare("SELECT object_id FROM $rel_table WHERE term_id = %d AND object_type = 'exam_subject_link'", $term_id));
-if (!empty($linked_exam_ids)) {
-    $exam_count = count($linked_exam_ids);
-    $ids_placeholder = implode(',', $linked_exam_ids);
-    $exam_names = $wpdb->get_col("SELECT name FROM $term_table WHERE term_id IN ($ids_placeholder)");
-    $formatted_count = "<strong><span style='color:red;'>{$exam_count} exam(s)</span></strong>";
-    // Wrap each name in a <strong> tag
-    $formatted_names = implode(', ', array_map(function($name) { return '<strong>' . esc_html($name) . '</strong>'; }, $exam_names));
-    $error_messages[] = "{$formatted_count} are linked to it. Linked exam(s): " . $formatted_names . ".";
-}
+                // NEW Check 2: Prevent deletion if it's linked to any exams
+                $linked_exam_ids = $wpdb->get_col($wpdb->prepare("SELECT object_id FROM $rel_table WHERE term_id = %d AND object_type = 'exam_subject_link'", $term_id));
+            if (!empty($linked_exam_ids)) {
+                $exam_count = count($linked_exam_ids);
+                $ids_placeholder = implode(',', $linked_exam_ids);
+                $exam_names = $wpdb->get_col("SELECT name FROM $term_table WHERE term_id IN ($ids_placeholder)");
+                $formatted_count = "<strong><span style='color:red;'>{$exam_count} exam(s)</span></strong>";
+                // Wrap each name in a <strong> tag
+                $formatted_names = implode(', ', array_map(function($name) { return '<strong>' . esc_html($name) . '</strong>'; }, $exam_names));
+                $error_messages[] = "{$formatted_count} are linked to it. Linked exam(s): " . $formatted_names . ".";
+            }
 
             // Check 1: Prevent deletion if it has child terms (sections/sub-sections)
             $child_count = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $term_table WHERE parent = %d", $term_id));
@@ -156,6 +128,69 @@ if (!empty($linked_exam_ids)) {
             }
             \QuestionPress\Admin\Admin_Utils::redirect_to_tab('subjects');
         }
+    }
+
+    /**
+     * NEW: Handles the 'admin_post_qp_add_subject_term' action.
+     */
+    public static function handle_add_term() {
+        if (!isset($_POST['action']) || $_POST['action'] !== 'qp_add_subject_term' || !check_admin_referer('qp_add_edit_subject_nonce')) {
+            wp_die('Security check failed.');
+        }
+        if (!current_user_can('manage_options')) wp_die('Permission denied.');
+
+        global $wpdb;
+        $term_table = $wpdb->prefix . 'qp_terms';
+        $tax_table = $wpdb->prefix . 'qp_taxonomies';
+        $source_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'subject'");
+        
+        $term_name = sanitize_text_field($_POST['term_name']);
+        $description = sanitize_textarea_field($_POST['term_description']);
+        $parent = absint($_POST['parent']);
+
+        if (empty($term_name)) {
+            \QuestionPress\Admin\Admin_Utils::set_message('Name cannot be empty.', 'error');
+        } else {
+            $data = ['name' => $term_name, 'slug' => sanitize_title($term_name), 'parent' => $parent, 'taxonomy_id' => $source_tax_id];
+            $wpdb->insert($term_table, $data);
+            $term_id = $wpdb->insert_id;
+            
+            if ($term_id > 0) {
+                Terms_DB::update_meta($term_id, 'description', $description);
+                \QuestionPress\Admin\Admin_Utils::set_message('Subject/Topic added.', 'updated');
+            }
+        }
+        \QuestionPress\Admin\Admin_Utils::redirect_to_tab('subjects');
+    }
+
+    /**
+     * NEW: Handles the 'admin_post_qp_update_subject_term' action.
+     */
+    public static function handle_update_term() {
+        if (!isset($_POST['action']) || $_POST['action'] !== 'qp_update_subject_term' || !check_admin_referer('qp_add_edit_subject_nonce')) {
+            wp_die('Security check failed.');
+        }
+        if (!current_user_can('manage_options')) wp_die('Permission denied.');
+
+        global $wpdb;
+        $term_table = $wpdb->prefix . 'qp_terms';
+        $tax_table = $wpdb->prefix . 'qp_taxonomies';
+        $source_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'subject'");
+
+        $term_id = absint($_POST['term_id']);
+        $term_name = sanitize_text_field($_POST['term_name']);
+        $description = sanitize_textarea_field($_POST['term_description']);
+        $parent = absint($_POST['parent']);
+
+        if (empty($term_name)) {
+            \QuestionPress\Admin\Admin_Utils::set_message('Name cannot be empty.', 'error');
+        } else {
+            $data = ['name' => $term_name, 'slug' => sanitize_title($term_name), 'parent' => $parent, 'taxonomy_id' => $source_tax_id];
+            $wpdb->update($term_table, $data, ['term_id' => $term_id]);
+            Terms_DB::update_meta($term_id, 'description', $description);
+            \QuestionPress\Admin\Admin_Utils::set_message('Subject/Topic updated.', 'updated');
+        }
+        \QuestionPress\Admin\Admin_Utils::redirect_to_tab('subjects');
     }
 
     public static function render() {

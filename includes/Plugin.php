@@ -128,6 +128,12 @@ final class Plugin {
         add_action('admin_init', ['\QP_Labels_Page', 'handle_forms']);
         add_action('admin_init', ['\QP_Exams_Page', 'handle_forms']);
         add_action('admin_init', ['\QP_Sources_Page', 'handle_forms']);
+
+        add_action('admin_post_qp_add_subject_term', ['\QP_Subjects_Page', 'handle_add_term']);
+        add_action('admin_post_qp_update_subject_term', ['\QP_Subjects_Page', 'handle_update_term']);
+        add_action('admin_post_qp_add_label_term', ['\QP_Labels_Page', 'handle_add_term']);
+        add_action('admin_post_qp_update_label_term', ['\QP_Labels_Page', 'handle_update_term']);
+        
         add_action('admin_init', [Form_Handler::class, 'handle_report_actions']);
         add_action('admin_init', [Form_Handler::class, 'handle_resolve_from_editor']);
         add_action('admin_init', ['\QP_Logs_Reports_Page', 'handle_log_settings_forms']);
