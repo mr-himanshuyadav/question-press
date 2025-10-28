@@ -20,9 +20,9 @@ if ( ! defined( 'ABSPATH' ) ) {
         <div class="col-wrap">
             <div class="form-wrap">
                 <h2><?php echo $exam_to_edit ? esc_html__( 'Edit Exam', 'question-press' ) : esc_html__( 'Add New Exam', 'question-press' ); ?></h2>
-                <form method="post" action="admin.php?page=qp-organization&tab=exams">
+                <form method="post" action="<?php echo esc_url( admin_url('admin-post.php') ); ?>">
                     <?php wp_nonce_field( 'qp_add_edit_exam_nonce' ); ?>
-                    <input type="hidden" name="action" value="<?php echo $exam_to_edit ? 'update_exam' : 'add_exam'; ?>">
+                    <input type="hidden" name="action" value="<?php echo $exam_to_edit ? 'qp_update_exam_term' : 'qp_add_exam_term'; ?>">
                     <?php if ( $exam_to_edit ) : ?>
                         <input type="hidden" name="term_id" value="<?php echo esc_attr( $exam_to_edit->term_id ); ?>">
                     <?php endif; ?>

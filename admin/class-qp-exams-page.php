@@ -19,49 +19,6 @@ class QP_Exams_Page {
         $exam_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'exam'");
         if (!$exam_tax_id) return; // Failsafe if migration hasn't run
 
-        // Add/Update Handler
-        if (isset($_POST['action']) && ($_POST['action'] === 'add_exam' || $_POST['action'] === 'update_exam') && check_admin_referer('qp_add_edit_exam_nonce')) {
-            $exam_name = sanitize_text_field($_POST['exam_name']);
-            $linked_subject_term_ids = isset($_POST['linked_subjects']) ? array_map('absint', $_POST['linked_subjects']) : [];
-
-            if (empty($exam_name)) {
-                \QuestionPress\Admin\Admin_Utils::set_message('Exam name cannot be empty.', 'error');
-            } else {
-                $term_data = [
-                    'taxonomy_id' => $exam_tax_id,
-                    'name' => $exam_name,
-                    'slug' => sanitize_title($exam_name)
-                ];
-                $term_id = 0;
-
-                if ($_POST['action'] === 'update_exam') {
-                    $term_id = absint($_POST['term_id']);
-                    $wpdb->update($term_table, $term_data, ['term_id' => $term_id]);
-                    \QuestionPress\Admin\Admin_Utils::set_message('Exam updated successfully.', 'updated');
-                } else {
-                    $wpdb->insert($term_table, $term_data);
-                    $term_id = $wpdb->insert_id;
-                    \QuestionPress\Admin\Admin_Utils::set_message('Exam added successfully.', 'updated');
-                }
-
-                if ($term_id > 0) {
-                    // Handle subject linking in the new relationship table
-                    // Here, the 'object' is the exam term itself, linking to subject terms.
-                    $wpdb->delete($rel_table, ['object_id' => $term_id, 'object_type' => 'exam_subject_link']);
-                    if (!empty($linked_subject_term_ids)) {
-                        foreach ($linked_subject_term_ids as $subject_term_id) {
-                            $wpdb->insert($rel_table, [
-                                'object_id'   => $term_id, 
-                                'term_id'     => $subject_term_id, 
-                                'object_type' => 'exam_subject_link'
-                            ]);
-                        }
-                    }
-                }
-            }
-            \QuestionPress\Admin\Admin_Utils::redirect_to_tab('exams');
-        }
-
         // Delete Handler
         if (isset($_GET['action']) && $_GET['action'] === 'delete' && isset($_GET['term_id']) && check_admin_referer('qp_delete_exam_' . absint($_GET['term_id']))) {
             $term_id = absint($_GET['term_id']);
@@ -86,6 +43,82 @@ class QP_Exams_Page {
             }
             \QuestionPress\Admin\Admin_Utils::redirect_to_tab('exams');
         }   
+    }
+
+    /**
+     * NEW: Handles the 'admin_post_qp_add_exam_term' action.
+     */
+    public static function handle_add_term() {
+        if (!isset($_POST['action']) || $_POST['action'] !== 'qp_add_exam_term' || !check_admin_referer('qp_add_edit_exam_nonce')) {
+            wp_die('Security check failed.');
+        }
+        if (!current_user_can('manage_options')) wp_die('Permission denied.');
+
+        global $wpdb;
+        $term_table = $wpdb->prefix . 'qp_terms';
+        $tax_table = $wpdb->prefix . 'qp_taxonomies';
+        $rel_table = $wpdb->prefix . 'qp_term_relationships';
+        $exam_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'exam'");
+
+        $exam_name = sanitize_text_field($_POST['exam_name']);
+        $linked_subject_term_ids = isset($_POST['linked_subjects']) ? array_map('absint', $_POST['linked_subjects']) : [];
+
+        if (empty($exam_name)) {
+            \QuestionPress\Admin\Admin_Utils::set_message('Exam name cannot be empty.', 'error');
+        } else {
+            $term_data = ['taxonomy_id' => $exam_tax_id, 'name' => $exam_name, 'slug' => sanitize_title($exam_name)];
+            $wpdb->insert($term_table, $term_data);
+            $term_id = $wpdb->insert_id;
+
+            if ($term_id > 0) {
+                // Handle subject linking
+                $wpdb->delete($rel_table, ['object_id' => $term_id, 'object_type' => 'exam_subject_link']);
+                if (!empty($linked_subject_term_ids)) {
+                    foreach ($linked_subject_term_ids as $subject_term_id) {
+                        $wpdb->insert($rel_table, ['object_id' => $term_id, 'term_id' => $subject_term_id, 'object_type' => 'exam_subject_link']);
+                    }
+                }
+                \QuestionPress\Admin\Admin_Utils::set_message('Exam added successfully.', 'updated');
+            }
+        }
+        \QuestionPress\Admin\Admin_Utils::redirect_to_tab('exams');
+    }
+
+    /**
+     * NEW: Handles the 'admin_post_qp_update_exam_term' action.
+     */
+    public static function handle_update_term() {
+        if (!isset($_POST['action']) || $_POST['action'] !== 'qp_update_exam_term' || !check_admin_referer('qp_add_edit_exam_nonce')) {
+            wp_die('Security check failed.');
+        }
+        if (!current_user_can('manage_options')) wp_die('Permission denied.');
+        
+        global $wpdb;
+        $term_table = $wpdb->prefix . 'qp_terms';
+        $tax_table = $wpdb->prefix . 'qp_taxonomies';
+        $rel_table = $wpdb->prefix . 'qp_term_relationships';
+        $exam_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'exam'");
+        
+        $term_id = absint($_POST['term_id']);
+        $exam_name = sanitize_text_field($_POST['exam_name']);
+        $linked_subject_term_ids = isset($_POST['linked_subjects']) ? array_map('absint', $_POST['linked_subjects']) : [];
+
+        if (empty($exam_name)) {
+            \QuestionPress\Admin\Admin_Utils::set_message('Exam name cannot be empty.', 'error');
+        } else {
+            $term_data = ['taxonomy_id' => $exam_tax_id, 'name' => $exam_name, 'slug' => sanitize_title($exam_name)];
+            $wpdb->update($term_table, $term_data, ['term_id' => $term_id]);
+
+            // Handle subject linking
+            $wpdb->delete($rel_table, ['object_id' => $term_id, 'object_type' => 'exam_subject_link']);
+            if (!empty($linked_subject_term_ids)) {
+                foreach ($linked_subject_term_ids as $subject_term_id) {
+                    $wpdb->insert($rel_table, ['object_id' => $term_id, 'term_id' => $subject_term_id, 'object_type' => 'exam_subject_link']);
+                }
+            }
+            \QuestionPress\Admin\Admin_Utils::set_message('Exam updated successfully.', 'updated');
+        }
+        \QuestionPress\Admin\Admin_Utils::redirect_to_tab('exams');
     }
 
     public static function render() {

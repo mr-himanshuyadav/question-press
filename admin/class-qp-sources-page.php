@@ -27,52 +27,6 @@ class QP_Sources_Page {
         $source_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'source'");
         if (!$source_tax_id) return;
 
-        // Add/Update Handler
-        if (isset($_POST['action']) && ($_POST['action'] === 'add_term' || $_POST['action'] === 'update_term') && check_admin_referer('qp_add_edit_source_nonce')) {
-            $term_name = sanitize_text_field($_POST['term_name']);
-            $description = sanitize_textarea_field($_POST['term_description']);
-            $parent = absint($_POST['parent']);
-
-            if (empty($term_name)) {
-                \QuestionPress\Admin\Admin_Utils::set_message('Name cannot be empty.', 'error');
-            } else {
-                $data = ['name' => $term_name, 'slug' => sanitize_title($term_name), 'parent' => $parent, 'taxonomy_id' => $source_tax_id];
-                $term_id = 0;
-
-                if ($_POST['action'] === 'update_term') {
-                    $term_id = absint($_POST['term_id']);
-                    $wpdb->update($term_table, $data, ['term_id' => $term_id]);
-                    \QuestionPress\Admin\Admin_Utils::set_message('Source/Section updated.', 'updated');
-                } else {
-                    $wpdb->insert($term_table, $data);
-                    $term_id = $wpdb->insert_id;
-                    \QuestionPress\Admin\Admin_Utils::set_message('Source/Section added.', 'updated');
-                }
-                if ($term_id > 0) {
-                    Terms_DB::update_meta($term_id, 'description', $description);
-
-                    if ($parent == 0) {
-                        $linked_subject_ids = isset($_POST['linked_subjects']) ? array_map('absint', $_POST['linked_subjects']) : [];
-                        
-                        // First, delete all existing subject links for this source to prevent duplicates
-                        $wpdb->delete($rel_table, ['object_id' => $term_id, 'object_type' => 'source_subject_link']);
-
-                        // Then, insert the new links
-                        if (!empty($linked_subject_ids)) {
-                            foreach ($linked_subject_ids as $subject_term_id) {
-                                $wpdb->insert($rel_table, [
-                                    'object_id'   => $term_id, 
-                                    'term_id'     => $subject_term_id, 
-                                    'object_type' => 'source_subject_link'
-                                ]);
-                            }
-                        }
-                    }
-                }
-            }
-            \QuestionPress\Admin\Admin_Utils::redirect_to_tab('sources');
-        }
-
         // Merge Handler
         if (isset($_POST['action']) && $_POST['action'] === 'perform_merge' && check_admin_referer('qp_perform_merge_nonce')) {
             $destination_term_id = absint($_POST['destination_term_id']);
@@ -150,6 +104,94 @@ class QP_Sources_Page {
             }
             \QuestionPress\Admin\Admin_Utils::redirect_to_tab('sources');
         }
+    }
+
+    /**
+     * NEW: Handles the 'admin_post_qp_add_source_term' action.
+     */
+    public static function handle_add_term() {
+        if (!isset($_POST['action']) || $_POST['action'] !== 'qp_add_source_term' || !check_admin_referer('qp_add_edit_source_nonce')) {
+            wp_die('Security check failed.');
+        }
+        if (!current_user_can('manage_options')) wp_die('Permission denied.');
+
+        global $wpdb;
+        $term_table = $wpdb->prefix . 'qp_terms';
+        $tax_table = $wpdb->prefix . 'qp_taxonomies';
+        $rel_table = $wpdb->prefix . 'qp_term_relationships';
+        $source_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'source'");
+
+        $term_name = sanitize_text_field($_POST['term_name']);
+        $description = sanitize_textarea_field($_POST['term_description']);
+        $parent = absint($_POST['parent']);
+
+        if (empty($term_name)) {
+            \QuestionPress\Admin\Admin_Utils::set_message('Name cannot be empty.', 'error');
+        } else {
+            $data = ['name' => $term_name, 'slug' => sanitize_title($term_name), 'parent' => $parent, 'taxonomy_id' => $source_tax_id];
+            $wpdb->insert($term_table, $data);
+            $term_id = $wpdb->insert_id;
+
+            if ($term_id > 0) {
+                Terms_DB::update_meta($term_id, 'description', $description);
+                if ($parent == 0) { // Only link subjects for top-level sources
+                    $linked_subject_ids = isset($_POST['linked_subjects']) ? array_map('absint', $_POST['linked_subjects']) : [];
+                    $wpdb->delete($rel_table, ['object_id' => $term_id, 'object_type' => 'source_subject_link']);
+                    if (!empty($linked_subject_ids)) {
+                        foreach ($linked_subject_ids as $subject_term_id) {
+                            $wpdb->insert($rel_table, ['object_id' => $term_id, 'term_id' => $subject_term_id, 'object_type' => 'source_subject_link']);
+                        }
+                    }
+                }
+                \QuestionPress\Admin\Admin_Utils::set_message('Source/Section added.', 'updated');
+            }
+        }
+        \QuestionPress\Admin\Admin_Utils::redirect_to_tab('sources');
+    }
+
+    /**
+     * NEW: Handles the 'admin_post_qp_update_source_term' action.
+     */
+    public static function handle_update_term() {
+        if (!isset($_POST['action']) || $_POST['action'] !== 'qp_update_source_term' || !check_admin_referer('qp_add_edit_source_nonce')) {
+            wp_die('Security check failed.');
+        }
+        if (!current_user_can('manage_options')) wp_die('Permission denied.');
+
+        global $wpdb;
+        $term_table = $wpdb->prefix . 'qp_terms';
+        $tax_table = $wpdb->prefix . 'qp_taxonomies';
+        $rel_table = $wpdb->prefix . 'qp_term_relationships';
+        $source_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'source'");
+
+        $term_id = absint($_POST['term_id']);
+        $term_name = sanitize_text_field($_POST['term_name']);
+        $description = sanitize_textarea_field($_POST['term_description']);
+        $parent = absint($_POST['parent']);
+
+        if (empty($term_name)) {
+            \QuestionPress\Admin\Admin_Utils::set_message('Name cannot be empty.', 'error');
+        } else {
+            $data = ['name' => $term_name, 'slug' => sanitize_title($term_name), 'parent' => $parent, 'taxonomy_id' => $source_tax_id];
+            $wpdb->update($term_table, $data, ['term_id' => $term_id]);
+            
+            Terms_DB::update_meta($term_id, 'description', $description);
+            
+            if ($parent == 0) { // Only link subjects for top-level sources
+                $linked_subject_ids = isset($_POST['linked_subjects']) ? array_map('absint', $_POST['linked_subjects']) : [];
+                $wpdb->delete($rel_table, ['object_id' => $term_id, 'object_type' => 'source_subject_link']);
+                if (!empty($linked_subject_ids)) {
+                    foreach ($linked_subject_ids as $subject_term_id) {
+                        $wpdb->insert($rel_table, ['object_id' => $term_id, 'term_id' => $subject_term_id, 'object_type' => 'source_subject_link']);
+                    }
+                }
+            } else {
+                // If it's being made a child, remove any subject links it might have had
+                 $wpdb->delete($rel_table, ['object_id' => $term_id, 'object_type' => 'source_subject_link']);
+            }
+            \QuestionPress\Admin\Admin_Utils::set_message('Source/Section updated.', 'updated');
+        }
+        \QuestionPress\Admin\Admin_Utils::redirect_to_tab('sources');
     }
 
     public static function render() {

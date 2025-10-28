@@ -133,6 +133,10 @@ final class Plugin {
         add_action('admin_post_qp_update_subject_term', ['\QP_Subjects_Page', 'handle_update_term']);
         add_action('admin_post_qp_add_label_term', ['\QP_Labels_Page', 'handle_add_term']);
         add_action('admin_post_qp_update_label_term', ['\QP_Labels_Page', 'handle_update_term']);
+        add_action('admin_post_qp_add_exam_term', ['\QP_Exams_Page', 'handle_add_term']);
+        add_action('admin_post_qp_update_exam_term', ['\QP_Exams_Page', 'handle_update_term']);
+        add_action('admin_post_qp_add_source_term', ['\QP_Sources_Page', 'handle_add_term']);
+        add_action('admin_post_qp_update_source_term', ['\QP_Sources_Page', 'handle_update_term']);
         
         add_action('admin_init', [Form_Handler::class, 'handle_report_actions']);
         add_action('admin_init', [Form_Handler::class, 'handle_resolve_from_editor']);

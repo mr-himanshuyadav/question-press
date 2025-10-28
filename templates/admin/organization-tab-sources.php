@@ -21,9 +21,9 @@ if ( ! defined( 'ABSPATH' ) ) {
         <div class="col-wrap">
             <div class="form-wrap">
                 <h2><?php echo $term_to_edit ? esc_html__( 'Edit Source/Section', 'question-press' ) : esc_html__( 'Add New Source/Section', 'question-press' ); ?></h2>
-                <form method="post" action="admin.php?page=qp-organization&tab=sources">
+                <form method="post" action="<?php echo esc_url( admin_url('admin-post.php') ); ?>">
                     <?php wp_nonce_field( 'qp_add_edit_source_nonce' ); ?>
-                    <input type="hidden" name="action" value="<?php echo $term_to_edit ? 'update_term' : 'add_term'; ?>">
+                    <input type="hidden" name="action" value="<?php echo $term_to_edit ? 'qp_update_source_term' : 'qp_add_source_term'; ?>">
                     <?php if ( $term_to_edit ) : ?>
                         <input type="hidden" name="term_id" value="<?php echo esc_attr( $term_to_edit->term_id ); ?>">
                     <?php endif; ?>
