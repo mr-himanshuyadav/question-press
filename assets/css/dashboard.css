@@ -1088,7 +1088,7 @@ ul.qp-review-list li {
      display: none; /* Hide avatar change button by default */
 }
 .qp-profile-card.is-editing .qp-change-avatar-button {
-    display: inline-block !important; /* Show only when editing */
+    display: inline-block; /* Show only when editing */
 }
 
 /* --- Password Card Styles --- */

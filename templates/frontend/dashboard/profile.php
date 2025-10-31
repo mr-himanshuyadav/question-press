@@ -24,7 +24,7 @@ if ( ! defined( 'ABSPATH' ) ) {
                     <div class="qp-profile-avatar qp-profile-avatar-wrapper">
                         <img id="qp-profile-avatar-preview" src="<?php echo esc_url( $profile_data['avatar_url'] ); ?>" alt="Profile Picture" width="128" height="128">
                         <input type="file" id="qp-avatar-upload-input" name="qp_avatar_upload" accept="image/jpeg, image/png, image/gif" style="display: none;">
-                        <button type="button" class="qp-change-avatar-button qp-button qp-button-secondary" style="display: none; margin-top: 10px;"><?php esc_html_e( 'Change Avatar', 'question-press' ); ?></button>
+                        <button type="button" class="qp-change-avatar-button qp-button qp-button-secondary" style="margin-top: 10px;"><?php esc_html_e( 'Change Avatar', 'question-press' ); ?></button>
                         <div class="qp-avatar-upload-actions" style="display: none; margin-top: 10px; gap: 5px;">
                             <button type="button" class="qp-upload-avatar-button qp-button qp-button-primary button-small"><?php esc_html_e( 'Upload New', 'question-press' ); ?></button>
                             <button type="button" class="qp-cancel-avatar-button qp-button qp-button-secondary button-small"><?php esc_html_e( 'Cancel', 'question-press' ); ?></button>
