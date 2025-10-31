@@ -740,12 +740,15 @@ class QP_Shortcodes
         }
     ?>
         <div class="qp-container qp-review-wrapper <?php echo esc_attr($mode_class); ?>">
-            <div style="display: flex; flex-direction: column;justify-content: space-between; margin-bottom: 1.5rem;">
-                <div style="display: flex;flex-direction: row; justify-content: space-between;">
+            <div style="display: flex; flex-direction: column; justify-content: space-between; margin-bottom: 1.5rem; gap: 1rem;">
+                <div style="display: flex; flex-direction: row; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
                     <h2>Review</h2>
-                    <a href="<?php echo esc_url($dashboard_page_url); ?>" class="qp-button qp-button-secondary" style="align-self: center; padding: 12px 14px;">&laquo; Dashboard</a>
+                    <div class="qp-review-header-actions" style="display: flex; align-items: center; gap: 10px;">
+                        <button type="button" onclick="window.history.back();" class="qp-button qp-button-secondary">&laquo; Go Back</button>
+                        <a href="<?php echo esc_url($dashboard_page_url); ?>" class="qp-button qp-button-primary">Dashboard</a>
+                    </div>
                 </div>
-                <div style="display: flex; align-items: center; gap: 15px; margin-top: 5px;">
+                <div style="display: flex; align-items: center; gap: 15px;">
                     <span class="qp-session-mode-indicator" style="padding: 5px 12px; font-size: 12px;"><?php echo esc_html($mode); ?></span>
                     <p style="margin: 0; color: #50575e; font-size: 14px;"><strong>Session ID:</strong> <?php echo esc_html($session_id); ?></p>
                     <?php if ($is_course_item_deleted): ?>
