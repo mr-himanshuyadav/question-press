@@ -29,7 +29,7 @@ if ( ! defined( 'ABSPATH' ) ) {
             $access_mode = get_post_meta( $course_id, '_qp_course_access_mode', true ) ?: 'free';
             $linked_product_id = get_post_meta( $course_id, '_qp_linked_product_id', true );
             $product_url = $linked_product_id ? get_permalink( $linked_product_id ) : '#';
-            $user_has_access = qp_user_can_access_course( $user_id, $course_id, true ); // Pass user_id explicitly
+            $user_has_access = \QuestionPress\Utils\User_Access::can_access_course( $user_id, $course_id, true ); // Pass user_id explicitly
 
             $button_html = '';
             if ( $is_enrolled ) {

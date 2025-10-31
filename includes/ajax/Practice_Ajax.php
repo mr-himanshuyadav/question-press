@@ -1453,7 +1453,8 @@ class Practice_Ajax {
 
         if ($access_mode === 'requires_purchase') {
             // If it requires purchase, verify the user has a valid entitlement
-            if (!qp_user_can_access_course($user_id, $course_id)) {
+            // CHANGED: Use the new User_Access class method
+            if (!\QuestionPress\Utils\User_Access::can_access_course($user_id, $course_id, true)) { // true = ignore enrollment check
                 wp_send_json_error(['message' => 'You do not have access to enroll in this course. Please purchase it first.', 'code' => 'access_denied']);
                 return; // Stop execution
             }

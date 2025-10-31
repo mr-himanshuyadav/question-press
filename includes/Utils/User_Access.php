@@ -66,4 +66,69 @@ class User_Access {
 		return array_unique( array_map( 'absint', $allowed_subject_ids ) );
 	}
 
+	/**
+	 * Checks if a user has access to a specific course via a relevant entitlement OR existing enrollment.
+	 * Replaces the old qp_user_can_access_course() function.
+	 *
+	 * @param int  $user_id                 The user's ID.
+	 * @param int  $course_id               The course (post) ID.
+	 * @param bool $ignore_enrollment_check If true, only checks for a valid *purchase* entitlement (e.g., for 'Enroll' button).
+	 * @return bool True if the user has access, false otherwise.
+	 */
+	public static function can_access_course( $user_id, $course_id, $ignore_enrollment_check = false ) {
+		// --- Logic copied from global function ---
+		global $wpdb;
+		$user_id   = absint( $user_id );
+		$course_id = absint( $course_id );
+		if ( ! $user_id || ! $course_id ) {
+			return false;
+		}
+
+		// Admins always have access
+		if ( user_can( $user_id, 'manage_options' ) ) {
+			return true;
+		}
+
+		$entitlements_table = $wpdb->prefix . 'qp_user_entitlements';
+		$user_courses_table = $wpdb->prefix . 'qp_user_courses';
+		$current_time       = current_time( 'mysql' );
+
+		// 1. Check for an existing, active enrollment (if not ignored)
+		if ( ! $ignore_enrollment_check ) {
+			$is_enrolled = $wpdb->get_var( $wpdb->prepare(
+				"SELECT user_course_id FROM $user_courses_table WHERE user_id = %d AND course_id = %d AND status = 'enrolled'",
+				$user_id,
+				$course_id
+			) );
+			if ( $is_enrolled ) {
+				return true; // Already enrolled, access granted
+			}
+		}
+
+		// 2. Check for an active, non-expired entitlement that grants access to this specific course.
+		// Get the auto-generated plan ID linked to this course
+		$auto_plan_id = get_post_meta( $course_id, '_qp_course_auto_plan_id', true );
+		if ( empty( $auto_plan_id ) ) {
+			// This course might not be properly configured for paid access
+			return false;
+		}
+		$auto_plan_id = absint( $auto_plan_id );
+
+		// Check for an entitlement matching this specific plan ID
+		$has_valid_entitlement = $wpdb->get_var( $wpdb->prepare(
+			"SELECT entitlement_id
+			 FROM {$entitlements_table}
+			 WHERE user_id = %d
+			   AND plan_id = %d
+			   AND status = 'active'
+			   AND (expiry_date IS NULL OR expiry_date > %s)",
+			$user_id,
+			$auto_plan_id,
+			$current_time
+		) );
+
+		return (bool) $has_valid_entitlement;
+		// --- End copied logic ---
+	}
+
 }

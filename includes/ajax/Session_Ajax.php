@@ -1003,9 +1003,7 @@ class Session_Ajax {
         }
 
         // --- NEW: Entitlement Check ONLY ---
-        // (Decrement happens when the first answer is submitted in check_answer or save_mock_attempt)
         global $wpdb;
-
         $items_table = $wpdb->prefix . 'qp_course_items';
 
         // --- Get Course ID associated with the item ---
@@ -1018,7 +1016,8 @@ class Session_Ajax {
 
 
         // --- NEW: Check Course Access FIRST ---
-        if (!qp_user_can_access_course($user_id, $course_id)) {
+        // CHANGED: Use the new User_Access class method
+        if (!\QuestionPress\Utils\User_Access::can_access_course($user_id, $course_id)) {
             wp_send_json_error(['message' => 'You do not have access to start tests in this course.', 'code' => 'access_denied']);
             return; // Stop execution
         }
