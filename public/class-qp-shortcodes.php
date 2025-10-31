@@ -69,7 +69,7 @@ class QP_Shortcodes
 
         // --- Filter subjects based on user scope ---
         $user_id = get_current_user_id();
-        $allowed_subjects_or_all = qp_get_allowed_subject_ids_for_user($user_id); // Get 'all' or array of IDs
+        $allowed_subjects_or_all = \QuestionPress\Utils\User_Access::get_allowed_subject_ids($user_id); // Get 'all' or array of IDs
         $allowed_subjects_array = []; // Used for filtering below
         $multiSelectDisabled = false;
 
@@ -112,7 +112,7 @@ class QP_Shortcodes
 
         // --- Filter subjects based on user scope ---
         $user_id = get_current_user_id();
-        $allowed_subjects_or_all = qp_get_allowed_subject_ids_for_user($user_id);
+        $allowed_subjects_or_all = \QuestionPress\Utils\User_Access::get_allowed_subject_ids($user_id);
         $allowed_subjects_array = [];
         $multiSelectDisabled = false;
 
@@ -154,7 +154,7 @@ class QP_Shortcodes
 
         // --- Filter subjects based on user scope ---
         $user_id = get_current_user_id();
-        $allowed_subjects_or_all = qp_get_allowed_subject_ids_for_user($user_id);
+        $allowed_subjects_or_all = \QuestionPress\Utils\User_Access::get_allowed_subject_ids($user_id);
         $allowed_subjects_array = [];
         $multiSelectDisabled = false;
 
@@ -196,7 +196,7 @@ class QP_Shortcodes
 
         // --- Filter subjects based on user scope ---
         $user_id = get_current_user_id();
-        $allowed_subjects_or_all = qp_get_allowed_subject_ids_for_user($user_id);
+        $allowed_subjects_or_all = \QuestionPress\Utils\User_Access::get_allowed_subject_ids($user_id);
         $allowed_subjects_array = [];
         $sectionWiseDisabled = false; // Changed variable name
 

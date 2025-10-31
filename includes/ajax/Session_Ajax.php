@@ -8,6 +8,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 use QuestionPress\Database\Terms_DB;
 use QuestionPress\Database\Questions_DB;
+use QuestionPress\Utils\User_Access;
 use WP_Error; // Use statement for WP_Error
 use WP_Query; // Use statement for WP_Query
 
@@ -28,7 +29,7 @@ class Session_Ajax {
         $pauses_table = $wpdb->prefix . 'qp_session_pauses';
 
         // --- NEW: Scope Validation ---
-        $allowed_subjects = qp_get_allowed_subject_ids_for_user($user_id);
+        $allowed_subjects = User_Access::get_allowed_subject_ids($user_id);
 
         if ($allowed_subjects !== 'all' && is_array($allowed_subjects)) {
             $subjects_raw = isset($_POST['qp_subject']) && is_array($_POST['qp_subject']) ? $_POST['qp_subject'] : [];
@@ -333,7 +334,7 @@ class Session_Ajax {
 
         global $wpdb;
         $user_id = get_current_user_id();
-        $allowed_subjects = qp_get_allowed_subject_ids_for_user($user_id);
+        $allowed_subjects = User_Access::get_allowed_subject_ids($user_id);
 
         // --- Define these variables *before* the scope check ---
         $subjects_raw = isset($_POST['mock_subjects']) && is_array($_POST['mock_subjects']) ? $_POST['mock_subjects'] : [];
@@ -536,7 +537,7 @@ class Session_Ajax {
         $topic_ids_to_query = []; // Define this early
 
         // --- Scope Validation ---
-        $allowed_subjects = qp_get_allowed_subject_ids_for_user($user_id);
+        $allowed_subjects = User_Access::get_allowed_subject_ids($user_id);
 
         if ($allowed_subjects !== 'all' && is_array($allowed_subjects)) {
             $subjects_raw = isset($_POST['revision_subjects']) && is_array($_POST['revision_subjects']) ? $_POST['revision_subjects'] : [];

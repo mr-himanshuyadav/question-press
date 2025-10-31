@@ -563,7 +563,7 @@ public static function render_history_content() // <-- Already changed to public
         if ( $subject_tax_id ) {
             // --- NEW: Filter subjects based on user scope ---
             $user_id = get_current_user_id();
-            $allowed_subjects_or_all = qp_get_allowed_subject_ids_for_user( $user_id );
+            $allowed_subjects_or_all = \QuestionPress\Utils\User_Access::get_allowed_subject_ids( $user_id );
 
             if ( $allowed_subjects_or_all === 'all' ) {
                 // User has access to all, fetch all subjects
@@ -737,7 +737,7 @@ public static function render_history_content() // <-- Already changed to public
         $scope_description = 'All Subjects & Exams';
         $allowed_subjects_list = [];
         $allowed_exams_list = [];
-        $allowed_subject_ids_or_all = qp_get_allowed_subject_ids_for_user($user_id);
+        $allowed_subject_ids_or_all = \QuestionPress\Utils\User_Access::get_allowed_subject_ids($user_id);
         if ($allowed_subject_ids_or_all !== 'all') {
              global $wpdb;
              $term_table = $wpdb->prefix . 'qp_terms';
