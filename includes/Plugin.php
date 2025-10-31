@@ -128,6 +128,7 @@ final class Plugin {
         add_action('admin_init', ['\QP_Labels_Page', 'handle_forms']);
         add_action('admin_init', ['\QP_Exams_Page', 'handle_forms']);
         add_action('admin_init', ['\QP_Sources_Page', 'handle_forms']);
+        add_action('admin_init', ['\QP_Settings_Page', 'register_settings']);
 
         add_action('admin_post_qp_add_subject_term', ['\QP_Subjects_Page', 'handle_add_term']);
         add_action('admin_post_qp_update_subject_term', ['\QP_Subjects_Page', 'handle_update_term']);
