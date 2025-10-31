@@ -11,6 +11,7 @@
  * @var string  $base_dashboard_url   Base URL for the dashboard page.
  * @var string  $logout_url           URL for logging out.
  * @var string  $avatar_html          HTML for the user's avatar.
+ * @var bool    $is_front_page        True if the dashboard is the site's front page.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -34,8 +35,14 @@ if ( ! defined( 'ABSPATH' ) ) {
 	<?php foreach ( $tabs as $slug => $details ) : ?>
 		<?php
 		$is_active = ( $slug === $active_tab );
-		// Construct the full URL for the link
-		$url = ( $slug === 'overview' ) ? $base_dashboard_url : trailingslashit( $base_dashboard_url ) . $slug . '/';
+        // Prepend 'tab/' if this is the front page, otherwise build the normal path
+        $url_slug = ($is_front_page ? 'tab/' : '') . $slug . '/';
+        
+        if ($slug === 'overview') {
+            $url = $base_dashboard_url; // Overview is always the base URL
+        } else {
+            $url = trailingslashit( $base_dashboard_url ) . $url_slug;
+        }
 		?>
 		<li>
 			<a href="<?php echo esc_url( $url ); ?>" class="<?php echo $is_active ? 'active' : ''; ?>">

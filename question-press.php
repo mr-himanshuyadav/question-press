@@ -1157,54 +1157,66 @@ function qp_register_query_vars($vars) {
  */
 function qp_add_dashboard_rewrite_rules() {
     $options = get_option('qp_settings');
-    // Ensure 'dashboard_page' key exists before accessing it
     $dashboard_page_id = isset($options['dashboard_page']) ? absint($options['dashboard_page']) : 0;
 
-    // Only add rules if a valid dashboard page ID is set
-    if ($dashboard_page_id > 0) {
-        // Get the slug (URL path) of the selected dashboard page
-        $dashboard_slug = get_post_field('post_name', $dashboard_page_id);
+    if ($dashboard_page_id <= 0) {
+        return; // No page set, do nothing.
+    }
 
-        // Proceed only if we successfully retrieved the slug
-        if ($dashboard_slug) {
-            // Rule for specific course: /dashboard-slug/courses/course-slug/
-            // Maps the URL to index.php?pagename=[dashboard-slug]&qp_tab=courses&qp_course_slug=[course-slug]
-            add_rewrite_rule(
-                '^' . $dashboard_slug . '/courses/([^/]+)/?$', // Matches /dashboard-slug/courses/ANYTHING/
-                'index.php?pagename=' . $dashboard_slug . '&qp_tab=courses&qp_course_slug=$matches[1]',
-                'top' // Process this rule early
-            );
+    // Get the page's path relative to the home URL (e.g., "dashboard")
+    // This will be an EMPTY STRING if the page is the site's front page.
+    $dashboard_path = get_page_uri($dashboard_page_id);
+    $is_front_page = ($dashboard_path === ''); // Check if it's the front page
+    
+    // Define the known tabs
+    $tabs = ['overview', 'history', 'review', 'progress', 'courses', 'profile'];
+    $tab_regex = implode('|', $tabs);
 
-            // Rule for profile tab: /dashboard-slug/profile/
-            add_rewrite_rule(
-                '^' . $dashboard_slug . '/profile/?$', // Matches /dashboard-slug/profile/
-                'index.php?pagename=' . $dashboard_slug . '&qp_tab=profile', // Map to profile tab
-                'top'
-            );
+    if ( ! $is_front_page ) {
+        // --- CASE 1: Dashboard is a SUB-PAGE (e.g., /dashboard/) ---
+        
+        // Rule for specific course: /dashboard-path/courses/course-slug/
+        add_rewrite_rule(
+            '^' . $dashboard_path . '/courses/([^/]+)/?$',
+            // --- FIX: Use page_id instead of pagename ---
+            'index.php?page_id=' . $dashboard_page_id . '&qp_tab=courses&qp_course_slug=$matches[1]',
+            'top'
+        );
 
-            // Rule for main tab: /dashboard-slug/tab-name/
-            // Maps the URL to index.php?pagename=[dashboard-slug]&qp_tab=[tab-name]
-            add_rewrite_rule(
-                '^' . $dashboard_slug . '/([^/]+)/?$', // Matches /dashboard-slug/ANYTHING/
-                'index.php?pagename=' . $dashboard_slug . '&qp_tab=$matches[1]',
-                'top' // Process this rule early
-            );
+        // Rule for a specific tab: /dashboard-path/tab-name/
+        add_rewrite_rule(
+            '^' . $dashboard_path . '/(' . $tab_regex . ')/?$',
+            // --- FIX: Use page_id instead of pagename ---
+            'index.php?page_id=' . $dashboard_page_id . '&qp_tab=$matches[1]',
+            'top'
+        );
+        
+        // Rule for the base dashboard URL: /dashboard-path/
+        add_rewrite_rule(
+            '^' . $dashboard_path . '/?$',
+            // --- FIX: Use page_id instead of pagename ---
+            'index.php?page_id=' . $dashboard_page_id,
+            'top'
+        );
 
-            // Optional: Rule for the base dashboard URL /dashboard-slug/
-            // WordPress might handle this automatically if the page structure is correct,
-            // but adding it explicitly can sometimes help.
-            add_rewrite_rule(
-                '^' . $dashboard_slug . '/?$', // Matches /dashboard-slug/
-                'index.php?pagename=' . $dashboard_slug, // Just load the dashboard page
-                'top'
-            );
-        } else {
-            // Log an error or add an admin notice if the slug couldn't be found
-            error_log('Question Press: Could not retrieve slug for dashboard page ID: ' . $dashboard_page_id);
-        }
     } else {
-        // Log an error or add an admin notice if the dashboard page isn't set
-        error_log('Question Press: Dashboard page ID not set in options.');
+        // --- CASE 2: Dashboard IS THE FRONT PAGE (path is an empty string) ---
+        
+        // Rule for specific course on front page: /tab/courses/course-slug/
+        add_rewrite_rule(
+            '^tab/courses/([^/]+)/?$', // (This was correct from last time)
+            'index.php?page_id=' . $dashboard_page_id . '&qp_tab=courses&qp_course_slug=$matches[1]',
+            'top'
+        );
+
+        // Rule for a specific tab on front page: /tab/tab-name/
+        add_rewrite_rule(
+            '^tab/(' . $tab_regex . ')/?$', // (This was correct from last time)
+            'index.php?page_id=' . $dashboard_page_id . '&qp_tab=$matches[1]',
+            'top'
+        );
+        
+        // The base front page (/) is already handled by WordPress.
     }
 }
 

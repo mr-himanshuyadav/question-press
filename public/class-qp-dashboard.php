@@ -142,6 +142,7 @@ class QP_Dashboard
         $options = get_option('qp_settings');
         $dashboard_page_id = isset($options['dashboard_page']) ? absint($options['dashboard_page']) : 0;
         $base_dashboard_url = $dashboard_page_id ? trailingslashit(get_permalink($dashboard_page_id)) : trailingslashit(home_url());
+        $is_front_page = ($dashboard_page_id > 0 && get_option('show_on_front') == 'page' && get_option('page_on_front') == $dashboard_page_id);
 
         $tabs = [
             'overview' => ['label' => 'Overview', 'icon' => 'chart-pie'],
@@ -175,7 +176,8 @@ class QP_Dashboard
             'tabs'                 => $tabs,
             'base_dashboard_url'   => $base_dashboard_url,
             'logout_url'           => $logout_url,
-            'avatar_html'          => $avatar_html
+            'avatar_html'          => $avatar_html,
+            'is_front_page'        => $is_front_page
         ];
 
         // Load and return the template HTML
