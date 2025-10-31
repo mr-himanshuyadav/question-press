@@ -1,6 +1,8 @@
 <?php
 namespace QuestionPress; // PSR-4 Namespace
 
+use QuestionPress\Database\Terms_DB;
+
 /**
  * Fired during plugin activation.
  *
@@ -384,11 +386,11 @@ class Activator {
 
     if ($label_tax_id) {
         foreach ($default_labels as $label) {
-            $term_id = qp_get_or_create_term($label['name'], $label_tax_id);
+            $term_id = Terms_DB::get_or_create($label['name'], $label_tax_id);
             if ($term_id) {
-                qp_update_term_meta($term_id, 'color', $label['color']);
-                qp_update_term_meta($term_id, 'description', $label['description']);
-                qp_update_term_meta($term_id, 'is_default', '1');
+                Terms_DB::update_meta($term_id, 'color', $label['color']);
+                Terms_DB::update_meta($term_id, 'description', $label['description']);
+                Terms_DB::update_meta($term_id, 'is_default', '1');
             }
         }
     }
@@ -408,10 +410,10 @@ class Activator {
 
     if ($reason_tax_id) {
         foreach ($default_reasons as $reason) {
-            $term_id = qp_get_or_create_term($reason['text'], $reason_tax_id);
+            $term_id = Terms_DB::get_or_create($reason['text'], $reason_tax_id);
             if ($term_id) {
-                qp_update_term_meta($term_id, 'is_active', '1');
-                qp_update_term_meta($term_id, 'type', $reason['type']); // Add the type meta
+                Terms_DB::update_meta($term_id, 'is_active', '1');
+                Terms_DB::update_meta($term_id, 'type', $reason['type']); // Add the type meta
             }
         }
     }
