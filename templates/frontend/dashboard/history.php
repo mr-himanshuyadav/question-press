@@ -19,6 +19,9 @@
 if ( ! defined( 'ABSPATH' ) ) {
     exit; // Exit if accessed directly.
 }
+
+use QuestionPress\Frontend\Dashboard;
+
 ?>
 <div class="qp-history-header">
     <h2 style="margin:0;"><?php esc_html_e( 'Practice History', 'question-press' ); ?></h2>
@@ -45,15 +48,15 @@ if ( ! defined( 'ABSPATH' ) ) {
         <?php if ( ! empty( $all_sessions ) ) : ?>
             <?php foreach ( $all_sessions as $session ) :
                 $settings = json_decode( $session->settings_snapshot, true );
-                $mode = QP_Dashboard::get_session_mode_name( $session, $settings ); // Use helper
-                $subjects_display = QP_Dashboard::get_session_subjects_display( $session, $settings, $lineage_cache, $group_to_topic_map, $question_to_group_map ); // Use helper
+                $mode = Dashboard::get_session_mode_name( $session, $settings ); // Use helper
+                $subjects_display = Dashboard::get_session_subjects_display( $session, $settings, $lineage_cache, $group_to_topic_map, $question_to_group_map ); // Use helper
                 $is_scored = isset( $settings['marks_correct'] );
 
                 // Use pre-calculated stats for accuracy, otherwise fallback for scored sessions
                 if ( isset( $accuracy_stats[ $session->session_id ] ) && ! $is_scored ) {
                     $result_display = $accuracy_stats[ $session->session_id ];
                 } else {
-                    $result_display = QP_Dashboard::get_session_result_display( $session, $settings ); // Use helper
+                    $result_display = Dashboard::get_session_result_display( $session, $settings ); // Use helper
                 }
                 $status_display = ucfirst( $session->status );
                 if ( $session->status === 'abandoned' ) $status_display = 'Abandoned';

@@ -25,6 +25,8 @@ use QuestionPress\Core\Cron;
 use QuestionPress\Core\Rewrites;
 use QuestionPress\Utils\Data_Cleanup;
 use QuestionPress\Integrations\WooCommerce_Integration;
+use QuestionPress\Frontend\Shortcodes;
+use QuestionPress\Frontend\Dashboard;
 
 /**
  * Final QuestionPress Class.
@@ -254,17 +256,11 @@ final class Plugin {
         // Example: load_plugin_textdomain( 'question-press', false, dirname( QP_PLUGIN_BASENAME ) . '/languages' );
     // }
 
-    /**
-     * Register frontend shortcodes.
-     */
     public function register_shortcodes() {
-        // Use placeholder classes for now, assuming they exist in the global namespace
-        // We will create/move these later and update namespaces.
-        // If QP_Shortcodes and QP_Dashboard are already namespaced, update the use statements at the top.
-        add_shortcode('question_press_practice', ['\QP_Shortcodes', 'render_practice_form']);
-        add_shortcode('question_press_session', ['\QP_Shortcodes', 'render_session_page']);
-        add_shortcode('question_press_review', ['\QP_Shortcodes', 'render_review_page']);
-        add_shortcode('question_press_dashboard', ['\QP_Dashboard', 'render']);
+        add_shortcode('question_press_practice', [Shortcodes::class, 'render_practice_form']);
+        add_shortcode('question_press_session', [Shortcodes::class, 'render_session_page']);
+        add_shortcode('question_press_review', [Shortcodes::class, 'render_review_page']);
+        add_shortcode('question_press_dashboard', [Dashboard::class, 'render']);
     }
 
     /**

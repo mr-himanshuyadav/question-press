@@ -18,7 +18,6 @@
             "QuestionPress\\": "includes/"
         },
         "classmap": [
-            "public/",
             "admin/",
             "api/"
         ]

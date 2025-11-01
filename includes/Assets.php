@@ -2,6 +2,7 @@
 namespace QuestionPress; // PSR-4 Namespace
 
 use QuestionPress\Admin\Views\Course_Editor_Helper;
+use QuestionPress\Frontend\Shortcodes;
 
 // Exit if accessed directly.
 if ( ! defined( 'ABSPATH' ) ) {
@@ -136,7 +137,7 @@ class Assets {
 
         // Localize session data specifically for the session page
         if (has_shortcode($post->post_content, 'question_press_session')) {
-            $session_data = \QP_Shortcodes::get_session_data_for_script();
+            $session_data = Shortcodes::get_session_data_for_script();
             if ($session_data) {
                 wp_localize_script('qp-practice-script', 'qp_session_data', $session_data);
             }

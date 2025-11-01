@@ -22,6 +22,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit; // Exit if accessed directly.
 }
 
+use QuestionPress\Frontend\Dashboard;
+
 // Ensure stats object exists and has defaults if necessary
 $stats             = $stats ?? (object) [ 'total_attempted' => 0, 'total_correct' => 0, 'total_incorrect' => 0 ];
 $overall_accuracy  = $overall_accuracy ?? 0;
@@ -91,7 +93,7 @@ $never_correct_count = $never_correct_count ?? 0;
 				<?php
 				foreach ( $active_sessions as $session ) {
 					$settings    = json_decode( $session->settings_snapshot, true );
-					$mode        = QP_Dashboard::get_session_mode_name( $session, $settings ); // Use helper
+					$mode        = Dashboard::get_session_mode_name( $session, $settings ); // Use helper
 					$row_class   = $session->status === 'paused' ? 'qp-session-paused-card' : ''; // Add class for paused
 					?>
 					<div class="qp-active-session-card <?php echo esc_attr( $row_class ); ?>">
@@ -132,9 +134,9 @@ $never_correct_count = $never_correct_count ?? 0;
 					<?php
 					foreach ( $recent_history as $session ) :
 						$settings         = json_decode( $session->settings_snapshot, true );
-						$mode             = QP_Dashboard::get_session_mode_name( $session, $settings ); // Use helper
-						$context_display  = QP_Dashboard::get_session_subjects_display( $session, $settings, $lineage_cache, $group_to_topic_map, $question_to_group_map ); // Use helper, renamed variable
-						$result_display   = QP_Dashboard::get_session_result_display( $session, $settings ); // Use helper
+						$mode             = Dashboard::get_session_mode_name( $session, $settings ); // Use helper
+						$context_display  = Dashboard::get_session_subjects_display( $session, $settings, $lineage_cache, $group_to_topic_map, $question_to_group_map ); // Use helper, renamed variable
+						$result_display   = Dashboard::get_session_result_display( $session, $settings ); // Use helper
 						$session_review_url = add_query_arg( 'session_id', $session->session_id, $review_page_url );
 					?>
 						<tr>

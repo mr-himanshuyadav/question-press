@@ -8,7 +8,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 use QuestionPress\Database\Terms_DB;
 use QuestionPress\Database\Questions_DB;
-use QuestionPress\Utils\User_Access; //
+use QuestionPress\Utils\User_Access;
+use QuestionPress\Frontend\Shortcodes;
 use WP_Error; // Use statement for WP_Error
 use Exception; // Use statement for Exception
 
@@ -1542,7 +1543,7 @@ class Practice_Ajax {
     {
         check_ajax_referer('qp_practice_nonce', 'nonce');
         // Use global namespace \QP_Shortcodes as it's not refactored yet
-        wp_send_json_success(['form_html' => \QP_Shortcodes::render_practice_form()]);
+        wp_send_json_success(['form_html' => Shortcodes::render_practice_form()]);
     }
 
     /**
