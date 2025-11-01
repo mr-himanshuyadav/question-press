@@ -615,19 +615,39 @@ class Meta_Boxes {
         }
 
         $access_mode = get_post_meta( $post_id, '_qp_course_access_mode', true );
+        $existing_plan_id = get_post_meta( $post_id, '_qp_course_auto_plan_id', true );
+
+        // --- FIX: If course is NOT 'requires_purchase', clean up any existing auto-plan ---
+        if ( $access_mode !== 'requires_purchase' ) {
+            if ( ! empty( $existing_plan_id ) ) {
+                $existing_plan_post = get_post( $existing_plan_id );
+                
+                // Check if the plan exists and is one of ours
+                if ( $existing_plan_post && $existing_plan_post->post_type === 'qp_plan' && get_post_meta($existing_plan_id, '_qp_is_auto_generated', true) === 'true' ) {
+                    // It's our auto-plan. Set it to 'draft' to deactivate it.
+                    $plan_update_args = [
+                        'ID' => $existing_plan_id,
+                        'post_status' => 'draft',
+                    ];
+                    wp_update_post($plan_update_args);
+                    error_log( "QP Auto Plan: Set Plan ID #{$existing_plan_id} to draft because Course ID #{$post_id} was set to free." );
+                }
+                
+                // Remove the link from the course, as it's no longer a paid course.
+                delete_post_meta( $post_id, '_qp_course_auto_plan_id' );
+            }
+            return; // We are done.
+        }
+        // --- END FIX ---
 
         // Only proceed if the course requires purchase
-        if ( $access_mode !== 'requires_purchase' ) {
-            // Optional: If switched from paid to free, we could potentially update the linked plan's status,
-            // but for now, we'll just leave the plan as is to preserve access for past purchasers.
-            return;
-        }
+        // (This code is now only reached if $access_mode === 'requires_purchase')
 
         // Get the course details needed for the plan
         $course_title     = get_the_title( $post_id );
         $duration_value   = get_post_meta( $post_id, '_qp_course_access_duration_value', true );
         $duration_unit    = get_post_meta( $post_id, '_qp_course_access_duration_unit', true );
-        $existing_plan_id = get_post_meta( $post_id, '_qp_course_auto_plan_id', true );
+        // $existing_plan_id is already defined above
 
         // Determine plan type based on duration
         $plan_type = ! empty( $duration_value ) ? 'time_limited' : 'unlimited'; // Course access implies unlimited attempts

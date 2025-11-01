@@ -1564,12 +1564,20 @@ class Practice_Ajax {
             wp_send_json_error(['message' => 'Invalid course ID.']);
         }
 
-        // --- NEW: Check if user has access to this course before proceeding ---
-        // Uses the imported User_Access class
-        if (!User_Access::can_access_course($user_id, $course_id)) {
-            wp_send_json_error(['message' => 'You do not have access to view this course structure.', 'code' => 'access_denied']);
-            return; // Stop execution
+        // --- FIX START: Check for access mode ---
+        $access_mode = get_post_meta($course_id, '_qp_course_access_mode', true) ?: 'free';
+
+        // If the course is NOT free, THEN we check for access permissions.
+        if ($access_mode !== 'free') {
+            // Uses the imported User_Access class
+            if (!User_Access::can_access_course($user_id, $course_id)) {
+                wp_send_json_error(['message' => 'You do not have access to view this course structure.', 'code' => 'access_denied']);
+                return; // Stop execution
+            }
         }
+        // If the course is 'free', we grant access to view the structure.
+        // --- FIX END ---
+
 
         global $wpdb;
         $sections_table = $wpdb->prefix . 'qp_course_sections';

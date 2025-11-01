@@ -96,7 +96,7 @@ class User_Access {
 		// 1. Check for an existing, active enrollment (if not ignored)
 		if ( ! $ignore_enrollment_check ) {
 			$is_enrolled = $wpdb->get_var( $wpdb->prepare(
-				"SELECT user_course_id FROM $user_courses_table WHERE user_id = %d AND course_id = %d AND status = 'enrolled'",
+				"SELECT user_course_id FROM $user_courses_table WHERE user_id = %d AND course_id = %d AND status IN ('enrolled', 'in_progress')",
 				$user_id,
 				$course_id
 			) );
