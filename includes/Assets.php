@@ -89,21 +89,27 @@ class Assets {
             'can_delete_history' => $can_delete
         ];
 
-        // --- CORRECTED SCRIPT LOADING LOGIC ---
+        // --- NEW: Enqueue Utils Script ---
+        $utils_js_version = file_exists( QP_PLUGIN_PATH . 'assets/js/utils.js' ) ? filemtime( QP_PLUGIN_PATH . 'assets/js/utils.js' ) : QP_PLUGIN_VERSION;
+        wp_enqueue_script('qp-utils-script', QP_ASSETS_URL . 'js/utils.js', ['jquery', 'sweetalert2'], $utils_js_version, true);
+        // Localize data to the utils script since it's now the base
+        wp_localize_script('qp-utils-script', 'qp_ajax_object', $ajax_data);
+
 
         // Load dashboard script if the dashboard shortcode is present
         if (has_shortcode($post->post_content, 'question_press_dashboard')) {
             wp_enqueue_script('sweetalert2', 'https://cdn.jsdelivr.net/npm/sweetalert2@11', [], null, true);
-            wp_enqueue_script('qp-dashboard-script', QP_ASSETS_URL . 'js/dashboard.js', ['jquery', 'sweetalert2'], $dashboard_js_version, true);
-            wp_localize_script('qp-dashboard-script', 'qp_ajax_object', $ajax_data);
+            // Add 'qp-utils-script' as a dependency
+            wp_enqueue_script('qp-dashboard-script', QP_ASSETS_URL . 'js/dashboard.js', ['jquery', 'sweetalert2', 'qp-utils-script'], $dashboard_js_version, true);
+            // wp_localize_script('qp-dashboard-script', 'qp_ajax_object', $ajax_data); // No longer needed here
         }
 
         // Load practice script if practice or session shortcodes are present
         if (has_shortcode($post->post_content, 'question_press_practice') || has_shortcode($post->post_content, 'question_press_session') || has_shortcode($post->post_content, 'question_press_review')) {
 
             wp_enqueue_script('hammer-js', 'https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js', [], '2.0.8', true);
-            wp_enqueue_script('qp-practice-script', QP_ASSETS_URL . 'js/practice.js', ['jquery', 'hammer-js'], $practice_js_version, true);
-            wp_localize_script('qp-practice-script', 'qp_ajax_object', $ajax_data);
+            // Add 'qp-utils-script' as a dependency
+            wp_enqueue_script('qp-practice-script', QP_ASSETS_URL . 'js/practice.js', ['jquery', 'hammer-js', 'qp-utils-script'], $practice_js_version, true);
             $qp_settings = get_option('qp_settings');
             wp_localize_script('qp-practice-script', 'qp_practice_settings', [
                 'show_counts' => !empty($qp_settings['show_question_counts']),
