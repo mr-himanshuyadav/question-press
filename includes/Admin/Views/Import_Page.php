@@ -1,9 +1,14 @@
 <?php
+
+namespace QuestionPress\Admin\Views;
+
+use QuestionPress\Utils\Template_Loader;
+
 if (!defined('ABSPATH')) {
     exit; // Exit if accessed directly.
 }
 
-class QP_Import_Page
+class Import_Page
 {
     /**
      * Renders the Import page.
@@ -14,7 +19,7 @@ class QP_Import_Page
         // Check if the form has been submitted and a file is uploaded
         if (isset($_POST['submit']) && isset($_FILES['question_zip_file'])) {
             // Nonce and file error checks are handled inside the importer
-            $importer = new QP_Importer();
+            $importer = new Importer();
             $importer->handle_import(); // This method will echo the results page
         } else {
             // No submission, so just render the upload form
@@ -47,6 +52,6 @@ class QP_Import_Page
         ];
         
         // Load and echo the template
-        echo qp_get_template_html( 'tools-import', 'admin', $args );
+        echo Template_Loader::get_html( 'tools-import', 'admin', $args );
     }
 }

@@ -6,32 +6,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-// We need access to the List Table class
-use \QP_Questions_List_Table;
-
 /**
  * Handles rendering the "All Questions" admin page.
  */
 class All_Questions_Page {
-
-	/**
-     * Adds screen options for the "All Questions" list table.
-     * Hooked into the load action for the page.
-     * Replaces the old qp_add_screen_options function.
-     */
-    public static function add_screen_options() {
-        $option = 'per_page';
-        $args   = [
-            'label'   => 'Questions per page',
-            'default' => 20,
-            'option'  => 'qp_questions_per_page' // Matches the option name used elsewhere
-        ];
-        add_screen_option( $option, $args );
-
-        // Instantiate the table here to ensure columns are registered for screen options.
-        // We still need the global class name until the List Table itself is refactored.
-        new \QP_Questions_List_Table();
-    }
 
 	/**
      * Saves the screen options for the "All Questions" list table.
@@ -57,7 +35,7 @@ class All_Questions_Page {
 	 */
 	public static function render() {
 		// Instantiate the list table
-		$list_table = new QP_Questions_List_Table();
+		$list_table = new Questions_List_Table();
 		// Prepare items (fetches data based on current request parameters)
 		$list_table->prepare_items();
 

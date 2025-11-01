@@ -27,6 +27,15 @@ use QuestionPress\Utils\Data_Cleanup;
 use QuestionPress\Integrations\WooCommerce_Integration;
 use QuestionPress\Frontend\Shortcodes;
 use QuestionPress\Frontend\Dashboard;
+use QuestionPress\Admin\Views\All_Questions_Page;
+use QuestionPress\Admin\Views\Exams_Page;
+use QuestionPress\Admin\Views\Labels_Page;
+use QuestionPress\Admin\Views\Logs_Reports_Page;
+use QuestionPress\Admin\Views\Question_Editor_Page;
+use QuestionPress\Admin\Views\Settings_Page;
+use QuestionPress\Admin\Views\Sources_Page;
+use QuestionPress\Admin\Views\Subjects_Page;
+use QuestionPress\Admin\Views\User_Entitlements_Page;
 
 /**
  * Final QuestionPress Class.
@@ -135,30 +144,30 @@ final class Plugin {
         add_action('init', [$this, 'register_shortcodes']);
         add_action('init', [Rewrites::class, 'add_dashboard_rewrite_rules']);
         add_action('rest_api_init', ['\QP_Rest_Api', 'register_routes']);
-        add_action('admin_init', ['\QP_Subjects_Page', 'handle_forms']);
-        add_action('admin_init', ['\QP_Labels_Page', 'handle_forms']);
-        add_action('admin_init', ['\QP_Exams_Page', 'handle_forms']);
-        add_action('admin_init', ['\QP_Sources_Page', 'handle_forms']);
-        add_action('admin_init', ['\QP_Settings_Page', 'register_settings']);
+        add_action('admin_init', [Subjects_Page::class, 'handle_forms']);
+        add_action('admin_init', [Labels_Page::class, 'handle_forms']);
+        add_action('admin_init', [Exams_Page::class, 'handle_forms']);
+        add_action('admin_init', [Sources_Page::class, 'handle_forms']);
+        add_action('admin_init', [Settings_Page::class, 'register_settings']);
 
-        add_action('admin_post_qp_add_subject_term', ['\QP_Subjects_Page', 'handle_add_term']);
-        add_action('admin_post_qp_update_subject_term', ['\QP_Subjects_Page', 'handle_update_term']);
-        add_action('admin_post_qp_add_label_term', ['\QP_Labels_Page', 'handle_add_term']);
-        add_action('admin_post_qp_update_label_term', ['\QP_Labels_Page', 'handle_update_term']);
-        add_action('admin_post_qp_add_exam_term', ['\QP_Exams_Page', 'handle_add_term']);
-        add_action('admin_post_qp_update_exam_term', ['\QP_Exams_Page', 'handle_update_term']);
-        add_action('admin_post_qp_add_source_term', ['\QP_Sources_Page', 'handle_add_term']);
-        add_action('admin_post_qp_update_source_term', ['\QP_Sources_Page', 'handle_update_term']);
-        add_action('admin_post_qp_add_report_reason', ['\QP_Logs_Reports_Page', 'handle_add_reason']);
-        add_action('admin_post_qp_update_report_reason', ['\QP_Logs_Reports_Page', 'handle_update_reason']);
+        add_action('admin_post_qp_add_subject_term', [Subjects_Page::class, 'handle_add_term']);
+        add_action('admin_post_qp_update_subject_term', [Subjects_Page::class, 'handle_update_term']);
+        add_action('admin_post_qp_add_label_term', [Labels_Page::class, 'handle_add_term']);
+        add_action('admin_post_qp_update_label_term', [Labels_Page::class, 'handle_update_term']);
+        add_action('admin_post_qp_add_exam_term', [Exams_Page::class, 'handle_add_term']);
+        add_action('admin_post_qp_update_exam_term', [Exams_Page::class, 'handle_update_term']);
+        add_action('admin_post_qp_add_source_term', [Sources_Page::class, 'handle_add_term']);
+        add_action('admin_post_qp_update_source_term', [Sources_Page::class, 'handle_update_term']);
+        add_action('admin_post_qp_add_report_reason', [Logs_Reports_Page::class, 'handle_add_reason']);
+        add_action('admin_post_qp_update_report_reason', [Logs_Reports_Page::class, 'handle_update_reason']);
         add_action('admin_post_qp_perform_merge', [\QuestionPress\Admin\Form_Handler::class, 'handle_perform_merge']);
         
         add_action('admin_init', [Form_Handler::class, 'handle_report_actions']);
         add_action('admin_init', [Form_Handler::class, 'handle_resolve_from_editor']);
-        add_action('admin_init', ['\QP_Logs_Reports_Page', 'handle_log_settings_forms']);
+        add_action('admin_init', [Logs_Reports_Page::class, 'handle_log_settings_forms']);
         add_action('admin_init', [Admin_Utils::class, 'redirect_wp_profile_page']);
-        add_action('admin_post_qp_save_user_scope', [\QuestionPress\Admin\Views\User_Entitlements_Page::class, 'handle_save_scope']);
-        add_action('wp_ajax_qp_save_question_group', ['\QP_Question_Editor_Page', 'handle_save_group']);
+        add_action('admin_post_qp_save_user_scope', [User_Entitlements_Page::class, 'handle_save_scope']);
+        add_action('wp_ajax_qp_save_question_group', [Question_Editor_Page::class, 'handle_save_group']);
 
 
         // Register admin menus if in admin area
@@ -244,8 +253,8 @@ final class Plugin {
         if ( is_admin() ) {
             add_filter('display_post_states', [Admin_Utils::class, 'add_page_indicator'], 10, 2); // CHANGED CALLBACK
         }
-        add_filter('set-screen-option', [\QuestionPress\Admin\Views\User_Entitlements_Page::class, 'save_screen_options'], 10, 3);
-        add_filter('set-screen-option', [\QuestionPress\Admin\Views\All_Questions_Page::class, 'save_screen_options'], 10, 3);
+        add_filter('set-screen-option', [User_Entitlements_Page::class, 'save_screen_options'], 10, 3);
+        add_filter('set-screen-option', [All_Questions_Page::class, 'save_screen_options'], 10, 3);
     }
 
     /**

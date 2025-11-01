@@ -1,10 +1,13 @@
 <?php
+namespace QuestionPress\Admin\Views;
 
 if (!class_exists('WP_List_Table')) {
     require_once(ABSPATH . 'wp-admin/includes/class-wp-list-table.php');
 }
 
-class QP_Reports_List_Table extends WP_List_Table
+use \WP_List_Table;
+
+class Reports_List_Table extends WP_List_Table
 {
 
     public function __construct()

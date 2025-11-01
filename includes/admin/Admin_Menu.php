@@ -11,6 +11,10 @@ use QuestionPress\Admin\Views\Organization_Page;
 use QuestionPress\Admin\Views\Tools_Page;
 use QuestionPress\Admin\Views\Merge_Terms_Page;
 use QuestionPress\Admin\Views\User_Entitlements_Page;
+use QuestionPress\Admin\Views\Logs_Reports_Page;
+use QuestionPress\Admin\Views\Question_Editor_Page;
+use QuestionPress\Admin\Views\Settings_Page;
+use QuestionPress\Admin\Views\Questions_List_Table;
 
 /**
  * Handles the registration of WordPress admin menu items.
@@ -34,7 +38,7 @@ class Admin_Menu {
 		);
 
 		// Screen Options for All questions page
-        add_action( "load-{$hook}", [All_Questions_Page::class, 'add_screen_options'] ); // CHANGED CALLBACK
+		add_action( "load-{$hook}", [Questions_List_Table::class, 'add_screen_options'] );
 
 		// Add submenu pages under the main "Question Press" menu
 		add_submenu_page(
@@ -51,7 +55,7 @@ class Admin_Menu {
 			'Add New',
 			'manage_options',
 			'qp-question-editor',
-			['\QP_Question_Editor_Page', 'render'] // Callback using existing global class
+			[Question_Editor_Page::class, 'render'] // Callback using existing global class
 		);
 		add_submenu_page(
 			'question-press',
@@ -75,7 +79,7 @@ class Admin_Menu {
 			'Reports',
 			'manage_options',
 			'qp-logs-reports',
-			['\QP_Logs_Reports_Page', 'render'] // Callback using existing global class
+			[Logs_Reports_Page::class, 'render'] // Callback using existing global class
 		);
 		add_submenu_page(
 			'question-press',
@@ -91,7 +95,7 @@ class Admin_Menu {
 			'Settings',
 			'manage_options',
 			'qp-settings',
-			['\QP_Settings_Page', 'render'] // Callback using existing global class
+			[Settings_Page::class, 'render'] // Callback using existing global class
 		);
 
 		// Hidden pages (Callbacks still global or existing global classes)

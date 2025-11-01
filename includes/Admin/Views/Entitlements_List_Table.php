@@ -1,5 +1,7 @@
 <?php
-// question-press/admin/class-qp-entitlements-list-table.php
+// question-press/includes/Admin/Views/Entitlements_List_Table.php
+
+namespace QuestionPress\Admin\Views;
 
 if (!defined('ABSPATH')) exit;
 
@@ -7,7 +9,9 @@ if (!class_exists('WP_List_Table')) {
     require_once(ABSPATH . 'wp-admin/includes/class-wp-list-table.php');
 }
 
-class QP_Entitlements_List_Table extends WP_List_Table {
+use \WP_List_Table;
+
+class Entitlements_List_Table extends WP_List_Table {
 
     public function __construct() {
         parent::__construct([

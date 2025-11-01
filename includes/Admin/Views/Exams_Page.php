@@ -1,7 +1,12 @@
 <?php
+namespace QuestionPress\Admin\Views;
+
+use QuestionPress\Utils\Template_Loader;
+use QuestionPress\Admin\Admin_Utils;
+
 if (!defined('ABSPATH')) exit;
 
-class QP_Exams_Page {
+class Exams_Page {
 
     /**
      * Handles form submissions for the Exams tab using the new taxonomy system.
@@ -34,14 +39,14 @@ class QP_Exams_Page {
             
             if ($usage_count > 0) {
                 $formatted_count = "<strong><span style='color:red;'>{$usage_count} question(s).</span></strong>";
-                \QuestionPress\Admin\Admin_Utils::set_message("This exam cannot be deleted because it is in use by {$formatted_count}", 'error');
+                Admin_Utils::set_message("This exam cannot be deleted because it is in use by {$formatted_count}", 'error');
             } else {
                 // Delete the term and its relationships (like linked subjects)
                 $wpdb->delete($term_table, ['term_id' => $term_id]);
                 $wpdb->delete($rel_table, ['object_id' => $term_id, 'object_type' => 'exam_subject_link']);
-                \QuestionPress\Admin\Admin_Utils::set_message('Exam deleted successfully.', 'updated');
+                Admin_Utils::set_message('Exam deleted successfully.', 'updated');
             }
-            \QuestionPress\Admin\Admin_Utils::redirect_to_tab('exams');
+            Admin_Utils::redirect_to_tab('exams');
         }   
     }
 
@@ -64,7 +69,7 @@ class QP_Exams_Page {
         $linked_subject_term_ids = isset($_POST['linked_subjects']) ? array_map('absint', $_POST['linked_subjects']) : [];
 
         if (empty($exam_name)) {
-            \QuestionPress\Admin\Admin_Utils::set_message('Exam name cannot be empty.', 'error');
+            Admin_Utils::set_message('Exam name cannot be empty.', 'error');
         } else {
             $term_data = ['taxonomy_id' => $exam_tax_id, 'name' => $exam_name, 'slug' => sanitize_title($exam_name)];
             $wpdb->insert($term_table, $term_data);
@@ -78,10 +83,10 @@ class QP_Exams_Page {
                         $wpdb->insert($rel_table, ['object_id' => $term_id, 'term_id' => $subject_term_id, 'object_type' => 'exam_subject_link']);
                     }
                 }
-                \QuestionPress\Admin\Admin_Utils::set_message('Exam added successfully.', 'updated');
+                Admin_Utils::set_message('Exam added successfully.', 'updated');
             }
         }
-        \QuestionPress\Admin\Admin_Utils::redirect_to_tab('exams');
+        Admin_Utils::redirect_to_tab('exams');
     }
 
     /**
@@ -104,7 +109,7 @@ class QP_Exams_Page {
         $linked_subject_term_ids = isset($_POST['linked_subjects']) ? array_map('absint', $_POST['linked_subjects']) : [];
 
         if (empty($exam_name)) {
-            \QuestionPress\Admin\Admin_Utils::set_message('Exam name cannot be empty.', 'error');
+            Admin_Utils::set_message('Exam name cannot be empty.', 'error');
         } else {
             $term_data = ['taxonomy_id' => $exam_tax_id, 'name' => $exam_name, 'slug' => sanitize_title($exam_name)];
             $wpdb->update($term_table, $term_data, ['term_id' => $term_id]);
@@ -116,9 +121,9 @@ class QP_Exams_Page {
                     $wpdb->insert($rel_table, ['object_id' => $term_id, 'term_id' => $subject_term_id, 'object_type' => 'exam_subject_link']);
                 }
             }
-            \QuestionPress\Admin\Admin_Utils::set_message('Exam updated successfully.', 'updated');
+            Admin_Utils::set_message('Exam updated successfully.', 'updated');
         }
-        \QuestionPress\Admin\Admin_Utils::redirect_to_tab('exams');
+        Admin_Utils::redirect_to_tab('exams');
     }
 
     public static function render() {
@@ -186,6 +191,6 @@ class QP_Exams_Page {
         ];
         
         // Load and echo the template
-        echo qp_get_template_html( 'organization-tab-exams', 'admin', $args );
+        echo Template_Loader::get_html( 'organization-tab-exams', 'admin', $args );
     }
 }

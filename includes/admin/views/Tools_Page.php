@@ -6,10 +6,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-// Global classes used by the original function
-use \QP_Import_Page;
-use \QP_Export_Page;
-use \QP_Backup_Restore_Page;
+// We also need the classes this page calls:
+use QuestionPress\Admin\Views\Import_Page;
+use QuestionPress\Admin\Views\Export_Page;
+use QuestionPress\Admin\Views\Backup_Restore_Page;
 
 /**
  * Handles rendering the "Tools" admin page with its tabs.
@@ -22,9 +22,9 @@ class Tools_Page {
 	 */
 	public static function render() {
 		$tabs = [
-			'import'         => ['label' => 'Import', 'callback' => ['\QP_Import_Page', 'render']],          // Still uses global class
-			'export'         => ['label' => 'Export', 'callback' => ['\QP_Export_Page', 'render']],          // Still uses global class
-			'backup_restore' => ['label' => 'Backup & Restore', 'callback' => ['\QP_Backup_Restore_Page', 'render']], // Still uses global class
+			'import'         => ['label' => 'Import', 'callback' => [Import_Page::class, 'render']],
+			'export'         => ['label' => 'Export', 'callback' => [Export_Page::class, 'render']],
+			'backup_restore' => ['label' => 'Backup & Restore', 'callback' => [Backup_Restore_Page::class, 'render']],
 		];
 		$active_tab = isset( $_GET['tab'] ) && array_key_exists( $_GET['tab'], $tabs ) ? $_GET['tab'] : 'import';
 		?>

@@ -1,9 +1,14 @@
 <?php
-if (!defined('ABSPATH')) exit;
+
+namespace QuestionPress\Admin\Views;
 
 use QuestionPress\Database\Terms_DB;
+use QuestionPress\Utils\Template_Loader;
+use QuestionPress\Admin\Admin_Utils;
 
-class QP_Labels_Page
+if (!defined('ABSPATH')) exit;
+
+class Labels_Page
 {
     /**
      * Handles form submissions for the Labels tab using the new taxonomy system.
@@ -28,19 +33,19 @@ class QP_Labels_Page
             $is_default = Terms_DB::get_meta($term_id, 'is_default', true);
 
             if ($is_default) {
-                \QuestionPress\Admin\Admin_Utils::set_message('Default labels cannot be deleted.', 'error');
+                Admin_Utils::set_message('Default labels cannot be deleted.', 'error');
             } else {
                 $usage_count = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $rel_table WHERE term_id = %d AND object_type = 'question'", $term_id));
                 if ($usage_count > 0) {
                     $formatted_count = "<strong><span style='color:red;'>{$usage_count} question(s).</span></strong>";
-                    \QuestionPress\Admin\Admin_Utils::set_message("This label cannot be deleted because it is in use by {$formatted_count}", 'error');
+                    Admin_Utils::set_message("This label cannot be deleted because it is in use by {$formatted_count}", 'error');
                 } else {
                     $wpdb->delete($term_table, ['term_id' => $term_id]);
                     $wpdb->delete($meta_table, ['term_id' => $term_id]);
-                    \QuestionPress\Admin\Admin_Utils::set_message('Label deleted successfully.', 'updated');
+                    Admin_Utils::set_message('Label deleted successfully.', 'updated');
                 }
             }
-            \QuestionPress\Admin\Admin_Utils::redirect_to_tab('labels');
+            Admin_Utils::redirect_to_tab('labels');
         }
     }
 
@@ -63,7 +68,7 @@ class QP_Labels_Page
         $description = sanitize_textarea_field($_POST['label_description']);
             
         if (empty($label_name) || empty($label_color)) {
-            \QuestionPress\Admin\Admin_Utils::set_message('Label name and color are required.', 'error');
+            Admin_Utils::set_message('Label name and color are required.', 'error');
         } else {
             $term_data = ['taxonomy_id' => $label_tax_id, 'name' => $label_name, 'slug' => sanitize_title($label_name)];
             $wpdb->insert($term_table, $term_data);
@@ -72,10 +77,10 @@ class QP_Labels_Page
             if ($term_id > 0) {
                 Terms_DB::update_meta($term_id, 'color', $label_color);
                 Terms_DB::update_meta($term_id, 'description', $description);
-                \QuestionPress\Admin\Admin_Utils::set_message('Label added.', 'updated');
+                Admin_Utils::set_message('Label added.', 'updated');
             }
         }
-        \QuestionPress\Admin\Admin_Utils::redirect_to_tab('labels');
+        Admin_Utils::redirect_to_tab('labels');
     }
 
     /**
@@ -98,7 +103,7 @@ class QP_Labels_Page
         $term_id = absint($_POST['term_id']);
             
         if (empty($label_name) || empty($label_color)) {
-            \QuestionPress\Admin\Admin_Utils::set_message('Label name and color are required.', 'error');
+            Admin_Utils::set_message('Label name and color are required.', 'error');
         } else {
             $term_data = ['taxonomy_id' => $label_tax_id, 'name' => $label_name, 'slug' => sanitize_title($label_name)];
             
@@ -108,9 +113,9 @@ class QP_Labels_Page
             }
             Terms_DB::update_meta($term_id, 'color', $label_color);
             Terms_DB::update_meta($term_id, 'description', $description);
-            \QuestionPress\Admin\Admin_Utils::set_message('Label updated.', 'updated');
+            Admin_Utils::set_message('Label updated.', 'updated');
         }
-        \QuestionPress\Admin\Admin_Utils::redirect_to_tab('labels');
+        Admin_Utils::redirect_to_tab('labels');
     }
 
     public static function render()
@@ -167,6 +172,6 @@ class QP_Labels_Page
         ];
         
         // Load and echo the template
-        echo qp_get_template_html( 'organization-tab-labels', 'admin', $args );
+        echo Template_Loader::get_html( 'organization-tab-labels', 'admin', $args );
     }
 }

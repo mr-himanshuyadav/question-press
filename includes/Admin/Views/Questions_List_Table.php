@@ -1,13 +1,15 @@
 <?php
+namespace QuestionPress\Admin\Views;
 
 if (!class_exists('WP_List_Table')) {
     require_once(ABSPATH . 'wp-admin/includes/class-wp-list-table.php');
 }
 
+use \WP_List_Table;
 use QuestionPress\Database\Questions_DB;
 use QuestionPress\Database\Terms_DB;
 
-class QP_Questions_List_Table extends WP_List_Table
+class Questions_List_Table extends WP_List_Table
 {
 
     public function __construct()
@@ -44,7 +46,22 @@ class QP_Questions_List_Table extends WP_List_Table
     }
 
 
+    /**
+     * Adds screen options for the "All Questions" list table.
+     * Hooked into the load action for the page.
+     */
+    public static function add_screen_options() {
+        $option = 'per_page';
+        $args   = [
+            'label'   => 'Questions per page',
+            'default' => 20,
+            'option'  => 'qp_questions_per_page' // Matches the option name
+        ];
+        add_screen_option( $option, $args );
 
+        // Instantiate the table here *early* to ensure columns are registered for screen options.
+        new self();
+    }
 
     protected function get_hidden_columns()
     {
@@ -221,20 +238,22 @@ class QP_Questions_List_Table extends WP_List_Table
                 $all_source_terms = $wpdb->get_results($wpdb->prepare("SELECT term_id, name, parent FROM $term_table WHERE taxonomy_id = %d ORDER BY name ASC", $source_tax_id));
 
                 // Helper function to build the hierarchical dropdown
-                function qp_render_source_options($terms, $parent_id = 0, $level = 0, $current_selection = '')
-                {
-                    $prefix = str_repeat('&nbsp;&nbsp;', $level);
-                    foreach ($terms as $term) {
-                        if ($term->parent == $parent_id) {
-                            $value = ($term->parent == 0 ? 'source_' : 'section_') . $term->term_id;
-                            printf(
-                                '<option value="%s" %s>%s%s</option>',
-                                esc_attr($value),
-                                selected($current_selection, $value, false),
-                                $prefix,
-                                esc_html($term->name)
-                            );
-                            qp_render_source_options($terms, $term->term_id, $level + 1, $current_selection);
+                if ( ! function_exists( __NAMESPACE__ . '\qp_render_source_options' ) ) {
+                    function qp_render_source_options($terms, $parent_id = 0, $level = 0, $current_selection = '')
+                    {
+                        $prefix = str_repeat('&nbsp;&nbsp;', $level);
+                        foreach ($terms as $term) {
+                            if ($term->parent == $parent_id) {
+                                $value = ($term->parent == 0 ? 'source_' : 'section_') . $term->term_id;
+                                printf(
+                                    '<option value="%s" %s>%s%s</option>',
+                                    esc_attr($value),
+                                    selected($current_selection, $value, false),
+                                    $prefix,
+                                    esc_html($term->name)
+                                );
+                                qp_render_source_options($terms, $term->term_id, $level + 1, $current_selection);
+                            }
                         }
                     }
                 }
@@ -536,7 +555,13 @@ class QP_Questions_List_Table extends WP_List_Table
             $wpdb->query("UPDATE {$q_table} SET status = 'publish' WHERE question_id IN ({$ids_placeholder})");
         }
         if ('delete' === $action) {
-            check_admin_referer('bulk-' . $this->_args['plural']); // Nonce check for bulk action
+            // Nonce check for single-item delete
+            if (isset($_GET['question_id'])) {
+                 check_admin_referer('qp_delete_question_' . $question_ids[0]);
+            } else {
+                // Nonce check for bulk delete
+                check_admin_referer('bulk-' . $this->_args['plural']);
+            }
 
             global $wpdb;
             $q_table = Questions_DB::get_questions_table_name(); // Use static method

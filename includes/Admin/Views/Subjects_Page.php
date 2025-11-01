@@ -1,17 +1,19 @@
 <?php
-if (!defined('ABSPATH')) exit;
+
+namespace QuestionPress\Admin\Views;
 
 use QuestionPress\Database\Terms_DB;
+use QuestionPress\Utils\Template_Loader;
+use QuestionPress\Admin\Admin_Utils;
 
-// Ensure the new list table class is included
-require_once QP_PLUGIN_PATH . 'admin/class-qp-terms-list-table.php';
+if (!defined('ABSPATH')) exit;
 
-class QP_Subjects_Page {
+class Subjects_Page {
 
     public static function handle_forms() {
         // Handle bulk actions first
         if (isset($_GET['tab']) && $_GET['tab'] === 'subjects') {
-            $list_table = new QP_Terms_List_Table('subject', 'Subject/Topic', 'subjects');
+            $list_table = new Terms_List_Table('subject', 'Subject/Topic', 'subjects');
             $list_table->process_bulk_action();
         }
         
@@ -89,13 +91,13 @@ class QP_Subjects_Page {
 
             if (!empty($error_messages)) {
                 $message = "This item cannot be deleted for the following reasons:<br>" . implode('<br>', $error_messages);
-                \QuestionPress\Admin\Admin_Utils::set_message($message, 'error');
+                Admin_Utils::set_message($message, 'error');
             } else {
                 $wpdb->delete($term_table, ['term_id' => $term_id]);
                 $wpdb->delete($meta_table, ['term_id' => $term_id]);
-                \QuestionPress\Admin\Admin_Utils::set_message('Subject/Topic deleted successfully.', 'updated');
+                Admin_Utils::set_message('Subject/Topic deleted successfully.', 'updated');
             }
-            \QuestionPress\Admin\Admin_Utils::redirect_to_tab('subjects');
+            Admin_Utils::redirect_to_tab('subjects');
         }
     }
 
@@ -118,7 +120,7 @@ class QP_Subjects_Page {
         $parent = absint($_POST['parent']);
 
         if (empty($term_name)) {
-            \QuestionPress\Admin\Admin_Utils::set_message('Name cannot be empty.', 'error');
+            Admin_Utils::set_message('Name cannot be empty.', 'error');
         } else {
             $data = ['name' => $term_name, 'slug' => sanitize_title($term_name), 'parent' => $parent, 'taxonomy_id' => $source_tax_id];
             $wpdb->insert($term_table, $data);
@@ -126,10 +128,10 @@ class QP_Subjects_Page {
             
             if ($term_id > 0) {
                 Terms_DB::update_meta($term_id, 'description', $description);
-                \QuestionPress\Admin\Admin_Utils::set_message('Subject/Topic added.', 'updated');
+                Admin_Utils::set_message('Subject/Topic added.', 'updated');
             }
         }
-        \QuestionPress\Admin\Admin_Utils::redirect_to_tab('subjects');
+        Admin_Utils::redirect_to_tab('subjects');
     }
 
     /**
@@ -152,14 +154,14 @@ class QP_Subjects_Page {
         $parent = absint($_POST['parent']);
 
         if (empty($term_name)) {
-            \QuestionPress\Admin\Admin_Utils::set_message('Name cannot be empty.', 'error');
+            Admin_Utils::set_message('Name cannot be empty.', 'error');
         } else {
             $data = ['name' => $term_name, 'slug' => sanitize_title($term_name), 'parent' => $parent, 'taxonomy_id' => $source_tax_id];
             $wpdb->update($term_table, $data, ['term_id' => $term_id]);
             Terms_DB::update_meta($term_id, 'description', $description);
-            \QuestionPress\Admin\Admin_Utils::set_message('Subject/Topic updated.', 'updated');
+            Admin_Utils::set_message('Subject/Topic updated.', 'updated');
         }
-        \QuestionPress\Admin\Admin_Utils::redirect_to_tab('subjects');
+        Admin_Utils::redirect_to_tab('subjects');
     }
 
     public static function render() {
@@ -185,7 +187,7 @@ class QP_Subjects_Page {
         $parent_subjects = $wpdb->get_results($wpdb->prepare("SELECT term_id, name FROM $term_table WHERE taxonomy_id = %d AND parent = 0 ORDER BY name ASC", $subject_tax_id));
 
         // Prepare the list table
-        $list_table = new QP_Terms_List_Table('subject', 'Subject/Topic', 'subjects');
+        $list_table = new Terms_List_Table('subject', 'Subject/Topic', 'subjects');
         $list_table->prepare_items();
         
         // Capture the list table's HTML
@@ -209,6 +211,6 @@ class QP_Subjects_Page {
         ];
         
         // Load and echo the template
-        echo qp_get_template_html( 'organization-tab-subjects', 'admin', $args );
+        echo Template_Loader::get_html( 'organization-tab-subjects', 'admin', $args );
     }
 }

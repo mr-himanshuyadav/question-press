@@ -1,12 +1,14 @@
 <?php
+namespace QuestionPress\Admin\Views;
 
 if (!defined('ABSPATH')) {
     exit; // Exit if accessed directly.
 }
 
 use QuestionPress\Database\Terms_DB;
+use QuestionPress\Utils\Template_Loader;
 
-class QP_Export_Page
+class Export_Page
 {
 
     public static function handle_export_submission()
@@ -39,7 +41,7 @@ class QP_Export_Page
         ];
 
         // Load and echo the template
-        echo qp_get_template_html( 'tools-export', 'admin', $args );
+        echo Template_Loader::get_html( 'tools-export', 'admin', $args );
     }
 
     private static function generate_zip()

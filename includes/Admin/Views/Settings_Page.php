@@ -1,7 +1,12 @@
 <?php
+
+namespace QuestionPress\Admin\Views;
+
 if (!defined('ABSPATH')) exit;
 
-class QP_Settings_Page
+use QuestionPress\Utils\Template_Loader;
+
+class Settings_Page
 {
 
     public static function render()
@@ -47,7 +52,7 @@ class QP_Settings_Page
         ];
         
         // Load and echo the template
-        echo qp_get_template_html( 'settings-page-wrapper', 'admin', $args );
+        echo Template_Loader::get_html( 'settings-page-wrapper', 'admin', $args );
     }
 
     /**

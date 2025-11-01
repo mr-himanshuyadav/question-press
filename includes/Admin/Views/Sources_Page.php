@@ -1,17 +1,19 @@
 <?php
-if (!defined('ABSPATH')) exit;
+
+namespace QuestionPress\Admin\Views;
 
 use QuestionPress\Database\Terms_DB;
+use QuestionPress\Utils\Template_Loader;
+use QuestionPress\Admin\Admin_Utils;
 
-// This class was already included in the Subjects page, but it's good practice to ensure it's here.
-require_once QP_PLUGIN_PATH . 'admin/class-qp-terms-list-table.php';
+if (!defined('ABSPATH')) exit;
 
-class QP_Sources_Page {
+class Sources_Page {
 
     public static function handle_forms() {
         // Instantiate and process bulk actions immediately if on the correct tab.
         if (isset($_GET['page']) && $_GET['page'] === 'qp-organization' && isset($_GET['tab']) && $_GET['tab'] === 'sources') {
-            $list_table = new QP_Terms_List_Table('source', 'Source/Section', 'sources');
+            $list_table = new Terms_List_Table('source', 'Source/Section', 'sources');
             $list_table->process_bulk_action();
         }
 
@@ -63,13 +65,13 @@ class QP_Sources_Page {
 
             if (!empty($error_messages)) {
                 $message = "This item cannot be deleted for the following reasons:<br>" . implode('<br>', $error_messages);
-                \QuestionPress\Admin\Admin_Utils::set_message($message, 'error');
+                Admin_Utils::set_message($message, 'error');
             } else {
                 $wpdb->delete($term_table, ['term_id' => $term_id]);
                 $wpdb->delete($meta_table, ['term_id' => $term_id]);
-                \QuestionPress\Admin\Admin_Utils::set_message('Source/Section deleted successfully.', 'updated');
+                Admin_Utils::set_message('Source/Section deleted successfully.', 'updated');
             }
-            \QuestionPress\Admin\Admin_Utils::redirect_to_tab('sources');
+            Admin_Utils::redirect_to_tab('sources');
         }
     }
 
@@ -93,7 +95,7 @@ class QP_Sources_Page {
         $parent = absint($_POST['parent']);
 
         if (empty($term_name)) {
-            \QuestionPress\Admin\Admin_Utils::set_message('Name cannot be empty.', 'error');
+            Admin_Utils::set_message('Name cannot be empty.', 'error');
         } else {
             $data = ['name' => $term_name, 'slug' => sanitize_title($term_name), 'parent' => $parent, 'taxonomy_id' => $source_tax_id];
             $wpdb->insert($term_table, $data);
@@ -110,10 +112,10 @@ class QP_Sources_Page {
                         }
                     }
                 }
-                \QuestionPress\Admin\Admin_Utils::set_message('Source/Section added.', 'updated');
+                Admin_Utils::set_message('Source/Section added.', 'updated');
             }
         }
-        \QuestionPress\Admin\Admin_Utils::redirect_to_tab('sources');
+        Admin_Utils::redirect_to_tab('sources');
     }
 
     /**
@@ -137,7 +139,7 @@ class QP_Sources_Page {
         $parent = absint($_POST['parent']);
 
         if (empty($term_name)) {
-            \QuestionPress\Admin\Admin_Utils::set_message('Name cannot be empty.', 'error');
+            Admin_Utils::set_message('Name cannot be empty.', 'error');
         } else {
             $data = ['name' => $term_name, 'slug' => sanitize_title($term_name), 'parent' => $parent, 'taxonomy_id' => $source_tax_id];
             $wpdb->update($term_table, $data, ['term_id' => $term_id]);
@@ -156,9 +158,9 @@ class QP_Sources_Page {
                 // If it's being made a child, remove any subject links it might have had
                  $wpdb->delete($rel_table, ['object_id' => $term_id, 'object_type' => 'source_subject_link']);
             }
-            \QuestionPress\Admin\Admin_Utils::set_message('Source/Section updated.', 'updated');
+            Admin_Utils::set_message('Source/Section updated.', 'updated');
         }
-        \QuestionPress\Admin\Admin_Utils::redirect_to_tab('sources');
+        Admin_Utils::redirect_to_tab('sources');
     }
 
     public static function render() {
@@ -183,7 +185,7 @@ class QP_Sources_Page {
         
         $all_source_terms = $wpdb->get_results($wpdb->prepare("SELECT term_id, name, parent FROM $term_table WHERE taxonomy_id = %d ORDER BY name ASC", $source_tax_id));
         
-        $list_table = new QP_Terms_List_Table('source', 'Source/Section', 'sources');
+        $list_table = new Terms_List_Table('source', 'Source/Section', 'sources');
         $list_table->prepare_items();
 
         // Capture the list table's HTML
@@ -225,6 +227,6 @@ class QP_Sources_Page {
         ];
 
         // Load and echo the template
-        echo qp_get_template_html( 'organization-tab-sources', 'admin', $args );
+        echo Template_Loader::get_html( 'organization-tab-sources', 'admin', $args );
     }
 }

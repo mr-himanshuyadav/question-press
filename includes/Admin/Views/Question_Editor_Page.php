@@ -1,10 +1,15 @@
 <?php
+
+namespace QuestionPress\Admin\Views;
+
+
 if (!defined('ABSPATH')) exit;
 
+use QuestionPress\Database\Questions_DB;
 use QuestionPress\Utils\Attempt_Evaluator;
 use QuestionPress\Admin\Views\Course_Editor_Helper;
 
-class QP_Question_Editor_Page
+class Question_Editor_Page
 {
     public static function handle_save_group()
     {
@@ -47,9 +52,9 @@ class QP_Question_Editor_Page
         ];
 
         if ($is_editing) {
-            \QuestionPress\Database\Questions_DB::update_group( $group_id, $group_data );
+            Questions_DB::update_group( $group_id, $group_data );
         } else {
-            $new_group_id = \QuestionPress\Database\Questions_DB::insert_group( $group_data );
+            $new_group_id = Questions_DB::insert_group( $group_data );
             if ($new_group_id) {
                 $group_id = $new_group_id;
             } else {
@@ -142,8 +147,8 @@ class QP_Question_Editor_Page
                     }
                 }
 
-                $original_correct_option_id = \QuestionPress\Database\Questions_DB::get_correct_option_id($question_id);
-                $correct_option_id_set = \QuestionPress\Database\Questions_DB::save_options_for_question($question_id, $q_data);
+                $original_correct_option_id = Questions_DB::get_correct_option_id($question_id);
+                $correct_option_id_set = Questions_DB::save_options_for_question($question_id, $q_data);
 
                 if ($original_correct_option_id != $correct_option_id_set) {
                     Attempt_Evaluator::re_evaluate_question_attempts($question_id, absint($correct_option_id_set));
@@ -162,7 +167,7 @@ class QP_Question_Editor_Page
 
         // --- 7. Final JSON Response ---
         if ($is_editing && empty($submitted_q_ids)) {
-            \QuestionPress\Database\Questions_DB::delete_group_and_contents($group_id);
+            Questions_DB::delete_group_and_contents($group_id);
             // Send a success response with a redirect URL to the main page
             wp_send_json_success(['redirect_url' => admin_url('admin.php?page=question-press&message=1')]);
         }
@@ -231,7 +236,7 @@ class QP_Question_Editor_Page
 
         if ($is_editing) {
             // --- NEW: Fetch all data using the DB class method ---
-            $editor_data = QuestionPress\Database\Questions_DB::get_group_details_for_editor($group_id);
+            $editor_data = Questions_DB::get_group_details_for_editor($group_id);
 
             if ($editor_data && $editor_data['group']) {
                 $group_data = $editor_data['group']; // The group object

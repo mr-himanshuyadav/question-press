@@ -1,13 +1,13 @@
 <?php
-if (!defined('ABSPATH')) exit;
+namespace QuestionPress\Admin\Views;
 
 use QuestionPress\Database\Terms_DB;
+use QuestionPress\Utils\Template_Loader;
+use QuestionPress\Admin\Admin_Utils;
 
-// We will create these files in the next steps
-require_once QP_PLUGIN_PATH . 'admin/class-qp-reports-list-table.php';
-require_once QP_PLUGIN_PATH . 'admin/class-qp-log-settings-list-table.php';
+if (!defined('ABSPATH')) exit;
 
-class QP_Logs_Reports_Page {
+class Logs_Reports_Page {
 
     public static function render() {
         $tabs = [
@@ -30,7 +30,7 @@ class QP_Logs_Reports_Page {
         ];
         
         // Load and echo the wrapper template
-        echo qp_get_template_html( 'reports-page-wrapper', 'admin', $args );
+        echo Template_Loader::get_html( 'reports-page-wrapper', 'admin', $args );
     }
 
     public static function render_reports_tab() {
@@ -44,7 +44,7 @@ class QP_Logs_Reports_Page {
         $current_status = isset($_GET['status']) ? sanitize_key($_GET['status']) : 'open';
 
         // Prepare the list table
-        $list_table = new QP_Reports_List_Table();
+        $list_table = new Reports_List_Table();
         $list_table->prepare_items();
         
         // Capture the list table's HTML components
@@ -66,7 +66,7 @@ class QP_Logs_Reports_Page {
         ];
         
         // Load and echo the template
-        echo qp_get_template_html( 'reports-tab-main', 'admin', $args );
+        echo Template_Loader::get_html( 'reports-tab-main', 'admin', $args );
     }
 
     public static function render_log_settings_tab() {
@@ -92,7 +92,7 @@ class QP_Logs_Reports_Page {
         }
 
         // Prepare the list table
-        $list_table = new QP_Log_Settings_List_Table();
+        $list_table = new Log_Settings_List_Table();
         $list_table->prepare_items();
         
         // Capture the list table's HTML
@@ -110,7 +110,7 @@ class QP_Logs_Reports_Page {
         ];
         
         // Load and echo the template
-        echo qp_get_template_html( 'reports-tab-log-settings', 'admin', $args );
+        echo Template_Loader::get_html( 'reports-tab-log-settings', 'admin', $args );
     }
 
     /**
@@ -142,13 +142,13 @@ class QP_Logs_Reports_Page {
                 // If it's in use, set an error message and redirect
                 $message = sprintf('This reason cannot be deleted because it is currently used in %d report(s).', $usage_count);
                 // **FIX**: Use Admin_Utils for message
-                \QuestionPress\Admin\Admin_Utils::set_message($message, 'error');
+                Admin_Utils::set_message($message, 'error');
             } else {
                 // If not in use, proceed with deletion
                 $wpdb->delete($wpdb->prefix . 'qp_term_meta', ['term_id' => $term_id_to_delete]);
                 $wpdb->delete($term_table, ['term_id' => $term_id_to_delete]);
                 // **FIX**: Use Admin_Utils for message
-                \QuestionPress\Admin\Admin_Utils::set_message('Reason deleted successfully.', 'updated');
+                Admin_Utils::set_message('Reason deleted successfully.', 'updated');
             }
 
             wp_safe_redirect(admin_url('admin.php?page=qp-logs-reports&tab=log_settings'));

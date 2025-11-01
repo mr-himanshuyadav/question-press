@@ -1,12 +1,14 @@
 <?php
 
+namespace QuestionPress\Admin\Views;
+
 if (!defined('ABSPATH')) {
     exit; // Exit if accessed directly.
 }
 
 use QuestionPress\Database\Terms_DB;
 
-class QP_Importer {
+class Importer {
 
     public function handle_import() {
         if (!isset($_POST['qp_import_nonce_field']) || !wp_verify_nonce($_POST['qp_import_nonce_field'], 'qp_import_nonce_action')) {

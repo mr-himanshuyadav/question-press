@@ -1,10 +1,13 @@
 <?php
+namespace QuestionPress\Admin\Views;
 
 if (!class_exists('WP_List_Table')) {
     require_once(ABSPATH . 'wp-admin/includes/class-wp-list-table.php');
 }
 
-class QP_Log_Settings_List_Table extends WP_List_Table {
+use \WP_List_Table;
+
+class Log_Settings_List_Table extends WP_List_Table {
 
     public function __construct() {
         parent::__construct(['singular' => 'Reason', 'plural' => 'Reasons', 'ajax' => false]);
