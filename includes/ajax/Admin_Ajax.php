@@ -9,6 +9,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 use QuestionPress\Database\Terms_DB;
 use QuestionPress\Database\Questions_DB;
 use QuestionPress\Utils\Attempt_Evaluator;
+use QuestionPress\Admin\Backup\Backup_Manager;
 use WP_Error; // Use statement for WP_Error
 use WP_Query; // Use statement for WP_Query
 use QP_Questions_List_Table; // Use statement for list table
@@ -562,22 +563,12 @@ class Admin_Ajax {
             wp_send_json_error(['message' => 'Permission denied.']);
         }
 
-        // Assume qp_perform_backup exists globally
-        if (function_exists('qp_perform_backup')) {
-            $result = qp_perform_backup('manual');
-            if ($result['success']) {
-                // Assume qp_get_local_backups_html exists globally
-                if(function_exists('qp_get_local_backups_html')){
-                     $backups_html = qp_get_local_backups_html();
-                     wp_send_json_success(['backups_html' => $backups_html]);
-                } else {
-                     wp_send_json_error(['message' => 'Helper function missing.']);
-                }
-            } else {
-                wp_send_json_error(['message' => $result['message']]);
-            }
+        $result = Backup_Manager::perform_backup('manual');
+        if ($result['success']) {
+             $backups_html = Backup_Manager::get_local_backups_html();
+             wp_send_json_success(['backups_html' => $backups_html]);
         } else {
-             wp_send_json_error(['message' => 'Backup function missing.']);
+            wp_send_json_error(['message' => $result['message']]);
         }
     }
 
@@ -602,14 +593,8 @@ class Admin_Ajax {
 
         if (file_exists($file_path)) {
             if (unlink($file_path)) {
-                // Deletion successful, send back the updated list
-                // Assume qp_get_local_backups_html exists globally
-                 if(function_exists('qp_get_local_backups_html')){
-                     $backups_html = qp_get_local_backups_html();
-                     wp_send_json_success(['backups_html' => $backups_html, 'message' => 'Backup deleted successfully.']);
-                } else {
-                     wp_send_json_error(['message' => 'Helper function missing.']);
-                }
+                 $backups_html = Backup_Manager::get_local_backups_html();
+                 wp_send_json_success(['backups_html' => $backups_html, 'message' => 'Backup deleted successfully.']);
             } else {
                 wp_send_json_error(['message' => 'Could not delete the file. Please check file permissions.']);
             }
@@ -632,17 +617,12 @@ class Admin_Ajax {
             wp_send_json_error(['message' => 'Invalid filename.']);
         }
 
-        // Assume qp_perform_restore exists globally
-         if (function_exists('qp_perform_restore')) {
-            $result = qp_perform_restore($filename);
-            if ($result['success']) {
-                wp_send_json_success(['message' => 'Data has been successfully restored.', 'stats' => $result['stats']]);
-            } else {
-                wp_send_json_error(['message' => $result['message']]);
-            }
-         } else {
-              wp_send_json_error(['message' => 'Restore function missing.']);
-         }
+        $result = Backup_Manager::perform_restore($filename);
+        if ($result['success']) {
+            wp_send_json_success(['message' => 'Data has been successfully restored.', 'stats' => $result['stats']]);
+        } else {
+            wp_send_json_error(['message' => $result['message']]);
+        }
     }
 
     /**

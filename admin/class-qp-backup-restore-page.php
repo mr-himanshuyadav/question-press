@@ -3,6 +3,8 @@ if (!defined('ABSPATH')) {
     exit; // Exit if accessed directly.
 }
 
+use QuestionPress\Admin\Backup\Backup_Manager;
+
 class QP_Backup_Restore_Page
 {
 
@@ -82,7 +84,7 @@ class QP_Backup_Restore_Page
         }
 
         // Now, call the new restore function with the uploaded filename
-        $result = qp_perform_restore($new_filename);
+        $result = Backup_Manager::perform_restore($new_filename);
 
         // Clean up the uploaded file regardless of success or failure
         if (file_exists($new_filepath)) {
@@ -106,7 +108,7 @@ class QP_Backup_Restore_Page
         
         // Fetch data needed for the template
         $schedule = get_option('qp_auto_backup_schedule', false);
-        $backups_html = qp_get_local_backups_html(); // Call the helper to get the table rows
+        $backups_html = Backup_Manager::get_local_backups_html(); // Call the helper to get the table rows
 
         // Prepare arguments for the template
         $args = [

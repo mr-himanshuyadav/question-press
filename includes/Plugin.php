@@ -20,6 +20,7 @@ use QuestionPress\Admin\Admin_Menu;
 use QuestionPress\Admin\Admin_Utils;
 use QuestionPress\Admin\Meta_Boxes;
 use QuestionPress\Admin\Form_Handler;
+use QuestionPress\Admin\Backup\Backup_Manager;
 
 /**
  * Final QuestionPress Class.
@@ -162,8 +163,8 @@ final class Plugin {
             add_action('save_post_qp_plan', [Meta_Boxes::class, 'save_plan_details']);
 
             // Course Access Meta Box (NEW)
-            add_action('add_meta_boxes_qp_course', [Meta_Boxes::class, 'add_course_access']); // CHANGED CALLBACK
-            add_action('save_post_qp_course', [Meta_Boxes::class, 'save_course_access'], 30, 1); // CHANGED CALLBACK
+            add_action('add_meta_boxes_qp_course', [Meta_Boxes::class, 'add_course_access']);
+            add_action('save_post_qp_course', [Meta_Boxes::class, 'save_course_access'], 30, 1);
 
             // Course Structure Meta Box (NEW)
             add_action('add_meta_boxes', [Meta_Boxes::class, 'add_course_structure']);
@@ -177,9 +178,9 @@ final class Plugin {
         add_action('woocommerce_product_after_variable_attributes', 'qp_add_plan_link_to_variable_products', 10, 3);
         add_action('woocommerce_save_product_variation', 'qp_save_plan_link_variable_product', 10, 2);
         add_action('woocommerce_order_status_completed', 'qp_grant_access_on_order_complete', 10, 1);
-        add_action('qp_scheduled_backup_hook', 'qp_run_scheduled_backup_event');
+        add_action('qp_scheduled_backup_hook', [Backup_Manager::class, 'run_scheduled_backup_event']);
         add_action('admin_head', [\QuestionPress\Admin\Views\User_Entitlements_Page::class, 'add_screen_options']);
-        add_action('admin_head', [Assets::instance(), 'enqueue_dynamic_admin_styles']); // CHANGED CALLBACK
+        add_action('admin_head', [Assets::instance(), 'enqueue_dynamic_admin_styles']);
         add_action('wp', 'qp_schedule_session_cleanup');
         add_action('qp_cleanup_abandoned_sessions_event', 'qp_cleanup_abandoned_sessions');
         add_action('before_delete_post', 'qp_cleanup_course_data_on_delete', 10, 1);
