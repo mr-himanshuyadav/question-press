@@ -234,8 +234,8 @@ final class Plugin {
         add_action('wp_ajax_qp_delete_backup', [\QuestionPress\Ajax\Admin_Ajax::class, 'delete_backup']);
         add_action('wp_ajax_qp_restore_backup', [\QuestionPress\Ajax\Admin_Ajax::class, 'restore_backup']);
         add_action('wp_ajax_regenerate_api_key', [\QuestionPress\Ajax\Admin_Ajax::class, 'regenerate_api_key']);
-        add_action('wp_ajax_get_practice_form_html', 'qp_get_practice_form_html_ajax'); // Keep as global for now
-        add_action('wp_ajax_get_course_structure', 'qp_get_course_structure_ajax'); // Keep as global for now
+        add_action('wp_ajax_get_practice_form_html', [\QuestionPress\Ajax\Practice_Ajax::class, 'get_practice_form_html']);
+        add_action('wp_ajax_get_course_structure', [\QuestionPress\Ajax\Practice_Ajax::class, 'get_course_structure']);
 
         // Filters
         add_filter('query_vars', [Rewrites::class, 'register_query_vars']);

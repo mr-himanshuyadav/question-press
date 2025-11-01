@@ -8,6 +8,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 use QuestionPress\Database\Terms_DB;
 use QuestionPress\Database\Questions_DB;
+use QuestionPress\Utils\User_Access; //
 use WP_Error; // Use statement for WP_Error
 use Exception; // Use statement for Exception
 
@@ -1454,7 +1455,7 @@ class Practice_Ajax {
         if ($access_mode === 'requires_purchase') {
             // If it requires purchase, verify the user has a valid entitlement
             // CHANGED: Use the new User_Access class method
-            if (!\QuestionPress\Utils\User_Access::can_access_course($user_id, $course_id, true)) { // true = ignore enrollment check
+            if (!User_Access::can_access_course($user_id, $course_id, true)) { // true = ignore enrollment check
                 wp_send_json_error(['message' => 'You do not have access to enroll in this course. Please purchase it first.', 'code' => 'access_denied']);
                 return; // Stop execution
             }
@@ -1529,5 +1530,134 @@ class Practice_Ajax {
         }
 
         wp_send_json_success(['questions' => $formatted_results]);
+    }
+
+    // --- NEW METHODS MOVED FROM question-press.php ---
+
+    /**
+     * AJAX handler to get the practice form HTML.
+     * Moved from global scope.
+     */
+    public static function get_practice_form_html_ajax()
+    {
+        check_ajax_referer('qp_practice_nonce', 'nonce');
+        // Use global namespace \QP_Shortcodes as it's not refactored yet
+        wp_send_json_success(['form_html' => \QP_Shortcodes::render_practice_form()]);
+    }
+
+    /**
+     * AJAX handler to fetch the structure (sections and items) for a specific course.
+     * Also fetches the user's progress for items within that course.
+     * Moved from global scope.
+     */
+    public static function get_course_structure_ajax() {
+        check_ajax_referer('qp_practice_nonce', 'nonce'); // Re-use the existing frontend nonce
+
+        if (!is_user_logged_in()) {
+            wp_send_json_error(['message' => 'Not logged in.']);
+        }
+
+        $course_id = isset($_POST['course_id']) ? absint($_POST['course_id']) : 0;
+        $user_id = get_current_user_id();
+
+        if (!$course_id) {
+            wp_send_json_error(['message' => 'Invalid course ID.']);
+        }
+
+        // --- NEW: Check if user has access to this course before proceeding ---
+        // Uses the imported User_Access class
+        if (!User_Access::can_access_course($user_id, $course_id)) {
+            wp_send_json_error(['message' => 'You do not have access to view this course structure.', 'code' => 'access_denied']);
+            return; // Stop execution
+        }
+
+        global $wpdb;
+        $sections_table = $wpdb->prefix . 'qp_course_sections';
+        $items_table = $wpdb->prefix . 'qp_course_items';
+        $progress_table = $wpdb->prefix . 'qp_user_items_progress';
+        $course_title = get_the_title($course_id); // Get course title from wp_posts
+
+        $structure = [
+            'course_id' => $course_id,
+            'course_title' => $course_title,
+            'sections' => []
+        ];
+
+        // Get sections for the course
+        $sections = $wpdb->get_results($wpdb->prepare(
+            "SELECT section_id, title, description, section_order FROM $sections_table WHERE course_id = %d ORDER BY section_order ASC",
+            $course_id
+        ));
+
+        if (empty($sections)) {
+            wp_send_json_success($structure); // Send structure with empty sections array
+            return;
+        }
+
+        $section_ids = wp_list_pluck($sections, 'section_id');
+        $ids_placeholder = implode(',', array_map('absint', $section_ids));
+
+        // Get all items for these sections, including progress status and result data
+        $items_raw = $wpdb->get_results($wpdb->prepare(
+            "SELECT i.item_id, i.section_id, i.title, i.item_order, i.content_type, p.status, p.result_data -- <<< ADD p.result_data
+             FROM $items_table i
+             LEFT JOIN {$wpdb->prefix}qp_user_items_progress p ON i.item_id = p.item_id AND p.user_id = %d AND p.course_id = %d
+             WHERE i.section_id IN ($ids_placeholder)
+             ORDER BY i.item_order ASC",
+            $user_id,
+            $course_id
+        ));
+
+        // Organize items by section
+        $items_by_section = [];
+        foreach ($items_raw as $item) {
+            $item->status = $item->status ?? 'not_started'; // Use fetched status or default
+
+            // --- ADD THIS BLOCK ---
+            $item->session_id = null; // Default to null
+            if (!empty($item->result_data)) {
+                $result_data_decoded = json_decode($item->result_data, true);
+                if (isset($result_data_decoded['session_id'])) {
+                    $item->session_id = absint($result_data_decoded['session_id']);
+                }
+            }
+            unset($item->result_data); // Don't need to send the full result data to JS for this
+            // --- END ADDED BLOCK ---
+
+            if (!isset($items_by_section[$item->section_id])) {
+                $items_by_section[$item->section_id] = [];
+            }
+            $items_by_section[$item->section_id][] = $item;
+        }
+
+        // Get user's progress for these items in this course
+        $progress_raw = $wpdb->get_results($wpdb->prepare(
+            "SELECT item_id, status FROM $progress_table WHERE user_id = %d AND course_id = %d",
+            $user_id,
+            $course_id
+        ), OBJECT_K); // Keyed by item_id for easy lookup
+
+        // Organize items by section
+        $items_by_section = [];
+        foreach ($items_raw as $item) {
+            $item->status = $progress_raw[$item->item_id]->status ?? 'not_started'; // Add status
+            if (!isset($items_by_section[$item->section_id])) {
+                $items_by_section[$item->section_id] = [];
+            }
+            $items_by_section[$item->section_id][] = $item;
+        }
+
+        // Build the final structure
+        foreach ($sections as $section) {
+            $structure['sections'][] = [
+                'id' => $section->section_id,
+                'title' => $section->title,
+                'description' => $section->description,
+                'order' => $section->section_order,
+                'items' => $items_by_section[$section->section_id] ?? []
+            ];
+        }
+
+        wp_send_json_success($structure);
     }
 }
