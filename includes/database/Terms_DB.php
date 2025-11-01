@@ -47,9 +47,9 @@ class Terms_DB extends DB { // Inherits from DB to get $wpdb
 
     /**
     * Helper method to get taxonomy ID by name.
-    * (You might want this in Terms_DB instead)
-    * @param string $taxonomy_name
-    * @return int|null
+    *
+    * @param string $taxonomy_name The name of the taxonomy (e.g., 'subject', 'source').
+    * @return int|null The taxonomy_id or null if not found.
     */
    public static function get_taxonomy_id_by_name($taxonomy_name){
          $tax_table = self::get_taxonomies_table_name(); // Use self::
@@ -61,7 +61,6 @@ class Terms_DB extends DB { // Inherits from DB to get $wpdb
 
     /**
      * Retrieve metadata for a term from our custom table.
-     * (Moved from global function qp_get_term_meta)
      *
      * @param int    $term_id  ID of the term.
      * @param string $meta_key Metadata key.
@@ -72,16 +71,18 @@ class Terms_DB extends DB { // Inherits from DB to get $wpdb
         $wpdb = self::$wpdb;
         $meta_table = self::get_term_meta_table_name();
         $value = $wpdb->get_var($wpdb->prepare("SELECT meta_value FROM $meta_table WHERE term_id = %d AND meta_key = %s", $term_id, $meta_key));
-        return $value;
+        
+        // Unserialize if the value was serialized
+        return maybe_unserialize($value);
     }
 
     /**
      * Update metadata for a term in our custom table. Creates if not exists.
-     * (Moved from global function qp_update_term_meta)
      *
      * @param int    $term_id     ID of the term.
      * @param string $meta_key    Metadata key.
      * @param mixed  $meta_value  Metadata value. Must be serializable if non-scalar.
+     * @return bool True on success, false on failure.
      */
     public static function update_meta($term_id, $meta_key, $meta_value) {
         $meta_table = self::get_term_meta_table_name();
@@ -91,27 +92,33 @@ class Terms_DB extends DB { // Inherits from DB to get $wpdb
             $meta_key
         ));
 
+        $meta_value_serialized = maybe_serialize($meta_value);
+
         if ($existing_meta_id) {
-            self::$wpdb->update(
+            $result = self::$wpdb->update(
                 $meta_table,
-                ['meta_value' => maybe_serialize($meta_value)], // Serialize if needed
-                ['meta_id' => $existing_meta_id]
+                ['meta_value' => $meta_value_serialized],
+                ['meta_id' => $existing_meta_id],
+                ['%s'], // format for value
+                ['%d']  // format for where
             );
         } else {
-            self::$wpdb->insert(
+            $result = self::$wpdb->insert(
                 $meta_table,
                 [
                     'term_id' => $term_id,
                     'meta_key' => $meta_key,
-                    'meta_value' => maybe_serialize($meta_value) // Serialize if needed
-                ]
+                    'meta_value' => $meta_value_serialized
+                ],
+                ['%d', '%s', '%s'] // formats
             );
         }
+        
+        return (bool) $result;
     }
 
     /**
      * Get or create a term in the custom taxonomy system.
-     * (Moved from global function qp_get_or_create_term)
      *
      * @param string $name         The name of the term.
      * @param int    $taxonomy_id  The ID of the taxonomy.
@@ -149,7 +156,8 @@ class Terms_DB extends DB { // Inherits from DB to get $wpdb
                 'slug'        => sanitize_title($name),
                 'taxonomy_id' => $taxonomy_id,
                 'parent'      => $parent_id,
-            ]
+            ],
+            ['%s', '%s', '%d', '%d']
         );
 
         return $result ? (int) self::$wpdb->insert_id : 0;
@@ -157,7 +165,6 @@ class Terms_DB extends DB { // Inherits from DB to get $wpdb
 
     /**
      * Trace a term's lineage back to the root and return an array of names.
-     * (Moved from global function qp_get_term_lineage_names)
      *
      * @param int    $term_id      The starting term_id.
      * @return array An ordered array of names from parent to child.
@@ -184,7 +191,6 @@ class Terms_DB extends DB { // Inherits from DB to get $wpdb
 
     /**
      * Get all descendant term IDs for a given parent, including the parent itself.
-     * (Moved from global function get_all_descendant_ids)
      *
      * @param int    $parent_id The starting term_id.
      * @return array An array of term IDs.
@@ -221,7 +227,6 @@ class Terms_DB extends DB { // Inherits from DB to get $wpdb
 
     /**
      * Helper function to get the full source hierarchy for a given question.
-     * (Moved from global function qp_get_source_hierarchy_for_question)
      *
      * @param int $question_id The ID of the question.
      * @return array An array containing the names of the source, section, etc., in order.
@@ -230,7 +235,7 @@ class Terms_DB extends DB { // Inherits from DB to get $wpdb
         $rel_table = self::get_relationships_table_name();
         $term_table = self::get_terms_table_name();
         $tax_table = self::get_taxonomies_table_name();
-        $questions_table = self::$wpdb->prefix . 'qp_questions'; // Hardcode for now
+        $questions_table = self::$wpdb->prefix . 'qp_questions';
 
         // Step 1: Get the group_id for the given question.
         $group_id = self::$wpdb->get_var(self::$wpdb->prepare(
@@ -243,6 +248,7 @@ class Terms_DB extends DB { // Inherits from DB to get $wpdb
         }
 
         // Step 2: Find the most specific source term linked to the GROUP.
+        // Assumes a group is only linked to one source branch.
         $term_id = self::$wpdb->get_var(self::$wpdb->prepare(
             "SELECT r.term_id
              FROM {$rel_table} r
@@ -257,7 +263,7 @@ class Terms_DB extends DB { // Inherits from DB to get $wpdb
             return [];
         }
 
-        // Step 3: Use the moved lineage function
+        // Step 3: Use the lineage function
         return self::get_lineage_names($term_id);
     }
 
@@ -265,17 +271,26 @@ class Terms_DB extends DB { // Inherits from DB to get $wpdb
      * Gets terms linked to a specific object ID and type for given taxonomy names.
      * Optionally includes term meta.
      *
-     * @param int          $object_id    The ID of the object (e.g., group_id, question_id).
+     * @param int|array    $object_id    The ID(s) of the object (e.g., group_id, question_id).
      * @param string       $object_type  The type of the object ('group', 'question').
      * @param string|array $taxonomy_names The name(s) of the taxonomy(ies) to look for.
      * @param array        $include_meta Optional array of meta keys to include.
-     * @return array       Array of term objects (stdClass), each potentially containing a 'meta' property. Returns empty array if taxonomy doesn't exist or no terms found.
+     * @return array       Array of term objects (stdClass), each potentially containing a 'meta' property.
+     * If $object_id is an array, returns an associative array [object_id => [term, ...]].
      */
     public static function get_linked_terms( $object_id, $object_type, $taxonomy_names, $include_meta = [] ) {
-        $object_id = absint($object_id);
-        if ( $object_id <= 0 ) {
-            return [];
+        $is_bulk = is_array($object_id);
+        
+        if ($is_bulk) {
+            $object_ids = array_map('absint', $object_id);
+            if (empty($object_ids)) return [];
+            $obj_id_placeholder = implode(',', $object_ids);
+        } else {
+            $object_ids = [absint($object_id)];
+            if ($object_ids[0] <= 0) return [];
+            $obj_id_placeholder = $object_ids[0];
         }
+
         $taxonomy_names = (array) $taxonomy_names;
         $tax_placeholders = implode( ',', array_fill( 0, count($taxonomy_names), '%s' ) );
 
@@ -291,35 +306,41 @@ class Terms_DB extends DB { // Inherits from DB to get $wpdb
         $taxonomy_ids = self::$wpdb->get_col( $taxonomy_ids_query );
 
         if ( empty($taxonomy_ids) ) {
-            return []; // Taxonomies not found
+            return $is_bulk ? [] : []; // Taxonomies not found
         }
         $tax_ids_placeholder = implode( ',', $taxonomy_ids );
 
         // Base query to get linked terms
         $sql = self::$wpdb->prepare(
-            "SELECT t.term_id, t.name, t.slug, t.parent, tax.taxonomy_name
+            "SELECT r.object_id, t.term_id, t.name, t.slug, t.parent, tax.taxonomy_name
              FROM {$term_table} t
              JOIN {$rel_table} r ON t.term_id = r.term_id
              JOIN {$tax_table} tax ON t.taxonomy_id = tax.taxonomy_id
-             WHERE r.object_id = %d AND r.object_type = %s AND t.taxonomy_id IN ({$tax_ids_placeholder})",
-            $object_id,
+             WHERE r.object_id IN ({$obj_id_placeholder}) AND r.object_type = %s AND t.taxonomy_id IN ({$tax_ids_placeholder})",
             $object_type
         );
 
-        $terms = self::$wpdb->get_results( $sql );
+        $terms_raw = self::$wpdb->get_results( $sql );
+        if (empty($terms_raw)) {
+             return $is_bulk ? [] : [];
+        }
 
         // Include meta if requested
-        if ( !empty($terms) && !empty($include_meta) ) {
-            $term_ids = wp_list_pluck( $terms, 'term_id' );
-            $term_ids_placeholder = implode( ',', array_map('absint', $term_ids) );
+        if ( !empty($include_meta) ) {
+            $term_ids = wp_list_pluck( $terms_raw, 'term_id' );
+            $term_ids_placeholder = implode( ',', array_map('absint', array_unique($term_ids)) );
             $meta_keys_placeholder = implode( ',', array_fill(0, count($include_meta), '%s') );
             $meta_table = self::get_term_meta_table_name();
 
+            $meta_query_args = $include_meta;
+            // Note: $term_ids_placeholder is an interpolated string of numbers, not a parameter for prepare
             $meta_query = self::$wpdb->prepare(
-                "SELECT term_id, meta_key, meta_value FROM {$meta_table} WHERE term_id IN ({$term_ids_placeholder}) AND meta_key IN ({$meta_keys_placeholder})",
-                array_merge( [$term_ids_placeholder], $include_meta ) // Note: Placeholder %d is handled directly in SQL string
+                "SELECT term_id, meta_key, meta_value 
+                 FROM {$meta_table} 
+                 WHERE term_id IN ({$term_ids_placeholder}) AND meta_key IN ({$meta_keys_placeholder})",
+                $meta_query_args
             );
-             // Fetch meta and organize it
+            
             $meta_results = self::$wpdb->get_results( $meta_query );
             $meta_by_term = [];
             foreach ( $meta_results as $meta ) {
@@ -327,16 +348,21 @@ class Terms_DB extends DB { // Inherits from DB to get $wpdb
             }
 
             // Attach meta to terms
-            foreach ( $terms as $term ) {
+            foreach ( $terms_raw as $term ) {
                 $term->meta = $meta_by_term[ $term->term_id ] ?? [];
             }
         }
 
-        return $terms;
+        // Format output
+        if ($is_bulk) {
+            $terms_by_object = [];
+            foreach ($terms_raw as $term) {
+                $terms_by_object[$term->object_id][] = $term;
+            }
+            return $terms_by_object;
+        } else {
+            return $terms_raw; // Just return the array of terms for the single object
+        }
     }
-
-
-    // --- Methods will be moved/added below ---
-
 
 } // End class Terms_DB

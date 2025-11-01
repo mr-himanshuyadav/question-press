@@ -6,6 +6,8 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
+use QuestionPress\Database\Terms_DB;
+
 /**
  * Handles database operations for Questions, Groups, and Options.
  *
@@ -41,7 +43,7 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
      * Get a single question's basic data by its ID.
      * Includes group data.
      *
-     * @param int $question_id
+     * @param int $question_id The ID of the question.
      * @return object|null Question data object or null if not found.
      */
     public static function get_question_by_id( $question_id ) {
@@ -60,7 +62,7 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
     /**
      * Get options for a specific question.
      *
-     * @param int $question_id
+     * @param int $question_id The ID of the question.
      * @return array Array of option objects.
      */
     public static function get_options_for_question( $question_id ) {
@@ -69,7 +71,7 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
             "SELECT option_id, option_text, is_correct
              FROM {$o_table}
              WHERE question_id = %d
-             ORDER BY option_id ASC", // Or however options should be ordered by default
+             ORDER BY option_id ASC",
             $question_id
         ) );
     }
@@ -77,7 +79,7 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
     /**
      * Get the correct option ID for a question.
      *
-     * @param int $question_id
+     * @param int $question_id The ID of the question.
      * @return int|null Correct option ID or null if none is set.
      */
     public static function get_correct_option_id( $question_id ) {
@@ -91,8 +93,8 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
     /**
         * Get basic group data by ID.
         *
-        * @param int $group_id
-        * @return object|null
+        * @param int $group_id The ID of the group.
+        * @return object|null The group data object or null if not found.
         */
     public static function get_group_by_id( $group_id ) {
         $g_table = self::get_groups_table_name();
@@ -105,7 +107,7 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
     /**
      * Get all questions belonging to a specific group.
      *
-     * @param int $group_id
+     * @param int $group_id The ID of the group.
      * @return array Array of question objects.
      */
     public static function get_questions_by_group_id( $group_id ) {
@@ -204,7 +206,7 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
 
         $q_table = self::get_questions_table_name();
         $o_table = self::get_options_table_name();
-        $rel_table = Terms_DB::get_relationships_table_name(); // Use Terms_DB method
+        $rel_table = Terms_DB::get_relationships_table_name();
 
         // Delete options
         self::$wpdb->query( "DELETE FROM {$o_table} WHERE question_id IN ({$ids_placeholder})" );
@@ -229,7 +231,7 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
         }
 
         $g_table = self::get_groups_table_name();
-        $rel_table = Terms_DB::get_relationships_table_name(); // Use Terms_DB method
+        $rel_table = Terms_DB::get_relationships_table_name();
 
         // Find questions associated with the group
         $question_ids = self::get_questions_by_group_id( $group_id );
@@ -311,9 +313,7 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
             }
             $where_conditions[] = self::$wpdb->prepare("topic_rel.term_id = %d", $args['topic_id']);
         } elseif ( $args['subject_id'] > 0 ) {
-            $child_topic_ids = Terms_DB::get_all_descendant_ids($args['subject_id']); // Use Terms_DB method
-            // Note: get_all_descendant_ids includes the parent, adjust if only children needed
-            // For filtering, we want questions linked to the subject OR its descendants
+            $child_topic_ids = Terms_DB::get_all_descendant_ids($args['subject_id']);
             if (!empty($child_topic_ids)) {
                  $ids_placeholder = implode(',', $child_topic_ids);
                  if (!in_array('topic_rel', $joins_added)) {
@@ -336,7 +336,7 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
             }
 
             if ($term_id_to_filter > 0) {
-                $descendant_ids = Terms_DB::get_all_descendant_ids($term_id_to_filter); // Use Terms_DB method
+                $descendant_ids = Terms_DB::get_all_descendant_ids($term_id_to_filter);
                 if (!empty($descendant_ids)) {
                     $term_ids_placeholder = implode(',', $descendant_ids);
                     if (!in_array('source_rel', $joins_added)) {
@@ -363,7 +363,7 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
 
         // Label Filter (AND logic)
         if ( !empty($args['label_ids']) ) {
-            $label_tax_id = Terms_DB::get_taxonomy_id_by_name('label'); // Assuming you add this helper to Terms_DB
+            $label_tax_id = Terms_DB::get_taxonomy_id_by_name('label');
             if ($label_tax_id) {
                  $label_ids_placeholder = implode(',', array_map('absint', $args['label_ids']));
                  // Use a subquery to find questions having ALL specified labels
@@ -384,15 +384,16 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
         // --- Handle Count Query ---
         if ( $args['count_only'] ) {
             $count_query = $select_sql . " " . $query_from . " " . $query_joins . " " . $where_clause;
-            return (int) self::$wpdb->get_var( $count_query );
+            // Use prepare if params exist (e.g., from search)
+            $query_to_run = empty($params) ? $count_query : self::$wpdb->prepare($count_query, $params);
+            return (int) self::$wpdb->get_var( $query_to_run );
         }
 
         // --- Handle Data Query ---
         // Add joins needed for sorting/display *after* filtering is built
          if ( 'subject_name' === $args['orderby'] && !in_array('topic_rel', $joins_added) ) {
-             // Need topic relationship to get parent subject
              $query_joins .= " LEFT JOIN {$rel_table} topic_rel ON g.group_id = topic_rel.object_id AND topic_rel.object_type = 'group' AND topic_rel.term_id IN (SELECT term_id FROM {$term_table} WHERE parent != 0 AND taxonomy_id = (SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'subject'))";
-             $joins_added[] = 'topic_rel'; // Mark as added
+             $joins_added[] = 'topic_rel';
          }
          if ( 'subject_name' === $args['orderby'] && !in_array('topic_term', $joins_added) ) {
             $query_joins .= " LEFT JOIN {$term_table} topic_term ON topic_rel.term_id = topic_term.term_id";
@@ -402,17 +403,16 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
             $query_joins .= " LEFT JOIN {$term_table} subject_term ON topic_term.parent = subject_term.term_id";
             $joins_added[] = 'subject_term';
          }
-         // Add similar logic if sorting by source or exam name is needed later
 
         // Sorting
         $order = strtoupper($args['order']) === 'ASC' ? 'ASC' : 'DESC';
         $orderby = 'q.question_id'; // Default safe value
-         $allowed_orderby = ['question_id', 'subject_name']; // Add other allowed columns later
+         $allowed_orderby = ['question_id', 'subject_name'];
          if ( in_array($args['orderby'], $allowed_orderby) ) {
              if ( $args['orderby'] === 'subject_name' ) {
-                 $orderby = 'subject_term.name'; // Use the alias from the JOIN
+                 $orderby = 'subject_term.name';
              } else {
-                 $orderby = 'q.' . sanitize_key($args['orderby']); // Prefix question table columns
+                 $orderby = 'q.' . sanitize_key($args['orderby']);
              }
          }
 
@@ -424,18 +424,24 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
                     . " ORDER BY {$orderby} {$order}"
                     . " LIMIT %d OFFSET %d";
 
+        // Add pagination params to the end
+        $params[] = $args['per_page'];
+        $params[] = $offset;
+
         $items = self::$wpdb->get_results( self::$wpdb->prepare(
             $data_query,
-            $args['per_page'],
-            $offset
+            $params
         ), ARRAY_A );
 
-         // Fetch total items count using the same filters
+         // Fetch total items count using the same filters (without pagination params)
+         array_pop($params); // remove offset
+         array_pop($params); // remove per_page
          $count_query = "SELECT COUNT(DISTINCT q.question_id) " . $query_from . " " . $query_joins . " " . $where_clause;
-         $total_items = (int) self::$wpdb->get_var( $count_query );
+         $query_to_run = empty($params) ? $count_query : self::$wpdb->prepare($count_query, $params);
+         $total_items = (int) self::$wpdb->get_var( $query_to_run );
 
 
-        // Add term data needed for display (Subject/Topic/Exam/Source)
+        // Add term data needed for display
          if(!empty($items)){
              self::enrich_questions_with_terms($items);
          }
@@ -448,123 +454,99 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
     }
 
     /**
-        * Helper to enrich question items array with term names (Subject, Topic, Exam, Source Lineage, Labels).
-        * Modifies the input array by reference.
-        *
-        * @param array $items Array of question items fetched from DB.
-        */
+     * Helper to enrich question items array with term names (Subject, Topic, Exam, Source Lineage, Labels).
+     * Modifies the input array by reference.
+     *
+     * @param array &$items Array of question items (as associative arrays) fetched from DB.
+     */
     public static function enrich_questions_with_terms(array &$items) {
         if (empty($items)) return;
 
         $group_ids = array_unique(wp_list_pluck($items, 'group_id'));
         $question_ids = array_unique(wp_list_pluck($items, 'question_id'));
 
+        // Clean up empty/invalid IDs
+        $group_ids = array_filter($group_ids, 'absint');
+        $question_ids = array_filter($question_ids, 'absint');
+
         if (empty($group_ids) && empty($question_ids)) return;
 
-        $rel_table = Terms_DB::get_relationships_table_name();
-        $term_table = Terms_DB::get_terms_table_name();
-        $tax_table = Terms_DB::get_taxonomies_table_name();
-        $meta_table = Terms_DB::get_term_meta_table_name();
-
         // --- Get All Relevant Relationships in One Go ---
-        $relationships = [];
-        if (!empty($group_ids)) {
-                $group_ids_placeholder = implode(',', $group_ids);
-                $group_rels = self::$wpdb->get_results("
-                    SELECT r.object_id, r.term_id, t.name, t.parent, tax.taxonomy_name
-                    FROM {$rel_table} r
-                    JOIN {$term_table} t ON r.term_id = t.term_id
-                    JOIN {$tax_table} tax ON t.taxonomy_id = tax.taxonomy_id
-                    WHERE r.object_id IN ({$group_ids_placeholder}) AND r.object_type = 'group'
-                    AND tax.taxonomy_name IN ('subject', 'source', 'exam')
-                ");
-                if ($group_rels) $relationships = array_merge($relationships, $group_rels);
-        }
-        if (!empty($question_ids)) {
-                $question_ids_placeholder = implode(',', $question_ids);
-                $label_rels = self::$wpdb->get_results("
-                    SELECT r.object_id, r.term_id, t.name, m.meta_value as color, tax.taxonomy_name
-                    FROM {$rel_table} r
-                    JOIN {$term_table} t ON r.term_id = t.term_id
-                    JOIN {$tax_table} tax ON t.taxonomy_id = tax.taxonomy_id
-                    LEFT JOIN {$meta_table} m ON r.term_id = m.term_id AND m.meta_key = 'color'
-                    WHERE r.object_id IN ({$question_ids_placeholder}) AND r.object_type = 'question'
-                    AND tax.taxonomy_name = 'label'
-                ");
-                if ($label_rels) $relationships = array_merge($relationships, $label_rels);
-        }
-
-        // --- Process Relationships and Store by Item ID ---
         $terms_by_item = [];
-        foreach ($relationships as $rel) {
-            $item_id = $rel->object_id; // Could be group_id or question_id
-            if (!isset($terms_by_item[$item_id])) {
-                    $terms_by_item[$item_id] = ['subject' => null, 'topic' => null, 'exam' => null, 'source_term_id' => null, 'labels' => []];
-            }
-            switch ($rel->taxonomy_name) {
-                case 'subject':
-                    if ($rel->parent != 0) $terms_by_item[$item_id]['topic'] = $rel;
-                    else $terms_by_item[$item_id]['subject'] = $rel;
-                    break;
-                case 'source':
-                    // Store the most specific source term ID found for the group
-                    $terms_by_item[$item_id]['source_term_id'] = $rel->term_id;
-                    break;
-                case 'exam':
-                    $terms_by_item[$item_id]['exam'] = $rel;
-                    break;
-                case 'label':
-                    // Labels are associated with question_id, not group_id
-                    $terms_by_item[$item_id]['labels'][] = (object)['label_name' => $rel->name, 'label_color' => $rel->color];
-                    break;
-            }
+        
+        // Initialize for all items to prevent notices
+        foreach ($items as $item) {
+            $terms_by_item[$item['group_id']] = ['subject' => null, 'topic' => null, 'exam' => null, 'source_term_id' => null];
+            $terms_by_item[$item['question_id']] = ['labels' => []];
         }
 
-            // --- Fill in missing Subject if only Topic exists ---
-            // Pre-fetch all subject terms for lookup
-            $all_subject_terms = [];
-            $subject_tax_id = Terms_DB::get_taxonomy_id_by_name('subject');
-            if ($subject_tax_id) {
-                $all_subject_terms_raw = self::$wpdb->get_results(self::$wpdb->prepare("SELECT term_id, name, parent FROM {$term_table} WHERE taxonomy_id = %d", $subject_tax_id), OBJECT_K);
-                if ($all_subject_terms_raw) $all_subject_terms = $all_subject_terms_raw;
-            }
-
-            foreach($terms_by_item as $item_id => &$term_data) {
-                if ($term_data['topic'] && !$term_data['subject']) {
-                    $parent_id = $term_data['topic']->parent;
-                    if (isset($all_subject_terms[$parent_id])) {
-                        $term_data['subject'] = $all_subject_terms[$parent_id];
+        if (!empty($group_ids)) {
+            $group_rels = Terms_DB::get_linked_terms($group_ids, 'group', ['subject', 'source', 'exam']);
+            foreach ($group_rels as $gid => $terms) {
+                foreach ($terms as $term) {
+                    switch ($term->taxonomy_name) {
+                        case 'subject':
+                            if ($term->parent != 0) $terms_by_item[$gid]['topic'] = $term;
+                            else $terms_by_item[$gid]['subject'] = $term;
+                            break;
+                        case 'source':
+                            $terms_by_item[$gid]['source_term_id'] = $term->term_id;
+                            break;
+                        case 'exam':
+                            $terms_by_item[$gid]['exam'] = $term;
+                            break;
                     }
                 }
             }
-            unset($term_data); // Unset reference
-
-            // --- Enrich the original $items array ---
-            foreach ($items as &$item) {
-                $gid = $item['group_id'];
-                $qid = $item['question_id'];
-                $group_terms = $terms_by_item[$gid] ?? null;
-                $question_terms = $terms_by_item[$qid] ?? null;
-
-                $item['subject_name'] = $group_terms['subject']->name ?? null;
-                $item['topic_name'] = $group_terms['topic']->name ?? null;
-                $item['exam_name'] = $group_terms['exam']->name ?? null;
-                $item['linked_source_term_id'] = $group_terms['source_term_id'] ?? null; // Keep the ID for lineage lookup later
-                $item['labels'] = $question_terms['labels'] ?? [];
-
-                // If subject is missing but topic exists, fill subject from topic's parent (already looked up)
-                if (empty($item['subject_name']) && $group_terms['topic'] && isset($all_subject_terms[$group_terms['topic']->parent])) {
-                    $item['subject_name'] = $all_subject_terms[$group_terms['topic']->parent]->name;
+        }
+        
+        if (!empty($question_ids)) {
+            $label_rels = Terms_DB::get_linked_terms($question_ids, 'question', 'label', ['color']);
+            foreach ($label_rels as $qid => $terms) {
+                foreach ($terms as $term) {
+                    $terms_by_item[$qid]['labels'][] = (object)[
+                        'label_id' => $term->term_id, // Add ID
+                        'label_name' => $term->name, 
+                        'label_color' => $term->meta['color'] ?? '#cccccc'
+                    ];
                 }
             }
-            unset($item); // Unset reference
+        }
+
+        // --- Fill in missing Subject if only Topic exists ---
+        $all_subject_terms = [];
+        $subject_tax_id = Terms_DB::get_taxonomy_id_by_name('subject');
+        if ($subject_tax_id) {
+            $all_subject_terms_raw = self::$wpdb->get_results(self::$wpdb->prepare("SELECT term_id, name, parent FROM " . Terms_DB::get_terms_table_name() . " WHERE taxonomy_id = %d", $subject_tax_id), OBJECT_K);
+            if ($all_subject_terms_raw) $all_subject_terms = $all_subject_terms_raw;
+        }
+
+        // Enrich the original $items array
+        foreach ($items as &$item) {
+            $gid = $item['group_id'];
+            $qid = $item['question_id'];
+            
+            $group_terms = $terms_by_item[$gid] ?? ['subject' => null, 'topic' => null, 'exam' => null, 'source_term_id' => null];
+            $question_terms = $terms_by_item[$qid] ?? ['labels' => []];
+
+            $item['subject_name'] = $group_terms['subject']->name ?? null;
+            $item['topic_name'] = $group_terms['topic']->name ?? null;
+            $item['exam_name'] = $group_terms['exam']->name ?? null;
+            $item['linked_source_term_id'] = $group_terms['source_term_id'] ?? null;
+            $item['labels'] = $question_terms['labels'] ?? [];
+
+            // If subject is missing but topic exists, fill subject from topic's parent
+            if (empty($item['subject_name']) && $group_terms['topic'] && isset($all_subject_terms[$group_terms['topic']->parent])) {
+                $item['subject_name'] = $all_subject_terms[$group_terms['topic']->parent]->name;
+            }
+        }
+        unset($item); // Unset reference
     }
 
     /**
      * Saves/Updates options for a given question based on submitted data.
      * Deletes options not present in the submitted data.
      * Sets the correct answer.
-     * (Moved from global function process_question_options)
      *
      * @param int $question_id The ID of the question.
      * @param array $q_data    The submitted data array for this question (containing options, option_ids, correct_option_id).
@@ -578,18 +560,12 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
         $correct_option_id_from_form = isset($q_data['correct_option_id']) ? $q_data['correct_option_id'] : null;
         $final_correct_option_id = null; // Variable to store the actual correct ID
 
-        // Get original correct option ID before changes
-        // $original_correct_option_id = self::get_correct_option_id($question_id); // Fetch original correct ID
-
         foreach ($options_text as $index => $option_text) {
             $option_id = isset($option_ids[$index]) ? absint($option_ids[$index]) : 0;
-            // --- FIX: Use wp_kses_post for option text ---
             $trimmed_option_text = trim(stripslashes($option_text));
             if (empty($trimmed_option_text)) continue;
 
-            $option_data = ['option_text' => wp_kses_post($trimmed_option_text)]; // Use wp_kses_post
-            // --- END FIX ---
-
+            $option_data = ['option_text' => wp_kses_post($trimmed_option_text)];
             $current_option_actual_id = 0; // Track the ID for this iteration
 
             if ($option_id > 0) {
@@ -612,7 +588,7 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
             }
 
              // Check if this option is the one marked as correct from the form
-             if ($correct_option_id_from_form == $current_option_actual_id) { // Use == for loose comparison
+             if ($correct_option_id_from_form == $current_option_actual_id) {
                  $final_correct_option_id = $current_option_actual_id;
              }
 
@@ -625,7 +601,7 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
         $options_to_delete = array_diff($existing_db_option_ids, $submitted_option_ids);
         if (!empty($options_to_delete)) {
             $ids_placeholder = implode(',', array_map('absint', $options_to_delete));
-            self::$wpdb->query("DELETE FROM $o_table WHERE option_id IN ($ids_placeholder)"); // Use query() for multiple deletions
+            self::$wpdb->query("DELETE FROM $o_table WHERE option_id IN ($ids_placeholder)");
         }
 
         // Set the correct answer flag
@@ -638,33 +614,14 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
             );
         }
 
-        // --- Return the correct ID that was actually set ---
         return $final_correct_option_id;
-        // --- Removed the call to qp_re_evaluate_question_attempts ---
-
     }
 
     /**
      * Retrieves all necessary data for rendering the question group editor page.
-     * Includes group details, questions, options, labels, and term relationships.
      *
      * @param int $group_id The ID of the question group.
      * @return array|null An associative array containing all group details, or null if group not found.
-     * Structure:
-     * [
-     * 'group' => (object) Group data from qp_question_groups,
-     * 'questions' => [
-     * (object) Question data (incl. options array, labels array)
-     * ...
-     * ],
-     * 'terms' => [ // Term IDs linked to the GROUP
-     * 'subject' => (int|null) Top-level subject ID,
-     * 'topic' => (int|null) Specific topic ID (if applicable),
-     * 'source' => (int|null) Top-level source ID,
-     * 'section' => (int|null) Specific section ID (if applicable),
-     * 'exam' => (int|null) Exam ID (if applicable)
-     * ]
-     * ]
      */
     public static function get_group_details_for_editor( int $group_id ) {
         if ( $group_id <= 0 ) {
@@ -680,7 +637,6 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
         // 2. Get Questions in Group
         $questions_in_group = self::get_questions_by_group_id( $group_id );
         if ( empty( $questions_in_group ) ) {
-            // Group exists but has no questions (maybe an edge case during save)
              return [
                  'group' => $group_data,
                  'questions' => [],
@@ -691,35 +647,29 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
         }
 
         $question_ids = wp_list_pluck( $questions_in_group, 'question_id' );
-        $ids_placeholder = implode( ',', array_map( 'absint', $question_ids ) );
 
         // 3. Get All Options for these Questions
+        $all_options_raw = self::get_options_for_question($question_ids); // This needs to handle array
+        // Re-fetch options properly for multiple questions
+        $ids_placeholder = implode( ',', array_map( 'absint', $question_ids ) );
         $o_table = self::get_options_table_name();
         $all_options_raw = self::$wpdb->get_results( "SELECT * FROM {$o_table} WHERE question_id IN ($ids_placeholder) ORDER BY question_id, option_id ASC" );
+        
         $options_by_question = [];
         foreach ( $all_options_raw as $option ) {
             $options_by_question[ $option->question_id ][] = $option;
         }
 
         // 4. Get All Labels for these Questions (including color)
-        $label_tax_id = Terms_DB::get_taxonomy_id_by_name('label');
+        $labels_by_question_raw = Terms_DB::get_linked_terms($question_ids, 'question', 'label', ['color']);
         $labels_by_question = [];
-        if ($label_tax_id) {
-            $label_results = Terms_DB::get_linked_terms($question_ids, 'question', 'label', ['color']);
-            // Reorganize labels by question ID
-            foreach ($label_results as $label_term) {
-                // Find which question ID this label belongs to by checking relationships again (or adjust get_linked_terms later)
-                 $q_ids_for_label = self::$wpdb->get_col(self::$wpdb->prepare(
-                     "SELECT object_id FROM " . Terms_DB::get_relationships_table_name() . " WHERE term_id = %d AND object_type = 'question' AND object_id IN ($ids_placeholder)",
-                     $label_term->term_id
-                 ));
-                 foreach ($q_ids_for_label as $qid) {
-                    $labels_by_question[$qid][] = (object) [ // Match expected structure
-                        'label_id' => $label_term->term_id,
-                        'label_name' => $label_term->name,
-                        'label_color' => $label_term->meta['color'] ?? '#cccccc'
-                    ];
-                 }
+        foreach($labels_by_question_raw as $qid => $terms) {
+            foreach ($terms as $term) {
+                 $labels_by_question[$qid][] = (object) [
+                    'label_id' => $term->term_id,
+                    'label_name' => $term->name,
+                    'label_color' => $term->meta['color'] ?? '#cccccc'
+                ];
             }
         }
 
@@ -736,31 +686,27 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
              'subject' => null, 'topic' => null, 'source' => null, 'section' => null, 'exam' => null
         ];
 
-        // Process terms to identify hierarchy
-        $term_lineage_cache = []; // Cache to avoid redundant DB calls
+        $term_lineage_cache = []; 
 
         foreach ($group_terms_raw as $term) {
              if (!isset($term_lineage_cache[$term->term_id])) {
-                $term_lineage_cache[$term->term_id] = Terms_DB::get_lineage_names($term->term_id); // Fetch lineage
+                $lineage_ids = [];
+                $current_id = $term->term_id;
+                for ($i=0; $i < 10; $i++){
+                    if (!$current_id) break;
+                    array_unshift($lineage_ids, $current_id);
+                    $current_id = self::$wpdb->get_var( self::$wpdb->prepare("SELECT parent FROM ".Terms_DB::get_terms_table_name()." WHERE term_id = %d", $current_id) );
+                }
+                $term_lineage_cache[$term->term_id] = $lineage_ids;
              }
-             $lineage_names = $term_lineage_cache[$term->term_id]; // Names from parent->child
-             $lineage_ids = []; // We need IDs for hierarchy check
-
-             // Simple way to get IDs (could be optimized if Terms_DB::get_lineage returns IDs too)
-             $current_id = $term->term_id;
-             for ($i=0; $i < 10; $i++){
-                if (!$current_id) break;
-                array_unshift($lineage_ids, $current_id);
-                $current_id = self::$wpdb->get_var( self::$wpdb->prepare("SELECT parent FROM ".Terms_DB::get_terms_table_name()." WHERE term_id = %d", $current_id) );
-             }
-
+             $lineage_ids = $term_lineage_cache[$term->term_id];
 
              if ($term->taxonomy_name === 'subject') {
-                 $group_terms_processed['subject'] = $lineage_ids[0] ?? null; // First ID is top-level subject
-                 $group_terms_processed['topic'] = ($term->parent != 0) ? $term->term_id : null; // If it has a parent, it's a topic
+                 $group_terms_processed['subject'] = $lineage_ids[0] ?? null;
+                 $group_terms_processed['topic'] = ($term->parent != 0) ? $term->term_id : null;
              } elseif ($term->taxonomy_name === 'source') {
-                 $group_terms_processed['source'] = $lineage_ids[0] ?? null; // First ID is top-level source
-                 $group_terms_processed['section'] = ($term->parent != 0) ? $term->term_id : null; // If it has a parent, it's a section
+                 $group_terms_processed['source'] = $lineage_ids[0] ?? null;
+                 $group_terms_processed['section'] = ($term->parent != 0) ? $term->term_id : null;
              } elseif ($term->taxonomy_name === 'exam') {
                  $group_terms_processed['exam'] = $term->term_id;
              }
@@ -777,33 +723,11 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
 
     /**
      * Retrieves detailed data for a single question for the frontend practice UI.
-     * Includes group data, options (text only), lineage, and user-specific statuses.
      *
      * @param int $question_id The ID of the question.
      * @param int $user_id     The ID of the current user.
      * @param int $session_id  The ID of the current practice session (optional, used for context).
      * @return array|null An associative array containing question details, or null if not found.
-     * Structure:
-     * [
-     * 'question' => [
-     * 'question_id' => int,
-     * 'question_text' => string,
-     * 'question_number_in_section' => string|null,
-     * 'group_id' => int,
-     * 'direction_text' => string|null,
-     * 'direction_image_url' => string|null,
-     * 'subject_lineage' => array, // Names [Subject, Topic]
-     * 'source_lineage' => array, // Names [Source, Section, ...]
-     * 'options' => [ ['option_id' => int, 'option_text' => string], ... ]
-     * ],
-     * 'correct_option_id' => int|null, // Only returned by check_answer, fetched separately here
-     * 'attempt_id' => int|null, // ID of the attempt in *this* session
-     * 'previous_attempt_count' => int, // Count of attempts in *other* sessions
-     * 'is_revision' => bool,
-     * 'is_admin' => bool, // Or role check
-     * 'is_marked_for_review' => bool,
-     * 'reported_info' => ['has_report' => bool, 'has_suggestion' => bool]
-     * ]
      */
     public static function get_question_details_for_practice( int $question_id, int $user_id, int $session_id = 0 ) {
         if ($question_id <= 0 || $user_id <= 0) {
@@ -816,14 +740,14 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
             return null; // Question not found
         }
 
-        $question_data = (array) $question_base; // Convert object to array for easier modification
+        $question_data = (array) $question_base;
         $group_id = $question_data['group_id'];
 
         // Add direction image URL
         $question_data['direction_image_url'] = $question_data['direction_image_id']
             ? wp_get_attachment_url($question_data['direction_image_id'])
             : null;
-        unset($question_data['direction_image_id']); // Don't send ID to frontend
+        unset($question_data['direction_image_id']);
 
         // 2. Get Subject/Topic & Source/Section Lineage Names
         $question_data['subject_lineage'] = [];
@@ -832,7 +756,7 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
         if ($group_id) {
             $group_terms = Terms_DB::get_linked_terms($group_id, 'group', ['subject', 'source']);
             foreach ($group_terms as $term) {
-                $lineage = Terms_DB::get_lineage_names($term->term_id); // Use the DB class method
+                $lineage = Terms_DB::get_lineage_names($term->term_id);
                 if ($term->taxonomy_name === 'subject') {
                     $question_data['subject_lineage'] = $lineage;
                 } elseif ($term->taxonomy_name === 'source') {
@@ -847,22 +771,22 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
             "SELECT option_id, option_text FROM {$o_table} WHERE question_id = %d ORDER BY option_id ASC",
             $question_id
         ), ARRAY_A);
-        // Apply nl2br and kses_post here
+        
         $question_data['options'] = array_map(function($opt) {
             $opt['option_text'] = wp_kses_post(nl2br(stripslashes($opt['option_text'])));
             return $opt;
         }, $options_raw);
 
 
-        // Get Correct Option ID separately (needed for check_answer, but good to have)
+        // Get Correct Option ID separately
         $correct_option_id = self::get_correct_option_id($question_id);
 
         // 4. Apply nl2br/kses_post to question/direction text
         if (!empty($question_data['question_text'])) {
-            $question_data['question_text'] = wp_kses_post(nl2br($question_data['question_text']));
+            $question_data['question_text'] = wp_kses_post(nl2br(stripslashes($question_data['question_text'])));
         }
         if (!empty($question_data['direction_text'])) {
-            $question_data['direction_text'] = wp_kses_post(nl2br($question_data['direction_text']));
+            $question_data['direction_text'] = wp_kses_post(nl2br(stripslashes($question_data['direction_text'])));
         }
 
 
@@ -871,7 +795,6 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
         $review_table = self::$wpdb->prefix . 'qp_review_later';
         $reports_table = self::$wpdb->prefix . 'qp_question_reports';
         $meta_table = Terms_DB::get_term_meta_table_name();
-        $term_table_rel = Terms_DB::get_relationships_table_name(); // Alias for clarity if needed
 
         // Check attempt in *this* session
         $attempt_in_session = null;
@@ -884,7 +807,7 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
 
         // Count previous attempts in *other* sessions
         $previous_attempt_count = (int) self::$wpdb->get_var( self::$wpdb->prepare(
-            "SELECT COUNT(*) FROM {$a_table} WHERE user_id = %d AND question_id = %d AND session_id != %d AND status = 'answered'", // Count only answered attempts
+            "SELECT COUNT(*) FROM {$a_table} WHERE user_id = %d AND question_id = %d AND session_id != %d AND status = 'answered'",
             $user_id, $question_id, $session_id
         ));
 
@@ -894,7 +817,7 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
             $user_id, $question_id
         ));
 
-        // Check report status (more detailed)
+        // Check report status
         $report_info = ['has_report' => false, 'has_suggestion' => false];
         $open_reports = self::$wpdb->get_results( self::$wpdb->prepare(
              "SELECT report_id, reason_term_ids FROM {$reports_table} WHERE user_id = %d AND question_id = %d AND status = 'open'",
@@ -921,7 +844,7 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
              }
         }
 
-        // Check admin/role permission (simplified example)
+        // Check role permission
         $user = get_userdata($user_id);
         $options = get_option('qp_settings');
         $allowed_roles = isset($options['show_source_meta_roles']) ? $options['show_source_meta_roles'] : [];
@@ -929,18 +852,18 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
 
         // Remove source info if user lacks permission
         if (!$user_can_view_source) {
-            unset($question_data['source_lineage']);
-            unset($question_data['question_number_in_section']);
+            $question_data['source_lineage'] = []; // Clear lineage
+            $question_data['question_number_in_section'] = null; // Clear number
         }
 
         // 6. Assemble Final Result Array
         return [
             'question'             => $question_data,
-            'correct_option_id'    => $correct_option_id, // Send correct ID separately
+            'correct_option_id'    => $correct_option_id,
             'attempt_id'           => $attempt_in_session ? (int) $attempt_in_session->attempt_id : null,
             'previous_attempt_count' => $previous_attempt_count,
             'is_revision'          => ($previous_attempt_count > 0),
-            'is_admin'             => $user_can_view_source, // Re-purpose this flag for source visibility
+            'is_admin'             => $user_can_view_source,
             'is_marked_for_review' => $is_marked,
             'reported_info'        => $report_info
         ];
@@ -951,7 +874,6 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
      *
      * @param int $question_id The ID of the question to get data for.
      * @return array|null An associative array containing all necessary data, or null if question not found.
-     * Structure includes: 'question', 'group', 'options', 'current_terms', 'all_terms', 'links'
      */
     public static function get_data_for_quick_edit( int $question_id ) {
         if ( $question_id <= 0 ) {
@@ -967,6 +889,14 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
 
         // 2. Get Options for the Question
         $options = self::get_options_for_question( $question_id );
+        // Sanitize option text for display in readonly input
+        foreach ($options as $option) {
+            $option->option_text = esc_attr(stripslashes($option->option_text));
+        }
+        // Sanitize question/direction text
+        $question->question_text = wp_kses_post(nl2br(stripslashes($question->question_text)));
+        $question->direction_text = wp_kses_post(nl2br(stripslashes($question->direction_text)));
+
 
         // 3. Get Current Term Relationships
         $current_terms = [
@@ -974,7 +904,6 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
         ];
         if ($group_id) {
             $group_terms_raw = Terms_DB::get_linked_terms( $group_id, 'group', ['subject', 'source', 'exam'] );
-            // Process group terms to find specific IDs (similar logic as in get_group_details_for_editor)
             $term_lineage_cache = [];
             foreach ($group_terms_raw as $term) {
                  if (!isset($term_lineage_cache[$term->term_id])) {
@@ -1000,8 +929,9 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
                  }
             }
         }
-        // Get question-specific labels
-        $current_terms['labels'] = wp_list_pluck(Terms_DB::get_linked_terms($question_id, 'question', 'label'), 'term_id');
+        
+        $labels_raw = Terms_DB::get_linked_terms($question_id, 'question', 'label');
+        $current_terms['labels'] = wp_list_pluck($labels_raw, 'term_id');
 
         // 4. Get All Terms needed for Dropdowns
         $all_terms_data = [
@@ -1048,7 +978,7 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
 
         // 6. Assemble Result
         return [
-            'question'      => $question, // Contains group info like direction_text, is_pyq etc.
+            'question'      => $question,
             'options'       => $options,
             'current_terms' => $current_terms,
             'all_terms'     => $all_terms_data,
@@ -1058,7 +988,6 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
 
     /**
      * Searches for published questions based on various criteria.
-     * Used by the course editor modal.
      *
      * @param array $args {
      * Optional. Array of search arguments.
@@ -1086,13 +1015,12 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
         $g_table = self::get_groups_table_name();
         $rel_table = Terms_DB::get_relationships_table_name();
         $term_table = Terms_DB::get_terms_table_name();
-        $tax_table = Terms_DB::get_taxonomies_table_name();
 
         // Base query structure
         $select_sql = "SELECT DISTINCT q.question_id, q.question_text";
         $query_from = "FROM {$q_table} q";
         $query_joins = " LEFT JOIN {$g_table} g ON q.group_id = g.group_id";
-        $where_conditions = ["q.status = 'publish'"]; // Only published questions
+        $where_conditions = ["q.status = 'publish'"];
         $params = [];
         $joins_added = []; // Helper to avoid duplicate joins
 
@@ -1117,9 +1045,8 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
             $where_conditions[] = self::$wpdb->prepare( "topic_rel.term_id = %d", $args['topic_id'] );
         } elseif ( $args['subject_id'] > 0 ) {
             // Filter by subject (find all child topics)
-            $child_topic_ids = Terms_DB::get_all_descendant_ids( $args['subject_id'] ); // Includes parent
-             // We only want to filter by actual topics (children), not the parent subject itself
-            $child_topic_ids = array_filter($child_topic_ids, function($tid) use ($args) {
+            $child_topic_ids = Terms_DB::get_all_descendant_ids( $args['subject_id'] );
+             $child_topic_ids = array_filter($child_topic_ids, function($tid) use ($args) {
                 return $tid != $args['subject_id'];
             });
 
@@ -1131,8 +1058,7 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
                 }
                 $where_conditions[] = "topic_rel.term_id IN ($ids_placeholder)";
             } else {
-                // Subject selected, but it has no child topics
-                $where_conditions[] = "1=0"; // Ensure no results
+                $where_conditions[] = "1=0";
             }
         }
 
@@ -1147,7 +1073,7 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
                 }
                  $where_conditions[] = "source_rel.term_id IN ($ids_placeholder)";
             } else {
-                $where_conditions[] = "1=0"; // Source term not found or has no descendants
+                $where_conditions[] = "1=0";
             }
         }
 
@@ -1157,26 +1083,15 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
         $sql = $select_sql . " " . $query_from . " " . $query_joins . " " . $where_clause . " ORDER BY q.question_id DESC" . $limit_clause;
 
         // Execute query
-        return self::$wpdb->get_results( self::$wpdb->prepare( $sql, $params ), OBJECT ); // Return objects
+        $query_to_run = empty($params) ? $sql : self::$wpdb->prepare($sql, $params);
+        return self::$wpdb->get_results( $query_to_run, OBJECT );
     }
 
     /**
      * Retrieves detailed data for a single question for the REST API.
-     * Includes group data, options (ID and text only), and term lineage.
-     * Excludes user-specific data and correct answer flags.
      *
      * @param int $question_id The ID of the question.
      * @return array|null An associative array containing question details, or null if not found/published.
-     * Structure:
-     * [
-     * 'question_id' => int,
-     * 'question_text' => string,
-     * 'direction_text' => string|null,
-     * 'direction_image_url' => string|null,
-     * 'subject_lineage' => array, // Names [Subject, Topic]
-     * 'source_lineage' => array, // Names [Source, Section, ...]
-     * 'options' => [ ['option_id' => int, 'option_text' => string], ... ]
-     * ]
      */
     public static function get_question_details_for_api( int $question_id ) {
         if ( $question_id <= 0 ) {
@@ -1194,7 +1109,6 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
             $question_id
         ) );
 
-        // Return null if question not found or not published
         if ( ! $question_base || $question_base->status !== 'publish' ) {
             return null;
         }
@@ -1206,7 +1120,7 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
         $question_data['direction_image_url'] = $question_data['direction_image_id']
             ? wp_get_attachment_url( $question_data['direction_image_id'] )
             : null;
-        unset( $question_data['direction_image_id'], $question_data['group_id'], $question_data['status'] ); // Clean up internal fields
+        unset( $question_data['direction_image_id'], $question_data['group_id'], $question_data['status'] );
 
         // 2. Get Subject/Topic & Source/Section Lineage Names
         $question_data['subject_lineage'] = [];
@@ -1226,12 +1140,12 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
         // 3. Get Options (ID and Text only)
         $o_table = self::get_options_table_name();
         $options_raw = self::$wpdb->get_results( self::$wpdb->prepare(
-            "SELECT option_id, option_text FROM {$o_table} WHERE question_id = %d ORDER BY option_id ASC", // You might want ORDER BY RAND() here for the API
+            "SELECT option_id, option_text FROM {$o_table} WHERE question_id = %d ORDER BY option_id ASC",
             $question_id
         ), ARRAY_A );
-        // Apply nl2br and kses_post here
+        
         $question_data['options'] = array_map(function($opt) {
-            $opt['option_text'] = wp_kses_post(nl2br($opt['option_text']));
+            $opt['option_text'] = wp_kses_post(nl2br(stripslashes($opt['option_text'])));
             return $opt;
         }, $options_raw);
 
@@ -1244,9 +1158,7 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
             $question_data['direction_text'] = wp_kses_post(nl2br(stripslashes($question_data['direction_text'])));
         }
 
-        // Ensure question_id is an integer
         $question_data['question_id'] = (int) $question_data['question_id'];
-
 
         return $question_data;
     }
@@ -1273,8 +1185,6 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
         $q_table = self::get_questions_table_name();
         $g_table = self::get_groups_table_name();
         $rel_table = Terms_DB::get_relationships_table_name();
-        $term_table = Terms_DB::get_terms_table_name(); // Needed for hierarchy
-        $tax_table = Terms_DB::get_taxonomies_table_name(); // Needed for tax id
 
         // Base query
         $select_sql = "SELECT q.question_id";
@@ -1288,7 +1198,6 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
         if ( $args['subject_id'] !== 'all' ) {
             $subject_id = absint( $args['subject_id'] );
             if ($subject_id > 0) {
-                // Get all descendant topic IDs including the subject itself if needed for direct links
                 $term_ids_to_filter = Terms_DB::get_all_descendant_ids($subject_id);
 
                 if (!empty($term_ids_to_filter)) {
@@ -1299,10 +1208,10 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
                     }
                     $where_conditions[] = "subject_rel.term_id IN ($ids_placeholder)";
                 } else {
-                    $where_conditions[] = "1=0"; // Subject not found or has no descendants linked
+                    $where_conditions[] = "1=0";
                 }
             } else {
-                 $where_conditions[] = "1=0"; // Invalid subject ID passed
+                 $where_conditions[] = "1=0";
             }
         }
 
@@ -1313,17 +1222,16 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
 
         // Construct final query
         $where_sql = ' WHERE ' . implode( ' AND ', $where_conditions );
-        $query = $select_sql . $from_sql . $joins_sql . $where_sql . " ORDER BY RAND()"; // Order randomly for sessions
+        $query = $select_sql . $from_sql . $joins_sql . $where_sql . " ORDER BY RAND()";
 
-        // Execute and return IDs
-        return self::$wpdb->get_col( self::$wpdb->prepare( $query, $params ) );
+        $query_to_run = empty($params) ? $query : self::$wpdb->prepare($query, $params);
+        return self::$wpdb->get_col( $query_to_run );
     }
 
     /**
      * Checks if a single, enriched question item matches a set of list table filters.
-     * Used by Quick Edit to determine if the row should remain visible.
      *
-     * @param array $item    The enriched question item (must include 'status', 'question_id', 'question_text', 'subject_id', 'topic_id', 'linked_source_term_id', 'labels').
+     * @param array $item    The enriched question item.
      * @param array $filters The array of filter values from the list table (e.g., $_REQUEST).
      * @return bool True if the item matches all active filters, false otherwise.
      */
@@ -1338,36 +1246,41 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
             $search_term = $filters['search'];
             if (is_numeric($search_term)) {
                 if ($item['question_id'] != $search_term) {
-                    return false; // Does not match numeric ID search
+                    return false;
                 }
             } else {
-                // Check if search term is in the question text
                 if (stripos($item['question_text'], $search_term) === false) {
-                    return false; // Does not match text search
+                    return false;
                 }
             }
         }
+        
+        // 3. Get item's actual subject/topic IDs
+        $item_subject_id = null;
+        $item_topic_id = $item['topic_id'] ?? null; // Use topic_id if it was enriched
+        if ($item['subject_name'] && !$item_topic_id) {
+             // This is less reliable, but a fallback
+             $item_subject_id = Terms_DB::get_taxonomy_id_by_name($item['subject_name']); 
+        } else if ($item_topic_id) {
+            // Get parent subject from topic
+            $item_subject_id = self::$wpdb->get_var(self::$wpdb->prepare("SELECT parent FROM ".Terms_DB::get_terms_table_name()." WHERE term_id = %d", $item_topic_id));
+        }
 
-        // 3. Check Subject
+        // 4. Check Subject Filter
         if (!empty($filters['subject_id'])) {
-            // Get all descendant IDs for the filtered subject
-            $subject_and_topic_ids = Terms_DB::get_all_descendant_ids($filters['subject_id']);
-            
-            // Check if the item's topic_id (most specific) OR subject_id is in the filter list
-            $item_term_id = $item['topic_id'] ?? $item['subject_id']; // Use topic, fallback to subject
-            if (!$item_term_id || !in_array($item_term_id, $subject_and_topic_ids)) {
+            if ($item_subject_id != $filters['subject_id']) {
                  return false;
             }
         }
 
-        // 4. Check Topic (This is a more specific filter)
+        // 5. Check Topic Filter
         if (!empty($filters['topic_id'])) {
-            if ($item['topic_id'] != $filters['topic_id']) {
+            if ($item_topic_id != $filters['topic_id']) {
                 return false;
             }
         }
 
-        // 5. Check Source/Section
+        // 6. Check Source/Section
         if (!empty($filters['source_filter'])) {
             $term_id_to_filter = 0;
             if (strpos($filters['source_filter'], 'source_') === 0) {
@@ -1377,44 +1290,26 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
             }
 
             if ($term_id_to_filter > 0) {
-                // Get all descendants of the filter term
                 $source_and_section_ids = Terms_DB::get_all_descendant_ids($term_id_to_filter);
-                // Check if the item's linked term is one of them
                 if (empty($item['linked_source_term_id']) || !in_array($item['linked_source_term_id'], $source_and_section_ids)) {
                     return false;
                 }
             }
         }
 
-        // 6. Check Labels
+        // 7. Check Labels
         if (!empty($filters['label_ids'])) {
-            $item_label_ids = wp_list_pluck($item['labels'], 'label_id'); // 'label_id' might not be set, let's check enrich...
-            // enrich_questions_with_terms adds 'labels' as an array of objects: [ (object)['label_name', 'label_color'] ]
-            // This is a bug in my previous code. enrich_questions_with_terms needs to add label_id.
-            
-            // Let's assume for a moment the label IDs are NOT available on $item['labels']
-            // We must re-fetch them. This is inefficient but will work.
-            global $wpdb;
-            $label_tax_id = Terms_DB::get_taxonomy_id_by_name('label');
-            $item_label_ids = $wpdb->get_col($wpdb->prepare(
-                "SELECT term_id FROM " . Terms_DB::get_relationships_table_name() . " 
-                 WHERE object_id = %d AND object_type = 'question' 
-                 AND term_id IN (SELECT term_id FROM " . Terms_DB::get_terms_table_name() . " WHERE taxonomy_id = %d)",
-                 $item['question_id'], $label_tax_id
-            ));
+            // 'labels' on the item is an array of objects: [ (object)['label_id', 'label_name', 'label_color'] ]
+            $item_label_ids = wp_list_pluck($item['labels'], 'label_id');
             $item_label_ids = array_map('intval', $item_label_ids);
             
-            // Check if all required labels are present in the item's labels
             $missing_labels = array_diff($filters['label_ids'], $item_label_ids);
             if (!empty($missing_labels)) {
-                return false; // Item is missing one or more required labels
+                return false;
             }
         }
 
-        // If all checks passed, the item matches
         return true;
     }
-
-    // --- More methods for saving, updating, deleting will be added below ---
 
 } // End class Questions_DB
