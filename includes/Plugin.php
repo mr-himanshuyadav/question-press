@@ -128,7 +128,7 @@ final class Plugin {
     private function init_hooks() {
         // Actions
         add_action('plugins_loaded', [$this, 'on_plugins_loaded']);
-        add_action('init', 'qp_start_session', 1);
+        add_action('init', [$this, 'start_session'], 1);
         add_action('init', [$this->cron, 'ensure_cron_scheduled']);
         add_action('init', [$this, 'register_shortcodes']);
         add_action('init', [Rewrites::class, 'add_dashboard_rewrite_rules']);
@@ -161,11 +161,11 @@ final class Plugin {
 
         // Register admin menus if in admin area
         if ( is_admin() && isset($this->admin_menu) ) {
-             add_action('admin_menu', [$this->admin_menu, 'register_menus']);
+            add_action('admin_menu', [$this->admin_menu, 'register_menus']);
+            add_action('admin_menu', [$this->admin_menu, 'add_report_count_to_menu'], 99);
         }
 
         // Register Meta Boxes (only in admin)
-        add_action('admin_menu', 'qp_add_report_count_to_menu', 99);
         if ( is_admin() ) {
             add_action('add_meta_boxes_qp_plan', [Meta_Boxes::class, 'add_plan_details']);
             add_action('save_post_qp_plan', [Meta_Boxes::class, 'save_plan_details']);
@@ -265,6 +265,15 @@ final class Plugin {
         add_shortcode('question_press_session', ['\QP_Shortcodes', 'render_session_page']);
         add_shortcode('question_press_review', ['\QP_Shortcodes', 'render_review_page']);
         add_shortcode('question_press_dashboard', ['\QP_Dashboard', 'render']);
+    }
+
+    /**
+     * Start session on init hook.
+     */
+    public function start_session() {
+        if ( session_status() === PHP_SESSION_NONE ) {
+            session_start();
+        }
     }
 
     /**

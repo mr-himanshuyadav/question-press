@@ -60,15 +60,6 @@ register_deactivation_hook( __FILE__, array( Deactivator::class, 'deactivate' ) 
 // =========================================================================
 
 /**
- * Start session on init hook.
- */
-function qp_start_session() {
-    if (session_status() === PHP_SESSION_NONE) {
-        session_start();
-    }
-}
-
-/**
  * Save the custom field for Simple products.
  */
 function qp_save_plan_link_simple_product($post_id) {
@@ -165,52 +156,6 @@ function qp_get_practice_form_html_ajax()
 {
     check_ajax_referer('qp_practice_nonce', 'nonce');
     wp_send_json_success(['form_html' => QP_Shortcodes::render_practice_form()]);
-}
-
-
-/**
- * Adds a notification bubble with the count of open reports to the admin menu.
- */
-function qp_add_report_count_to_menu()
-{
-    global $wpdb, $menu, $submenu;
-
-    // Only show the count to users who can manage the plugin
-    if (!current_user_can('manage_options')) {
-        return;
-    }
-
-    $reports_table = $wpdb->prefix . 'qp_question_reports';
-    // Get the count of open reports (not just distinct questions)
-    $open_reports_count = (int) $wpdb->get_var("SELECT COUNT(report_id) FROM {$reports_table} WHERE status = 'open'");
-
-    if ($open_reports_count > 0) {
-        // Create the bubble HTML using standard WordPress classes
-        $bubble = " <span class='awaiting-mod'><span class='count-{$open_reports_count}'>{$open_reports_count}</span></span>";
-
-        // Determine if we are on a Question Press admin page.
-        $is_qp_page = (isset($_GET['page']) && strpos($_GET['page'], 'qp-') === 0) || (isset($_GET['page']) && $_GET['page'] === 'question-press');
-
-        // Only add the bubble to the top-level menu if we are NOT on a Question Press page.
-        if (!$is_qp_page) {
-            foreach ($menu as $key => $value) {
-                if ($value[2] == 'question-press') {
-                    $menu[$key][0] .= $bubble;
-                    break;
-                }
-            }
-        }
-
-        // Always add the bubble to the "Reports" submenu item regardless of the current page.
-        if (isset($submenu['question-press'])) {
-            foreach ($submenu['question-press'] as $key => $value) {
-                if ($value[2] == 'qp-logs-reports') {
-                    $submenu['question-press'][$key][0] .= $bubble;
-                    break;
-                }
-            }
-        }
-    }
 }
 
 // New Development - Subscriptions
