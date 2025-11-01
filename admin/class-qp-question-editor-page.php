@@ -2,6 +2,7 @@
 if (!defined('ABSPATH')) exit;
 
 use QuestionPress\Utils\Attempt_Evaluator;
+use QuestionPress\Admin\Views\Course_Editor_Helper;
 
 class QP_Question_Editor_Page
 {
@@ -288,15 +289,17 @@ class QP_Question_Editor_Page
         $exam_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'exam'");
         $source_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'source'");
 
-        $all_subjects = $wpdb->get_results($wpdb->prepare("SELECT term_id AS subject_id, name AS subject_name FROM {$term_table} WHERE taxonomy_id = %d AND parent = 0 ORDER BY name ASC", $subject_tax_id));
-        $all_subject_terms = $wpdb->get_results($wpdb->prepare("SELECT term_id as id, name, parent FROM {$term_table} WHERE taxonomy_id = %d ORDER BY name ASC", $subject_tax_id));
-        $all_labels = $wpdb->get_results($wpdb->prepare("SELECT term_id AS label_id, name AS label_name FROM {$term_table} WHERE taxonomy_id = %d ORDER BY name ASC", $label_tax_id));
-        $all_exams = $wpdb->get_results($wpdb->prepare("SELECT term_id AS exam_id, name AS exam_name FROM {$term_table} WHERE taxonomy_id = %d ORDER BY name ASC", $exam_tax_id));
-        $all_source_terms = $wpdb->get_results($wpdb->prepare("SELECT term_id as id, name, parent as parent_id FROM {$term_table} WHERE taxonomy_id = %d ORDER BY name ASC", $source_tax_id));
+        // --- Fetch ALL data needed for the form dropdowns from our new helper class ---
+        $form_data = Course_Editor_Helper::get_question_editor_dropdown_data();
 
-        $source_subject_links = $wpdb->get_results("SELECT object_id AS source_id, term_id AS subject_id FROM {$rel_table} WHERE object_type = 'source_subject_link'");
-        $exam_subject_links = $wpdb->get_results("SELECT object_id AS exam_id, term_id AS subject_id FROM {$rel_table} WHERE object_type = 'exam_subject_link'");
-        $all_parent_sources = array_filter($all_source_terms, fn($term) => $term->parent_id == 0);
+        $all_subjects         = $form_data['all_subjects'];
+        $all_subject_terms    = $form_data['all_subject_terms'];
+        $all_labels           = $form_data['all_labels'];
+        $all_exams            = $form_data['all_exams'];
+        $all_source_terms     = $form_data['all_source_terms'];
+        $source_subject_links = $form_data['source_subject_links'];
+        $exam_subject_links   = $form_data['exam_subject_links'];
+        $all_parent_sources   = $form_data['all_parent_sources'];
 
         // Pass all necessary data to our JavaScript file
         wp_localize_script('qp-editor-script', 'qp_editor_data', [

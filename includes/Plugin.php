@@ -23,6 +23,7 @@ use QuestionPress\Admin\Form_Handler;
 use QuestionPress\Admin\Backup\Backup_Manager;
 use QuestionPress\Core\Cron;
 use QuestionPress\Core\Rewrites;
+use QuestionPress\Utils\Data_Cleanup;
 
 /**
  * Final QuestionPress Class.
@@ -180,8 +181,8 @@ final class Plugin {
             add_action('add_meta_boxes', [Meta_Boxes::class, 'add_course_structure']);
             add_action('save_post_qp_course', [Meta_Boxes::class, 'save_course_structure']);
         }
-        add_action('save_post_qp_course', 'qp_sync_course_plan', 40, 1);
-        add_action('save_post_qp_course', 'qp_recalculate_course_progress_on_save', 20, 1);
+        add_action('save_post_qp_course', [Meta_Boxes::class, 'sync_course_plan'], 40, 1);
+        add_action('save_post_qp_course', [Data_Cleanup::class, 'recalculate_course_progress_on_save'], 20, 1);
         add_action('qp_check_entitlement_expiration_hook', [$this->cron, 'run_entitlement_expiration_check']);
         add_action('woocommerce_product_options_general_product_data', 'qp_add_plan_link_to_simple_products');
         add_action('woocommerce_process_product_meta_simple', 'qp_save_plan_link_simple_product');
@@ -193,8 +194,8 @@ final class Plugin {
         add_action('admin_head', [Assets::instance(), 'enqueue_dynamic_admin_styles']);
         add_action('wp', [$this->cron, 'schedule_session_cleanup']);
         add_action('qp_cleanup_abandoned_sessions_event', [$this->cron, 'cleanup_abandoned_sessions']);
-        add_action('before_delete_post', 'qp_cleanup_course_data_on_delete', 10, 1);
-        add_action('delete_user', 'qp_cleanup_user_data_on_delete', 10, 1);
+        add_action('before_delete_post', [Data_Cleanup::class, 'cleanup_course_data_on_delete'], 10, 1);
+        add_action('delete_user', [Data_Cleanup::class, 'cleanup_user_data_on_delete'], 10, 1);
 
         // AJAX Actions (already using class methods)
         add_action('wp_ajax_qp_save_profile', [\QuestionPress\Ajax\Profile_Ajax::class, 'save_profile']);

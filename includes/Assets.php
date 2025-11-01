@@ -1,6 +1,8 @@
 <?php
 namespace QuestionPress; // PSR-4 Namespace
 
+use QuestionPress\Admin\Views\Course_Editor_Helper;
+
 // Exit if accessed directly.
 if ( ! defined( 'ABSPATH' ) ) {
     exit;
@@ -189,8 +191,8 @@ class Assets {
 
         // Localize data needed by the script (like existing structure and dropdown options)
         global $post; // Get the current post object
-        $course_structure_data = qp_get_course_structure_for_editor($post ? $post->ID : 0); // We will create this helper function next
-        $test_series_options = qp_get_test_series_options_for_js(); // And this one too
+        $course_structure_data = Course_Editor_Helper::get_course_structure_for_editor($post ? $post->ID : 0); // We will create this helper function next
+        $test_series_options = Course_Editor_Helper::get_test_series_options_for_js(); // And this one too
 
         wp_localize_script('qp-course-editor-script', 'qpCourseEditorData', [
             'ajax_url' => admin_url('admin-ajax.php'), // Add ajaxurl for convenience
