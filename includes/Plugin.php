@@ -24,6 +24,7 @@ use QuestionPress\Admin\Backup\Backup_Manager;
 use QuestionPress\Core\Cron;
 use QuestionPress\Core\Rewrites;
 use QuestionPress\Utils\Data_Cleanup;
+use QuestionPress\Integrations\WooCommerce_Integration;
 
 /**
  * Final QuestionPress Class.
@@ -119,10 +120,6 @@ final class Plugin {
             $this->admin_menu = new Admin_Menu();
             // Admin::instance();
         }
-        // If WooCommerce is active
-        // if ( class_exists( 'WooCommerce' ) ) {
-        //    Integrations\WooCommerce::instance();
-        // }
     }
 
     /**
@@ -130,7 +127,7 @@ final class Plugin {
      */
     private function init_hooks() {
         // Actions
-        add_action('plugins_loaded', [$this, 'load_plugin_textdomain']);
+        add_action('plugins_loaded', [$this, 'on_plugins_loaded']);
         add_action('init', 'qp_start_session', 1);
         add_action('init', [$this->cron, 'ensure_cron_scheduled']);
         add_action('init', [$this, 'register_shortcodes']);
@@ -184,11 +181,6 @@ final class Plugin {
         add_action('save_post_qp_course', [Meta_Boxes::class, 'sync_course_plan'], 40, 1);
         add_action('save_post_qp_course', [Data_Cleanup::class, 'recalculate_course_progress_on_save'], 20, 1);
         add_action('qp_check_entitlement_expiration_hook', [$this->cron, 'run_entitlement_expiration_check']);
-        add_action('woocommerce_product_options_general_product_data', 'qp_add_plan_link_to_simple_products');
-        add_action('woocommerce_process_product_meta_simple', 'qp_save_plan_link_simple_product');
-        add_action('woocommerce_product_after_variable_attributes', 'qp_add_plan_link_to_variable_products', 10, 3);
-        add_action('woocommerce_save_product_variation', 'qp_save_plan_link_variable_product', 10, 2);
-        add_action('woocommerce_order_status_completed', 'qp_grant_access_on_order_complete', 10, 1);
         add_action('qp_scheduled_backup_hook', [Backup_Manager::class, 'run_scheduled_backup_event']);
         add_action('admin_head', [\QuestionPress\Admin\Views\User_Entitlements_Page::class, 'add_screen_options']);
         add_action('admin_head', [Assets::instance(), 'enqueue_dynamic_admin_styles']);
@@ -276,14 +268,21 @@ final class Plugin {
     }
 
     /**
-     * Load the plugin text domain for translation.
+     * Actions to run once all plugins are loaded.
+     * We use this to load our text domain and check for integrations.
      */
-    public function load_plugin_textdomain() {
+    public function on_plugins_loaded() {
+        // Load text domain
         load_plugin_textdomain(
             'question-press', // Your text domain
             false,            // Deprecated argument
             dirname( plugin_basename( QP_PLUGIN_FILE ) ) . '/languages/' // Path to the languages folder
         );
+
+        // If WooCommerce is active, load our integration
+        if ( class_exists( 'WooCommerce' ) ) {
+            new WooCommerce_Integration();
+        }
     }
 
     /**
