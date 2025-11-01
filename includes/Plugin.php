@@ -21,6 +21,7 @@ use QuestionPress\Admin\Admin_Utils;
 use QuestionPress\Admin\Meta_Boxes;
 use QuestionPress\Admin\Form_Handler;
 use QuestionPress\Admin\Backup\Backup_Manager;
+use QuestionPress\Core\Cron;
 
 /**
  * Final QuestionPress Class.
@@ -48,6 +49,13 @@ final class Plugin {
      * @var Admin_Menu|null
      */
     private $admin_menu = null;
+
+    /**
+     * Instance of the Cron handler.
+     *
+     * @var Cron|null
+     */
+    private $cron = null;
 
     /**
      * Main Plugin Instance.
@@ -103,6 +111,7 @@ final class Plugin {
         // Shortcodes::instance();
         Post_Types::instance();
         Taxonomies::instance(); // Just in case if migrated to native taxonomies later
+        $this->cron = new Cron();
         // REST_API::instance(); // Assuming REST_API is a class handling registration
         if ( is_admin() ) {
             $this->admin_menu = new Admin_Menu();
@@ -121,7 +130,7 @@ final class Plugin {
         // Actions
         add_action('plugins_loaded', [$this, 'load_plugin_textdomain']); // CORRECT - Use plugins_loaded hook
         add_action('init', 'qp_start_session', 1);
-        add_action('init', 'qp_ensure_cron_scheduled');
+        add_action('init', [$this->cron, 'ensure_cron_scheduled']);
         add_action('init', [$this, 'register_shortcodes']); // Register shortcodes via class method
         add_action('init', 'qp_add_dashboard_rewrite_rules');
         add_action('rest_api_init', ['\QP_Rest_Api', 'register_routes']);
@@ -172,7 +181,7 @@ final class Plugin {
         }
         add_action('save_post_qp_course', 'qp_sync_course_plan', 40, 1);
         add_action('save_post_qp_course', 'qp_recalculate_course_progress_on_save', 20, 1);
-        add_action('qp_check_entitlement_expiration_hook', 'qp_run_entitlement_expiration_check');
+        add_action('qp_check_entitlement_expiration_hook', [$this->cron, 'run_entitlement_expiration_check']);
         add_action('woocommerce_product_options_general_product_data', 'qp_add_plan_link_to_simple_products');
         add_action('woocommerce_process_product_meta_simple', 'qp_save_plan_link_simple_product');
         add_action('woocommerce_product_after_variable_attributes', 'qp_add_plan_link_to_variable_products', 10, 3);
@@ -181,8 +190,8 @@ final class Plugin {
         add_action('qp_scheduled_backup_hook', [Backup_Manager::class, 'run_scheduled_backup_event']);
         add_action('admin_head', [\QuestionPress\Admin\Views\User_Entitlements_Page::class, 'add_screen_options']);
         add_action('admin_head', [Assets::instance(), 'enqueue_dynamic_admin_styles']);
-        add_action('wp', 'qp_schedule_session_cleanup');
-        add_action('qp_cleanup_abandoned_sessions_event', 'qp_cleanup_abandoned_sessions');
+        add_action('wp', [$this->cron, 'schedule_session_cleanup']);
+        add_action('qp_cleanup_abandoned_sessions_event', [$this->cron, 'cleanup_abandoned_sessions']);
         add_action('before_delete_post', 'qp_cleanup_course_data_on_delete', 10, 1);
         add_action('delete_user', 'qp_cleanup_user_data_on_delete', 10, 1);
 
