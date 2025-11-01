@@ -1,3 +1,18 @@
+// Helper function to render KaTeX
+function renderKaTeX(element) {
+    if (typeof renderMathInElement === 'function' && element) {
+        renderMathInElement(element, {
+            delimiters: [
+                {left: '$$', right: '$$', display: true},
+                {left: '$', right: '$', display: false},
+                {left: '\\[', right: '\\]', display: true},
+                {left: '\\(', right: '\\)', display: false}
+            ],
+            throwOnError: false
+        });
+    }
+}
+
 jQuery(document).ready(function($) {
     var wrapper = $('#qp-practice-app-wrapper');
     var subjectSelect = $('#qp-progress-subject');
@@ -257,17 +272,7 @@ wrapper.on('click', 'a.qp-button-primary[href*="session_id="]', function(e) {
                     modalContent.find('.qp-modal-options').data('correct-option-id', correctOptionId);
 
                     // Manually trigger KaTeX rendering on the new modal content.
-                    if (typeof renderMathInElement === 'function') {
-                        renderMathInElement(modalContent[0], {
-                            delimiters: [
-                                {left: '$$', right: '$$', display: true},
-                                {left: '$', right: '$', display: false},
-                                {left: '\\\\[', right: '\\\\]', display: true},
-                                {left: '\\\\(', right: '\\\\)', display: false}
-                            ],
-                            throwOnError: false
-                        });
-                    }
+                    renderKaTeX(modalContent[0]);
 
                 } else {
                     modalContent.html('<p>Could not load question.</p><button class="qp-modal-close-btn">&times;</button>');

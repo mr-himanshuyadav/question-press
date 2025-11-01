@@ -1,3 +1,18 @@
+// Helper function to render KaTeX
+function renderKaTeX(element) {
+    if (typeof renderMathInElement === 'function' && element) {
+        renderMathInElement(element, {
+            delimiters: [
+                {left: '$$', right: '$$', display: true},
+                {left: '$', right: '$', display: false},
+                {left: '\\[', right: '\\]', display: true},
+                {left: '\\(', right: '\\)', display: false}
+            ],
+            throwOnError: false
+        });
+    }
+}
+
 jQuery(document).ready(function ($) {
   var wrapper = $("#qp-practice-app-wrapper");
   var isAutoCheckEnabled = false;
@@ -1843,6 +1858,11 @@ checkAttemptsBeforeAction(function() {
             .css("max-width", "100%")
         );
       directionEl.show();
+      
+      // Re-render KaTeX for direction text
+      if (questionData.direction_text) {
+          renderKaTeX(directionEl[0]);
+      }
     }
     // --- NEW: Hierarchical Subject/Topic Display ---
     var showTopic = qp_practice_settings.show_topic_meta &&
@@ -1888,6 +1908,9 @@ checkAttemptsBeforeAction(function() {
     }
     $("#qp-question-text-area").html(questionData.question_text);
     
+    // Re-render KaTeX for the question text
+    renderKaTeX(document.getElementById('qp-question-text-area'));
+    
     // Directly check the detailed report_info from the backend data.
     var reportInfoForButton = previousState.reported_info || data.reported_info || {};
     if (reportInfoForButton.has_report || reportInfoForButton.has_suggestion) {
@@ -1905,6 +1928,12 @@ checkAttemptsBeforeAction(function() {
           .append($("<span>").html(option.option_text))
       );
     });
+    
+    // Re-render KaTeX for the options
+    renderKaTeX(document.getElementById('qp-options-area'));
+    
+    // Trigger custom event for other scripts that might need to know content was updated
+    document.dispatchEvent(new CustomEvent('qp-content-updated'));
 
     // Mode-specific logic
     if (isMockTest) {

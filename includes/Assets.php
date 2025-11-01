@@ -112,7 +112,7 @@ class Assets {
         }
 
         // Load KaTeX if any page that can display questions is present
-        if (has_shortcode($post->post_content, 'question_press_session') || has_shortcode($post->post_content, 'question_press_review') || has_shortcode($post->post_content, 'question_press_dashboard')) {
+        if (has_shortcode($post->post_content, 'question_press_practice') || has_shortcode($post->post_content, 'question_press_session') || has_shortcode($post->post_content, 'question_press_review') || has_shortcode($post->post_content, 'question_press_dashboard')) {
             wp_enqueue_style('katex-css', 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css', [], '0.16.9');
             wp_enqueue_script('katex-js', 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js', [], '0.16.9', true);
             wp_enqueue_script('katex-auto-render', 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js', ['katex-js'], '0.16.9', true);
@@ -131,6 +131,21 @@ class Assets {
                             throwOnError: false
                         });
                     }
+                    
+                    // Re-render KaTeX when content is dynamically loaded
+                    document.addEventListener('qp-content-updated', function() {
+                        if (typeof renderMathInElement === 'function') {
+                            renderMathInElement(document.body, {
+                                delimiters: [
+                                    {left: '$$', right: '$$', display: true},
+                                    {left: '$', right: '$', display: false},
+                                    {left: '\\\\[', right: '\\\\]', display: true},
+                                    {left: '\\\\(', right: '\\\\)', display: false}
+                                ],
+                                throwOnError: false
+                            });
+                        }
+                    });
                 });
             ");
         }
@@ -144,8 +159,8 @@ class Assets {
         }
     }
     }
-
     /**
+
      * Enqueues scripts and styles for the WordPress admin area.
      *
      * @param string $hook_suffix The current admin page hook.

@@ -859,10 +859,10 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
 
         // 4. Apply nl2br/kses_post to question/direction text
         if (!empty($question_data['question_text'])) {
-            $question_data['question_text'] = wp_kses_post(nl2br(stripslashes($question_data['question_text'])));
+            $question_data['question_text'] = wp_kses_post(nl2br($question_data['question_text']));
         }
         if (!empty($question_data['direction_text'])) {
-            $question_data['direction_text'] = wp_kses_post(nl2br(stripslashes($question_data['direction_text'])));
+            $question_data['direction_text'] = wp_kses_post(nl2br($question_data['direction_text']));
         }
 
 
@@ -1229,11 +1229,9 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
             "SELECT option_id, option_text FROM {$o_table} WHERE question_id = %d ORDER BY option_id ASC", // You might want ORDER BY RAND() here for the API
             $question_id
         ), ARRAY_A );
-        // Apply basic sanitization/formatting
+        // Apply nl2br and kses_post here
         $question_data['options'] = array_map(function($opt) {
-            $opt['option_text'] = wp_kses_post(nl2br(stripslashes($opt['option_text'])));
-             // Ensure option_id is an integer
-            $opt['option_id'] = (int) $opt['option_id'];
+            $opt['option_text'] = wp_kses_post(nl2br($opt['option_text']));
             return $opt;
         }, $options_raw);
 

@@ -509,10 +509,10 @@ class Practice_Ajax {
 
         // Apply nl2br to convert newlines to <br> tags for HTML display.
         if (!empty($question_data['direction_text'])) {
-            $question_data['direction_text'] = wp_kses_post(nl2br(stripslashes($question_data['direction_text']))); // Added stripslashes
+            $question_data['direction_text'] = wp_kses_post(nl2br($question_data['direction_text'])); // Added stripslashes
         }
         if (!empty($question_data['question_text'])) {
-            $question_data['question_text'] = wp_kses_post(nl2br(stripslashes($question_data['question_text']))); // Added stripslashes
+            $question_data['question_text'] = wp_kses_post(nl2br($question_data['question_text'])); // Added stripslashes
         }
 
         // Fetch options
@@ -523,7 +523,7 @@ class Practice_Ajax {
 
         foreach ($options as &$option) {
             if (!empty($option['option_text'])) {
-                $option['option_text'] = wp_kses_post(nl2br(stripslashes($option['option_text']))); // Added stripslashes
+                $option['option_text'] = wp_kses_post(nl2br($option['option_text'])); // Added stripslashes
             }
         }
         unset($option);

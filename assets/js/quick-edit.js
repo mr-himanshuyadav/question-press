@@ -59,8 +59,8 @@ $.ajax({
                     delimiters: [
                         {left: '$$', right: '$$', display: true},
                         {left: '$', right: '$', display: false},
-                        {left: '\\\\[', right: '\\\\]', display: true},
-                        {left: '\\\\(', right: '\\\\)', display: false}
+                        {left: '\\[', right: '\\]', display: true},
+                        {left: '\\(', right: '\\)', display: false}
                     ],
                     throwOnError: false
                 });
@@ -670,8 +670,8 @@ wrapper.on('click', '.save', function(e) {
                 delimiters: [
                   { left: "$$", right: "$$", display: true },
                   { left: "$", right: "$", display: false },
-                  { left: "\\\\[", right: "\\\\]", display: true },
-                  { left: "\\\\(", right: "\\\\)", display: false },
+                  { left: "\\[", right: "\\]", display: true },
+                  { left: "\\(", right: "\\)", display: false },
                 ],
                 throwOnError: false,
               });
