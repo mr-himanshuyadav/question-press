@@ -16,8 +16,6 @@ class Cron {
 
     /**
      * Constructor.
-     *
-     * We don't need to add hooks here; the Plugin class will handle it.
      */
     public function __construct() {
         // Constructor can be used for setup if needed
@@ -26,6 +24,8 @@ class Cron {
     /**
      * Ensures the entitlement expiration cron job is scheduled.
      * Runs on WordPress initialization.
+     *
+     * @return void
      */
     public function ensure_cron_scheduled() {
         if ( ! wp_next_scheduled( 'qp_check_entitlement_expiration_hook' ) ) {
@@ -36,6 +36,8 @@ class Cron {
 
     /**
      * The callback function executed by the WP-Cron job to update expired entitlements.
+     *
+     * @return void
      */
     public function run_entitlement_expiration_check() {
         error_log( "QP Cron: Running entitlement expiration check..." );
@@ -75,6 +77,8 @@ class Cron {
 
     /**
      * Schedules the session cleanup event if it's not already scheduled.
+     *
+     * @return void
      */
     public function schedule_session_cleanup() {
         if ( ! wp_next_scheduled( 'qp_cleanup_abandoned_sessions_event' ) ) {
@@ -84,6 +88,8 @@ class Cron {
 
     /**
      * The function that runs on the scheduled cron event to clean up old sessions.
+     *
+     * @return void
      */
     public function cleanup_abandoned_sessions() {
         global $wpdb;

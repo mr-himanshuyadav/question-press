@@ -16,6 +16,7 @@ class Rewrites {
 
     /**
      * Register custom query variables for dashboard routing.
+     * Hooked to 'query_vars'.
      *
      * @param array $vars Existing query variables.
      * @return array Modified query variables.
@@ -28,6 +29,9 @@ class Rewrites {
 
     /**
      * Add rewrite rules for the dynamic dashboard URLs.
+     * Hooked to 'init'.
+     *
+     * @return void
      */
     public static function add_dashboard_rewrite_rules() {
         $options = get_option( 'qp_settings' );
@@ -52,7 +56,6 @@ class Rewrites {
             // Rule for specific course: /dashboard-path/courses/course-slug/
             add_rewrite_rule(
                 '^' . $dashboard_path . '/courses/([^/]+)/?$',
-                // --- FIX: Use page_id instead of pagename ---
                 'index.php?page_id=' . $dashboard_page_id . '&qp_tab=courses&qp_course_slug=$matches[1]',
                 'top'
             );
@@ -60,7 +63,6 @@ class Rewrites {
             // Rule for a specific tab: /dashboard-path/tab-name/
             add_rewrite_rule(
                 '^' . $dashboard_path . '/(' . $tab_regex . ')/?$',
-                // --- FIX: Use page_id instead of pagename ---
                 'index.php?page_id=' . $dashboard_page_id . '&qp_tab=$matches[1]',
                 'top'
             );
@@ -68,7 +70,6 @@ class Rewrites {
             // Rule for the base dashboard URL: /dashboard-path/
             add_rewrite_rule(
                 '^' . $dashboard_path . '/?$',
-                // --- FIX: Use page_id instead of pagename ---
                 'index.php?page_id=' . $dashboard_page_id,
                 'top'
             );
@@ -78,19 +79,17 @@ class Rewrites {
 
             // Rule for specific course on front page: /tab/courses/course-slug/
             add_rewrite_rule(
-                '^tab/courses/([^/]+)/?$', // (This was correct from last time)
+                '^tab/courses/([^/]+)/?$',
                 'index.php?page_id=' . $dashboard_page_id . '&qp_tab=courses&qp_course_slug=$matches[1]',
                 'top'
             );
 
             // Rule for a specific tab on front page: /tab/tab-name/
             add_rewrite_rule(
-                '^tab/(' . $tab_regex . ')/?$', // (This was correct from last time)
+                '^tab/(' . $tab_regex . ')/?$',
                 'index.php?page_id=' . $dashboard_page_id . '&qp_tab=$matches[1]',
                 'top'
             );
-
-            // The base front page (/) is already handled by WordPress.
         }
     }
 
