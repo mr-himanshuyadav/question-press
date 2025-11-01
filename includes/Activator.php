@@ -2,6 +2,7 @@
 namespace QuestionPress; // PSR-4 Namespace
 
 use QuestionPress\Database\Terms_DB;
+use QuestionPress\Core\Rewrites;
 
 /**
  * Fired during plugin activation.
@@ -468,6 +469,7 @@ class Activator {
 
         // Ensure flush_rewrite_rules() is called if needed for CPTs/Taxonomies
         // (We'll move CPT registration later, but keep flush in mind)
+        Rewrites::add_dashboard_rewrite_rules();
         flush_rewrite_rules();
     }
 

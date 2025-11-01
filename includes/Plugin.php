@@ -22,6 +22,7 @@ use QuestionPress\Admin\Meta_Boxes;
 use QuestionPress\Admin\Form_Handler;
 use QuestionPress\Admin\Backup\Backup_Manager;
 use QuestionPress\Core\Cron;
+use QuestionPress\Core\Rewrites;
 
 /**
  * Final QuestionPress Class.
@@ -128,11 +129,11 @@ final class Plugin {
      */
     private function init_hooks() {
         // Actions
-        add_action('plugins_loaded', [$this, 'load_plugin_textdomain']); // CORRECT - Use plugins_loaded hook
+        add_action('plugins_loaded', [$this, 'load_plugin_textdomain']);
         add_action('init', 'qp_start_session', 1);
         add_action('init', [$this->cron, 'ensure_cron_scheduled']);
-        add_action('init', [$this, 'register_shortcodes']); // Register shortcodes via class method
-        add_action('init', 'qp_add_dashboard_rewrite_rules');
+        add_action('init', [$this, 'register_shortcodes']);
+        add_action('init', [Rewrites::class, 'add_dashboard_rewrite_rules']);
         add_action('rest_api_init', ['\QP_Rest_Api', 'register_routes']);
         add_action('admin_init', ['\QP_Subjects_Page', 'handle_forms']);
         add_action('admin_init', ['\QP_Labels_Page', 'handle_forms']);
@@ -244,18 +245,12 @@ final class Plugin {
         add_action('wp_ajax_get_course_structure', 'qp_get_course_structure_ajax'); // Keep as global for now
 
         // Filters
-        add_filter('query_vars', 'qp_register_query_vars');
+        add_filter('query_vars', [Rewrites::class, 'register_query_vars']);
         if ( is_admin() ) {
             add_filter('display_post_states', [Admin_Utils::class, 'add_page_indicator'], 10, 2); // CHANGED CALLBACK
         }
         add_filter('set-screen-option', [\QuestionPress\Admin\Views\User_Entitlements_Page::class, 'save_screen_options'], 10, 3);
         add_filter('set-screen-option', [\QuestionPress\Admin\Views\All_Questions_Page::class, 'save_screen_options'], 10, 3);
-
-        // Activation hook is registered in main file, but flush is needed here too
-        // Ensure QP_PLUGIN_FILE is available or replace with __FILE__ relative path if needed
-        if (defined('QP_PLUGIN_FILE')) {
-             register_activation_hook(QP_PLUGIN_FILE, 'qp_flush_rewrite_rules_on_activate');
-        }
     }
 
     /**
