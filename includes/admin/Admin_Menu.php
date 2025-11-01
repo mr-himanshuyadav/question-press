@@ -105,7 +105,7 @@ class Admin_Menu {
 			'Edit Question',                // Menu title (not shown)
 			'manage_options',               // Capability
 			'qp-edit-group',                // Menu slug
-			['\QP_Question_Editor_Page', 'render'] // Callback
+			[Question_Editor_Page::class, 'render'] // Callback
 		);
 		add_submenu_page(
 			null,
