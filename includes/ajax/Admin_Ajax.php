@@ -10,6 +10,7 @@ use QuestionPress\Database\Terms_DB;
 use QuestionPress\Database\Questions_DB;
 use QuestionPress\Utils\Attempt_Evaluator;
 use QuestionPress\Admin\Backup\Backup_Manager;
+use QuestionPress\Admin\Views\Questions_List_Table;
 use WP_Error; // Use statement for WP_Error
 use WP_Query; // Use statement for WP_Query
 use QP_Questions_List_Table; // Use statement for list table
@@ -525,7 +526,7 @@ class Admin_Ajax {
              $updated_item = $items_array[0];
 
              // Check if the item still matches the current list table filters
-             $list_table = new QP_Questions_List_Table(); // Need an instance
+             $list_table = new Questions_List_Table(); // Need an instance
              $current_filters = [ // Reconstruct filters from request
                  'status'        => isset($_REQUEST['status']) ? sanitize_key($_REQUEST['status']) : 'publish',
                  'subject_id'    => isset($_REQUEST['filter_by_subject']) ? absint($_REQUEST['filter_by_subject']) : 0,

@@ -18,6 +18,7 @@ class Data_Cleanup {
      * Hooks into 'before_delete_post'.
      *
      * @param int $post_id The ID of the post being deleted.
+     * @return void
      */
     public static function cleanup_course_data_on_delete( $post_id ) {
         // Check if the post being deleted is actually a 'qp_course'
@@ -35,19 +36,20 @@ class Data_Cleanup {
     }
 
     /**
-     * Cleans up related course enrollment and progress data when a WordPress user is deleted.
+     * Cleans up all related plugin data when a WordPress user is deleted.
      * Hooks into 'delete_user'.
      *
      * @param int $user_id The ID of the user being deleted.
+     * @return void
      */
     public static function cleanup_user_data_on_delete( $user_id ) {
         global $wpdb;
         $user_courses_table = $wpdb->prefix . 'qp_user_courses';
         $progress_table     = $wpdb->prefix . 'qp_user_items_progress';
-        $sessions_table     = $wpdb->prefix . 'qp_user_sessions'; // Added sessions
-        $attempts_table     = $wpdb->prefix . 'qp_user_attempts'; // Added attempts
-        $review_table       = $wpdb->prefix . 'qp_review_later'; // Added review list
-        $reports_table      = $wpdb->prefix . 'qp_question_reports'; // Added reports
+        $sessions_table     = $wpdb->prefix . 'qp_user_sessions';
+        $attempts_table     = $wpdb->prefix . 'qp_user_attempts';
+        $review_table       = $wpdb->prefix . 'qp_review_later';
+        $reports_table      = $wpdb->prefix . 'qp_question_reports';
 
         // Sanitize the user ID just in case
         $user_id_to_delete = absint( $user_id );
@@ -74,6 +76,7 @@ class Data_Cleanup {
      * Hooks into 'save_post_qp_course' after the structure meta is saved.
      *
      * @param int $post_id The ID of the course post being saved.
+     * @return void
      */
     public static function recalculate_course_progress_on_save( $post_id ) {
         // Check nonce (from the meta box save action)

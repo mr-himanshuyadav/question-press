@@ -7,13 +7,14 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Handles user access and permission checks.
+ * Handles user access and permission checks for subjects and courses.
+ *
+ * @package QuestionPress\Utils
  */
 class User_Access {
 
 	/**
 	 * Determines the allowed subject term IDs for a given user based on their scope settings.
-	 * Replaces the old qp_get_allowed_subject_ids_for_user() function.
 	 *
 	 * @param int $user_id The user's ID.
 	 * @return array|string Returns an array of allowed subject IDs, or 'all' if unrestricted.
@@ -26,7 +27,6 @@ class User_Access {
 
 		// Check for admin/unrestricted role
 		$user = get_userdata( $user_id );
-		// Note: 'editor' may be too broad, adjust if you have a custom 'Question Manager' role
 		if ( $user && array_intersect( ['administrator', 'editor'], $user->roles ) ) {
 			return 'all'; // Admins/Editors can access all
 		}
@@ -68,7 +68,6 @@ class User_Access {
 
 	/**
 	 * Checks if a user has access to a specific course via a relevant entitlement OR existing enrollment.
-	 * Replaces the old qp_user_can_access_course() function.
 	 *
 	 * @param int  $user_id                 The user's ID.
 	 * @param int  $course_id               The course (post) ID.
@@ -76,7 +75,6 @@ class User_Access {
 	 * @return bool True if the user has access, false otherwise.
 	 */
 	public static function can_access_course( $user_id, $course_id, $ignore_enrollment_check = false ) {
-		// --- Logic copied from global function ---
 		global $wpdb;
 		$user_id   = absint( $user_id );
 		$course_id = absint( $course_id );
@@ -96,7 +94,7 @@ class User_Access {
 		// 1. Check for an existing, active enrollment (if not ignored)
 		if ( ! $ignore_enrollment_check ) {
 			$is_enrolled = $wpdb->get_var( $wpdb->prepare(
-				"SELECT user_course_id FROM $user_courses_table WHERE user_id = %d AND course_id = %d AND status IN ('enrolled', 'in_progress')",
+				"SELECT user_course_id FROM $user_courses_table WHERE user_id = %d AND course_id = %d AND status IN ('enrolled', 'in_progress', 'completed')", // Also allow access if completed
 				$user_id,
 				$course_id
 			) );
@@ -109,8 +107,9 @@ class User_Access {
 		// Get the auto-generated plan ID linked to this course
 		$auto_plan_id = get_post_meta( $course_id, '_qp_course_auto_plan_id', true );
 		if ( empty( $auto_plan_id ) ) {
-			// This course might not be properly configured for paid access
-			return false;
+			// This course might be free (check access mode) or misconfigured
+			$access_mode = get_post_meta( $course_id, '_qp_course_access_mode', true ) ?: 'free';
+			return ($access_mode === 'free'); // Grant access if it's free, deny if it's paid but misconfigured
 		}
 		$auto_plan_id = absint( $auto_plan_id );
 
@@ -128,7 +127,6 @@ class User_Access {
 		) );
 
 		return (bool) $has_valid_entitlement;
-		// --- End copied logic ---
 	}
 
 }

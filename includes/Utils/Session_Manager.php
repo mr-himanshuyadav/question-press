@@ -6,25 +6,27 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-use QuestionPress\Database\DB; // <-- Import the base DB class
+use QuestionPress\Database\DB;
 
 /**
- * Handles session-related logic like finalization.
+ * Handles session-related logic like finalization and state calculation.
+ *
+ * @package QuestionPress\Utils
  */
 class Session_Manager extends DB { // <-- Extend DB to get self::$wpdb
 
 	/**
 	 * Helper function to calculate final stats and update a session record.
-	 * (Moved from global function qp_finalize_and_end_session)
+	 * This is the canonical method for ending any session.
 	 *
 	 * @param int    $session_id The ID of the session to finalize.
 	 * @param string $new_status The status to set for the session (e.g., 'completed', 'abandoned').
-	 * @param string|null $end_reason The reason the session ended.
-	 * @return array|null An array of summary data, or null if the session was empty.
+	 * @param string|null $end_reason The reason the session ended (e.g., 'user_submitted', 'abandoned_by_system').
+	 * @return array|null An array of summary data, or null if the session was empty and deleted.
 	 */
 	public static function finalize_and_end_session($session_id, $new_status = 'completed', $end_reason = null)
 	{
-		$wpdb = self::$wpdb; // <-- Use self::$wpdb
+		$wpdb = self::$wpdb;
 		$sessions_table = $wpdb->prefix . 'qp_user_sessions';
 		$attempts_table = $wpdb->prefix . 'qp_user_attempts';
 		$pauses_table = $wpdb->prefix . 'qp_session_pauses';
@@ -44,6 +46,7 @@ class Session_Manager extends DB { // <-- Extend DB to get self::$wpdb
 		if ($total_answered_attempts === 0) {
 			$wpdb->delete($sessions_table, ['session_id' => $session_id]);
 			$wpdb->delete($attempts_table, ['session_id' => $session_id]); // Also clear any skipped/expired attempts
+			$wpdb->delete($pauses_table, ['session_id' => $session_id]);   // Also clear any pause records
 			return null; // Indicate that the session was empty and deleted
 		}
 
@@ -125,16 +128,15 @@ class Session_Manager extends DB { // <-- Extend DB to get self::$wpdb
 		], ['session_id' => $session_id]);
 
 		// --- NEW: Update Course Item Progress if applicable ---
-		if (($new_status === 'completed' || $new_status === 'abandoned') && // Only update progress if session truly ended
+		if (($new_status === 'completed' || $new_status === 'abandoned') &&
 			isset($settings['course_id']) && isset($settings['item_id'])) {
 
 			$course_id = absint($settings['course_id']);
 			$item_id = absint($settings['item_id']);
-			$user_id = $session->user_id; // Get user ID from the session object
+			$user_id = $session->user_id;
 			$progress_table = $wpdb->prefix . 'qp_user_items_progress';
-			$items_table = $wpdb->prefix . 'qp_course_items'; // <<< Keep this variable definition
+			$items_table = $wpdb->prefix . 'qp_course_items';
 
-			// *** START NEW CHECK ***
 			// Check if the course item still exists before trying to update progress
 			$item_exists = $wpdb->get_var($wpdb->prepare(
 				"SELECT COUNT(*) FROM {$items_table} WHERE item_id = %d AND course_id = %d",
@@ -143,65 +145,53 @@ class Session_Manager extends DB { // <-- Extend DB to get self::$wpdb
 			));
 
 			if ($item_exists) {
-				// *** Item exists, proceed with updating progress ***
-
-				// Prepare result data (customize as needed)
+				// Prepare result data
 				$result_data = json_encode([
 					'score' => $final_score,
 					'correct' => $correct_count,
 					'incorrect' => $incorrect_count,
 					'skipped' => $skipped_count,
-					'not_viewed' => $not_viewed_count, // Include if relevant (from mock tests)
+					'not_viewed' => $not_viewed_count,
 					'total_attempted' => $total_attempted,
-					'session_id' => $session_id // Store the session ID for potential review linking
+					'session_id' => $session_id
 				]);
 
-				// Use REPLACE INTO for simplicity
+				// Use REPLACE INTO to update or insert progress
 				$wpdb->query($wpdb->prepare(
 					"REPLACE INTO {$progress_table} (user_id, item_id, course_id, status, completion_date, result_data, last_viewed)
 					 VALUES (%d, %d, %d, %s, %s, %s, %s)",
 					$user_id,
 					$item_id,
 					$course_id,
-					'completed', // Mark item as completed when session ends
-					current_time('mysql'), // Completion date
+					'completed',
+					current_time('mysql'),
 					$result_data,
-					current_time('mysql') // Update last viewed as well
+					current_time('mysql')
 				));
 
-				// Note: Calculation and update of overall course progress should happen ONLY if the item exists
-				// --- Calculate and Update Overall Course Progress ---
+				// Calculate and Update Overall Course Progress
 				$user_courses_table = $wpdb->prefix . 'qp_user_courses';
 
-				// Get total number of items in the course
 				$total_items = (int) $wpdb->get_var($wpdb->prepare(
 					"SELECT COUNT(item_id) FROM $items_table WHERE course_id = %d",
 					$course_id
 				));
 
-				// Get number of completed items for the user in this course
 				$completed_items = (int) $wpdb->get_var($wpdb->prepare(
 					"SELECT COUNT(user_item_id) FROM $progress_table WHERE user_id = %d AND course_id = %d AND status = 'completed'",
 					$user_id,
 					$course_id
 				));
 
-				// Calculate percentage
 				$progress_percent = ($total_items > 0) ? round(($completed_items / $total_items) * 100) : 0;
+				$new_course_status = ($total_items > 0 && $completed_items >= $total_items) ? 'completed' : 'in_progress';
 
-				// Check if course is now fully complete
-				$new_course_status = 'in_progress'; // Default
-				if ($total_items > 0 && $completed_items >= $total_items) {
-					$new_course_status = 'completed';
-				}
-
-				// Get the current completion date (if any) to avoid overwriting it
 				$current_completion_date = $wpdb->get_var($wpdb->prepare(
 					"SELECT completion_date FROM {$user_courses_table} WHERE user_id = %d AND course_id = %d",
 					$user_id, $course_id
 				));
+				
 				$completion_date_to_set = $current_completion_date;
-
 				if ($new_course_status === 'completed' && is_null($current_completion_date)) {
 					$completion_date_to_set = current_time('mysql');
 				} elseif ($new_course_status !== 'completed') {
@@ -220,16 +210,11 @@ class Session_Manager extends DB { // <-- Extend DB to get self::$wpdb
 					['%d', '%s', '%s'],
 					['%d', '%d']
 				);
-				// --- End Overall Course Progress Update ---
 
 			} else {
-				// *** Item does NOT exist, skip progress update ***
-				// Optional: Log this occurrence for debugging
 				error_log("QP Session Finalize: Skipped progress update for user {$user_id}, course {$course_id}, because item {$item_id} no longer exists.");
 			}
-			// *** END NEW CHECK ***
-
-		} // This closing brace corresponds to the "if (isset($settings['course_id']) ...)" check
+		}
 		// --- END Course Item Progress Update ---
 
 		return [

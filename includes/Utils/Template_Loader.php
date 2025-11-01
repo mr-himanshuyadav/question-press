@@ -8,6 +8,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 /**
  * Handles loading view templates from the /templates/ directory.
+ *
+ * @package QuestionPress\Utils
  */
 class Template_Loader {
 
@@ -47,6 +49,7 @@ class Template_Loader {
             return ""; 
         }
 
+        // Make variables available to the included template
         if ( is_array( $args ) && ! empty( $args ) ) {
             extract( $args ); // phpcs:ignore WordPress.PHP.DontExtract.extract_extract
         }

@@ -6,20 +6,22 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-use QuestionPress\Database\DB; // <-- Import the base DB class
+use QuestionPress\Database\DB;
 
 /**
  * Handles logic for evaluating or re-evaluating user attempts.
+ *
+ * @package QuestionPress\Utils
  */
 class Attempt_Evaluator extends DB { // <-- Extend DB to get self::$wpdb
 
 	/**
 	 * Re-evaluates all attempts for a specific question after its correct answer has changed.
 	 * It also recalculates and updates the stats for all affected sessions.
-	 * (Moved from global function qp_re_evaluate_question_attempts)
 	 *
 	 * @param int $question_id The ID of the question that was updated.
 	 * @param int $new_correct_option_id The ID of the new correct option.
+	 * @return void
 	 */
 	public static function re_evaluate_question_attempts($question_id, $new_correct_option_id)
 	{
