@@ -25,7 +25,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	<div class="qp-sidebar-avatar">
 		<?php echo $avatar_html; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- HTML generated internally ?>
 	</div>
-	<span class="qp-user-name"><?php echo esc_html__( 'Hello, ', 'question-press' ) . esc_html( $current_user->display_name ); ?>!</span><br>
+	<span class="qp-user-name"><?php echo esc_html__( 'Hello, ', 'question-press' ) . esc_html( $current_user->display_name ); ?>!</span>
 	<span class="qp-access-status">
 		<?php echo wp_kses_post( $access_status_message ); ?>
 	</span>

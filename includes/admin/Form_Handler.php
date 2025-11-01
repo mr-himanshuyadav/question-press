@@ -16,49 +16,70 @@ use QuestionPress\Database\Terms_DB;
 class Form_Handler {
 
 	/**
-	 * Handles bulk actions from the Reports admin page.
-	 * Replaces the old qp_handle_report_actions function.
-	 * Hooked to 'admin_init'.
-	 */
-	public static function handle_report_actions() {
-		// --- Logic copied from qp_handle_report_actions() ---
-		if ( ! isset( $_REQUEST['page'] ) || $_REQUEST['page'] !== 'qp-logs-reports' ) {
-			return; // Not on the reports page
-		}
-		if ( ! current_user_can( 'manage_options' ) ) {
-			return; // Permission check
-		}
+     * Handles all report actions, including bulk, single, and clear.
+     */
+    public static function handle_report_actions() {
+        if ( ! isset( $_GET['page'] ) || $_GET['page'] !== 'qp-logs-reports' || ! is_admin() || ! current_user_can( 'manage_options' ) ) {
+            return;
+        }
 
-		$reports_list_table = new \QP_Reports_List_Table(); // Use global class
-		$action = $reports_list_table->current_action();
+        global $wpdb;
+        $reports_table = "{$wpdb->prefix}qp_question_reports";
 
-		if ( $action && isset( $_REQUEST['report_ids'] ) ) {
-			// Check nonce
-			if ( ! isset( $_REQUEST['_wpnonce'] ) || ! wp_verify_nonce( $_REQUEST['_wpnonce'], 'bulk-reports' ) ) {
-				wp_die( 'Security check failed for bulk reports action.' );
-			}
+        // === 1. Handle Bulk Actions ===
+        if ( isset( $_GET['bulk_action'] ) ) {
+            // ... (existing bulk action logic) ...
+            // Check for bulk actions
+            $action = $_GET['bulk_action'] ?? '-1';
+            if ( $action === '-1' && isset( $_GET['bulk_action2'] ) ) {
+                $action = $_GET['bulk_action2'];
+            }
 
-			global $wpdb;
-			$reports_table = $wpdb->prefix . 'qp_question_reports';
-			$report_ids = array_map( 'absint', $_REQUEST['report_ids'] );
-			$ids_placeholder = implode( ',', $report_ids );
-			$redirect_url = admin_url( 'admin.php?page=qp-logs-reports&tab=main' ); // Redirect back to main reports tab
+            if ( ( $action === 'resolve' || $action === 'reopen' ) && isset( $_GET['report_ids'] ) ) {
+                check_admin_referer( 'qp_bulk_report_action_nonce' );
+                $report_ids = array_map( 'absint', $_GET['report_ids'] );
+                $ids_placeholder = implode( ',', $report_ids );
+                $new_status = ( $action === 'resolve' ) ? 'resolved' : 'open';
 
-			if ( $action === 'bulk_resolve' ) {
-				$wpdb->query( "UPDATE $reports_table SET status = 'resolved' WHERE report_id IN ($ids_placeholder)" );
-				$redirect_url = add_query_arg( ['message' => 'resolved', 'count' => count( $report_ids )], $redirect_url );
-				wp_safe_redirect( $redirect_url );
-				exit;
-			}
-			if ( $action === 'bulk_delete' ) {
-				$wpdb->query( "DELETE FROM $reports_table WHERE report_id IN ($ids_placeholder)" );
-				$redirect_url = add_query_arg( ['message' => 'deleted', 'count' => count( $report_ids )], $redirect_url );
-				wp_safe_redirect( $redirect_url );
-				exit;
-			}
-		}
-		// --- End logic from qp_handle_report_actions() ---
-	}
+                $wpdb->query( "UPDATE {$reports_table} SET status = '{$new_status}' WHERE report_id IN ($ids_placeholder)" );
+
+                $message_code = ( $action === 'resolve' ) ? '1' : '2';
+                $redirect_url = admin_url( 'admin.php?page=qp-logs-reports&tab=reports&message=' . $message_code );
+                wp_safe_redirect( $redirect_url );
+                exit;
+            }
+            return; // Return after handling or ignoring bulk action
+        }
+
+        // === 2. Handle Single Link Actions ===
+        if ( isset( $_GET['action'] ) ) {
+            // Handle single resolve action
+            if ( $_GET['action'] === 'resolve_report' && isset( $_GET['question_id'] ) ) {
+                $question_id = absint( $_GET['question_id'] );
+                check_admin_referer( 'qp_resolve_report_' . $question_id );
+                $wpdb->update( $reports_table, [ 'status' => 'resolved' ], [ 'question_id' => $question_id, 'status' => 'open' ] );
+                wp_safe_redirect( admin_url( 'admin.php?page=qp-logs-reports&tab=reports&message=3' ) );
+                exit;
+            }
+
+            // Handle single re-open action
+            if ( $_GET['action'] === 'reopen_report' && isset( $_GET['question_id'] ) ) {
+                $question_id = absint( $_GET['question_id'] );
+                check_admin_referer( 'qp_reopen_report_' . $question_id );
+                $wpdb->update( $reports_table, [ 'status' => 'open' ], [ 'question_id' => $question_id, 'status' => 'resolved' ] );
+                wp_safe_redirect( admin_url( 'admin.php?page=qp-logs-reports&tab=reports&status=resolved&message=4' ) );
+                exit;
+            }
+
+            // Handle clearing all resolved reports
+            if ( $_GET['action'] === 'clear_resolved_reports' ) {
+                check_admin_referer( 'qp_clear_all_reports_nonce' );
+                $wpdb->delete( $reports_table, [ 'status' => 'resolved' ] );
+                wp_safe_redirect( admin_url( 'admin.php?page=qp-logs-reports&tab=reports&status=resolved&message=5' ) );
+                exit;
+            }
+        }
+    }
 
 	/**
      * Handles resolving all open reports for a group from the question editor page.

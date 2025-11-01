@@ -107,51 +107,6 @@ function qp_save_plan_link_variable_product($variation_id, $i) {
     update_post_meta($variation_id, '_qp_linked_plan_id', $plan_id);
 }
 
-function qp_handle_report_actions()
-{
-    if (!isset($_GET['page']) || $_GET['page'] !== 'qp-logs-reports' || !isset($_GET['action'])) {
-        return;
-    }
-
-    global $wpdb;
-    $reports_table = "{$wpdb->prefix}qp_question_reports";
-
-    // Handle single resolve action
-    if ($_GET['action'] === 'resolve_report' && isset($_GET['question_id'])) {
-        $question_id = absint($_GET['question_id']);
-        check_admin_referer('qp_resolve_report_' . $question_id);
-        $wpdb->update($reports_table, ['status' => 'resolved'], ['question_id' => $question_id, 'status' => 'open']);
-        wp_safe_redirect(admin_url('admin.php?page=qp-logs-reports&tab=reports&message=3'));
-        exit;
-    }
-
-    // Handle single re-open action
-    if ($_GET['action'] === 'reopen_report' && isset($_GET['question_id'])) {
-        $question_id = absint($_GET['question_id']);
-        check_admin_referer('qp_reopen_report_' . $question_id);
-        $wpdb->update($reports_table, ['status' => 'open'], ['question_id' => $question_id, 'status' => 'resolved']);
-        wp_safe_redirect(admin_url('admin.php?page=qp-logs-reports&tab=reports&status=resolved&message=4'));
-        exit;
-    }
-
-    // Handle clearing all resolved reports
-    if ($_GET['action'] === 'clear_resolved_reports') {
-        check_admin_referer('qp_clear_all_reports_nonce');
-        $wpdb->delete($reports_table, ['status' => 'resolved']);
-        wp_safe_redirect(admin_url('admin.php?page=qp-logs-reports&tab=reports&status=resolved&message=5'));
-        exit;
-    }
-}
-
-
-/**
- * Flush rewrite rules on plugin deactivation.
- */
-function qp_flush_rewrite_rules_on_deactivate() {
-    // Flush the rules to remove ours
-    flush_rewrite_rules();
-}
-
 function qp_get_practice_form_html_ajax()
 {
     check_ajax_referer('qp_practice_nonce', 'nonce');
