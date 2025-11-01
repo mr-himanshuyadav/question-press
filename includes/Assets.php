@@ -152,7 +152,8 @@ class Assets {
 
         if ($hook_suffix === 'question-press_page_qp-tools') {
         wp_enqueue_script('sweetalert2', 'https://cdn.jsdelivr.net/npm/sweetalert2@11', [], null, true);
-        wp_enqueue_script('qp-backup-restore-script', QP_ASSETS_URL . 'js/backup-restore.js', ['jquery', 'sweetalert2'], '1.0.0', true);
+        $backup_js_version = file_exists( QP_PLUGIN_PATH . 'assets/js/backup-restore.js' ) ? filemtime( QP_PLUGIN_PATH . 'assets/js/backup-restore.js' ) : QP_PLUGIN_VERSION;
+        wp_enqueue_script('qp-backup-restore-script', QP_ASSETS_URL . 'js/backup-restore.js', ['jquery', 'sweetalert2'], $backup_js_version, true);
         wp_localize_script('qp-backup-restore-script', 'qp_backup_restore_data', [
             'nonce' => wp_create_nonce('qp_backup_restore_nonce')
         ]);
