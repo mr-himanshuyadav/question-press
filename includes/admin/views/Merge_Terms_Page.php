@@ -1,6 +1,8 @@
 <?php
 namespace QuestionPress\Admin\Views;
 
+use QuestionPress\Utils\Template_Loader;
+
 // Exit if accessed directly.
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -75,7 +77,7 @@ class Merge_Terms_Page {
 
 		// Load and echo the template (assuming it exists and qp_get_template_html is available)
 		// We'll create this template file next if it doesn't exist yet.
-		echo \qp_get_template_html( 'merge-terms-page', 'admin', $args );
+		echo Template_Loader::get_html( 'merge-terms-page', 'admin', $args );
 
 		// The original function included the JS directly. Let's keep it that way for now.
 		?>

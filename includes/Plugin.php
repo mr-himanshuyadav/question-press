@@ -127,8 +127,7 @@ final class Plugin {
      * to include procedural function files or instantiate core components.
      */
     private function includes() {
-        // Example: Include global functions file (we'll create this next)
-         require_once QP_PLUGIN_PATH . 'includes/functions/qp-core-functions.php';
+        
 
         // Example: Instantiate core components (we'll add these classes later)
         Assets::instance();

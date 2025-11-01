@@ -6,8 +6,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-// Global classes used by the original function
-use \QP_Entitlements_List_Table;
+use QuestionPress\Utils\Template_Loader;
 
 /**
  * Handles rendering the "User Entitlements & Scope" admin page.
@@ -26,7 +25,7 @@ class User_Entitlements_Page {
         // For 'qp-user-entitlements' under 'question-press', it's 'question-press_page_qp-user-entitlements'
         if ($screen && $screen->id === 'question-press_page_qp-user-entitlements') {
             // Call the static method from the List Table class
-            \QP_Entitlements_List_Table::add_screen_options();
+            Entitlements_List_Table::add_screen_options();
         }
     }
 
@@ -69,7 +68,7 @@ class User_Entitlements_Page {
 		];
 
 		// Load and echo the template
-		echo \qp_get_template_html( 'user-entitlements-page', 'admin', $args );
+        echo Template_Loader::get_html( 'user-entitlements-page', 'admin', $args );
 
 	} // End render()
 

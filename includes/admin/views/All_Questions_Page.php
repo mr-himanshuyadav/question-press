@@ -1,6 +1,8 @@
 <?php
 namespace QuestionPress\Admin\Views;
 
+use QuestionPress\Utils\Template_Loader;
+
 // Exit if accessed directly.
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -99,6 +101,6 @@ class All_Questions_Page {
 		];
 
 		// Load and echo the template using the global function (we'll move this later if needed)
-		echo \qp_get_template_html( 'all-questions-page', 'admin', $args );
+		echo Template_Loader::get_html( 'all-questions-page', 'admin', $args );
 	}
 }
