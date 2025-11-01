@@ -203,7 +203,7 @@ class QP_Dashboard
         $course_id = $course_post->ID;
 
         // --- Access Check ---
-        if (!qp_user_can_access_course($user_id, $course_id)) {
+        if (!\QuestionPress\Utils\User_Access::can_access_course($user_id, $course_id)) {
             echo '<div class="qp-card"><div class="qp-card-content"><p>You do not have permission to view this course.</p></div></div>';
             $options = get_option('qp_settings');
             $dashboard_page_id = isset($options['dashboard_page']) ? absint($options['dashboard_page']) : 0;
