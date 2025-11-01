@@ -8,6 +8,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 use QuestionPress\Database\Terms_DB;
 use QuestionPress\Database\Questions_DB;
+use QuestionPress\Utils\Attempt_Evaluator;
 use WP_Error; // Use statement for WP_Error
 use WP_Query; // Use statement for WP_Query
 use QP_Questions_List_Table; // Use statement for list table
@@ -477,10 +478,7 @@ class Admin_Ajax {
 
             // If the correct answer has changed, trigger the re-evaluation.
              if ($original_correct_option_id != $new_correct_option_id) {
-                 // Assume qp_re_evaluate_question_attempts exists globally or move it to a class
-                 if (function_exists('qp_re_evaluate_question_attempts')) {
-                    qp_re_evaluate_question_attempts($question_id, $new_correct_option_id);
-                 }
+                    Attempt_Evaluator::re_evaluate_question_attempts($question_id, $new_correct_option_id);
              }
 
         } else {

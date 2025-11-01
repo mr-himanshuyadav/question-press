@@ -9,6 +9,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 use QuestionPress\Database\Terms_DB;
 use QuestionPress\Database\Questions_DB;
 use QuestionPress\Utils\User_Access;
+use QuestionPress\Utils\Session_Manager;
 use WP_Error; // Use statement for WP_Error
 use WP_Query; // Use statement for WP_Query
 
@@ -800,7 +801,7 @@ class Session_Ajax {
         $end_reason = $is_auto_submit ? 'autosubmitted_timer' : 'user_submitted';
 
         // Call the shared helper function (assuming qp_finalize_and_end_session is globally available for now)
-        $summary_data = qp_finalize_and_end_session($session_id, 'completed', $end_reason);
+        $summary_data = Session_Manager::finalize_and_end_session($session_id, 'completed', $end_reason); // <-- CHANGE THIS LINE
 
         if (is_null($summary_data)) {
             wp_send_json_success(['status' => 'no_attempts', 'message' => 'Session deleted as no questions were attempted.']);

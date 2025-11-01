@@ -11,6 +11,7 @@ use WP_Error;
 use WP_REST_Response;
 use QuestionPress\Database\Questions_DB; // Use our DB class
 use QuestionPress\Database\Terms_DB;   // Use our DB class
+use QuestionPress\Utils\Session_Manager;
 
 /**
  * Handles REST API requests for creating and managing practice sessions.
@@ -97,7 +98,7 @@ class SessionController {
 
         // Call the global helper function (which we also use for AJAX)
         // This ensures logic is consistent
-        $summary_data = qp_finalize_and_end_session($session_id, 'completed', 'api_submitted');
+        $summary_data = Session_Manager::finalize_and_end_session($session_id, 'completed', 'api_submitted');
 
         if (is_null($summary_data)) {
              // Session was empty and got deleted

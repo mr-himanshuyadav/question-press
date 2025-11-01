@@ -1,6 +1,8 @@
 <?php
 if (!defined('ABSPATH')) exit;
 
+use QuestionPress\Utils\Attempt_Evaluator;
+
 class QP_Question_Editor_Page
 {
     public static function handle_save_group()
@@ -143,7 +145,7 @@ class QP_Question_Editor_Page
                 $correct_option_id_set = \QuestionPress\Database\Questions_DB::save_options_for_question($question_id, $q_data);
 
                 if ($original_correct_option_id != $correct_option_id_set) {
-                    \qp_re_evaluate_question_attempts($question_id, absint($correct_option_id_set));
+                    Attempt_Evaluator::re_evaluate_question_attempts($question_id, absint($correct_option_id_set));
                 }
             }
         }   
@@ -868,11 +870,6 @@ class QP_Question_Editor_Page
                 margin-left: 15px;
                 vertical-align: middle;
                 display: inline-block;
-            }
-
-            .qp-header-label-select {
-                /* You can use a library like Select2 or Choices.js for a better UI,
-           but for a minimal approach, we can style a custom dropdown trigger. */
             }
 
             .qp-status-indicator {
