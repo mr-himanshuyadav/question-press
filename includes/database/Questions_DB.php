@@ -773,7 +773,7 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
         ), ARRAY_A);
         
         $question_data['options'] = array_map(function($opt) {
-            $opt['option_text'] = wp_kses_post(nl2br(stripslashes($opt['option_text'])));
+            $opt['option_text'] = wp_kses_post(nl2br($opt['option_text']));
             return $opt;
         }, $options_raw);
 
@@ -783,10 +783,10 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
 
         // 4. Apply nl2br/kses_post to question/direction text
         if (!empty($question_data['question_text'])) {
-            $question_data['question_text'] = wp_kses_post(nl2br(stripslashes($question_data['question_text'])));
+            $question_data['question_text'] = wp_kses_post(nl2br($question_data['question_text']));
         }
         if (!empty($question_data['direction_text'])) {
-            $question_data['direction_text'] = wp_kses_post(nl2br(stripslashes($question_data['direction_text'])));
+            $question_data['direction_text'] = wp_kses_post(nl2br($question_data['direction_text']));
         }
 
 
@@ -891,11 +891,11 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
         $options = self::get_options_for_question( $question_id );
         // Sanitize option text for display in readonly input
         foreach ($options as $option) {
-            $option->option_text = esc_attr(stripslashes($option->option_text));
+            $option->option_text = esc_attr($option->option_text);
         }
         // Sanitize question/direction text
-        $question->question_text = wp_kses_post(nl2br(stripslashes($question->question_text)));
-        $question->direction_text = wp_kses_post(nl2br(stripslashes($question->direction_text)));
+        $question->question_text = wp_kses_post(nl2br($question->question_text));
+        $question->direction_text = wp_kses_post(nl2br($question->direction_text));
 
 
         // 3. Get Current Term Relationships
