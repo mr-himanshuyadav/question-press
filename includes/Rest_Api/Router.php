@@ -1,4 +1,6 @@
 <?php
+namespace QuestionPress\Rest_Api; // Added namespace
+
 if (!defined('ABSPATH')) exit;
 
 // Manually include the JWT library files
@@ -9,8 +11,10 @@ use Firebase\JWT\Key;
 use QuestionPress\Rest_Api\AuthController;
 use QuestionPress\Rest_Api\QuestionController;
 use QuestionPress\Rest_Api\SessionController;
+use QuestionPress\Rest_Api\DataController; // Added missing use statement
+use \WP_REST_Server; // Added for WP_REST_Server::CREATABLE
 
-class QP_Rest_Api {
+final class Router { // Changed class name
 
     /**
      * The main function to hook into WordPress.

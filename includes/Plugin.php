@@ -27,6 +27,14 @@ use QuestionPress\Utils\Data_Cleanup;
 use QuestionPress\Integrations\WooCommerce_Integration;
 use QuestionPress\Frontend\Shortcodes;
 use QuestionPress\Frontend\Dashboard;
+
+// Ajax
+use QuestionPress\Ajax\Admin_Ajax;
+use QuestionPress\Ajax\Practice_Ajax;
+use QuestionPress\Ajax\Profile_Ajax;
+use QuestionPress\Ajax\Session_Ajax;
+    
+// Admin Page Classes
 use QuestionPress\Admin\Views\All_Questions_Page;
 use QuestionPress\Admin\Views\Exams_Page;
 use QuestionPress\Admin\Views\Labels_Page;
@@ -36,6 +44,9 @@ use QuestionPress\Admin\Views\Settings_Page;
 use QuestionPress\Admin\Views\Sources_Page;
 use QuestionPress\Admin\Views\Subjects_Page;
 use QuestionPress\Admin\Views\User_Entitlements_Page;
+
+// API Router
+use QuestionPress\Rest_Api\Router;
 
 /**
  * Final QuestionPress Class.
@@ -143,7 +154,7 @@ final class Plugin {
         add_action('init', [$this->cron, 'ensure_cron_scheduled']);
         add_action('init', [$this, 'register_shortcodes']);
         add_action('init', [Rewrites::class, 'add_dashboard_rewrite_rules']);
-        add_action('rest_api_init', ['\QP_Rest_Api', 'register_routes']);
+        add_action('rest_api_init', [Router::class, 'register_routes']);
         add_action('admin_init', [Subjects_Page::class, 'handle_forms']);
         add_action('admin_init', [Labels_Page::class, 'handle_forms']);
         add_action('admin_init', [Exams_Page::class, 'handle_forms']);
@@ -160,7 +171,7 @@ final class Plugin {
         add_action('admin_post_qp_update_source_term', [Sources_Page::class, 'handle_update_term']);
         add_action('admin_post_qp_add_report_reason', [Logs_Reports_Page::class, 'handle_add_reason']);
         add_action('admin_post_qp_update_report_reason', [Logs_Reports_Page::class, 'handle_update_reason']);
-        add_action('admin_post_qp_perform_merge', [\QuestionPress\Admin\Form_Handler::class, 'handle_perform_merge']);
+        add_action('admin_post_qp_perform_merge', [Form_Handler::class, 'handle_perform_merge']);
         
         add_action('admin_init', [Form_Handler::class, 'handle_report_actions']);
         add_action('admin_init', [Form_Handler::class, 'handle_resolve_from_editor']);
@@ -193,7 +204,7 @@ final class Plugin {
         add_action('save_post_qp_course', [Data_Cleanup::class, 'recalculate_course_progress_on_save'], 20, 1);
         add_action('qp_check_entitlement_expiration_hook', [$this->cron, 'run_entitlement_expiration_check']);
         add_action('qp_scheduled_backup_hook', [Backup_Manager::class, 'run_scheduled_backup_event']);
-        add_action('admin_head', [\QuestionPress\Admin\Views\User_Entitlements_Page::class, 'add_screen_options']);
+        add_action('admin_head', [User_Entitlements_Page::class, 'add_screen_options']);
         add_action('admin_head', [Assets::instance(), 'enqueue_dynamic_admin_styles']);
         add_action('wp', [$this->cron, 'schedule_session_cleanup']);
         add_action('qp_cleanup_abandoned_sessions_event', [$this->cron, 'cleanup_abandoned_sessions']);
@@ -201,52 +212,52 @@ final class Plugin {
         add_action('delete_user', [Data_Cleanup::class, 'cleanup_user_data_on_delete'], 10, 1);
 
         // AJAX Actions (already using class methods)
-        add_action('wp_ajax_qp_save_profile', [\QuestionPress\Ajax\Profile_Ajax::class, 'save_profile']);
-        add_action('wp_ajax_qp_change_password', [\QuestionPress\Ajax\Profile_Ajax::class, 'change_password']);
-        add_action('wp_ajax_qp_upload_avatar', [\QuestionPress\Ajax\Profile_Ajax::class, 'upload_avatar']);
-        add_action('wp_ajax_start_practice_session', [\QuestionPress\Ajax\Session_Ajax::class, 'start_practice_session']);
-        add_action('wp_ajax_qp_start_incorrect_practice_session', [\QuestionPress\Ajax\Session_Ajax::class, 'start_incorrect_practice_session']);
-        add_action('wp_ajax_qp_start_mock_test_session', [\QuestionPress\Ajax\Session_Ajax::class, 'start_mock_test_session']);
-        add_action('wp_ajax_start_revision_session', [\QuestionPress\Ajax\Session_Ajax::class, 'start_revision_session']);
-        add_action('wp_ajax_qp_start_review_session', [\QuestionPress\Ajax\Session_Ajax::class, 'start_review_session']);
-        add_action('wp_ajax_update_session_activity', [\QuestionPress\Ajax\Session_Ajax::class, 'update_session_activity']);
-        add_action('wp_ajax_end_practice_session', [\QuestionPress\Ajax\Session_Ajax::class, 'end_practice_session']);
-        add_action('wp_ajax_delete_empty_session', [\QuestionPress\Ajax\Session_Ajax::class, 'delete_empty_session']);
-        add_action('wp_ajax_delete_user_session', [\QuestionPress\Ajax\Session_Ajax::class, 'delete_user_session']);
-        add_action('wp_ajax_delete_revision_history', [\QuestionPress\Ajax\Session_Ajax::class, 'delete_revision_history']);
-        add_action('wp_ajax_qp_pause_session', [\QuestionPress\Ajax\Session_Ajax::class, 'pause_session']);
-        add_action('wp_ajax_qp_terminate_session', [\QuestionPress\Ajax\Session_Ajax::class, 'terminate_session']);
-        add_action('wp_ajax_start_course_test_series', [\QuestionPress\Ajax\Session_Ajax::class, 'start_course_test_series']);
-        add_action('wp_ajax_check_answer', [\QuestionPress\Ajax\Practice_Ajax::class, 'check_answer']);
-        add_action('wp_ajax_qp_save_mock_attempt', [\QuestionPress\Ajax\Practice_Ajax::class, 'save_mock_attempt']);
-        add_action('wp_ajax_qp_update_mock_status', [\QuestionPress\Ajax\Practice_Ajax::class, 'update_mock_status']);
-        add_action('wp_ajax_expire_question', [\QuestionPress\Ajax\Practice_Ajax::class, 'expire_question']);
-        add_action('wp_ajax_skip_question', [\QuestionPress\Ajax\Practice_Ajax::class, 'skip_question']);
-        add_action('wp_ajax_qp_toggle_review_later', [\QuestionPress\Ajax\Practice_Ajax::class, 'toggle_review_later']);
-        add_action('wp_ajax_get_single_question_for_review', [\QuestionPress\Ajax\Practice_Ajax::class, 'get_single_question_for_review']);
-        add_action('wp_ajax_submit_question_report', [\QuestionPress\Ajax\Practice_Ajax::class, 'submit_question_report']);
-        add_action('wp_ajax_get_report_reasons', [\QuestionPress\Ajax\Practice_Ajax::class, 'get_report_reasons']);
-        add_action('wp_ajax_get_unattempted_counts', [\QuestionPress\Ajax\Practice_Ajax::class, 'get_unattempted_counts']);
-        add_action('wp_ajax_get_question_data', [\QuestionPress\Ajax\Practice_Ajax::class, 'get_question_data']);
-        add_action('wp_ajax_get_topics_for_subject', [\QuestionPress\Ajax\Practice_Ajax::class, 'get_topics_for_subject']);
-        add_action('wp_ajax_get_sections_for_subject', [\QuestionPress\Ajax\Practice_Ajax::class, 'get_sections_for_subject']);
-        add_action('wp_ajax_get_sources_for_subject', [\QuestionPress\Ajax\Practice_Ajax::class, 'get_sources_for_subject_cascading']);
-        add_action('wp_ajax_get_child_terms', [\QuestionPress\Ajax\Practice_Ajax::class, 'get_child_terms_cascading']);
-        add_action('wp_ajax_get_progress_data', [\QuestionPress\Ajax\Practice_Ajax::class, 'get_progress_data']);
-        add_action('wp_ajax_get_sources_for_subject_progress', [\QuestionPress\Ajax\Practice_Ajax::class, 'get_sources_for_subject_progress']);
-        add_action('wp_ajax_qp_check_remaining_attempts', [\QuestionPress\Ajax\Practice_Ajax::class, 'check_remaining_attempts']);
-        add_action('wp_ajax_enroll_in_course', [\QuestionPress\Ajax\Practice_Ajax::class, 'enroll_in_course']);
-        add_action('wp_ajax_qp_search_questions_for_course', [\QuestionPress\Ajax\Practice_Ajax::class, 'search_questions_for_course']);
-        add_action('wp_ajax_get_topics_for_list_table_filter', [\QuestionPress\Ajax\Admin_Ajax::class, 'get_topics_for_list_table_filter']);
-        add_action('wp_ajax_get_sources_for_list_table_filter', [\QuestionPress\Ajax\Admin_Ajax::class, 'get_sources_for_list_table_filter']);
-        add_action('wp_ajax_qp_get_quick_edit_form', [\QuestionPress\Ajax\Admin_Ajax::class, 'get_quick_edit_form']);
-        add_action('wp_ajax_save_quick_edit_data', [\QuestionPress\Ajax\Admin_Ajax::class, 'save_quick_edit_data']);
-        add_action('wp_ajax_qp_create_backup', [\QuestionPress\Ajax\Admin_Ajax::class, 'create_backup']);
-        add_action('wp_ajax_qp_delete_backup', [\QuestionPress\Ajax\Admin_Ajax::class, 'delete_backup']);
-        add_action('wp_ajax_qp_restore_backup', [\QuestionPress\Ajax\Admin_Ajax::class, 'restore_backup']);
-        add_action('wp_ajax_regenerate_api_key', [\QuestionPress\Ajax\Admin_Ajax::class, 'regenerate_api_key']);
-        add_action('wp_ajax_get_practice_form_html', [\QuestionPress\Ajax\Practice_Ajax::class, 'get_practice_form_html']);
-        add_action('wp_ajax_get_course_structure', [\QuestionPress\Ajax\Practice_Ajax::class, 'get_course_structure']);
+        add_action('wp_ajax_qp_save_profile', [Profile_Ajax::class, 'save_profile']);
+        add_action('wp_ajax_qp_change_password', [Profile_Ajax::class, 'change_password']);
+        add_action('wp_ajax_qp_upload_avatar', [Profile_Ajax::class, 'upload_avatar']);
+        add_action('wp_ajax_start_practice_session', [Session_Ajax::class, 'start_practice_session']);
+        add_action('wp_ajax_qp_start_incorrect_practice_session', [Session_Ajax::class, 'start_incorrect_practice_session']);
+        add_action('wp_ajax_qp_start_mock_test_session', [Session_Ajax::class, 'start_mock_test_session']);
+        add_action('wp_ajax_start_revision_session', [Session_Ajax::class, 'start_revision_session']);
+        add_action('wp_ajax_qp_start_review_session', [Session_Ajax::class, 'start_review_session']);
+        add_action('wp_ajax_update_session_activity', [Session_Ajax::class, 'update_session_activity']);
+        add_action('wp_ajax_end_practice_session', [Session_Ajax::class, 'end_practice_session']);
+        add_action('wp_ajax_delete_empty_session', [Session_Ajax::class, 'delete_empty_session']);
+        add_action('wp_ajax_delete_user_session', [Session_Ajax::class, 'delete_user_session']);
+        add_action('wp_ajax_delete_revision_history', [Session_Ajax::class, 'delete_revision_history']);
+        add_action('wp_ajax_qp_pause_session', [Session_Ajax::class, 'pause_session']);
+        add_action('wp_ajax_qp_terminate_session', [Session_Ajax::class, 'terminate_session']);
+        add_action('wp_ajax_start_course_test_series', [Session_Ajax::class, 'start_course_test_series']);
+        add_action('wp_ajax_check_answer', [Practice_Ajax::class, 'check_answer']);
+        add_action('wp_ajax_qp_save_mock_attempt', [Practice_Ajax::class, 'save_mock_attempt']);
+        add_action('wp_ajax_qp_update_mock_status', [Practice_Ajax::class, 'update_mock_status']);
+        add_action('wp_ajax_expire_question', [Practice_Ajax::class, 'expire_question']);
+        add_action('wp_ajax_skip_question', [Practice_Ajax::class, 'skip_question']);
+        add_action('wp_ajax_qp_toggle_review_later', [Practice_Ajax::class, 'toggle_review_later']);
+        add_action('wp_ajax_get_single_question_for_review', [Practice_Ajax::class, 'get_single_question_for_review']);
+        add_action('wp_ajax_submit_question_report', [Practice_Ajax::class, 'submit_question_report']);
+        add_action('wp_ajax_get_report_reasons', [Practice_Ajax::class, 'get_report_reasons']);
+        add_action('wp_ajax_get_unattempted_counts', [Practice_Ajax::class, 'get_unattempted_counts']);
+        add_action('wp_ajax_get_question_data', [Practice_Ajax::class, 'get_question_data']);
+        add_action('wp_ajax_get_topics_for_subject', [Practice_Ajax::class, 'get_topics_for_subject']);
+        add_action('wp_ajax_get_sections_for_subject', [Practice_Ajax::class, 'get_sections_for_subject']);
+        add_action('wp_ajax_get_sources_for_subject', [Practice_Ajax::class, 'get_sources_for_subject_cascading']);
+        add_action('wp_ajax_get_child_terms', [Practice_Ajax::class, 'get_child_terms_cascading']);
+        add_action('wp_ajax_get_progress_data', [Practice_Ajax::class, 'get_progress_data']);
+        add_action('wp_ajax_get_sources_for_subject_progress', [Practice_Ajax::class, 'get_sources_for_subject_progress']);
+        add_action('wp_ajax_qp_check_remaining_attempts', [Practice_Ajax::class, 'check_remaining_attempts']);
+        add_action('wp_ajax_enroll_in_course', [Practice_Ajax::class, 'enroll_in_course']);
+        add_action('wp_ajax_qp_search_questions_for_course', [Practice_Ajax::class, 'search_questions_for_course']);
+        add_action('wp_ajax_get_topics_for_list_table_filter', [Admin_Ajax::class, 'get_topics_for_list_table_filter']);
+        add_action('wp_ajax_get_sources_for_list_table_filter', [Admin_Ajax::class, 'get_sources_for_list_table_filter']);
+        add_action('wp_ajax_qp_get_quick_edit_form', [Admin_Ajax::class, 'get_quick_edit_form']);
+        add_action('wp_ajax_save_quick_edit_data', [Admin_Ajax::class, 'save_quick_edit_data']);
+        add_action('wp_ajax_qp_create_backup', [Admin_Ajax::class, 'create_backup']);
+        add_action('wp_ajax_qp_delete_backup', [Admin_Ajax::class, 'delete_backup']);
+        add_action('wp_ajax_qp_restore_backup', [Admin_Ajax::class, 'restore_backup']);
+        add_action('wp_ajax_regenerate_api_key', [Admin_Ajax::class, 'regenerate_api_key']);
+        add_action('wp_ajax_get_practice_form_html', [Practice_Ajax::class, 'get_practice_form_html']);
+        add_action('wp_ajax_get_course_structure', [Practice_Ajax::class, 'get_course_structure']);
 
         // Filters
         add_filter('query_vars', [Rewrites::class, 'register_query_vars']);

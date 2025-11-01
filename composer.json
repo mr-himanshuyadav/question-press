@@ -17,9 +17,7 @@
         "psr-4": {
             "QuestionPress\\": "includes/"
         },
-        "classmap": [
-            "api/"
-        ]
+        "classmap": []
     },
     "config": {
         "allow-plugins": {
