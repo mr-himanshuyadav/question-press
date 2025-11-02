@@ -34,13 +34,41 @@ class WooCommerce_Integration {
     public function add_plan_link_to_simple_products() {
         global $post;
 
-        // Get all published 'qp_plan' posts
+        // --- NEW: Check if this is an auto-generated product ---
+        if ( get_post_meta( $post->ID, '_qp_is_auto_generated', true ) === 'true' ) {
+            $linked_plan_id = get_post_meta( $post->ID, '_qp_linked_plan_id', true );
+            $plan_post = $linked_plan_id ? get_post( $linked_plan_id ) : null;
+            
+            echo '<div class="options_group" style="padding: 12px; border-top: 1px solid #eee;">';
+            echo '<p style="margin: 0;"><strong>' . esc_html__( 'Question Press Plan', 'question-press' ) . '</strong></p>';
+            echo '<p style="font-style: italic; color: #666; margin: 5px 0 0 0;">';
+            if ( $plan_post && $plan_post->post_type === 'qp_plan' ) {
+                echo esc_html__( 'This product is auto-linked to:', 'question-press' ) . '<br>';
+                echo '<strong>' . esc_html( $plan_post->post_title ) . '</strong>';
+                echo ' (<a href="' . esc_url( get_edit_post_link( $plan_post->ID ) ) . '" target="_blank">' . esc_html__( 'View Plan', 'question-press' ) . '</a>)';
+            } else {
+                echo esc_html__( 'This product is auto-generated but its plan is missing. Please re-save the linked course.', 'question-press' );
+            }
+            echo '</p></div>';
+            return; // Stop here, don't show the dropdown
+        }
+        // --- END NEW ---
+
+        // Get all published 'qp_plan' posts, excluding auto-generated ones
         $plans = get_posts( [
             'post_type'   => 'qp_plan',
             'post_status' => 'publish',
             'numberposts' => -1,
             'orderby'     => 'title',
             'order'       => 'ASC',
+            // --- NEW: Exclude auto-generated plans from the dropdown ---
+            'meta_query'  => [
+                [
+                    'key'     => '_qp_is_auto_generated',
+                    'compare' => 'NOT EXISTS', // Show manual plans
+                ]
+            ]
+            // --- END NEW ---
         ] );
 
         $options = [ '' => __( '— Select a Question Press Plan —', 'question-press' ) ];
@@ -65,6 +93,12 @@ class WooCommerce_Integration {
      * Save the custom field for Simple products.
      */
     public function save_plan_link_simple_product( $post_id ) {
+        // --- NEW: Don't save if it's an auto-generated product (it's set by the course) ---
+        if ( get_post_meta( $post_id, '_qp_is_auto_generated', true ) === 'true' ) {
+            return;
+        }
+        // --- END NEW ---
+
         $plan_id = isset( $_POST['_qp_linked_plan_id'] ) ? absint( $_POST['_qp_linked_plan_id'] ) : '';
         update_post_meta( $post_id, '_qp_linked_plan_id', $plan_id );
     }
@@ -80,6 +114,14 @@ class WooCommerce_Integration {
             'numberposts' => -1,
             'orderby'     => 'title',
             'order'       => 'ASC',
+            // --- NEW: Exclude auto-generated plans from the dropdown ---
+            'meta_query'  => [
+                [
+                    'key'     => '_qp_is_auto_generated',
+                    'compare' => 'NOT EXISTS', // Show manual plans
+                ]
+            ]
+            // --- END NEW ---
         ] );
 
         $options = [ '' => __( '— Select a Question Press Plan —', 'question-press' ) ];

@@ -179,6 +179,8 @@ final class Plugin {
         add_action('admin_post_qp_save_user_scope', [User_Entitlements_Page::class, 'handle_save_scope']);
         add_action('wp_ajax_qp_save_question_group', [Question_Editor_Page::class, 'handle_save_group']);
 
+        add_action('pre_get_posts', [Post_Types::class, 'hide_auto_plans_from_admin_list']);
+
 
         // Register admin menus if in admin area
         if ( is_admin() && isset($this->admin_menu) ) {
@@ -208,6 +210,11 @@ final class Plugin {
         add_action('wp', [$this->cron, 'schedule_session_cleanup']);
         add_action('qp_cleanup_abandoned_sessions_event', [$this->cron, 'cleanup_abandoned_sessions']);
         add_action('before_delete_post', [Data_Cleanup::class, 'cleanup_course_data_on_delete'], 10, 1);
+        add_action('before_delete_post', [Data_Cleanup::class, 'prevent_auto_plan_deletion'], 10, 1);
+        add_action('before_delete_post', [Data_Cleanup::class, 'prevent_auto_product_deletion'], 10, 1);
+        add_action('wp_trash_post', [Data_Cleanup::class, 'sync_plan_on_course_trash'], 10, 1);
+        add_action('untrash_post', [Data_Cleanup::class, 'sync_plan_on_course_untrash'], 10, 1);
+        add_filter('wp_count_posts', [Post_Types::class, 'filter_plan_view_counts'], 10, 2);
         add_action('delete_user', [Data_Cleanup::class, 'cleanup_user_data_on_delete'], 10, 1);
 
         // AJAX Actions (already using class methods)
@@ -261,7 +268,8 @@ final class Plugin {
         // Filters
         add_filter('query_vars', [Rewrites::class, 'register_query_vars']);
         if ( is_admin() ) {
-            add_filter('display_post_states', [Admin_Utils::class, 'add_page_indicator'], 10, 2); // CHANGED CALLBACK
+            add_filter('display_post_states', [Admin_Utils::class, 'add_page_indicator'], 10, 2);
+            add_filter('display_post_states', [Admin_Utils::class, 'add_course_post_states'], 10, 2);
         }
         add_filter('set-screen-option', [User_Entitlements_Page::class, 'save_screen_options'], 10, 3);
         add_filter('set-screen-option', [All_Questions_Page::class, 'save_screen_options'], 10, 3);

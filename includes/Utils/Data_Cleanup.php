@@ -14,11 +14,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 class Data_Cleanup {
 
     /**
-     * Cleans up related enrollment and progress data when a qp_course post is deleted.
+     * Cleans up related data when a qp_course post is permanently deleted.
      * Hooks into 'before_delete_post'.
-     *
-     * @param int $post_id The ID of the post being deleted.
-     * @return void
      */
     public static function cleanup_course_data_on_delete( $post_id ) {
         // Check if the post being deleted is actually a 'qp_course'
@@ -27,11 +24,56 @@ class Data_Cleanup {
             $user_courses_table = $wpdb->prefix . 'qp_user_courses';
             $progress_table     = $wpdb->prefix . 'qp_user_items_progress';
 
-            // Delete item progress records associated with this course first
+            // Delete item progress records
             $wpdb->delete( $progress_table, [ 'course_id' => $post_id ], [ '%d' ] );
 
-            // Then delete the main enrollment records for this course
+            // Delete the main enrollment records
             $wpdb->delete( $user_courses_table, [ 'course_id' => $post_id ], [ '%d' ] );
+
+            // --- UPDATED: Delete the linked auto-generated plan AND product ---
+            $auto_plan_id = get_post_meta( $post_id, '_qp_course_auto_plan_id', true );
+            if ( ! empty( $auto_plan_id ) && get_post_meta( $auto_plan_id, '_qp_is_auto_generated', true ) === 'true' ) {
+                wp_delete_post( $auto_plan_id, true ); 
+                error_log( "QP Data Cleanup: Deleted auto-plan #{$auto_plan_id} linked to deleted course #{$post_id}." );
+            }
+            
+            $auto_product_id = get_post_meta( $post_id, '_qp_linked_product_id', true );
+            if ( ! empty( $auto_product_id ) && get_post_meta( $auto_product_id, '_qp_is_auto_generated', true ) === 'true' ) {
+                wp_delete_post( $auto_product_id, true ); 
+                error_log( "QP Data Cleanup: Deleted auto-product #{$auto_product_id} linked to deleted course #{$post_id}." );
+            }
+            // --- END UPDATED ---
+        }
+    }
+
+    /**
+     * Prevents an auto-generated plan from being deleted if its course still exists.
+     * Hooks into 'before_delete_post'.
+     */
+    public static function prevent_auto_plan_deletion( $post_id ) {
+        if ( get_post_type( $post_id ) === 'qp_plan' ) {
+            if ( get_post_meta( $post_id, '_qp_is_auto_generated', true ) === 'true' ) {
+                $linked_courses = get_post_meta( $post_id, '_qp_plan_linked_courses', true );
+                $course_id = ( is_array( $linked_courses ) && ! empty( $linked_courses ) ) ? absint( $linked_courses[0] ) : 0;
+                
+                if ( $course_id > 0 ) {
+                    $course_post = get_post( $course_id );
+                    // Check if course exists AND is not in the trash
+                    if ( $course_post && $course_post->post_status !== 'trash' ) {
+                        $course_edit_link = get_edit_post_link( $course_id );
+                        $message = sprintf(
+                            __( 'This is an auto-generated plan and cannot be deleted because its course, "%s" (ID: %d), still exists. %sIf you want to remove this plan, you must delete the course. If you want to make the course free, set its Access Mode to "Free" to move this plan to drafts.', 'question-press' ),
+                            esc_html( $course_post->post_title ),
+                            $course_id,
+                            '<br/><br/>'
+                        );
+                        if ($course_edit_link) {
+                            $message .= ' <a href="' . esc_url($course_edit_link) . '">Edit the course here</a>.';
+                        }
+                        wp_die( $message, 'Deletion Restricted', [ 'response' => 403, 'back_link' => true ] );
+                    }
+                }
+            }
         }
     }
 
@@ -69,6 +111,103 @@ class Data_Cleanup {
         $wpdb->delete( $review_table, [ 'user_id' => $user_id_to_delete ], [ '%d' ] );
         $wpdb->delete( $reports_table, [ 'user_id' => $user_id_to_delete ], [ '%d' ] );
 
+    }
+
+    /**
+     * NEW: Prevents an auto-generated product from being deleted if its course still exists.
+     * Hooks into 'before_delete_post'.
+     *
+     * @param int $post_id The ID of the post (product) being deleted.
+     * @return void
+     */
+    public static function prevent_auto_product_deletion( $post_id ) {
+        // Check if the post being deleted is a 'product'
+        if ( get_post_type( $post_id ) === 'product' ) {
+            
+            // Check if it's an auto-generated product
+            if ( get_post_meta( $post_id, '_qp_is_auto_generated', true ) === 'true' ) {
+                
+                // Find its linked course
+                $course_id = get_post_meta( $post_id, '_qp_linked_course_id', true );
+                
+                if ( $course_id > 0 ) {
+                    // Check if the course post still exists (and is not in the trash)
+                    $course_post = get_post( $course_id );
+                    if ( $course_post && $course_post->post_status !== 'trash' ) {
+                        // The course exists, so block deletion.
+                        $course_edit_link = get_edit_post_link( $course_id );
+                        $message = sprintf(
+                            __( 'This is an auto-generated product and cannot be deleted because its course, "%s" (ID: %d), still exists. %sIf you want to remove this product, you must delete the course. If you want to make the course free, set its Access Mode to "Free" to move this product to drafts.', 'question-press' ),
+                            esc_html( $course_post->post_title ),
+                            $course_id,
+                            '<br/><br/>'
+                        );
+                        
+                        if ($course_edit_link) {
+                            $message .= ' <a href="' . esc_url($course_edit_link) . '">Edit the course here</a>.';
+                        }
+                        
+                        wp_die( $message, 'Deletion Restricted', [ 'response' => 403, 'back_link' => true ] );
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Moves the associated auto-plan to the trash when a course is trashed.
+     * Hooks into 'wp_trash_post'.
+     */
+    public static function sync_plan_on_course_trash( $post_id ) {
+        if ( get_post_type( $post_id ) !== 'qp_course' ) {
+            return;
+        }
+
+        // 1. Trash the Plan
+        $auto_plan_id = get_post_meta( $post_id, '_qp_course_auto_plan_id', true );
+        if ( ! empty( $auto_plan_id ) && get_post_meta( $auto_plan_id, '_qp_is_auto_generated', true ) === 'true' ) {
+            if ( get_post_status( $auto_plan_id ) !== 'trash' ) {
+                wp_trash_post( $auto_plan_id );
+            }
+        }
+        
+        // 2. Trash the Product
+        $auto_product_id = get_post_meta( $post_id, '_qp_linked_product_id', true );
+        if ( ! empty( $auto_product_id ) && get_post_meta( $auto_product_id, '_qp_is_auto_generated', true ) === 'true' ) {
+            if ( get_post_status( $auto_product_id ) !== 'trash' ) {
+                wp_trash_post( $auto_product_id );
+            }
+        }
+    }
+
+    /**
+     * Restores the associated auto-plan from the trash when a course is restored.
+     * Hooks into 'untrash_post'.
+     */
+    public static function sync_plan_on_course_untrash( $post_id ) {
+        if ( get_post_type( $post_id ) !== 'qp_course' ) {
+            return;
+        }
+
+        // 1. Untrash the Plan
+        $auto_plan_id = get_post_meta( $post_id, '_qp_course_auto_plan_id', true );
+        if ( ! empty( $auto_plan_id ) && get_post_meta( $auto_plan_id, '_qp_is_auto_generated', true ) === 'true' ) {
+            if ( get_post_status( $auto_plan_id ) === 'trash' ) {
+                wp_untrash_post( $auto_plan_id );
+            }
+        }
+        
+        // 2. Untrash the Product
+        $auto_product_id = get_post_meta( $post_id, '_qp_linked_product_id', true );
+        if ( ! empty( $auto_product_id ) && get_post_meta( $auto_product_id, '_qp_is_auto_generated', true ) === 'true' ) {
+            if ( get_post_status( $auto_product_id ) === 'trash' ) {
+                wp_untrash_post( $auto_product_id );
+            }
+        }
+
+        // 3. Re-sync status for both (this will set them to publish/draft correctly)
+        // This function now handles both plan and product status
+        \QuestionPress\Admin\Meta_Boxes::sync_course_plan( $post_id );
     }
 
     /**

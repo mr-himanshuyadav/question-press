@@ -140,6 +140,90 @@ class Post_Types {
     register_post_type('qp_plan', $args);
     }
 
+    /**
+     * Hides auto-generated plans from the "All Plans" admin list.
+     * Hooked to 'pre_get_posts'.
+     *
+     * @param \WP_Query $query The main WordPress query object.
+     */
+    public static function hide_auto_plans_from_admin_list( $query ) {
+        // Check if we are in the admin, on the main query, and for the 'qp_plan' post type
+        if ( ! is_admin() || ! $query->is_main_query() || $query->get('post_type') !== 'qp_plan' ) {
+            return;
+        }
+
+        // Get the current screen to ensure we're only modifying the "All Plans" list
+        $screen = get_current_screen();
+        if ( $screen && $screen->id === 'edit-qp_plan' ) {
+            
+            // Get existing meta query if any
+            $meta_query = $query->get('meta_query') ?: [];
+
+            // Add our condition to exclude posts where _qp_is_auto_generated is 'true'
+            // This will automatically include posts where the key doesn't exist (manual plans)
+            $meta_query[] = [
+                'relation' => 'OR',
+                [
+                    'key'     => '_qp_is_auto_generated',
+                    'compare' => 'NOT EXISTS', // Show manual plans
+                ],
+                [
+                    'key'     => '_qp_is_auto_generated',
+                    'value'   => 'true',
+                    'compare' => '=' // Show plans where key is not 'true'
+                ]
+            ];
+            
+            $query->set( 'meta_query', $meta_query );
+        }
+    }
+
+    /**
+     * Modifies the post count object for the 'qp_plan' post type to exclude auto-generated plans.
+     * Hooked to 'wp_count_posts'.
+     *
+     * @param stdClass $counts  An object containing post counts.
+     * @param string   $type    The post type.
+     * @return stdClass The modified counts object.
+     */
+    public static function filter_plan_view_counts( $counts, $type ) {
+        // Only modify counts for the 'qp_plan' post type in the admin
+        if ( ! is_admin() || $type !== 'qp_plan' ) {
+            return $counts;
+        }
+
+        global $wpdb;
+
+        // This query counts all 'qp_plan' posts, grouped by status,
+        // that do NOT have the meta key '_qp_is_auto_generated' set to 'true'.
+        // This correctly includes manual plans (where key is NULL) and excludes auto-plans.
+        $query = "
+            SELECT p.post_status, COUNT( * ) AS num_posts 
+            FROM {$wpdb->posts} p
+            LEFT JOIN {$wpdb->postmeta} m ON (p.ID = m.post_id AND m.meta_key = '_qp_is_auto_generated')
+            WHERE p.post_type = 'qp_plan'
+            AND (m.meta_value IS NULL OR m.meta_value != 'true')
+            GROUP BY p.post_status
+        ";
+
+        $results = $wpdb->get_results( $query, ARRAY_A );
+
+        // Create a new, empty counts object
+        $new_counts = new \stdClass();
+        foreach ( get_post_stati() as $status ) {
+            $new_counts->$status = 0;
+        }
+
+        // Populate the new counts object with our custom query results
+        foreach ( (array) $results as $row ) {
+            if ( isset( $new_counts->{$row['post_status']} ) ) {
+                $new_counts->{$row['post_status']} = (int) $row['num_posts'];
+            }
+        }
+
+        return $new_counts;
+    }
+
     /** Cloning/Unserializing prevention */
     public function __clone() { _doing_it_wrong( __FUNCTION__, esc_html__( 'Cloning is forbidden.', 'question-press' ), '1.0' ); }
     public function __wakeup() { _doing_it_wrong( __FUNCTION__, esc_html__( 'Unserializing instances of this class is forbidden.', 'question-press' ), '1.0' ); }

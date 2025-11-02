@@ -76,7 +76,26 @@ class Meta_Boxes {
 		<div class="qp-plan-meta-box">
 			<table>
 				<tbody>
-					<tr>
+					<?php // --- ADDED: Check if this is an auto-generated plan ---
+					$is_auto_plan = get_post_meta( $post->ID, '_qp_is_auto_generated', true ) === 'true';
+					if ( $is_auto_plan ) :
+						$course_id_arr = get_post_meta( $post->ID, '_qp_plan_linked_courses', true );
+						$course_id     = ( is_array( $course_id_arr ) && ! empty( $course_id_arr ) ) ? $course_id_arr[0] : 0;
+						?>
+						<tr>
+							<td colspan="2">
+								<div class="notice notice-info inline" style="margin: 0;">
+									<p><strong><?php esc_html_e( 'Auto-Generated Plan', 'question-press' ); ?></strong><br>
+										<?php esc_html_e( 'This plan is automatically managed by its associated course and cannot be edited here.', 'question-press' ); ?>
+										<?php if ( $course_id && get_post( $course_id ) ) : ?>
+											<br><a href="<?php echo esc_url( get_edit_post_link( $course_id ) ); ?>" class="button button-small" style="margin-top: 10px;"><?php esc_html_e( 'Edit Linked Course', 'question-press' ); ?></a>
+										<?php endif; ?>
+									</p>
+								</div>
+							</td>
+						</tr>
+					<?php endif; ?>
+					<tr <?php if ( $is_auto_plan ) echo 'style="display:none;"'; ?>>
 						<th><label for="qp_plan_type">Plan Type</label></th>
 						<td>
 							<select name="_qp_plan_type" id="qp_plan_type">
@@ -91,7 +110,7 @@ class Meta_Boxes {
 						</td>
 					</tr>
 
-					<tr class="conditional-field" data-depends-on="time_limited combined">
+					<tr class="conditional-field" data-depends-on="time_limited combined" <?php if ( $is_auto_plan ) echo 'style="display:none;"'; ?>>
 						<th><label for="qp_plan_duration_value">Duration</label></th>
 						<td>
 							<input type="number" name="_qp_plan_duration_value" id="qp_plan_duration_value" value="<?php echo esc_attr($duration_value); ?>" min="1" style="width: 80px; margin-right: 10px;">
@@ -104,14 +123,14 @@ class Meta_Boxes {
 						</td>
 					</tr>
 					<?php // ... rest of the table rows from original function ... ?>
-					<tr class="conditional-field" data-depends-on="attempt_limited combined">
+					<tr class="conditional-field" data-depends-on="attempt_limited combined" <?php if ( $is_auto_plan ) echo 'style="display:none;"'; ?>>
 						<th><label for="qp_plan_attempts">Number of Attempts</label></th>
 						<td>
 							<input type="number" name="_qp_plan_attempts" id="qp_plan_attempts" value="<?php echo esc_attr($attempts); ?>" min="1">
 							<p class="description">How many attempts the user gets with this plan.</p>
 						</td>
 					</tr>
-					<tr class="conditional-field" data-depends-on="course_access combined">
+					<tr class="conditional-field" data-depends-on="course_access combined" <?php if ( $is_auto_plan ) echo 'style="display:none;"'; ?>>
 						<th><label for="qp_plan_course_access_type">Course Access</label></th>
 						<td>
 							<select name="_qp_plan_course_access_type" id="qp_plan_course_access_type">
@@ -120,7 +139,7 @@ class Meta_Boxes {
 							</select>
 						</td>
 					</tr>
-					<tr class="conditional-field" data-depends-on="course_access combined" data-sub-depends-on="specific">
+					<tr class="conditional-field" data-depends-on="course_access combined" data-sub-depends-on="specific" <?php if ( $is_auto_plan ) echo 'style="display:none;"'; ?>>
 						<th><label>Select Courses</label></th>
 						<td>
 							<div class="course-select-list">
@@ -138,7 +157,7 @@ class Meta_Boxes {
 							 <p class="description">Select the specific courses included in this plan.</p>
 						</td>
 					</tr>
-					 <tr>
+					 <tr <?php if ( $is_auto_plan ) echo 'style="display:none;"'; ?>>
 						<th><label for="qp_plan_description">Description</label></th>
 						<td>
 							<textarea name="_qp_plan_description" id="qp_plan_description" rows="3"><?php echo esc_textarea($description); ?></textarea>
@@ -151,7 +170,11 @@ class Meta_Boxes {
 
 		<script type="text/javascript"> /* Keep JS here for now */
 			jQuery(document).ready(function($) {
-				// ... (JS code from original function) ...
+				// Hide conditional fields if it's an auto-plan
+				if ( <?php echo $is_auto_plan ? 'true' : 'false'; ?> ) {
+					$('.qp-plan-meta-box .conditional-field').hide();
+				}
+
 				const planTypeSelect = $('#qp_plan_type');
 				const courseAccessSelect = $('#qp_plan_course_access_type');
 				const metaBox = $('.qp-plan-meta-box');
@@ -199,6 +222,12 @@ class Meta_Boxes {
 		if (!current_user_can('edit_post', $post_id)) return $post_id;
 		if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) return $post_id;
 		if ('qp_plan' !== get_post_type($post_id)) return $post_id;
+
+		// --- ADDED: Prevent editing auto-generated plans ---
+		if ( get_post_meta( $post_id, '_qp_is_auto_generated', true ) === 'true' ) {
+			return $post_id; // Do not save any changes
+		}
+		// --- END ADDED ---
 
 		// Sanitize and save meta fields (copied from original function)
 		$fields_to_save = [ /* ... fields ... */
@@ -259,16 +288,22 @@ class Meta_Boxes {
 
 		// Get existing meta values
 		$access_mode = get_post_meta( $post->ID, '_qp_course_access_mode', true ) ?: 'free'; // Default to free
-		// ... (rest of the variable fetching logic from original function) ...
 		$duration_value = get_post_meta($post->ID, '_qp_course_access_duration_value', true);
 		$duration_unit = get_post_meta($post->ID, '_qp_course_access_duration_unit', true) ?: 'day';
 		$linked_product_id = get_post_meta($post->ID, '_qp_linked_product_id', true);
 		$auto_plan_id = get_post_meta($post->ID, '_qp_course_auto_plan_id', true);
 
+		// --- NEW: Check if the linked product is auto-generated ---
+		$is_auto_product_linked = false;
+		if ( ! empty( $linked_product_id ) && get_post_meta( $linked_product_id, '_qp_is_auto_generated', true ) === 'true' ) {
+			$is_auto_product_linked = true;
+		}
+		// --- END NEW ---
+
 		// Get all published WooCommerce products for selection
 		$products = [];
-		if ( class_exists( 'WooCommerce' ) ) {
-			$products = wc_get_products([ /* ... wc_get_products args ... */
+		if ( class_exists( 'WooCommerce' ) && ! $is_auto_product_linked ) { // Only query if we need the dropdown
+			$products = wc_get_products([
 				'status' => 'publish',
 				'limit' => -1,
 				'orderby' => 'title',
@@ -277,7 +312,7 @@ class Meta_Boxes {
 			]);
 		}
 
-		// --- Output the HTML (copied directly from original function) ---
+		// --- Output the HTML ---
 		?>
 		<style>
             #qp_course_access_meta_box p { margin-bottom: 15px; }
@@ -290,6 +325,7 @@ class Meta_Boxes {
             #qp-purchase-fields { display: <?php echo ($access_mode === 'requires_purchase') ? 'block' : 'none'; ?>; margin-top: 15px; border-top: 1px solid #eee; padding-top: 15px;}
             #qp_course_access_meta_box small.description { font-size: 0.9em; color: #666; display: block; margin-top: 3px; }
             #qp-auto-plan-info { font-style: italic; color: #666; font-size: 0.9em; margin-top: 10px; padding-top: 10px; border-top: 1px dashed #ddd; }
+            #qp-auto-product-info { font-style: italic; color: #666; font-size: 0.9em; margin-top: 10px; padding: 10px; border-top: 1px dashed #ddd; background: #fdfdfd; }
         </style>
 
 		<p>
@@ -300,7 +336,7 @@ class Meta_Boxes {
 			</select>
 		</p>
 
-		<div id="qp-purchase-fields">
+		<div id="qp-purchase-fields" style="display: <?php echo ($access_mode === 'requires_purchase') ? 'block' : 'none'; ?>;">
 			<p>
 				<label><?php esc_html_e('Access Duration:', 'question-press'); ?></label>
 				<div class="duration-group">
@@ -316,27 +352,47 @@ class Meta_Boxes {
 
 			<?php // Only show product link if WooCommerce is active ?>
 			<?php if ( class_exists( 'WooCommerce' ) ) : ?>
-			<p>
-				<label for="qp_linked_product_id"><?php esc_html_e('Linked WooCommerce Product:', 'question-press'); ?></label>
-				<select name="_qp_linked_product_id" id="qp_linked_product_id">
-					<option value="">— <?php esc_html_e('Select Product', 'question-press'); ?> —</option>
-					<?php
-					if ($products) {
-						foreach ($products as $product) {
-							if ($product->is_type('simple') || $product->is_type('variable')) {
-								printf(
-									'<option value="%s" %s>%s</option>',
-									esc_attr($product->get_id()),
-									selected($linked_product_id, $product->get_id(), false),
-									esc_html($product->get_name()) . ' (#' . $product->get_id() . ')'
-								);
-							}
-						}
-					}
-					?>
-				</select>
-				<small class="description"><?php esc_html_e('Product users click "Purchase" for. Ensure this product is linked to the correct auto-generated or manual plan.', 'question-press'); ?></small>
-			</p>
+
+                <?php // --- NEW: Show info box if auto-product is linked ---
+                if ( $is_auto_product_linked && $linked_product_id ) : 
+                    $product_post = get_post($linked_product_id);
+                ?>
+                    <div id="qp-auto-product-info">
+                        <strong><?php esc_html_e( 'Auto-Product Linked', 'question-press' ); ?></strong><br>
+                        <?php if ($product_post) : ?>
+                            <?php echo esc_html($product_post->post_title); ?><br>
+                            <a href="<?php echo esc_url( get_edit_post_link( $linked_product_id ) ); ?>" class="button button-secondary button-small" target="_blank" style="margin-top: 5px;"><?php esc_html_e('Edit Product (to set price)', 'question-press'); ?></a>
+                        <?php else : ?>
+                            <span style="color: red;"><?php esc_html_e( 'Linked product not found.', 'question-press' ); ?></span>
+                        <?php endif; ?>
+                         <input type="hidden" name="_qp_linked_product_id" value="<?php echo esc_attr($linked_product_id); ?>">
+                    </div>
+
+                <?php // --- OLD: Show dropdown if no auto-product is linked ---
+                else : ?>
+                    <p>
+                        <label for="qp_linked_product_id"><?php esc_html_e('Linked WooCommerce Product:', 'question-press'); ?></label>
+                        <select name="_qp_linked_product_id" id="qp_linked_product_id">
+                            <option value="">— <?php esc_html_e('Select Product or Save to Auto-Create', 'question-press'); ?> —</option>
+                            <?php
+                            if ($products) {
+                                foreach ($products as $product) {
+                                    if ($product->is_type('simple') || $product->is_type('variable')) {
+                                        printf(
+                                            '<option value="%s" %s>%s</option>',
+                                            esc_attr($product->get_id()),
+                                            selected($linked_product_id, $product->get_id(), false),
+                                            esc_html($product->get_name()) . ' (#' . $product->get_id() . ')'
+                                        );
+                                    }
+                                }
+                            }
+                            ?>
+                        </select>
+                        <small class="description"><?php esc_html_e('Manually link a product. Or, leave blank and save the course to auto-create a new product.', 'question-press'); ?></small>
+                    </p>
+                <?php endif; ?>
+                
 			<?php else : ?>
 				<p><small class="description"><?php esc_html_e('Install and activate WooCommerce to link products for purchase.', 'question-press'); ?></small></p>
 			<?php endif; ?>
@@ -350,7 +406,7 @@ class Meta_Boxes {
 				 </p>
 			<?php elseif ($access_mode === 'requires_purchase') : ?>
 				 <p id="qp-auto-plan-info">
-					 <?php esc_html_e( 'A Plan will be automatically created/updated when you save this course. Link your WC Product to that Plan ID.', 'question-press' ); ?>
+					 <?php esc_html_e( 'A Plan and Product will be automatically created/updated when you save this course.', 'question-press' ); ?>
 				 </p>
 			<?php endif; ?>
 
@@ -391,12 +447,34 @@ class Meta_Boxes {
 			update_post_meta($post_id, '_qp_course_access_duration_value', $duration_value);
 			$duration_unit = isset($_POST['_qp_course_access_duration_unit']) ? sanitize_key($_POST['_qp_course_access_duration_unit']) : 'day';
 			update_post_meta($post_id, '_qp_course_access_duration_unit', $duration_unit);
-			$product_id = isset($_POST['_qp_linked_product_id']) ? absint($_POST['_qp_linked_product_id']) : '';
-			update_post_meta($post_id, '_qp_linked_product_id', $product_id);
+
+			// --- UPDATED: Only save product ID if it's NOT an auto-product ---
+			// (The auto-product ID is hidden and saved automatically, or set by sync_course_plan)
+			if ( isset( $_POST['_qp_linked_product_id'] ) ) {
+				$product_id = absint( $_POST['_qp_linked_product_id'] );
+				// Check if this ID is for an auto-product. If it is, trust the value.
+				// If it's NOT (i.e., it's from the dropdown), then save it.
+				$is_auto_product = get_post_meta( $product_id, '_qp_is_auto_generated', true ) === 'true';
+				if ( ! $is_auto_product ) {
+					// This came from the manual dropdown, so save it
+					update_post_meta( $post_id, '_qp_linked_product_id', $product_id );
+				}
+				// If it *was* an auto-product, its hidden field value will be saved, which is correct.
+			}
+			// --- END UPDATED ---
+
 		} else {
 			delete_post_meta($post_id, '_qp_course_access_duration_value');
 			delete_post_meta($post_id, '_qp_course_access_duration_unit');
-			delete_post_meta($post_id, '_qp_linked_product_id');
+			
+			// --- UPDATED: Only delete the link if it's NOT an auto-product ---
+			// (We want to keep the link to the auto-product so we can re-publish it later)
+			$linked_product_id = get_post_meta( $post_id, '_qp_linked_product_id', true );
+			if ( ! empty( $linked_product_id ) && get_post_meta( $linked_product_id, '_qp_is_auto_generated', true ) !== 'true' ) {
+				// It's a manually linked product, so remove the link
+				delete_post_meta($post_id, '_qp_linked_product_id');
+			}
+			// --- END UPDATED ---
 		}
 	}
 
@@ -450,9 +528,9 @@ class Meta_Boxes {
 
 		<?php // Keep styles here for now ?>
 		<style>
-			#qp-sections-list .qp-section { /* ... styles ... */ }
+			#qp-sections-list .qp-section { border: 1px solid #ccd0d4; margin-bottom: 15px; background: #fff; border-radius: 4px;/* ... styles ... */ }
             /* ... (Copy ALL styles from the original qp_render_course_structure_meta_box function here) ... */
-            border: 1px solid #ccd0d4; margin-bottom: 15px; background: #fff; border-radius: 4px;
+            
             .qp-section-header { padding: 10px 15px; background: #f6f7f7; border-bottom: 1px solid #ccd0d4; cursor: move; display: flex; justify-content: space-between; align-items: center; }
             .qp-section-header h3 { margin: 0; font-size: 1.1em; display: inline-block; }
             .qp-section-title-input { font-size: 1.1em; font-weight: bold; border: none; box-shadow: none; padding: 2px 5px; margin-left: 5px; background: transparent; }
@@ -599,113 +677,162 @@ class Meta_Boxes {
 	}
 
 	/**
-     * Automatically creates or updates a qp_plan post based on course settings.
+     * Automatically creates/updates a qp_plan AND a wc_product based on course settings.
      * Triggered after the course meta is saved.
      *
      * @param int $post_id The ID of the qp_course post being saved.
      */
     public static function sync_course_plan( $post_id ) {
-        // Basic checks (already done in qp_save_course_access_meta, but good practice)
+        // Basic checks
         if ( ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) || 'qp_course' !== get_post_type( $post_id ) || ! current_user_can( 'edit_post', $post_id ) ) {
             return;
         }
-        // Verify nonce again, just to be safe, using the nonce from the access meta save
-        if ( ! isset( $_POST['qp_course_access_nonce'] ) || ! wp_verify_nonce( $_POST['qp_course_access_nonce'], 'qp_save_course_access_meta' ) ) {
-            return;
-        }
+
+        // We rely on the 'save_post' hook's capability checks, so we remove the
+        // specific nonce check to allow this to run during Quick Edit.
 
         $access_mode = get_post_meta( $post_id, '_qp_course_access_mode', true );
         $existing_plan_id = get_post_meta( $post_id, '_qp_course_auto_plan_id', true );
+        
+        // --- Get linked product ID and check if it's ours ---
+        $existing_product_id = get_post_meta( $post_id, '_qp_linked_product_id', true );
+        $is_auto_product = $existing_product_id ? get_post_meta($existing_product_id, '_qp_is_auto_generated', true) === 'true' : false;
 
-        // --- FIX: If course is NOT 'requires_purchase', clean up any existing auto-plan ---
-        if ( $access_mode !== 'requires_purchase' ) {
-            if ( ! empty( $existing_plan_id ) ) {
-                $existing_plan_post = get_post( $existing_plan_id );
-                
-                // Check if the plan exists and is one of ours
-                if ( $existing_plan_post && $existing_plan_post->post_type === 'qp_plan' && get_post_meta($existing_plan_id, '_qp_is_auto_generated', true) === 'true' ) {
-                    // It's our auto-plan. Set it to 'draft' to deactivate it.
-                    $plan_update_args = [
-                        'ID' => $existing_plan_id,
-                        'post_status' => 'draft',
-                    ];
-                    wp_update_post($plan_update_args);
-                    error_log( "QP Auto Plan: Set Plan ID #{$existing_plan_id} to draft because Course ID #{$post_id} was set to free." );
-                }
-                
-                // Remove the link from the course, as it's no longer a paid course.
-                delete_post_meta( $post_id, '_qp_course_auto_plan_id' );
-            }
-            return; // We are done.
-        }
-        // --- END FIX ---
+        // Get the post status
+        $post_status = get_post_status( $post_id );
 
-        // Only proceed if the course requires purchase
-        // (This code is now only reached if $access_mode === 'requires_purchase')
-
-        // Get the course details needed for the plan
+        // Get the course details needed for the plan/product
         $course_title     = get_the_title( $post_id );
         $duration_value   = get_post_meta( $post_id, '_qp_course_access_duration_value', true );
         $duration_unit    = get_post_meta( $post_id, '_qp_course_access_duration_unit', true );
-        // $existing_plan_id is already defined above
-
-        // Determine plan type based on duration
-        $plan_type = ! empty( $duration_value ) ? 'time_limited' : 'unlimited'; // Course access implies unlimited attempts
+        $plan_type = 'combined'; // Use 'combined' to properly scope access
 
         // Prepare plan post data
         $plan_post_args = [
             'post_title'   => 'Auto: Access Plan for Course "' . $course_title . '"',
-            'post_content' => '', // Content not needed
-            'post_status'  => 'publish', // Auto-publish the plan
+            'post_content' => '', 
+            'post_status'  => 'draft', // Default to draft
             'post_type'    => 'qp_plan',
-            'meta_input'   => [ // Use meta_input for direct meta saving/updating
-                '_qp_is_auto_generated'       => 'true', // Flag this as auto-managed
+            'meta_input'   => [
+                '_qp_is_auto_generated'       => 'true', 
                 '_qp_plan_type'               => $plan_type,
                 '_qp_plan_duration_value'     => ! empty( $duration_value ) ? absint( $duration_value ) : null,
                 '_qp_plan_duration_unit'      => ! empty( $duration_value ) ? sanitize_key( $duration_unit ) : null,
-                '_qp_plan_attempts'           => null, // Course access plans grant unlimited attempts within duration
+                '_qp_plan_attempts'           => null, 
                 '_qp_plan_course_access_type' => 'specific',
-                '_qp_plan_linked_courses'     => [ $post_id ], // Link specifically to this course ID
-                // '_qp_plan_description' => 'Automatically generated plan for ' . $course_title, // Optional description
+                '_qp_plan_linked_courses'     => [ $post_id ], 
             ],
         ];
 
-        $plan_id_to_save = 0;
+        // --- UPDATED LOGIC: Handle both Plan and Product ---
 
-        // Check if a plan already exists and is valid
-        if ( ! empty( $existing_plan_id ) ) {
-            $existing_plan_post = get_post( $existing_plan_id );
-            // Check if the post exists and is indeed a qp_plan
-            if ( $existing_plan_post && $existing_plan_post->post_type === 'qp_plan' ) {
-                // Update existing plan
-                $plan_post_args['ID'] = $existing_plan_id; // Add ID for update
-                $updated_plan_id      = wp_update_post( $plan_post_args, true ); // true returns WP_Error on failure
-                if ( ! is_wp_error( $updated_plan_id ) ) {
-                    $plan_id_to_save = $updated_plan_id;
-                    error_log( "QP Auto Plan: Updated Plan ID #{$plan_id_to_save} for Course ID #{$post_id}" );
-                } else {
-                    error_log( "QP Auto Plan: FAILED to update Plan ID #{$existing_plan_id} for Course ID #{$post_id}. Error: " . $updated_plan_id->get_error_message() );
+        // If the course is NOT 'requires_purchase' OR its status is NOT 'publish' (e.g., draft, trash),
+        // then the plan and product should be a draft.
+        if ( $access_mode !== 'requires_purchase' || $post_status !== 'publish' ) {
+            // --- Course is set to FREE or is DRAFT/TRASHED etc. ---
+            
+            // 1. Set Plan to Draft
+            if ( ! empty( $existing_plan_id ) ) {
+                $existing_plan_post = get_post( $existing_plan_id );
+                if ( $existing_plan_post && $existing_plan_post->post_type === 'qp_plan' && get_post_meta($existing_plan_id, '_qp_is_auto_generated', true) === 'true' ) {
+                    // Only update if it's not already a draft
+                    if ($existing_plan_post->post_status !== 'draft') {
+                        wp_update_post(['ID' => $existing_plan_id, 'post_status' => 'draft']); 
+                        error_log( "QP Auto Sync: Set Plan ID #{$existing_plan_id} to draft for Course #{$post_id}." );
+                    }
                 }
-            } else {
-                // The linked ID was invalid, clear it and create a new one
-                delete_post_meta( $post_id, '_qp_course_auto_plan_id' );
-                $existing_plan_id = 0; // Force creation below
+            }
+            
+            // 2. Set Auto-Product to Draft
+            if ( $is_auto_product && class_exists( 'WooCommerce' ) ) {
+                $product = wc_get_product( $existing_product_id );
+                if ( $product && $product->get_status() !== 'draft' ) {
+                    $product->set_status( 'draft' );
+                    $product->save();
+                    error_log( "QP Auto Sync: Set Product ID #{$existing_product_id} to draft for Course #{$post_id}." );
+                }
+            }
+            return; // We are done.
+        
+        } else {
+            // --- Course is set to REQUIRES PURCHASE AND is PUBLISHED ---
+            
+            $plan_post_args['post_status'] = 'publish'; // Set to publish
+            $plan_id_to_save = 0;
+
+            // 1. Create or Update the Plan
+            if ( ! empty( $existing_plan_id ) ) {
+                $existing_plan_post = get_post( $existing_plan_id );
+                if ( $existing_plan_post && $existing_plan_post->post_type === 'qp_plan' && get_post_meta($existing_plan_id, '_qp_is_auto_generated', true) === 'true' ) {
+                    $plan_post_args['ID'] = $existing_plan_id; 
+                    $updated_plan_id      = wp_update_post( $plan_post_args, true ); 
+                    if ( ! is_wp_error( $updated_plan_id ) ) {
+                        $plan_id_to_save = $updated_plan_id;
+                    }
+                } else {
+                    delete_post_meta( $post_id, '_qp_course_auto_plan_id' );
+                    $existing_plan_id = 0; // Force creation
+                }
+            }
+
+            if ( empty( $plan_id_to_save ) && empty( $existing_plan_id ) ) {
+                $new_plan_id = wp_insert_post( $plan_post_args, true ); 
+                if ( ! is_wp_error( $new_plan_id ) ) {
+                    $plan_id_to_save = $new_plan_id;
+                    update_post_meta( $post_id, '_qp_course_auto_plan_id', $plan_id_to_save );
+                }
+            }
+
+            // If we still don't have a plan ID, we can't create the product.
+            if ( $plan_id_to_save <= 0 ) {
+                error_log( "QP Auto Sync: FAILED to create/find Plan for Course ID #{$post_id}. Product creation skipped." );
+                return;
+            }
+
+            // 2. Create or Update the WooCommerce Product
+            if ( class_exists( 'WooCommerce' ) ) {
+                $product_id_to_save = 0;
+
+                // Check if an auto-product already exists
+                if ( $is_auto_product ) {
+                    $product = wc_get_product( $existing_product_id );
+                    if ( $product ) {
+                        $product->set_name( 'Access for "' . $course_title . '"' );
+                        $product->set_status( 'publish' );
+                        $product->update_meta_data( '_qp_linked_plan_id', $plan_id_to_save ); // Re-sync plan ID
+                        $product_id_to_save = $product->save();
+                        error_log( "QP Auto Sync: Updated and Published Product ID #{$product_id_to_save} for Course #{$post_id}" );
+                    } else {
+                         $is_auto_product = false; // Linked product was not found, force creation
+                    }
+                } 
+                
+                // If no auto-product was found or it was invalid, create a new one
+                if ( ! $is_auto_product ) {
+                    $product = new \WC_Product_Simple();
+                    $product->set_name( 'Access for "' . $course_title . '"' );
+                    $product->set_status( 'publish' );
+                    $product->set_virtual( true );
+                    $product->set_downloadable( false );
+                    $product->set_regular_price( '' ); // Admin must set this
+                    
+                    // Add our meta data
+                    $product->update_meta_data( '_qp_is_auto_generated', 'true' );
+                    $product->update_meta_data( '_qp_linked_plan_id', $plan_id_to_save );
+                    $product->update_meta_data( '_qp_linked_course_id', $post_id ); // <-- Add reverse link
+                    
+                    $product_id_to_save = $product->save();
+                    
+                    if ( $product_id_to_save > 0 ) {
+                        // Link this new product back to the course
+                        update_post_meta( $post_id, '_qp_linked_product_id', $product_id_to_save );
+                        error_log( "QP Auto Sync: CREATED and Published Product ID #{$product_id_to_save} for Course #{$post_id}" );
+                    } else {
+                         error_log( "QP Auto Sync: FAILED to create new Product for Course ID #{$post_id}." );
+                    }
+                }
             }
         }
-
-        // Create new plan if no valid existing one was found/updated
-        if ( empty( $plan_id_to_save ) && empty( $existing_plan_id ) ) {
-            $new_plan_id = wp_insert_post( $plan_post_args, true ); // true returns WP_Error on failure
-            if ( ! is_wp_error( $new_plan_id ) ) {
-                $plan_id_to_save = $new_plan_id;
-                // Save the new plan ID back to the course meta
-                update_post_meta( $post_id, '_qp_course_auto_plan_id', $plan_id_to_save );
-                error_log( "QP Auto Plan: CREATED Plan ID #{$plan_id_to_save} for Course ID #{$post_id}" );
-            } else {
-                error_log( "QP Auto Plan: FAILED to create new Plan for Course ID #{$post_id}. Error: " . $new_plan_id->get_error_message() );
-            }
-        }
-
     }
 
 } // End class Meta_Boxes
