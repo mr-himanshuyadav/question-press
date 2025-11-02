@@ -178,7 +178,7 @@ final class Plugin {
         add_action('admin_init', [Admin_Utils::class, 'redirect_wp_profile_page']);
         add_action('admin_post_qp_save_user_scope', [User_Entitlements_Page::class, 'handle_save_scope']);
         add_action('wp_ajax_qp_save_question_group', [Question_Editor_Page::class, 'handle_save_group']);
-
+        add_action('admin_notices', [Admin_Utils::class, 'display_admin_notices']);
         add_action('pre_get_posts', [Post_Types::class, 'hide_auto_plans_from_admin_list']);
 
 
