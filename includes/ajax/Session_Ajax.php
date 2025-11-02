@@ -997,60 +997,36 @@ class Session_Ajax {
         }
         $user_id = get_current_user_id();
 
+        // --- FIX 1: DEFINE $current_time ---
+        $current_time = current_time('mysql');
+        // --- END FIX 1 ---
+
         // --- Get Item ID first ---
         $item_id = isset($_POST['item_id']) ? absint($_POST['item_id']) : 0;
         if (!$item_id) {
             wp_send_json_error(['message' => 'Invalid course item ID.']);
         }
 
-        // --- NEW: Entitlement Check ONLY ---
+        // --- FIX 2: REPLACED Entitlement Check ---
         global $wpdb;
         $items_table = $wpdb->prefix . 'qp_course_items';
 
-        // --- Get Course ID associated with the item ---
+        // Get Course ID associated with the item
         $course_id = $wpdb->get_var($wpdb->prepare("SELECT course_id FROM $items_table WHERE item_id = %d", $item_id));
         if (!$course_id) {
             wp_send_json_error(['message' => 'Could not determine the course for this item.']);
             return;
         }
-        // --- END Get Course ID ---
 
-
-        // --- NEW: Check Course Access FIRST ---
-        // CHANGED: Use the new User_Access class method
-        if (!\QuestionPress\Utils\User_Access::can_access_course($user_id, $course_id)) {
+        // Check if the user has access to this course.
+        // This function correctly checks for course enrollment OR a valid entitlement
+        // (including course-only plans with 0 attempts).
+        if (!User_Access::can_access_course($user_id, $course_id)) {
             wp_send_json_error(['message' => 'You do not have access to start tests in this course.', 'code' => 'access_denied']);
             return; // Stop execution
         }
-        // --- Proceed with Attempt Check (Existing Logic from previous step) ---
-        $entitlements_table = $wpdb->prefix . 'qp_user_entitlements';
-        $current_time = current_time('mysql');
-        $has_access_for_attempt = false; // Renamed variable for clarity
+        // --- END FIX 2 ---
 
-        $active_entitlements_count = $wpdb->get_var($wpdb->prepare(
-            "SELECT COUNT(entitlement_id)
-             FROM {$entitlements_table}
-             WHERE user_id = %d
-             AND status = 'active'
-             AND (expiry_date IS NULL OR expiry_date > %s)
-             AND (remaining_attempts IS NULL OR remaining_attempts > 0)",
-            $user_id,
-            $current_time
-        ));
-
-        if ($active_entitlements_count > 0) {
-            $has_access_for_attempt = true;
-        }
-
-        if (!$has_access_for_attempt) {
-            error_log("QP Course Test Start: User #{$user_id} denied access. No suitable active entitlement found for attempt.");
-            wp_send_json_error([
-                'message' => 'You have run out of attempts or your subscription has expired.',
-                'code' => 'access_denied' // Keep same code, JS handles message
-            ]);
-            return;
-        }
-        // --- END NEW Entitlement Check ---
 
         // --- Proceed with starting the session (Original logic) ---
 

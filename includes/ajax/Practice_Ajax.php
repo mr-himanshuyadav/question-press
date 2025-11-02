@@ -31,67 +31,81 @@ class Practice_Ajax {
             return;
         }
         $user_id = get_current_user_id();
-
-        // --- NEW: Entitlement Check & Decrement ---
         global $wpdb;
-        $entitlements_table = $wpdb->prefix . 'qp_user_entitlements';
         $current_time = current_time('mysql');
-        $entitlement_to_decrement = null;
+        
+        // --- START REFINED Entitlement Check ---
+    $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
+    if (!$session_id) {
+        wp_send_json_error(['message' => 'Invalid session ID.']);
+        return;
+    }
 
-        // Find an active entitlement with attempts remaining (prioritize non-NULL attempts, maybe oldest expiry first?)
-        // For simplicity, find the first one with attempts > 0, then check for NULL if none found.
+    // 1. Get the session settings
+    $session_settings_json = $wpdb->get_var($wpdb->prepare("SELECT settings_snapshot FROM {$wpdb->prefix}qp_user_sessions WHERE session_id = %d", $session_id));
+    $settings = $session_settings_json ? json_decode($session_settings_json, true) : [];
+    $entitlements_table = $wpdb->prefix . 'qp_user_entitlements';
+    $entitlement_to_decrement = null;
+    $has_access = false;
+
+    // 2. Check what kind of session this is
+    if ( isset($settings['course_id']) && $settings['course_id'] > 0 ) {
+        // CASE A: This is a Course Test
+        // Access is granted if the user can still access the course (e.g., enrolled or has a valid plan)
+        if ( User_Access::can_access_course($user_id, $settings['course_id']) ) {
+            $has_access = true;
+            // We do NOT decrement general attempts for in-course tests.
+        }
+    } else {
+        // CASE B: This is a General Practice Session
+        // Access is granted if the user has general practice attempts (NULL or > 0)
         $active_entitlements = $wpdb->get_results($wpdb->prepare(
             "SELECT entitlement_id, remaining_attempts
              FROM {$entitlements_table}
-             WHERE user_id = %d
-             AND status = 'active'
-             AND (expiry_date IS NULL OR expiry_date > %s)
-             ORDER BY remaining_attempts ASC, expiry_date ASC", // Prioritize finite attempts first, then soonest expiry
-            $user_id,
-            $current_time
+             WHERE user_id = %d AND status = 'active' AND (expiry_date IS NULL OR expiry_date > %s)
+             ORDER BY remaining_attempts ASC, expiry_date ASC",
+            $user_id, $current_time
         ));
 
-        $has_access = false;
         if (!empty($active_entitlements)) {
             foreach ($active_entitlements as $entitlement) {
                 if (!is_null($entitlement->remaining_attempts)) {
                     if ((int)$entitlement->remaining_attempts > 0) {
                         $entitlement_to_decrement = $entitlement;
                         $has_access = true;
-                        break; // Found one with finite attempts > 0
+                        break; 
                     }
-                    // If attempts are 0, continue checking other entitlements
                 } else {
-                    // Found an unlimited attempt entitlement
-                    $has_access = true;
-                    // No need to decrement, but break the loop as access is confirmed
+                    $has_access = true; // Unlimited plan
                     break;
                 }
             }
         }
+    }
 
-        if (!$has_access) {
-            error_log("QP Check Answer: User #{$user_id} denied access. No suitable active entitlement found.");
-            wp_send_json_error([
-                'message' => 'You have run out of attempts or your subscription has expired.',
-                'code' => 'access_denied'
-            ]);
-            return;
-        }
+    // 3. Final check and action
+    if (!$has_access) {
+        error_log("QP Check Answer: User #{$user_id} denied access for session #{$session_id}. No suitable entitlement found.");
+        wp_send_json_error([
+            'message' => 'You do not have access to perform this action. Your plan may have expired or you may be out of attempts.',
+            'code' => 'access_denied'
+        ]);
+        return;
+    }
 
-        // Decrement attempts if a specific entitlement was identified
-        if ($entitlement_to_decrement) {
-            $new_attempts = max(0, (int)$entitlement_to_decrement->remaining_attempts - 1);
-            $wpdb->update(
-                $entitlements_table,
-                ['remaining_attempts' => $new_attempts],
-                ['entitlement_id' => $entitlement_to_decrement->entitlement_id]
-            );
-            error_log("QP Check Answer: User #{$user_id} used attempt from Entitlement #{$entitlement_to_decrement->entitlement_id}. Remaining on this plan: {$new_attempts}");
-        } else {
-             error_log("QP Check Answer: User #{$user_id} used attempt via an unlimited plan.");
-        }
-        // --- END NEW Entitlement Check & Decrement ---
+    // 4. Decrement general practice attempts if one was identified
+    if ($entitlement_to_decrement) {
+        $new_attempts = max(0, (int)$entitlement_to_decrement->remaining_attempts - 1);
+        $wpdb->update(
+            $entitlements_table,
+            ['remaining_attempts' => $new_attempts],
+            ['entitlement_id' => $entitlement_to_decrement->entitlement_id]
+        );
+        error_log("QP Check Answer: User #{$user_id} used general attempt from Entitlement #{$entitlement_to_decrement->entitlement_id}. Remaining: {$new_attempts}");
+    } else {
+         error_log("QP Check Answer: User #{$user_id} attempt approved (Course Test or Unlimited Plan).");
+    }
+    // --- END REFINED Entitlement Check ---
 
         // --- Proceed with checking the answer (Original logic, slightly adjusted) ---
         $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
@@ -188,63 +202,78 @@ class Practice_Ajax {
             return;
         }
         $user_id = get_current_user_id();
-
-        // --- NEW: Entitlement Check & Decrement ---
         global $wpdb;
-        $entitlements_table = $wpdb->prefix . 'qp_user_entitlements';
         $current_time = current_time('mysql');
-        $entitlement_to_decrement = null;
 
-        // Find an active entitlement with attempts remaining
+        // --- START REFINED Entitlement Check ---
+    $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
+    if (!$session_id) {
+        wp_send_json_error(['message' => 'Invalid session ID.']);
+        return;
+    }
+
+    // 1. Get the session settings
+    $session_settings_json = $wpdb->get_var($wpdb->prepare("SELECT settings_snapshot FROM {$wpdb->prefix}qp_user_sessions WHERE session_id = %d", $session_id));
+    $settings = $session_settings_json ? json_decode($session_settings_json, true) : [];
+    $entitlements_table = $wpdb->prefix . 'qp_user_entitlements';
+    $entitlement_to_decrement = null;
+    $has_access = false;
+
+    // 2. Check what kind of session this is
+    if ( isset($settings['course_id']) && $settings['course_id'] > 0 ) {
+        // CASE A: This is a Course Test
+        if ( User_Access::can_access_course($user_id, $settings['course_id']) ) {
+            $has_access = true;
+        }
+    } else {
+        // CASE B: This is a General Practice Session
         $active_entitlements = $wpdb->get_results($wpdb->prepare(
             "SELECT entitlement_id, remaining_attempts
              FROM {$entitlements_table}
-             WHERE user_id = %d
-             AND status = 'active'
-             AND (expiry_date IS NULL OR expiry_date > %s)
+             WHERE user_id = %d AND status = 'active' AND (expiry_date IS NULL OR expiry_date > %s)
              ORDER BY remaining_attempts ASC, expiry_date ASC",
-            $user_id,
-            $current_time
+            $user_id, $current_time
         ));
 
-        $has_access = false;
         if (!empty($active_entitlements)) {
             foreach ($active_entitlements as $entitlement) {
                 if (!is_null($entitlement->remaining_attempts)) {
                     if ((int)$entitlement->remaining_attempts > 0) {
                         $entitlement_to_decrement = $entitlement;
                         $has_access = true;
-                        break;
+                        break; 
                     }
                 } else {
-                    $has_access = true;
+                    $has_access = true; // Unlimited plan
                     break;
                 }
             }
         }
+    }
 
-        if (!$has_access) {
-            error_log("QP Mock Save: User #{$user_id} denied access. No suitable active entitlement found.");
-            wp_send_json_error([
-                'message' => 'You have run out of attempts or your subscription has expired.',
-                'code' => 'access_denied'
-            ]);
-            return;
-        }
+    // 3. Final check and action
+    if (!$has_access) {
+        error_log("QP Mock Save: User #{$user_id} denied access for session #{$session_id}. No suitable entitlement found.");
+        wp_send_json_error([
+            'message' => 'You do not have access to perform this action. Your plan may have expired or you may be out of attempts.',
+            'code' => 'access_denied'
+        ]);
+        return;
+    }
 
-        // Decrement attempts if needed
-        if ($entitlement_to_decrement) {
-            $new_attempts = max(0, (int)$entitlement_to_decrement->remaining_attempts - 1);
-            $wpdb->update(
-                $entitlements_table,
-                ['remaining_attempts' => $new_attempts],
-                ['entitlement_id' => $entitlement_to_decrement->entitlement_id]
-            );
-            error_log("QP Mock Save: User #{$user_id} used attempt from Entitlement #{$entitlement_to_decrement->entitlement_id}. Remaining on this plan: {$new_attempts}");
-        } else {
-             error_log("QP Mock Save: User #{$user_id} used attempt via an unlimited plan.");
-        }
-        // --- END NEW Entitlement Check & Decrement ---
+    // 4. Decrement general practice attempts if one was identified
+    if ($entitlement_to_decrement) {
+        $new_attempts = max(0, (int)$entitlement_to_decrement->remaining_attempts - 1);
+        $wpdb->update(
+            $entitlements_table,
+            ['remaining_attempts' => $new_attempts],
+            ['entitlement_id' => $entitlement_to_decrement->entitlement_id]
+        );
+        error_log("QP Mock Save: User #{$user_id} used general attempt from Entitlement #{$entitlement_to_decrement->entitlement_id}. Remaining: {$new_attempts}");
+    } else {
+         error_log("QP Mock Save: User #{$user_id} attempt approved (Course Test or Unlimited Plan).");
+    }
+    // --- END REFINED Entitlement Check ---
 
         // --- Proceed with saving the mock attempt (Original logic, slightly adjusted) ---
         $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
