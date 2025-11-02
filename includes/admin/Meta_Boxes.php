@@ -340,10 +340,25 @@ class Meta_Boxes
 			'_qp_plan_type' => 'sanitize_key',
 			'_qp_plan_duration_value' => 'absint',
 			'_qp_plan_duration_unit' => 'sanitize_key',
-			'_qp_plan_attempts' => 'absint',
 			'_qp_plan_course_access_type' => 'sanitize_key',
 			'_qp_plan_description' => 'sanitize_textarea_field',
 		];
+		// Manual Handling for Plan Attempts 
+		$plan_type = isset($_POST['_qp_plan_type']) ? sanitize_key($_POST['_qp_plan_type']) : '';
+		if ( $plan_type === 'unlimited' ) {
+			// Unlimited plan = NULL attempts
+			update_post_meta($post_id, '_qp_plan_attempts', null);
+		} elseif ( $plan_type === 'course_access' ) {
+			// Course Access plan = 0 attempts
+			update_post_meta($post_id, '_qp_plan_attempts', 0);
+		} elseif ( $plan_type === 'attempt_limited' || $plan_type === 'combined' ) {
+			// Attempt/Combined plan = value from form
+			$attempts = isset($_POST['_qp_plan_attempts']) ? absint($_POST['_qp_plan_attempts']) : 0;
+			update_post_meta($post_id, '_qp_plan_attempts', $attempts);
+		} else {
+			// No type or other type, save as 0
+			update_post_meta($post_id, '_qp_plan_attempts', 0);
+		}
 		foreach ($fields_to_save as $meta_key => $sanitize_func) {
 			if (isset($_POST[$meta_key])) {
 				$value = call_user_func($sanitize_func, $_POST[$meta_key]);
@@ -1032,7 +1047,7 @@ class Meta_Boxes
 				'_qp_plan_type'               => $plan_type,
 				'_qp_plan_duration_value'     => ! empty($duration_value) ? absint($duration_value) : null,
 				'_qp_plan_duration_unit'      => ! empty($duration_value) ? sanitize_key($duration_unit) : null,
-				'_qp_plan_attempts'           => null,
+				'_qp_plan_attempts'           => 0,
 				'_qp_plan_course_access_type' => 'specific',
 				'_qp_plan_linked_courses'     => [$post_id],
 			],

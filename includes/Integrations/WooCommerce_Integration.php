@@ -246,12 +246,16 @@ class WooCommerce_Integration {
                         error_log( "QP Access Hook: Plan ID #{$plan_id} is Unlimited type." );
                     }
 
-                    // Set remaining attempts if applicable
-                    if ( ( $plan_type === 'attempt_limited' || $plan_type === 'combined' ) && ! empty( $attempts ) ) {
+                    // Set remaining attempts
+                    if ( $plan_type === 'unlimited' ) {
+                        $remaining_attempts = null; // NULL = Unlimited attempts
+                        error_log( "QP Access Hook: Setting UNLIMITED attempts for Plan ID #{$plan_id}." );
+                    } else {
+                        // This now correctly handles:
+                        // 'attempt_limited' / 'combined' -> saves the number (e.g., 100)
+                        // 'course_access' (manual or auto) -> saves 0 (because of our meta box fixes)
                         $remaining_attempts = absint( $attempts );
                         error_log( "QP Access Hook: Setting attempts for Plan ID #{$plan_id}: {$remaining_attempts}" );
-                    } elseif ( $plan_type === 'unlimited' ) {
-                        $remaining_attempts = null; // Explicitly null for unlimited attempts
                     }
 
                     // Insert the new entitlement record

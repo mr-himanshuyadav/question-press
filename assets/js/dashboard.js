@@ -636,34 +636,33 @@ wrapper.on('click', 'a.qp-button-primary[href*="session_id="]', function(e) {
         var itemId = button.data('item-id');
         var originalText = button.text();
 
-        // Use the checkAttemptsBeforeAction helper
-        checkAttemptsBeforeAction(function() {
-            // This code runs ONLY if the attempt check is successful
-            $.ajax({
-                url: qp_ajax_object.ajax_url,
-                type: 'POST',
-                data: {
-                    action: 'start_course_test_series', // Correct action name
-                    nonce: qp_ajax_object.start_course_test_nonce, // Correct nonce
-                    item_id: itemId
-                },
-                beforeSend: function() {
-                    button.text('Starting Test...'); // Update text
-                },
-                success: function(response) {
-                    if (response.success && response.data.redirect_url) {
-                        window.location.href = response.data.redirect_url;
-                    } else {
-                        Swal.fire('Error!', response.data.message || 'Could not start the test session.', 'error');
-                        button.text(originalText).prop('disabled', false); // Reset button on failure
-                    }
-                },
-                error: function() {
-                    Swal.fire('Error!', 'A server error occurred while starting the test.', 'error');
+        // The server-side action 'start_course_test_series' now handles all access checks.
+        // We do not need the checkAttemptsBeforeAction() wrapper here.
+        $.ajax({
+            url: qp_ajax_object.ajax_url,
+            type: 'POST',
+            data: {
+                action: 'start_course_test_series', // Correct action name
+                nonce: qp_ajax_object.start_course_test_nonce, // Correct nonce
+                item_id: itemId
+            },
+            beforeSend: function() {
+                button.text('Starting Test...').prop('disabled', true); // Update text and disable
+            },
+            success: function(response) {
+                if (response.success && response.data.redirect_url) {
+                    window.location.href = response.data.redirect_url;
+                } else {
+                    // The server will send 'access_denied' if User_Access::can_access_course fails
+                    Swal.fire('Error!', response.data.message || 'Could not start the test session.', 'error');
                     button.text(originalText).prop('disabled', false); // Reset button on failure
                 }
-            });
-        }, button, originalText, 'Checking Access...'); // Pass button details to the helper
+            },
+            error: function() {
+                Swal.fire('Error!', 'A server error occurred while starting the test.', 'error');
+                button.text(originalText).prop('disabled', false); // Reset button on failure
+            }
+        });
     });
 
     // --- Enroll Button Handler (delegated from wrapper) ---
