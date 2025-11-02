@@ -206,7 +206,7 @@ class Cron
             // 2a. Set the Course status to 'draft'
             wp_update_post([
                 'ID' => $course_id,
-                'post_status' => 'draft'
+                'post_status' => 'expired'
             ]);
             update_post_meta($course_id, '_qp_status_reason', 'expired');
 

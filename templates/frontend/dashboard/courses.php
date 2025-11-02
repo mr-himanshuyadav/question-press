@@ -44,7 +44,18 @@ if ( ! defined( 'ABSPATH' ) ) {
                     esc_html( $button_text )
                 );
             } else {
-                if ( $access_mode === 'free' ) {
+                // Get the post status
+                $course_status = get_post_status( $course_id );
+
+                // If the course is expired, show a disabled button
+                if ( $course_status === 'expired' ) {
+                    $button_html = sprintf(
+                        '<button class="qp-button" disabled>%s</button>',
+                        __( 'Course Expired', 'question-press' )
+                    );
+                }
+
+                elseif ( $access_mode === 'free' ) { // <-- Make sure to add 'else' here
                     $button_html = sprintf(
                         '<button class="qp-button qp-button-secondary qp-enroll-course-btn" data-course-id="%d">%s</button>',
                         $course_id,

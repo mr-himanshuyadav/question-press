@@ -95,27 +95,6 @@ class Admin_Utils {
 		wp_safe_redirect( admin_url( 'admin.php?page=qp-organization&tab=' . $tab ) );
 		exit;
 	}
-
-	/**
-	 * Adds a "(Free Course)" indicator to courses in the admin list.
-	 * Hooked to 'display_post_states'.
-	 *
-	 * @param array   $post_states An array of post states.
-	 * @param \WP_Post $post        The current post object.
-	 * @return array  The modified array of post states.
-	 */
-	public static function add_course_post_states( $post_states, $post ) {
-		// Only check for 'qp_course' post type
-		if ( $post->post_type === 'qp_course' ) {
-			$access_mode = get_post_meta( $post->ID, '_qp_course_access_mode', true );
-			
-			// If mode is 'free' (or not set, defaulting to 'free'), add the state
-			if ( empty( $access_mode ) || $access_mode === 'free' ) {
-				$post_states['qp_free_course'] = __( 'Free Course', 'question-press' );
-			}
-		}
-		return $post_states;
-	}
 	
 
 	/**

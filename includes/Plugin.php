@@ -269,12 +269,12 @@ final class Plugin {
 
         // Filters
         add_filter('query_vars', [Rewrites::class, 'register_query_vars']);
-        if ( is_admin() ) {
-            add_filter('display_post_states', [Admin_Utils::class, 'add_page_indicator'], 10, 2);
-            add_filter('display_post_states', [Admin_Utils::class, 'add_course_post_states'], 10, 2);
-        }
         add_filter('set-screen-option', [User_Entitlements_Page::class, 'save_screen_options'], 10, 3);
         add_filter('set-screen-option', [All_Questions_Page::class, 'save_screen_options'], 10, 3);
+        // Add custom post states (e.g., "Free Course", "Expired") to list tables
+        add_filter('display_post_states', [Post_Types::class, 'add_custom_post_states'], 10, 2);
+        // Add "Expired" to the quick filter links (e.g., "All | Published | Expired")
+        add_filter('views_edit-qp_course', [Post_Types::class, 'add_expired_to_course_views'], 10, 1);
     }
 
     /**

@@ -1,8 +1,9 @@
 <?php
+
 namespace QuestionPress; // PSR-4 Namespace
 
 // Exit if accessed directly.
-if ( ! defined( 'ABSPATH' ) ) {
+if (! defined('ABSPATH')) {
     exit;
 }
 
@@ -11,7 +12,8 @@ if ( ! defined( 'ABSPATH' ) ) {
  *
  * @package QuestionPress
  */
-class Post_Types {
+class Post_Types
+{
 
     /**
      * The single instance of the class.
@@ -24,8 +26,9 @@ class Post_Types {
      * @static
      * @return Post_Types Main instance.
      */
-    public static function instance() {
-        if ( is_null( self::$_instance ) ) {
+    public static function instance()
+    {
+        if (is_null(self::$_instance)) {
             self::$_instance = new self();
         }
         return self::$_instance;
@@ -34,14 +37,17 @@ class Post_Types {
     /**
      * Constructor. Hooks into WordPress 'init'.
      */
-    private function __construct() {
-        add_action( 'init', [ $this, 'register_post_types' ], 5 ); // Register early on init
+    private function __construct()
+    {
+        add_action('init', [$this, 'register_post_types'], 5); // Register early on init
+        add_action('init', [$this, 'register_custom_statuses']);
     }
 
     /**
      * Register core post types.
      */
-    public function register_post_types() {
+    public function register_post_types()
+    {
         $this->register_course_post_type();
         $this->register_plan_post_type();
     }
@@ -50,94 +56,113 @@ class Post_Types {
      * Register the 'Course' Custom Post Type.
      * (Code moved from the original qp_register_course_post_type function)
      */
-    private function register_course_post_type() {
+    private function register_course_post_type()
+    {
         $labels = [
-        'name'                  => _x('Courses', 'Post type general name', 'question-press'),
-        'singular_name'         => _x('Course', 'Post type singular name', 'question-press'),
-        'menu_name'             => _x('Courses', 'Admin Menu text', 'question-press'),
-        'name_admin_bar'        => _x('Course', 'Add New on Toolbar', 'question-press'),
-        'add_new'               => __('Add New', 'question-press'),
-        'add_new_item'          => __('Add New Course', 'question-press'),
-        'new_item'              => __('New Course', 'question-press'),
-        'edit_item'             => __('Edit Course', 'question-press'),
-        'view_item'             => __('View Course', 'question-press'),
-        'all_items'             => __('All Courses', 'question-press'),
-        'search_items'          => __('Search Courses', 'question-press'),
-        'parent_item_colon'     => __('Parent Course:', 'question-press'),
-        'not_found'             => __('No courses found.', 'question-press'),
-        'not_found_in_trash'    => __('No courses found in Trash.', 'question-press'),
-        'featured_image'        => _x('Course Cover Image', 'Overrides the “Featured Image” phrase for this post type. Added in 4.3', 'question-press'),
-        'set_featured_image'    => _x('Set cover image', 'Overrides the “Set featured image” phrase for this post type. Added in 4.3', 'question-press'),
-        'remove_featured_image' => _x('Remove cover image', 'Overrides the “Remove featured image” phrase for this post type. Added in 4.3', 'question-press'),
-        'use_featured_image'    => _x('Use as cover image', 'Overrides the “Use as featured image” phrase for this post type. Added in 4.3', 'question-press'),
-        'archives'              => _x('Course archives', 'The post type archive label used in nav menus. Default “Post Archives”. Added in 4.4', 'question-press'),
-        'insert_into_item'      => _x('Insert into course', 'Overrides the “Insert into post”/”Insert into page” phrase (used when inserting media into a post). Added in 4.4', 'question-press'),
-        'uploaded_to_this_item' => _x('Uploaded to this course', 'Overrides the “Uploaded to this post”/”Uploaded to this page” phrase (used when viewing media attached to a post). Added in 4.4', 'question-press'),
-        'filter_items_list'     => _x('Filter courses list', 'Screen reader text for the filter links heading on the post type listing screen. Default “Filter posts list”/”Filter pages list”. Added in 4.4', 'question-press'),
-        'items_list_navigation' => _x('Courses list navigation', 'Screen reader text for the pagination heading on the post type listing screen. Default “Posts list navigation”/”Pages list navigation”. Added in 4.4', 'question-press'),
-        'items_list'            => _x('Courses list', 'Screen reader text for the items list heading on the post type listing screen. Default “Posts list”/”Pages list”. Added in 4.4', 'question-press'),
-    ];
+            'name'                  => _x('Courses', 'Post type general name', 'question-press'),
+            'singular_name'         => _x('Course', 'Post type singular name', 'question-press'),
+            'menu_name'             => _x('Courses', 'Admin Menu text', 'question-press'),
+            'name_admin_bar'        => _x('Course', 'Add New on Toolbar', 'question-press'),
+            'add_new'               => __('Add New', 'question-press'),
+            'add_new_item'          => __('Add New Course', 'question-press'),
+            'new_item'              => __('New Course', 'question-press'),
+            'edit_item'             => __('Edit Course', 'question-press'),
+            'view_item'             => __('View Course', 'question-press'),
+            'all_items'             => __('All Courses', 'question-press'),
+            'search_items'          => __('Search Courses', 'question-press'),
+            'parent_item_colon'     => __('Parent Course:', 'question-press'),
+            'not_found'             => __('No courses found.', 'question-press'),
+            'not_found_in_trash'    => __('No courses found in Trash.', 'question-press'),
+            'featured_image'        => _x('Course Cover Image', 'Overrides the “Featured Image” phrase for this post type. Added in 4.3', 'question-press'),
+            'set_featured_image'    => _x('Set cover image', 'Overrides the “Set featured image” phrase for this post type. Added in 4.3', 'question-press'),
+            'remove_featured_image' => _x('Remove cover image', 'Overrides the “Remove featured image” phrase for this post type. Added in 4.3', 'question-press'),
+            'use_featured_image'    => _x('Use as cover image', 'Overrides the “Use as featured image” phrase for this post type. Added in 4.3', 'question-press'),
+            'archives'              => _x('Course archives', 'The post type archive label used in nav menus. Default “Post Archives”. Added in 4.4', 'question-press'),
+            'insert_into_item'      => _x('Insert into course', 'Overrides the “Insert into post”/”Insert into page” phrase (used when inserting media into a post). Added in 4.4', 'question-press'),
+            'uploaded_to_this_item' => _x('Uploaded to this course', 'Overrides the “Uploaded to this post”/”Uploaded to this page” phrase (used when viewing media attached to a post). Added in 4.4', 'question-press'),
+            'filter_items_list'     => _x('Filter courses list', 'Screen reader text for the filter links heading on the post type listing screen. Default “Filter posts list”/”Filter pages list”. Added in 4.4', 'question-press'),
+            'items_list_navigation' => _x('Courses list navigation', 'Screen reader text for the pagination heading on the post type listing screen. Default “Posts list navigation”/”Pages list navigation”. Added in 4.4', 'question-press'),
+            'items_list'            => _x('Courses list', 'Screen reader text for the items list heading on the post type listing screen. Default “Posts list”/”Pages list”. Added in 4.4', 'question-press'),
+        ];
 
-    $args = [
-        'labels'             => $labels,
-        'public'             => false, // Not publicly viewable on the frontend directly via its slug
-        'publicly_queryable' => false, // Not queryable in the main WP query
-        'show_ui'            => true,  // Show in the admin UI
-        'show_in_menu'       => true,  // Show as a top-level menu item
-        'query_var'          => false, // No query variable needed
-        'rewrite'            => false, // No URL rewriting needed
-        'capability_type'    => 'post', // Use standard post capabilities
-        'has_archive'        => false, // No archive page needed
-        'hierarchical'       => false, // Courses are not hierarchical like pages
-        'menu_position'      => 26,    // Position below Question Press (usually 25)
-        'menu_icon'          => 'dashicons-welcome-learn-more', // Choose an appropriate icon
-        'supports'           => ['title', 'editor', 'author'], // Features we want initially
-        'show_in_rest'       => false, // Disable Block Editor support for now
-    ];
+        $args = [
+            'labels'             => $labels,
+            'public'             => false, // Not publicly viewable on the frontend directly via its slug
+            'publicly_queryable' => false, // Not queryable in the main WP query
+            'show_ui'            => true,  // Show in the admin UI
+            'show_in_menu'       => true,  // Show as a top-level menu item
+            'query_var'          => false, // No query variable needed
+            'rewrite'            => false, // No URL rewriting needed
+            'capability_type'    => 'post', // Use standard post capabilities
+            'has_archive'        => false, // No archive page needed
+            'hierarchical'       => false, // Courses are not hierarchical like pages
+            'menu_position'      => 26,    // Position below Question Press (usually 25)
+            'menu_icon'          => 'dashicons-welcome-learn-more', // Choose an appropriate icon
+            'supports'           => ['title', 'editor', 'author'], // Features we want initially
+            'show_in_rest'       => false, // Disable Block Editor support for now
+        ];
 
-    register_post_type('qp_course', $args);
+        register_post_type('qp_course', $args);
+    }
+
+    /**
+     * Register our custom 'expired' post status.
+     * Hooked to 'init'.
+     */
+    public function register_custom_statuses()
+    {
+        register_post_status('expired', [
+            'label'                     => _x('Expired', 'post status label', 'question-press'),
+            'label_count'               => _n_noop('Expired <span class="count">(%s)</span>', 'Expired <span class="count">(%s)</span>', 'question-press'),
+            'public'                    => false,
+            'exclude_from_search'       => true,
+            'show_in_admin_all_list'    => true,
+            'show_in_admin_status_list' => true,
+            'post_type'                 => ['qp_course'],
+        ]);
     }
 
     /**
      * Register the 'Plan' Custom Post Type.
      * (Code moved from the original qp_register_plan_post_type function)
      */
-    private function register_plan_post_type() {
+    private function register_plan_post_type()
+    {
         $labels = [
-        'name'                  => _x('Plans', 'Post type general name', 'question-press'),
-        'singular_name'         => _x('Plan', 'Post type singular name', 'question-press'),
-        'menu_name'             => _x('Monetization Plans', 'Admin Menu text', 'question-press'),
-        'name_admin_bar'        => _x('Plan', 'Add New on Toolbar', 'question-press'),
-        'add_new'               => __('Add New Plan', 'question-press'),
-        'add_new_item'          => __('Add New Plan', 'question-press'),
-        'new_item'              => __('New Plan', 'question-press'),
-        'edit_item'             => __('Edit Plan', 'question-press'),
-        'view_item'             => __('View Plan', 'question-press'), // Should not be viewable on frontend
-        'all_items'             => __('All Plans', 'question-press'),
-        'search_items'          => __('Search Plans', 'question-press'),
-        'parent_item_colon'     => __('Parent Plan:', 'question-press'), // Not applicable, but standard label
-        'not_found'             => __('No plans found.', 'question-press'),
-        'not_found_in_trash'    => __('No plans found in Trash.', 'question-press'),
-    ];
+            'name'                  => _x('Plans', 'Post type general name', 'question-press'),
+            'singular_name'         => _x('Plan', 'Post type singular name', 'question-press'),
+            'menu_name'             => _x('Monetization Plans', 'Admin Menu text', 'question-press'),
+            'name_admin_bar'        => _x('Plan', 'Add New on Toolbar', 'question-press'),
+            'add_new'               => __('Add New Plan', 'question-press'),
+            'add_new_item'          => __('Add New Plan', 'question-press'),
+            'new_item'              => __('New Plan', 'question-press'),
+            'edit_item'             => __('Edit Plan', 'question-press'),
+            'view_item'             => __('View Plan', 'question-press'), // Should not be viewable on frontend
+            'all_items'             => __('All Plans', 'question-press'),
+            'search_items'          => __('Search Plans', 'question-press'),
+            'parent_item_colon'     => __('Parent Plan:', 'question-press'), // Not applicable, but standard label
+            'not_found'             => __('No plans found.', 'question-press'),
+            'not_found_in_trash'    => __('No plans found in Trash.', 'question-press'),
+        ];
 
-    $args = [
-        'labels'             => $labels,
-        'description'        => __('Defines access plans for Question Press features.', 'question-press'),
-        'public'             => false, // Not publicly viewable on frontend
-        'publicly_queryable' => false, // Not queryable directly
-        'show_ui'            => true,  // Show in admin UI
-        'show_in_menu'       => 'question-press', // Show under the main Question Press menu
-        'query_var'          => false,
-        'rewrite'            => false,
-        'capability_type'    => 'post', // Use standard post capabilities (adjust if needed)
-        'has_archive'        => false,
-        'hierarchical'       => false,
-        'menu_position'      => null, // Will appear as submenu
-        'supports'           => ['title', 'editor'], // Only title needed initially, details via meta
-        'show_in_rest'       => false, // Disable Gutenberg for this CPT
-    ];
+        $args = [
+            'labels'             => $labels,
+            'description'        => __('Defines access plans for Question Press features.', 'question-press'),
+            'public'             => false, // Not publicly viewable on frontend
+            'publicly_queryable' => false, // Not queryable directly
+            'show_ui'            => true,  // Show in admin UI
+            'show_in_menu'       => 'question-press', // Show under the main Question Press menu
+            'query_var'          => false,
+            'rewrite'            => false,
+            'capability_type'    => 'post', // Use standard post capabilities (adjust if needed)
+            'has_archive'        => false,
+            'hierarchical'       => false,
+            'menu_position'      => null, // Will appear as submenu
+            'supports'           => ['title', 'editor'], // Only title needed initially, details via meta
+            'show_in_rest'       => false, // Disable Gutenberg for this CPT
+        ];
 
-    register_post_type('qp_plan', $args);
+        register_post_type('qp_plan', $args);
     }
 
     /**
@@ -146,16 +171,17 @@ class Post_Types {
      *
      * @param \WP_Query $query The main WordPress query object.
      */
-    public static function hide_auto_plans_from_admin_list( $query ) {
+    public static function hide_auto_plans_from_admin_list($query)
+    {
         // Check if we are in the admin, on the main query, and for the 'qp_plan' post type
-        if ( ! is_admin() || ! $query->is_main_query() || $query->get('post_type') !== 'qp_plan' ) {
+        if (! is_admin() || ! $query->is_main_query() || $query->get('post_type') !== 'qp_plan') {
             return;
         }
 
         // Get the current screen to ensure we're only modifying the "All Plans" list
         $screen = get_current_screen();
-        if ( $screen && $screen->id === 'edit-qp_plan' ) {
-            
+        if ($screen && $screen->id === 'edit-qp_plan') {
+
             // Get existing meta query if any
             $meta_query = $query->get('meta_query') ?: [];
 
@@ -173,8 +199,8 @@ class Post_Types {
                     'compare' => '!=' // Show plans where key is not 'true'
                 ]
             ];
-            
-            $query->set( 'meta_query', $meta_query );
+
+            $query->set('meta_query', $meta_query);
         }
     }
 
@@ -186,9 +212,10 @@ class Post_Types {
      * @param string   $type    The post type.
      * @return stdClass The modified counts object.
      */
-    public static function filter_plan_view_counts( $counts, $type ) {
+    public static function filter_plan_view_counts($counts, $type)
+    {
         // Only modify counts for the 'qp_plan' post type in the admin
-        if ( ! is_admin() || $type !== 'qp_plan' ) {
+        if (! is_admin() || $type !== 'qp_plan') {
             return $counts;
         }
 
@@ -206,17 +233,17 @@ class Post_Types {
             GROUP BY p.post_status
         ";
 
-        $results = $wpdb->get_results( $query, ARRAY_A );
+        $results = $wpdb->get_results($query, ARRAY_A);
 
         // Create a new, empty counts object
         $new_counts = new \stdClass();
-        foreach ( get_post_stati() as $status ) {
+        foreach (get_post_stati() as $status) {
             $new_counts->$status = 0;
         }
 
         // Populate the new counts object with our custom query results
-        foreach ( (array) $results as $row ) {
-            if ( isset( $new_counts->{$row['post_status']} ) ) {
+        foreach ((array) $results as $row) {
+            if (isset($new_counts->{$row['post_status']})) {
                 $new_counts->{$row['post_status']} = (int) $row['num_posts'];
             }
         }
@@ -224,8 +251,57 @@ class Post_Types {
         return $new_counts;
     }
 
-    /** Cloning/Unserializing prevention */
-    public function __clone() { _doing_it_wrong( __FUNCTION__, esc_html__( 'Cloning is forbidden.', 'question-press' ), '1.0' ); }
-    public function __wakeup() { _doing_it_wrong( __FUNCTION__, esc_html__( 'Unserializing instances of this class is forbidden.', 'question-press' ), '1.0' ); }
+    /**
+     * Adds our custom post states to the post list.
+     * Hooked to 'display_post_states'.
+     */
+    public static function add_custom_post_states($post_states, $post)
+    {
+        // Only check for 'qp_course' post type
+        if ($post->post_type === 'qp_course') {
+            $access_mode = get_post_meta($post->ID, '_qp_course_access_mode', true);
 
+            // If mode is 'free', add the state
+            if (empty($access_mode) || $access_mode === 'free') {
+                $post_states['qp_free_course'] = __('Free Course', 'question-press');
+            }
+
+            // --- ADDED: Check for expired status ---
+            if ($post->post_status === 'expired') {
+                $post_states['qp_expired_course'] = __('Expired', 'question-press');
+            }
+        }
+        return $post_states;
+    }
+
+    /**
+     * Adds 'Expired' to the list of status views (e.g., "All | Published | Expired | Trash").
+     * Hooked to 'views_edit-qp_course'.
+     */
+    public static function add_expired_to_course_views($views)
+    {
+        global $wpdb;
+        $count = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $wpdb->posts WHERE post_type = %s AND post_status = 'expired'", 'qp_course'));
+
+        if ($count > 0) {
+            $views['expired'] = sprintf(
+                '<a href="%s" class="%s">%s <span class="count">(%s)</span></a>',
+                esc_url(add_query_arg(['post_status' => 'expired'], 'edit.php?post_type=qp_course')),
+                (get_query_var('post_status') === 'expired') ? 'current' : '',
+                esc_html__('Expired', 'question-press'),
+                $count
+            );
+        }
+        return $views;
+    }
+
+    /** Cloning/Unserializing prevention */
+    public function __clone()
+    {
+        _doing_it_wrong(__FUNCTION__, esc_html__('Cloning is forbidden.', 'question-press'), '1.0');
+    }
+    public function __wakeup()
+    {
+        _doing_it_wrong(__FUNCTION__, esc_html__('Unserializing instances of this class is forbidden.', 'question-press'), '1.0');
+    }
 } // End class Post_Types

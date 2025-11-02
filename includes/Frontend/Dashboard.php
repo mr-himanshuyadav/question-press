@@ -42,7 +42,20 @@ final class Dashboard {
 		$entitlement_summary = [];
 		if ( ! empty( $active_entitlements_for_display ) ) {
 			foreach ( $active_entitlements_for_display as $entitlement ) {
-				$clean_plan_title = preg_replace( '/^Auto: Access Plan for Course "([^"]+)"$/', '$1', $entitlement->plan_title );
+				// FIX: Coalesce to an empty string to prevent passing null to preg_replace
+				$plan_title_raw = $entitlement->plan_title ?? '';
+				$clean_plan_title = preg_replace( '/^Auto: Access Plan for Course "([^"]+)"$/', '$1', $plan_title_raw );
+
+				// ADDED: If the title is now empty, it means the plan was missing or had no title.
+				if ( empty( $clean_plan_title ) ) {
+					// Use the original raw title if it existed (e.g., for a manual plan)
+					if ( ! empty( $plan_title_raw ) ) {
+						$clean_plan_title = $plan_title_raw;
+					} else {
+						// Otherwise, the plan is truly missing
+						$clean_plan_title = 'Plan ID #' . $entitlement->plan_id . ' (Missing)';
+					}
+				}
 				$summary_line     = '<strong>' . esc_html( $clean_plan_title ) . '</strong>';
 				$details          = [];
 				if ( ! is_null( $entitlement->remaining_attempts ) ) {
@@ -213,6 +226,13 @@ final class Dashboard {
 	 * Renders the view for a single specific course, fetching its structure and user progress.
 	 */
 	public static function render_single_course_view( $course_slug, $user_id ) {
+		// Get course WP_Post object by slug, allowing 'expired' status
+		$posts_array = get_posts([
+			'post_type' => 'qp_course',
+			'name' => $course_slug,
+			'post_status' => ['publish', 'expired'],
+			'posts_per_page' => 1
+		]);
 		$course_post = get_page_by_path( $course_slug, OBJECT, 'qp_course' ); // Get course WP_Post object by slug
 
 		// --- Basic Course Validation ---
@@ -658,7 +678,7 @@ final class Dashboard {
 		// Get all published courses
 		$args = [
 			'post_type'      => 'qp_course',
-			'post_status'    => 'publish',
+			'post_status'    => ['publish', 'expired'],
 			'posts_per_page' => -1,
 			'orderby'        => 'menu_order title',
 			'order'          => 'ASC',
