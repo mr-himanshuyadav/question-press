@@ -40,41 +40,44 @@ class WooCommerce_Integration {
             $linked_plan_id = get_post_meta( $post->ID, '_qp_linked_plan_id', true );
             $plan_post = $linked_plan_id ? get_post( $linked_plan_id ) : null;
             
-            // --- ADDED: Get Course info ---
+            // Get Course info
             $linked_course_id = get_post_meta( $post->ID, '_qp_linked_course_id', true );
             $course_post = $linked_course_id ? get_post( $linked_course_id ) : null;
-            // --- END ADD ---
             
             echo '<div class="options_group" style="padding: 12px; border-top: 1px solid #eee;">';
-            echo '<p style="margin: 0; padding-bottom: 5px;"><strong>' . esc_html__( 'Question Press Auto-Link', 'question-press' ) . '</strong></p>';
-            echo '<div style="font-style: italic; color: #666; margin: 0;">';
+            echo '<p style="margin: 0; padding-bottom: 10px; border-bottom: 1px solid #eee;"><strong>' . esc_html__( 'Question Press Auto-Link', 'question-press' ) . '</strong></p>';
+            echo '<div style="font-style: italic; color: #666; margin: 10px 0 0 0;">';
 
-            // --- REPLACED: Show Course Details ---
-            echo '<strong>' . esc_html__( 'Linked Course:', 'question-press' ) . '</strong><br>';
-            if ( $course_post && $course_post->post_type === 'qp_course' ) {
+            // CASE 1: Linked to a Course (which implies a plan)
+            if ( $course_post ) {
+                echo '<strong>' . esc_html__( 'Linked Course:', 'question-press' ) . '</strong><br>';
                 echo esc_html( $course_post->post_title ) . ' (ID: ' . esc_html( $linked_course_id ) . ')';
                 echo ' (<a href="' . esc_url( get_edit_post_link( $course_post->ID ) ) . '" target="_blank">' . esc_html__( 'Edit Course', 'question-press' ) . '</a>)';
-            } else {
-                echo esc_html__( 'Course link is missing or broken.', 'question-press' );
-            }
-            // --- END REPLACE ---
-            
-            echo '<br><br>'; // Add spacing
+                
+                echo '<br><br>'; // Add spacing
 
-            // --- REPLACED: Show Plan Details ---
-            echo '<strong>' . esc_html__( 'Linked Plan:', 'question-press' ) . '</strong><br>';
-            if ( $plan_post && $plan_post->post_type === 'qp_plan' ) {
+                echo '<strong>' . esc_html__( 'Linked Plan:', 'question-press' ) . '</strong><br>';
+                if ( $plan_post ) {
+                    echo esc_html( $plan_post->post_title ) . ' (ID: ' . esc_html( $linked_plan_id ) . ')';
+                    echo ' (<a href="' . esc_url( get_edit_post_link( $plan_post->ID ) ) . '" target="_blank">' . esc_html__( 'View Plan', 'question-press' ) . '</a>)';
+                } else {
+                    echo esc_html__( 'Plan link is missing or broken.', 'question-press' );
+                }
+            
+            // CASE 2: Linked ONLY to a Manual Plan
+            } elseif ( $plan_post ) {
+                echo '<strong>' . esc_html__( 'Linked Plan:', 'question-press' ) . '</strong><br>';
                 echo esc_html( $plan_post->post_title ) . ' (ID: ' . esc_html( $linked_plan_id ) . ')';
-                echo ' (<a href="' . esc_url( get_edit_post_link( $plan_post->ID ) ) . '" target="_blank">' . esc_html__( 'View Plan', 'question-press' ) . '</a>)';
+                echo ' (<a href="' . esc_url( get_edit_post_link( $plan_post->ID ) ) . '" target="_blank">' . esc_html__( 'Edit Plan', 'question-press' ) . '</a>)';
+            
+            // CASE 3: Orphaned Product
             } else {
-                echo esc_html__( 'Plan link is missing or broken.', 'question-press' );
+                echo '<span style="color: #c00;">' . esc_html__( 'This product is auto-generated but its source plan/course is missing.', 'question-press' ) . '</span>';
             }
-            // --- END REPLACE ---
 
             echo '</div></div>';
             return; // Stop here, don't show the dropdown
         }
-        // --- END NEW ---
 
         // Get all published 'qp_plan' posts, excluding auto-generated ones
         $plans = get_posts( [

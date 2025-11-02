@@ -211,6 +211,10 @@ final class Plugin {
         }
         add_action('save_post_qp_course', [Meta_Boxes::class, 'sync_course_plan'], 40, 1);
         add_action('save_post_qp_course', [Data_Cleanup::class, 'recalculate_course_progress_on_save'], 20, 1);
+        add_action('save_post_qp_plan', [Meta_Boxes::class, 'sync_plan_product'], 40, 1);
+        add_action('before_delete_post', [Data_Cleanup::class, 'cleanup_plan_data_on_delete'], 10, 1);
+        add_action('wp_trash_post', [Data_Cleanup::class, 'sync_product_on_plan_trash'], 10, 1);
+        add_action('untrash_post', [Data_Cleanup::class, 'sync_product_on_plan_untrash'], 10, 1);
         add_action('qp_check_entitlement_expiration_hook', [$this->cron, 'run_entitlement_expiration_check']);
         add_action('qp_check_course_expiration_hook', [$this->cron, 'run_course_expiration_check']);
         add_action('qp_scheduled_backup_hook', [Backup_Manager::class, 'run_scheduled_backup_event']);

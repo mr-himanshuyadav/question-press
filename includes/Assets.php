@@ -231,6 +231,16 @@ class Assets {
         $course_editor_css_version = file_exists(QP_PLUGIN_PATH . 'assets/css/course-editor.css') ? filemtime(QP_PLUGIN_PATH . 'assets/css/course-editor.css') : QP_PLUGIN_VERSION;
         wp_enqueue_style('qp-course-editor-style', QP_ASSETS_URL . 'css/course-editor.css', [], $course_editor_css_version);
     }
+    if ( ($pagenow == 'post-new.php' && isset($_GET['post_type']) && $_GET['post_type'] == 'qp_plan') ||
+         ($pagenow == 'post.php' && isset($_GET['post']) && get_post_type($_GET['post']) == 'qp_plan') ) {
+        
+        // Enqueue SweetAlert for any potential notices
+        wp_enqueue_script('sweetalert2', 'https://cdn.jsdelivr.net/npm/sweetalert2@11', [], null, true);
+        
+        // Enqueue a new, lightweight script for this page
+        $plan_editor_js_version = file_exists(QP_PLUGIN_PATH . 'assets/js/plan-editor.js') ? filemtime(QP_PLUGIN_PATH . 'assets/js/plan-editor.js') : QP_PLUGIN_VERSION;
+        wp_enqueue_script('qp-plan-editor-script', QP_ASSETS_URL . 'js/plan-editor.js', ['jquery', 'sweetalert2'], $plan_editor_js_version, true);
+    }
     if ($hook_suffix === 'question-press_page_qp-organization' && isset($_GET['tab']) && $_GET['tab'] === 'labels') {
         add_action('admin_footer', function () {
             echo '<script>jQuery(document).ready(function($){$(".qp-color-picker").wpColorPicker();});</script>';

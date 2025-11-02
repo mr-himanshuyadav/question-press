@@ -174,43 +174,48 @@ class Admin_Utils {
         }
 
         // Check if it's our auto-generated product
-        if ( get_post_meta( $post->ID, '_qp_is_auto_generated', true ) === 'true' ) {
-            
-            $course_id = get_post_meta( $post->ID, '_qp_linked_course_id', true );
-            $plan_id = get_post_meta( $post->ID, '_qp_linked_plan_id', true );
-
-            $links_html = [];
-
-            // Add Course Link
-            if ( $course_id && get_post( $course_id ) ) {
-                $course_link = get_edit_post_link( $course_id );
-                $links_html[] = sprintf(
-                    'Course (ID: %d) <a href="%s" title="Edit Course">Edit</a>',
-                    esc_html( $course_id ),
-                    esc_url( $course_link )
-                );
-            } else if ($course_id) {
-                $links_html[] = 'Course (ID: ' . esc_html( $course_id ) . ') - Missing';
-            }
-
-            // Add Plan Link
-            if ( $plan_id && get_post( $plan_id ) ) {
-                $plan_link = get_edit_post_link( $plan_id );
-                $links_html[] = sprintf(
-                    'Plan (ID: %d) <a href="%s" title="View Plan">View</a>',
-                    esc_html( $plan_id ),
-                    esc_url( $plan_link )
-                );
-            } else if ($plan_id) {
-                $links_html[] = 'Plan (ID: ' . esc_html( $plan_id ) . ') - Missing';
-            }
-
-            // Create the final red indicator text
-            $indicator_text = '<span style="color:#d63638;">Linked to: ' . implode(' | ', $links_html) . '</span>';
-            
-            // Add the new state
-            $post_states['qp_auto_product'] = $indicator_text;
+        if ( get_post_meta( $post->ID, '_qp_is_auto_generated', true ) !== 'true' ) {
+            return $post_states;
         }
+        
+        $course_id = get_post_meta( $post->ID, '_qp_linked_course_id', true );
+        $plan_id = get_post_meta( $post->ID, '_qp_linked_plan_id', true );
+        $links_html = [];
+
+        // CASE 1: Linked to a Course (which implies a plan)
+        if ( $course_id ) {
+            $course_post = get_post( $course_id );
+            if ( $course_post ) {
+                $links_html[] = sprintf(
+                    'Course: <a href="%s" title="Edit Course"><strong>%s</strong> (ID: %d)</a>',
+                    esc_url( get_edit_post_link( $course_id ) ),
+                    esc_html( wp_trim_words( $course_post->post_title, 5, '...' ) ),
+                    esc_html( $course_id )
+                );
+            }
+        // CASE 2: Linked ONLY to a Manual Plan
+        } elseif ( $plan_id ) {
+            $plan_post = get_post( $plan_id );
+            if ( $plan_post ) {
+                $links_html[] = sprintf(
+                    'Plan: <a href="%s" title="Edit Plan"><strong>%s</strong> (ID: %d)</a>',
+                    esc_url( get_edit_post_link( $plan_id ) ),
+                    esc_html( wp_trim_words( $plan_post->post_title, 5, '...' ) ),
+                    esc_html( $plan_id )
+                );
+            }
+        }
+
+        if ( empty($links_html) ) {
+             $links_html[] = 'Source link is broken';
+        }
+
+        // Create the final red indicator text
+        $indicator_text = '<span style="color:#d63638;">Auto-linked to: ' . implode(' | ', $links_html) . '</span>';
+        
+        // Add the new state
+        $post_states['qp_auto_product'] = $indicator_text;
+        
         return $post_states;
     }
 
