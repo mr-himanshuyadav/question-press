@@ -1371,12 +1371,17 @@ checkAttemptsBeforeAction(function() {
         if (response.success && response.data.redirect_url) {
           window.location.href = response.data.redirect_url;
         } else {
-          var errorMessage = response.data.html
-            ? response.data.html
-            : "<p>" +
-              (response.data.message || "An unknown error occurred.") +
-              "</p>";
-          wrapper.html(errorMessage);
+          // --- MODIFICATION: Use Swal.fire for error messages ---
+          var errorMessage = response.data.message || "An unknown error occurred.";
+          Swal.fire({
+            title: "Could Not Start Test",
+            text: errorMessage,
+            icon: "warning",
+            confirmButtonText: "OK",
+          });
+          // Reset the button
+          submitButton.val(originalButtonText).prop("disabled", false);
+          // --- END MODIFICATION ---
         }
       },
       error: function () {

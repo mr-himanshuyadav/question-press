@@ -335,6 +335,57 @@ class Session_Ajax {
 
         global $wpdb;
         $user_id = get_current_user_id();
+        // --- BEGIN NEW: MOCK TEST ATTEMPT CHECK ---
+		global $wpdb;
+		$current_time = current_time('mysql');
+		$entitlements_table = $wpdb->prefix . 'qp_user_entitlements';
+		$num_questions = isset($_POST['qp_mock_num_questions']) ? absint($_POST['qp_mock_num_questions']) : 20;
+
+		// Check for general practice entitlements
+		$active_entitlements = $wpdb->get_results($wpdb->prepare(
+			"SELECT entitlement_id, remaining_attempts
+			 FROM {$entitlements_table}
+			 WHERE user_id = %d AND status = 'active' AND (expiry_date IS NULL OR expiry_date > %s)
+			 AND (remaining_attempts IS NULL OR remaining_attempts > 0)",
+			$user_id,
+			$current_time
+		));
+
+		$has_access = false;
+		$has_unlimited_attempts = false;
+		$total_remaining = 0;
+
+		if (!empty($active_entitlements)) {
+			foreach ($active_entitlements as $entitlement) {
+				if (is_null($entitlement->remaining_attempts)) {
+					$has_unlimited_attempts = true;
+					$has_access = true;
+					break; // Found unlimited plan, stop checking
+				}
+				$total_remaining += (int)$entitlement->remaining_attempts;
+			}
+
+			if (!$has_unlimited_attempts && $total_remaining > 0) {
+				$has_access = true; // Has a finite number of attempts
+			}
+		}
+
+		// If user has no access at all (no plans)
+		if (!$has_access) {
+			wp_send_json_error(['message' => __('You do not have an active plan to start a mock test.', 'question-press')]);
+			return;
+		}
+
+		// If user has finite attempts, check if they have enough
+		if (!$has_unlimited_attempts && $total_remaining < $num_questions) {
+			wp_send_json_error(['message' => sprintf(
+				__('You do not have enough attempts remaining for this test. You need %d attempts but only have %d.', 'question-press'),
+				$num_questions,
+				$total_remaining
+			)]);
+			return;
+		}
+		// --- END NEW: MOCK TEST ATTEMPT CHECK ---
         $allowed_subjects = User_Access::get_allowed_subject_ids($user_id);
 
         // --- Define these variables *before* the scope check ---

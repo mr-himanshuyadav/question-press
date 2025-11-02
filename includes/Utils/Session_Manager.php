@@ -127,6 +127,78 @@ class Session_Manager extends DB { // <-- Extend DB to get self::$wpdb
 			'marks_obtained' => $final_score
 		], ['session_id' => $session_id]);
 
+		// --- BEGIN NEW: Deduct Attempts for General Mock Tests on Finalization ---
+		if (
+			$is_mock_test &&
+			(!isset($settings['course_id']) || $settings['course_id'] <= 0) &&
+			($new_status === 'completed' || $new_status === 'abandoned') &&
+			$total_attempted > 0
+		) {
+			$user_id = $session->user_id;
+			$entitlements_table = $wpdb->prefix . 'qp_user_entitlements';
+			$attempts_to_deduct = $total_attempted;
+
+			// Get all active, non-expired entitlements that have attempts (finite or unlimited)
+			$active_entitlements = $wpdb->get_results($wpdb->prepare(
+				"SELECT entitlement_id, remaining_attempts
+				 FROM {$entitlements_table}
+				 WHERE user_id = %d
+				   AND status = 'active'
+				   AND (expiry_date IS NULL OR expiry_date > %s)
+				   AND (remaining_attempts IS NULL OR remaining_attempts > 0)
+				 ORDER BY remaining_attempts ASC", // Process finite plans first (lowest attempts)
+				$user_id,
+				current_time('mysql')
+			));
+
+			$has_unlimited = false;
+			$finite_entitlements = [];
+
+			foreach ($active_entitlements as $entitlement) {
+				if (is_null($entitlement->remaining_attempts)) {
+					$has_unlimited = true;
+					break; // User has an unlimited plan, no deduction needed.
+				}
+				$finite_entitlements[] = $entitlement;
+			}
+
+			// Only deduct if the user does NOT have an unlimited plan
+			if (!$has_unlimited && !empty($finite_entitlements)) {
+				error_log("QP Finalize: User #{$user_id} finalizing mock test. Deducting {$attempts_to_deduct} attempts.");
+				
+				foreach ($finite_entitlements as $entitlement) {
+					if ($attempts_to_deduct <= 0) {
+						break; // All attempts have been deducted
+					}
+
+					$attempts_on_this_plan = (int)$entitlement->remaining_attempts;
+					
+					if ($attempts_on_this_plan >= $attempts_to_deduct) {
+						// This plan can cover the remaining attempts
+						$new_attempts = $attempts_on_this_plan - $attempts_to_deduct;
+						$attempts_deducted_from_this = $attempts_to_deduct;
+						$attempts_to_deduct = 0;
+					} else {
+						// This plan is used up
+						$new_attempts = 0;
+						$attempts_deducted_from_this = $attempts_on_this_plan;
+						$attempts_to_deduct = $attempts_to_deduct - $attempts_on_this_plan;
+					}
+
+					$wpdb->update(
+						$entitlements_table,
+						['remaining_attempts' => $new_attempts],
+						['entitlement_id' => $entitlement->entitlement_id]
+					);
+
+					error_log("QP Finalize: Deducted {$attempts_deducted_from_this} attempts from Entitlement #{$entitlement->entitlement_id}. Remaining: {$new_attempts}.");
+				}
+			} elseif ($has_unlimited) {
+				error_log("QP Finalize: User #{$user_id} has unlimited plan. No attempts deducted for mock test.");
+			}
+		}
+		// --- END NEW: Deduct Attempts for General Mock Tests ---
+
 		// --- NEW: Update Course Item Progress if applicable ---
 		if (($new_status === 'completed' || $new_status === 'abandoned') &&
 			isset($settings['course_id']) && isset($settings['item_id'])) {

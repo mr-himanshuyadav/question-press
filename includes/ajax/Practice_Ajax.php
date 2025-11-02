@@ -1,8 +1,9 @@
 <?php
+
 namespace QuestionPress\Ajax; // PSR-4 Namespace
 
 // Exit if accessed directly.
-if ( ! defined( 'ABSPATH' ) ) {
+if (! defined('ABSPATH')) {
     exit;
 }
 
@@ -16,13 +17,15 @@ use Exception; // Use statement for Exception
 /**
  * Handles AJAX requests related to the practice/session UI interactions.
  */
-class Practice_Ajax {
+class Practice_Ajax
+{
 
     /**
      * AJAX handler for checking an answer in non-mock test modes.
      * Includes access check and attempt decrement logic using entitlements table.
      */
-    public static function check_answer() {
+    public static function check_answer()
+    {
         check_ajax_referer('qp_practice_nonce', 'nonce');
 
         // --- Access Control Check ---
@@ -33,79 +36,80 @@ class Practice_Ajax {
         $user_id = get_current_user_id();
         global $wpdb;
         $current_time = current_time('mysql');
-        
+
         // --- START REFINED Entitlement Check ---
-    $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
-    if (!$session_id) {
-        wp_send_json_error(['message' => 'Invalid session ID.']);
-        return;
-    }
-
-    // 1. Get the session settings
-    $session_settings_json = $wpdb->get_var($wpdb->prepare("SELECT settings_snapshot FROM {$wpdb->prefix}qp_user_sessions WHERE session_id = %d", $session_id));
-    $settings = $session_settings_json ? json_decode($session_settings_json, true) : [];
-    $entitlements_table = $wpdb->prefix . 'qp_user_entitlements';
-    $entitlement_to_decrement = null;
-    $has_access = false;
-
-    // 2. Check what kind of session this is
-    if ( isset($settings['course_id']) && $settings['course_id'] > 0 ) {
-        // CASE A: This is a Course Test
-        // Access is granted if the user can still access the course (e.g., enrolled or has a valid plan)
-        if ( User_Access::can_access_course($user_id, $settings['course_id']) ) {
-            $has_access = true;
-            // We do NOT decrement general attempts for in-course tests.
+        $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
+        if (!$session_id) {
+            wp_send_json_error(['message' => 'Invalid session ID.']);
+            return;
         }
-    } else {
-        // CASE B: This is a General Practice Session
-        // Access is granted if the user has general practice attempts (NULL or > 0)
-        $active_entitlements = $wpdb->get_results($wpdb->prepare(
-            "SELECT entitlement_id, remaining_attempts
+
+        // 1. Get the session settings
+        $session_settings_json = $wpdb->get_var($wpdb->prepare("SELECT settings_snapshot FROM {$wpdb->prefix}qp_user_sessions WHERE session_id = %d", $session_id));
+        $settings = $session_settings_json ? json_decode($session_settings_json, true) : [];
+        $entitlements_table = $wpdb->prefix . 'qp_user_entitlements';
+        $entitlement_to_decrement = null;
+        $has_access = false;
+
+        // 2. Check what kind of session this is
+        if (isset($settings['course_id']) && $settings['course_id'] > 0) {
+            // CASE A: This is a Course Test
+            // Access is granted if the user can still access the course (e.g., enrolled or has a valid plan)
+            if (User_Access::can_access_course($user_id, $settings['course_id'])) {
+                $has_access = true;
+                // We do NOT decrement general attempts for in-course tests.
+            }
+        } else {
+            // CASE B: This is a General Practice Session
+            // Access is granted if the user has general practice attempts (NULL or > 0)
+            $active_entitlements = $wpdb->get_results($wpdb->prepare(
+                "SELECT entitlement_id, remaining_attempts
              FROM {$entitlements_table}
              WHERE user_id = %d AND status = 'active' AND (expiry_date IS NULL OR expiry_date > %s)
              ORDER BY remaining_attempts ASC, expiry_date ASC",
-            $user_id, $current_time
-        ));
+                $user_id,
+                $current_time
+            ));
 
-        if (!empty($active_entitlements)) {
-            foreach ($active_entitlements as $entitlement) {
-                if (!is_null($entitlement->remaining_attempts)) {
-                    if ((int)$entitlement->remaining_attempts > 0) {
-                        $entitlement_to_decrement = $entitlement;
-                        $has_access = true;
-                        break; 
+            if (!empty($active_entitlements)) {
+                foreach ($active_entitlements as $entitlement) {
+                    if (!is_null($entitlement->remaining_attempts)) {
+                        if ((int)$entitlement->remaining_attempts > 0) {
+                            $entitlement_to_decrement = $entitlement;
+                            $has_access = true;
+                            break;
+                        }
+                    } else {
+                        $has_access = true; // Unlimited plan
+                        break;
                     }
-                } else {
-                    $has_access = true; // Unlimited plan
-                    break;
                 }
             }
         }
-    }
 
-    // 3. Final check and action
-    if (!$has_access) {
-        error_log("QP Check Answer: User #{$user_id} denied access for session #{$session_id}. No suitable entitlement found.");
-        wp_send_json_error([
-            'message' => 'You do not have access to perform this action. Your plan may have expired or you may be out of attempts.',
-            'code' => 'access_denied'
-        ]);
-        return;
-    }
+        // 3. Final check and action
+        if (!$has_access) {
+            error_log("QP Check Answer: User #{$user_id} denied access for session #{$session_id}. No suitable entitlement found.");
+            wp_send_json_error([
+                'message' => 'You do not have access to perform this action. Your plan may have expired or you may be out of attempts.',
+                'code' => 'access_denied'
+            ]);
+            return;
+        }
 
-    // 4. Decrement general practice attempts if one was identified
-    if ($entitlement_to_decrement) {
-        $new_attempts = max(0, (int)$entitlement_to_decrement->remaining_attempts - 1);
-        $wpdb->update(
-            $entitlements_table,
-            ['remaining_attempts' => $new_attempts],
-            ['entitlement_id' => $entitlement_to_decrement->entitlement_id]
-        );
-        error_log("QP Check Answer: User #{$user_id} used general attempt from Entitlement #{$entitlement_to_decrement->entitlement_id}. Remaining: {$new_attempts}");
-    } else {
-         error_log("QP Check Answer: User #{$user_id} attempt approved (Course Test or Unlimited Plan).");
-    }
-    // --- END REFINED Entitlement Check ---
+        // 4. Decrement general practice attempts if one was identified
+        if ($entitlement_to_decrement) {
+            $new_attempts = max(0, (int)$entitlement_to_decrement->remaining_attempts - 1);
+            $wpdb->update(
+                $entitlements_table,
+                ['remaining_attempts' => $new_attempts],
+                ['entitlement_id' => $entitlement_to_decrement->entitlement_id]
+            );
+            error_log("QP Check Answer: User #{$user_id} used general attempt from Entitlement #{$entitlement_to_decrement->entitlement_id}. Remaining: {$new_attempts}");
+        } else {
+            error_log("QP Check Answer: User #{$user_id} attempt approved (Course Test or Unlimited Plan).");
+        }
+        // --- END REFINED Entitlement Check ---
 
         // --- Proceed with checking the answer (Original logic, slightly adjusted) ---
         $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
@@ -149,28 +153,28 @@ class Practice_Ajax {
                 'attempt_time' => $current_time // Use the time check was performed
             ]
         );
-         $attempt_id = $wpdb->insert_id; // Get attempt ID after insert/replace
+        $attempt_id = $wpdb->insert_id; // Get attempt ID after insert/replace
 
 
         // If it's a revision session, also record in the revision table
         if (isset($settings['practice_mode']) && $settings['practice_mode'] === 'revision') {
-             // **FIX START**: Get topic ID directly from group relationship
-             $q_table = $wpdb->prefix . 'qp_questions';
-             $rel_table = $wpdb->prefix . 'qp_term_relationships';
-             $term_table = $wpdb->prefix . 'qp_terms';
-             $tax_table = $wpdb->prefix . 'qp_taxonomies';
-             $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'subject'");
+            // **FIX START**: Get topic ID directly from group relationship
+            $q_table = $wpdb->prefix . 'qp_questions';
+            $rel_table = $wpdb->prefix . 'qp_term_relationships';
+            $term_table = $wpdb->prefix . 'qp_terms';
+            $tax_table = $wpdb->prefix . 'qp_taxonomies';
+            $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'subject'");
 
-             $topic_id = $wpdb->get_var($wpdb->prepare(
-                 "SELECT r.term_id
+            $topic_id = $wpdb->get_var($wpdb->prepare(
+                "SELECT r.term_id
                   FROM {$q_table} q
                   JOIN {$rel_table} r ON q.group_id = r.object_id AND r.object_type = 'group'
                   JOIN {$term_table} t ON r.term_id = t.term_id
                   WHERE q.question_id = %d AND t.taxonomy_id = %d AND t.parent != 0",
-                 $question_id,
-                 $subject_tax_id
-             ));
-             // **FIX END**
+                $question_id,
+                $subject_tax_id
+            ));
+            // **FIX END**
 
             if ($topic_id) {
                 $wpdb->query($wpdb->prepare(
@@ -193,7 +197,8 @@ class Practice_Ajax {
      * AJAX handler to save a user's selected answer during a mock test.
      * Includes access check and attempt decrement logic using entitlements table.
      */
-    public static function save_mock_attempt() {
+    public static function save_mock_attempt()
+    {
         check_ajax_referer('qp_practice_nonce', 'nonce');
 
         // --- Access Control Check ---
@@ -206,74 +211,64 @@ class Practice_Ajax {
         $current_time = current_time('mysql');
 
         // --- START REFINED Entitlement Check ---
-    $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
-    if (!$session_id) {
-        wp_send_json_error(['message' => 'Invalid session ID.']);
-        return;
-    }
-
-    // 1. Get the session settings
-    $session_settings_json = $wpdb->get_var($wpdb->prepare("SELECT settings_snapshot FROM {$wpdb->prefix}qp_user_sessions WHERE session_id = %d", $session_id));
-    $settings = $session_settings_json ? json_decode($session_settings_json, true) : [];
-    $entitlements_table = $wpdb->prefix . 'qp_user_entitlements';
-    $entitlement_to_decrement = null;
-    $has_access = false;
-
-    // 2. Check what kind of session this is
-    if ( isset($settings['course_id']) && $settings['course_id'] > 0 ) {
-        // CASE A: This is a Course Test
-        if ( User_Access::can_access_course($user_id, $settings['course_id']) ) {
-            $has_access = true;
+        $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
+        if (!$session_id) {
+            wp_send_json_error(['message' => 'Invalid session ID.']);
+            return;
         }
-    } else {
-        // CASE B: This is a General Practice Session
-        $active_entitlements = $wpdb->get_results($wpdb->prepare(
-            "SELECT entitlement_id, remaining_attempts
+
+        // 1. Get the session settings
+        $session_settings_json = $wpdb->get_var($wpdb->prepare("SELECT settings_snapshot FROM {$wpdb->prefix}qp_user_sessions WHERE session_id = %d", $session_id));
+        $settings = $session_settings_json ? json_decode($session_settings_json, true) : [];
+        $entitlements_table = $wpdb->prefix . 'qp_user_entitlements';
+        $entitlement_to_decrement = null;
+        $has_access = false;
+
+        // 2. Check what kind of session this is
+        if (isset($settings['course_id']) && $settings['course_id'] > 0) {
+            // CASE A: This is a Course Test
+            if (User_Access::can_access_course($user_id, $settings['course_id'])) {
+                $has_access = true;
+            }
+        } else {
+            // CASE B: This is a General Practice Session
+            $active_entitlements = $wpdb->get_results($wpdb->prepare(
+                "SELECT entitlement_id, remaining_attempts
              FROM {$entitlements_table}
              WHERE user_id = %d AND status = 'active' AND (expiry_date IS NULL OR expiry_date > %s)
              ORDER BY remaining_attempts ASC, expiry_date ASC",
-            $user_id, $current_time
-        ));
+                $user_id,
+                $current_time
+            ));
 
-        if (!empty($active_entitlements)) {
-            foreach ($active_entitlements as $entitlement) {
-                if (!is_null($entitlement->remaining_attempts)) {
-                    if ((int)$entitlement->remaining_attempts > 0) {
-                        $entitlement_to_decrement = $entitlement;
-                        $has_access = true;
-                        break; 
+            if (!empty($active_entitlements)) {
+                foreach ($active_entitlements as $entitlement) {
+                    if (!is_null($entitlement->remaining_attempts)) {
+                        if ((int)$entitlement->remaining_attempts > 0) {
+                            $entitlement_to_decrement = $entitlement;
+                            $has_access = true;
+                            break;
+                        }
+                    } else {
+                        $has_access = true; // Unlimited plan
+                        break;
                     }
-                } else {
-                    $has_access = true; // Unlimited plan
-                    break;
                 }
             }
         }
-    }
 
-    // 3. Final check and action
-    if (!$has_access) {
-        error_log("QP Mock Save: User #{$user_id} denied access for session #{$session_id}. No suitable entitlement found.");
-        wp_send_json_error([
-            'message' => 'You do not have access to perform this action. Your plan may have expired or you may be out of attempts.',
-            'code' => 'access_denied'
-        ]);
-        return;
-    }
+        // 3. Final check and action
+        if (!$has_access) {
+            error_log("QP Mock Save: User #{$user_id} denied access for session #{$session_id}. No suitable entitlement found.");
+            wp_send_json_error([
+                'message' => 'You do not have access to perform this action. Your plan may have expired or you may be out of attempts.',
+                'code' => 'access_denied'
+            ]);
+            return;
+        }
 
-    // 4. Decrement general practice attempts if one was identified
-    if ($entitlement_to_decrement) {
-        $new_attempts = max(0, (int)$entitlement_to_decrement->remaining_attempts - 1);
-        $wpdb->update(
-            $entitlements_table,
-            ['remaining_attempts' => $new_attempts],
-            ['entitlement_id' => $entitlement_to_decrement->entitlement_id]
-        );
-        error_log("QP Mock Save: User #{$user_id} used general attempt from Entitlement #{$entitlement_to_decrement->entitlement_id}. Remaining: {$new_attempts}");
-    } else {
-         error_log("QP Mock Save: User #{$user_id} attempt approved (Course Test or Unlimited Plan).");
-    }
-    // --- END REFINED Entitlement Check ---
+        // We just log that the access was approved
+        error_log("QP Mock Save: User #{$user_id} attempt approved (Course Test, Unlimited, or General Mock). No deduction per click.");
 
         // --- Proceed with saving the mock attempt (Original logic, slightly adjusted) ---
         $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
@@ -337,7 +332,8 @@ class Practice_Ajax {
      * AJAX handler to update the status of a mock test question.
      * Handles statuses like viewed, marked_for_review, etc.
      */
-    public static function update_mock_status() {
+    public static function update_mock_status()
+    {
         check_ajax_referer('qp_practice_nonce', 'nonce');
         $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
         $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
@@ -389,7 +385,8 @@ class Practice_Ajax {
     /**
      * AJAX handler to mark a question as 'expired' for a session.
      */
-    public static function expire_question() {
+    public static function expire_question()
+    {
         check_ajax_referer('qp_practice_nonce', 'nonce');
         $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
         $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
@@ -414,7 +411,8 @@ class Practice_Ajax {
     /**
      * AJAX handler to skip a question.
      */
-    public static function skip_question() {
+    public static function skip_question()
+    {
         check_ajax_referer('qp_practice_nonce', 'nonce');
         $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
         $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
@@ -441,7 +439,8 @@ class Practice_Ajax {
     /**
      * AJAX handler to add or remove a question from the user's review list.
      */
-    public static function toggle_review_later() {
+    public static function toggle_review_later()
+    {
         check_ajax_referer('qp_practice_nonce', 'nonce');
 
         if (!is_user_logged_in()) {
@@ -485,11 +484,12 @@ class Practice_Ajax {
     /**
      * AJAX handler to get the full data for a single question for the review popup.
      */
-    public static function get_single_question_for_review() {
+    public static function get_single_question_for_review()
+    {
         // Security check - Allow nonce from practice or quick edit
         if (
             !(check_ajax_referer('qp_practice_nonce', 'nonce', false) ||
-              check_ajax_referer('qp_get_quick_edit_form_nonce', 'nonce', false))
+                check_ajax_referer('qp_get_quick_edit_form_nonce', 'nonce', false))
         ) {
             wp_send_json_error(['message' => 'Security check failed.']);
         }
@@ -565,7 +565,8 @@ class Practice_Ajax {
     /**
      * AJAX handler to submit a new question report from the modal.
      */
-    public static function submit_question_report() {
+    public static function submit_question_report()
+    {
         check_ajax_referer('qp_practice_nonce', 'nonce');
 
         if (!is_user_logged_in()) {
@@ -632,7 +633,8 @@ class Practice_Ajax {
     /**
      * AJAX handler to get all active report reasons.
      */
-    public static function get_report_reasons() {
+    public static function get_report_reasons()
+    {
         check_ajax_referer('qp_practice_nonce', 'nonce');
 
         global $wpdb;
@@ -720,7 +722,8 @@ class Practice_Ajax {
     /**
      * AJAX handler to get the number of unattempted questions for the current user.
      */
-    public static function get_unattempted_counts() {
+    public static function get_unattempted_counts()
+    {
         check_ajax_referer('qp_practice_nonce', 'nonce');
         if (!is_user_logged_in()) {
             wp_send_json_error(['message' => 'User not logged in.']);
@@ -785,11 +788,12 @@ class Practice_Ajax {
     /**
      * AJAX handler to get the full data for a single question for the practice UI.
      */
-    public static function get_question_data() {
+    public static function get_question_data()
+    {
         check_ajax_referer('qp_practice_nonce', 'nonce');
 
         if (!is_user_logged_in()) {
-             wp_send_json_error(['message' => 'Not logged in.']); // Add login check
+            wp_send_json_error(['message' => 'Not logged in.']); // Add login check
         }
 
         $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
@@ -816,7 +820,8 @@ class Practice_Ajax {
     /**
      * AJAX handler to get topics for a subject THAT HAVE QUESTIONS.
      */
-    public static function get_topics_for_subject() {
+    public static function get_topics_for_subject()
+    {
         check_ajax_referer('qp_practice_nonce', 'nonce');
 
         $subject_ids_raw = isset($_POST['subject_id']) ? $_POST['subject_id'] : [];
@@ -889,7 +894,8 @@ class Practice_Ajax {
     /**
      * AJAX handler to get sections containing questions for a given subject and topic.
      */
-    public static function get_sections_for_subject() {
+    public static function get_sections_for_subject()
+    {
         check_ajax_referer('qp_practice_nonce', 'nonce');
 
         $topic_id = isset($_POST['topic_id']) ? absint($_POST['topic_id']) : 0;
@@ -962,7 +968,8 @@ class Practice_Ajax {
     /**
      * AJAX handler to get sources linked to a specific subject.
      */
-    public static function get_sources_for_subject() {
+    public static function get_sources_for_subject()
+    {
         check_ajax_referer('qp_practice_nonce', 'nonce');
         $subject_id = isset($_POST['subject_id']) ? absint($_POST['subject_id']) : 0;
 
@@ -994,7 +1001,8 @@ class Practice_Ajax {
     /**
      * AJAX handler to get child terms (sections) for a given parent term.
      */
-    public static function get_child_terms() {
+    public static function get_child_terms()
+    {
         check_ajax_referer('qp_practice_nonce', 'nonce');
         $parent_term_id = isset($_POST['parent_id']) ? absint($_POST['parent_id']) : 0;
 
@@ -1017,7 +1025,8 @@ class Practice_Ajax {
      * AJAX handler for the dashboard progress tab.
      * Calculates and returns the hierarchical progress data.
      */
-    public static function get_progress_data() {
+    public static function get_progress_data()
+    {
         check_ajax_referer('qp_practice_nonce', 'nonce');
         $subject_term_id = isset($_POST['subject_id']) ? absint($_POST['subject_id']) : 0;
         $source_term_id = isset($_POST['source_id']) ? absint($_POST['source_id']) : 0;
@@ -1162,7 +1171,7 @@ class Practice_Ajax {
         ob_start();
         $subject_name = $wpdb->get_var($wpdb->prepare("SELECT name FROM {$term_table} WHERE term_id = %d", $subject_term_id));
         $subject_percentage = $source_term_object->total > 0 ? round(($source_term_object->completed / $source_term_object->total) * 100) : 0;
-        ?>
+?>
         <div class="qp-progress-tree">
             <div class="qp-progress-item subject-level">
                 <div class="qp-progress-bar-bg" style="width: <?php echo esc_attr($subject_percentage); ?>%;"></div>
@@ -1177,7 +1186,8 @@ class Practice_Ajax {
                 <?php
                 // Define the recursive function locally or make it globally available if needed elsewhere
                 if (!function_exists('qp_render_progress_tree_recursive')) {
-                    function qp_render_progress_tree_recursive($terms, $review_page_url, $session_page_url, $subject_term_id) {
+                    function qp_render_progress_tree_recursive($terms, $review_page_url, $session_page_url, $subject_term_id)
+                    {
                         usort($terms, fn($a, $b) => strcmp($a->name, $b->name));
 
                         foreach ($terms as $term) {
@@ -1232,7 +1242,7 @@ class Practice_Ajax {
                 ?>
             </div>
         </div>
-    <?php
+<?php
         $html = ob_get_clean();
         wp_send_json_success(['html' => $html]);
     }
@@ -1240,7 +1250,8 @@ class Practice_Ajax {
     /**
      * AJAX handler to get sources linked to a specific subject (for cascading dropdowns).
      */
-    public static function get_sources_for_subject_cascading() {
+    public static function get_sources_for_subject_cascading()
+    {
         check_ajax_referer('qp_practice_nonce', 'nonce');
         $subject_id = isset($_POST['subject_id']) ? absint($_POST['subject_id']) : 0;
 
@@ -1272,7 +1283,8 @@ class Practice_Ajax {
     /**
      * AJAX handler to get child terms (sections) for a given parent term (for cascading dropdowns).
      */
-    public static function get_child_terms_cascading() {
+    public static function get_child_terms_cascading()
+    {
         check_ajax_referer('qp_practice_nonce', 'nonce');
         $parent_term_id = isset($_POST['parent_id']) ? absint($_POST['parent_id']) : 0;
 
@@ -1295,7 +1307,8 @@ class Practice_Ajax {
      * AJAX handler for the dashboard progress tab to get sources for a subject.
      * Renamed to avoid conflict.
      */
-    public static function get_sources_for_subject_progress() {
+    public static function get_sources_for_subject_progress()
+    {
         check_ajax_referer('qp_practice_nonce', 'nonce');
         $subject_term_id = isset($_POST['subject_id']) ? absint($_POST['subject_id']) : 0;
 
@@ -1390,7 +1403,8 @@ class Practice_Ajax {
     /**
      * AJAX handler to check remaining attempts/access for the current user.
      */
-    public static function check_remaining_attempts() {
+    public static function check_remaining_attempts()
+    {
         // No nonce check needed for reads, but login is essential.
         if (!is_user_logged_in()) {
             wp_send_json_error(['has_access' => false, 'message' => 'Not logged in.', 'reason_code' => 'not_logged_in']);
@@ -1465,7 +1479,8 @@ class Practice_Ajax {
     /**
      * AJAX handler for enrolling a user in a course.
      */
-    public static function enroll_in_course() {
+    public static function enroll_in_course()
+    {
         check_ajax_referer('qp_enroll_course_nonce', 'nonce');
 
         if (!is_user_logged_in()) {
@@ -1479,12 +1494,12 @@ class Practice_Ajax {
             wp_send_json_error(['message' => 'Invalid course ID.']);
         }
 
-        if ( ! $course_id || get_post_type( $course_id ) !== 'qp_course' ) {
+        if (! $course_id || get_post_type($course_id) !== 'qp_course') {
             wp_send_json_error(['message' => 'Invalid course ID.']);
         }
-        
+
         // Check if the course is published
-        if ( get_post_status( $course_id ) !== 'publish' ) {
+        if (get_post_status($course_id) !== 'publish') {
             wp_send_json_error(['message' => 'This course is no longer available for enrollment.']);
         }
 
@@ -1537,7 +1552,8 @@ class Practice_Ajax {
     /**
      * AJAX handler to search for questions for the course editor modal.
      */
-    public static function search_questions_for_course() {
+    public static function search_questions_for_course()
+    {
         // 1. Security Checks
         check_ajax_referer('qp_course_editor_select_nonce', 'nonce');
         if (!current_user_can('manage_options')) { // Use appropriate capability
@@ -1589,7 +1605,8 @@ class Practice_Ajax {
      * Also fetches the user's progress for items within that course.
      * Moved from global scope.
      */
-    public static function get_course_structure_ajax() {
+    public static function get_course_structure_ajax()
+    {
         check_ajax_referer('qp_practice_nonce', 'nonce'); // Re-use the existing frontend nonce
 
         if (!is_user_logged_in()) {
