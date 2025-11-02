@@ -353,61 +353,53 @@ class Meta_Boxes {
 			<?php // Only show product link if WooCommerce is active ?>
 			<?php if ( class_exists( 'WooCommerce' ) ) : ?>
 
-                <?php // --- NEW: Show info box if auto-product is linked ---
-                if ( $is_auto_product_linked && $linked_product_id ) : 
-                    $product_post = get_post($linked_product_id);
-                ?>
-                    <div id="qp-auto-product-info">
-                        <strong><?php esc_html_e( 'Auto-Product Linked', 'question-press' ); ?></strong><br>
-                        <?php if ($product_post) : ?>
-                            <?php echo esc_html($product_post->post_title); ?><br>
-                            <a href="<?php echo esc_url( get_edit_post_link( $linked_product_id ) ); ?>" class="button button-secondary button-small" target="_blank" style="margin-top: 5px;"><?php esc_html_e('Edit Product (to set price)', 'question-press'); ?></a>
-                        <?php else : ?>
-                            <span style="color: red;"><?php esc_html_e( 'Linked product not found.', 'question-press' ); ?></span>
-                        <?php endif; ?>
-                         <input type="hidden" name="_qp_linked_product_id" value="<?php echo esc_attr($linked_product_id); ?>">
-                    </div>
+                <?php // --- REFINED: Show auto-product info or auto-creation text ---
+            if ( $is_auto_product_linked && $linked_product_id ) : 
+                $product_post = get_post($linked_product_id);
+            ?>
+                <div id="qp-auto-product-info" style="padding: 10px; background: #fdfdfd; border: 1px solid #ddd; border-radius: 4px;">
+                    <strong><?php esc_html_e( 'Auto-Product Linked', 'question-press' ); ?></strong><br>
+                    <?php if ($product_post) : ?>
+                        <?php 
+                        // Show Product Title, ID, and Edit Link
+                        echo esc_html($product_post->post_title); 
+                        echo ' (ID: ' . esc_html($linked_product_id) . ')';
+                        ?>
+                        <br>
+                        <a href="<?php echo esc_url( get_edit_post_link( $linked_product_id ) ); ?>" class="button button-secondary button-small" target="_blank" style="margin-top: 5px;"><?php esc_html_e('Edit Product (to set price)', 'question-press'); ?></a>
+                    <?php else : ?>
+                        <span style="color: red;"><?php esc_html_e( 'Linked product (ID: ', 'question-press' ); echo esc_html($linked_product_id); esc_html_e( ') not found.', 'question-press' ); ?></span>
+                    <?php endif; ?>
+                     <input type="hidden" name="_qp_linked_product_id" value="<?php echo esc_attr($linked_product_id); ?>">
+                </div>
 
-                <?php // --- OLD: Show dropdown if no auto-product is linked ---
-                else : ?>
-                    <p>
-                        <label for="qp_linked_product_id"><?php esc_html_e('Linked WooCommerce Product:', 'question-press'); ?></label>
-                        <select name="_qp_linked_product_id" id="qp_linked_product_id">
-                            <option value="">— <?php esc_html_e('Select Product or Save to Auto-Create', 'question-press'); ?> —</option>
-                            <?php
-                            if ($products) {
-                                foreach ($products as $product) {
-                                    if ($product->is_type('simple') || $product->is_type('variable')) {
-                                        printf(
-                                            '<option value="%s" %s>%s</option>',
-                                            esc_attr($product->get_id()),
-                                            selected($linked_product_id, $product->get_id(), false),
-                                            esc_html($product->get_name()) . ' (#' . $product->get_id() . ')'
-                                        );
-                                    }
-                                }
-                            }
-                            ?>
-                        </select>
-                        <small class="description"><?php esc_html_e('Manually link a product. Or, leave blank and save the course to auto-create a new product.', 'question-press'); ?></small>
+            <?php // NEW: Show auto-generation text if no product is linked
+            else : ?>
+                <div id="qp-auto-product-info-new" style="padding: 10px; background: #fdfdfd; border: 1px solid #ddd; border-radius: 4px;">
+                    <p style="margin: 0; font-style: italic; color: #666;">
+                        <?php esc_html_e( 'A new WooCommerce product will be automatically created and linked when you save this course.', 'question-press' ); ?>
                     </p>
-                <?php endif; ?>
+                </div>
+            <?php endif; ?>
                 
 			<?php else : ?>
 				<p><small class="description"><?php esc_html_e('Install and activate WooCommerce to link products for purchase.', 'question-press'); ?></small></p>
 			<?php endif; ?>
 
-			<?php // Auto-plan info logic remains the same ?>
+			<?php // Auto-plan info logic - REFINED ?>
 			<?php if ($auto_plan_id && get_post($auto_plan_id)) : ?>
-				 <p id="qp-auto-plan-info">
-					 <?php esc_html_e( 'This course automatically manages Plan ID #', 'question-press' ); echo esc_html($auto_plan_id); ?>.
-					 <a href="<?php echo esc_url(get_edit_post_link($auto_plan_id)); ?>" target="_blank"><?php esc_html_e( 'View Plan', 'question-press' ); ?></a><br>
-					 <?php esc_html_e( 'Ensure your Linked Product above uses this Plan ID.', 'question-press' ); ?>
-				 </p>
+				<div id="qp-auto-plan-info" style="padding: 10px; background: #fdfdfd; border: 1px solid #ddd; border-radius: 4px; margin-top: 10px;">
+					<strong><?php esc_html_e( 'Auto-Plan Linked', 'question-press' ); ?></strong><br>
+					<?php echo esc_html(get_the_title($auto_plan_id)); ?> (ID: <?php echo esc_html($auto_plan_id); ?>)
+					<br>
+					<a href="<?php echo esc_url(get_edit_post_link($auto_plan_id)); ?>" class="button button-secondary button-small" target="_blank" style="margin-top: 5px;"><?php esc_html_e( 'View Plan', 'question-press' ); ?></a>
+				</div>
 			<?php elseif ($access_mode === 'requires_purchase') : ?>
-				 <p id="qp-auto-plan-info">
-					 <?php esc_html_e( 'A Plan and Product will be automatically created/updated when you save this course.', 'question-press' ); ?>
-				 </p>
+				<div id="qp-auto-plan-info" style="padding: 10px; background: #fdfdfd; border: 1px solid #ddd; border-radius: 4px; margin-top: 10px;">
+					<p style="margin: 0; font-style: italic; color: #666;">
+						<?php esc_html_e( 'An Access Plan will be automatically created/updated when you save this course.', 'question-press' ); ?>
+					</p>
+				</div>
 			<?php endif; ?>
 
 		</div>
