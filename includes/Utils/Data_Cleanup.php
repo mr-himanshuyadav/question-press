@@ -47,45 +47,76 @@ class Data_Cleanup
             ));
 
             if (! empty($linked_course_ids)) {
-                $course_titles = array_map('get_the_title', $linked_course_ids);
+                // --- Updated Plan Deletion Message ---
+                $links_html = [];
+                foreach ($linked_course_ids as $cid) {
+                    $course_post = get_post($cid);
+                    if ($course_post) {
+                        $edit_link = esc_url(get_edit_post_link($cid));
+                        $course_title = esc_html($course_post->post_title);
+                        $links_html[] = sprintf(
+                            '<strong>%s (ID: %d)</strong> [<a href="%s">View Course</a>]',
+                            $course_title,
+                            $cid,
+                            $edit_link
+                        );
+                    }
+                }
                 $error_message = sprintf(
-                    'The auto-generated plan "%s" cannot be deleted because it is linked to the following course(s): %s. Please change the course access mode to "Free" or delete the course(s) first.',
-                    $post_title,
-                    implode(', ', $course_titles)
+                    '<strong>%s</strong> can\'t be deleted. It is auto-linked to: %s. Please change the course access mode to "Free" or delete the course(s) first.',
+                    esc_html($post_title),
+                    implode(', ', $links_html)
                 );
+                // --- End Update ---
             }
         } elseif ($post_type === 'product') {
 
-            // Check ALL possible deletion-blocking rules.
-            
             // Rule 1: Is this product MANUALLY linked from a course?
-            // (This is for products manually selected in the 'Requires Purchase' dropdown)
             $linked_course_ids = $wpdb->get_col($wpdb->prepare(
                 "SELECT post_id FROM {$wpdb->postmeta} WHERE meta_key = '_qp_linked_product_id' AND meta_value = %d",
                 $post_id
             ));
             if (! empty($linked_course_ids)) {
-                $course_titles = array_map( 'get_the_title', $linked_course_ids );
+                // --- Updated Manual Course Link Message ---
+                $links_html = [];
+                foreach ($linked_course_ids as $cid) {
+                    $course_post = get_post($cid);
+                    if ($course_post) {
+                        $edit_link = esc_url(get_edit_post_link($cid));
+                        $course_title = esc_html($course_post->post_title);
+                        $links_html[] = sprintf(
+                            '<strong>%s (ID: %d)</strong> [<a href="%s">View Course</a>]',
+                            $course_title,
+                            $cid,
+                            $edit_link
+                        );
+                    }
+                }
                 $error_message = sprintf(
-                    'The product "%s" cannot be deleted because it is manually linked to the following course(s): %s. Please unlink the product from these courses before deleting.',
-                    $post_title,
-                    implode( ', ', $course_titles )
+                    '<strong>%s</strong> can\'t be deleted. It is manually linked to: %s. Please unlink the product from these courses first.',
+                    esc_html($post_title),
+                    implode(', ', $links_html)
                 );
+                // --- End Update ---
             }
 
             // Rule 2: Is this an AUTO-generated product linked TO a COURSE?
-            // We check this *before* the plan link, as course-generated products also have a plan link.
             if ( empty($error_message) && get_post_meta( $post_id, '_qp_is_auto_generated', true ) === 'true' ) {
                 $course_id = get_post_meta( $post_id, '_qp_linked_course_id', true );
                 if ( $course_id > 0 ) {
                     $course_post = get_post( $course_id );
-                    // Check if course exists AND is not in the trash
                     if ( $course_post && $course_post->post_status !== 'trash' ) {
+                        // --- Updated Auto-Course Link Message ---
+                        $edit_link = esc_url(get_edit_post_link($course_id));
+                        $course_title = esc_html($course_post->post_title);
                         $error_message = sprintf(
-                            'The auto-generated product "%s" cannot be deleted because its course, "%s", still exists. Please change the course access mode to "Free" or delete the course first.',
-                            $post_title,
-                            esc_html( $course_post->post_title )
+                            '<strong>%s</strong> can\'t be deleted. It is auto-linked to <strong>%s (ID: %d)</strong> [<a href="%s">View Course</a>]. Please change the course access mode to "Free" or delete the course first.',
+                            esc_html($post_title),
+                            $course_title,
+                            $course_id,
+                            $edit_link
                         );
+                        // --- End Update ---
                     }
                 }
             }
@@ -94,19 +125,22 @@ class Data_Cleanup
             if ( empty($error_message) && get_post_meta( $post_id, '_qp_is_auto_generated', true ) === 'true' ) {
                 $plan_id = get_post_meta( $post_id, '_qp_linked_plan_id', true );
                 if ( $plan_id > 0 ) {
-                    // *** THIS IS THE CRITICAL FIX ***
-                    // We must also check that it's NOT linked to a course, or Rule 2 would have caught it.
                     $course_id = get_post_meta( $post_id, '_qp_linked_course_id', true );
                     
                     if ( empty($course_id) ) { 
                         $plan_post = get_post( $plan_id );
-                        // Check if plan exists AND is not in the trash
                         if ( $plan_post && $plan_post->post_status !== 'trash' ) {
+                            // --- Updated Auto-Plan Link Message ---
+                            $edit_link = esc_url(get_edit_post_link($plan_id));
+                            $plan_title = esc_html($plan_post->post_title);
                             $error_message = sprintf(
-                                'The auto-generated product "%s" cannot be deleted because its plan, "%s", still exists. Please delete the plan first.',
-                                $post_title,
-                                esc_html( $plan_post->post_title )
+                                '<strong>%s</strong> can\'t be deleted. It is auto-linked to <strong>%s (ID: %d)</strong> [<a href="%s">View Plan</a>]. Please delete the plan first.',
+                                esc_html($post_title),
+                                $plan_title,
+                                $plan_id,
+                                $edit_link
                             );
+                            // --- End Update ---
                         }
                     }
                 }
