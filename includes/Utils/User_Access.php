@@ -82,7 +82,7 @@ class User_Access {
 			return false;
 		}
 
-		// Admins always have access
+		// 1. Admins always have access
 		if ( user_can( $user_id, 'manage_options' ) ) {
 			return true;
 		}
@@ -91,10 +91,10 @@ class User_Access {
 		$user_courses_table = $wpdb->prefix . 'qp_user_courses';
 		$current_time       = current_time( 'mysql' );
 
-		// 1. Check for an existing, active enrollment (if not ignored)
+		// 2. Check for an existing, active enrollment (if not ignored)
 		if ( ! $ignore_enrollment_check ) {
 			$is_enrolled = $wpdb->get_var( $wpdb->prepare(
-				"SELECT user_course_id FROM $user_courses_table WHERE user_id = %d AND course_id = %d AND status IN ('enrolled', 'in_progress', 'completed')", // Also allow access if completed
+				"SELECT user_course_id FROM $user_courses_table WHERE user_id = %d AND course_id = %d AND status IN ('enrolled', 'in_progress', 'completed')",
 				$user_id,
 				$course_id
 			) );
@@ -103,30 +103,64 @@ class User_Access {
 			}
 		}
 
-		// 2. Check for an active, non-expired entitlement that grants access to this specific course.
-		// Get the auto-generated plan ID linked to this course
-		$auto_plan_id = get_post_meta( $course_id, '_qp_course_auto_plan_id', true );
-		if ( empty( $auto_plan_id ) ) {
-			// This course might be free (check access mode) or misconfigured
-			$access_mode = get_post_meta( $course_id, '_qp_course_access_mode', true ) ?: 'free';
-			return ($access_mode === 'free'); // Grant access if it's free, deny if it's paid but misconfigured
+		// 3. Check if the course is free
+		$access_mode = get_post_meta( $course_id, '_qp_course_access_mode', true ) ?: 'free';
+		if ( $access_mode === 'free' ) {
+			return true; // It's a free course, access granted
 		}
-		$auto_plan_id = absint( $auto_plan_id );
 
-		// Check for an entitlement matching this specific plan ID
-		$has_valid_entitlement = $wpdb->get_var( $wpdb->prepare(
-			"SELECT entitlement_id
-			 FROM {$entitlements_table}
+		// --- START REFINED ACCESS LOGIC ---
+		// 4. Get ALL active, non-expired entitlements for the user
+		$active_entitlements = $wpdb->get_results( $wpdb->prepare(
+			"SELECT plan_id FROM {$entitlements_table}
 			 WHERE user_id = %d
-			   AND plan_id = %d
 			   AND status = 'active'
 			   AND (expiry_date IS NULL OR expiry_date > %s)",
 			$user_id,
-			$auto_plan_id,
 			$current_time
 		) );
 
-		return (bool) $has_valid_entitlement;
+		if ( empty( $active_entitlements ) ) {
+			return false; // User has no active entitlements at all.
+		}
+
+		$active_plan_ids = wp_list_pluck( $active_entitlements, 'plan_id' );
+		$active_plan_ids = array_map( 'absint', $active_plan_ids );
+
+		// 5. Fast Check: Does the user have the specific auto-plan for this course?
+		$course_auto_plan_id = get_post_meta( $course_id, '_qp_course_auto_plan_id', true );
+		if ( ! empty( $course_auto_plan_id ) && in_array( absint( $course_auto_plan_id ), $active_plan_ids, true ) ) {
+			return true; // User has the specific entitlement for this course.
+		}
+
+		// 6. Slow Check: Loop through all other active entitlements (e.g., manual "All Access" plans)
+		foreach ( $active_plan_ids as $plan_id ) {
+			// Skip the course-specific plan we already checked
+			if ( $plan_id == $course_auto_plan_id ) {
+				continue;
+			}
+			
+			// Get the course access rules for this plan
+			$plan_course_access_type = get_post_meta( $plan_id, '_qp_plan_course_access_type', true );
+
+			// Check if this plan grants "All Courses"
+			if ( $plan_course_access_type === 'all' ) {
+				return true; // This plan grants access to all courses.
+			}
+
+			// Check if this plan grants "Specific Courses"
+			if ( $plan_course_access_type === 'specific' ) {
+				$linked_courses = get_post_meta( $plan_id, '_qp_plan_linked_courses', true );
+				
+				// Check if the plan's list of courses is an array and contains the course ID
+				if ( is_array( $linked_courses ) && in_array( $course_id, $linked_courses, true ) ) {
+					return true; // This plan grants access to this specific course.
+				}
+			}
+		}
+		// --- END REFINED ACCESS LOGIC ---
+
+		return false; // All checks failed.
 	}
 
 }
