@@ -322,13 +322,13 @@ class Meta_Boxes {
             #qp_course_access_meta_box .duration-group { display: flex; align-items: center; gap: 10px; }
             #qp_course_access_meta_box .duration-group input[type="number"] { width: 80px; flex-shrink: 0; }
             #qp_course_access_meta_box .duration-group select { flex-grow: 1; }
-            #qp-purchase-fields { display: <?php echo ($access_mode === 'requires_purchase') ? 'block' : 'none'; ?>; margin-top: 15px; border-top: 1px solid #eee; padding-top: 15px;}
+            #qp-purchase-fields { display: <?php echo ($access_mode === 'requires_purchase') ? 'block' : 'none'; ?>; margin-top: 15px; border-top: 1px solid #eee; padding-top: 0px;}
             #qp_course_access_meta_box small.description { font-size: 0.9em; color: #666; display: block; margin-top: 3px; }
             #qp-auto-plan-info { font-style: italic; color: #666; font-size: 0.9em; margin-top: 10px; padding-top: 10px; border-top: 1px dashed #ddd; }
             #qp-auto-product-info { font-style: italic; color: #666; font-size: 0.9em; margin-top: 10px; padding: 10px; border-top: 1px dashed #ddd; background: #fdfdfd; }
         </style>
 
-		<p>
+		<p style="margin-bottom: 0;">
 			<label for="qp_course_access_mode"><?php esc_html_e('Access Mode:', 'question-press'); ?></label>
 			<select name="_qp_course_access_mode" id="qp_course_access_mode">
 				<option value="free" <?php selected($access_mode, 'free'); ?>><?php esc_html_e('Free (Public Enrollment)', 'question-press'); ?></option>
@@ -340,7 +340,7 @@ class Meta_Boxes {
 			<p>
 				<label><?php esc_html_e('Access Duration:', 'question-press'); ?></label>
 				<div class="duration-group">
-					<input type="number" name="_qp_course_access_duration_value" value="<?php echo esc_attr($duration_value); ?>" min="1" placeholder="e.g., 30">
+					<input type="number" name="_qp_course_access_duration_value" value="<?php echo esc_attr($duration_value); ?>" min="0" placeholder="e.g., 30">
 					<select name="_qp_course_access_duration_unit">
 						<option value="day" <?php selected($duration_unit, 'day'); ?>>Day(s)</option>
 						<option value="month" <?php selected($duration_unit, 'month'); ?>>Month(s)</option>
@@ -783,6 +783,32 @@ class Meta_Boxes {
 
             // 2. Create or Update the WooCommerce Product
             if ( class_exists( 'WooCommerce' ) ) {
+
+				// Get or Create the 'QP Course Plan' Product Category
+				$category_name = 'QP Course Plan (Auto)';
+				$category_slug = 'qp-course-plan-auto'; // A clean slug
+				$taxonomy = 'product_cat';
+				$category_id = null;
+
+				// Check if the term exists
+				$term = term_exists( $category_name, $taxonomy );
+
+				if ( $term !== null && is_array( $term ) ) {
+					// Term exists
+					$category_id = (int) $term['term_id'];
+				} else {
+					// Term does not exist, so create it
+					$new_term = wp_insert_term( $category_name, $taxonomy, ['slug' => $category_slug] );
+					if ( ! is_wp_error( $new_term ) && is_array( $new_term ) ) {
+						$category_id = (int) $new_term['term_id'];
+						error_log( "QP Auto Sync: Created new product category '{$category_name}' with ID #{$category_id}." );
+					} else {
+						// Log an error if creation failed
+						$error_message = is_wp_error( $new_term ) ? $new_term->get_error_message() : 'Unknown error creating term.';
+						error_log( "QP Auto Sync: FAILED to create product category '{$category_name}'. Error: " . $error_message );
+					}
+				}
+
                 $product_id_to_save = 0;
 
                 // Check if an auto-product already exists
@@ -807,11 +833,14 @@ class Meta_Boxes {
                     $product->set_virtual( true );
                     $product->set_downloadable( false );
                     $product->set_regular_price( '' ); // Admin must set this
+					if ( $category_id > 0 ) {
+                        $product->set_category_ids( [ $category_id ] );
+                    }
                     
                     // Add our meta data
                     $product->update_meta_data( '_qp_is_auto_generated', 'true' );
                     $product->update_meta_data( '_qp_linked_plan_id', $plan_id_to_save );
-                    $product->update_meta_data( '_qp_linked_course_id', $post_id ); // <-- Add reverse link
+                    $product->update_meta_data( '_qp_linked_course_id', $post_id );
                     
                     $product_id_to_save = $product->save();
                     

@@ -170,7 +170,7 @@ class Post_Types {
                 [
                     'key'     => '_qp_is_auto_generated',
                     'value'   => 'true',
-                    'compare' => '=' // Show plans where key is not 'true'
+                    'compare' => '!=' // Show plans where key is not 'true'
                 ]
             ];
             
