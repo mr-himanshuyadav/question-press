@@ -47,7 +47,7 @@ class Rewrites {
         $is_front_page = ( $dashboard_path === '' ); // Check if it's the front page
 
         // Define the known tabs
-        $tabs      = [ 'overview', 'history', 'review', 'progress', 'courses', 'profile' ];
+        $tabs      = [ 'overview', 'my-courses', 'history', 'review', 'progress', 'available-courses', 'profile' ];
         $tab_regex = implode( '|', $tabs );
 
         if ( ! $is_front_page ) {

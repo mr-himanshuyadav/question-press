@@ -12,16 +12,16 @@ final class Dashboard {
 
 	public static function render() {
 		if ( ! is_user_logged_in() ) {
-			// Keep login message logic here for now
+			// Keep login message logic here for now, or move to its own template later
 			return '<p>You must be logged in to view your dashboard. <a href="' . wp_login_url( get_permalink() ) . '">Click here to log in.</a></p>';
 		}
 
 		// --- Fetch common data ---
 		$current_user = wp_get_current_user();
 		$user_id      = $current_user->ID;
+		
 		// --- Entitlement Summary Logic (Keep as is) ---
 		$access_status_message = '';
-		// ... (existing logic to fetch and format $access_status_message) ...
 		global $wpdb; // Ensure $wpdb is available
 		$entitlements_table = $wpdb->prefix . 'qp_user_entitlements';
 		$current_time       = current_time( 'mysql' );
@@ -36,23 +36,19 @@ final class Dashboard {
 				$current_time
 			)
 		);
-		// ... (existing logic to build $access_status_message) ...
+		
 		$shop_page_url = function_exists( 'wc_get_page_id' ) ? get_permalink( wc_get_page_id( 'shop' ) ) : home_url( '/' );
 		$link_text     = empty( $shop_page_url ) ? 'Purchase Access' : 'Purchase More';
 		$entitlement_summary = [];
 		if ( ! empty( $active_entitlements_for_display ) ) {
 			foreach ( $active_entitlements_for_display as $entitlement ) {
-				// FIX: Coalesce to an empty string to prevent passing null to preg_replace
 				$plan_title_raw = $entitlement->plan_title ?? '';
 				$clean_plan_title = preg_replace( '/^Auto: Access Plan for Course "([^"]+)"$/', '$1', $plan_title_raw );
 
-				// ADDED: If the title is now empty, it means the plan was missing or had no title.
 				if ( empty( $clean_plan_title ) ) {
-					// Use the original raw title if it existed (e.g., for a manual plan)
 					if ( ! empty( $plan_title_raw ) ) {
 						$clean_plan_title = $plan_title_raw;
 					} else {
-						// Otherwise, the plan is truly missing
 						$clean_plan_title = 'Plan ID #' . $entitlement->plan_id . ' (Missing)';
 					}
 				}
@@ -77,22 +73,48 @@ final class Dashboard {
 			$access_status_message = 'No active plan found. <a href="' . esc_url( $shop_page_url ) . '">' . esc_html( $link_text ) . '</a>';
 		}
 
+		// --- NEW: Pre-fetch course counts for conditional tabs ---
+		$user_courses_table = $wpdb->prefix . 'qp_user_courses';
+		$enrolled_course_ids = $wpdb->get_col(
+			$wpdb->prepare(
+				"SELECT course_id FROM $user_courses_table WHERE user_id = %d AND status IN ('enrolled', 'in_progress', 'completed')",
+				$user_id
+			)
+		);
+		$enrolled_course_count = count($enrolled_course_ids);
+
+		$available_course_args = [
+			'post_type'      => 'qp_course',
+			'post_status'    => 'publish', // Only count published available courses
+			'posts_per_page' => 1, // We only need to know if at least one exists
+			'fields'         => 'ids',
+		];
+		if ( !empty($enrolled_course_ids) ) {
+			$available_course_args['post__not_in'] = $enrolled_course_ids;
+		}
+		$available_courses_query = new WP_Query( $available_course_args );
+		$available_course_count = $available_courses_query->post_count;
+		// --- END NEW COUNTS ---
+
+
 		// --- Determine active tab ---
 		$current_tab         = get_query_var( 'qp_tab', 'overview' );
 		$current_course_slug = get_query_var( 'qp_course_slug' );
 
 		// --- Get Sidebar HTML ---
-		// Call the refactored method which now returns HTML
-		$sidebar_html = self::render_sidebar( $current_user, $access_status_message, $current_tab );
+		// Pass the new counts to the sidebar renderer
+		$sidebar_html = self::render_sidebar( $current_user, $access_status_message, $current_tab, $enrolled_course_count, $available_course_count );
 
 		// --- Get Main Content HTML ---
-		// This part still uses output buffering within the specific content methods for now
 		ob_start();
-		// --- Main Conditional Rendering Logic (Keep as is) ---
+		// --- Main Conditional Rendering Logic (MODIFIED) ---
 		if ( $current_tab === 'courses' && ! empty( $current_course_slug ) ) {
+			// This is the single course view
 			self::render_single_course_view( $current_course_slug, $user_id );
-		} elseif ( $current_tab === 'courses' ) {
-			echo self::render_courses_content();
+		} elseif ( $current_tab === 'my-courses' ) {
+			echo self::render_my_courses_content(); // NEW
+		} elseif ( $current_tab === 'available-courses' ) {
+			echo self::render_available_courses_content(); // MODIFIED
 		} elseif ( $current_tab === 'history' ) {
 			echo self::render_history_content();
 		} elseif ( $current_tab === 'review' ) {
@@ -102,8 +124,9 @@ final class Dashboard {
 		} elseif ( $current_tab === 'profile' ) {
 			echo self::render_profile_content();
 		} else {
+			// --- Overview Tab (default) ---
 			$attempts_table = $wpdb->prefix . 'qp_user_attempts';
-			$stats          = $wpdb->get_row( $wpdb->prepare( "SELECT COUNT(CASE WHEN status = 'answered' THEN 1 END) as total_attempted, COUNT(CASE WHEN is_correct = 1 THEN 1 END) as total_correct, COUNT(CASE WHEN is_correct = 0 THEN 1 END) as total_incorrect FROM {$attempts_table} WHERE user_id = %d", $user_id ) ); // Added incorrect count
+			$stats          = $wpdb->get_row( $wpdb->prepare( "SELECT COUNT(CASE WHEN status = 'answered' THEN 1 END) as total_attempted, COUNT(CASE WHEN is_correct = 1 THEN 1 END) as total_correct, COUNT(CASE WHEN is_correct = 0 THEN 1 END) as total_incorrect FROM {$attempts_table} WHERE user_id = %d", $user_id ) );
 			$total_attempted  = $stats->total_attempted ?? 0;
 			$total_correct    = $stats->total_correct ?? 0;
 			$overall_accuracy = ( $total_attempted > 0 ) ? ( $total_correct / $total_attempted ) * 100 : 0;
@@ -120,8 +143,6 @@ final class Dashboard {
 			$session_page_url        = isset( $options['session_page'] ) ? get_permalink( $options['session_page'] ) : home_url( '/' );
 			$review_page_url         = isset( $options['review_page'] ) ? get_permalink( $options['review_page'] ) : home_url( '/' );
 
-			// Call overview rendering (Keep as is - echoes internally)
-			// *** ENSURE THIS LINE HAS 'echo' ***
 			echo self::render_overview_content(
 				$stats,
 				$overall_accuracy,
@@ -138,7 +159,6 @@ final class Dashboard {
 		// --- End Main Content HTML ---
 
 		// --- Load Wrapper Template ---
-		// Pass sidebar and main content HTML to the wrapper template
 		return Template_Loader::get_html(
 			'dashboard/dashboard-wrapper',
 			'frontend',
@@ -156,40 +176,61 @@ final class Dashboard {
 	 * @param WP_User $current_user        The current user object.
 	 * @param string  $access_status_message HTML access status message.
 	 * @param string  $active_tab          Slug of the active tab.
+	 * @param int     $enrolled_course_count Count of user's enrolled courses.
+	 * @param int     $available_course_count Count of available (non-enrolled) courses.
 	 * @return string  The rendered sidebar HTML.
 	 */
-	public static function render_sidebar( $current_user, $access_status_message, $active_tab ) {
+	public static function render_sidebar( $current_user, $access_status_message, $active_tab, $enrolled_course_count, $available_course_count ) {
 		$options            = get_option( 'qp_settings' );
 		$dashboard_page_id  = isset( $options['dashboard_page'] ) ? absint( $options['dashboard_page'] ) : 0;
-		$base_dashboard_url = $dashboard_page_id ? trailingslashit( get_permalink( $dashboard_page_id ) ) : trailingslashit( home_url() );
+		$base_dashboard_url = $dashboard_page_id ? trailingslashit( get_permalink( $dashboard_page_id ) ) : home_url( '/' );
 		$is_front_page      = ( $dashboard_page_id > 0 && get_option( 'show_on_front' ) == 'page' && get_option( 'page_on_front' ) == $dashboard_page_id );
 
+		// --- NEW: Dynamically build the tabs array ---
 		$tabs = [
 			'overview' => [
 				'label' => 'Overview',
 				'icon'  => 'chart-pie',
 			],
-			'history'  => [
-				'label' => 'History',
-				'icon'  => 'list-view',
-			],
-			'review'   => [
-				'label' => 'Review',
-				'icon'  => 'star-filled',
-			],
-			'progress' => [
-				'label' => 'Progress',
-				'icon'  => 'chart-bar',
-			],
-			'courses'  => [
-				'label' => 'Courses',
-				'icon'  => 'welcome-learn-more',
-			],
-			'profile'  => [
-				'label' => 'Profile',
-				'icon'  => 'admin-users',
-			],
 		];
+
+		// Conditionally add "My Courses" tab
+		if ( $enrolled_course_count > 0 ) {
+			$tabs['my-courses'] = [
+				'label' => 'My Courses',
+				'icon'  => 'welcome-learn-more',
+			];
+		}
+
+		// Add the static middle tabs
+		$tabs['history'] = [
+			'label' => 'History',
+			'icon'  => 'list-view',
+		];
+		$tabs['review'] = [
+			'label' => 'Review',
+			'icon'  => 'star-filled',
+		];
+		$tabs['progress'] = [
+			'label' => 'Progress',
+			'icon'  => 'chart-bar',
+		];
+
+		// Conditionally add "Available Courses" tab
+		if ( $available_course_count > 0 ) {
+			$tabs['available-courses'] = [
+				'label' => 'Available Courses',
+				'icon'  => 'store',
+			];
+		}
+		
+		// Add the final static tab
+		$tabs['profile'] = [
+			'label' => 'Profile',
+			'icon'  => 'admin-users',
+		];
+		// --- END NEW DYNAMIC TABS ---
+
 
 		// --- Get Avatar HTML ---
 		$custom_avatar_id   = get_user_meta( $current_user->ID, '_qp_avatar_attachment_id', true );
@@ -231,28 +272,31 @@ final class Dashboard {
 			'post_type' => 'qp_course',
 			'name' => $course_slug,
 			'post_status' => ['publish', 'expired'],
-			'posts_per_page' => 1
+			'posts_per_page' => 1,
+			'fields' => 'ids' // Only get ID for efficiency
 		]);
-		$course_post = get_page_by_path( $course_slug, OBJECT, 'qp_course' ); // Get course WP_Post object by slug
+		
+		$course_id = $posts_array[0] ?? 0;
+		$course_post = get_post($course_id);
+
+		// --- Get base dashboard URL ---
+		$options            = get_option( 'qp_settings' );
+		$dashboard_page_id  = isset( $options['dashboard_page'] ) ? absint( $options['dashboard_page'] ) : 0;
+		$base_dashboard_url = $dashboard_page_id ? trailingslashit( get_permalink( $dashboard_page_id ) ) : trailingslashit( home_url() );
+		$is_front_page      = ( $dashboard_page_id > 0 && get_option( 'show_on_front' ) == 'page' && get_option( 'page_on_front' ) == $dashboard_page_id );
+		$tab_prefix         = $is_front_page ? 'tab/' : '';
 
 		// --- Basic Course Validation ---
 		if ( ! $course_post || $course_post->post_type !== 'qp_course' ) {
 			echo '<div class="qp-card"><div class="qp-card-content"><p>Error: Course not found.</p></div></div>';
-			$options            = get_option( 'qp_settings' );
-			$dashboard_page_id  = isset( $options['dashboard_page'] ) ? absint( $options['dashboard_page'] ) : 0;
-			$base_dashboard_url = $dashboard_page_id ? trailingslashit( get_permalink( $dashboard_page_id ) ) : trailingslashit( home_url() );
-			echo '<a href="' . esc_url( $base_dashboard_url . 'courses/' ) . '" class="qp-button qp-button-secondary qp-back-to-courses-btn">&laquo; Back to Courses</a>';
+			echo '<a href="' . esc_url( $base_dashboard_url ) . '" class="qp-button qp-button-secondary qp-back-to-courses-btn">&laquo; Back to Dashboard</a>';
 			return;
 		}
-		$course_id = $course_post->ID;
 
 		// --- Access Check ---
 		if ( ! User_Access::can_access_course( $user_id, $course_id ) ) {
 			echo '<div class="qp-card"><div class="qp-card-content"><p>You do not have permission to view this course.</p></div></div>';
-			$options            = get_option( 'qp_settings' );
-			$dashboard_page_id  = isset( $options['dashboard_page'] ) ? absint( $options['dashboard_page'] ) : 0;
-			$base_dashboard_url = $dashboard_page_id ? trailingslashit( get_permalink( $dashboard_page_id ) ) : trailingslashit( home_url() );
-			echo '<a href="' . esc_url( $base_dashboard_url . 'courses/' ) . '" class="qp-button qp-button-secondary qp-back-to-courses-btn">&laquo; Back to Courses</a>';
+			echo '<a href="' . esc_url( $base_dashboard_url ) . '" class="qp-button qp-button-secondary qp-back-to-courses-btn">&laquo; Back to Dashboard</a>';
 			return;
 		}
 
@@ -324,14 +368,25 @@ final class Dashboard {
 			}
 		}
 
+		// --- NEW: Determine the correct "Back" URL ---
+		$user_courses_table = $wpdb->prefix . 'qp_user_courses';
+		$is_enrolled = $wpdb->get_var( $wpdb->prepare(
+			"SELECT user_course_id FROM $user_courses_table WHERE user_id = %d AND course_id = %d",
+			$user_id, $course_id
+		) );
+		
+		if ( $is_enrolled ) {
+			$back_url = $base_dashboard_url . $tab_prefix . 'my-courses/';
+		} else {
+			$back_url = $base_dashboard_url . $tab_prefix . 'available-courses/';
+		}
+		// --- END NEW ---
+
+
 		// --- Render Structure HTML ---
 		echo '<div class="qp-course-structure-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">';
 		echo '<h2>' . esc_html( get_the_title( $course_id ) ) . '</h2>';
-		// Get base URL for back button
-		$options            = get_option( 'qp_settings' );
-		$dashboard_page_id  = isset( $options['dashboard_page'] ) ? absint( $options['dashboard_page'] ) : 0;
-		$base_dashboard_url = $dashboard_page_id ? trailingslashit( get_permalink( $dashboard_page_id ) ) : trailingslashit( home_url() );
-		echo '<a href="' . esc_url( $base_dashboard_url . 'courses/' ) . '" class="qp-button qp-button-secondary qp-back-to-courses-btn">&laquo; Back to Courses</a>';
+		echo '<a href="' . esc_url( $back_url ) . '" class="qp-button qp-button-secondary qp-back-to-courses-btn">&laquo; Back to Courses</a>';
 		echo '</div>'; // Close qp-course-structure-header
 
 		echo '<div class="qp-course-structure-content">';
@@ -649,22 +704,20 @@ final class Dashboard {
 	}
 
 	/**
-	 * Renders the content specifically for the Courses section by loading a template.
-	 * NOW PUBLIC STATIC and RETURNS HTML.
-	 * Includes Enrollment Status and Progress.
+	 * Renders the content specifically for the "Available Courses" section.
+	 * MODIFIED from old render_courses_content().
+	 * @return string Rendered HTML content.
 	 */
-	public static function render_courses_content() {
+	public static function render_available_courses_content() {
 		if ( ! is_user_logged_in() ) {
 			return '';
 		}
 
-		$user_id            = get_current_user_id();
+		$user_id = get_current_user_id();
 		global $wpdb;
 		$user_courses_table = $wpdb->prefix . 'qp_user_courses';
-		$items_table        = $wpdb->prefix . 'qp_course_items';
-		$progress_table     = $wpdb->prefix . 'qp_user_items_progress';
 
-		// Get enrolled course IDs
+		// Get enrolled course IDs to EXCLUDE them
 		$enrolled_course_ids = $wpdb->get_col(
 			$wpdb->prepare(
 				"SELECT course_id FROM $user_courses_table WHERE user_id = %d",
@@ -678,68 +731,22 @@ final class Dashboard {
 		// Get all published courses
 		$args = [
 			'post_type'      => 'qp_course',
-			'post_status'    => ['publish', 'expired'],
+			'post_status'    => ['publish', 'expired'], // <-- Include expired to show them as "Expired"
 			'posts_per_page' => -1,
 			'orderby'        => 'menu_order title',
 			'order'          => 'ASC',
+			'post__not_in'   => $enrolled_course_ids, // <-- Key change: EXCLUDE enrolled courses
 		];
-		$courses_query = new WP_Query( $args );
-
-		// Prepare progress data
-		$enrolled_courses_data = [];
-		$found_enrolled        = false;
-		$found_available       = false;
-
-		if ( ! empty( $enrolled_course_ids ) ) {
-			$ids_placeholder         = implode( ',', array_map( 'absint', $enrolled_course_ids ) );
-			$total_items_results     = $wpdb->get_results(
-				"SELECT course_id, COUNT(item_id) as total_items FROM $items_table WHERE course_id IN ($ids_placeholder) GROUP BY course_id",
-				OBJECT_K
-			);
-			$completed_items_results = $wpdb->get_results(
-				$wpdb->prepare(
-					"SELECT course_id, COUNT(user_item_id) as completed_items FROM $progress_table WHERE user_id = %d AND course_id IN ($ids_placeholder) AND status = 'completed' GROUP BY course_id",
-					$user_id
-				),
-				OBJECT_K
-			);
-
-			foreach ( $enrolled_course_ids as $course_id ) {
-				$total_items     = $total_items_results[ $course_id ]->total_items ?? 0;
-				$completed_items = $completed_items_results[ $course_id ]->completed_items ?? 0;
-				$progress_percent = ( $total_items > 0 ) ? round( ( $completed_items / $total_items ) * 100 ) : 0;
-				$enrolled_courses_data[ $course_id ] = [
-					'progress'    => $progress_percent,
-					'is_complete' => ( $total_items > 0 && $completed_items >= $total_items ),
-				];
-			}
-		}
-
-		// Determine if enrolled/available courses exist (for messages in template)
-		if ( $courses_query->have_posts() ) {
-			foreach ( $courses_query->posts as $course_post ) {
-				if ( in_array( $course_post->ID, $enrolled_course_ids ) ) {
-					$found_enrolled = true;
-				} else {
-					$found_available = true;
-				}
-				if ( $found_enrolled && $found_available ) {
-					break; // Optimization
-				}
-			}
-		}
+		$available_courses_query = new WP_Query( $args );
 
 		// Prepare arguments for the template
 		$template_args = [
-			'courses_query'         => $courses_query,
-			'enrolled_course_ids'   => $enrolled_course_ids,
-			'enrolled_courses_data' => $enrolled_courses_data,
-			'found_enrolled'        => $found_enrolled,
-			'found_available'       => $found_available,
-			'user_id'               => $user_id, // Pass user ID to template for access checks
+			'available_courses_query' => $available_courses_query,
+			'user_id'                 => $user_id,
+			// No progress data needed for available courses
 		];
 
-		// Load and return the template HTML
+		// Load and return the "courses" template (which is now our "available" template)
 		return Template_Loader::get_html( 'dashboard/courses', 'frontend', $template_args );
 	}
 
@@ -763,6 +770,82 @@ final class Dashboard {
 
 		// Load and return the template HTML
 		return Template_Loader::get_html( 'dashboard/profile', 'frontend', $args );
+	}
+
+	/**
+	 * Renders the content specifically for the "My Courses" section.
+	 * NEW FUNCTION.
+	 * @return string Rendered HTML content.
+	 */
+	public static function render_my_courses_content() {
+		if ( ! is_user_logged_in() ) {
+			return '';
+		}
+
+		$user_id = get_current_user_id();
+		global $wpdb;
+		$user_courses_table = $wpdb->prefix . 'qp_user_courses';
+		$items_table = $wpdb->prefix . 'qp_course_items';
+		$progress_table = $wpdb->prefix . 'qp_user_items_progress';
+
+		// Get *only* enrolled course IDs
+		$enrolled_course_ids = $wpdb->get_col(
+			$wpdb->prepare(
+				"SELECT course_id FROM $user_courses_table WHERE user_id = %d AND status IN ('enrolled', 'in_progress', 'completed')",
+				$user_id
+			)
+		);
+
+		if ( empty( $enrolled_course_ids ) ) {
+			// This should not happen if tab is hidden, but good fallback.
+			return '<div class="qp-card"><div class="qp-card-content"><p style="text-align: center;">' . esc_html__( 'You are not currently enrolled in any courses.', 'question-press' ) . '</p></div></div>';
+		}
+
+		// Query for the enrolled courses
+		$args = [
+			'post_type'      => 'qp_course',
+			'post_status'    => ['publish', 'expired'], // Show expired courses if enrolled
+			'posts_per_page' => -1,
+			'orderby'        => 'menu_order title',
+			'order'          => 'ASC',
+			'post__in'       => $enrolled_course_ids, // <-- Key change: only query these IDs
+		];
+		$enrolled_courses_query = new WP_Query( $args );
+
+		// Prepare progress data
+		$enrolled_courses_data = [];
+		$ids_placeholder = implode( ',', array_map( 'absint', $enrolled_course_ids ) );
+		$total_items_results = $wpdb->get_results(
+			"SELECT course_id, COUNT(item_id) as total_items FROM $items_table WHERE course_id IN ($ids_placeholder) GROUP BY course_id",
+			OBJECT_K
+		);
+		$completed_items_results = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT course_id, COUNT(user_item_id) as completed_items FROM $progress_table WHERE user_id = %d AND course_id IN ($ids_placeholder) AND status = 'completed' GROUP BY course_id",
+				$user_id
+			),
+			OBJECT_K
+		);
+
+		foreach ( $enrolled_course_ids as $course_id ) {
+			$total_items = $total_items_results[ $course_id ]->total_items ?? 0;
+			$completed_items = $completed_items_results[ $course_id ]->completed_items ?? 0;
+			$progress_percent = ( $total_items > 0 ) ? round( ( $completed_items / $total_items ) * 100 ) : 0;
+			$enrolled_courses_data[ $course_id ] = [
+				'progress'    => $progress_percent,
+				'is_complete' => ( $total_items > 0 && $completed_items >= $total_items ),
+			];
+		}
+
+		// Prepare arguments for the new template
+		$template_args = [
+			'enrolled_courses_query' => $enrolled_courses_query,
+			'enrolled_courses_data'  => $enrolled_courses_data,
+			'user_id'                => $user_id,
+		];
+
+		// Load and return the "my-courses" template
+		return Template_Loader::get_html( 'dashboard/my-courses', 'frontend', $template_args );
 	}
 
 	/**
