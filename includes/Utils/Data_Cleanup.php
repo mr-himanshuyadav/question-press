@@ -27,16 +27,16 @@ class Data_Cleanup
     public static function prevent_deletion_if_linked($post_id)
     {
         global $wpdb;
-        $post_type = get_post_type($post_id);
-
-        // Only check for the post types we care about
-        if ($post_type !== 'qp_plan' && $post_type !== 'product') {
-            return;
+        $post = get_post( $post_id );
+        if ( ! $post ) {
+            return; // Post doesn't exist, do nothing
         }
+        $post_id = $post->ID; // Ensure we have the ID
+        $post_type = $post->post_type;
+        $post_title = $post->post_title;
 
-        $linked_course_ids = [];
-        $post_title = get_the_title($post_id);
         $error_message = '';
+        $linked_course_ids = [];
 
         if ($post_type === 'qp_plan') {
             // Check if this plan is an auto-generated plan linked to a course
