@@ -598,19 +598,6 @@ wrapper.on('click', 'a.qp-button-primary[href*="session_id="]', function(e) {
         }
     });
 
-    // Click handler for the "Back to Courses" button (delegated from wrapper)
-    wrapper.on('click', '.qp-back-to-courses-btn', function(e) {
-        e.preventDefault(); // Prevent default button action
-        var baseDashboardUrl = qp_ajax_object.dashboard_page_url || '/'; // Get base URL
-         // Ensure base URL ends with a slash
-        if (baseDashboardUrl.slice(-1) !== '/') {
-            baseDashboardUrl += '/';
-        }
-        var coursesListUrl = baseDashboardUrl + 'courses/'; // URL for the main courses list
-        console.log("Navigating back to:", coursesListUrl); // Add console log
-        window.location.href = coursesListUrl; // Navigate back to the courses list
-    });
-
     // Click handler for "Review Results" button (delegated from wrapper)
     wrapper.on('click', '.view-test-results-btn', function(e) {
         e.preventDefault();

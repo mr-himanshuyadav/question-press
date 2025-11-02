@@ -83,18 +83,35 @@ final class Dashboard {
 		);
 		$enrolled_course_count = count($enrolled_course_ids);
 
-		$available_course_args = [
+		// --- REVISED: Get ACCURATE available course count ---
+		$available_course_count = 0;
+		// Get all PUBLISHED courses
+		$all_published_courses = new \WP_Query( [
 			'post_type'      => 'qp_course',
-			'post_status'    => 'publish', // Only count published available courses
-			'posts_per_page' => 1, // We only need to know if at least one exists
+			'post_status'    => 'publish', // Only check 'publish' status for purchasable
+			'posts_per_page' => -1,
 			'fields'         => 'ids',
-		];
-		if ( !empty($enrolled_course_ids) ) {
-			$available_course_args['post__not_in'] = $enrolled_course_ids;
+		] );
+
+		if ( $all_published_courses->have_posts() ) {
+			foreach ( $all_published_courses->posts as $course_id ) {
+				// Skip if already enrolled
+				if ( in_array( $course_id, $enrolled_course_ids ) ) {
+					continue;
+				}
+				
+				// Check if user has a *paid* entitlement (ignoring enrollment)
+				$access_result = User_Access::can_access_course( $user_id, $course_id, true );
+				
+				// If it's a free course (true) OR a paid course they DON'T have access to (false)
+				// then it is "available" to be shown.
+				if ( $access_result === true || $access_result === false ) {
+					$available_course_count++;
+				}
+				// If access_result is numeric, they've purchased it, so it's NOT "available".
+			}
 		}
-		$available_courses_query = new WP_Query( $available_course_args );
-		$available_course_count = $available_courses_query->post_count;
-		// --- END NEW COUNTS ---
+		// --- END REVISED COUNT ---
 
 
 		// --- Determine active tab ---
@@ -717,7 +734,7 @@ final class Dashboard {
 		global $wpdb;
 		$user_courses_table = $wpdb->prefix . 'qp_user_courses';
 
-		// Get enrolled course IDs to EXCLUDE them
+		// 1. Get enrolled course IDs (courses to EXCLUDE)
 		$enrolled_course_ids = $wpdb->get_col(
 			$wpdb->prepare(
 				"SELECT course_id FROM $user_courses_table WHERE user_id = %d",
@@ -728,18 +745,47 @@ final class Dashboard {
 			$enrolled_course_ids = []; // Ensure it's an array
 		}
 
-		// Get all published courses
+		// --- NEW: Find courses the user has purchased but not enrolled in (also to EXCLUDE) ---
+		$purchased_course_ids = [];
+		$all_published_courses = new \WP_Query( [
+			'post_type'      => 'qp_course',
+			'post_status'    => 'publish', // Only check 'publish' status for purchasable
+			'posts_per_page' => -1,
+			'fields'         => 'ids',
+			'post__not_in'   => $enrolled_course_ids, // Only check non-enrolled courses
+		] );
+
+		if ( $all_published_courses->have_posts() ) {
+			foreach ( $all_published_courses->posts as $course_id ) {
+				$access_result = User_Access::can_access_course( $user_id, $course_id, true );
+				// If access is granted by an entitlement (numeric ID), it's a "purchased" course
+				if ( is_numeric( $access_result ) ) {
+					$purchased_course_ids[] = $course_id;
+				}
+			}
+		}
+		// --- END NEW ---
+
+		// 3. Combine all IDs to exclude
+		$all_excluded_ids = array_unique( array_merge( $enrolled_course_ids, $purchased_course_ids ) );
+
+		// 4. Get all published/expired courses, EXCLUDING the ones found above
 		$args = [
 			'post_type'      => 'qp_course',
-			'post_status'    => ['publish', 'expired'], // <-- Include expired to show them as "Expired"
+			'post_status'    => ['publish', 'expired'], // Include expired to show them as "Expired"
 			'posts_per_page' => -1,
 			'orderby'        => 'menu_order title',
 			'order'          => 'ASC',
-			'post__not_in'   => $enrolled_course_ids, // <-- Key change: EXCLUDE enrolled courses
 		];
-		$available_courses_query = new WP_Query( $args );
 
-		// Prepare arguments for the template
+		if ( ! empty( $all_excluded_ids ) ) {
+			$args['post__not_in'] = $all_excluded_ids; // <-- Key change: EXCLUDE enrolled AND purchased courses
+		}
+		
+		$available_courses_query = new \WP_Query( $args );
+		// --- END MODIFIED QUERY ---
+
+		// 5. Prepare arguments for the template
 		$template_args = [
 			'available_courses_query' => $available_courses_query,
 			'user_id'                 => $user_id,
@@ -796,52 +842,79 @@ final class Dashboard {
 			)
 		);
 
-		if ( empty( $enrolled_course_ids ) ) {
-			// This should not happen if tab is hidden, but good fallback.
-			return '<div class="qp-card"><div class="qp-card-content"><p style="text-align: center;">' . esc_html__( 'You are not currently enrolled in any courses.', 'question-press' ) . '</p></div></div>';
-		}
-
-		// Query for the enrolled courses
-		$args = [
-			'post_type'      => 'qp_course',
-			'post_status'    => ['publish', 'expired'], // Show expired courses if enrolled
-			'posts_per_page' => -1,
-			'orderby'        => 'menu_order title',
-			'order'          => 'ASC',
-			'post__in'       => $enrolled_course_ids, // <-- Key change: only query these IDs
-		];
-		$enrolled_courses_query = new WP_Query( $args );
-
-		// Prepare progress data
+		// --- 1. Query for Enrolled Courses ---
+		$enrolled_courses_query = new \WP_Query(); // Empty query by default
 		$enrolled_courses_data = [];
-		$ids_placeholder = implode( ',', array_map( 'absint', $enrolled_course_ids ) );
-		$total_items_results = $wpdb->get_results(
-			"SELECT course_id, COUNT(item_id) as total_items FROM $items_table WHERE course_id IN ($ids_placeholder) GROUP BY course_id",
-			OBJECT_K
-		);
-		$completed_items_results = $wpdb->get_results(
-			$wpdb->prepare(
-				"SELECT course_id, COUNT(user_item_id) as completed_items FROM $progress_table WHERE user_id = %d AND course_id IN ($ids_placeholder) AND status = 'completed' GROUP BY course_id",
-				$user_id
-			),
-			OBJECT_K
-		);
 
-		foreach ( $enrolled_course_ids as $course_id ) {
-			$total_items = $total_items_results[ $course_id ]->total_items ?? 0;
-			$completed_items = $completed_items_results[ $course_id ]->completed_items ?? 0;
-			$progress_percent = ( $total_items > 0 ) ? round( ( $completed_items / $total_items ) * 100 ) : 0;
-			$enrolled_courses_data[ $course_id ] = [
-				'progress'    => $progress_percent,
-				'is_complete' => ( $total_items > 0 && $completed_items >= $total_items ),
+		if ( ! empty( $enrolled_course_ids ) ) {
+			// Query for the enrolled courses
+			$args = [
+				'post_type'      => 'qp_course',
+				'post_status'    => ['publish', 'expired'], // Show expired courses if enrolled
+				'posts_per_page' => -1,
+				'orderby'        => 'menu_order title',
+				'order'          => 'ASC',
+				'post__in'       => $enrolled_course_ids, // <-- Key change: only query these IDs
 			];
+			$enrolled_courses_query = new \WP_Query( $args );
+
+			// Prepare progress data
+			$ids_placeholder = implode( ',', array_map( 'absint', $enrolled_course_ids ) );
+			$total_items_results = $wpdb->get_results(
+				"SELECT course_id, COUNT(item_id) as total_items FROM $items_table WHERE course_id IN ($ids_placeholder) GROUP BY course_id",
+				OBJECT_K
+			);
+			$completed_items_results = $wpdb->get_results(
+				$wpdb->prepare(
+					"SELECT course_id, COUNT(user_item_id) as completed_items FROM $progress_table WHERE user_id = %d AND course_id IN ($ids_placeholder) AND status = 'completed' GROUP BY course_id",
+					$user_id
+				),
+				OBJECT_K
+			);
+
+			foreach ( $enrolled_course_ids as $course_id ) {
+				$total_items = $total_items_results[ $course_id ]->total_items ?? 0;
+				$completed_items = $completed_items_results[ $course_id ]->completed_items ?? 0;
+				$progress_percent = ( $total_items > 0 ) ? round( ( $completed_items / $total_items ) * 100 ) : 0;
+				$enrolled_courses_data[ $course_id ] = [
+					'progress'    => $progress_percent,
+					'is_complete' => ( $total_items > 0 && $completed_items >= $total_items ),
+				];
+			}
 		}
 
-		// Prepare arguments for the new template
+		// --- 2. Query for Purchased but Not Enrolled Courses ---
+		$purchased_not_enrolled_posts = [];
+		
+		// Get all published courses
+		$all_published_courses = new \WP_Query( [
+			'post_type'      => 'qp_course',
+			'post_status'    => 'publish',
+			'posts_per_page' => -1,
+			'fields'         => 'ids', // Only get IDs
+		] );
+
+		if ( $all_published_courses->have_posts() ) {
+			foreach ( $all_published_courses->posts as $course_id ) {
+				// If NOT enrolled
+				if ( ! in_array( $course_id, $enrolled_course_ids ) ) {
+					// Check if user has a *paid* entitlement
+					$access_result = User_Access::can_access_course( $user_id, $course_id, true );
+					
+					// is_numeric() checks if access was granted by a specific entitlement ID
+					if ( is_numeric( $access_result ) ) {
+						$purchased_not_enrolled_posts[] = get_post( $course_id );
+					}
+				}
+			}
+		}
+
+		// --- 3. Prepare arguments for the template ---
 		$template_args = [
-			'enrolled_courses_query' => $enrolled_courses_query,
-			'enrolled_courses_data'  => $enrolled_courses_data,
-			'user_id'                => $user_id,
+			'enrolled_courses_query'       => $enrolled_courses_query,
+			'enrolled_courses_data'        => $enrolled_courses_data,
+			'purchased_not_enrolled_posts' => $purchased_not_enrolled_posts,
+			'user_id'                      => $user_id,
 		];
 
 		// Load and return the "my-courses" template
