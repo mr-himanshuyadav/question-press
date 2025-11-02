@@ -1450,6 +1450,15 @@ class Practice_Ajax {
             wp_send_json_error(['message' => 'Invalid course ID.']);
         }
 
+        if ( ! $course_id || get_post_type( $course_id ) !== 'qp_course' ) {
+            wp_send_json_error(['message' => 'Invalid course ID.']);
+        }
+        
+        // Check if the course is published
+        if ( get_post_status( $course_id ) !== 'publish' ) {
+            wp_send_json_error(['message' => 'This course is no longer available for enrollment.']);
+        }
+
         // --- NEW: Check if course requires purchase AND if user has access ---
         $access_mode = get_post_meta($course_id, '_qp_course_access_mode', true) ?: 'free';
 

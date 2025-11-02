@@ -204,6 +204,10 @@ class Assets {
     if (($pagenow == 'post-new.php' && isset($_GET['post_type']) && $_GET['post_type'] == 'qp_course') ||
         ($pagenow == 'post.php' && isset($_GET['post']) && get_post_type($_GET['post']) == 'qp_course')) {
 
+        wp_enqueue_script('jquery-ui-datepicker');
+        wp_enqueue_style('wp-admin-styles'); // General admin styles
+        wp_enqueue_style('jquery-ui-style', 'https://ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/themes/smoothness/jquery-ui.css', true);
+
         // Enqueue jQuery UI Sortable
         wp_enqueue_script('jquery-ui-sortable');
 

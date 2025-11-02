@@ -1,4 +1,11 @@
 jQuery(document).ready(function ($) {
+    // Initialize the datepicker on our new field
+    if ($('.qp-datepicker').length > 0) {
+        $('.qp-datepicker').datepicker({
+            dateFormat: 'yy-mm-dd' // WordPress standard
+        });
+    }
+    
     const sectionsList = $('#qp-sections-list');
     const structureContainer = $('#qp-course-structure-container');
 

@@ -3,7 +3,7 @@
 namespace QuestionPress\Core;
 
 // Exit if accessed directly.
-if ( ! defined( 'ABSPATH' ) ) {
+if (! defined('ABSPATH')) {
     exit;
 }
 
@@ -12,12 +12,14 @@ if ( ! defined( 'ABSPATH' ) ) {
  *
  * @package QuestionPress\Core
  */
-class Cron {
+class Cron
+{
 
     /**
      * Constructor.
      */
-    public function __construct() {
+    public function __construct()
+    {
         // Constructor can be used for setup if needed
     }
 
@@ -27,10 +29,16 @@ class Cron {
      *
      * @return void
      */
-    public function ensure_cron_scheduled() {
-        if ( ! wp_next_scheduled( 'qp_check_entitlement_expiration_hook' ) ) {
-            wp_schedule_event( time(), 'daily', 'qp_check_entitlement_expiration_hook' );
-            error_log( "QP Cron: Re-scheduled entitlement expiration check on init." );
+    public function ensure_cron_scheduled()
+    {
+        if (! wp_next_scheduled('qp_check_entitlement_expiration_hook')) {
+            wp_schedule_event(time(), 'daily', 'qp_check_entitlement_expiration_hook');
+            error_log("QP Cron: Re-scheduled entitlement expiration check on init.");
+        }
+
+        if (! wp_next_scheduled('qp_check_course_expiration_hook')) {
+            wp_schedule_event(time(), 'daily', 'qp_check_course_expiration_hook');
+            error_log("QP Cron: Scheduled course expiration check.");
         }
     }
 
@@ -39,24 +47,25 @@ class Cron {
      *
      * @return void
      */
-    public function run_entitlement_expiration_check() {
-        error_log( "QP Cron: Running entitlement expiration check..." );
+    public function run_entitlement_expiration_check()
+    {
+        error_log("QP Cron: Running entitlement expiration check...");
         global $wpdb;
         $entitlements_table = $wpdb->prefix . 'qp_user_entitlements';
-        $current_time       = current_time( 'mysql' );
+        $current_time       = current_time('mysql');
 
         // Find entitlement records that are 'active' but whose expiry date is in the past
-        $expired_ids = $wpdb->get_col( $wpdb->prepare(
+        $expired_ids = $wpdb->get_col($wpdb->prepare(
             "SELECT entitlement_id
              FROM {$entitlements_table}
              WHERE status = 'active'
              AND expiry_date IS NOT NULL
              AND expiry_date <= %s",
             $current_time
-        ) );
+        ));
 
-        if ( ! empty( $expired_ids ) ) {
-            $ids_placeholder = implode( ',', array_map( 'absint', $expired_ids ) );
+        if (! empty($expired_ids)) {
+            $ids_placeholder = implode(',', array_map('absint', $expired_ids));
 
             // Update the status of these records to 'expired'
             $updated_count = $wpdb->query(
@@ -65,13 +74,13 @@ class Cron {
                  WHERE entitlement_id IN ($ids_placeholder)"
             );
 
-            if ( $updated_count !== false ) {
-                error_log( "QP Cron: Marked {$updated_count} entitlements as expired." );
+            if ($updated_count !== false) {
+                error_log("QP Cron: Marked {$updated_count} entitlements as expired.");
             } else {
-                error_log( "QP Cron: Error updating expired entitlements. DB Error: " . $wpdb->last_error );
+                error_log("QP Cron: Error updating expired entitlements. DB Error: " . $wpdb->last_error);
             }
         } else {
-            error_log( "QP Cron: No expired entitlements found to update." );
+            error_log("QP Cron: No expired entitlements found to update.");
         }
     }
 
@@ -80,9 +89,10 @@ class Cron {
      *
      * @return void
      */
-    public function schedule_session_cleanup() {
-        if ( ! wp_next_scheduled( 'qp_cleanup_abandoned_sessions_event' ) ) {
-            wp_schedule_event( time(), 'hourly', 'qp_cleanup_abandoned_sessions_event' );
+    public function schedule_session_cleanup()
+    {
+        if (! wp_next_scheduled('qp_cleanup_abandoned_sessions_event')) {
+            wp_schedule_event(time(), 'hourly', 'qp_cleanup_abandoned_sessions_event');
         }
     }
 
@@ -91,12 +101,13 @@ class Cron {
      *
      * @return void
      */
-    public function cleanup_abandoned_sessions() {
+    public function cleanup_abandoned_sessions()
+    {
         global $wpdb;
-        $options         = get_option( 'qp_settings' );
-        $timeout_minutes = isset( $options['session_timeout'] ) ? absint( $options['session_timeout'] ) : 20;
+        $options         = get_option('qp_settings');
+        $timeout_minutes = isset($options['session_timeout']) ? absint($options['session_timeout']) : 20;
 
-        if ( $timeout_minutes < 5 ) {
+        if ($timeout_minutes < 5) {
             $timeout_minutes = 20;
         }
 
@@ -107,50 +118,123 @@ class Cron {
             "SELECT session_id, start_time, settings_snapshot FROM {$sessions_table} WHERE status = 'mock_test'"
         );
 
-        foreach ( $active_mock_tests as $test ) {
-            $settings         = json_decode( $test->settings_snapshot, true );
+        foreach ($active_mock_tests as $test) {
+            $settings         = json_decode($test->settings_snapshot, true);
             $duration_seconds = $settings['timer_seconds'] ?? 0;
 
-            if ( $duration_seconds <= 0 ) {
+            if ($duration_seconds <= 0) {
                 continue;
             }
 
-            $start_time_gmt  = get_gmt_from_date( $test->start_time );
-            $start_timestamp = strtotime( $start_time_gmt );
+            $start_time_gmt  = get_gmt_from_date($test->start_time);
+            $start_timestamp = strtotime($start_time_gmt);
             $end_timestamp   = $start_timestamp + $duration_seconds;
 
             // If the current time is past the test's official end time, finalize it as abandoned.
-            if ( time() > $end_timestamp ) {
+            if (time() > $end_timestamp) {
                 // Our updated function will delete it if empty, or mark as abandoned if there are attempts.
-                \QuestionPress\Utils\Session_Manager::finalize_and_end_session( $test->session_id, 'abandoned', 'abandoned_by_system' );
+                \QuestionPress\Utils\Session_Manager::finalize_and_end_session($test->session_id, 'abandoned', 'abandoned_by_system');
             }
         }
 
         // --- 2. Handle Abandoned 'active' sessions ---
-        $abandoned_sessions = $wpdb->get_results( $wpdb->prepare(
+        $abandoned_sessions = $wpdb->get_results($wpdb->prepare(
             "SELECT session_id, settings_snapshot FROM {$sessions_table}
              WHERE status = 'active' AND last_activity < NOW() - INTERVAL %d MINUTE",
             $timeout_minutes
-        ) );
+        ));
 
-        if ( ! empty( $abandoned_sessions ) ) {
-            foreach ( $abandoned_sessions as $session ) {
-                $settings            = json_decode( $session->settings_snapshot, true );
-                $is_section_practice = isset( $settings['practice_mode'] ) && $settings['practice_mode'] === 'Section Wise Practice';
+        if (! empty($abandoned_sessions)) {
+            foreach ($abandoned_sessions as $session) {
+                $settings            = json_decode($session->settings_snapshot, true);
+                $is_section_practice = isset($settings['practice_mode']) && $settings['practice_mode'] === 'Section Wise Practice';
 
-                if ( $is_section_practice ) {
+                if ($is_section_practice) {
                     // For section practice, just pause the session instead of abandoning it.
                     $wpdb->update(
                         $sessions_table,
-                        [ 'status' => 'paused' ],
-                        [ 'session_id' => $session->session_id ]
+                        ['status' => 'paused'],
+                        ['session_id' => $session->session_id]
                     );
                 } else {
                     // For all other modes, use the standard abandon/delete logic.
-                    \QuestionPress\Utils\Session_Manager::finalize_and_end_session( $session->session_id, 'abandoned', 'abandoned_by_system' );
+                    \QuestionPress\Utils\Session_Manager::finalize_and_end_session($session->session_id, 'abandoned', 'abandoned_by_system');
                 }
             }
         }
     }
 
+    /**
+     * The callback function executed by WP-Cron to check for and expire courses.
+     *
+     * @return void
+     */
+    public function run_course_expiration_check()
+    {
+        error_log("QP Cron: Running course expiration check...");
+        global $wpdb;
+        $current_time = current_time('mysql', true); // Get GMT time for comparison
+        $entitlements_table = $wpdb->prefix . 'qp_user_entitlements';
+        $expired_course_count = 0;
+
+        // 1. Find all 'published' courses that have an expiry date in the past
+        $args = [
+            'post_type' => 'qp_course',
+            'post_status' => 'publish',
+            'posts_per_page' => -1,
+            'meta_query' => [
+                [
+                    'key' => '_qp_course_expiry_date',
+                    'value' => $current_time,
+                    'compare' => '<=',
+                    'type' => 'DATETIME'
+                ]
+            ]
+        ];
+        $expired_courses = new \WP_Query($args);
+
+        if (! $expired_courses->have_posts()) {
+            error_log("QP Cron: No published courses found past their expiry date.");
+            return;
+        }
+
+        // 2. Loop through each expired course and take action
+        while ($expired_courses->have_posts()) {
+            $expired_courses->the_post();
+            $course_id = get_the_ID();
+
+            // 2a. Set the Course status to 'draft'
+            wp_update_post([
+                'ID' => $course_id,
+                'post_status' => 'draft'
+            ]);
+            update_post_meta($course_id, '_qp_status_reason', 'expired');
+
+            // 2b. Set the auto-linked Product to 'draft'
+            $auto_product_id = get_post_meta($course_id, '_qp_linked_product_id', true);
+            if (! empty($auto_product_id) && get_post_meta($auto_product_id, '_qp_is_auto_generated', true) === 'true') {
+                wp_update_post([
+                    'ID' => $auto_product_id,
+                    'post_status' => 'draft'
+                ]);
+            }
+
+            // 2c. Expire all 'active' entitlements for this course's auto-plan
+            $auto_plan_id = get_post_meta($course_id, '_qp_course_auto_plan_id', true);
+            if (! empty($auto_plan_id)) {
+                $wpdb->update(
+                    $entitlements_table,
+                    ['status' => 'expired'], // Data to set
+                    [
+                        'plan_id' => $auto_plan_id,
+                        'status' => 'active'
+                    ] // WHERE clauses
+                );
+            }
+            $expired_course_count++;
+        }
+        wp_reset_postdata();
+
+        error_log("QP Cron: Successfully expired {$expired_course_count} courses and their associated products/entitlements.");
+    }
 }

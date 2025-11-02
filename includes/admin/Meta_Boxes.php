@@ -292,6 +292,7 @@ class Meta_Boxes {
 		$duration_unit = get_post_meta($post->ID, '_qp_course_access_duration_unit', true) ?: 'day';
 		$linked_product_id = get_post_meta($post->ID, '_qp_linked_product_id', true);
 		$auto_plan_id = get_post_meta($post->ID, '_qp_course_auto_plan_id', true);
+		$expiry_date = get_post_meta( $post->ID, '_qp_course_expiry_date', true );
 
 		$product_regular_price = '';
 		$product_sale_price = '';
@@ -344,6 +345,12 @@ class Meta_Boxes {
 				<option value="free" <?php selected($access_mode, 'free'); ?>><?php esc_html_e('Free (Public Enrollment)', 'question-press'); ?></option>
 				<option value="requires_purchase" <?php selected($access_mode, 'requires_purchase'); ?>><?php esc_html_e('Requires Purchase', 'question-press'); ?></option>
 			</select>
+		</p>
+
+		<p class="qp-expiry-date-field" style="border-top: 1px solid #eee; padding-top: 15px; margin-top: 15px;">
+			<label for="qp_course_expiry_date"><?php esc_html_e('Expiry Date (Optional):', 'question-press'); ?></label>
+			<input type="text" name="_qp_course_expiry_date" id="qp_course_expiry_date" class="qp-datepicker" value="<?php echo esc_attr( $expiry_date ); ?>" placeholder="YYYY-MM-DD" autocomplete="off">
+			<small class="description"><?php esc_html_e('After this date, the course and its product will be unpublished, and all active entitlements will expire.', 'question-press'); ?></small>
 		</p>
 
 		<div id="qp-purchase-fields" style="display: <?php echo ($access_mode === 'requires_purchase') ? 'block' : 'none'; ?>;">
@@ -464,6 +471,18 @@ class Meta_Boxes {
 		// Save Access Mode (copied from original function)
 		$access_mode = isset($_POST['_qp_course_access_mode']) ? sanitize_key($_POST['_qp_course_access_mode']) : 'free';
 		update_post_meta($post_id, '_qp_course_access_mode', $access_mode);
+
+		// Save Expiry Date
+		if ( isset( $_POST['_qp_course_expiry_date'] ) ) {
+			// Validate that it's a real date or an empty string
+			$expiry_date_input = sanitize_text_field( $_POST['_qp_course_expiry_date'] );
+			if ( ! empty( $expiry_date_input ) && \DateTime::createFromFormat('Y-m-d', $expiry_date_input) !== false ) {
+				update_post_meta( $post_id, '_qp_course_expiry_date', $expiry_date_input );
+			} else {
+				// If it's empty or invalid, delete the meta
+				delete_post_meta( $post_id, '_qp_course_expiry_date' );
+			}
+		}
 
 		// Save fields only if requires_purchase (copied from original function)
 		if ($access_mode === 'requires_purchase') {
