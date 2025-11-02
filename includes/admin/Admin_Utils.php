@@ -138,4 +138,46 @@ class Admin_Utils {
         }
     }
 
+	/**
+     * Displays a persistent admin notice if WooCommerce is not active.
+     * Hooked to 'admin_notices' from Plugin.php.
+     */
+    public static function show_woocommerce_required_notice() {
+        // Don't show this notice on the plugins page
+        global $pagenow;
+        if ( $pagenow === 'plugins.php' ) {
+            return;
+        }
+        
+        // Check if WooCommerce is installed but not active
+        $plugin_slug = 'woocommerce/woocommerce.php';
+        $all_plugins = get_plugins();
+        $is_installed = array_key_exists( $plugin_slug, $all_plugins );
+        
+        $message = '<strong>Question Press Monetization requires WooCommerce.</strong>';
+        $button_html = '';
+
+        if ( current_user_can( 'activate_plugins' ) ) {
+            if ( $is_installed ) {
+                // Is installed but not active
+                $activate_url = wp_nonce_url( self_admin_url( 'plugins.php?action=activate&plugin=' . $plugin_slug ), 'activate-plugin_' . $plugin_slug );
+                $message .= ' Please activate WooCommerce to enable course purchases.';
+                $button_html = '<a href="' . esc_url( $activate_url ) . '" class="button button-primary" style="margin-left: 10px;">Activate WooCommerce</a>';
+            } else {
+                // Is not installed
+                $install_url = wp_nonce_url( self_admin_url( 'update.php?action=install-plugin&plugin=woocommerce' ), 'install-plugin_woocommerce' );
+                $message .= ' Please install WooCommerce to enable course purchases.';
+                $button_html = '<a href="' . esc_url( $install_url ) . '" class="button button-primary" style="margin-left: 10px;">Install WooCommerce</a>';
+            }
+        } else {
+            // User cannot install/activate plugins
+            $message .= ' Please contact your site administrator to install or activate WooCommerce.';
+        }
+
+        echo '<div class="notice notice-error" style="display: flex; align-items: center; justify-content: space-between; padding: 10px 15px;">
+                <p style="margin: 0;">' . $message . '</p>
+                <p style="margin: 0;">' . $button_html . '</p>
+              </div>';
+    }
+
 } // End class Admin_Utils

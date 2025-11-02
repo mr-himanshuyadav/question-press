@@ -315,6 +315,9 @@ final class Plugin {
         // If WooCommerce is active, load our integration
         if ( class_exists( 'WooCommerce' ) ) {
             new WooCommerce_Integration();
+        } else {
+            // If WooCommerce is NOT active, add an admin notice.
+            add_action( 'admin_notices', [ Admin_Utils::class, 'show_woocommerce_required_notice' ] );
         }
     }
 
