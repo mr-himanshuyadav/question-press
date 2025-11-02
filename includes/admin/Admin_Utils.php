@@ -116,5 +116,26 @@ class Admin_Utils {
 		}
 		return $post_states;
 	}
+	
+
+	/**
+     * Displays session-based admin notices globally.
+     * Hooked to 'admin_notices'.
+     */
+    public static function display_admin_notices() {
+        // Check if a session is active and the message exists
+        if ( session_status() === PHP_SESSION_ACTIVE && isset( $_SESSION['qp_admin_message'] ) ) {
+            
+            // We must use wp_kses_post here to allow the <strong> tags from our error message
+            $message = wp_kses_post( $_SESSION['qp_admin_message'] ); 
+            $type = esc_attr( $_SESSION['qp_admin_message_type'] ?? 'info' ); // Default to 'info'
+
+            echo "<div class='notice notice-{$type} is-dismissible'><p>{$message}</p></div>";
+            
+            // Clear the session variable so it doesn't show again
+            unset( $_SESSION['qp_admin_message'] );
+            unset( $_SESSION['qp_admin_message_type'] );
+        }
+    }
 
 } // End class Admin_Utils

@@ -209,9 +209,8 @@ final class Plugin {
         add_action('admin_head', [Assets::instance(), 'enqueue_dynamic_admin_styles']);
         add_action('wp', [$this->cron, 'schedule_session_cleanup']);
         add_action('qp_cleanup_abandoned_sessions_event', [$this->cron, 'cleanup_abandoned_sessions']);
+        add_action('before_delete_post', [Data_Cleanup::class, 'prevent_deletion_if_linked'], 5, 1);
         add_action('before_delete_post', [Data_Cleanup::class, 'cleanup_course_data_on_delete'], 10, 1);
-        add_action('before_delete_post', [Data_Cleanup::class, 'prevent_auto_plan_deletion'], 10, 1);
-        add_action('before_delete_post', [Data_Cleanup::class, 'prevent_auto_product_deletion'], 10, 1);
         add_action('wp_trash_post', [Data_Cleanup::class, 'sync_plan_on_course_trash'], 10, 1);
         add_action('untrash_post', [Data_Cleanup::class, 'sync_plan_on_course_untrash'], 10, 1);
         add_filter('wp_count_posts', [Post_Types::class, 'filter_plan_view_counts'], 10, 2);
