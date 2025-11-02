@@ -258,6 +258,7 @@ final class Plugin {
         add_action('wp_ajax_get_sources_for_list_table_filter', [Admin_Ajax::class, 'get_sources_for_list_table_filter']);
         add_action('wp_ajax_qp_get_quick_edit_form', [Admin_Ajax::class, 'get_quick_edit_form']);
         add_action('wp_ajax_save_quick_edit_data', [Admin_Ajax::class, 'save_quick_edit_data']);
+        add_action('wp_ajax_qp_update_product_price', [Admin_Ajax::class, 'update_product_price_from_course_meta']);
         add_action('wp_ajax_qp_create_backup', [Admin_Ajax::class, 'create_backup']);
         add_action('wp_ajax_qp_delete_backup', [Admin_Ajax::class, 'delete_backup']);
         add_action('wp_ajax_qp_restore_backup', [Admin_Ajax::class, 'restore_backup']);

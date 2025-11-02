@@ -293,6 +293,16 @@ class Meta_Boxes {
 		$linked_product_id = get_post_meta($post->ID, '_qp_linked_product_id', true);
 		$auto_plan_id = get_post_meta($post->ID, '_qp_course_auto_plan_id', true);
 
+		$product_regular_price = '';
+		$product_sale_price = '';
+		if ( $linked_product_id && class_exists('WooCommerce') ) {
+			$product = wc_get_product($linked_product_id);
+			if ($product) {
+				$product_regular_price = $product->get_regular_price();
+				$product_sale_price = $product->get_sale_price();
+			}
+		}
+
 		// --- NEW: Check if the linked product is auto-generated ---
 		$is_auto_product_linked = false;
 		if ( ! empty( $linked_product_id ) && get_post_meta( $linked_product_id, '_qp_is_auto_generated', true ) === 'true' ) {
@@ -358,15 +368,37 @@ class Meta_Boxes {
                 $product_post = get_post($linked_product_id);
             ?>
                 <div id="qp-auto-product-info" style="padding: 10px; background: #fdfdfd; border: 1px solid #ddd; border-radius: 4px;">
-                    <strong><?php esc_html_e( 'Auto-Product Linked', 'question-press' ); ?></strong><br>
+
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
+                        <div>
+                            <strong style="font-size: 1.1em;"><?php esc_html_e( 'Product (Auto-Linked)', 'question-press' ); ?></strong><br>
+                            <?php if ($product_post) : ?>
+                                <span><?php echo esc_html($product_post->post_title); ?> (ID: <?php echo esc_html($linked_product_id); ?>)</span>
+                            <?php endif; ?>
+                        </div>
+                        <a href="<?php echo esc_url( get_edit_post_link( $linked_product_id ) ); ?>" class="button button-secondary button-small" target="_blank"><?php esc_html_e('Edit Product', 'question-press'); ?></a>
+                    </div>
+
                     <?php if ($product_post) : ?>
-                        <?php 
-                        // Show Product Title, ID, and Edit Link
-                        echo esc_html($product_post->post_title); 
-                        echo ' (ID: ' . esc_html($linked_product_id) . ')';
-                        ?>
-                        <br>
-                        <a href="<?php echo esc_url( get_edit_post_link( $linked_product_id ) ); ?>" class="button button-secondary button-small" target="_blank" style="margin-top: 5px;"><?php esc_html_e('Edit Product (to set price)', 'question-press'); ?></a>
+                        <div class="qp-price-fields-group" style="display: flex; gap: 10px; margin-bottom: 10px;">
+                            <div style="flex: 1;">
+                                <label for="_qp_product_regular_price" style="display: block; font-weight: 600; font-size: 0.9em; margin-bottom: 3px;"><?php esc_html_e( 'Regular Price', 'question-press' ); ?></label>
+                                <input type="text" id="_qp_product_regular_price" name="_qp_product_regular_price" value="<?php echo esc_attr( $product_regular_price ); ?>" class="wc_input_price" placeholder="e.g., 20.00" style="width: 100%;">
+                            </div>
+                            <div style="flex: 1;">
+                                <label for="_qp_product_sale_price" style="display: block; font-weight: 600; font-size: 0.9em; margin-bottom: 3px;"><?php esc_html_e( 'Sale Price', 'question-press' ); ?></label>
+                                <input type="text" id="_qp_product_sale_price" name="_qp_product_sale_price" value="<?php echo esc_attr( $product_sale_price ); ?>" class="wc_input_price" placeholder="Optional" style="width: 100%;">
+                            </div>
+                        </div>
+                        <div>
+                            <button type="button" class="button button-primary" id="qp-save-product-price-btn" 
+                                    data-product-id="<?php echo esc_attr($linked_product_id); ?>"
+                                    data-nonce="<?php echo esc_attr(wp_create_nonce('qp_save_product_price_nonce')); ?>">
+                                <?php esc_html_e( 'Save Price', 'question-press' ); ?>
+                            </button>
+                            <span id="qp-price-save-success" style="color: #2e7d32; font-weight: 600; margin-left: 10px;"></span>
+                        </div>
+
                     <?php else : ?>
                         <span style="color: red;"><?php esc_html_e( 'Linked product (ID: ', 'question-press' ); echo esc_html($linked_product_id); esc_html_e( ') not found.', 'question-press' ); ?></span>
                     <?php endif; ?>
@@ -389,7 +421,7 @@ class Meta_Boxes {
 			<?php // Auto-plan info logic - REFINED ?>
 			<?php if ($auto_plan_id && get_post($auto_plan_id)) : ?>
 				<div id="qp-auto-plan-info" style="padding: 10px; background: #fdfdfd; border: 1px solid #ddd; border-radius: 4px; margin-top: 10px;">
-					<strong><?php esc_html_e( 'Auto-Plan Linked', 'question-press' ); ?></strong><br>
+					<strong><?php esc_html_e( 'Plan (Auto-Linked)', 'question-press' ); ?></strong><br>
 					<?php echo esc_html(get_the_title($auto_plan_id)); ?> (ID: <?php echo esc_html($auto_plan_id); ?>)
 					<br>
 					<a href="<?php echo esc_url(get_edit_post_link($auto_plan_id)); ?>" class="button button-secondary button-small" target="_blank" style="margin-top: 5px;"><?php esc_html_e( 'View Plan', 'question-press' ); ?></a>
