@@ -866,7 +866,7 @@ class Meta_Boxes {
                 if ( $is_auto_product ) {
                     $product = wc_get_product( $existing_product_id );
                     if ( $product ) {
-                        $product->set_name( 'Access for "' . $course_title . '"' );
+						$product->set_name( $course_title );
                         $product->set_status( 'publish' );
                         $product->update_meta_data( '_qp_linked_plan_id', $plan_id_to_save ); // Re-sync plan ID
                         $product_id_to_save = $product->save();
@@ -879,7 +879,7 @@ class Meta_Boxes {
                 // If no auto-product was found or it was invalid, create a new one
                 if ( ! $is_auto_product ) {
                     $product = new \WC_Product_Simple();
-                    $product->set_name( 'Access for "' . $course_title . '"' );
+					$product->set_name( $course_title );
                     $product->set_status( 'publish' );
                     $product->set_virtual( true );
                     $product->set_downloadable( false );

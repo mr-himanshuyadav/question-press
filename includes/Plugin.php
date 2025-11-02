@@ -200,6 +200,14 @@ final class Plugin {
             // Course Structure Meta Box (NEW)
             add_action('add_meta_boxes', [Meta_Boxes::class, 'add_course_structure']);
             add_action('save_post_qp_course', [Meta_Boxes::class, 'save_course_structure']);
+
+            // Course CPT Columns
+            add_filter('manage_qp_course_posts_columns', [Post_Types::class, 'set_course_columns']);
+            add_action('manage_qp_course_posts_custom_column', [Post_Types::class, 'render_course_columns'], 10, 2);
+            
+            // Plan CPT Columns
+            add_filter('manage_qp_plan_posts_columns', [Post_Types::class, 'set_plan_columns']);
+            add_action('manage_qp_plan_posts_custom_column', [Post_Types::class, 'render_plan_columns'], 10, 2);
         }
         add_action('save_post_qp_course', [Meta_Boxes::class, 'sync_course_plan'], 40, 1);
         add_action('save_post_qp_course', [Data_Cleanup::class, 'recalculate_course_progress_on_save'], 20, 1);
@@ -271,10 +279,9 @@ final class Plugin {
         add_filter('query_vars', [Rewrites::class, 'register_query_vars']);
         add_filter('set-screen-option', [User_Entitlements_Page::class, 'save_screen_options'], 10, 3);
         add_filter('set-screen-option', [All_Questions_Page::class, 'save_screen_options'], 10, 3);
-        // Add custom post states (e.g., "Free Course", "Expired") to list tables
         add_filter('display_post_states', [Post_Types::class, 'add_custom_post_states'], 10, 2);
-        // Add "Expired" to the quick filter links (e.g., "All | Published | Expired")
         add_filter('views_edit-qp_course', [Post_Types::class, 'add_expired_to_course_views'], 10, 1);
+        add_filter('display_post_states', [Admin_Utils::class, 'add_product_post_states'], 10, 2);
     }
 
     /**

@@ -295,6 +295,151 @@ class Post_Types
         return $views;
     }
 
+    /**
+     * Sets the custom columns for the 'qp_course' list table.
+     * Hooked from Plugin.php
+     */
+    public static function set_course_columns( $columns ) {
+        $new_columns = [];
+        $new_columns['cb'] = $columns['cb'];
+        $new_columns['title'] = $columns['title'];
+        $new_columns['access_mode'] = __( 'Access Mode', 'question-press' );
+        $new_columns['linked_product'] = __( 'Linked Product', 'question-press' );
+        $new_columns['expiry_date'] = __( 'Expiry Date', 'question-press' );
+        $new_columns['date'] = $columns['date'];
+        
+        return $new_columns;
+    }
+
+    /**
+     * Renders the content for custom 'qp_course' columns.
+     * Hooked from Plugin.php
+     */
+    public static function render_course_columns( $column_name, $post_id ) {
+        switch ( $column_name ) {
+            case 'access_mode':
+                $access_mode = get_post_meta( $post_id, '_qp_course_access_mode', true ) ?: 'free';
+                if ( $access_mode === 'free' ) {
+                    echo '<span style="color: #2e7d32; font-weight: 600;">' . esc_html__( 'Free', 'question-press' ) . '</span>';
+                } else {
+                    echo '<span style="color: #f57f17; font-weight: 600;">' . esc_html__( 'Paid', 'question-press' ) . '</span>';
+                }
+                break;
+
+            case 'linked_product':
+                $product_id = get_post_meta( $post_id, '_qp_linked_product_id', true );
+                if ( ! $product_id ) {
+                    echo '<em>' . esc_html__( 'None', 'question-press' ) . '</em>';
+                    break;
+                }
+                $product = get_post( $product_id );
+                if ( ! $product ) {
+                    echo '<span style="color: #c00;">' . esc_html__( 'Product #', 'question-press' ) . esc_html( $product_id ) . ' (Missing)</span>';
+                    break;
+                }
+                $edit_link = get_edit_post_link( $product_id );
+                echo '<strong><a href="' . esc_url( $edit_link ) . '" title="' . esc_attr( $product->post_title ) . '">' . esc_html( wp_trim_words( $product->post_title, 5, '...' ) ) . '</a></strong>';
+                echo '<br>(ID: ' . esc_html( $product_id ) . ')';
+                break;
+
+            case 'expiry_date':
+                $expiry_date = get_post_meta( $post_id, '_qp_course_expiry_date', true );
+                if ( ! empty( $expiry_date ) ) {
+                    $expiry_timestamp = strtotime( $expiry_date );
+                    $current_timestamp = current_time( 'timestamp' );
+                    $date_format = get_option( 'date_format' );
+                    $formatted_date = date_i18n( $date_format, $expiry_timestamp );
+
+                    if ( $expiry_timestamp < $current_timestamp ) {
+                        echo '<span style="color: #c00; font-weight: 600;">' . esc_html( $formatted_date ) . '</span>';
+                    } else {
+                        echo esc_html( $formatted_date );
+                    }
+                } else {
+                    echo '<em>' . esc_html__( 'No Expiry', 'question-press' ) . '</em>';
+                }
+                break;
+        }
+    }
+
+    /**
+     * Sets the custom columns for the 'qp_plan' list table.
+     * Hooked from Plugin.php
+     */
+    public static function set_plan_columns( $columns ) {
+        // This removes the 'author' column if it exists
+        unset($columns['author']);
+        
+        $new_columns = [];
+        $new_columns['cb'] = $columns['cb'];
+        $new_columns['title'] = $columns['title'];
+        $new_columns['plan_type'] = __( 'Plan Type', 'question-press' );
+        $new_columns['duration'] = __( 'Duration', 'question-press' );
+        $new_columns['attempts'] = __( 'Attempts', 'question-press' );
+        $new_columns['linked_course'] = __( 'Linked Course(s)', 'question-press' );
+        $new_columns['date'] = $columns['date'];
+        
+        return $new_columns;
+    }
+
+    /**
+     * Renders the content for custom 'qp_plan' columns.
+     * Hooked from Plugin.php
+     */
+    public static function render_plan_columns( $column_name, $post_id ) {
+        // This list only shows manual plans
+        switch ( $column_name ) {
+            case 'plan_type':
+                $plan_type = get_post_meta( $post_id, '_qp_plan_type', true );
+                if ( $plan_type ) {
+                    echo '<code>' . esc_html( $plan_type ) . '</code>';
+                } else {
+                    echo '<em>' . esc_html__( 'Not Set', 'question-press' ) . '</em>';
+                }
+                break;
+
+            case 'duration':
+                $value = get_post_meta( $post_id, '_qp_plan_duration_value', true );
+                $unit = get_post_meta( $post_id, '_qp_plan_duration_unit', true );
+                if ( ! empty( $value ) && ! empty( $unit ) ) {
+                    echo '<strong>' . esc_html( $value ) . ' ' . esc_html( $unit ) . '(s)</strong>';
+                } else {
+                    echo '<em>' . esc_html__( 'N/A', 'question-press' ) . '</em>';
+                }
+                break;
+
+            case 'attempts':
+                $attempts = get_post_meta( $post_id, '_qp_plan_attempts', true );
+                if ( ! empty( $attempts ) ) {
+                    echo '<strong>' . esc_html( number_format_i18n( $attempts ) ) . '</strong>';
+                } else {
+                    echo '<em>' . esc_html__( 'N/A', 'question-press' ) . '</em>';
+                }
+                break;
+
+            case 'linked_course':
+                // This is for manual plans, so we check '_qp_plan_linked_courses'
+                $course_ids = get_post_meta( $post_id, '_qp_plan_linked_courses', true );
+                if ( empty( $course_ids ) || ! is_array( $course_ids ) ) {
+                    echo '<em>' . esc_html__( 'None', 'question-press' ) . '</em>';
+                    break;
+                }
+
+                $links = [];
+                foreach( $course_ids as $course_id ) {
+                    $course = get_post( $course_id );
+                    if ( ! $course ) {
+                        $links[] = '<span style="color: #c00;">' . esc_html__( 'Course #', 'question-press' ) . esc_html( $course_id ) . ' (Missing)</span>';
+                    } else {
+                        $edit_link = get_edit_post_link( $course_id );
+                        $links[] = '<strong><a href="' . esc_url( $edit_link ) . '" title="' . esc_attr( $course->post_title ) . '">' . esc_html( wp_trim_words( $course->post_title, 5, '...' ) ) . '</a></strong> (ID: ' . esc_html( $course_id ) . ')';
+                    }
+                }
+                echo implode( '<br>', $links );
+                break;
+        }
+    }
+
     /** Cloning/Unserializing prevention */
     public function __clone()
     {
