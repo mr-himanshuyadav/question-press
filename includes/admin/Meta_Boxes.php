@@ -1107,7 +1107,7 @@ class Meta_Boxes
 			if (class_exists('WooCommerce')) {
 
 				// Get or Create the 'QP Course Plan' Product Category
-				$category_name = 'QP Course Plan (Auto)';
+				$category_name = 'QP Course (Auto)';
 				$category_slug = 'qp-course-plan-auto'; // A clean slug
 				$taxonomy = 'product_cat';
 				$category_id = null;
@@ -1224,8 +1224,8 @@ class Meta_Boxes
 		// If we are here, the Plan is 'published', so the Product should also be.
 
 		// --- Get or Create the 'QP Course Plan' Product Category ---
-		$category_name = 'QP Course Plan';
-		$category_slug = 'qp-course-plan';
+		$category_name = 'QP Plan (Auto)';
+		$category_slug = 'qp-plan-manual';
 		$taxonomy = 'product_cat';
 		$category_id = null;
 		$term = term_exists($category_name, $taxonomy);
