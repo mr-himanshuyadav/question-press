@@ -129,19 +129,25 @@ class Data_Cleanup
             // Delete the main enrollment records
             $wpdb->delete($user_courses_table, ['course_id' => $post_id], ['%d']);
 
+            remove_action('pre_trash_post', [Data_Cleanup::class, 'prevent_deletion_if_linked'], 5);
+            remove_action('before_delete_post', [Data_Cleanup::class, 'prevent_deletion_if_linked'], 5);
+
             // --- UPDATED: Delete the linked auto-generated plan AND product ---
             $auto_plan_id = get_post_meta($post_id, '_qp_course_auto_plan_id', true);
             if (! empty($auto_plan_id) && get_post_meta($auto_plan_id, '_qp_is_auto_generated', true) === 'true') {
-                wp_delete_post($auto_plan_id, true);
+                wp_delete_post($auto_plan_id, true); // 'true' forces permanent deletion
                 error_log("QP Data Cleanup: Deleted auto-plan #{$auto_plan_id} linked to deleted course #{$post_id}.");
             }
 
             $auto_product_id = get_post_meta($post_id, '_qp_linked_product_id', true);
             if (! empty($auto_product_id) && get_post_meta($auto_product_id, '_qp_is_auto_generated', true) === 'true') {
-                wp_delete_post($auto_product_id, true);
+                wp_delete_post($auto_product_id, true); // 'true' forces permanent deletion
                 error_log("QP Data Cleanup: Deleted auto-product #{$auto_product_id} linked to deleted course #{$post_id}.");
             }
             // --- END UPDATED ---
+
+            add_action('pre_trash_post', [Data_Cleanup::class, 'prevent_deletion_if_linked'], 5, 1);
+            add_action('before_delete_post', [Data_Cleanup::class, 'prevent_deletion_if_linked'], 5, 1);
         }
     }
 
