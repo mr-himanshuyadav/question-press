@@ -1479,8 +1479,7 @@ class Practice_Ajax
     /**
      * AJAX handler for enrolling a user in a course.
      */
-    public static function enroll_in_course()
-    {
+    public static function enroll_in_course() {
         check_ajax_referer('qp_enroll_course_nonce', 'nonce');
 
         if (!is_user_logged_in()) {
@@ -1493,54 +1492,66 @@ class Practice_Ajax
         if (!$course_id || get_post_type($course_id) !== 'qp_course') {
             wp_send_json_error(['message' => 'Invalid course ID.']);
         }
-
-        if (! $course_id || get_post_type($course_id) !== 'qp_course') {
-            wp_send_json_error(['message' => 'Invalid course ID.']);
-        }
-
+        
         // Check if the course is published
-        if (get_post_status($course_id) !== 'publish') {
+        if ( get_post_status( $course_id ) !== 'publish' ) {
             wp_send_json_error(['message' => 'This course is no longer available for enrollment.']);
         }
 
-        // --- NEW: Check if course requires purchase AND if user has access ---
-        $access_mode = get_post_meta($course_id, '_qp_course_access_mode', true) ?: 'free';
+        // --- NEW: Check for access and get the entitlement ID ---
+        $access_result = User_Access::can_access_course($user_id, $course_id, true); // true = ignore enrollment check
+        $entitlement_id_to_save = null; // Default to NULL (for free/admin)
 
-        if ($access_mode === 'requires_purchase') {
-            // If it requires purchase, verify the user has a valid entitlement
-            // CHANGED: Use the new User_Access class method
-            if (!User_Access::can_access_course($user_id, $course_id, true)) { // true = ignore enrollment check
-                wp_send_json_error(['message' => 'You do not have access to enroll in this course. Please purchase it first.', 'code' => 'access_denied']);
-                return; // Stop execution
-            }
-            // If access check passes for a paid course, proceed to enrollment
+        if ($access_result === false) {
+            // No access at all
+            wp_send_json_error(['message' => 'You do not have access to enroll in this course. Please purchase it first.', 'code' => 'access_denied']);
+            return;
+        } elseif (is_numeric($access_result)) {
+            // Access granted by a specific entitlement
+            $entitlement_id_to_save = absint($access_result);
         }
-        // If access_mode is 'free', proceed to enrollment without entitlement check
+        // If $access_result === true, it's a free course or admin, so $entitlement_id_to_save remains NULL.
         // --- END NEW CHECK ---
 
         global $wpdb;
         $user_courses_table = $wpdb->prefix . 'qp_user_courses';
 
-        // Check if already enrolled (keep this check)
-        $is_enrolled = $wpdb->get_var($wpdb->prepare(
-            "SELECT user_course_id FROM $user_courses_table WHERE user_id = %d AND course_id = %d",
-            $user_id,
-            $course_id
-        ));
+        // --- NEW: Modified duplicate enrollment check ---
+        $check_sql = "SELECT user_course_id FROM $user_courses_table WHERE user_id = %d AND course_id = %d";
+        $check_params = [$user_id, $course_id];
+
+        if (is_null($entitlement_id_to_save)) {
+            $check_sql .= " AND entitlement_id IS NULL";
+        } else {
+            $check_sql .= " AND entitlement_id = %d";
+            $check_params[] = $entitlement_id_to_save;
+        }
+
+        $is_enrolled = $wpdb->get_var($wpdb->prepare($check_sql, $check_params));
+        // --- END MODIFIED CHECK ---
 
         if ($is_enrolled) {
             wp_send_json_success(['message' => 'Already enrolled.', 'already_enrolled' => true]);
             return;
         }
 
-        // Enroll the user (keep this logic)
+        // --- NEW: Modified INSERT query ---
         $result = $wpdb->insert($user_courses_table, [
             'user_id' => $user_id,
             'course_id' => $course_id,
+            'entitlement_id' => $entitlement_id_to_save, // <-- ADDED
             'enrollment_date' => current_time('mysql'),
-            'status' => 'enrolled', // Initial status, could change later if progress starts
+            'status' => 'enrolled',
             'progress_percent' => 0
+        ], [
+            '%d', // user_id
+            '%d', // course_id
+            '%d', // entitlement_id (NULL will be handled correctly)
+            '%s', // enrollment_date
+            '%s', // status
+            '%d'  // progress_percent
         ]);
+        // --- END MODIFIED INSERT ---
 
         if ($result) {
             wp_send_json_success(['message' => 'Successfully enrolled!']);

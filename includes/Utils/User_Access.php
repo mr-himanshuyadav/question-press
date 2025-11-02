@@ -72,7 +72,7 @@ class User_Access {
 	 * @param int  $user_id                 The user's ID.
 	 * @param int  $course_id               The course (post) ID.
 	 * @param bool $ignore_enrollment_check If true, only checks for a valid *purchase* entitlement (e.g., for 'Enroll' button).
-	 * @return bool True if the user has access, false otherwise.
+	 * @return bool|int True if access is granted by admin/free, int (entitlement_id) if by plan, false otherwise.
 	 */
 	public static function can_access_course( $user_id, $course_id, $ignore_enrollment_check = false ) {
 		global $wpdb;
@@ -84,7 +84,7 @@ class User_Access {
 
 		// 1. Admins always have access
 		if ( user_can( $user_id, 'manage_options' ) ) {
-			return true;
+			return true; // CHANGED: Return true for admin
 		}
 
 		$entitlements_table = $wpdb->prefix . 'qp_user_entitlements';
@@ -99,20 +99,20 @@ class User_Access {
 				$course_id
 			) );
 			if ( $is_enrolled ) {
-				return true; // Already enrolled, access granted
+				return true; // CHANGED: Return true for already enrolled
 			}
 		}
 
 		// 3. Check if the course is free
 		$access_mode = get_post_meta( $course_id, '_qp_course_access_mode', true ) ?: 'free';
 		if ( $access_mode === 'free' ) {
-			return true; // It's a free course, access granted
+			return true; // CHANGED: Return true for free course
 		}
 
 		// --- START REFINED ACCESS LOGIC ---
 		// 4. Get ALL active, non-expired entitlements for the user
 		$active_entitlements = $wpdb->get_results( $wpdb->prepare(
-			"SELECT plan_id FROM {$entitlements_table}
+			"SELECT plan_id, entitlement_id FROM {$entitlements_table}
 			 WHERE user_id = %d
 			   AND status = 'active'
 			   AND (expiry_date IS NULL OR expiry_date > %s)",
@@ -124,13 +124,19 @@ class User_Access {
 			return false; // User has no active entitlements at all.
 		}
 
-		$active_plan_ids = wp_list_pluck( $active_entitlements, 'plan_id' );
-		$active_plan_ids = array_map( 'absint', $active_plan_ids );
+		// Map plan IDs to their entitlement IDs
+		$active_plan_entitlement_map = [];
+		foreach ($active_entitlements as $entitlement) {
+			$active_plan_entitlement_map[ absint($entitlement->plan_id) ] = absint($entitlement->entitlement_id);
+		}
+		$active_plan_ids = array_keys($active_plan_entitlement_map);
+
 
 		// 5. Fast Check: Does the user have the specific auto-plan for this course?
 		$course_auto_plan_id = get_post_meta( $course_id, '_qp_course_auto_plan_id', true );
 		if ( ! empty( $course_auto_plan_id ) && in_array( absint( $course_auto_plan_id ), $active_plan_ids, true ) ) {
-			return true; // User has the specific entitlement for this course.
+			// CHANGED: Return the entitlement_id
+			return $active_plan_entitlement_map[ absint( $course_auto_plan_id ) ];
 		}
 
 		// 6. Slow Check: Loop through all other active entitlements (e.g., manual "All Access" plans)
@@ -145,7 +151,8 @@ class User_Access {
 
 			// Check if this plan grants "All Courses"
 			if ( $plan_course_access_type === 'all' ) {
-				return true; // This plan grants access to all courses.
+				// CHANGED: Return the entitlement_id
+				return $active_plan_entitlement_map[ $plan_id ];
 			}
 
 			// Check if this plan grants "Specific Courses"
@@ -154,7 +161,8 @@ class User_Access {
 				
 				// Check if the plan's list of courses is an array and contains the course ID
 				if ( is_array( $linked_courses ) && in_array( $course_id, $linked_courses, true ) ) {
-					return true; // This plan grants access to this specific course.
+					// CHANGED: Return the entitlement_id
+					return $active_plan_entitlement_map[ $plan_id ];
 				}
 			}
 		}
