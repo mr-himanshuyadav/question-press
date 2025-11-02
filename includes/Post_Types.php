@@ -7,6 +7,9 @@ if (! defined('ABSPATH')) {
     exit;
 }
 
+use QuestionPress\Admin\Views\Course_Editor_Helper;
+use QuestionPress\Utils\User_Access;
+
 /**
  * Handles the registration of Custom Post Types.
  *
@@ -87,18 +90,18 @@ class Post_Types
 
         $args = [
             'labels'             => $labels,
-            'public'             => false, // Not publicly viewable on the frontend directly via its slug
-            'publicly_queryable' => false, // Not queryable in the main WP query
+            'public'             => true, // Make it public
+            'publicly_queryable' => true, // Allow it to be queried
             'show_ui'            => true,  // Show in the admin UI
             'show_in_menu'       => true,  // Show as a top-level menu item
-            'query_var'          => false, // No query variable needed
-            'rewrite'            => false, // No URL rewriting needed
+            'query_var'          => true, // Allow query var
+            'rewrite'            => ['slug' => 'course'], //Set the URL slug to /course/
             'capability_type'    => 'post', // Use standard post capabilities
             'has_archive'        => false, // No archive page needed
             'hierarchical'       => false, // Courses are not hierarchical like pages
             'menu_position'      => 26,    // Position below Question Press (usually 25)
             'menu_icon'          => 'dashicons-welcome-learn-more', // Choose an appropriate icon
-            'supports'           => ['title', 'editor', 'author'], // Features we want initially
+            'supports'           => ['title', 'author'], // Features we want initially
             'show_in_rest'       => false, // Disable Block Editor support for now
         ];
 
@@ -438,6 +441,166 @@ class Post_Types
                 echo implode( '<br>', $links );
                 break;
         }
+    }
+
+    /**
+     * Injects course syllabus and action buttons into the_content.
+     * Hooked to 'the_content' from Plugin.php.
+     *
+     * @param string $content The original post content (the course description).
+     * @return string The modified content with our syllabus appended.
+     */
+    public static function inject_course_details( $content ) {
+        // Check if we are on a single 'qp_course' page and in the main WordPress loop
+        if ( is_singular( 'qp_course' ) && in_the_loop() && is_main_query() ) {
+            
+            $post_id = get_the_ID();
+            $user_id = get_current_user_id();
+            $new_content = ''; // This will hold our syllabus and button
+            global $wpdb;
+
+            // --- 1. Generate the Action Button ---
+            ob_start();
+            $user_courses_table = $wpdb->prefix . 'qp_user_courses';
+            $is_enrolled = $wpdb->get_var($wpdb->prepare(
+                "SELECT user_course_id FROM $user_courses_table WHERE user_id = %d AND course_id = %d AND status IN ('enrolled', 'in_progress', 'completed')",
+                $user_id, $post_id
+            ));
+            
+            $button_html = '';
+
+            if ($is_enrolled) {
+                // User is enrolled, link them to the "My Courses" tab
+                $options = get_option('qp_settings');
+                $dashboard_page_id = isset($options['dashboard_page']) ? absint($options['dashboard_page']) : 0;
+                $base_dashboard_url = $dashboard_page_id ? trailingslashit(get_permalink($dashboard_page_id)) : home_url('/');
+                $is_front_page = ($dashboard_page_id > 0 && get_option('show_on_front') == 'page' && get_option('page_on_front') == $dashboard_page_id);
+                $tab_prefix = $is_front_page ? 'tab/' : '';
+                $my_courses_url = $base_dashboard_url . $tab_prefix . 'my-courses/';
+                
+                $button_html = sprintf(
+                    '<a href="%s" class="qp-button qp-button-secondary">%s</a>',
+                    esc_url($my_courses_url),
+                    __('View in My Courses', 'question-press')
+                );
+            } else {
+                // User is NOT enrolled. Check if they can enroll or must purchase.
+                $access_mode = get_post_meta($post_id, '_qp_course_access_mode', true) ?: 'free';
+                $course_status = get_post_status($post_id);
+                // Check access, ignoring enrollment (true)
+                $access_result = \QuestionPress\Utils\User_Access::can_access_course($user_id, $post_id, true);
+
+                if ($course_status === 'expired') {
+                    $button_html = sprintf('<button class="qp-button" disabled>%s</button>', __('Course Expired', 'question-press'));
+                } elseif ($access_mode === 'free') {
+                    $button_html = sprintf('<button class="qp-button qp-button-secondary qp-enroll-course-btn" data-course-id="%d">%s</button>', $post_id, __('Enroll Free', 'question-press'));
+                } elseif ($access_mode === 'requires_purchase') {
+                    if (is_numeric($access_result)) { // Access granted by a specific entitlement ID
+                        $button_html = sprintf('<button class="qp-button qp-button-secondary qp-enroll-course-btn" data-course-id="%d">%s</button>', $post_id, __('Enroll Now (Purchased)', 'question-press'));
+                    } else { // Access is 'false', they need to buy it
+                        $linked_product_id = get_post_meta($post_id, '_qp_linked_product_id', true);
+                        $product_url = $linked_product_id ? get_permalink($linked_product_id) : '#';
+                        $button_html = sprintf('<a href="%s" class="qp-button qp-button-primary">%s</a>', esc_url($product_url), __('Purchase Access', 'question-press'));
+                    }
+                }
+            }
+            
+            // Wrap the button in a styled box
+            echo '<div class="qp-course-action-box">' . $button_html . '</div>';
+            $new_content .= ob_get_clean();
+
+
+            // --- 2. Generate the Syllabus ---
+            ob_start();
+            // Use static::class since we added the 'use' statement
+            $structure = Course_Editor_Helper::get_course_structure_for_editor($post_id);
+
+            // --- NEW: Fetch progress data for progression logic ---
+            $progress_data = [];
+            $all_item_ids = [];
+            if (!empty($structure['sections'])) {
+                foreach ($structure['sections'] as $section) {
+                    if (!empty($section['items'])) {
+                        $all_item_ids = array_merge($all_item_ids, wp_list_pluck($section['items'], 'item_id'));
+                    }
+                }
+            }
+            if ($user_id > 0 && !empty($all_item_ids)) {
+                $progress_table = $wpdb->prefix . 'qp_user_items_progress';
+                $item_ids_placeholder = implode(',', array_map('absint', $all_item_ids));
+                $progress_raw = $wpdb->get_results($wpdb->prepare(
+                    "SELECT item_id, status FROM $progress_table WHERE user_id = %d AND item_id IN ($item_ids_placeholder)",
+                    $user_id
+                ), OBJECT_K);
+                if ($progress_raw) {
+                    $progress_data = $progress_raw;
+                }
+            }
+            // --- END NEW ---
+            
+            if (!empty($structure['sections'])) {
+                // --- NEW: Get progression mode ---
+                $progression_mode = get_post_meta($post_id, '_qp_course_progression_mode', true);
+                $is_progressive = ($progression_mode === 'progressive') && !user_can($user_id, 'manage_options'); // Admins bypass
+                $is_previous_item_complete = true; // First item is always unlocked
+                // --- END NEW ---
+
+                echo '<div class="qp-course-syllabus">';
+                echo '<h2>' . esc_html__('Syllabus', 'question-press') . '</h2>';
+                
+                foreach ($structure['sections'] as $section) {
+                    echo '<div class="qp-syllabus-section">';
+                    echo '<h4 class="qp-syllabus-section-title">' . esc_html($section['title']) . '</h4>';
+                    
+                    if (!empty($section['items'])) {
+                        echo '<ul class="qp-syllabus-items">';
+                        foreach ($section['items'] as $item) {
+                            $item_status = $progress_data[$item->item_id]->status ?? 'not_started';
+                            $is_locked = false;
+
+                            // --- NEW: Check lock status ---
+                            if ($is_progressive && !$is_previous_item_complete) {
+                                $is_locked = true;
+                            }
+                            // --- END NEW ---
+
+                            $icon_class = 'dashicons-text'; // Default icon
+                            if ($item->content_type === 'test_series') {
+                                $icon_class = 'dashicons-forms'; // Test icon
+                            }
+                            // Add other icon types here if needed
+                            
+                            // --- NEW: Modify icon and class if locked ---
+                            if ($is_locked) {
+                                $icon_class = 'dashicons-lock';
+                                echo '<li class="qp-item-locked">';
+                            } else {
+                                echo '<li>';
+                            }
+                            // --- END NEW ---
+
+                            echo '<span class="dashicons ' . $icon_class . '"></span>' . esc_html($item->title) . '</li>';
+
+                            // --- NEW: Update lock for next iteration ---
+                            if ($is_progressive) {
+                                $is_previous_item_complete = ($item_status === 'completed');
+                            }
+                            // --- END NEW ---
+                        }
+                        echo '</ul>';
+                    }
+                    echo '</div>'; // close .qp-syllabus-section
+                }
+                echo '</div>'; // close .qp-course-syllabus
+            }
+            $new_content .= ob_get_clean();
+            
+            // Append our new content to the original post content
+            return $content . $new_content;
+        }
+        
+        // For all other pages, return the content exactly as it was.
+        return $content;
     }
 
     /** Cloning/Unserializing prevention */

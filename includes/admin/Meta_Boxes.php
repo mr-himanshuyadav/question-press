@@ -212,62 +212,62 @@ class Meta_Boxes
 					</tr>
 				</tbody>
 			</table>
-		<?php if ( ! $is_auto_plan && class_exists( 'WooCommerce' ) ) : ?>
-            <?php
-            $auto_product_id = get_post_meta( $post->ID, '_qp_auto_product_id', true );
-            $product_post = $auto_product_id ? get_post( $auto_product_id ) : null;
-            $product_regular_price = '';
-            $product_sale_price = '';
-            if ( $auto_product_id && $product_post ) {
-                $product = wc_get_product( $auto_product_id );
-                if ( $product ) {
-                    $product_regular_price = $product->get_regular_price();
-                    $product_sale_price = $product->get_sale_price();
-                }
-            }
-            ?>
-            <div id="qp-auto-product-box" style="margin-top: 20px; padding: 12px; border: 1px solid #ccd0d4; background: #fdfdfd; border-radius: 4px;">
-                <h3 style="margin: 0 0 10px; padding: 0 0 10px; border-bottom: 1px solid #eee;"><?php esc_html_e( 'Auto-Linked Product', 'question-press' ); ?></h3>
+			<?php if (! $is_auto_plan && class_exists('WooCommerce')) : ?>
+				<?php
+				$auto_product_id = get_post_meta($post->ID, '_qp_auto_product_id', true);
+				$product_post = $auto_product_id ? get_post($auto_product_id) : null;
+				$product_regular_price = '';
+				$product_sale_price = '';
+				if ($auto_product_id && $product_post) {
+					$product = wc_get_product($auto_product_id);
+					if ($product) {
+						$product_regular_price = $product->get_regular_price();
+						$product_sale_price = $product->get_sale_price();
+					}
+				}
+				?>
+				<div id="qp-auto-product-box" style="margin-top: 20px; padding: 12px; border: 1px solid #ccd0d4; background: #fdfdfd; border-radius: 4px;">
+					<h3 style="margin: 0 0 10px; padding: 0 0 10px; border-bottom: 1px solid #eee;"><?php esc_html_e('Auto-Linked Product', 'question-press'); ?></h3>
 
-                <?php if ( $auto_product_id && $product_post ) : ?>
-                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
-                        <div>
-                            <strong style="font-size: 1.1em;"><?php echo esc_html( $product_post->post_title ); ?></strong>
-                            (ID: <?php echo esc_html( $auto_product_id ); ?>)
-                        </div>
-                        <a href="<?php echo esc_url( get_edit_post_link( $auto_product_id ) ); ?>" class="button button-secondary button-small" target="_blank"><?php esc_html_e('Edit Product', 'question-press'); ?></a>
-                    </div>
+					<?php if ($auto_product_id && $product_post) : ?>
+						<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
+							<div>
+								<strong style="font-size: 1.1em;"><?php echo esc_html($product_post->post_title); ?></strong>
+								(ID: <?php echo esc_html($auto_product_id); ?>)
+							</div>
+							<a href="<?php echo esc_url(get_edit_post_link($auto_product_id)); ?>" class="button button-secondary button-small" target="_blank"><?php esc_html_e('Edit Product', 'question-press'); ?></a>
+						</div>
 
-                    <div class="qp-price-fields-group" style="display: flex; gap: 10px; margin-bottom: 10px;">
-                        <div style="flex: 1;">
-                            <label for="_qp_product_regular_price" style="display: block; font-weight: 600; font-size: 0.9em; margin-bottom: 3px;"><?php esc_html_e( 'Regular Price', 'question-press' ); ?></label>
-                            <input type="text" id="_qp_product_regular_price" name="_qp_product_regular_price" value="<?php echo esc_attr( $product_regular_price ); ?>" class="wc_input_price" placeholder="e.g., 20.00" style="width: 100%;">
-                        </div>
-                        <div style="flex: 1;">
-                            <label for="_qp_product_sale_price" style="display: block; font-weight: 600; font-size: 0.9em; margin-bottom: 3px;"><?php esc_html_e( 'Sale Price', 'question-press' ); ?></label>
-                            <input type="text" id="_qp_product_sale_price" name="_qp_product_sale_price" value="<?php echo esc_attr( $product_sale_price ); ?>" class="wc_input_price" placeholder="Optional" style="width: 100%;">
-                        </div>
-                    </div>
-                    <div>
-                        <button type="button" class="button button-primary" id="qp-save-product-price-btn" 
-                                data-product-id="<?php echo esc_attr($auto_product_id); ?>"
-                                data-nonce="<?php echo esc_attr(wp_create_nonce('qp_save_product_price_nonce')); ?>">
-                            <?php esc_html_e( 'Save Price', 'question-press' ); ?>
-                        </button>
-                        <span id="qp-price-save-success" style="color: #2e7d32; font-weight: 600; margin-left: 10px;"></span>
-                    </div>
-                <?php elseif ( $plan_type !== '' ) : ?>
-                    <p style="margin: 0; font-style: italic; color: #666;">
-                        <?php esc_html_e( 'A new WooCommerce product will be automatically created and linked when you save this plan.', 'question-press' ); ?>
-                    </p>
-                <?php else: ?>
-                     <p style="margin: 0; font-style: italic; color: #666;">
-                        <?php esc_html_e( 'Please select a "Plan Type" and save to generate a product.', 'question-press' ); ?>
-                    </p>
-                <?php endif; ?>
-            </div>
-        <?php endif; ?>
-        </div>
+						<div class="qp-price-fields-group" style="display: flex; gap: 10px; margin-bottom: 10px;">
+							<div style="flex: 1;">
+								<label for="_qp_product_regular_price" style="display: block; font-weight: 600; font-size: 0.9em; margin-bottom: 3px;"><?php esc_html_e('Regular Price', 'question-press'); ?></label>
+								<input type="text" id="_qp_product_regular_price" name="_qp_product_regular_price" value="<?php echo esc_attr($product_regular_price); ?>" class="wc_input_price" placeholder="e.g., 20.00" style="width: 100%;">
+							</div>
+							<div style="flex: 1;">
+								<label for="_qp_product_sale_price" style="display: block; font-weight: 600; font-size: 0.9em; margin-bottom: 3px;"><?php esc_html_e('Sale Price', 'question-press'); ?></label>
+								<input type="text" id="_qp_product_sale_price" name="_qp_product_sale_price" value="<?php echo esc_attr($product_sale_price); ?>" class="wc_input_price" placeholder="Optional" style="width: 100%;">
+							</div>
+						</div>
+						<div>
+							<button type="button" class="button button-primary" id="qp-save-product-price-btn"
+								data-product-id="<?php echo esc_attr($auto_product_id); ?>"
+								data-nonce="<?php echo esc_attr(wp_create_nonce('qp_save_product_price_nonce')); ?>">
+								<?php esc_html_e('Save Price', 'question-press'); ?>
+							</button>
+							<span id="qp-price-save-success" style="color: #2e7d32; font-weight: 600; margin-left: 10px;"></span>
+						</div>
+					<?php elseif ($plan_type !== '') : ?>
+						<p style="margin: 0; font-style: italic; color: #666;">
+							<?php esc_html_e('A new WooCommerce product will be automatically created and linked when you save this plan.', 'question-press'); ?>
+						</p>
+					<?php else: ?>
+						<p style="margin: 0; font-style: italic; color: #666;">
+							<?php esc_html_e('Please select a "Plan Type" and save to generate a product.', 'question-press'); ?>
+						</p>
+					<?php endif; ?>
+				</div>
+			<?php endif; ?>
+		</div>
 
 		<script type="text/javascript">
 			/* Keep JS here for now */
@@ -345,13 +345,13 @@ class Meta_Boxes
 		];
 		// Manual Handling for Plan Attempts 
 		$plan_type = isset($_POST['_qp_plan_type']) ? sanitize_key($_POST['_qp_plan_type']) : '';
-		if ( $plan_type === 'unlimited' ) {
+		if ($plan_type === 'unlimited') {
 			// Unlimited plan = NULL attempts
 			update_post_meta($post_id, '_qp_plan_attempts', null);
-		} elseif ( $plan_type === 'course_access' ) {
+		} elseif ($plan_type === 'course_access') {
 			// Course Access plan = 0 attempts
 			update_post_meta($post_id, '_qp_plan_attempts', 0);
-		} elseif ( $plan_type === 'attempt_limited' || $plan_type === 'combined' ) {
+		} elseif ($plan_type === 'attempt_limited' || $plan_type === 'combined') {
 			// Attempt/Combined plan = value from form
 			$attempts = isset($_POST['_qp_plan_attempts']) ? absint($_POST['_qp_plan_attempts']) : 0;
 			update_post_meta($post_id, '_qp_plan_attempts', $attempts);
@@ -380,6 +380,101 @@ class Meta_Boxes
 		}
 	}
 
+	// --- NEW Meta Box for Course Settings (Progression & Expiry) ---
+
+	/**
+	 * Adds the meta box container for Course Settings (Progression & Expiry).
+	 * Hooked to 'add_meta_boxes_qp_course'.
+	 */
+	public static function add_course_progression()
+	{
+		add_meta_box(
+			'qp_course_settings_meta_box',          // Unique ID
+			__('Course Settings', 'question-press'), // Box title
+			[self::class, 'render_course_progression'], // Callback function
+			'qp_course',                            // Post type
+			'side',                                 // Context
+			'high'                               // Priority
+		);
+	}
+
+	/**
+	 * Renders the HTML content for the Course Settings meta box.
+	 *
+	 * @param \WP_Post $post The post object.
+	 */
+	public static function render_course_progression($post)
+	{
+		// Add a nonce field for security
+		wp_nonce_field('qp_save_course_progression_meta', 'qp_course_progression_nonce');
+
+		// Get existing meta values
+		$progression_mode = get_post_meta($post->ID, '_qp_course_progression_mode', true) ?: 'progressive';
+		$expiry_date = get_post_meta($post->ID, '_qp_course_expiry_date', true);
+	?>
+		<style>
+			#qp_course_settings_meta_box p {
+				margin-bottom: 15px;
+			}
+
+			#qp_course_settings_meta_box label {
+				font-weight: 600;
+				display: block;
+				margin-bottom: 5px;
+			}
+
+			#qp_course_settings_meta_box select,
+			#qp_course_settings_meta_box input[type="text"] {
+				width: 100%;
+				box-sizing: border-box;
+				margin-bottom: 5px;
+			}
+
+			#qp_course_settings_meta_box .description {
+				font-size: 0.9em;
+				color: #666;
+				display: block;
+				margin-top: 3px;
+			}
+
+			.qp-tooltip-icon {
+				color: #666;
+				text-decoration: none;
+				cursor: help;
+			}
+		</style>
+
+		<div class="qp-metabox-field-wrapper" style="border-bottom: 1px solid #eee; padding-bottom: 15px;">
+            <label><?php esc_html_e('Progression Mode:', 'question-press'); ?></label>
+            
+            <div style="display: flex; flex-direction: row; gap: 20px; margin-top: 5px;">
+				<div class="qp-access-mode-radio">
+                    <input type="radio" name="_qp_course_progression_mode" id="qp_progression_mode_progressive" value="progressive" <?php checked($progression_mode, 'progressive'); ?>>
+                    <label for="qp_progression_mode_progressive"><?php esc_html_e('Progressive', 'question-press'); ?></label>
+                    <span class="dashicons dashicons-editor-help qp-tooltip-icon" title="<?php esc_attr_e('User must complete items in the order you set.', 'question-press'); ?>"></span>
+                </div>
+                
+                <div class="qp-access-mode-radio">
+                    <input type="radio" name="_qp_course_progression_mode" id="qp_progression_mode_open" value="open" <?php checked($progression_mode, 'open'); ?>>
+                    <label for="qp_progression_mode_open"><?php esc_html_e('Open', 'question-press'); ?></label>
+                    <span class="dashicons dashicons-editor-help qp-tooltip-icon" title="<?php esc_attr_e('User can start any lesson or test at any time.', 'question-press'); ?>"></span>
+                </div>
+                
+                
+
+            </div>
+        </div>
+
+		<p class="qp-expiry-date-field">
+			<label for="qp_course_expiry_date">
+				<?php esc_html_e('Expiry Date (Optional)', 'question-press'); ?>
+				<span class="dashicons dashicons-editor-help qp-tooltip-icon" title="<?php esc_attr_e('After this date, the course and its product will be unpublished, and all active entitlements will expire.', 'question-press'); ?>"></span>
+			</label>
+			<input type="text" name="_qp_course_expiry_date" id="qp_course_expiry_date" class="qp-datepicker" value="<?php echo esc_attr($expiry_date); ?>" placeholder="YYYY-MM-DD" autocomplete="off">
+		</p>
+	<?php
+	}
+
 	// --- qp_course Meta Boxes ---
 
 	/**
@@ -391,7 +486,7 @@ class Meta_Boxes
 	{
 		add_meta_box(
 			'qp_course_access_meta_box',          // Unique ID
-			__('Course Access & Monetization', 'question-press'), // Box title
+			__('Access & Monetization', 'question-press'), // Box title
 			[self::class, 'render_course_access'],   // Callback function (static method in this class)
 			'qp_course',                          // Post type
 			'side',                               // Context
@@ -416,7 +511,6 @@ class Meta_Boxes
 		$duration_unit = get_post_meta($post->ID, '_qp_course_access_duration_unit', true) ?: 'day';
 		$linked_product_id = get_post_meta($post->ID, '_qp_linked_product_id', true);
 		$auto_plan_id = get_post_meta($post->ID, '_qp_course_auto_plan_id', true);
-		$expiry_date = get_post_meta($post->ID, '_qp_course_expiry_date', true);
 
 		$product_regular_price = '';
 		$product_sale_price = '';
@@ -428,23 +522,10 @@ class Meta_Boxes
 			}
 		}
 
-		// --- NEW: Check if the linked product is auto-generated ---
+		// Check if the linked product is auto-generated
 		$is_auto_product_linked = false;
 		if (! empty($linked_product_id) && get_post_meta($linked_product_id, '_qp_is_auto_generated', true) === 'true') {
 			$is_auto_product_linked = true;
-		}
-		// --- END NEW ---
-
-		// Get all published WooCommerce products for selection
-		$products = [];
-		if (class_exists('WooCommerce') && ! $is_auto_product_linked) { // Only query if we need the dropdown
-			$products = wc_get_products([
-				'status' => 'publish',
-				'limit' => -1,
-				'orderby' => 'title',
-				'order' => 'ASC',
-				'return' => 'objects',
-			]);
 		}
 
 		// --- Output the HTML ---
@@ -452,6 +533,18 @@ class Meta_Boxes
 		<style>
 			#qp_course_access_meta_box p {
 				margin-bottom: 15px;
+			}
+
+			#qp_course_access_meta_box .qp-metabox-field-wrapper {
+				margin-bottom: 15px;
+				padding-bottom: 15px;
+				border-bottom: 1px solid #eee;
+			}
+
+			#qp_course_access_meta_box .qp-metabox-field-wrapper:last-child {
+				margin-bottom: 0;
+				padding-bottom: 0;
+				border-bottom: none;
 			}
 
 			#qp_course_access_meta_box label {
@@ -467,6 +560,7 @@ class Meta_Boxes
 				margin-bottom: 5px;
 			}
 
+			/* NEW: Inline duration fields */
 			#qp_course_access_meta_box .duration-group {
 				display: flex;
 				align-items: center;
@@ -476,17 +570,19 @@ class Meta_Boxes
 			#qp_course_access_meta_box .duration-group input[type="number"] {
 				width: 80px;
 				flex-shrink: 0;
+				margin-bottom: 0;
+				/* Remove margin from input */
 			}
 
 			#qp_course_access_meta_box .duration-group select {
 				flex-grow: 1;
+				margin-bottom: 0;
+				/* Remove margin from select */
 			}
 
 			#qp-purchase-fields {
 				display: <?php echo ($access_mode === 'requires_purchase') ? 'block' : 'none'; ?>;
 				margin-top: 15px;
-				border-top: 1px solid #eee;
-				padding-top: 0px;
 			}
 
 			#qp_course_access_meta_box small.description {
@@ -496,6 +592,29 @@ class Meta_Boxes
 				margin-top: 3px;
 			}
 
+			/* NEW: Radio button styling */
+			.qp-access-mode-radio {
+				display: flex;
+				align-items: center;
+				gap: 5px;
+				margin-bottom: 8px;
+			}
+
+			.qp-access-mode-radio label {
+				font-weight: normal;
+				margin-bottom: 0;
+			}
+
+			.qp-access-mode-radio input[type="radio"] {
+				margin: 0;
+			}
+
+			.qp-tooltip-icon {
+				color: #666;
+				text-decoration: none;
+				cursor: help;
+			}
+
 			#qp-auto-plan-info {
 				font-style: italic;
 				color: #666;
@@ -503,6 +622,19 @@ class Meta_Boxes
 				margin-top: 10px;
 				padding-top: 10px;
 				border-top: 1px dashed #ddd;
+				/* NEW: Flex layout for header */
+				display: flex;
+				justify-content: space-between;
+				align-items: flex-start;
+			}
+
+			#qp-auto-plan-info-text {
+				flex-grow: 1;
+				padding-right: 10px;
+			}
+
+			#qp-auto-plan-info .button-small {
+				flex-shrink: 0;
 			}
 
 			#qp-auto-product-info {
@@ -516,43 +648,54 @@ class Meta_Boxes
 			}
 		</style>
 
-		<p style="margin-bottom: 0;">
-			<label for="qp_course_access_mode"><?php esc_html_e('Access Mode:', 'question-press'); ?></label>
-			<select name="_qp_course_access_mode" id="qp_course_access_mode">
-				<option value="free" <?php selected($access_mode, 'free'); ?>><?php esc_html_e('Free (Public Enrollment)', 'question-press'); ?></option>
-				<option value="requires_purchase" <?php selected($access_mode, 'requires_purchase'); ?>><?php esc_html_e('Requires Purchase', 'question-press'); ?></option>
-			</select>
-		</p>
+		<div class="qp-metabox-field-wrapper">
+            <label><?php esc_html_e('Access Mode:', 'question-press'); ?></label>
+            
+            <?php // NEW: Wrapper div to make radio buttons side-by-side ?>
+            <div style="display: flex; flex-direction: row; gap: 20px; margin-top: 5px;">
+                
+                <div class="qp-access-mode-radio">
+                    <input type="radio" name="_qp_course_access_mode" id="qp_access_mode_free" value="free" <?php checked($access_mode, 'free'); ?>>
+                    <label for="qp_access_mode_free"><?php esc_html_e('Free', 'question-press'); ?></label> <?php // <-- CHANGED TEXT ?>
+                    <span class="dashicons dashicons-editor-help qp-tooltip-icon" title="<?php esc_attr_e('Anyone can enroll in this course for free.', 'question-press'); ?>"></span>
+                </div>
+                
+                <div class="qp-access-mode-radio">
+                    <input type="radio" name="_qp_course_access_mode" id="qp_access_mode_paid" value="requires_purchase" <?php checked($access_mode, 'requires_purchase'); ?>>
+                    <label for="qp_access_mode_paid"><?php esc_html_e('Paid', 'question-press'); ?></label> <?php // <-- CHANGED TEXT ?>
+                    <span class="dashicons dashicons-editor-help qp-tooltip-icon" title="<?php esc_attr_e('Generates a Plan & Product. Access is granted via a WooCommerce purchase.', 'question-press'); ?>"></span>
+                </div>
 
-		<p class="qp-expiry-date-field" style="border-top: 1px solid #eee; padding-top: 15px; margin-top: 15px;">
-			<label for="qp_course_expiry_date"><?php esc_html_e('Expiry Date (Optional):', 'question-press'); ?></label>
-			<input type="text" name="_qp_course_expiry_date" id="qp_course_expiry_date" class="qp-datepicker" value="<?php echo esc_attr($expiry_date); ?>" placeholder="YYYY-MM-DD" autocomplete="off">
-			<small class="description"><?php esc_html_e('After this date, the course and its product will be unpublished, and all active entitlements will expire.', 'question-press'); ?></small>
-		</p>
+            </div>
+        </div>
 
 		<div id="qp-purchase-fields" style="display: <?php echo ($access_mode === 'requires_purchase') ? 'block' : 'none'; ?>;">
-			<p>
-				<label><?php esc_html_e('Access Duration:', 'question-press'); ?></label>
-			<div class="duration-group">
-				<input type="number" name="_qp_course_access_duration_value" value="<?php echo esc_attr($duration_value); ?>" min="0" placeholder="e.g., 30">
-				<select name="_qp_course_access_duration_unit">
-					<option value="day" <?php selected($duration_unit, 'day'); ?>>Day(s)</option>
-					<option value="month" <?php selected($duration_unit, 'month'); ?>>Month(s)</option>
-					<option value="year" <?php selected($duration_unit, 'year'); ?>>Year(s)</option>
-				</select>
-			</div>
-			<small class="description"><?php esc_html_e('How long access lasts after purchase. Leave blank for lifetime access.', 'question-press'); ?></small>
-			</p>
+
+			<div class="qp-metabox-field-wrapper">
+                <label for="qp_course_access_duration_value"> <?php // Added 'for' attribute ?>
+                    <?php esc_html_e('Access Duration:', 'question-press'); ?>
+                    <?php // Added tooltip ?>
+                    <span class="dashicons dashicons-editor-help qp-tooltip-icon" title="<?php esc_attr_e('How long access lasts after purchase. Leave blank for lifetime access.', 'question-press'); ?>"></span>
+                </label>
+                <div class="duration-group">
+                    <input type="number" id="qp_course_access_duration_value" name="_qp_course_access_duration_value" value="<?php echo esc_attr($duration_value); ?>" min="0" placeholder="e.g., 30"> <?php // Added 'id' attribute ?>
+                    <select name="_qp_course_access_duration_unit">
+                        <option value="day" <?php selected($duration_unit, 'day'); ?>>Day(s)</option>
+                        <option value="month" <?php selected($duration_unit, 'month'); ?>>Month(s)</option>
+                        <option value="year" <?php selected($duration_unit, 'year'); ?>>Year(s)</option>
+                    </select>
+                </div>
+                <?php // Removed the <small> description tag ?>
+            </div>
 
 			<?php // Only show product link if WooCommerce is active 
 			?>
 			<?php if (class_exists('WooCommerce')) : ?>
 
-				<?php // --- REFINED: Show auto-product info or auto-creation text ---
-				if ($is_auto_product_linked && $linked_product_id) :
+				<?php if ($is_auto_product_linked && $linked_product_id) :
 					$product_post = get_post($linked_product_id);
 				?>
-					<div id="qp-auto-product-info" style="padding: 10px; background: #fdfdfd; border: 1px solid #ddd; border-radius: 4px;">
+					<div id="qp-auto-product-info" class="qp-metabox-field-wrapper" style="padding: 10px; background: #fdfdfd; border: 1px solid #ddd; border-radius: 4px;">
 
 						<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
 							<div>
@@ -575,14 +718,6 @@ class Meta_Boxes
 									<input type="text" id="_qp_product_sale_price" name="_qp_product_sale_price" value="<?php echo esc_attr($product_sale_price); ?>" class="wc_input_price" placeholder="Optional" style="width: 100%;">
 								</div>
 							</div>
-							<div>
-								<button type="button" class="button button-primary" id="qp-save-product-price-btn"
-									data-product-id="<?php echo esc_attr($linked_product_id); ?>"
-									data-nonce="<?php echo esc_attr(wp_create_nonce('qp_save_product_price_nonce')); ?>">
-									<?php esc_html_e('Save Price', 'question-press'); ?>
-								</button>
-								<span id="qp-price-save-success" style="color: #2e7d32; font-weight: 600; margin-left: 10px;"></span>
-							</div>
 
 						<?php else : ?>
 							<span style="color: red;"><?php esc_html_e('Linked product (ID: ', 'question-press');
@@ -592,12 +727,22 @@ class Meta_Boxes
 						<input type="hidden" name="_qp_linked_product_id" value="<?php echo esc_attr($linked_product_id); ?>">
 					</div>
 
-				<?php // NEW: Show auto-generation text if no product is linked
+				<?php // NEW: Show NEW price fields if no product is linked
 				else : ?>
-					<div id="qp-auto-product-info-new" style="padding: 10px; background: #fdfdfd; border: 1px solid #ddd; border-radius: 4px;">
-						<p style="margin: 0; font-style: italic; color: #666;">
-							<?php esc_html_e('A new WooCommerce product will be automatically created and linked when you save this course.', 'question-press'); ?>
+					<div id="qp-new-product-price-fields" class="qp-metabox-field-wrapper" style="padding: 10px; background: #fdfdfd; border: 1px solid #ddd; border-radius: 4px;">
+                        <p style="margin: 0 0 10px; font-style: italic; color: #666;">
+							<?php esc_html_e('A new WooCommerce product will be created. Please set the price.', 'question-press'); ?>
 						</p>
+                        <div class="qp-price-fields-group" style="display: flex; gap: 10px; margin-bottom: 10px;">
+                            <div style="flex: 1;">
+                                <label for="_qp_new_product_regular_price" style="display: block; font-weight: 600; font-size: 0.9em; margin-bottom: 3px;"><?php esc_html_e( 'Regular Price', 'question-press' ); ?> <span style="color: red;">*</span></label>
+                                <input type="text" id="_qp_new_product_regular_price" name="_qp_new_product_regular_price" value="" class="wc_input_price" placeholder="e.g., 20.00" style="width: 100%;">
+                            </div>
+                            <div style="flex: 1;">
+                                <label for="_qp_new_product_sale_price" style="display: block; font-weight: 600; font-size: 0.9em; margin-bottom: 3px;"><?php esc_html_e( 'Sale Price', 'question-press' ); ?></label>
+                                <input type="text" id="_qp_new_product_sale_price" name="_qp_new_product_sale_price" value="" class="wc_input_price" placeholder="Optional" style="width: 100%;">
+                            </div>
+                        </div>
 					</div>
 				<?php endif; ?>
 
@@ -608,14 +753,15 @@ class Meta_Boxes
 			<?php // Auto-plan info logic - REFINED 
 			?>
 			<?php if ($auto_plan_id && get_post($auto_plan_id)) : ?>
-				<div id="qp-auto-plan-info" style="padding: 10px; background: #fdfdfd; border: 1px solid #ddd; border-radius: 4px; margin-top: 10px;">
-					<strong><?php esc_html_e('Plan (Auto-Linked)', 'question-press'); ?></strong><br>
-					<?php echo esc_html(get_the_title($auto_plan_id)); ?> (ID: <?php echo esc_html($auto_plan_id); ?>)
-					<br>
+				<div id="qp-auto-plan-info" class="qp-metabox-field-wrapper" style="padding: 10px 0 0 0; background: transparent; border: none; margin-top: 10px;">
+					<div id="qp-auto-plan-info-text">
+						<strong><?php esc_html_e('Plan (Auto-Linked)', 'question-press'); ?></strong><br>
+						<?php echo esc_html(get_the_title($auto_plan_id)); ?> (ID: <?php echo esc_html($auto_plan_id); ?>)
+					</div>
 					<a href="<?php echo esc_url(get_edit_post_link($auto_plan_id)); ?>" class="button button-secondary button-small" target="_blank" style="margin-top: 5px;"><?php esc_html_e('View Plan', 'question-press'); ?></a>
 				</div>
 			<?php elseif ($access_mode === 'requires_purchase') : ?>
-				<div id="qp-auto-plan-info" style="padding: 10px; background: #fdfdfd; border: 1px solid #ddd; border-radius: 4px; margin-top: 10px;">
+				<div id="qp-auto-plan-info" class="qp-metabox-field-wrapper" style="padding: 10px 0 0 0; background: transparent; border: none; margin-top: 10px;">
 					<p style="margin: 0; font-style: italic; color: #666;">
 						<?php esc_html_e('An Access Plan will be automatically created/updated when you save this course.', 'question-press'); ?>
 					</p>
@@ -625,85 +771,94 @@ class Meta_Boxes
 		</div>
 
 		<script type="text/javascript">
-			/* Keep JS here for now */
 			jQuery(document).ready(function($) {
-				// ... (JS code from original function) ...
-				$('#qp_course_access_mode').on('change', function() {
+				$('#qp_course_access_meta_box').on('change', 'input[name="_qp_course_access_mode"]', function() {
 					if ($(this).val() === 'requires_purchase') {
 						$('#qp-purchase-fields').slideDown(200);
 					} else {
 						$('#qp-purchase-fields').slideUp(200);
 					}
-				}).trigger('change');
+				});
+				// No trigger needed, visibility is set by PHP
 			});
 		</script>
 	<?php
-		// --- End HTML Output ---
 	}
 
 	/**
-	 * Saves the meta box data when the 'qp_course' post type is saved.
-	 * Replaces qp_save_course_access_meta().
+ * Saves the meta box data when the 'qp_course' post type is saved (for Access & Monetization box).
+ * Replaces qp_save_course_access_meta().
+ * Hooked to 'save_post_qp_course'.
+ *
+ * @param int $post_id The ID of the post being saved.
+ */
+public static function save_course_access($post_id)
+{
+	// Check nonce, permissions, autosave, post type
+	if (!isset($_POST['qp_course_access_nonce']) || !wp_verify_nonce($_POST['qp_course_access_nonce'], 'qp_save_course_access_meta')) return $post_id;
+	if (!current_user_can('edit_post', $post_id) || (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) || 'qp_course' !== get_post_type($post_id)) return $post_id;
+
+	// Save Access Mode
+	$access_mode = isset($_POST['_qp_course_access_mode']) ? sanitize_key($_POST['_qp_course_access_mode']) : 'free';
+	update_post_meta($post_id, '_qp_course_access_mode', $access_mode);
+
+    // Expiry Date and Progression Mode are saved in save_course_progression()
+
+	// Save fields only if requires_purchase
+	if ($access_mode === 'requires_purchase') {
+		$duration_value = isset($_POST['_qp_course_access_duration_value']) ? absint($_POST['_qp_course_access_duration_value']) : '';
+		update_post_meta($post_id, '_qp_course_access_duration_value', $duration_value);
+		$duration_unit = isset($_POST['_qp_course_access_duration_unit']) ? sanitize_key($_POST['_qp_course_access_duration_unit']) : 'day';
+		update_post_meta($post_id, '_qp_course_access_duration_unit', $duration_unit);
+
+		// Handle product ID (auto-product ID is saved via hidden field)
+		if (isset($_POST['_qp_linked_product_id'])) {
+			$product_id = absint($_POST['_qp_linked_product_id']);
+            // We just save what's submitted. The sync_course_plan function
+            // will create the product if it doesn't exist and link it.
+            // This field primarily handles the auto-product link.
+            update_post_meta($post_id, '_qp_linked_product_id', $product_id);
+		}
+
+	} else {
+		delete_post_meta($post_id, '_qp_course_access_duration_value');
+		delete_post_meta($post_id, '_qp_course_access_duration_unit');
+
+		// Only delete the link if it's NOT an auto-product
+		$linked_product_id = get_post_meta($post_id, '_qp_linked_product_id', true);
+		if (! empty($linked_product_id) && get_post_meta($linked_product_id, '_qp_is_auto_generated', true) !== 'true') {
+			delete_post_meta($post_id, '_qp_linked_product_id');
+		}
+	}
+}
+
+	/**
+	 * Saves the meta box data when the 'qp_course' post type is saved (for Progression box).
 	 * Hooked to 'save_post_qp_course'.
 	 *
 	 * @param int $post_id The ID of the post being saved.
 	 */
-	public static function save_course_access($post_id)
+	public static function save_course_progression($post_id)
 	{
-		// Check nonce, permissions, autosave, post type (copied from original function)
-		if (!isset($_POST['qp_course_access_nonce']) || !wp_verify_nonce($_POST['qp_course_access_nonce'], 'qp_save_course_access_meta')) return $post_id;
+		// Check nonce, permissions, autosave, post type
+		if (!isset($_POST['qp_course_progression_nonce']) || !wp_verify_nonce($_POST['qp_course_progression_nonce'], 'qp_save_course_progression_meta')) return $post_id;
 		if (!current_user_can('edit_post', $post_id) || (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) || 'qp_course' !== get_post_type($post_id)) return $post_id;
 
-		// Save Access Mode (copied from original function)
-		$access_mode = isset($_POST['_qp_course_access_mode']) ? sanitize_key($_POST['_qp_course_access_mode']) : 'free';
-		update_post_meta($post_id, '_qp_course_access_mode', $access_mode);
+		// --- Save Progression Mode ---
+		$progression_mode = isset($_POST['_qp_course_progression_mode']) ? sanitize_key($_POST['_qp_course_progression_mode']) : 'progressive';
+		if (!in_array($progression_mode, ['open', 'progressive'])) {
+			$progression_mode = 'progressive'; // Default to open if invalid value
+		}
+		update_post_meta($post_id, '_qp_course_progression_mode', $progression_mode);
 
-		// Save Expiry Date
+		// --- Save Expiry Date ---
 		if (isset($_POST['_qp_course_expiry_date'])) {
-			// Validate that it's a real date or an empty string
 			$expiry_date_input = sanitize_text_field($_POST['_qp_course_expiry_date']);
 			if (! empty($expiry_date_input) && \DateTime::createFromFormat('Y-m-d', $expiry_date_input) !== false) {
 				update_post_meta($post_id, '_qp_course_expiry_date', $expiry_date_input);
 			} else {
-				// If it's empty or invalid, delete the meta
 				delete_post_meta($post_id, '_qp_course_expiry_date');
 			}
-		}
-
-		// Save fields only if requires_purchase (copied from original function)
-		if ($access_mode === 'requires_purchase') {
-			$duration_value = isset($_POST['_qp_course_access_duration_value']) ? absint($_POST['_qp_course_access_duration_value']) : '';
-			update_post_meta($post_id, '_qp_course_access_duration_value', $duration_value);
-			$duration_unit = isset($_POST['_qp_course_access_duration_unit']) ? sanitize_key($_POST['_qp_course_access_duration_unit']) : 'day';
-			update_post_meta($post_id, '_qp_course_access_duration_unit', $duration_unit);
-
-			// --- UPDATED: Only save product ID if it's NOT an auto-product ---
-			// (The auto-product ID is hidden and saved automatically, or set by sync_course_plan)
-			if (isset($_POST['_qp_linked_product_id'])) {
-				$product_id = absint($_POST['_qp_linked_product_id']);
-				// Check if this ID is for an auto-product. If it is, trust the value.
-				// If it's NOT (i.e., it's from the dropdown), then save it.
-				$is_auto_product = get_post_meta($product_id, '_qp_is_auto_generated', true) === 'true';
-				if (! $is_auto_product) {
-					// This came from the manual dropdown, so save it
-					update_post_meta($post_id, '_qp_linked_product_id', $product_id);
-				}
-				// If it *was* an auto-product, its hidden field value will be saved, which is correct.
-			}
-			// --- END UPDATED ---
-
-		} else {
-			delete_post_meta($post_id, '_qp_course_access_duration_value');
-			delete_post_meta($post_id, '_qp_course_access_duration_unit');
-
-			// --- UPDATED: Only delete the link if it's NOT an auto-product ---
-			// (We want to keep the link to the auto-product so we can re-publish it later)
-			$linked_product_id = get_post_meta($post_id, '_qp_linked_product_id', true);
-			if (! empty($linked_product_id) && get_post_meta($linked_product_id, '_qp_is_auto_generated', true) !== 'true') {
-				// It's a manually linked product, so remove the link
-				delete_post_meta($post_id, '_qp_linked_product_id');
-			}
-			// --- END UPDATED ---
 		}
 	}
 
@@ -1148,13 +1303,22 @@ class Meta_Boxes
 
 				$product_id_to_save = 0;
 
-				// Check if an auto-product already exists
 				if ($is_auto_product) {
 					$product = wc_get_product($existing_product_id);
 					if ($product) {
 						$product->set_name($course_title);
 						$product->set_status('publish');
 						$product->update_meta_data('_qp_linked_plan_id', $plan_id_to_save); // Re-sync plan ID
+
+                        // --- NEW: Read and set prices from POST data ---
+                        if (isset($_POST['_qp_product_regular_price'])) {
+                            $product->set_regular_price(wc_format_decimal($_POST['_qp_product_regular_price']));
+                        }
+                        if (isset($_POST['_qp_product_sale_price'])) {
+                            $product->set_sale_price(wc_format_decimal($_POST['_qp_product_sale_price']));
+                        }
+                        // --- END NEW ---
+
 						$product_id_to_save = $product->save();
 						error_log("QP Auto Sync: Updated and Published Product ID #{$product_id_to_save} for Course #{$post_id}");
 					} else {
@@ -1169,7 +1333,17 @@ class Meta_Boxes
 					$product->set_status('publish');
 					$product->set_virtual(true);
 					$product->set_downloadable(false);
-					$product->set_regular_price(''); // Admin must set this
+                    
+                    // --- NEW: Read and set prices from POST data ---
+                    $regular_price = isset($_POST['_qp_new_product_regular_price']) ? wc_format_decimal($_POST['_qp_new_product_regular_price']) : '';
+                    $sale_price = isset($_POST['_qp_new_product_sale_price']) ? wc_format_decimal($_POST['_qp_new_product_sale_price']) : '';
+                    
+                    $product->set_regular_price($regular_price);
+                    if ($sale_price !== '') {
+                        $product->set_sale_price($sale_price);
+                    }
+                    // --- END NEW ---
+
 					if ($category_id > 0) {
 						$product->set_category_ids([$category_id]);
 					}

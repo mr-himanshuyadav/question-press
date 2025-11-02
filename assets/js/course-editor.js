@@ -154,84 +154,89 @@ jQuery(document).ready(function ($) {
     // --- Helper Function: Render Test Series Config ---
     function renderTestSeriesConfig(itemIndex, sectionIndex, configData = {}) {
         const itemBaseName = `course_sections[${sectionIndex}][items][${itemIndex}][config]`;
-        const allSubjectTerms = qpCourseEditorData.testSeriesOptions.allSubjectTerms || [];
         const selectedQuestionsArray = configData.selected_questions || [];
 
-        let subjectOptionsHtml = '';
-        allSubjectTerms.filter(term => term.parent == 0).forEach(subject => {
-            const isSelected = configData.subjects && configData.subjects.includes(String(subject.id));
-            subjectOptionsHtml += `<option value="${subject.id}" ${isSelected ? 'selected' : ''}>${subject.name}</option>`;
-        });
-
+        // ALL fields related to time/scoring are REMOVED from here.
         let configHtml = `
             <div class="qp-test-series-config">
-                 <div class="qp-config-row">
-                    <div>
-                        <label for="${itemBaseName}[time_limit]">Time Limit (Minutes, 0=None)</label>
-                        <input type="number" name="${itemBaseName}[time_limit]" data-config-key="time_limit" value="${configData.time_limit || 0}" min="0">
-                    </div>
-                </div>
-                 <div class="qp-config-row">
-                     <div>
-                        <label style="display:inline-block; margin-right: 10px;">
-                            <input type="checkbox" name="${itemBaseName}[scoring_enabled]" data-config-key="scoring_enabled" value="1" class="qp-config-scoring-enabled" ${configData.scoring_enabled ? 'checked' : ''}>
-                            Enable Scoring
-                        </label>
-                     </div>
-                 </div>
-                 <div class="qp-config-row qp-marks-group" style="${configData.scoring_enabled ? '' : 'display: none;'}">
-                     <div>
-                        <label>Marks Correct</label>
-                        <input type="number" name="${itemBaseName}[marks_correct]" data-config-key="marks_correct" value="${configData.marks_correct || 1}" step="0.1" min="0">
-                     </div>
-                     <div>
-                        <label>Marks Incorrect (Penalty)</label>
-                        <input type="number" name="${itemBaseName}[marks_incorrect]" data-config-key="marks_incorrect" value="${configData.marks_incorrect || 0}" step="0.1" min="0">
-                    </div>
-                 </div>
-
                  <hr>
                 <div>
-                    <label>Manually Selected Questions<span style="color:red;">*</span></label>
+                    <label>Selected Questions<span style="color:red;margin-bottom:5px;">*</span></label>
                      <div id="selected-questions-display-${sectionIndex}-${itemIndex}" class="qp-selected-questions-display" style="min-height: 40px; background: #f0f0f1; border: 1px solid #ddd; padding: 8px; border-radius: 4px; margin-bottom: 8px;">
                         ${selectedQuestionsArray.length > 0
-                            ? `<span style="font-weight: bold;">${selectedQuestionsArray.length} questions selected:</span> ${selectedQuestionsArray.join(', ')}`
-                            : '<span style="color: #777;">No questions selected manually.</span>'}
+                            ? `<span style="font-weight: bold;">${selectedQuestionsArray.length} questions selected:</span> ${selectedQuestionsArray.join(',')}`
+                            : '<span style="color: #777;">No questions selected.</span>'}
                     </div>
                     <button type="button" class="button qp-select-questions-btn" data-section-index="${sectionIndex}" data-item-index="${itemIndex}">
                         <span class="dashicons dashicons-editor-ul" style="vertical-align: text-top;"></span> Select Questions
                     </button>
                     <input type="hidden" name="${itemBaseName}[selected_questions]" data-config-key="selected_questions" class="qp-selected-questions-input" value="${selectedQuestionsArray.join(',') || ''}">
-                    <p class="description" style="margin-top: 5px;">You have to select questions manually.</p>
                 </div>
             </div>`;
         return configHtml;
     }
 
     // --- Helper Function: Render Single Item ---
-    function renderItem(itemData, itemIndex, sectionIndex) {
-        const config = itemData.content_config || {};
-        const itemId = itemData.item_id || 0; // Get existing ID or 0 for new
-        const itemBaseName = `course_sections[${sectionIndex}][items][${itemIndex}]`; // Base name for inputs
+function renderItem(itemData, itemIndex, sectionIndex) {
+    const config = itemData.content_config || {};
+    const itemId = itemData.item_id || 0; // Get existing ID or 0 for new
+    const itemBaseName = `course_sections[${sectionIndex}][items][${itemIndex}]`; // Base name for inputs
+    const configBaseName = `${itemBaseName}[config]`; // Config base name
 
-        const itemHtml = `
-            <div class="qp-course-item" data-item-id="${itemId}" data-initial-config='${JSON.stringify(config)}'>
-                 <input type="hidden" name="${itemBaseName}[item_id]" value="${itemId}">
-                 <div class="qp-item-header">
-                     <span class="dashicons dashicons-menu handle"></span>
-                     <input type="text" class="qp-item-title-input" value="${itemData.title || ''}" placeholder="Item Title">
-                     <div class="qp-item-controls">
-                         <select class="qp-item-content-type-select" disabled> <option value="test_series" selected>Test Series</option>
-                             </select>
-                         <button type="button" class="button button-link-delete qp-remove-item-btn"><span class="dashicons dashicons-trash"></span></button>
+    // --- NEW: Define scoring/time variables ---
+    const timeLimit = config.time_limit || 5;
+    const isScoringEnabled = config.scoring_enabled;
+    const marksCorrect = config.marks_correct || 1;
+    const marksIncorrect = config.marks_incorrect || 0;
+
+    // --- THIS IS THE FIX ---
+    // Set visibility style based on isScoringEnabled to prevent layout shift
+    const scoringFieldsVisibility = isScoringEnabled ? 'visibility: visible;' : 'visibility: hidden;';
+
+    const itemHtml = `
+        <div class="qp-course-item" data-item-id="${itemId}" data-initial-config='${JSON.stringify(config)}'>
+             <input type="hidden" name="${itemBaseName}[item_id]" value="${itemId}">
+             <div class="qp-item-header">
+                 <span class="dashicons dashicons-menu handle"></span>
+                 <input type="text" class="qp-item-title-input" value="${itemData.title || ''}" name="${itemBaseName}[title]" placeholder="Item Title">
+
+                 <div class="qp-item-controls">
+                    <div class="qp-item-header-config">
+                        <div class="qp-header-field">
+                            <label for="time-limit-${sectionIndex}-${itemIndex}">Time (In Minutes)</label>
+                            <input type="number" id="time-limit-${sectionIndex}-${itemIndex}" name="${configBaseName}[time_limit]" data-config-key="time_limit" value="${timeLimit}" min="5" title="Time Limit (Minutes, 0=None)">
+                        </div>
+
+                        <div class="qp-header-field qp-header-field-scoring">
+                            <label>
+                                <input type="checkbox" name="${configBaseName}[scoring_enabled]" data-config-key="scoring_enabled" value="1" class="qp-config-scoring-enabled" ${isScoringEnabled ? 'checked' : ''}>
+                                Scoring
+                            </label>
+                        </div>
+
+                        <div class="qp-header-field qp-marks-group" style="${scoringFieldsVisibility}">
+                            <div class="qp-marks-field-subgroup">
+                                <label for="marks-correct-${sectionIndex}-${itemIndex}">Correct</label>
+                                <input type="number" id="marks-correct-${sectionIndex}-${itemIndex}" name="${configBaseName}[marks_correct]" data-config-key="marks_correct" value="${marksCorrect}" step="0.1" min="0" title="Marks Correct">
+                            </div>
+                            <div class="qp-marks-field-subgroup">
+                                <label for="marks-incorrect-${sectionIndex}-${itemIndex}">Incorrect</label>
+                                <input type="number" id="marks-incorrect-${sectionIndex}-${itemIndex}" name="${configBaseName}[marks_incorrect]" data-config-key="marks_incorrect" value="${marksIncorrect}" step="0.1" min="0" title="Marks Incorrect (Penalty)">
+                            </div>
+                        </div>
                     </div>
-                 </div>
-                 <div class="qp-item-config">
-                     ${renderTestSeriesConfig(itemIndex, sectionIndex, config)}
-                 </div>
-            </div>`;
-        return itemHtml;
-    }
+                    <select class="qp-item-content-type-select" name="${itemBaseName}[content_type]" disabled>
+                         <option value="test_series" selected>Test Series</option>
+                    </select>
+                    <button type="button" class="button button-link-delete qp-remove-item-btn"><span class="dashicons dashicons-trash"></span></button>
+                </div>
+             </div>
+             <div class="qp-item-config">
+                 ${renderTestSeriesConfig(itemIndex, sectionIndex, config)}
+             </div>
+        </div>`;
+    return itemHtml;
+}
 
     // --- Helper Function: Render Single Section ---
     function renderSection(sectionData, sectionIndex) {
@@ -322,15 +327,20 @@ jQuery(document).ready(function ($) {
         });
     });
 
-     // --- Toggle Scoring Fields ---
+    // --- Toggle Scoring Fields ---
     sectionsList.on('change', '.qp-config-scoring-enabled', function() {
         const $checkbox = $(this);
-        const $marksGroup = $checkbox.closest('.qp-test-series-config').find('.qp-marks-group');
+
+        // --- THIS IS THE FIX ---
+        // Find the marks group, which is now inside the same config block
+        const $marksGroup = $checkbox.closest('.qp-item-header-config').find('.qp-marks-group');
+        // --- END FIX ---
+
         if ($checkbox.is(':checked')) {
-            $marksGroup.slideDown(200);
+            $marksGroup.css('visibility', 'visible'); // Use visibility
         } else {
-            $marksGroup.slideUp(200);
-            $marksGroup.find('input').val(0);
+            $marksGroup.css('visibility', 'hidden'); // Use visibility
+            // Note: We don't reset values, preserving user input if they toggle it off/on
         }
     });
 
@@ -572,65 +582,35 @@ jQuery(document).ready(function ($) {
     // --- Modal Interaction Logic End ---
     // ===========================================
 
-    // =============================================
-    // --- AJAX Save Price from Meta Box ---
-    // =============================================
-    
-    // Use delegation from a static parent element
-    $('body').on('click', '#qp-save-product-price-btn', function() {
-        var $button = $(this);
-        var $successMsg = $('#qp-price-save-success');
-        
-        var productId = $button.data('product-id');
-        var nonce = $button.data('nonce');
-        var regularPrice = $('#_qp_product_regular_price').val();
-        var salePrice = $('#_qp_product_sale_price').val();
-        
-        // Show loading state
-        $button.text('Saving...').prop('disabled', true);
-        $successMsg.text('');
-
-        $.ajax({
-            url: ajaxurl, // 'ajaxurl' is globally available in admin
-            type: 'POST',
-            data: {
-                action: 'qp_update_product_price',
-                nonce: nonce,
-                product_id: productId,
-                regular_price: regularPrice,
-                sale_price: salePrice
-            },
-            success: function(response) {
-                if (response.success) {
-                    // Update fields with sanitized values from server
-                    $('#_qp_product_regular_price').val(response.data.regular_price);
-                    $('#_qp_product_sale_price').val(response.data.sale_price);
+    // --- NEW: Client-side validation for New Course Price ---
+    $('form#post').on('submit', function(e) {
+        // Check if "Paid" mode is selected
+        if ( $('#qp_access_mode_paid').is(':checked') ) {
+            
+            // Check if we are creating a NEW product (i.e., the "new price" fields are visible)
+            var $newPriceFields = $('#qp-new-product-price-fields');
+            
+            if ($newPriceFields.length > 0 && $newPriceFields.is(':visible')) {
+                var $regularPrice = $('#_qp_new_product_regular_price');
+                
+                if ( $regularPrice.val() === '' || parseFloat($regularPrice.val()) <= 0 ) {
+                    // Stop the form from submitting
+                    e.preventDefault(); 
                     
-                    // Show success message
-                    $successMsg.text('Saved!');
-                    setTimeout(function() {
-                        $successMsg.text('');
-                    }, 2000); // Hide message after 2 seconds
-                } else {
-                    // Show error
-                    $successMsg.css('color', 'red').text(response.data.message || 'Error!');
-                    setTimeout(function() {
-                        $successMsg.text('').css('color', '#2e7d32'); // Reset color
-                    }, 3000);
+                    // Show an alert
+                    Swal.fire({
+                        title: 'Price Required',
+                        text: 'You must set a "Regular Price" for this paid course before saving.',
+                        icon: 'warning'
+                    });
+                    
+                    // Highlight the field and stop the spinner
+                    $regularPrice.css('border-color', 'red');
+                    $('#publishing-action .spinner').removeClass('is-active');
+                    $('#publish').prop('disabled', false);
                 }
-            },
-            error: function() {
-                // Show critical error
-                $successMsg.css('color', 'red').text('Server error.');
-                setTimeout(function() {
-                    $successMsg.text('').css('color', '#2e7d32'); // Reset color
-                }, 3000);
-            },
-            complete: function() {
-                // Restore button
-                $button.text('Save Price').prop('disabled', false);
             }
-        });
+        }
     });
 
     // --- Load initial data and make sortable ---

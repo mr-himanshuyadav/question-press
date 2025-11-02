@@ -68,4 +68,9 @@
   "Zend OPcache",
   "zip",
   "zlib"
-]}
+],
+"intelephense.environment.includePaths": [
+      "C:\\Users\\HIMANSHU\\Local Sites\\qp\\app\\public\\wp-includes",
+      "C:\\Users\\HIMANSHU\\Local Sites\\qp\\app\\public\\wp-content\\plugins\\woocommerce\\includes",
+      "C:\\Users\\HIMANSHU\\Local Sites\\qp\\app\\public\\wp-content\\plugins\\woocommerce"
+   ]}

@@ -409,6 +409,13 @@ final class Dashboard {
 		echo '<div class="qp-course-structure-content">';
 
 		if ( ! empty( $sections ) ) {
+            
+            // --- NEW: Get progression mode ---
+            $progression_mode = get_post_meta($course_id, '_qp_course_progression_mode', true);
+            $is_progressive = ($progression_mode === 'progressive') && !user_can($user_id, 'manage_options'); // Admins bypass
+            $is_previous_item_complete = true; // First item is always unlocked
+            // --- END NEW ---
+
 			foreach ( $sections as $section ) {
 				?>
 				<div class="qp-course-section-card qp-card">
@@ -430,44 +437,70 @@ final class Dashboard {
 								$status          = $item_progress['status'];
 								$session_id_attr = $item_progress['session_id'] ? ' data-session-id="' . esc_attr( $item_progress['session_id'] ) . '"' : '';
 
+                                // --- NEW: Progression Logic ---
+                                $is_locked = false;
+                                if ($is_progressive && !$is_previous_item_complete) {
+                                    $is_locked = true;
+                                }
+                                // --- END NEW ---
+
 								$status_icon  = '';
 								$button_text  = 'Start';
-								$button_class = 'qp-button-primary start-course-test-btn'; // Default to test start
+								$button_class = 'qp-button-primary start-course-test-btn';
+                                $button_disabled = $is_locked ? 'disabled' : '';
+                                $row_class = $is_locked ? 'qp-item-locked' : '';
 
-								switch ( $status ) {
-									case 'completed':
-										$status_icon  = '<span class="dashicons dashicons-yes-alt" style="color: var(--qp-dashboard-success);"></span>';
-										$button_text  = 'Review';
-										$button_class = 'qp-button-secondary view-test-results-btn';
-										break;
-									case 'in_progress': // Add case for 'in_progress' if used later
-										$status_icon  = '<span class="dashicons dashicons-marker" style="color: var(--qp-dashboard-warning-dark);"></span>';
-										$button_text  = 'Continue';
-										$button_class = 'qp-button-primary start-course-test-btn';
-										break;
-									default: // not_started
-										$status_icon = '<span class="dashicons dashicons-marker" style="color: var(--qp-dashboard-border);"></span>';
-										$button_text = 'Start';
-										$button_class = 'qp-button-primary start-course-test-btn';
-										break;
-								}
+                                // --- NEW: Update icon and button based on lock status ---
+                                if ($is_locked) {
+                                    $status_icon  = '<span class="dashicons dashicons-lock" style="color: var(--qp-dashboard-text-light);"></span>';
+                                    $button_text  = 'Locked';
+                                    $button_class = 'qp-button-secondary';
+                                } else {
+                                    // Original logic for non-locked items
+								    switch ( $status ) {
+									    case 'completed':
+										    $status_icon  = '<span class="dashicons dashicons-yes-alt" style="color: var(--qp-dashboard-success);"></span>';
+										    $button_text  = 'Review';
+										    $button_class = 'qp-button-secondary view-test-results-btn';
+										    break;
+									    case 'in_progress':
+										    $status_icon  = '<span class="dashicons dashicons-marker" style="color: var(--qp-dashboard-warning-dark);"></span>';
+										    $button_text  = 'Continue';
+										    $button_class = 'qp-button-primary start-course-test-btn';
+										    break;
+									    default: // not_started
+										    $status_icon = '<span class="dashicons dashicons-marker" style="color: var(--qp-dashboard-border);"></span>';
+										    $button_text = 'Start';
+										    $button_class = 'qp-button-primary start-course-test-btn';
+										    break;
+								    }
+                                }
 
 								// Adjust button for non-test items
 								if ( $item->content_type !== 'test_series' ) {
 									$button_class    = 'qp-button-secondary view-course-content-btn'; // Generic class for other types
-									$button_text     = 'View'; // Generic text
+									$button_text     = $is_locked ? 'Locked' : 'View'; // Use 'View' or 'Locked'
 									$session_id_attr = ''; // No session ID for non-tests
 								}
+                                // --- END NEW ---
 
 								?>
-								<div class="qp-course-item-row" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--qp-dashboard-border-light);">
+								<div class="qp-course-item-row <?php echo esc_attr($row_class); ?>" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--qp-dashboard-border-light);">
 									<span class="qp-course-item-link" style="display: flex; align-items: center; gap: 8px;">
-										<?php echo $status_icon; ?>
+										<?php echo $status_icon; // This now contains the lock icon ?>
 										<span style="font-weight: 500;"><?php echo esc_html( $item->title ); ?></span>
 									</span>
-									<button class="qp-button <?php echo esc_attr( $button_class ); ?>" data-item-id="<?php echo esc_attr( $item->item_id ); ?>" <?php echo $session_id_attr; ?> style="padding: 4px 10px; font-size: 12px;"><?php echo esc_html( $button_text ); ?></button>
+									<button class="qp-button <?php echo esc_attr( $button_class ); ?>" data-item-id="<?php echo esc_attr( $item->item_id ); ?>" <?php echo $session_id_attr; ?> style="padding: 4px 10px; font-size: 12px;" <?php echo $button_disabled; ?>>
+                                        <?php echo esc_html( $button_text ); ?>
+                                    </button>
 								</div>
 								<?php
+
+                                // --- NEW: Update lock for next iteration ---
+                                if ($is_progressive) {
+                                    $is_previous_item_complete = ($status === 'completed');
+                                }
+                                // --- END NEW ---
 							}
 						} else {
 							echo '<p style="text-align: center; color: var(--qp-dashboard-text-light); font-style: italic;">No items in this section.</p>';

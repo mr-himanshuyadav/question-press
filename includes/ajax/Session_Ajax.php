@@ -1078,6 +1078,57 @@ class Session_Ajax {
         }
         // --- END FIX 2 ---
 
+        // --- NEW: Step 2 - Progressive Enrollment Check ---
+        $progression_mode = get_post_meta($course_id, '_qp_course_progression_mode', true);
+        if ($progression_mode === 'progressive') {
+            
+            // 1. Get all items in this course, in their correct order
+            $sections_table = $wpdb->prefix . 'qp_course_sections';
+            $items_table = $wpdb->prefix . 'qp_course_items';
+            
+            $ordered_item_ids = $wpdb->get_col($wpdb->prepare(
+                "SELECT i.item_id
+                 FROM {$items_table} i
+                 JOIN {$sections_table} s ON i.section_id = s.section_id
+                 WHERE i.course_id = %d
+                 ORDER BY s.section_order ASC, i.item_order ASC",
+                $course_id
+            ));
+
+            if (!empty($ordered_item_ids)) {
+                $current_item_index = array_search($item_id, $ordered_item_ids);
+
+                // 2. If item is found and is NOT the first item
+                if ($current_item_index !== false && $current_item_index > 0) {
+                    $previous_item_id = $ordered_item_ids[$current_item_index - 1];
+                    
+                    // 3. Check the user's progress on the *previous* item
+                    $progress_table = $wpdb->prefix . 'qp_user_items_progress';
+                    $previous_item_status = $wpdb->get_var($wpdb->prepare(
+                        "SELECT status FROM {$progress_table} WHERE user_id = %d AND item_id = %d",
+                        $user_id,
+                        $previous_item_id
+                    ));
+                    
+                    // 4. If previous item is not 'completed', block access
+                    if ($previous_item_status !== 'completed') {
+                        $previous_item_title = $wpdb->get_var($wpdb->prepare("SELECT title FROM {$items_table} WHERE item_id = %d", $previous_item_id));
+                        wp_send_json_error([
+                            'message' => sprintf(
+                                __('You must complete the previous item "%s" before starting this one.', 'question-press'),
+                                $previous_item_title ? esc_html($previous_item_title) : 'N/A'
+                            ),
+                            'code' => 'progression_locked'
+                        ]);
+                        return;
+                    }
+                }
+                // If $current_item_index is 0 (first item), or item not found (shouldn't happen),
+                // we allow access to continue.
+            }
+        }
+        // --- END NEW Progressive Enrollment Check ---
+
 
         // --- Proceed with starting the session (Original logic) ---
 

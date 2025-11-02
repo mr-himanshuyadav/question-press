@@ -195,7 +195,9 @@ final class Plugin {
 
             // Course Access Meta Box (NEW)
             add_action('add_meta_boxes_qp_course', [Meta_Boxes::class, 'add_course_access']);
+            add_action('add_meta_boxes_qp_course', [Meta_Boxes::class, 'add_course_progression']);
             add_action('save_post_qp_course', [Meta_Boxes::class, 'save_course_access'], 30, 1);
+            add_action('save_post_qp_course', [Meta_Boxes::class, 'save_course_progression'], 30, 1);
 
             // Course Structure Meta Box (NEW)
             add_action('add_meta_boxes', [Meta_Boxes::class, 'add_course_structure']);
@@ -271,7 +273,6 @@ final class Plugin {
         add_action('wp_ajax_get_sources_for_list_table_filter', [Admin_Ajax::class, 'get_sources_for_list_table_filter']);
         add_action('wp_ajax_qp_get_quick_edit_form', [Admin_Ajax::class, 'get_quick_edit_form']);
         add_action('wp_ajax_save_quick_edit_data', [Admin_Ajax::class, 'save_quick_edit_data']);
-        add_action('wp_ajax_qp_update_product_price', [Admin_Ajax::class, 'update_product_price_from_course_meta']);
         add_action('wp_ajax_qp_create_backup', [Admin_Ajax::class, 'create_backup']);
         add_action('wp_ajax_qp_delete_backup', [Admin_Ajax::class, 'delete_backup']);
         add_action('wp_ajax_qp_restore_backup', [Admin_Ajax::class, 'restore_backup']);
@@ -285,6 +286,7 @@ final class Plugin {
         add_filter('set-screen-option', [All_Questions_Page::class, 'save_screen_options'], 10, 3);
         add_filter('display_post_states', [Post_Types::class, 'add_custom_post_states'], 10, 2);
         add_filter('views_edit-qp_course', [Post_Types::class, 'add_expired_to_course_views'], 10, 1);
+        add_filter('the_content', [Post_Types::class, 'inject_course_details'], 20);
         add_filter('display_post_states', [Admin_Utils::class, 'add_product_post_states'], 10, 2);
     }
 
