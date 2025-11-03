@@ -126,6 +126,12 @@
     margin-right: 4px;
 }
 
+.qp-history-item-context.course-context .context-content {
+    margin-left: 0; /* This removes any margin */
+    font-weight: 500; /* Makes the course name slightly bolder */
+    color: var(--qp-dashboard-text-dark); /* Makes it easier to read */
+}
+
 /* 3. Sub-Stats (re-using from previous CSS) */
 .qp-history-item-card .qp-card-sub-stats {
     display: flex; /* Changed from grid to flex */
@@ -309,4 +315,64 @@
     .qp-history-item-paused .qp-history-item-actions {
         flex-direction: row; /* Stays row */
     }
+}
+
+
+/* =================================================================
+   OVERVIEW: Concise History List Overrides
+   ================================================================= */
+
+/* Target the list inside the overview card */
+.qp-overview-history-list .qp-history-item-card {
+    padding: 1rem 1.25rem; /* Slightly less vertical padding */
+    border-radius: 0;
+    border-top: none;
+    border-left: none;
+    border-right: none;
+    border-bottom: 1px solid var(--qp-dashboard-border-light);
+    box-shadow: none;
+    background: none;
+}
+.qp-overview-history-list .qp-history-item-card:hover {
+    background-color: #fcfcfc;
+    transform: none; /* No lift */
+    box-shadow: none;
+}
+.qp-overview-history-list .qp-history-item-card:first-child {
+    border-top: 1px solid var(--qp-dashboard-border-light);
+}
+
+.qp-overview-history-list .qp-history-item-icon {
+    width: 40px; /* Smaller icon */
+    height: 40px;
+}
+.qp-overview-history-list .qp-history-item-icon .dashicons {
+    font-size: 20px; width: 20px; height: 20px;
+}
+
+.qp-overview-history-list .qp-history-item-main {
+    gap: 0;
+}
+.qp-overview-history-list .qp-history-item-header {
+    margin-bottom: 0.25rem; /* Tighter spacing */
+}
+.qp-overview-history-list .qp-history-item-mode {
+    font-size: 1.1em; /* 16px */
+}
+.qp-overview-history-list .qp-history-item-result {
+    font-size: 1.25em; /* 18px */
+}
+
+.qp-overview-history-list .qp-history-item-context {
+    margin-bottom: 0; /* No margin below context */
+}
+
+.qp-overview-history-list .qp-history-item-actions {
+    min-height: 0; /* Remove the min-height */
+    gap: 0.5rem;
+    align-items: center; /* Center-align date and button */
+}
+.qp-overview-history-list .qp-history-item-actions .qp-button-small {
+    padding: 2px 10px; /* Make button smaller */
+    font-size: 12px;
 }

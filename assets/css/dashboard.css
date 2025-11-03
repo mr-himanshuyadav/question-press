@@ -57,7 +57,7 @@
 
 /* Outline:none */
 
-.qp-sidebar-close-btn, .qp-sidebar-toggle, .qp-button, .qp-modal-close-btn{
+.qp-sidebar-close-btn, .qp-sidebar-toggle, .qp-button, .qp-modal-close-btn, .qp-md-tab-link{
     outline: none;
 }
 
@@ -107,7 +107,8 @@ body { margin: 0; }
 	transition: transform 0.3s ease-in-out;
 	flex-shrink: 0;
 	position: fixed;
-	top: 0px; /* Adjust if you have a WP admin bar visible */
+    top: var(--wp-admin--admin-bar--height, 0px);
+
 	bottom: 0;
 	left: 0;
 	/* overflow-y: auto; <-- REMOVE this */
@@ -115,7 +116,7 @@ body { margin: 0; }
     /* --- ADD Flexbox properties --- */
     display: flex;
     flex-direction: column;
-    height: 100vh; /* Make sidebar full viewport height */
+    height: calc(100vh - var(--wp-admin--admin-bar--height, 0px)); /* Make sidebar full viewport height */
     /* --- END ADD --- */
 }
 
@@ -232,6 +233,7 @@ body { margin: 0; }
 	 padding: 5px;
 	 display: flex;
 	 align-items: center;
+     justify-content: center;
 	 gap: 8px;
      text-decoration: none;
      border-radius: 4px;
@@ -266,6 +268,7 @@ body { margin: 0; }
 	transform: translateY(-2px);
 }
 .qp-card-header {
+    display: flex; justify-content: space-between; align-items: center;
 	padding: 1rem 1.5rem;
 	border-bottom: 1px solid var(--qp-dashboard-border-light);
 	background-color: var(--qp-dashboard-card-header-bg);
@@ -548,7 +551,7 @@ ul.qp-review-list li:last-child { border-bottom: none; }
 	height: 50px; /* Adjust height as needed */
 	background-color: var(--qp-dashboard-sidebar-bg); /* Use sidebar background */
 	border-bottom: 1px solid var(--qp-dashboard-border);
-	position: fixed; /* Fixed position */
+	position: sticky; /* Fixed position */
 	left: 0;
 	right: 0;
 	z-index: 1000; /* Ensure it's above content but below sidebar overlay */

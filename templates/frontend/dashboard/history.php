@@ -16,7 +16,7 @@ use QuestionPress\Frontend\Dashboard;
 if ( ! function_exists( 'qp_get_history_mode_details' ) ) {
     function qp_get_history_mode_details( $session, $settings ) {
         $details = [
-            'icon'  => 'dashicons-edit-alt',
+            'icon'  => 'dashicons-edit',
             'class' => 'mode-normal',
             'label' => 'Practice',
         ];
@@ -26,7 +26,7 @@ if ( ! function_exists( 'qp_get_history_mode_details' ) ) {
                 $details = [
                     'icon'  => 'dashicons-welcome-learn-more',
                     'class' => 'mode-course-test',
-                    'label' => Dashboard::get_session_mode_name( $session, $settings ), // Will show "Course / Section / Item"
+                    'label' => 'Course Test', // Will show "Course / Section / Item"
                 ];
             } else {
                 $details = [
@@ -103,10 +103,43 @@ if ( ! function_exists( 'qp_get_history_mode_details' ) ) {
             }
 
             // Get context (subjects or course)
-            $context_display = Dashboard::get_session_subjects_display( $session, $settings, $lineage_cache_completed, $group_to_topic_map_completed, $question_to_group_map_completed );
-            if ( $mode_details['class'] === 'mode-course-test' ) {
-                $context_display = ''; // Don't show subjects if it's a course test, the label has the info
-            }
+			if ( $mode_details['class'] === 'mode-course-test' ) {
+				// --- NEW: Fetch full course/section/item name ---
+				global $wpdb; // Make sure $wpdb is available
+				$course_id = absint($settings['course_id']);
+				$item_id = absint($settings['item_id']);
+				
+				$course_title = get_the_title($course_id); // This is correct (it's a post)
+				
+				// Fetch Item and Section Title
+				$items_table = $wpdb->prefix . 'qp_course_items';
+				$sections_table = $wpdb->prefix . 'qp_course_sections';
+				$item_info = $wpdb->get_row($wpdb->prepare(
+					"SELECT i.title AS item_title, s.title AS section_title
+					 FROM {$items_table} i
+					 LEFT JOIN {$sections_table} s ON i.section_id = s.section_id
+					 WHERE i.item_id = %d",
+					$item_id
+				));
+
+				$item_title = $item_info ? $item_info->item_title : null;
+				$section_title = $item_info ? $item_info->section_title : null;
+
+				// Build the new name string
+				$name_parts = [];
+				if ($course_title) $name_parts[] = esc_html($course_title);
+				if ($section_title) $name_parts[] = esc_html($section_title);
+				if ($item_title) $name_parts[] = esc_html($item_title);
+
+				if (!empty($name_parts)) {
+					$context_display = implode(' / ', $name_parts);
+				} else {
+					$context_display = ''; // Blank it if we couldn't find names
+				}
+			} else {
+				// --- Original logic for non-course tests ---
+				$context_display = Dashboard::get_session_subjects_display( $session, $settings, $lineage_cache_completed, $group_to_topic_map_completed, $question_to_group_map_completed );
+			}
             
             // Check for deleted course item
             if ( isset( $settings['course_id'] ) && isset( $settings['item_id'] ) ) {
@@ -126,12 +159,17 @@ if ( ! function_exists( 'qp_get_history_mode_details' ) ) {
                         <span class="qp-history-item-result"><?php echo esc_html( $result_display ); ?></span>
                     </div>
                     
-                    <div class="qp-history-item-context">
-                        <?php if ( ! empty( $context_display ) ) : ?>
-                            <span class="context-label">Subjects:</span>
-                            <?php echo wp_kses_post( $context_display ); ?>
-                        <?php endif; ?>
-                    </div>
+                    <div class="qp-history-item-context <?php echo ( $mode_details['class'] === 'mode-course-test' ? 'course-context' : '' ); ?>">
+						<?php if ( ! empty( $context_display ) ) : ?>
+							
+							<?php // --- THIS IS THE FIX: Only show label if NOT a course test --- ?>
+							<?php if ( $mode_details['class'] !== 'mode-course-test' ) : ?>
+								<span class="context-label">Subjects:</span>
+							<?php endif; ?>
+
+							<span class="context-content"><?php echo wp_kses_post( $context_display ); ?></span>
+						<?php endif; ?>
+					</div>
                     
                     <div class="qp-card-sub-stats">
                         <div class="stat-item correct">
