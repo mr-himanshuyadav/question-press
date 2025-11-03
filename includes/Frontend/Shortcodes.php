@@ -878,7 +878,7 @@ final class Shortcodes {
 					<?php if ( isset( $settings['practice_mode'] ) && $settings['practice_mode'] === 'mock_test' ) : ?>
 						<div class="stat">
 							<div class="value"><?php echo (int) $session->skipped_count; ?></div>
-							<div class="label">Unattempted</div>
+							<div class="label">Viewed & Unattempted</div>
 						</div>
 						<div class="stat">
 							<div class="value"><?php echo (int) $session->not_viewed_count; ?></div>
@@ -907,7 +907,10 @@ final class Shortcodes {
 					$answer_class        = $is_skipped ? 'skipped' : ( $attempt->is_correct ? 'correct' : 'incorrect' );
 
 					if ( isset( $settings['practice_mode'] ) && $settings['practice_mode'] === 'mock_test' ) {
-						if ( $attempt->mock_status === 'not_viewed' || $attempt->mock_status === 'viewed' || $attempt->mock_status === 'marked_for_review' ) {
+						if ( $attempt->mock_status === 'not_viewed' ) {
+							$answer_display_text = 'Not Viewed';
+							$answer_class        = 'not-viewed';
+						} elseif ( $attempt->mock_status === 'viewed' || $attempt->mock_status === 'marked_for_review' ) {
 							$answer_display_text = 'Unattempted';
 							$answer_class        = 'unattempted';
 						}

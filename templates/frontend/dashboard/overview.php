@@ -102,7 +102,8 @@ $never_correct_count = $never_correct_count ?? 0;
 							<span class="qp-card-date">Started: <?php echo esc_html( date_i18n( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), strtotime( $session->start_time ) ) ); ?></span>
 						</div>
 						<div class="qp-card-actions">
-							<?php if ( $mode !== 'Section Practice' ) : // Assuming this check is still needed ?>
+							<?php // Show button ONLY if setting is enabled AND it's NOT a Section Practice or Mock Test
+							if ( $allow_termination && $mode !== 'Section Practice' && $mode !== 'Mock Test' ) : ?>
 								<button class="qp-button qp-button-danger qp-terminate-session-btn" data-session-id="<?php echo esc_attr( $session->session_id ); ?>">Terminate</button>
 							<?php endif; ?>
 							<a href="<?php echo esc_url( add_query_arg( 'session_id', $session->session_id, $session_page_url ) ); ?>" class="qp-button qp-button-primary"><?php echo ( $session->status === 'paused' ? 'Resume' : 'Continue' ); ?></a>

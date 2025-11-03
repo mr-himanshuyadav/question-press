@@ -90,13 +90,13 @@ class Session_Manager extends DB { // <-- Extend DB to get self::$wpdb
 		$incorrect_count = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $attempts_table WHERE session_id = %d AND is_correct = 0", $session_id));
 		$total_attempted = $correct_count + $incorrect_count;
 		$not_viewed_count = 0;
+        $skipped_count = 0;
 		if ($is_mock_test) {
-			$unattempted_count = count(json_decode($session->question_ids_snapshot, true)) - $total_attempted;
 			$not_viewed_count = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $attempts_table WHERE session_id = %d AND mock_status = 'not_viewed'", $session_id));
+            $skipped_count = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $attempts_table WHERE session_id = %d AND mock_status IN ('viewed', 'marked_for_review')", $session_id));
 		} else {
-			$unattempted_count = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $attempts_table WHERE session_id = %d AND status = 'skipped'", $session_id));
+			$skipped_count = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $attempts_table WHERE session_id = %d AND status = 'skipped'", $session_id));
 		}
-		$skipped_count = $unattempted_count;
 		$final_score = ($correct_count * $marks_correct) + ($incorrect_count * $marks_incorrect);
 		$end_time_for_calc = ($new_status === 'abandoned' && !empty($session->last_activity) && $session->last_activity !== '0000-00-00 00:00:00') ? $session->last_activity : current_time('mysql');
 		$end_time_gmt = get_gmt_from_date($end_time_for_calc);
@@ -209,6 +209,14 @@ class Session_Manager extends DB { // <-- Extend DB to get self::$wpdb
 			$progress_table = $wpdb->prefix . 'qp_user_items_progress';
 			$items_table = $wpdb->prefix . 'qp_course_items';
 
+			// Get the current attempt count for this specific item
+			$current_attempt_count = (int) $wpdb->get_var($wpdb->prepare(
+				"SELECT attempt_count FROM {$progress_table} WHERE user_id = %d AND item_id = %d",
+				$user_id,
+				$item_id
+			));
+			$new_attempt_count = $current_attempt_count + 1;
+
 			// Check if the course item still exists before trying to update progress
 			$item_exists = $wpdb->get_var($wpdb->prepare(
 				"SELECT COUNT(*) FROM {$items_table} WHERE item_id = %d AND course_id = %d",
@@ -228,17 +236,17 @@ class Session_Manager extends DB { // <-- Extend DB to get self::$wpdb
 					'session_id' => $session_id
 				]);
 
-				// Use REPLACE INTO to update or insert progress
 				$wpdb->query($wpdb->prepare(
-					"REPLACE INTO {$progress_table} (user_id, item_id, course_id, status, completion_date, result_data, last_viewed)
-					 VALUES (%d, %d, %d, %s, %s, %s, %s)",
+					"REPLACE INTO {$progress_table} (user_id, item_id, course_id, status, completion_date, result_data, last_viewed, attempt_count)
+					 VALUES (%d, %d, %d, %s, %s, %s, %s, %d)",
 					$user_id,
 					$item_id,
 					$course_id,
 					'completed',
 					current_time('mysql'),
 					$result_data,
-					current_time('mysql')
+					current_time('mysql'),
+					$new_attempt_count
 				));
 
 				// Calculate and Update Overall Course Progress

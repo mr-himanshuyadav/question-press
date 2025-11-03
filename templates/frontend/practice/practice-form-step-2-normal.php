@@ -64,7 +64,7 @@ if ( ! defined( 'ABSPATH' ) ) {
         </label>
     </div>
     <div class="qp-form-group-description">
-        <p>Subject<strong>(number)</strong>: The number in front of subject, topic, section shows unattempted questions.</p>
+        <p>Helps you practice questions from your selected exams and subjects.</p>
     </div>
 
     <div class="qp-form-group">

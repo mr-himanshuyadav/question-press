@@ -622,6 +622,7 @@ wrapper.on('click', 'a.qp-button-primary[href*="session_id="]', function(e) {
         var button = $(this);
         var itemId = button.data('item-id');
         var originalText = button.text();
+        var isRetake = originalText.toLowerCase().includes('retake');
 
         // The server-side action 'start_course_test_series' now handles all access checks.
         // We do not need the checkAttemptsBeforeAction() wrapper here.
@@ -631,7 +632,8 @@ wrapper.on('click', 'a.qp-button-primary[href*="session_id="]', function(e) {
             data: {
                 action: 'start_course_test_series', // Correct action name
                 nonce: qp_ajax_object.start_course_test_nonce, // Correct nonce
-                item_id: itemId
+                item_id: itemId,
+                is_retake: isRetake
             },
             beforeSend: function() {
                 button.text('Starting Test...').prop('disabled', true); // Update text and disable

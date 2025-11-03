@@ -81,6 +81,7 @@ class Settings_Page
 
 
         add_settings_field('qp_can_delete_history_roles', 'Roles That Can Delete History', [self::class, 'render_can_delete_history_roles_multiselect'], 'qp-settings-page', 'qp_data_settings_section');
+        add_settings_field('qp_allow_session_termination', 'Allow Session Termination', [self::class, 'render_allow_session_termination_checkbox'], 'qp-settings-page', 'qp_data_settings_section');
 
         // API Section
         add_settings_section('qp_api_settings_section', 'REST API Documentation', [self::class, 'render_api_section_text'], 'qp-settings-page');
@@ -374,6 +375,12 @@ class Settings_Page
             $new_input['can_delete_history_roles'] = ['administrator'];
         }
 
+        if (isset($input['allow_session_termination'])) {
+            $new_input['allow_session_termination'] = absint($input['allow_session_termination']);
+        } else {
+            $new_input['allow_session_termination'] = 0;
+        }
+
         return $new_input;
     }
 
@@ -388,5 +395,14 @@ class Settings_Page
             'option_none_value' => '0'
         ]);
         echo '<p class="description">Select the page that contains the <code>[question_press_review]</code> shortcode.</p>';
+    }
+
+    public static function render_allow_session_termination_checkbox()
+    {
+        $options = get_option('qp_settings');
+        $checked = isset($options['allow_session_termination']) ? $options['allow_session_termination'] : 0;
+        echo '<label><input type="checkbox" name="qp_settings[allow_session_termination]" value="1" ' . checked(1, $checked, false) . ' /> ';
+        echo '<span>Allow users to "Terminate" their own active/paused sessions from the dashboard.</span></label>';
+        echo '<p class="description">Note: Mock tests can never be terminated by a user, only submitted.</p>';
     }
 }

@@ -2340,7 +2340,7 @@ checkAttemptsBeforeAction(function() {
       statsHtml = `
             <div class="stat"><div class="value">${summaryData.correct_count}</div><div class="label">Correct</div></div>
             <div class="stat"><div class="value">${summaryData.incorrect_count}</div><div class="label">Incorrect</div></div>
-            <div class="stat"><div class="value">${summaryData.skipped_count}</div><div class="label">Unattempted</div></div>
+            <div class="stat"><div class="value">${summaryData.skipped_count}</div><div class="label">Viewed & Unattempted</div></div>
             <div class="stat"><div class="value">${summaryData.not_viewed_count}</div><div class="label">Not Viewed</div></div>
         `;
     } else {

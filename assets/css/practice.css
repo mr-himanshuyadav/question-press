@@ -2450,6 +2450,14 @@ body.palette-overlay-open #qp-palette-sliding {
     font-style: italic;
 }
 
+.qp-review-answer.not-viewed {
+    background-color: #fbf1d4; /* A very light, almost white grey */
+    color: #5a5959; /* Lighter text */
+    font-style: italic;
+    border: 1px dashed #e0e0e0; /* A dashed border to set it apart */
+    padding: 3px 7px; /* Adjust padding to account for border */
+}
+
 .qp-review-question-text .katex {
     font: normal .95em KaTeX_Main, Times New Roman, serif;
 }

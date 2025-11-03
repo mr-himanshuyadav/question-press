@@ -180,16 +180,19 @@ class Session_Ajax {
         if ($practice_mode === 'Section Wise Practice') {
             $order_by_sql = 'ORDER BY CAST(q.question_number_in_section AS UNSIGNED) ASC, q.question_id ASC';
         } else {
-            $order_by_sql = ($admin_order_setting === 'in_order') ? 'ORDER BY q.question_id ASC' : 'ORDER BY RAND()';
+            $order_by_sql = ($admin_order_setting === 'in_order') ? 'ORDER BY q.question_id ASC' : '';
         }
 
         $where_sql = ' WHERE ' . implode(' AND ', $where_conditions);
-        $query = "SELECT q.question_id, q.question_number_in_section {$joins} {$where_sql} {$order_by_sql}";
+        $query = "SELECT DISTINCT q.question_id, q.question_number_in_section {$joins} {$where_sql} {$order_by_sql}";
 
         $question_results = $wpdb->get_results($query);
         $question_ids = wp_list_pluck($question_results, 'question_id');
+        
+        if ($practice_mode !== 'Section Wise Practice' && $admin_order_setting !== 'in_order') {
+            shuffle($question_ids);
+        }
 
-        // --- Session Creation (Common Logic) ---
         if (empty($question_ids)) {
             wp_send_json_error(['message' => 'No questions were found for the selected criteria. Please try different options.']);
         }
@@ -496,8 +499,7 @@ class Session_Ajax {
         // If $allowed_subjects === 'all' and no specific subject/topic selected, no topic WHERE clause is added.
 
         $base_where_sql = implode(' AND ', $where_clauses);
-        $query = "SELECT q.question_id, topic_term.term_id as topic_id {$joins} WHERE {$base_where_sql}";
-        // **END REVISED FIX**
+        $query = "SELECT DISTINCT q.question_id, topic_term.term_id as topic_id {$joins} WHERE {$base_where_sql}";
 
         $question_pool = $wpdb->get_results($wpdb->prepare($query, $query_params));
 
@@ -545,6 +547,7 @@ class Session_Ajax {
             wp_send_json_error(['html' => '<div class="qp-container"><p>Could not gather enough unique questions for the test. Please select more topics or reduce the number of questions.</p><button onclick="window.location.reload();" class="qp-button qp-button-secondary">Go Back</button></div>']);
         }
 
+        $final_question_ids = array_unique($final_question_ids);
         shuffle($final_question_ids); // Final shuffle for randomness
 
         // --- Create the session (Remains the same) ---
@@ -720,19 +723,25 @@ class Session_Ajax {
 
             if (!empty($available_qids)) {
                 $ids_placeholder = implode(',', array_map('absint', $available_qids));
-                $order_by_sql = $choose_random ? "ORDER BY RAND()" : "ORDER BY q.question_id ASC"; // Simple order if not random
+                // Remove ORDER BY RAND() and LIMIT from the SQL query
+                $order_by_sql = $choose_random ? "" : "ORDER BY q.question_id ASC";
 
-                // *** THIS IS THE FIX: Apply LIMIT correctly ***
-                $q_ids = $wpdb->get_col($wpdb->prepare(
+                // Get ALL available q_ids for this topic
+                $q_ids = $wpdb->get_col(
                     "SELECT q.question_id
                      FROM {$questions_table} q
                      WHERE q.question_id IN ($ids_placeholder)
-                     {$order_by_sql}
-                     LIMIT %d", // Apply limit here
-                    $questions_per_topic // Use the variable from settings
-                ));
-                // *** END FIX ***
-                $final_question_ids = array_merge($final_question_ids, $q_ids);
+                     {$order_by_sql}"
+                );
+
+                // Shuffle in PHP if requested
+                if ($choose_random) {
+                    shuffle($q_ids);
+                }
+
+                // Apply the limit *after* shuffling (or ordering)
+                $q_ids_to_add = array_slice($q_ids, 0, $questions_per_topic);
+                $final_question_ids = array_merge($final_question_ids, $q_ids_to_add);
             }
         }
 
@@ -777,7 +786,7 @@ class Session_Ajax {
 
         // Get all question IDs from the user's review list
         $review_question_ids = $wpdb->get_col($wpdb->prepare(
-            "SELECT question_id FROM {$wpdb->prefix}qp_review_later WHERE user_id = %d ORDER BY review_id ASC",
+            "SELECT DISTINCT question_id FROM {$wpdb->prefix}qp_review_later WHERE user_id = %d ORDER BY review_id ASC",
             $user_id
         ));
 
@@ -1058,6 +1067,32 @@ class Session_Ajax {
             wp_send_json_error(['message' => 'Invalid course item ID.']);
         }
 
+        $is_retake = isset($_POST['is_retake']) && $_POST['is_retake'] === 'true';
+
+        // --- NEW: Check for an existing active/paused session for this item ---
+        global $wpdb;
+        $sessions_table = $wpdb->prefix . 'qp_user_sessions';
+        $existing_session_id = $wpdb->get_var($wpdb->prepare(
+            "SELECT session_id FROM {$sessions_table} 
+             WHERE user_id = %d 
+               AND status IN ('active', 'mock_test', 'paused') 
+               AND settings_snapshot LIKE %s",
+            $user_id,
+            '%"item_id":' . $item_id . '%' // JSON LIKE search for the item_id
+        ));
+
+        if ($existing_session_id) {
+            // Found an existing session, just redirect to it
+            $options = get_option('qp_settings');
+            $session_page_id = isset($options['session_page']) ? absint($options['session_page']) : 0;
+            if (!$session_page_id) {
+                wp_send_json_error(['message' => 'The administrator has not configured a session page.']);
+            }
+            $redirect_url = add_query_arg('session_id', $existing_session_id, get_permalink($session_page_id));
+            wp_send_json_success(['redirect_url' => $redirect_url, 'session_id' => $existing_session_id]);
+            return;
+        }
+
         // --- FIX 2: REPLACED Entitlement Check ---
         global $wpdb;
         $items_table = $wpdb->prefix . 'qp_course_items';
@@ -1078,9 +1113,45 @@ class Session_Ajax {
         }
         // --- END FIX 2 ---
 
+        // --- NEW: Step 1b - Retake Check ---
+        $progress_table = $wpdb->prefix . 'qp_user_items_progress';
+        $user_progress = $wpdb->get_row($wpdb->prepare(
+            "SELECT status, attempt_count FROM {$progress_table} WHERE user_id = %d AND item_id = %d",
+            $user_id,
+            $item_id
+        ));
+        
+        $is_completed = ($user_progress && $user_progress->status === 'completed');
+
+        if ($is_completed) {
+            $allow_retakes = get_post_meta($course_id, '_qp_course_allow_retakes', true);
+            
+            if ($allow_retakes !== '1') {
+                wp_send_json_error([
+                    'message' => __('Retakes are not allowed for this course.', 'question-press'),
+                    'code' => 'retake_disabled'
+                ]);
+                return;
+            }
+
+            $retake_limit = absint(get_post_meta($course_id, '_qp_course_retake_limit', true)); // 0 = unlimited
+            if ($retake_limit > 0) {
+                // Limit is set, check attempt count
+                $current_attempts = (int) $user_progress->attempt_count;
+                if ($current_attempts >= $retake_limit) {
+                    wp_send_json_error([
+                        'message' => __('You have no retakes left for this test.', 'question-press'),
+                        'code' => 'no_retakes_left'
+                    ]);
+                    return;
+                }
+            }
+            // If we are here, retakes are allowed (either unlimited or user has attempts left)
+        }
+
         // --- NEW: Step 2 - Progressive Enrollment Check ---
         $progression_mode = get_post_meta($course_id, '_qp_course_progression_mode', true);
-        if ($progression_mode === 'progressive') {
+        if ($progression_mode === 'progressive' && !$is_completed) {
             
             // 1. Get all items in this course, in their correct order
             $sections_table = $wpdb->prefix . 'qp_course_sections';
@@ -1155,7 +1226,7 @@ class Session_Ajax {
         $reports_table = $wpdb->prefix . 'qp_question_reports';
 
         if (isset($config['selected_questions']) && is_array($config['selected_questions']) && !empty($config['selected_questions'])) {
-            $potential_ids = array_map('absint', $config['selected_questions']);
+            $potential_ids = array_unique(array_map('absint', $config['selected_questions']));
             if (!empty($potential_ids)) {
                 $ids_placeholder = implode(',', $potential_ids);
                 $reported_question_ids = $wpdb->get_col("SELECT DISTINCT question_id FROM {$reports_table} WHERE status = 'open'");
@@ -1207,6 +1278,20 @@ class Session_Ajax {
         if (!$session_id) {
              wp_send_json_error(['message' => 'Failed to create the session record.']);
         }
+
+        // --- NEW: Update the progress table to 'in_progress' ---
+            if ($session_id) {
+                $progress_table = $wpdb->prefix . 'qp_user_items_progress';
+                $wpdb->query($wpdb->prepare(
+                    "REPLACE INTO {$progress_table} (user_id, item_id, course_id, status, last_viewed)
+                     VALUES (%d, %d, %d, %s, %s)",
+                    $user_id,
+                    $item_id,
+                    $item->course_id,
+                    'in_progress', // Set status to 'in_progress'
+                    $current_time
+                ));
+            }
 
         $redirect_url = add_query_arg('session_id', $session_id, get_permalink($session_page_id));
         wp_send_json_success(['redirect_url' => $redirect_url, 'session_id' => $session_id]);

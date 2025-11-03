@@ -465,6 +465,19 @@ class Meta_Boxes
             </div>
         </div>
 
+		<div class="qp-metabox-field-wrapper" style="border-bottom: 1px solid #eee; padding-bottom: 15px;">
+            <label style="display:block; margin-bottom: 5px;"><?php esc_html_e('Retake Policy:', 'question-press'); ?></label>
+            <label style="font-weight: normal; display: block; margin-bottom: 10px;">
+                <input type="checkbox" name="_qp_course_allow_retakes" value="1" <?php checked(get_post_meta($post->ID, '_qp_course_allow_retakes', true), '1'); ?>>
+                <?php esc_html_e('Allow users to retake tests', 'question-press'); ?>
+            </label>
+            
+            <div class="qp-retake-limit-field">
+                <label for="qp_course_retake_limit" style="font-weight: normal; font-size: 0.9em;"><?php esc_html_e('Number of retakes allowed (0 for unlimited)', 'question-press'); ?></label>
+                <input type="number" name="_qp_course_retake_limit" id="qp_course_retake_limit" value="<?php echo esc_attr(get_post_meta($post->ID, '_qp_course_retake_limit', true) ?: '0'); ?>" min="0" step="1" style="width: 100px;">
+            </div>
+        </div>
+
 		<p class="qp-expiry-date-field">
 			<label for="qp_course_expiry_date">
 				<?php esc_html_e('Expiry Date (Optional)', 'question-press'); ?>
@@ -850,6 +863,17 @@ public static function save_course_access($post_id)
 			$progression_mode = 'progressive'; // Default to open if invalid value
 		}
 		update_post_meta($post_id, '_qp_course_progression_mode', $progression_mode);
+
+		// --- Save Retake Settings ---
+		$allow_retakes = isset($_POST['_qp_course_allow_retakes']) ? '1' : '0';
+		update_post_meta($post_id, '_qp_course_allow_retakes', $allow_retakes);
+
+		if ($allow_retakes === '1') {
+			$retake_limit = isset($_POST['_qp_course_retake_limit']) ? absint($_POST['_qp_course_retake_limit']) : 0;
+			update_post_meta($post_id, '_qp_course_retake_limit', $retake_limit);
+		} else {
+			delete_post_meta($post_id, '_qp_course_retake_limit');
+		}
 
 		// --- Save Expiry Date ---
 		if (isset($_POST['_qp_course_expiry_date'])) {
