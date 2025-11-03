@@ -1164,4 +1164,59 @@ wrapper.on('click', 'a.qp-button-primary[href*="session_id="]', function(e) {
         });
     });
 
+    /* =================================================================
+   NEW: History Page Tab Switching
+   ================================================================= */
+jQuery(document).ready(function($) {
+    var $tabContainer = $('.qp-md-tabs');
+
+    // Only run this code if we are on a page with these tabs
+    if ($tabContainer.length) {
+        var $tabLinks = $tabContainer.find('.qp-md-tab-link');
+
+        $tabLinks.on('click', function(e) {
+            e.preventDefault();
+            var $this = $(this);
+            
+            if ($this.hasClass('active')) {
+                return; // Do nothing if it's already active
+            }
+
+            var tabID = $this.data('tab');
+
+            // 1. Remove active class from all links and content
+            $tabLinks.removeClass('active').attr('aria-selected', 'false');
+            $('.qp-tab-content').removeClass('active').hide();
+
+            // 2. Add active class to the clicked link and its content
+            $this.addClass('active').attr('aria-selected', 'true');
+            $('#' + tabID).addClass('active').fadeIn(200); // Show with a subtle fade
+        });
+    }
+
+    // --- Also, fix the tab handler for the OLD tabs ---
+    // We need to make sure the old tab logic doesn't conflict.
+    // Let's modify the original tab click handler to be more specific.
+
+    // FIND the original tab click handler (if it exists)
+    // It probably looks something like this:
+    /*
+    $('.qp-dashboard-tabs .qp-tab-link').on('click', function(e) {
+        e.preventDefault();
+        var tab = $(this).data('tab');
+        
+        $('.qp-dashboard-tabs .qp-tab-link').removeClass('active');
+        $(this).addClass('active');
+        
+        $('.qp-tab-content').removeClass('active').hide();
+        $('#' + tab).addClass('active').show();
+    });
+    */
+    
+    // It's safer to just namespace our new tabs.
+    // The code we added above is specific to `.qp-md-tabs`
+    // so it will not conflict with the old `.qp-dashboard-tabs`
+    // on other pages (like the Profile page).
+});
+
 });

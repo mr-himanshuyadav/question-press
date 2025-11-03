@@ -69,6 +69,11 @@ class Assets {
         if (has_shortcode($post->post_content, 'question_press_dashboard')) {
             $dashboard_css_version = file_exists( QP_PLUGIN_PATH . 'assets/css/dashboard.css' ) ? filemtime( QP_PLUGIN_PATH . 'assets/css/dashboard.css' ) : QP_PLUGIN_VERSION; // Get version for cache busting
             wp_enqueue_style('qp-dashboard-styles', QP_ASSETS_URL . 'css/dashboard.css', ['qp-practice-styles'], $dashboard_css_version); // Make it dependent on practice styles
+            wp_enqueue_style(
+			'qp-dashboard-history',
+			QP_ASSETS_URL . 'css/dashboard/dashboard-history.css',
+			['qp-dashboard', 'dashicons']
+		);
         }
         // Load auth styles if on the signup page, OR if the user is logged out (and will see a login prompt)
         if (has_shortcode($post->post_content, 'question_press_signup') || !is_user_logged_in()) {

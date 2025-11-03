@@ -649,6 +649,7 @@ final class Dashboard {
 		$user_roles    = (array) $user->roles;
 		$allowed_roles = isset( $options['can_delete_history_roles'] ) ? $options['can_delete_history_roles'] : [ 'administrator' ];
 		$can_delete    = ! empty( array_intersect( $user_roles, $allowed_roles ) );
+		$can_terminate = isset($options['allow_session_termination']) && $options['allow_session_termination'] === '1';
 
 		// Fetch Paused Sessions
 		$paused_sessions = $wpdb->get_results(
@@ -668,8 +669,9 @@ final class Dashboard {
 
 		$all_sessions_for_history = array_merge( $paused_sessions, $session_history );
 
-		// Pre-fetch lineage data
-		list($lineage_cache, $group_to_topic_map, $question_to_group_map) = self::prefetch_lineage_data( $all_sessions_for_history );
+		// Pre-fetch lineage data for BOTH lists
+		list($lineage_cache_paused, $group_to_topic_map_paused, $question_to_group_map_paused) = self::prefetch_lineage_data( $paused_sessions );
+		list($lineage_cache_completed, $group_to_topic_map_completed, $question_to_group_map_completed) = self::prefetch_lineage_data( $session_history );
 
 		// Fetch accuracy stats
 		$session_ids_history = wp_list_pluck( $all_sessions_for_history, 'session_id' );
@@ -698,16 +700,25 @@ final class Dashboard {
 
 		// Prepare arguments for the template
 		$args = [
-			'practice_page_url'        => $practice_page_url,
-			'can_delete'               => $can_delete,
-			'all_sessions'             => $all_sessions_for_history,
-			'session_page_url'         => $session_page_url,
-			'review_page_url'          => $review_page_url,
-			'lineage_cache'            => $lineage_cache,
-			'group_to_topic_map'       => $group_to_topic_map,
-			'question_to_group_map'    => $question_to_group_map,
-			'accuracy_stats'           => $accuracy_stats,
-			'existing_course_item_ids' => $existing_course_item_ids, // <-- Pass the item IDs
+			'practice_page_url'     => $practice_page_url,
+			'can_delete'            => $can_delete,
+			'can_terminate'         => $can_terminate,
+			'session_page_url'      => $session_page_url,
+			'review_page_url'       => $review_page_url,
+			'existing_course_item_ids' => $existing_course_item_ids,
+			'accuracy_stats'        => $accuracy_stats,
+
+			// Pass Paused Sessions and their data
+			'paused_sessions'       => $paused_sessions,
+			'lineage_cache_paused'  => $lineage_cache_paused,
+			'group_to_topic_map_paused' => $group_to_topic_map_paused,
+			'question_to_group_map_paused' => $question_to_group_map_paused,
+
+			// Pass Completed Sessions and their data
+			'completed_sessions'    => $session_history,
+			'lineage_cache_completed' => $lineage_cache_completed,
+			'group_to_topic_map_completed' => $group_to_topic_map_completed,
+			'question_to_group_map_completed' => $question_to_group_map_completed,
 		];
 
 		// Load and return the template HTML

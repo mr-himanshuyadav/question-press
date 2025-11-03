@@ -1,19 +1,9 @@
 <?php
 /**
  * Template for the Dashboard History Tab content.
+ * (Redesigned with Material-style tabs and list layout)
  *
  * @package QuestionPress/Templates/Frontend/Dashboard
- *
- * @var string $practice_page_url    URL for the main practice page.
- * @var bool   $can_delete           Whether the current user can delete history.
- * @var array  $all_sessions         Array of session objects (paused, completed, abandoned).
- * @var string $session_page_url     URL for the session page (resume links).
- * @var string $review_page_url      URL for the review page.
- * @var array  $lineage_cache        Prefetched lineage data.
- * @var array  $group_to_topic_map   Prefetched group->topic map.
- * @var array  $question_to_group_map Prefetched question->group map.
- * @var array  $accuracy_stats       Prefetched accuracy stats keyed by session_id.
- * @var array  $existing_course_item_ids Array flip of existing item IDs.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -21,6 +11,54 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 use QuestionPress\Frontend\Dashboard;
+
+// Helper function to get mode-specific details
+if ( ! function_exists( 'qp_get_history_mode_details' ) ) {
+    function qp_get_history_mode_details( $session, $settings ) {
+        $details = [
+            'icon'  => 'dashicons-edit-alt',
+            'class' => 'mode-normal',
+            'label' => 'Practice',
+        ];
+
+        if ( isset( $settings['practice_mode'] ) && $settings['practice_mode'] === 'mock_test' ) {
+            if ( isset( $settings['course_id'] ) && $settings['course_id'] > 0 ) {
+                $details = [
+                    'icon'  => 'dashicons-welcome-learn-more',
+                    'class' => 'mode-course-test',
+                    'label' => Dashboard::get_session_mode_name( $session, $settings ), // Will show "Course / Section / Item"
+                ];
+            } else {
+                $details = [
+                    'icon'  => 'dashicons-analytics',
+                    'class' => 'mode-mock-test',
+                    'label' => Dashboard::get_session_mode_name( $session, $settings ),
+                ];
+            }
+        } elseif ( isset( $settings['practice_mode'] ) ) {
+            $mode_map = [
+                'revision'                => [ 'icon' => 'dashicons-backup', 'class' => 'mode-revision', 'label' => 'Revision' ],
+                'Incorrect Que. Practice' => [ 'icon' => 'dashicons-warning', 'class' => 'mode-incorrect', 'label' => 'Incorrect Practice' ],
+                'Section Wise Practice'   => [ 'icon' => 'dashicons-layout', 'class' => 'mode-section-wise', 'label' => 'Section Practice' ],
+            ];
+            if ( isset( $mode_map[ $settings['practice_mode'] ] ) ) {
+                $details = $mode_map[ $settings['practice_mode'] ];
+            } else {
+                 if ( $settings['practice_mode'] !== 'normal' ) {
+                             $details['label'] = $settings['practice_mode'];
+                        }
+            }
+        } elseif ( isset( $settings['subject_id'] ) && $settings['subject_id'] === 'review' ) {
+            $details = [
+                'icon'  => 'dashicons-book-alt',
+                'class' => 'mode-review',
+                'label' => 'Review Session',
+            ];
+        }
+
+        return $details;
+    }
+}
 
 ?>
 <div class="qp-history-header">
@@ -33,67 +71,138 @@ use QuestionPress\Frontend\Dashboard;
     </div>
 </div>
 
-<table class="qp-dashboard-table qp-full-history-table">
-    <thead>
-        <tr>
-            <th><?php esc_html_e( 'Date', 'question-press' ); ?></th>
-            <th><?php esc_html_e( 'Mode', 'question-press' ); ?></th>
-            <th><?php esc_html_e( 'Context', 'question-press' ); ?></th>
-            <th><?php esc_html_e( 'Result', 'question-press' ); ?></th>
-            <th><?php esc_html_e( 'Status', 'question-press' ); ?></th>
-            <th><?php esc_html_e( 'Actions', 'question-press' ); ?></th>
-        </tr>
-    </thead>
-    <tbody>
-        <?php if ( ! empty( $all_sessions ) ) : ?>
-            <?php foreach ( $all_sessions as $session ) :
-                $settings = json_decode( $session->settings_snapshot, true );
-                $mode = Dashboard::get_session_mode_name( $session, $settings ); // Use helper
-                $subjects_display = Dashboard::get_session_subjects_display( $session, $settings, $lineage_cache, $group_to_topic_map, $question_to_group_map ); // Use helper
-                $is_scored = isset( $settings['marks_correct'] );
+<?php // --- NEW: Material Design Tabs --- ?>
+<div class="qp-md-tabs">
+    <div class="qp-md-tab-list" role="tablist">
+        <button class="qp-md-tab-link active" data-tab="completed-sessions" role="tab" aria-selected="true">
+            <?php esc_html_e( 'Completed', 'question-press' ); ?> (<?php echo count( $completed_sessions ); ?>)
+        </button>
+        <button class="qp-md-tab-link" data-tab="paused-sessions" role="tab" aria-selected="false">
+            <?php esc_html_e( 'Active & Paused', 'question-press' ); ?> (<?php echo count( $paused_sessions ); ?>)
+        </button>
+    </div>
+    <div class="qp-md-tab-ink-bar"></div>
+</div>
 
-                // Use pre-calculated stats for accuracy, otherwise fallback for scored sessions
-                if ( isset( $accuracy_stats[ $session->session_id ] ) && ! $is_scored ) {
-                    $result_display = $accuracy_stats[ $session->session_id ];
-                } else {
-                    $result_display = Dashboard::get_session_result_display( $session, $settings ); // Use helper
+<?php // --- TAB CONTENT: COMPLETED SESSIONS --- ?>
+<div id="completed-sessions" class="qp-tab-content active qp-history-list">
+    <?php if ( ! empty( $completed_sessions ) ) : ?>
+        <?php
+        foreach ( $completed_sessions as $session ) :
+            $settings = json_decode( $session->settings_snapshot, true );
+            $is_scored = isset( $settings['marks_correct'] );
+            
+            // Get all mode details (icon, class, label)
+            $mode_details = qp_get_history_mode_details( $session, $settings );
+
+            // Get result display
+            if ( isset( $accuracy_stats[ $session->session_id ] ) && ! $is_scored ) {
+                $result_display = $accuracy_stats[ $session->session_id ];
+            } else {
+                $result_display = Dashboard::get_session_result_display( $session, $settings );
+            }
+
+            // Get context (subjects or course)
+            $context_display = Dashboard::get_session_subjects_display( $session, $settings, $lineage_cache_completed, $group_to_topic_map_completed, $question_to_group_map_completed );
+            if ( $mode_details['class'] === 'mode-course-test' ) {
+                $context_display = ''; // Don't show subjects if it's a course test, the label has the info
+            }
+            
+            // Check for deleted course item
+            if ( isset( $settings['course_id'] ) && isset( $settings['item_id'] ) ) {
+                if ( ! isset( $existing_course_item_ids[ absint( $settings['item_id'] ) ] ) ) {
+                    $context_display .= ' <em style="color:#777; font-size:0.9em;">(Item removed)</em>';
                 }
-                $status_display = ucfirst( $session->status );
-                if ( $session->status === 'abandoned' ) $status_display = 'Abandoned';
-                if ( $session->end_reason === 'autosubmitted_timer' ) $status_display = 'Auto-Submitted';
-
-                $row_class = $session->status === 'paused' ? 'class="qp-session-paused"' : '';
-
-                // Check if associated course item was deleted
-                $context_display = $subjects_display;
-                if ( isset( $settings['course_id'] ) && isset( $settings['item_id'] ) ) {
-                    if ( ! isset( $existing_course_item_ids[ absint( $settings['item_id'] ) ] ) ) {
-                        $context_display .= ' <em style="color:#777; font-size:0.9em;">(Item removed)</em>';
-                    }
-                }
-            ?>
-                <tr <?php echo $row_class; ?>>
-                    <td data-label="Date"><?php echo esc_html( date_i18n( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), strtotime( $session->start_time ) ) ); ?></td>
-                    <td data-label="Mode"><?php echo esc_html( $mode ); ?></td>
-                    <td data-label="Context"><?php echo wp_kses_post( $context_display ); ?></td>
-                    <td data-label="Result"><strong><?php echo esc_html( $result_display ); ?></strong></td>
-                    <td data-label="Status"><?php echo esc_html( $status_display ); ?></td>
-                    <td data-label="Actions" class="qp-actions-cell">
-                        <?php if ( $session->status === 'paused' ) : ?>
-                            <a href="<?php echo esc_url( add_query_arg( 'session_id', $session->session_id, $session_page_url ) ); ?>" class="qp-button qp-button-primary"><?php esc_html_e( 'Resume', 'question-press' ); ?></a>
-                        <?php else : ?>
-                            <a href="<?php echo esc_url( add_query_arg( 'session_id', $session->session_id, $review_page_url ) ); ?>" class="qp-button qp-button-secondary"><?php esc_html_e( 'Review', 'question-press' ); ?></a>
+            }
+        ?>
+            <div class="qp-card qp-history-item-card <?php echo esc_attr( $mode_details['class'] ); ?>">
+                <div class="qp-history-item-icon">
+                    <span class="dashicons <?php echo esc_attr( $mode_details['icon'] ); ?>"></span>
+                </div>
+                
+                <div class="qp-history-item-main">
+                    <div class="qp-history-item-header">
+                        <span class="qp-history-item-mode"><?php echo esc_html( $mode_details['label'] ); ?></span>
+                        <span class="qp-history-item-result"><?php echo esc_html( $result_display ); ?></span>
+                    </div>
+                    
+                    <div class="qp-history-item-context">
+                        <?php if ( ! empty( $context_display ) ) : ?>
+                            <span class="context-label">Subjects:</span>
+                            <?php echo wp_kses_post( $context_display ); ?>
                         <?php endif; ?>
-                        <?php if ( $can_delete ) : ?>
-                            <button class="qp-delete-session-btn" data-session-id="<?php echo esc_attr( $session->session_id ); ?>"><?php esc_html_e( 'Delete', 'question-press' ); ?></button>
-                        <?php endif; ?>
-                    </td>
-                </tr>
-            <?php endforeach; ?>
-        <?php else : ?>
-            <tr>
-                <td colspan="6" style="text-align: center; padding: 2rem;"><?php esc_html_e( 'You have no practice sessions yet.', 'question-press' ); ?></td>
-            </tr>
-        <?php endif; ?>
-    </tbody>
-</table>
+                    </div>
+                    
+                    <div class="qp-card-sub-stats">
+                        <div class="stat-item correct">
+                            <span class="stat-value"><?php echo (int) $session->correct_count; ?></span>
+                            <span class="stat-label">Correct</span>
+                        </div>
+                        <div class="stat-item incorrect">
+                            <span class="stat-value"><?php echo (int) $session->incorrect_count; ?></span>
+                            <span class="stat-label">Incorrect</span>
+                        </div>
+                        <div class="stat-item skipped">
+                            <span class="stat-value"><?php echo (int) $session->skipped_count + (int) $session->not_viewed_count; ?></span>
+                            <span class="stat-label">Skipped</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="qp-history-item-actions">
+                    <span class="qp-history-item-date"><?php echo esc_html( date_i18n( get_option( 'date_format' ), strtotime( $session->start_time ) ) ); ?></span>
+                    <?php if ( $can_delete ) : ?>
+                        <button class="qp-delete-session-btn" data-session-id="<?php echo esc_attr( $session->session_id ); ?>" title="<?php esc_attr_e( 'Delete', 'question-press' ); ?>">
+                            <span class="dashicons dashicons-trash"></span>
+                        </button>
+                    <?php endif; ?>
+                    <a href="<?php echo esc_url( add_query_arg( 'session_id', $session->session_id, $review_page_url ) ); ?>" class="qp-button qp-button-secondary qp-button-review"><?php esc_html_e( 'Review', 'question-press' ); ?></a>
+                </div>
+            </div>
+        <?php endforeach; ?>
+    <?php else : ?>
+        <div class="qp-card qp-no-results-card"><div class="qp-card-content">
+            <span class="dashicons dashicons-info-outline"></span>
+            <p><?php esc_html_e( 'You have no completed practice sessions yet.', 'question-press' ); ?></p>
+        </div></div>
+    <?php endif; ?>
+</div>
+
+<?php // --- TAB CONTENT: PAUSED SESSIONS --- ?>
+<div id="paused-sessions" class="qp-tab-content qp-history-list" style="display: none;">
+    <?php if ( ! empty( $paused_sessions ) ) : ?>
+        <?php
+        foreach ( $paused_sessions as $session ) :
+            $settings = json_decode( $session->settings_snapshot, true );
+            $mode_details = qp_get_history_mode_details( $session, $settings );
+        ?>
+            <div class="qp-card qp-history-item-card qp-history-item-paused <?php echo esc_attr( $mode_details['class'] ); ?>">
+                <div class="qp-history-item-icon">
+                    <span class="dashicons dashicons-controls-pause"></span>
+                </div>
+
+                <div class="qp-history-item-main">
+                    <div class="qp-history-item-header">
+                        <span class="qp-history-item-mode"><?php echo esc_html( $mode_details['label'] ); ?></span>
+                    </div>
+                    <div class="qp-history-item-context">
+                        <span class="context-label">Paused:</span>
+                        <?php echo esc_html( date_i18n( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), strtotime( $session->last_activity ) ) ); ?>
+                    </div>
+                </div>
+
+                <div class="qp-history-item-actions">
+                    <?php if ( $can_terminate ) : ?>
+                        <button class="qp-button qp-button-danger qp-terminate-session-btn" data-session-id="<?php echo esc_attr( $session->session_id ); ?>">Terminate</button>
+                    <?php endif; ?>
+                    <a href="<?php echo esc_url( add_query_arg( 'session_id', $session->session_id, $session_page_url ) ); ?>" class="qp-button qp-button-primary"><?php echo ( $session->status === 'paused' ? 'Resume' : 'Continue' ); ?></a>
+                </div>
+            </div>
+        <?php endforeach; ?>
+    <?php else : ?>
+        <div class="qp-card qp-no-results-card"><div class="qp-card-content">
+            <span class="dashicons dashicons-info-outline"></span>
+            <p><?php esc_html_e( 'You have no paused sessions.', 'question-press' ); ?></p>
+        </div></div>
+    <?php endif; ?>
+</div>
