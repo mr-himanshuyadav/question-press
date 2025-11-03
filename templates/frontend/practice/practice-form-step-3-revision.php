@@ -53,6 +53,10 @@ if ( ! defined( 'ABSPATH' ) ) {
         <input type="number" name="qp_revision_questions_per_topic" id="qp_revision_questions_per_topic" value="2" min="1" max="20" required>
     </div>
 
+    <p class="description" style="font-size: 13px; color: #50575e; margin-bottom: 1.5rem;">
+        Note: The total number of questions for the session will be capped at your limit of <strong><?php echo esc_attr($normal_practice_limit); ?></strong>.
+    </p>
+
     <div class="qp-form-group qp-checkbox-group">
         <label class="qp-custom-checkbox">
             <input type="checkbox" name="exclude_pyq" value="1" checked>

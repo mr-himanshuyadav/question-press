@@ -8,6 +8,8 @@
  * @var array    $enrolled_courses_data        Array of progress data for enrolled courses.
  * @var array    $purchased_not_enrolled_posts Array of post objects for purchased, non-enrolled courses.
  * @var int      $user_id                      The current user ID.
+ * @var bool     $allow_global_opt_out     Whether the global setting for opt-out is enabled.
+ * @var array    $enrolled_courses_data        Array of progress data for enrolled courses.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -49,8 +51,20 @@ if ( ! defined( 'ABSPATH' ) ) {
                         <?php echo '<p>' . wp_trim_words( get_the_content(), 30, '...' ) . '</p>'; ?>
                     <?php endif; ?>
                 </div>
-                <div class="qp-card-action" style="padding: 1rem 1.5rem; border-top: 1px solid var(--qp-dashboard-border-light); text-align: right;">
-                    <?php echo $button_html; ?>
+                <div class="qp-card-action" style="padding: 1rem 1.5rem; border-top: 1px solid var(--qp-dashboard-border-light); text-align: right; display: flex; justify-content: flex-end; align-items: center; gap: 10px;">
+                    <?php
+                    // --- NEW: DEREGISTER BUTTON LOGIC ---
+                    $allow_course_opt_out = (bool) get_post_meta($course_id, '_qp_course_allow_opt_out', true);
+                    if ($allow_global_opt_out && $allow_course_opt_out) :
+                    ?>
+                        <button class="qp-button qp-button-danger qp-deregister-course-btn" data-course-id="<?php echo esc_attr($course_id); ?>" data-course-title="<?php echo esc_attr(get_the_title()); ?>" style="padding: 4px 10px; font-size: 12px; margin-right: auto; background-color: transparent; border-color: transparent; color: #d63638; box-shadow: none;">
+                            <span class="dashicons dashicons-warning" style="vertical-align: middle; font-size: 16px;"></span> Deregister
+                        </button>
+                    <?php 
+                    endif;
+                    // --- END NEW ---
+                    ?>
+                    <?php echo $button_html; // This is the "Continue/Review" button ?>
                 </div>
             </div>
         <?php endwhile; wp_reset_postdata(); ?>

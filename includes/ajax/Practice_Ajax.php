@@ -105,6 +105,16 @@ class Practice_Ajax
                 ['remaining_attempts' => $new_attempts],
                 ['entitlement_id' => $entitlement_to_decrement->entitlement_id]
             );
+
+            if ($new_attempts === 0) {
+                $wpdb->update(
+                    $entitlements_table,
+                    ['status' => 'expired'],
+                    ['entitlement_id' => $entitlement_to_decrement->entitlement_id]
+                );
+                error_log("QP Check Answer: Entitlement #{$entitlement_to_decrement->entitlement_id} expired due to 0 attempts remaining.");
+            }
+
             error_log("QP Check Answer: User #{$user_id} used general attempt from Entitlement #{$entitlement_to_decrement->entitlement_id}. Remaining: {$new_attempts}");
         } else {
             error_log("QP Check Answer: User #{$user_id} attempt approved (Course Test or Unlimited Plan).");
@@ -236,7 +246,7 @@ class Practice_Ajax
                 "SELECT entitlement_id, remaining_attempts
              FROM {$entitlements_table}
              WHERE user_id = %d AND status = 'active' AND (expiry_date IS NULL OR expiry_date > %s)
-             ORDER BY remaining_attempts ASC, expiry_date ASC",
+             ORDER BY expiry_date ASC, remaining_attempts ASC",
                 $user_id,
                 $current_time
             ));
@@ -1734,5 +1744,79 @@ class Practice_Ajax
         }
 
         wp_send_json_success($structure);
+    }
+
+    /**
+     * AJAX handler for a user to deregister (opt-out) from a course.
+     */
+    public static function deregister_from_course() {
+        check_ajax_referer('qp_practice_nonce', 'nonce');
+
+        if (!is_user_logged_in()) {
+            wp_send_json_error(['message' => 'Not logged in.']);
+        }
+
+        $user_id = get_current_user_id();
+        $course_id = isset($_POST['course_id']) ? absint($_POST['course_id']) : 0;
+
+        if (!$course_id || get_post_type($course_id) !== 'qp_course') {
+            wp_send_json_error(['message' => 'Invalid course.']);
+        }
+
+        // --- Security Check 1: Global Setting ---
+        $options = get_option('qp_settings');
+        $allow_global_opt_out = (bool) ($options['allow_course_opt_out'] ?? 0);
+        if (!$allow_global_opt_out) {
+            wp_send_json_error(['message' => 'This action is not enabled.']);
+        }
+
+        // --- Security Check 2: Per-Course Setting ---
+        $allow_course_opt_out = (bool) get_post_meta($course_id, '_qp_course_allow_opt_out', true);
+        if (!$allow_course_opt_out) {
+            wp_send_json_error(['message' => 'You are not allowed to deregister from this specific course.']);
+        }
+
+        // --- All checks passed, proceed with deletion ---
+        global $wpdb;
+        $user_courses_table = $wpdb->prefix . 'qp_user_courses';
+        $progress_table = $wpdb->prefix . 'qp_user_items_progress';
+        $sessions_table = $wpdb->prefix . 'qp_user_sessions';
+        $attempts_table = $wpdb->prefix . 'qp_user_attempts';
+
+        try {
+            $wpdb->query('START TRANSACTION');
+
+            // 1. Delete enrollment record
+            $wpdb->delete($user_courses_table, ['user_id' => $user_id, 'course_id' => $course_id], ['%d', '%d']);
+
+            // 2. Delete item progress
+            $wpdb->delete($progress_table, ['user_id' => $user_id, 'course_id' => $course_id], ['%d', '%d']);
+
+            // 3. Find all session IDs for this user & course
+            $session_ids = $wpdb->get_col($wpdb->prepare(
+                "SELECT session_id FROM {$sessions_table}
+                 WHERE user_id = %d
+                   AND settings_snapshot LIKE %s",
+                $user_id,
+                '%"course_id":' . $course_id . '%'
+            ));
+
+            if (!empty($session_ids)) {
+                $ids_placeholder = implode(',', array_map('absint', $session_ids));
+
+                // 4. Delete all attempts from those sessions
+                $wpdb->query("DELETE FROM {$attempts_table} WHERE session_id IN ({$ids_placeholder})");
+                
+                // 5. Delete all those sessions
+                $wpdb->query("DELETE FROM {$sessions_table} WHERE session_id IN ({$ids_placeholder})");
+            }
+
+            $wpdb->query('COMMIT');
+            wp_send_json_success(['message' => 'You have been successfully deregistered from the course.']);
+
+        } catch (Exception $e) {
+            $wpdb->query('ROLLBACK');
+            wp_send_json_error(['message' => 'A database error occurred. Could not complete the action.']);
+        }
     }
 }

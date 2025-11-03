@@ -175,6 +175,14 @@ class Session_Ajax {
         // --- Determine Order and Finalize Query ---
         $options = get_option('qp_settings');
         $admin_order_setting = isset($options['question_order']) ? $options['question_order'] : 'random';
+        $admin_max_limit = isset($options['normal_practice_limit']) ? absint($options['normal_practice_limit']) : 100;
+        $user_requested_limit = isset($_POST['qp_normal_practice_limit']) ? absint($_POST['qp_normal_practice_limit']) : $admin_max_limit;
+        
+        // Final limit is the *smaller* of the admin setting or the user's request
+        $final_limit = min($user_requested_limit, $admin_max_limit);
+        if ($final_limit <= 0) $final_limit = 100; // Failsafe
+
+        $limit_sql = $wpdb->prepare(" LIMIT %d", $final_limit);
         $order_by_sql = '';
 
         if ($practice_mode === 'Section Wise Practice') {
@@ -184,7 +192,7 @@ class Session_Ajax {
         }
 
         $where_sql = ' WHERE ' . implode(' AND ', $where_conditions);
-        $query = "SELECT DISTINCT q.question_id, q.question_number_in_section {$joins} {$where_sql} {$order_by_sql}";
+        $query = "SELECT DISTINCT q.question_id, q.question_number_in_section {$joins} {$where_sql} {$order_by_sql} {$limit_sql}";
 
         $question_results = $wpdb->get_results($query);
         $question_ids = wp_list_pluck($question_results, 'question_id');
@@ -584,6 +592,9 @@ class Session_Ajax {
         $tax_table = $wpdb->prefix . 'qp_taxonomies';
         $rel_table = $wpdb->prefix . 'qp_term_relationships';
         $revision_table = $wpdb->prefix . 'qp_revision_attempts';
+        $options = get_option('qp_settings');
+        $global_question_limit = isset($options['normal_practice_limit']) ? absint($options['normal_practice_limit']) : 100;
+        if ($global_question_limit <= 0) $global_question_limit = 100; // Failsafe
         $questions_table = $wpdb->prefix . 'qp_questions';
         $groups_table = $wpdb->prefix . 'qp_question_groups';
         $reports_table = $wpdb->prefix . 'qp_question_reports';
@@ -745,12 +756,19 @@ class Session_Ajax {
             }
         }
 
-        // --- Create and Start the Session ---
         $question_ids = array_unique($final_question_ids); // Use the collected IDs
         if (empty($question_ids)) {
             wp_send_json_error(['message' => 'No new questions were found for the selected criteria. You may have already revised them all.']);
         }
-        shuffle($question_ids); // Shuffle the final combined list
+
+        // --- NEW: Shuffle the list first ---
+        shuffle($question_ids); 
+        
+        // --- NEW: Apply the global limit to the final shuffled list ---
+        if (count($question_ids) > $global_question_limit) {
+            $question_ids = array_slice($question_ids, 0, $global_question_limit);
+        }
+        // --- END NEW ---
 
         $options = get_option('qp_settings');
         $session_page_id = isset($options['session_page']) ? absint($options['session_page']) : 0;

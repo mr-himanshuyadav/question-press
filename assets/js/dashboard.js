@@ -1079,4 +1079,89 @@ wrapper.on('click', 'a.qp-button-primary[href*="session_id="]', function(e) {
         });
     });
 
+    // --- NEW: Deregister from Course Button Handler ---
+    wrapper.on('click', '.qp-deregister-course-btn', function() {
+        var $button = $(this);
+        var courseId = $button.data('course-id');
+        var courseTitle = $button.data('course-title') || 'this course';
+        var originalButtonHtml = $button.html(); // Save original content
+
+        // --- Step 1: Initial Confirmation ---
+        Swal.fire({
+            title: 'Are you sure?',
+            html: `You are about to deregister from <strong>${courseTitle}</strong>. This will permanently delete all your progress, test results, and session history for this course.`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Yes, Deregister',
+            confirmButtonColor: '#d33',
+            cancelButtonText: 'Cancel'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                // --- Step 2: Final Confirmation (Typing) ---
+                Swal.fire({
+                    title: 'Final Confirmation',
+                    html: `This action cannot be undone. Please type <strong>DEREGISTER</strong> in the box below to confirm.`,
+                    icon: 'error',
+                    input: 'text',
+                    inputPlaceholder: 'DEREGISTER',
+                    showCancelButton: true,
+                    confirmButtonText: 'Confirm & Delete My Data',
+                    confirmButtonColor: '#d33',
+                    preConfirm: (inputValue) => {
+                        if (inputValue !== 'DEREGISTER') {
+                            Swal.showValidationMessage('You must type "DEREGISTER" to confirm.');
+                            return false;
+                        }
+                        return inputValue;
+                    },
+                    allowOutsideClick: () => !Swal.isLoading()
+                }).then((finalResult) => {
+                    if (finalResult.isConfirmed) {
+                        // --- Step 3: AJAX Call ---
+                        $.ajax({
+                            url: qp_ajax_object.ajax_url,
+                            type: 'POST',
+                            data: {
+                                action: 'qp_deregister_from_course',
+                                nonce: qp_ajax_object.nonce, // Use the main frontend nonce
+                                course_id: courseId
+                            },
+                            beforeSend: function() {
+                                $button.html('Removing...').prop('disabled', true);
+                                Swal.fire({
+                                    title: 'Processing...',
+                                    text: 'Removing your course data. Please wait.',
+                                    allowOutsideClick: false,
+                                    didOpen: () => {
+                                        Swal.showLoading();
+                                    }
+                                });
+                            },
+                            success: function(response) {
+                                if (response.success) {
+                                    Swal.fire({
+                                        title: 'Success!',
+                                        text: response.message,
+                                        icon: 'success',
+                                        timer: 2000,
+                                        showConfirmButton: false
+                                    }).then(() => {
+                                        location.reload(); // Reload the page
+                                    });
+                                } else {
+                                    Swal.fire('Error', response.data.message || 'Could not complete the action.', 'error');
+                                    $button.html(originalButtonHtml).prop('disabled', false);
+                                }
+                            },
+                            error: function() {
+                                Swal.fire('Error', 'A server error occurred. Please try again.', 'error');
+                                $button.html(originalButtonHtml).prop('disabled', false);
+                            }
+                        });
+                    }
+                });
+            }
+        });
+    });
+
 });

@@ -146,7 +146,7 @@ class Session_Manager extends DB { // <-- Extend DB to get self::$wpdb
 				   AND status = 'active'
 				   AND (expiry_date IS NULL OR expiry_date > %s)
 				   AND (remaining_attempts IS NULL OR remaining_attempts > 0)
-				 ORDER BY remaining_attempts ASC", // Process finite plans first (lowest attempts)
+				 ORDER BY expiry_date ASC, remaining_attempts ASC", // Prioritize expiring plans first
 				$user_id,
 				current_time('mysql')
 			));
@@ -190,6 +190,16 @@ class Session_Manager extends DB { // <-- Extend DB to get self::$wpdb
 						['remaining_attempts' => $new_attempts],
 						['entitlement_id' => $entitlement->entitlement_id]
 					);
+
+					// Check if attempts just hit zero ---
+                    if ($new_attempts === 0) {
+                        $wpdb->update(
+                            $entitlements_table,
+                            ['status' => 'expired'],
+                            ['entitlement_id' => $entitlement->entitlement_id]
+                        );
+                        error_log("QP Finalize: Entitlement #{$entitlement->entitlement_id} expired due to 0 attempts remaining.");
+                    }
 
 					error_log("QP Finalize: Deducted {$attempts_deducted_from_this} attempts from Entitlement #{$entitlement->entitlement_id}. Remaining: {$new_attempts}.");
 				}

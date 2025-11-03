@@ -79,9 +79,13 @@ class Settings_Page
 
         add_settings_field('qp_show_topic_meta', 'Display Topic Meta', [self::class, 'render_show_topic_meta_checkbox'], 'qp-settings-page', 'qp_data_settings_section');
 
+        add_settings_field('qp_normal_practice_limit', 'Normal Practice Question Limit', [self::class, 'render_normal_practice_limit_input'], 'qp-settings-page', 'qp_data_settings_section');
+
 
         add_settings_field('qp_can_delete_history_roles', 'Roles That Can Delete History', [self::class, 'render_can_delete_history_roles_multiselect'], 'qp-settings-page', 'qp_data_settings_section');
         add_settings_field('qp_allow_session_termination', 'Allow Session Termination', [self::class, 'render_allow_session_termination_checkbox'], 'qp-settings-page', 'qp_data_settings_section');
+
+        add_settings_field('qp_allow_course_opt_out', 'Allow Course Opt-Out', [self::class, 'render_allow_course_opt_out_checkbox'], 'qp-settings-page', 'qp_data_settings_section');
 
         // API Section
         add_settings_section('qp_api_settings_section', 'REST API Documentation', [self::class, 'render_api_section_text'], 'qp-settings-page');
@@ -381,6 +385,20 @@ class Settings_Page
             $new_input['allow_session_termination'] = 0;
         }
 
+        if (isset($input['allow_course_opt_out'])) {
+            $new_input['allow_course_opt_out'] = absint($input['allow_course_opt_out']);
+        } else {
+            $new_input['allow_course_opt_out'] = 0;
+        }
+
+        if (isset($input['normal_practice_limit'])) {
+            $limit = absint($input['normal_practice_limit']);
+            // Ensure the limit is at least 10, default to 100 if not
+            $new_input['normal_practice_limit'] = ($limit >= 10) ? $limit : 100;
+        } else {
+            $new_input['normal_practice_limit'] = 100; // Default if not set
+        }
+
         return $new_input;
     }
 
@@ -404,5 +422,22 @@ class Settings_Page
         echo '<label><input type="checkbox" name="qp_settings[allow_session_termination]" value="1" ' . checked(1, $checked, false) . ' /> ';
         echo '<span>Allow users to "Terminate" their own active/paused sessions from the dashboard.</span></label>';
         echo '<p class="description">Note: Mock tests can never be terminated by a user, only submitted.</p>';
+    }
+
+    public static function render_normal_practice_limit_input()
+    {
+        $options = get_option('qp_settings');
+        $limit = isset($options['normal_practice_limit']) ? $options['normal_practice_limit'] : 100;
+        echo '<input type="number" name="qp_settings[normal_practice_limit]" value="' . esc_attr($limit) . '" min="10" max="500" /> ';
+        echo '<p class="description">Set the maximum number of questions a "Normal Practice" session can have (e.g., 100). This does not affect Mock Tests or Revision Mode.</p>';
+    }
+
+    public static function render_allow_course_opt_out_checkbox()
+    {
+        $options = get_option('qp_settings');
+        $checked = isset($options['allow_course_opt_out']) ? $options['allow_course_opt_out'] : 0;
+        echo '<label><input type="checkbox" name="qp_settings[allow_course_opt_out]" value="1" ' . checked(1, $checked, false) . ' /> ';
+        echo '<span>Allow users to "Deregister" (opt-out) from courses?</span></label>';
+        echo '<p class="description">If enabled, you must also enable this on a per-course basis.</p>';
     }
 }
