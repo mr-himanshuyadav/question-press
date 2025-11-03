@@ -1243,6 +1243,26 @@ body.palette-overlay-open #qp-palette-sliding {
     background-color: #1976d2;
 }
 
+/* --- NEW: Course Test Mode (Purple) --- */
+.mode-course-test .qp-session-mode-indicator {
+    background-color: #5d3d9b; /* Purple */
+}
+
+.mode-course-test.qp-practice-wrapper {
+    border-color: #5d3d9b;
+    box-shadow: 0 0 15px rgba(93, 61, 155, 0.2);
+}
+
+/* Make its "Submit" button match the theme */
+.mode-course-test.qp-practice-wrapper .qp-button-danger {
+    background-color: #5d3d9b;
+    border-color: #5d3d9b;
+}
+.mode-course-test.qp-practice-wrapper .qp-button-danger:hover:not(:disabled) {
+    background-color: #4527a0; /* Darker Purple */
+    border-color: #4527a0;
+}
+
 /* --- Additional Mode Color Themes --- */
 
 /* Incorrect Practice Mode (Orange) */

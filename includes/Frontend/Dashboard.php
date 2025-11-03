@@ -167,6 +167,11 @@ final class Dashboard {
 			$session_page_url        = isset( $options['session_page'] ) ? get_permalink( $options['session_page'] ) : home_url( '/' );
 			$review_page_url         = isset( $options['review_page'] ) ? get_permalink( $options['review_page'] ) : home_url( '/' );
 			$allow_termination       = isset( $options['allow_session_termination'] ) ? $options['allow_session_termination'] : 0;
+			$dashboard_page_id  = isset( $options['dashboard_page'] ) ? absint( $options['dashboard_page'] ) : 0;
+			$base_dashboard_url = $dashboard_page_id ? trailingslashit( get_permalink( $dashboard_page_id ) ) : home_url( '/' );
+			$is_front_page      = ( $dashboard_page_id > 0 && get_option( 'show_on_front' ) == 'page' && get_option( 'page_on_front' ) == $dashboard_page_id );
+			$tab_prefix         = $is_front_page ? 'tab/' : '';
+			$history_tab_url    = $base_dashboard_url . $tab_prefix . 'history/';
 
 			echo self::render_overview_content(
 				$stats,
@@ -178,7 +183,8 @@ final class Dashboard {
 				$practice_page_url,
 				$session_page_url,
 				$review_page_url,
-				$allow_termination
+				$allow_termination,
+				$history_tab_url
 			);
 		}
 		$main_content_html = ob_get_clean();
@@ -596,36 +602,66 @@ final class Dashboard {
 	 * @param string $review_page_url      Review page URL.
 	 * @return string Rendered HTML content.
 	 */
-	public static function render_overview_content( $stats, $overall_accuracy, $active_sessions, $recent_history, $review_count, $never_correct_count, $practice_page_url, $session_page_url, $review_page_url, $allow_termination ) {
-		// --- Prefetch lineage data needed for the recent history table ---
-		list($lineage_cache, $group_to_topic_map, $question_to_group_map) = self::prefetch_lineage_data( $recent_history );
+	public static function render_overview_content( $stats, $overall_accuracy, $active_sessions, $recent_history, $review_count, $never_correct_count, $practice_page_url, $session_page_url, $review_page_url, $allow_termination, $history_tab_url ) {
+		// --- NEW: Prefetch lineage data for BOTH lists ---
+		list($lineage_cache_active, $group_to_topic_map_active, $question_to_group_map_active) = self::prefetch_lineage_data( $active_sessions );
+		list($lineage_cache_recent, $group_to_topic_map_recent, $question_to_group_map_recent) = self::prefetch_lineage_data( $recent_history );
+
+		// --- NEW: Prefetch accuracy stats for recent history ---
+		global $wpdb;
+		$attempts_table      = $wpdb->prefix . 'qp_user_attempts';
+		$accuracy_stats      = [];
+		$session_ids_history = wp_list_pluck( $recent_history, 'session_id' );
+		if ( ! empty( $session_ids_history ) ) {
+			$ids_placeholder = implode( ',', array_map( 'absint', $session_ids_history ) );
+			$results         = $wpdb->get_results(
+				"SELECT session_id,
+			 COUNT(CASE WHEN is_correct = 1 THEN 1 END) as correct,
+			 COUNT(CASE WHEN is_correct = 0 THEN 1 END) as incorrect
+			 FROM {$attempts_table}
+			 WHERE session_id IN ({$ids_placeholder}) AND status = 'answered'
+			 GROUP BY session_id"
+			);
+			foreach ( $results as $result ) {
+				$total_attempted                = (int) $result->correct + (int) $result->incorrect;
+				$accuracy                       = ( $total_attempted > 0 ) ? ( ( (int) $result->correct / $total_attempted ) * 100 ) : 0;
+				$accuracy_stats[ $result->session_id ] = number_format( $accuracy, 2 ) . '%';
+			}
+		}
 
 		// Prepare arguments array for the template
 		$args = [
 			'stats'                 => $stats,
 			'overall_accuracy'      => $overall_accuracy,
-			'active_sessions'       => $active_sessions,
-			'recent_history'        => $recent_history,
 			'review_count'          => $review_count,
 			'never_correct_count'   => $never_correct_count,
 			'practice_page_url'     => $practice_page_url,
 			'session_page_url'      => $session_page_url,
 			'review_page_url'       => $review_page_url,
 			'allow_termination'     => $allow_termination,
-			'lineage_cache'         => $lineage_cache, // Pass prefetched data
-			'group_to_topic_map'    => $group_to_topic_map,
-			'question_to_group_map' => $question_to_group_map,
+			'history_tab_url'       => $history_tab_url,
+			'accuracy_stats'        => $accuracy_stats, // <-- Pass accuracy stats
+
+			// Active Sessions & Data
+			'active_sessions'       => $active_sessions,
+			'lineage_cache_active'  => $lineage_cache_active,
+			'group_to_topic_map_active' => $group_to_topic_map_active,
+			'question_to_group_map_active' => $question_to_group_map_active,
+
+			// Recent History & Data
+			'recent_history'        => $recent_history,
+			'lineage_cache_recent'  => $lineage_cache_recent,
+			'group_to_topic_map_recent' => $group_to_topic_map_recent,
+			'question_to_group_map_recent' => $question_to_group_map_recent,
 		];
 
-		// Load and return the template HTML - Check path 'dashboard/overview'
+		// Load and return the template HTML
 		$html = Template_Loader::get_html( 'dashboard/overview', 'frontend', $args );
 
 		if ( empty( trim( $html ) ) || strpos( $html, 'Template not found' ) !== false ) {
-			// error_log("Error loading dashboard/overview template or it's empty. Path checked: " . QP_TEMPLATES_DIR . 'frontend/dashboard/overview.php');
-			return '<p style="color:red;">Error: Overview template could not be loaded.</p>'; // Return error message
+			return '<p style="color:red;">Error: Overview template could not be loaded.</p>';
 		}
 
-		// Load and return the template HTML
 		return $html;
 	}
 
@@ -649,6 +685,7 @@ final class Dashboard {
 		$user_roles    = (array) $user->roles;
 		$allowed_roles = isset( $options['can_delete_history_roles'] ) ? $options['can_delete_history_roles'] : [ 'administrator' ];
 		$can_delete    = ! empty( array_intersect( $user_roles, $allowed_roles ) );
+		$can_terminate = isset($options['allow_session_termination']) && $options['allow_session_termination'] === '1';
 
 		// Fetch Paused Sessions
 		$paused_sessions = $wpdb->get_results(
@@ -668,8 +705,9 @@ final class Dashboard {
 
 		$all_sessions_for_history = array_merge( $paused_sessions, $session_history );
 
-		// Pre-fetch lineage data
-		list($lineage_cache, $group_to_topic_map, $question_to_group_map) = self::prefetch_lineage_data( $all_sessions_for_history );
+		// Pre-fetch lineage data for BOTH lists
+		list($lineage_cache_paused, $group_to_topic_map_paused, $question_to_group_map_paused) = self::prefetch_lineage_data( $paused_sessions );
+		list($lineage_cache_completed, $group_to_topic_map_completed, $question_to_group_map_completed) = self::prefetch_lineage_data( $session_history );
 
 		// Fetch accuracy stats
 		$session_ids_history = wp_list_pluck( $all_sessions_for_history, 'session_id' );
@@ -698,16 +736,25 @@ final class Dashboard {
 
 		// Prepare arguments for the template
 		$args = [
-			'practice_page_url'        => $practice_page_url,
-			'can_delete'               => $can_delete,
-			'all_sessions'             => $all_sessions_for_history,
-			'session_page_url'         => $session_page_url,
-			'review_page_url'          => $review_page_url,
-			'lineage_cache'            => $lineage_cache,
-			'group_to_topic_map'       => $group_to_topic_map,
-			'question_to_group_map'    => $question_to_group_map,
-			'accuracy_stats'           => $accuracy_stats,
-			'existing_course_item_ids' => $existing_course_item_ids, // <-- Pass the item IDs
+			'practice_page_url'     => $practice_page_url,
+			'can_delete'            => $can_delete,
+			'can_terminate'         => $can_terminate,
+			'session_page_url'      => $session_page_url,
+			'review_page_url'       => $review_page_url,
+			'existing_course_item_ids' => $existing_course_item_ids,
+			'accuracy_stats'        => $accuracy_stats,
+
+			// Pass Paused Sessions and their data
+			'paused_sessions'       => $paused_sessions,
+			'lineage_cache_paused'  => $lineage_cache_paused,
+			'group_to_topic_map_paused' => $group_to_topic_map_paused,
+			'question_to_group_map_paused' => $question_to_group_map_paused,
+
+			// Pass Completed Sessions and their data
+			'completed_sessions'    => $session_history,
+			'lineage_cache_completed' => $lineage_cache_completed,
+			'group_to_topic_map_completed' => $group_to_topic_map_completed,
+			'question_to_group_map_completed' => $question_to_group_map_completed,
 		];
 
 		// Load and return the template HTML

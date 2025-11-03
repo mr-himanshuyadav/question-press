@@ -826,8 +826,8 @@ class Session_Ajax {
             'sheet_label_id'  => 'all',
             'pyq_only'        => false,
             'revise_mode'     => true, // Treat it as revision
-            'marks_correct'   => 1.0,  // Or any default you prefer
-            'marks_incorrect' => 0,
+            'marks_correct'   => null,  // Or any default you prefer
+            'marks_incorrect' => null,
             'timer_enabled'   => false,
         ];
 

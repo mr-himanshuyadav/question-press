@@ -57,7 +57,7 @@
 
 /* Outline:none */
 
-.qp-sidebar-close-btn, .qp-sidebar-toggle, .qp-button, .qp-modal-close-btn{
+.qp-sidebar-close-btn, .qp-sidebar-toggle, .qp-button, .qp-modal-close-btn, .qp-md-tab-link{
     outline: none;
 }
 
@@ -107,7 +107,8 @@ body { margin: 0; }
 	transition: transform 0.3s ease-in-out;
 	flex-shrink: 0;
 	position: fixed;
-	top: 0px; /* Adjust if you have a WP admin bar visible */
+    top: var(--wp-admin--admin-bar--height, 0px);
+
 	bottom: 0;
 	left: 0;
 	/* overflow-y: auto; <-- REMOVE this */
@@ -115,7 +116,7 @@ body { margin: 0; }
     /* --- ADD Flexbox properties --- */
     display: flex;
     flex-direction: column;
-    height: 100vh; /* Make sidebar full viewport height */
+    height: calc(100vh - var(--wp-admin--admin-bar--height, 0px)); /* Make sidebar full viewport height */
     /* --- END ADD --- */
 }
 
@@ -232,6 +233,7 @@ body { margin: 0; }
 	 padding: 5px;
 	 display: flex;
 	 align-items: center;
+     justify-content: center;
 	 gap: 8px;
      text-decoration: none;
      border-radius: 4px;
@@ -266,6 +268,7 @@ body { margin: 0; }
 	transform: translateY(-2px);
 }
 .qp-card-header {
+    display: flex; justify-content: space-between; align-items: center;
 	padding: 1rem 1.5rem;
 	border-bottom: 1px solid var(--qp-dashboard-border-light);
 	background-color: var(--qp-dashboard-card-header-bg);
@@ -548,7 +551,7 @@ ul.qp-review-list li:last-child { border-bottom: none; }
 	height: 50px; /* Adjust height as needed */
 	background-color: var(--qp-dashboard-sidebar-bg); /* Use sidebar background */
 	border-bottom: 1px solid var(--qp-dashboard-border);
-	position: fixed; /* Fixed position */
+	position: sticky; /* Fixed position */
 	left: 0;
 	right: 0;
 	z-index: 1000; /* Ensure it's above content but below sidebar overlay */
@@ -1244,4 +1247,318 @@ ul.qp-syllabus-items li .dashicons {
     border-color: var(--qp-dashboard-border-light);
     color: #a0a5aa;
     opacity: 0.8;
+}
+
+
+/* =================================================================
+   NEW: History Page (Material Design Inspired)
+   ================================================================= */
+
+/* --- Clean "No Results" Card --- */
+.qp-no-results-card .qp-card-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 3rem 2rem;
+    color: var(--qp-dashboard-text-light);
+}
+.qp-no-results-card .dashicons {
+    font-size: 48px;
+    height: 48px;
+    width: 48px;
+    margin-bottom: 1rem;
+}
+
+/* --- Material-Style Tabs --- */
+.qp-md-tabs {
+    position: relative;
+    border-bottom: 1px solid var(--qp-dashboard-border-light);
+    margin-top: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+.qp-md-tab-list {
+    display: flex;
+    gap: 1rem;
+}
+.qp-md-tab-link {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--qp-dashboard-text-light);
+    background: none;
+    border: none;
+    padding: 0.75rem 0.5rem;
+    cursor: pointer;
+    position: relative;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1.5px; /* Sits on top of the container border */
+    transition: color 0.2s ease;
+}
+.qp-md-tab-link:hover {
+    color: var(--qp-dashboard-text-dark);
+}
+.qp-md-tab-link.active {
+    color: var(--qp-dashboard-primary);
+    border-bottom-color: var(--qp-dashboard-primary);
+}
+
+/* --- History List Layout --- */
+.qp-history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem; /* Space between cards */
+}
+
+.qp-history-item-card {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    padding: 1.25rem;
+    transition: all 0.2s ease-out;
+    border-radius: 8px; /* Softer radius */
+}
+.qp-history-item-card:hover {
+    background-color: #fcfcfc;
+    box-shadow: var(--qp-dashboard-shadow-hover);
+    transform: translateY(-2px);
+}
+
+/* 1. Icon */
+.qp-history-item-icon {
+    flex-shrink: 0;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--qp-dashboard-primary);
+    color: #fff;
+}
+.qp-history-item-icon .dashicons {
+    font-size: 24px;
+    width: 24px;
+    height: 24px;
+}
+
+/* 2. Main Content Block */
+.qp-history-item-main {
+    flex-grow: 1;
+}
+
+.qp-history-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 1rem;
+    margin-bottom: 0.5rem;
+}
+.qp-history-item-mode {
+    font-size: 1.2em; /* 18px */
+    font-weight: 600;
+    color: var(--qp-dashboard-text-dark);
+    line-height: 1.3;
+}
+.qp-history-item-result {
+    font-size: 1.5em; /* 21px */
+    font-weight: 700;
+    color: var(--qp-dashboard-text-dark);
+    flex-shrink: 0;
+}
+
+.qp-history-item-context {
+    font-size: 14px;
+    color: var(--qp-dashboard-text-light);
+    margin-bottom: 1rem;
+    line-height: 1.4;
+}
+.qp-history-item-context .context-label {
+    font-weight: 600;
+    color: var(--qp-dashboard-text-light);
+    margin-right: 4px;
+}
+
+/* 3. Sub-Stats (re-using from previous CSS) */
+.qp-history-item-card .qp-card-sub-stats {
+    display: flex; /* Changed from grid to flex */
+    gap: 2rem; /* Increased gap */
+    width: 100%;
+    margin-top: 1rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--qp-dashboard-border-light);
+}
+.qp-history-item-card .qp-card-sub-stats .stat-item {
+    padding: 0; border: none; background: none;
+    text-align: left; /* Align left */
+}
+.qp-history-item-card .qp-card-sub-stats .stat-value {
+    font-size: 1.25em; /* 18px */
+    font-weight: 600;
+    line-height: 1;
+}
+.qp-history-item-card .qp-card-sub-stats .stat-label {
+    font-size: 11px;
+    text-transform: uppercase;
+}
+/* Sub-stat colors */
+.qp-card-sub-stats .stat-item.correct .stat-value { color: var(--qp-dashboard-success); }
+.qp-card-sub-stats .stat-item.incorrect .stat-value { color: var(--qp-dashboard-danger); }
+.qp-card-sub-stats .stat-item.skipped .stat-value { color: var(--qp-dashboard-text-light); }
+
+
+/* 4. Actions Block */
+.qp-history-item-actions {
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1rem;
+    min-height: 70px; /* Align with sub-stats */
+}
+.qp-history-item-date {
+    font-size: 13px;
+    color: var(--qp-dashboard-text-light);
+    margin-bottom: auto; /* Pushes to top */
+}
+
+.qp-history-item-actions .qp-delete-session-btn {
+    color: var(--qp-dashboard-text-light);
+    background: transparent;
+    border: none;
+    padding: 4px;
+    opacity: 0.6;
+    align-self: flex-start; /* Puts it on the left of this column */
+    margin-top: -8px; /* Nudge up */
+}
+.qp-history-item-actions .qp-delete-session-btn:hover {
+    color: var(--qp-dashboard-danger);
+    opacity: 1;
+}
+.qp-history-item-actions .qp-button {
+    min-width: 100px;
+    text-align: center;
+}
+.qp-history-item-paused .qp-history-item-actions {
+    flex-direction: row; /* Paused card has horizontal buttons */
+    align-items: center;
+    min-height: 0;
+}
+
+
+/* --- Mode-Specific Colors --- */
+.mode-normal .qp-history-item-icon { background-color: var(--qp-dashboard-primary); }
+.mode-normal .qp-button-review { border-color: var(--qp-dashboard-primary); color: var(--qp-dashboard-primary); }
+
+.mode-course-test .qp-history-item-icon { background-color: #5d3d9b; } /* Purple */
+.mode-course-test .qp-button-review { 
+    border-color: #5d3d9b; color: #5d3d9b; 
+}
+.mode-course-test .qp-button-review:hover {
+    background-color: #5d3d9b; color: #fff; border-color: #5d3d9b;
+}
+
+.mode-mock-test .qp-history-item-icon { background-color: var(--qp-dashboard-danger); }
+.mode-mock-test .qp-button-review { 
+    border-color: var(--qp-dashboard-danger); color: var(--qp-dashboard-danger); 
+}
+.mode-mock-test .qp-button-review:hover {
+    background-color: var(--qp-dashboard-danger); color: #fff; border-color: var(--qp-dashboard-danger);
+}
+
+.mode-revision .qp-history-item-icon { background-color: #3949ab; } /* Indigo */
+.mode-revision .qp-button-review { 
+    border-color: #3949ab; color: #3949ab; 
+}
+.mode-revision .qp-button-review:hover {
+    background-color: #3949ab; color: #fff; border-color: #3949ab;
+}
+
+.mode-incorrect .qp-history-item-icon { background-color: #f57c00; } /* Orange */
+.mode-incorrect .qp-button-review { 
+    border-color: #f57c00; color: #f57c00; 
+}
+.mode-incorrect .qp-button-review:hover {
+    background-color: #f57c00; color: #fff; border-color: #f57c00;
+}
+
+.mode-section-wise .qp-history-item-icon { background-color: #00897b; } /* Teal */
+.mode-section-wise .qp-button-review { 
+    border-color: #00897b; color: #00897b; 
+}
+.mode-section-wise .qp-button-review:hover {
+    background-color: #00897b; color: #fff; border-color: #00897b;
+}
+
+.mode-review .qp-history-item-icon { background-color: #1e88e5; } /* Blue */
+.mode-review .qp-button-review { 
+    border-color: #1e88e5; color: #1e88e5; 
+}
+.mode-review .qp-button-review:hover {
+    background-color: #1e88e5; color: #fff; border-color: #1e88e5;
+}
+
+
+/* --- Responsive --- */
+@media (max-width: 782px) {
+    .qp-history-item-card {
+        flex-direction: column;
+        align-items: flex-start; /* Align left */
+        gap: 0.5rem;
+    }
+    .qp-history-item-icon {
+        top: 1.25rem;
+        right: 1.25rem;
+        width: 36px;
+        height: 36px;
+    }
+    .qp-history-item-icon .dashicons {
+        font-size: 20px; width: 20px; height: 20px;
+    }
+    .qp-history-item-main {
+        width: 100%;
+    }
+    .qp-history-item-header {
+        flex-direction: column-reverse; /* Put score on top */
+        align-items: flex-start;
+        gap: 0;
+        margin-bottom: 0.75rem;
+    }
+    .qp-history-item-result {
+        font-size: 2em; /* Bigger on mobile */
+    }
+    .qp-history-item-mode {
+        font-size: 1.1em;
+    }
+    .qp-history-item-context {
+        margin-bottom: 0;
+    }
+    .qp-history-item-card .qp-card-sub-stats {
+        gap: 1.5rem;
+        padding-bottom: 1rem;
+    }
+
+    .qp-history-item-actions {
+        width: 100%;
+        flex-direction: row-reverse; /* Review button on right */
+        align-items: center;
+        justify-content: flex-start;
+        gap: 0.75rem;
+        min-height: 0;
+        margin-top: 0.5rem;
+    }
+    .qp-history-item-actions .qp-button {
+        flex-grow: 1; /* Make button fill space */
+    }
+    .qp-history-item-date {
+        margin-bottom: 0;
+        margin-right: auto; /* Pushes to left */
+    }
+    .qp-history-item-actions .qp-delete-session-btn {
+        align-self: center;
+        margin-top: 0;
+    }
+    .qp-history-item-paused .qp-history-item-actions {
+        flex-direction: row; /* Stays row */
+    }
 }

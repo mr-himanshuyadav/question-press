@@ -527,9 +527,34 @@ final class Shortcodes
 	public static function render_summary_ui($summaryData, $session_id = 0, $settings = [])
 	{
 		$options              = get_option('qp_settings');
-		$dashboard_page_url = isset($options['dashboard_page']) ? get_permalink($options['dashboard_page']) : home_url('/');
+		$dashboard_page_id  = isset($options['dashboard_page']) ? absint($options['dashboard_page']) : 0;
+		$dashboard_page_url = $dashboard_page_id ? get_permalink($dashboard_page_id) : home_url('/');
 		$review_page_url    = isset($options['review_page']) ? get_permalink($options['review_page']) : home_url('/');
 		$session_review_url = $review_page_url ? add_query_arg('session_id', $session_id, $review_page_url) : '#';
+
+		// --- NEW: Context-Aware Back Button Logic ---
+		$is_course_test = isset($settings['course_id']) && $settings['course_id'] > 0;
+		$back_button_text = esc_html__('View Dashboard', 'question-press');
+		$back_button_url = $dashboard_page_url; // Default URL
+
+		if ($is_course_test) {
+			$course_id = absint($settings['course_id']);
+			$course_slug = get_post_field('post_name', $course_id);
+			
+			if ($course_slug) {
+				// Check if the dashboard is the front page to add the 'tab/' prefix
+				$is_front_page = ($dashboard_page_id > 0 && get_option('show_on_front') == 'page' && get_option('page_on_front') == $dashboard_page_id);
+				$tab_prefix = $is_front_page ? 'tab/' : '';
+				
+				// Get the base dashboard URL with a trailing slash
+				$base_dashboard_url = $dashboard_page_id ? trailingslashit( get_permalink( $dashboard_page_id ) ) : trailingslashit( home_url( '/' ) );
+
+				// Construct the new URL and text
+				$back_button_text = esc_html__('Back to Course', 'question-press');
+				$back_button_url = $base_dashboard_url . $tab_prefix . 'courses/' . $course_slug . '/';
+			}
+		}
+		// --- END NEW LOGIC ---
 
 		$accuracy = 0;
 		if (isset($summaryData['total_attempted']) && $summaryData['total_attempted'] > 0) {
@@ -573,7 +598,8 @@ final class Shortcodes
 				</div>
 			</div>
 			<div class="qp-summary-actions">
-				<a href="<?php echo esc_url($dashboard_page_url); ?>" class="qp-button qp-button-secondary">View Dashboard</a>
+				<?php // --- MODIFIED LINE --- ?>
+				<a href="<?php echo esc_url($back_button_url); ?>" class="qp-button qp-button-secondary"><?php echo $back_button_text; ?></a>
 				<?php if ($session_id && $review_page_url !== '#') : ?>
 					<a href="<?php echo esc_url($session_review_url); ?>" class="qp-button qp-button-primary">Review Session</a>
 				<?php endif; ?>
@@ -609,8 +635,16 @@ final class Shortcodes
 		$mode_class = 'mode-normal';
 		$mode_name  = 'Practice Session';
 		if ($is_mock_test) {
-			$mode_class = 'mode-mock-test';
-			$mode_name  = 'Mock Test';
+			// --- NEW: Check if it's a Course Test ---
+			if (isset($session_settings['course_id']) && $session_settings['course_id'] > 0 && isset($session_settings['item_id']) && $session_settings['item_id'] > 0) {
+				$item_title = get_the_title(absint($session_settings['item_id']));
+				$mode_name = $item_title ? esc_html($item_title) : 'Course Test'; // Fallback text
+				$mode_class = 'mode-course-test'; // New class for different color
+			} else {
+				// --- Original Mock Test Logic ---
+				$mode_class = 'mode-mock-test';
+				$mode_name  = 'Mock Test';
+			}
 		} elseif (isset($session_settings['practice_mode'])) {
 			switch ($session_settings['practice_mode']) {
 				case 'revision':
@@ -677,6 +711,30 @@ final class Shortcodes
 		$dashboard_page_url = isset($options['dashboard_page']) ? get_permalink($options['dashboard_page']) : home_url('/');
 
 		$settings        = json_decode($session->settings_snapshot, true);
+		// --- NEW: Context-Aware Back Button Logic for Review Page ---
+		$is_course_test = isset($settings['course_id']) && $settings['course_id'] > 0;
+		$back_button_text = esc_html__('Go Back', 'question-press');
+		$back_button_url = "javascript:window.history.back();"; // Default action
+		$back_button_onclick = "window.history.back(); return false;"; // Default onclick
+		$back_button_tag = "button"; // Default to a button
+
+		if ($is_course_test) {
+			$course_id = absint($settings['course_id']);
+			$course_slug = get_post_field('post_name', $course_id);
+			
+			if ($course_slug) {
+				$dashboard_page_id = isset($options['dashboard_page']) ? absint($options['dashboard_page']) : 0;
+				$base_dashboard_url = $dashboard_page_id ? trailingslashit( get_permalink( $dashboard_page_id ) ) : trailingslashit( home_url( '/' ) );
+				$is_front_page = ($dashboard_page_id > 0 && get_option('show_on_front') == 'page' && get_option('page_on_front') == $dashboard_page_id);
+				$tab_prefix = $is_front_page ? 'tab/' : '';
+
+				$back_button_text = esc_html__('Go to Course', 'question-press');
+				$back_button_url = $base_dashboard_url . $tab_prefix . 'courses/' . $course_slug . '/';
+				$back_button_onclick = ""; // No onclick needed for a link
+				$back_button_tag = "a"; // Change to a link
+			}
+		}
+		// --- END NEW LOGIC ---
 		$marks_correct   = $settings['marks_correct'] ?? 1;
 		$marks_incorrect = $settings['marks_incorrect'] ?? 0;
 
@@ -825,8 +883,49 @@ final class Shortcodes
 		$mode       = 'Practice';
 
 		if ($is_mock_test) {
-			$mode_class = 'mode-mock-test';
-			$mode       = 'Mock Test';
+			// --- MODIFIED: Check if it's a Course Test ---
+			if (isset($settings['course_id']) && $settings['course_id'] > 0 && isset($settings['item_id']) && $settings['item_id'] > 0) {
+				global $wpdb; // <-- Make sure $wpdb is available
+				$course_id = absint($settings['course_id']);
+				$item_id = absint($settings['item_id']);
+				
+				$course_title = get_the_title($course_id); // This is correct (it's a post)
+				
+				// --- NEW: Fetch Item and Section Title ---
+				$items_table = $wpdb->prefix . 'qp_course_items';
+				$sections_table = $wpdb->prefix . 'qp_course_sections';
+				$item_info = $wpdb->get_row($wpdb->prepare(
+					"SELECT i.title AS item_title, s.title AS section_title
+					 FROM {$items_table} i
+					 LEFT JOIN {$sections_table} s ON i.section_id = s.section_id
+					 WHERE i.item_id = %d",
+					$item_id
+				));
+
+				$item_title = $item_info ? $item_info->item_title : null;
+				$section_title = $item_info ? $item_info->section_title : null;
+				// --- END NEW FETCH ---
+
+				$mode = 'Course Test'; // Default fallback
+
+				// Build the new name string
+				$name_parts = [];
+				if ($course_title) $name_parts[] = esc_html($course_title);
+				if ($section_title) $name_parts[] = esc_html($section_title);
+				if ($item_title) $name_parts[] = esc_html($item_title);
+
+				if (!empty($name_parts)) {
+					$mode = implode(' / ', $name_parts);
+				} elseif ($item_title) {
+					// Fallback to just the item title if course is missing
+					$mode = esc_html($item_title);
+				}
+				
+				$mode_class = 'mode-course-test'; // Keep the same class
+			} else {
+				$mode_class = 'mode-mock-test';
+				$mode       = 'Mock Test';
+			}
 		} elseif (isset($settings['practice_mode'])) {
 			switch ($settings['practice_mode']) {
 				case 'revision':
@@ -852,7 +951,13 @@ final class Shortcodes
 				<div style="display: flex; flex-direction: row; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
 					<h2>Review</h2>
 					<div class="qp-review-header-actions" style="display: flex; align-items: center; gap: 10px;">
-						<button type="button" onclick="window.history.back();" class="qp-button qp-button-secondary">&laquo; Go Back</button>
+						<?php
+						if ($back_button_tag === 'a') :
+						?>
+							<a href="<?php echo esc_url($back_button_url); ?>" class="qp-button qp-button-secondary">&laquo; <?php echo $back_button_text; ?></a>
+						<?php else : ?>
+							<button type="button" onclick="<?php echo esc_attr($back_button_onclick); ?>" class="qp-button qp-button-secondary">&laquo; <?php echo $back_button_text; ?></button>
+						<?php endif; ?>
 						<a href="<?php echo esc_url($dashboard_page_url); ?>" class="qp-button qp-button-primary">Dashboard</a>
 					</div>
 				</div>

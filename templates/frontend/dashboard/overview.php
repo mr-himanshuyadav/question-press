@@ -24,6 +24,53 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 use QuestionPress\Frontend\Dashboard;
 
+if ( ! function_exists( 'qp_get_history_mode_details' ) ) {
+    function qp_get_history_mode_details( $session, $settings ) {
+        $details = [
+            'icon'  => 'dashicons-edit',
+            'class' => 'mode-normal',
+            'label' => 'Practice',
+        ];
+
+        if ( isset( $settings['practice_mode'] ) && $settings['practice_mode'] === 'mock_test' ) {
+            if ( isset( $settings['course_id'] ) && $settings['course_id'] > 0 ) {
+                $details = [
+                    'icon'  => 'dashicons-welcome-learn-more',
+                    'class' => 'mode-course-test',
+                    'label' => 'Course Test',
+                ];
+            } else {
+                $details = [
+                    'icon'  => 'dashicons-analytics',
+                    'class' => 'mode-mock-test',
+                    'label' => Dashboard::get_session_mode_name( $session, $settings ),
+                ];
+            }
+        } elseif ( isset( $settings['practice_mode'] ) ) {
+            $mode_map = [
+                'revision'                => [ 'icon' => 'dashicons-backup', 'class' => 'mode-revision', 'label' => 'Revision' ],
+                'Incorrect Que. Practice' => [ 'icon' => 'dashicons-warning', 'class' => 'mode-incorrect', 'label' => 'Incorrect Practice' ],
+                'Section Wise Practice'   => [ 'icon' => 'dashicons-layout', 'class' => 'mode-section-wise', 'label' => 'Section Practice' ],
+            ];
+            if ( isset( $mode_map[ $settings['practice_mode'] ] ) ) {
+                $details = $mode_map[ $settings['practice_mode'] ];
+            } else {
+                if ( $settings['practice_mode'] !== 'normal' ) {
+                     $details['label'] = $settings['practice_mode'];
+                }
+            }
+        } elseif ( isset( $settings['subject_id'] ) && $settings['subject_id'] === 'review' ) {
+            $details = [
+                'icon'  => 'dashicons-book-alt',
+                'class' => 'mode-review',
+                'label' => 'Review Session',
+            ];
+        }
+
+        return $details;
+    }
+}
+
 // Ensure stats object exists and has defaults if necessary
 $stats             = $stats ?? (object) [ 'total_attempted' => 0, 'total_correct' => 0, 'total_incorrect' => 0 ];
 $overall_accuracy  = $overall_accuracy ?? 0;
@@ -115,54 +162,91 @@ $never_correct_count = $never_correct_count ?? 0;
 	</div>
 <?php endif; ?>
 
-<div class="qp-card">
-	<div class="qp-card-header">
-		<h3>Recent History</h3>
-	</div>
-	<div class="qp-card-content">
-		<?php if ( ! empty( $recent_history ) ) : ?>
-			<table class="qp-dashboard-table qp-recent-history-table">
-				<thead>
-					<tr>
-						<th>Date</th>
-						<th>Mode</th>
-						<th>Context</th> <?php // Changed from Subjects ?>
-						<th>Result</th>
-						<th>Actions</th>
-					</tr>
-				</thead>
-				<tbody>
-					<?php
-					foreach ( $recent_history as $session ) :
-						$settings         = json_decode( $session->settings_snapshot, true );
-						$mode             = Dashboard::get_session_mode_name( $session, $settings ); // Use helper
-						$context_display  = Dashboard::get_session_subjects_display( $session, $settings, $lineage_cache, $group_to_topic_map, $question_to_group_map ); // Use helper, renamed variable
-						$result_display   = Dashboard::get_session_result_display( $session, $settings ); // Use helper
-						$session_review_url = add_query_arg( 'session_id', $session->session_id, $review_page_url );
-					?>
-						<tr>
-							<td data-label="Date"><?php echo esc_html( date_i18n( get_option( 'date_format' ), strtotime( $session->start_time ) ) ); ?></td>
-							<td data-label="Mode"><?php echo esc_html( $mode ); ?></td>
-							<td data-label="Context"><?php echo esc_html( $context_display ); ?></td>
-							<td data-label="Result"><strong><?php echo esc_html( $result_display ); ?></strong></td>
-							<td data-label="Actions" class="qp-actions-cell">
-								<a href="<?php echo esc_url( $session_review_url ); ?>" class="qp-button qp-button-secondary">Review</a>
-								<?php /* Add delete button here if needed, checking permissions */ ?>
-							</td>
-						</tr>
-					<?php endforeach; ?>
-				</tbody>
-			</table>
-			<?php
-            // Get base dashboard URL correctly
-            $options = get_option('qp_settings');
-            $dashboard_page_id = isset($options['dashboard_page']) ? absint($options['dashboard_page']) : 0;
-            $base_dashboard_url = $dashboard_page_id ? trailingslashit(get_permalink($dashboard_page_id)) : trailingslashit(home_url());
-            $history_tab_url = $base_dashboard_url . 'history/';
+<div class="qp-card qp-card-recent-history">
+    <div class="qp-card-header">
+        <h3><?php esc_html_e( 'Recent History', 'question-press' ); ?></h3>
+        <a href="<?php echo esc_url( $history_tab_url ); ?>" class="qp-button qp-button-secondary qp-button-small"><?php esc_html_e( 'View All', 'question-press' ); ?></a>
+    </div>
+    <div class="qp-card-content qp-history-list qp-overview-history-list" style="padding: 0;">
+        <?php if ( ! empty( $recent_history ) ) : ?>
+            <?php
+            foreach ( $recent_history as $session ) :
+                $settings = json_decode( $session->settings_snapshot, true );
+                $is_scored = isset( $settings['marks_correct'] );
+                
+                // Get all mode details (icon, class, label)
+                $mode_details = qp_get_history_mode_details( $session, $settings );
+
+                // Get result display
+                if ( isset( $accuracy_stats[ $session->session_id ] ) && ! $is_scored ) {
+                    $result_display = $accuracy_stats[ $session->session_id ];
+                } else {
+                    $result_display = Dashboard::get_session_result_display( $session, $settings );
+                }
+
+                // Get context (subjects or course)
+                if ( $mode_details['class'] === 'mode-course-test' ) {
+                    // Fetch full course/section/item name
+                    global $wpdb; 
+                    $course_id = absint($settings['course_id']);
+                    $item_id = absint($settings['item_id']);
+                    $course_title = get_the_title($course_id);
+                    $items_table = $wpdb->prefix . 'qp_course_items';
+                    $sections_table = $wpdb->prefix . 'qp_course_sections';
+                    $item_info = $wpdb->get_row($wpdb->prepare(
+                        "SELECT i.title AS item_title, s.title AS section_title
+                        FROM {$items_table} i
+                        LEFT JOIN {$sections_table} s ON i.section_id = s.section_id
+                        WHERE i.item_id = %d", $item_id
+                    ));
+                    $item_title = $item_info ? $item_info->item_title : null;
+                    $section_title = $item_info ? $item_info->section_title : null;
+                    $name_parts = [];
+                    if ($course_title) $name_parts[] = esc_html($course_title);
+                    if ($section_title) $name_parts[] = esc_html($section_title);
+                    if ($item_title) $name_parts[] = esc_html($item_title);
+                    if (!empty($name_parts)) {
+                        $context_display = implode(' / ', $name_parts);
+                    } else {
+                        $context_display = '';
+                    }
+                } else {
+                    // --- Use the *recent* lineage data ---
+                    $context_display = Dashboard::get_session_subjects_display( $session, $settings, $lineage_cache_recent, $group_to_topic_map_recent, $question_to_group_map_recent );
+                }
             ?>
-			<p style="text-align: right; margin-top: 1rem;"><a href="<?php echo esc_url($history_tab_url); ?>" class="qp-view-full-history-link">View Full History &rarr;</a></p>
-		<?php else : ?>
-			<p style="text-align: center;">No completed sessions yet.</p>
-		<?php endif; ?>
-	</div>
+                <div class="qp-history-item-card <?php echo esc_attr( $mode_details['class'] ); ?>">
+                    <div class="qp-history-item-icon">
+                        <span class="dashicons <?php echo esc_attr( $mode_details['icon'] ); ?>"></span>
+                    </div>
+                    
+                    <div class="qp-history-item-main">
+                        <div class="qp-history-item-header">
+                            <span class="qp-history-item-mode"><?php echo esc_html( $mode_details['label'] ); ?></span>
+                            <span class="qp-history-item-result"><?php echo esc_html( $result_display ); ?></span>
+                        </div>
+                        
+                        <div class="qp-history-item-context <?php echo ( $mode_details['class'] === 'mode-course-test' ? 'course-context' : '' ); ?>">
+                            <?php if ( ! empty( $context_display ) ) : ?>
+                                <?php if ( $mode_details['class'] !== 'mode-course-test' ) : ?>
+                                    <span class="context-label">Subjects:</span>
+                                <?php endif; ?>
+                                <span class="context-content"><?php echo wp_kses_post( $context_display ); ?></span>
+                            <?php endif; ?>
+                        </div>
+
+                        <?php // --- NOTE: We have REMOVED the .qp-card-sub-stats DIV here for conciseness --- ?>
+
+                    </div>
+
+                    <div class="qp-history-item-actions">
+                        <span class="qp-history-item-date"><?php echo esc_html( date_i18n( get_option( 'date_format' ), strtotime( $session->start_time ) ) ); ?></span>
+                        <a href="<?php echo esc_url( add_query_arg( 'session_id', $session->session_id, $review_page_url ) ); ?>" class="qp-button qp-button-secondary qp-button-review qp-button-small"><?php esc_html_e( 'Review', 'question-press' ); ?></a>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+        <?php else : ?>
+            <p style="text-align: center; padding: 2rem;"><?php esc_html_e( 'No recent history.', 'question-press' ); ?></p>
+        <?php endif; ?>
+    </div>
 </div>
