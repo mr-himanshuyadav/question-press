@@ -527,9 +527,34 @@ final class Shortcodes
 	public static function render_summary_ui($summaryData, $session_id = 0, $settings = [])
 	{
 		$options              = get_option('qp_settings');
-		$dashboard_page_url = isset($options['dashboard_page']) ? get_permalink($options['dashboard_page']) : home_url('/');
+		$dashboard_page_id  = isset($options['dashboard_page']) ? absint($options['dashboard_page']) : 0;
+		$dashboard_page_url = $dashboard_page_id ? get_permalink($dashboard_page_id) : home_url('/');
 		$review_page_url    = isset($options['review_page']) ? get_permalink($options['review_page']) : home_url('/');
 		$session_review_url = $review_page_url ? add_query_arg('session_id', $session_id, $review_page_url) : '#';
+
+		// --- NEW: Context-Aware Back Button Logic ---
+		$is_course_test = isset($settings['course_id']) && $settings['course_id'] > 0;
+		$back_button_text = esc_html__('View Dashboard', 'question-press');
+		$back_button_url = $dashboard_page_url; // Default URL
+
+		if ($is_course_test) {
+			$course_id = absint($settings['course_id']);
+			$course_slug = get_post_field('post_name', $course_id);
+			
+			if ($course_slug) {
+				// Check if the dashboard is the front page to add the 'tab/' prefix
+				$is_front_page = ($dashboard_page_id > 0 && get_option('show_on_front') == 'page' && get_option('page_on_front') == $dashboard_page_id);
+				$tab_prefix = $is_front_page ? 'tab/' : '';
+				
+				// Get the base dashboard URL with a trailing slash
+				$base_dashboard_url = $dashboard_page_id ? trailingslashit( get_permalink( $dashboard_page_id ) ) : trailingslashit( home_url( '/' ) );
+
+				// Construct the new URL and text
+				$back_button_text = esc_html__('Back to Course', 'question-press');
+				$back_button_url = $base_dashboard_url . $tab_prefix . 'courses/' . $course_slug . '/';
+			}
+		}
+		// --- END NEW LOGIC ---
 
 		$accuracy = 0;
 		if (isset($summaryData['total_attempted']) && $summaryData['total_attempted'] > 0) {
@@ -573,7 +598,8 @@ final class Shortcodes
 				</div>
 			</div>
 			<div class="qp-summary-actions">
-				<a href="<?php echo esc_url($dashboard_page_url); ?>" class="qp-button qp-button-secondary">View Dashboard</a>
+				<?php // --- MODIFIED LINE --- ?>
+				<a href="<?php echo esc_url($back_button_url); ?>" class="qp-button qp-button-secondary"><?php echo $back_button_text; ?></a>
 				<?php if ($session_id && $review_page_url !== '#') : ?>
 					<a href="<?php echo esc_url($session_review_url); ?>" class="qp-button qp-button-primary">Review Session</a>
 				<?php endif; ?>
@@ -677,6 +703,30 @@ final class Shortcodes
 		$dashboard_page_url = isset($options['dashboard_page']) ? get_permalink($options['dashboard_page']) : home_url('/');
 
 		$settings        = json_decode($session->settings_snapshot, true);
+		// --- NEW: Context-Aware Back Button Logic for Review Page ---
+		$is_course_test = isset($settings['course_id']) && $settings['course_id'] > 0;
+		$back_button_text = esc_html__('Go Back', 'question-press');
+		$back_button_url = "javascript:window.history.back();"; // Default action
+		$back_button_onclick = "window.history.back(); return false;"; // Default onclick
+		$back_button_tag = "button"; // Default to a button
+
+		if ($is_course_test) {
+			$course_id = absint($settings['course_id']);
+			$course_slug = get_post_field('post_name', $course_id);
+			
+			if ($course_slug) {
+				$dashboard_page_id = isset($options['dashboard_page']) ? absint($options['dashboard_page']) : 0;
+				$base_dashboard_url = $dashboard_page_id ? trailingslashit( get_permalink( $dashboard_page_id ) ) : trailingslashit( home_url( '/' ) );
+				$is_front_page = ($dashboard_page_id > 0 && get_option('show_on_front') == 'page' && get_option('page_on_front') == $dashboard_page_id);
+				$tab_prefix = $is_front_page ? 'tab/' : '';
+
+				$back_button_text = esc_html__('Go to Course', 'question-press');
+				$back_button_url = $base_dashboard_url . $tab_prefix . 'courses/' . $course_slug . '/';
+				$back_button_onclick = ""; // No onclick needed for a link
+				$back_button_tag = "a"; // Change to a link
+			}
+		}
+		// --- END NEW LOGIC ---
 		$marks_correct   = $settings['marks_correct'] ?? 1;
 		$marks_incorrect = $settings['marks_incorrect'] ?? 0;
 
@@ -852,7 +902,13 @@ final class Shortcodes
 				<div style="display: flex; flex-direction: row; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
 					<h2>Review</h2>
 					<div class="qp-review-header-actions" style="display: flex; align-items: center; gap: 10px;">
-						<button type="button" onclick="window.history.back();" class="qp-button qp-button-secondary">&laquo; Go Back</button>
+						<?php
+						if ($back_button_tag === 'a') :
+						?>
+							<a href="<?php echo esc_url($back_button_url); ?>" class="qp-button qp-button-secondary">&laquo; <?php echo $back_button_text; ?></a>
+						<?php else : ?>
+							<button type="button" onclick="<?php echo esc_attr($back_button_onclick); ?>" class="qp-button qp-button-secondary">&laquo; <?php echo $back_button_text; ?></button>
+						<?php endif; ?>
 						<a href="<?php echo esc_url($dashboard_page_url); ?>" class="qp-button qp-button-primary">Dashboard</a>
 					</div>
 				</div>
