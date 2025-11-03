@@ -105,6 +105,16 @@ class Practice_Ajax
                 ['remaining_attempts' => $new_attempts],
                 ['entitlement_id' => $entitlement_to_decrement->entitlement_id]
             );
+
+            if ($new_attempts === 0) {
+                $wpdb->update(
+                    $entitlements_table,
+                    ['status' => 'expired'],
+                    ['entitlement_id' => $entitlement_to_decrement->entitlement_id]
+                );
+                error_log("QP Check Answer: Entitlement #{$entitlement_to_decrement->entitlement_id} expired due to 0 attempts remaining.");
+            }
+
             error_log("QP Check Answer: User #{$user_id} used general attempt from Entitlement #{$entitlement_to_decrement->entitlement_id}. Remaining: {$new_attempts}");
         } else {
             error_log("QP Check Answer: User #{$user_id} attempt approved (Course Test or Unlimited Plan).");

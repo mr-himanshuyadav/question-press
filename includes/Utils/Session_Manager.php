@@ -191,6 +191,16 @@ class Session_Manager extends DB { // <-- Extend DB to get self::$wpdb
 						['entitlement_id' => $entitlement->entitlement_id]
 					);
 
+					// Check if attempts just hit zero ---
+                    if ($new_attempts === 0) {
+                        $wpdb->update(
+                            $entitlements_table,
+                            ['status' => 'expired'],
+                            ['entitlement_id' => $entitlement->entitlement_id]
+                        );
+                        error_log("QP Finalize: Entitlement #{$entitlement->entitlement_id} expired due to 0 attempts remaining.");
+                    }
+
 					error_log("QP Finalize: Deducted {$attempts_deducted_from_this} attempts from Entitlement #{$entitlement->entitlement_id}. Remaining: {$new_attempts}.");
 				}
 			} elseif ($has_unlimited) {
