@@ -412,7 +412,7 @@ final class Dashboard {
             
             // --- NEW: Get progression mode ---
             $progression_mode = get_post_meta($course_id, '_qp_course_progression_mode', true);
-            $is_progressive = ($progression_mode === 'progressive') && !user_can($user_id, 'manage_options'); // Admins bypass
+            $is_progressive = ($progression_mode === 'progressive'); // Admins bypass
             $is_previous_item_complete = true; // First item is always unlocked
             // --- END NEW ---
 
