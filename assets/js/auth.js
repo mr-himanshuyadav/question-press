@@ -203,4 +203,46 @@ jQuery(document).ready(function($) {
 
     // Set initial state of the button on page load
     checkFormValidity();
+
+    // --- NEW: Resend OTP Logic ---
+    var resendLink = $('#qp-resend-otp-link');
+    var resendMessage = $('#qp-resend-otp-message');
+
+    if (resendLink.length) {
+        resendLink.on('click', function(e) {
+            e.preventDefault();
+            
+            resendLink.hide();
+            resendMessage.text('Sending...').show();
+
+            $.ajax({
+                url: qp_ajax_object.ajax_url,
+                type: 'POST',
+                data: {
+                    action: 'qp_resend_registration_otp'
+                    // No nonce needed for this specific action
+                },
+                success: function(response) {
+                    if (response.success) {
+                        resendMessage.text(response.data.message).css('color', '#2e7d32');
+                    } else {
+                        resendMessage.text(response.data.message).css('color', '#d63638');
+                    }
+                    
+                    // Show the link again after a few seconds
+                    setTimeout(function() {
+                        resendLink.show();
+                        resendMessage.hide().text('');
+                    }, 5000); // 5 second cooldown
+                },
+                error: function() {
+                    resendMessage.text('An error occurred. Please try again.').css('color', '#d63638');
+                    setTimeout(function() {
+                        resendLink.show();
+                        resendMessage.hide().text('');
+                    }, 5000);
+                }
+            });
+        });
+    }
 });

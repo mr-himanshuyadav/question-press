@@ -283,6 +283,7 @@ final class Plugin {
         // AJAX for signup form validation
         add_action('wp_ajax_nopriv_qp_check_username', [Practice_Ajax::class, 'check_username_availability']);
         add_action('wp_ajax_nopriv_qp_check_email', [Practice_Ajax::class, 'check_email_availability']);
+        add_action('wp_ajax_nopriv_qp_resend_registration_otp', [Practice_Ajax::class, 'resend_registration_otp']);
 
         // Filters
         add_filter('query_vars', [Rewrites::class, 'register_query_vars']);

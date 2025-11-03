@@ -1029,6 +1029,7 @@ final class Shortcodes {
 
 
 	public static function render_signup_form() {
+        // --- 1. Handle Logged-in / Registration Disabled ---
         if ( is_user_logged_in() ) {
             $options = get_option('qp_settings');
             $dashboard_url = $options['dashboard_page'] ? get_permalink($options['dashboard_page']) : home_url('/');
@@ -1041,90 +1042,158 @@ final class Shortcodes {
 
         global $wpdb;
         $errors = [];
+        $options = get_option('qp_settings');
+        $enable_otp = (bool) ($options['enable_otp_verification'] ?? 0);
 
-        // --- Process Full Form Submission ---
-        if ( ! empty( $_POST ) && isset( $_POST['action'] ) && $_POST['action'] === 'qp_signup_submit' ) {
+        // Ensure session is started
+        if ( session_status() === PHP_SESSION_NONE ) {
+            session_start();
+        }
+
+        // --- 2. Handle All Form Submissions ---
+        if ( ! empty( $_POST ) && isset( $_POST['action'] ) ) {
             check_admin_referer('qp_signup_nonce');
+            
+            // --- ACTION: User submitted the main signup form ---
+            if ( $_POST['action'] === 'qp_signup_submit' ) {
+                $username = sanitize_user( $_POST['qp_reg_username'] ?? '' );
+                $email = sanitize_email( $_POST['qp_reg_email'] ?? '' );
+                $display_name = sanitize_text_field( $_POST['qp_reg_display_name'] ?? '' );
+                $password = $_POST['qp_reg_password'] ?? '';
+                $confirm_password = $_POST['qp_reg_confirm_password'] ?? '';
+                $exam_id = isset($_POST['qp_reg_exam']) ? absint($_POST['qp_reg_exam']) : 0;
+                $subject_id = isset($_POST['qp_reg_subject']) ? absint($_POST['qp_reg_subject']) : 0;
 
-            $username = sanitize_user( $_POST['qp_reg_username'] ?? '' );
-            $email = sanitize_email( $_POST['qp_reg_email'] ?? '' );
-            $display_name = sanitize_text_field( $_POST['qp_reg_display_name'] ?? '' );
-            $password = $_POST['qp_reg_password'] ?? '';
-            $confirm_password = $_POST['qp_reg_confirm_password'] ?? '';
-            $exam_id = isset($_POST['qp_reg_exam']) ? absint($_POST['qp_reg_exam']) : 0;
-            $subject_id = isset($_POST['qp_reg_subject']) ? absint($_POST['qp_reg_subject']) : 0;
+                // Validation (we keep these checks as a server-side fallback)
+                if ( empty($username) || empty($email) || empty($display_name) || empty($password) || empty($confirm_password) ) { $errors[] = 'All required fields (*) are mandatory.'; }
+                if ( ! is_email( $email ) ) { $errors[] = 'Please provide a valid email address.'; }
+                if ( username_exists( $username ) ) { $errors[] = 'That username is already taken. Please choose another.'; }
+                if ( email_exists( $email ) ) { $errors[] = 'That email address is already in use. Please log in.'; }
+                if ( $password !== $confirm_password ) { $errors[] = 'Your passwords do not match.'; }
+                if ( strlen($password) < 8 ) { $errors[] = 'Password must be at least 8 characters long.'; }
 
-            // --- Validation ---
-            if ( empty($username) || empty($email) || empty($display_name) || empty($password) || empty($confirm_password) ) {
-                $errors[] = 'All required fields (*) are mandatory.';
-            }
-            if ( ! is_email( $email ) ) {
-                $errors[] = 'Please provide a valid email address.';
-            }
-
-            if ( empty( $errors ) ) {
-                // --- Create the User ---
-                $user_id = wp_create_user( $username, $password, $email );
-
-                if ( is_wp_error( $user_id ) ) {
-                    $errors[] = 'Error creating user: ' . $user_id->get_error_message();
-                } else {
-                    // User created! Now set display name and scope.
-                    wp_update_user( [
-                        'ID'           => $user_id,
-                        'display_name' => $display_name
-                    ] );
-
-                    // Save Scope
-                    $allowed_exams = ($exam_id > 0) ? [$exam_id] : [];
-                    $allowed_subjects = ($subject_id > 0) ? [$subject_id] : [];
-                    
-                    update_user_meta( $user_id, '_qp_allowed_exam_term_ids', wp_json_encode( $allowed_exams ) );
-                    update_user_meta( $user_id, '_qp_allowed_subject_term_ids', wp_json_encode( $allowed_subjects ) );
-                    
-                    // Log the new user in
-                    $creds = [
-                        'user_login'    => $username,
-                        'user_password' => $password,
-                        'remember'      => true
+                if ( empty( $errors ) ) {
+                    // All fields are valid. Store data in session.
+                    $_SESSION['qp_signup_data'] = [
+                        'username' => $username,
+                        'email' => $email,
+                        'display_name' => $display_name,
+                        'password' => $password,
+                        'exam_id' => $exam_id,
+                        'subject_id' => $subject_id,
                     ];
-                    $user_signon = wp_signon( $creds, false );
-                    
-                    if ( is_wp_error($user_signon) ) {
-                        $errors[] = 'Registration successful, but auto-login failed: ' . $user_signon->get_error_message();
+
+                    if ( $enable_otp ) {
+                        // --- OTP is ON: Send code and show Step 2 ---
+                        $otp_result = \QuestionPress\Utils\OTP_Manager::generate_and_send($email);
+                        if (is_wp_error($otp_result)) {
+                            $errors[] = $otp_result->get_error_message();
+                            // Stay on step 1 and show the error
+                        } else {
+                            // Success, redirect to OTP step
+                            wp_safe_redirect( add_query_arg('step', 'verify', get_permalink()) );
+                            exit;
+                        }
                     } else {
-                        // Success! Redirect to dashboard.
-                        $options = get_option('qp_settings');
-                        $dashboard_url = $options['dashboard_page'] ? get_permalink($options['dashboard_page']) : home_url('/');
-                        wp_safe_redirect( $dashboard_url );
-                        exit;
+                        // --- OTP is OFF: Create user directly ---
+                        $user_id = wp_create_user( $username, $password, $email );
+                        if ( is_wp_error( $user_id ) ) {
+                            $errors[] = 'Error creating user: ' . $user_id->get_error_message();
+                        } else {
+                            // User created. Set display name and scope.
+                            wp_update_user( ['ID' => $user_id, 'display_name' => $display_name] );
+                            update_user_meta( $user_id, '_qp_allowed_exam_term_ids', wp_json_encode( $exam_id > 0 ? [$exam_id] : [] ) );
+                            update_user_meta( $user_id, '_qp_allowed_subject_term_ids', wp_json_encode( $subject_id > 0 ? [$subject_id] : [] ) );
+                            
+                            // Log in and redirect
+                            $creds = ['user_login' => $username, 'user_password' => $password, 'remember' => true];
+                            wp_signon( $creds, false );
+                            $dashboard_url = $options['dashboard_page'] ? get_permalink($options['dashboard_page']) : home_url('/');
+                            wp_safe_redirect( $dashboard_url );
+                            exit;
+                        }
                     }
                 }
-            }
+                // If we are here, $errors is not empty. We will fall through and re-render Step 1.
+            
+            // --- ACTION: User submitted the OTP form ---
+            } elseif ( $_POST['action'] === 'qp_verify_otp' ) {
+
+                $step_1_data = $_SESSION['qp_signup_data'] ?? [];
+                if ( empty($step_1_data) ) {
+                    $errors[] = 'Your session has expired. Please start over.';
+                    // Fall through to render step 1
+                } else {
+                    $email = $step_1_data['email'];
+                    
+                    if (isset($_POST['qp_signup_submit_back'])) {
+                        // User clicked "Back". Clear session and go to step 1.
+                        unset($_SESSION['qp_signup_data']);
+                        wp_safe_redirect( remove_query_arg('step', get_permalink()) );
+                        exit;
+                    }
+
+                    if (isset($_POST['qp_signup_submit_otp'])) {
+                        $otp_code = $_POST['qp_reg_otp'] ?? '';
+                        $verify_result = \QuestionPress\Utils\OTP_Manager::verify($email, $otp_code);
+
+                        if (is_wp_error($verify_result)) {
+                            $errors[] = $verify_result->get_error_message();
+                            // Fall through to re-render OTP form with error
+                        } else {
+                            // --- SUCCESS! Create the user ---
+                            $user_id = wp_create_user( $step_1_data['username'], $step_1_data['password'], $step_1_data['email'] );
+                            if ( is_wp_error( $user_id ) ) {
+                                $errors[] = 'Error creating user: ' . $user_id->get_error_message();
+                                // Fall through to re-render OTP form with error
+                            } else {
+                                // User created! Set display name and scope.
+                                wp_update_user( ['ID' => $user_id, 'display_name' => $step_1_data['display_name']] );
+                                update_user_meta( $user_id, '_qp_allowed_exam_term_ids', wp_json_encode( $step_1_data['exam_id'] > 0 ? [$step_1_data['exam_id']] : [] ) );
+                                update_user_meta( $user_id, '_qp_allowed_subject_term_ids', wp_json_encode( $step_1_data['subject_id'] > 0 ? [$step_1_data['subject_id']] : [] ) );
+                                
+                                // Log in and redirect
+                                $creds = ['user_login' => $step_1_data['username'], 'user_password' => $step_1_data['password'], 'remember' => true];
+                                wp_signon( $creds, false );
+                                
+                                // Clean up session
+                                unset($_SESSION['qp_signup_data']);
+                                
+                                $dashboard_url = $options['dashboard_page'] ? get_permalink($options['dashboard_page']) : home_url('/');
+                                wp_safe_redirect( $dashboard_url );
+                                exit;
+                            }
+                        }
+                    }
+                }
+            } // end action check
         }
         
-        // --- Fetch Data for Dropdowns (for GET request) ---
-        $term_table = $wpdb->prefix . 'qp_terms';
-        $tax_table = $wpdb->prefix . 'qp_taxonomies';
-        
-        $exam_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'exam'");
-        $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'subject'");
+        // --- 3. Display Logic (GET request) ---
+        $step_html = '';
+        $current_step = isset($_GET['step']) ? $_GET['step'] : '1';
+        $step_1_data = $_SESSION['qp_signup_data'] ?? [];
 
-        $exams = $wpdb->get_results($wpdb->prepare(
-            "SELECT term_id, name FROM $term_table WHERE taxonomy_id = %d AND parent = 0 ORDER BY name ASC",
-            $exam_tax_id
-        ));
-        $subjects = $wpdb->get_results($wpdb->prepare(
-            "SELECT term_id, name FROM $term_table WHERE taxonomy_id = %d AND parent = 0 ORDER BY name ASC",
-            $subject_tax_id
-        ));
+        if ( $current_step === 'verify' && $enable_otp && !empty($step_1_data) ) {
+            // --- Show Step 2: OTP Verification ---
+            $step_html = Template_Loader::get_html('auth/signup-otp-verify', 'frontend', [
+                'email' => $step_1_data['email'] ?? '',
+            ]);
+        } else {
+            // --- Show Step 1: Main Signup Form (Default) ---
+            $term_table = $wpdb->prefix . 'qp_terms';
+            $tax_table = $wpdb->prefix . 'qp_taxonomies';
+            $exam_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'exam'");
+            $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'subject'");
+            $exams = $wpdb->get_results($wpdb->prepare("SELECT term_id, name FROM $term_table WHERE taxonomy_id = %d AND parent = 0 ORDER BY name ASC", $exam_tax_id));
+            $subjects = $wpdb->get_results($wpdb->prepare("SELECT term_id, name FROM $term_table WHERE taxonomy_id = %d AND parent = 0 ORDER BY name ASC", $subject_tax_id));
 
-        // --- Render the new single-page form ---
-        $step_html = Template_Loader::get_html('auth/signup-form', 'frontend', [
-            'errors'   => $errors,
-            'subjects' => $subjects,
-            'exams'    => $exams
-        ]);
+            $step_html = Template_Loader::get_html('auth/signup-form', 'frontend', [
+                'errors'   => $errors,
+                'subjects' => $subjects,
+                'exams'    => $exams
+            ]);
+        }
         
         // Render the main wrapper
         return Template_Loader::get_html('auth/signup-wrapper', 'frontend', [

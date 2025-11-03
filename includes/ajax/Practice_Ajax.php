@@ -1855,4 +1855,29 @@ class Practice_Ajax
             wp_send_json_success(['message' => 'Email is available.']);
         }
     }
+
+    /**
+     * AJAX handler for resending an OTP code.
+     */
+    public static function resend_registration_otp() {
+        if ( session_status() === PHP_SESSION_NONE ) {
+            session_start();
+        }
+
+        // No nonce needed here, as we're acting on session data, not POST data.
+        $email = $_SESSION['qp_signup_data']['email'] ?? '';
+
+        if (empty($email)) {
+            wp_send_json_error(['message' => 'Your session has expired. Please go back.']);
+        }
+        
+        // Use our new OTP Manager
+        $result = \QuestionPress\Utils\OTP_Manager::generate_and_send($email);
+
+        if (is_wp_error($result)) {
+            wp_send_json_error(['message' => $result->get_error_message()]);
+        } else {
+            wp_send_json_success(['message' => 'A new code has been sent.']);
+        }
+    }
 }

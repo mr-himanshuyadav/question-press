@@ -332,7 +332,7 @@ class Activator {
     ) $charset_collate;";
     dbDelta($sql_user_items_progress);
 
-    // === NEW USER ENTITLEMENTS TABLE ===
+    // 10. USER ENTITLEMENTS TABLE
     $table_user_entitlements = $wpdb->prefix . 'qp_user_entitlements';
     $sql_user_entitlements = "CREATE TABLE $table_user_entitlements (
         entitlement_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -352,6 +352,21 @@ class Activator {
         KEY expiry_date (expiry_date)
     ) $charset_collate;";
     dbDelta($sql_user_entitlements);
+
+    // 11. OTP Verification Table
+    $table_otp = $wpdb->prefix . 'qp_otp_verification';
+    $sql_otp = "CREATE TABLE $table_otp (
+        id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+        email VARCHAR(100) NOT NULL,
+        code_hash VARCHAR(255) NOT NULL,
+        expires_at DATETIME NOT NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'pending',
+        PRIMARY KEY (id),
+        KEY email (email),
+        KEY expires_at (expires_at),
+        KEY status (status)
+    ) $charset_collate;";
+    dbDelta($sql_otp);
 
     // === SCHEDULE CRON JOBS ===
     if (!wp_next_scheduled('qp_check_entitlement_expiration_hook')) {

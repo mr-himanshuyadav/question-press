@@ -87,6 +87,7 @@ class Settings_Page
         add_settings_field('qp_allow_session_termination', 'Allow Session Termination', [self::class, 'render_allow_session_termination_checkbox'], 'qp-settings-page', 'qp_data_settings_section');
 
         add_settings_field('qp_allow_course_opt_out', 'Allow Course Opt-Out', [self::class, 'render_allow_course_opt_out_checkbox'], 'qp-settings-page', 'qp_data_settings_section');
+        add_settings_field('qp_enable_otp_verification', 'Enable Email OTP Verification', [self::class, 'render_enable_otp_verification_checkbox'], 'qp-settings-page', 'qp_data_settings_section');
 
         // API Section
         add_settings_section('qp_api_settings_section', 'REST API Documentation', [self::class, 'render_api_section_text'], 'qp-settings-page');
@@ -396,6 +397,12 @@ class Settings_Page
             $new_input['allow_course_opt_out'] = 0;
         }
 
+        if (isset($input['enable_otp_verification'])) {
+            $new_input['enable_otp_verification'] = absint($input['enable_otp_verification']);
+        } else {
+            $new_input['enable_otp_verification'] = 0;
+        }
+
         if (isset($input['normal_practice_limit'])) {
             $limit = absint($input['normal_practice_limit']);
             // Ensure the limit is at least 10, default to 100 if not
@@ -460,5 +467,14 @@ class Settings_Page
             'option_none_value' => '0'
         ]);
         echo '<p class="description">Select the page that contains the <code>[question_press_signup]</code> shortcode.</p>';
+    }
+
+    public static function render_enable_otp_verification_checkbox()
+    {
+        $options = get_option('qp_settings');
+        $checked = isset($options['enable_otp_verification']) ? $options['enable_otp_verification'] : 0;
+        echo '<label><input type="checkbox" name="qp_settings[enable_otp_verification]" value="1" ' . checked(1, $checked, false) . ' /> ';
+        echo '<span>Enable email OTP verification on new user registration.</span></label>';
+        echo '<p class="description">This helps prevent fake signups by requiring users to verify their email address.</p>';
     }
 }
