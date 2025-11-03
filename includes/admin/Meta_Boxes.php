@@ -478,6 +478,21 @@ class Meta_Boxes
             </div>
         </div>
 
+		<?php
+        $global_opt_out = get_option('qp_settings')['allow_course_opt_out'] ?? 0;
+        if ($global_opt_out) : // Only show this if the global setting is enabled
+            $course_opt_out = get_post_meta($post->ID, '_qp_course_allow_opt_out', true);
+        ?>
+        <div class="qp-metabox-field-wrapper" style="border-bottom: 1px solid #eee; padding-bottom: 15px;">
+            <label style="display:block; margin-bottom: 5px;"><?php esc_html_e('User Opt-Out:', 'question-press'); ?></label>
+            <label style="font-weight: normal; display: block;">
+                <input type="checkbox" name="_qp_course_allow_opt_out" value="1" <?php checked($course_opt_out, '1'); ?>>
+                <?php esc_html_e('Allow users to deregister (opt-out)', 'question-press'); ?>
+            </label>
+             <small class="description"><?php esc_html_e('If checked, users can remove this course and all their progress from their dashboard.', 'question-press'); ?></small>
+        </div>
+        <?php endif; ?>
+
 		<p class="qp-expiry-date-field">
 			<label for="qp_course_expiry_date">
 				<?php esc_html_e('Expiry Date (Optional)', 'question-press'); ?>
@@ -873,6 +888,17 @@ public static function save_course_access($post_id)
 			update_post_meta($post_id, '_qp_course_retake_limit', $retake_limit);
 		} else {
 			delete_post_meta($post_id, '_qp_course_retake_limit');
+		}
+
+		// --- Save Opt-Out Setting ---
+		if (isset($_POST['_qp_course_allow_opt_out'])) {
+			update_post_meta($post_id, '_qp_course_allow_opt_out', '1');
+		} else {
+			// Save as '0' only if the global setting was enabled (meaning the checkbox was visible)
+			$global_opt_out = get_option('qp_settings')['allow_course_opt_out'] ?? 0;
+			if ($global_opt_out) {
+				update_post_meta($post_id, '_qp_course_allow_opt_out', '0');
+			}
 		}
 
 		// --- Save Expiry Date ---

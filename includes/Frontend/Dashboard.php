@@ -922,6 +922,8 @@ final class Dashboard {
 		$user_id = get_current_user_id();
 		global $wpdb;
 		$user_courses_table = $wpdb->prefix . 'qp_user_courses';
+		$options = get_option('qp_settings');
+        $allow_global_opt_out = (bool) ($options['allow_course_opt_out'] ?? 0);
 		$items_table = $wpdb->prefix . 'qp_course_items';
 		$progress_table = $wpdb->prefix . 'qp_user_items_progress';
 
@@ -1002,6 +1004,7 @@ final class Dashboard {
 
 		// --- 3. Prepare arguments for the template ---
 		$template_args = [
+			'allow_global_opt_out'         => $allow_global_opt_out,
 			'enrolled_courses_query'       => $enrolled_courses_query,
 			'enrolled_courses_data'        => $enrolled_courses_data,
 			'purchased_not_enrolled_posts' => $purchased_not_enrolled_posts,

@@ -279,6 +279,7 @@ final class Plugin {
         add_action('wp_ajax_regenerate_api_key', [Admin_Ajax::class, 'regenerate_api_key']);
         add_action('wp_ajax_get_practice_form_html', [Practice_Ajax::class, 'get_practice_form_html']);
         add_action('wp_ajax_get_course_structure', [Practice_Ajax::class, 'get_course_structure']);
+        add_action('wp_ajax_qp_deregister_from_course', [Practice_Ajax::class, 'deregister_from_course']);
 
         // Filters
         add_filter('query_vars', [Rewrites::class, 'register_query_vars']);
