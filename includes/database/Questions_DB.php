@@ -1232,7 +1232,6 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
 
         return $question_ids;
     }
-    }
 
     /**
      * Checks if a single, enriched question item matches a set of list table filters.

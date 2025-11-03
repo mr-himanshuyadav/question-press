@@ -90,13 +90,13 @@ class Session_Manager extends DB { // <-- Extend DB to get self::$wpdb
 		$incorrect_count = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $attempts_table WHERE session_id = %d AND is_correct = 0", $session_id));
 		$total_attempted = $correct_count + $incorrect_count;
 		$not_viewed_count = 0;
+        $skipped_count = 0;
 		if ($is_mock_test) {
-			$unattempted_count = count(json_decode($session->question_ids_snapshot, true)) - $total_attempted;
 			$not_viewed_count = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $attempts_table WHERE session_id = %d AND mock_status = 'not_viewed'", $session_id));
+            $skipped_count = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $attempts_table WHERE session_id = %d AND mock_status IN ('viewed', 'marked_for_review')", $session_id));
 		} else {
-			$unattempted_count = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $attempts_table WHERE session_id = %d AND status = 'skipped'", $session_id));
+			$skipped_count = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $attempts_table WHERE session_id = %d AND status = 'skipped'", $session_id));
 		}
-		$skipped_count = $unattempted_count;
 		$final_score = ($correct_count * $marks_correct) + ($incorrect_count * $marks_incorrect);
 		$end_time_for_calc = ($new_status === 'abandoned' && !empty($session->last_activity) && $session->last_activity !== '0000-00-00 00:00:00') ? $session->last_activity : current_time('mysql');
 		$end_time_gmt = get_gmt_from_date($end_time_for_calc);
