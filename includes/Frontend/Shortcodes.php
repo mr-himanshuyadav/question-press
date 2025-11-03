@@ -635,8 +635,16 @@ final class Shortcodes
 		$mode_class = 'mode-normal';
 		$mode_name  = 'Practice Session';
 		if ($is_mock_test) {
-			$mode_class = 'mode-mock-test';
-			$mode_name  = 'Mock Test';
+			// --- NEW: Check if it's a Course Test ---
+			if (isset($session_settings['course_id']) && $session_settings['course_id'] > 0 && isset($session_settings['item_id']) && $session_settings['item_id'] > 0) {
+				$item_title = get_the_title(absint($session_settings['item_id']));
+				$mode_name = $item_title ? esc_html($item_title) : 'Course Test'; // Fallback text
+				$mode_class = 'mode-course-test'; // New class for different color
+			} else {
+				// --- Original Mock Test Logic ---
+				$mode_class = 'mode-mock-test';
+				$mode_name  = 'Mock Test';
+			}
 		} elseif (isset($session_settings['practice_mode'])) {
 			switch ($session_settings['practice_mode']) {
 				case 'revision':
@@ -875,8 +883,49 @@ final class Shortcodes
 		$mode       = 'Practice';
 
 		if ($is_mock_test) {
-			$mode_class = 'mode-mock-test';
-			$mode       = 'Mock Test';
+			// --- MODIFIED: Check if it's a Course Test ---
+			if (isset($settings['course_id']) && $settings['course_id'] > 0 && isset($settings['item_id']) && $settings['item_id'] > 0) {
+				global $wpdb; // <-- Make sure $wpdb is available
+				$course_id = absint($settings['course_id']);
+				$item_id = absint($settings['item_id']);
+				
+				$course_title = get_the_title($course_id); // This is correct (it's a post)
+				
+				// --- NEW: Fetch Item and Section Title ---
+				$items_table = $wpdb->prefix . 'qp_course_items';
+				$sections_table = $wpdb->prefix . 'qp_course_sections';
+				$item_info = $wpdb->get_row($wpdb->prepare(
+					"SELECT i.title AS item_title, s.title AS section_title
+					 FROM {$items_table} i
+					 LEFT JOIN {$sections_table} s ON i.section_id = s.section_id
+					 WHERE i.item_id = %d",
+					$item_id
+				));
+
+				$item_title = $item_info ? $item_info->item_title : null;
+				$section_title = $item_info ? $item_info->section_title : null;
+				// --- END NEW FETCH ---
+
+				$mode = 'Course Test'; // Default fallback
+
+				// Build the new name string
+				$name_parts = [];
+				if ($course_title) $name_parts[] = esc_html($course_title);
+				if ($section_title) $name_parts[] = esc_html($section_title);
+				if ($item_title) $name_parts[] = esc_html($item_title);
+
+				if (!empty($name_parts)) {
+					$mode = implode(' / ', $name_parts);
+				} elseif ($item_title) {
+					// Fallback to just the item title if course is missing
+					$mode = esc_html($item_title);
+				}
+				
+				$mode_class = 'mode-course-test'; // Keep the same class
+			} else {
+				$mode_class = 'mode-mock-test';
+				$mode       = 'Mock Test';
+			}
 		} elseif (isset($settings['practice_mode'])) {
 			switch ($settings['practice_mode']) {
 				case 'revision':
