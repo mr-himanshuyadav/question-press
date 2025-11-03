@@ -159,6 +159,7 @@ final class Dashboard {
 			$practice_page_url       = isset( $options['practice_page'] ) ? get_permalink( $options['practice_page'] ) : home_url( '/' );
 			$session_page_url        = isset( $options['session_page'] ) ? get_permalink( $options['session_page'] ) : home_url( '/' );
 			$review_page_url         = isset( $options['review_page'] ) ? get_permalink( $options['review_page'] ) : home_url( '/' );
+			$allow_termination       = isset( $options['allow_session_termination'] ) ? $options['allow_session_termination'] : 0;
 
 			echo self::render_overview_content(
 				$stats,
@@ -169,7 +170,8 @@ final class Dashboard {
 				$never_correct_count,
 				$practice_page_url,
 				$session_page_url,
-				$review_page_url
+				$review_page_url,
+				$allow_termination
 			);
 		}
 		$main_content_html = ob_get_clean();
@@ -301,6 +303,7 @@ final class Dashboard {
 		$dashboard_page_id  = isset( $options['dashboard_page'] ) ? absint( $options['dashboard_page'] ) : 0;
 		$base_dashboard_url = $dashboard_page_id ? trailingslashit( get_permalink( $dashboard_page_id ) ) : trailingslashit( home_url() );
 		$is_front_page      = ( $dashboard_page_id > 0 && get_option( 'show_on_front' ) == 'page' && get_option( 'page_on_front' ) == $dashboard_page_id );
+		$session_page_url   = isset( $options['session_page'] ) ? get_permalink( $options['session_page'] ) : home_url( '/' );
 		$tab_prefix         = $is_front_page ? 'tab/' : '';
 
 		// --- Basic Course Validation ---
@@ -508,13 +511,26 @@ final class Dashboard {
                                             }
                                             break;
                                         case 'in_progress':
-                                            $status_icon  = '<span class="dashicons dashicons-marker" style="color: var(--qp-dashboard-warning-dark);"></span>';
-                                            $button_html = sprintf(
-                                                '<button class="qp-button qp-button-primary start-course-test-btn" data-item-id="%d" style="padding: 4px 10px; font-size: 12px;">%s</button>',
-                                                esc_attr($item->item_id),
-                                                esc_html__('Continue', 'question-press')
-                                            );
-                                            break;
+										    $status_icon  = '<span class="dashicons dashicons-marker" style="color: var(--qp-dashboard-warning-dark);"></span>';
+                                            
+                                            // Check if we have a valid session ID to resume
+                                            if ( ! empty( $item_progress['session_id'] ) ) {
+                                                // Create a direct link to the session page
+                                                $resume_url = add_query_arg('session_id', $item_progress['session_id'], $session_page_url);
+                                                $button_html = sprintf(
+                                                    '<a href="%s" class="qp-button qp-button-primary" style="padding: 4px 10px; font-size: 12px; text-decoration: none;">%s</a>',
+                                                    esc_url($resume_url),
+                                                    esc_html__('Continue', 'question-press')
+                                                );
+                                            } else {
+                                                // Fallback: If session ID is missing (should not happen), use the old button
+                                                $button_html = sprintf(
+                                                    '<button class="qp-button qp-button-primary start-course-test-btn" data-item-id="%d" style="padding: 4px 10px; font-size: 12px;">%s</button>',
+                                                    esc_attr($item->item_id),
+                                                    esc_html__('Continue', 'question-press')
+                                                );
+                                            }
+										    break;
                                         default: // not_started
                                             $status_icon = '<span class="dashicons dashicons-marker" style="color: var(--qp-dashboard-border);"></span>';
                                             $button_html = sprintf(
@@ -573,7 +589,7 @@ final class Dashboard {
 	 * @param string $review_page_url      Review page URL.
 	 * @return string Rendered HTML content.
 	 */
-	public static function render_overview_content( $stats, $overall_accuracy, $active_sessions, $recent_history, $review_count, $never_correct_count, $practice_page_url, $session_page_url, $review_page_url ) {
+	public static function render_overview_content( $stats, $overall_accuracy, $active_sessions, $recent_history, $review_count, $never_correct_count, $practice_page_url, $session_page_url, $review_page_url, $allow_termination ) {
 		// --- Prefetch lineage data needed for the recent history table ---
 		list($lineage_cache, $group_to_topic_map, $question_to_group_map) = self::prefetch_lineage_data( $recent_history );
 
@@ -588,6 +604,7 @@ final class Dashboard {
 			'practice_page_url'     => $practice_page_url,
 			'session_page_url'      => $session_page_url,
 			'review_page_url'       => $review_page_url,
+			'allow_termination'     => $allow_termination,
 			'lineage_cache'         => $lineage_cache, // Pass prefetched data
 			'group_to_topic_map'    => $group_to_topic_map,
 			'question_to_group_map' => $question_to_group_map,

@@ -1067,6 +1067,32 @@ class Session_Ajax {
             wp_send_json_error(['message' => 'Invalid course item ID.']);
         }
 
+        $is_retake = isset($_POST['is_retake']) && $_POST['is_retake'] === 'true';
+
+        // --- NEW: Check for an existing active/paused session for this item ---
+        global $wpdb;
+        $sessions_table = $wpdb->prefix . 'qp_user_sessions';
+        $existing_session_id = $wpdb->get_var($wpdb->prepare(
+            "SELECT session_id FROM {$sessions_table} 
+             WHERE user_id = %d 
+               AND status IN ('active', 'mock_test', 'paused') 
+               AND settings_snapshot LIKE %s",
+            $user_id,
+            '%"item_id":' . $item_id . '%' // JSON LIKE search for the item_id
+        ));
+
+        if ($existing_session_id) {
+            // Found an existing session, just redirect to it
+            $options = get_option('qp_settings');
+            $session_page_id = isset($options['session_page']) ? absint($options['session_page']) : 0;
+            if (!$session_page_id) {
+                wp_send_json_error(['message' => 'The administrator has not configured a session page.']);
+            }
+            $redirect_url = add_query_arg('session_id', $existing_session_id, get_permalink($session_page_id));
+            wp_send_json_success(['redirect_url' => $redirect_url, 'session_id' => $existing_session_id]);
+            return;
+        }
+
         // --- FIX 2: REPLACED Entitlement Check ---
         global $wpdb;
         $items_table = $wpdb->prefix . 'qp_course_items';
@@ -1252,6 +1278,20 @@ class Session_Ajax {
         if (!$session_id) {
              wp_send_json_error(['message' => 'Failed to create the session record.']);
         }
+
+        // --- NEW: Update the progress table to 'in_progress' ---
+            if ($session_id) {
+                $progress_table = $wpdb->prefix . 'qp_user_items_progress';
+                $wpdb->query($wpdb->prepare(
+                    "REPLACE INTO {$progress_table} (user_id, item_id, course_id, status, last_viewed)
+                     VALUES (%d, %d, %d, %s, %s)",
+                    $user_id,
+                    $item_id,
+                    $item->course_id,
+                    'in_progress', // Set status to 'in_progress'
+                    $current_time
+                ));
+            }
 
         $redirect_url = add_query_arg('session_id', $session_id, get_permalink($session_page_id));
         wp_send_json_success(['redirect_url' => $redirect_url, 'session_id' => $session_id]);
