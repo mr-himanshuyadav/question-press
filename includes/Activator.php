@@ -451,6 +451,7 @@ class Activator {
         'dashboard_page' => ['title' => 'Dashboard', 'content' => '[question_press_dashboard]'],
         'session_page'   => ['title' => 'Session', 'content' => '[question_press_session]'],
         'review_page'    => ['title' => 'Review', 'content' => '[question_press_review]'],
+        'signup_page'    => ['title' => 'Signup', 'content' => '[question_press_signup]']
     ];
 
     foreach ($pages_to_create as $option_key => $page_details) {
