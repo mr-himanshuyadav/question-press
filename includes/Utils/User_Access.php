@@ -47,7 +47,7 @@ class User_Access {
 
 		// If both are empty, the user has access to everything
 		if ( empty( $allowed_exam_ids ) && empty( $allowed_subject_ids ) ) {
-			return 'all';
+			return [];
 		}
 
 		// If exams are specified, get all subjects linked to those exams

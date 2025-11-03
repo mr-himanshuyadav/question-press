@@ -9,6 +9,8 @@ jQuery(document).ready(function($) {
     var emailInput = $('#qp_reg_email');
     var passInput = $('#qp_reg_password');
     var confirmPassInput = $('#qp_reg_confirm_password');
+    var examSelect = $('#qp_reg_exam');
+    var subjectSelect = $('#qp_reg_subject');
     var submitButton = signupForm.find('input[type="submit"]');
     
     // --- Get all error/icon elements ---
@@ -16,6 +18,8 @@ jQuery(document).ready(function($) {
     var emailError = $('#qp_email_error');
     var passLengthError = $('#qp_password_length_error');
     var passMatchError = $('#qp_password_match_error');
+    var subjectError = $('#qp_subject_error');
+    var scopeError = $('#qp_scope_error'); // The main error for Exam/Subject
     var usernameIcon = $('.qp-validation-icon[data-for="qp_reg_username"]');
     var emailIcon = $('.qp-validation-icon[data-for="qp_reg_email"]');
 
@@ -28,47 +32,76 @@ jQuery(document).ready(function($) {
         username: false,
         email: false,
         passwordLength: false,
-        passwordMatch: false
+        passwordMatch: false,
+        scope: false // New state for exam/subject
     };
 
     /**
      * Checks the complete form validity and enables/disables the submit button.
      */
     function checkFormValidity() {
-        // 1. Check password length
+        // 1. Password length
         var newPass = passInput.val();
         validationState.passwordLength = (newPass.length >= 8);
-
-        // 2. Check password match
-        var confirmPass = confirmPassInput.val();
-        validationState.passwordMatch = (newPass.length > 0 && newPass === confirmPass);
-
-        // --- NEW: Show/Hide Password Errors ---
         if (newPass.length > 0 && !validationState.passwordLength) {
             passLengthError.show();
         } else {
             passLengthError.hide();
         }
 
+        // 2. Password match
+        var confirmPass = confirmPassInput.val();
+        validationState.passwordMatch = (newPass.length > 0 && newPass === confirmPass);
         if (confirmPass.length > 0 && !validationState.passwordMatch) {
             passMatchError.show();
         } else {
             passMatchError.hide();
         }
-        // --- END NEW ---
 
-        // 3. Check all conditions
-        if (validationState.username && validationState.email && validationState.passwordLength && validationState.passwordMatch) {
+        // 3. NEW: Scope validation (Exam OR Subjects)
+        var examVal = examSelect.val();
+        var subjectVals = subjectSelect.val() || [];
+        var subjectCount = subjectVals.length;
+
+        // --- Enforce mutual exclusivity ---
+        if (examVal !== '') {
+            // If an exam is selected, disable and clear subjects
+            subjectSelect.prop('disabled', true).val(null);
+            subjectError.hide();
+            validationState.scope = true;
+            scopeError.hide();
+        } else if (subjectCount > 0) {
+            // If subjects are selected, disable exam
+            examSelect.prop('disabled', true).val('');
+            
+            // Check subject limit
+            if (subjectCount > 5) {
+                subjectError.text('You can select a maximum of 5 subjects.').show();
+                validationState.scope = false;
+            } else {
+                subjectError.hide();
+                validationState.scope = true;
+                scopeError.hide();
+            }
+        } else {
+            // If neither is selected, enable both and show error
+            examSelect.prop('disabled', false);
+            subjectSelect.prop('disabled', false);
+            validationState.scope = false;
+            scopeError.show(); // Show the main scope error
+        }
+        // --- End exclusivity ---
+        
+        // 4. Check all conditions
+        if (validationState.username && validationState.email && validationState.passwordLength && validationState.passwordMatch && validationState.scope) {
             submitButton.prop('disabled', false).val('Create Account');
         } else {
-            // Keep button disabled but use a generic message
             submitButton.prop('disabled', true).val('Please complete all fields');
         }
     }
 
     /**
-     * Reusable function to validate the username.
-     * @param {boolean} isImmediate - If true, runs immediately (for blur). If false, uses a delay (for keyup).
+     * Reusable function to validate the username. (Unchanged)
      */
     function validateUsername(isImmediate) {
         clearTimeout(usernameTimer);
@@ -127,8 +160,7 @@ jQuery(document).ready(function($) {
     }
 
     /**
-     * Reusable function to validate the email.
-     * @param {boolean} isImmediate - If true, runs immediately (for blur). If false, uses a delay (for keyup).
+     * Reusable function to validate the email. (Unchanged)
      */
     function validateEmail(isImmediate) {
         clearTimeout(emailTimer);
@@ -196,53 +228,12 @@ jQuery(document).ready(function($) {
     emailInput.on('keyup', function() { validateEmail(false); });
     emailInput.on('blur', function() { validateEmail(true); });
 
-    // --- Password Validation (for enabling submit) ---
-    $('#qp_reg_password, #qp_reg_confirm_password').on('keyup', function() {
-        checkFormValidity();
-    });
+    // --- NEW: Add listeners for new fields ---
+    passInput.on('keyup', checkFormValidity);
+    confirmPassInput.on('keyup', checkFormValidity);
+    examSelect.on('change', checkFormValidity);
+    subjectSelect.on('change', checkFormValidity);
 
     // Set initial state of the button on page load
     checkFormValidity();
-
-    // --- NEW: Resend OTP Logic ---
-    var resendLink = $('#qp-resend-otp-link');
-    var resendMessage = $('#qp-resend-otp-message');
-
-    if (resendLink.length) {
-        resendLink.on('click', function(e) {
-            e.preventDefault();
-            
-            resendLink.hide();
-            resendMessage.text('Sending...').show();
-
-            $.ajax({
-                url: qp_ajax_object.ajax_url,
-                type: 'POST',
-                data: {
-                    action: 'qp_resend_registration_otp'
-                    // No nonce needed for this specific action
-                },
-                success: function(response) {
-                    if (response.success) {
-                        resendMessage.text(response.data.message).css('color', '#2e7d32');
-                    } else {
-                        resendMessage.text(response.data.message).css('color', '#d63638');
-                    }
-                    
-                    // Show the link again after a few seconds
-                    setTimeout(function() {
-                        resendLink.show();
-                        resendMessage.hide().text('');
-                    }, 5000); // 5 second cooldown
-                },
-                error: function() {
-                    resendMessage.text('An error occurred. Please try again.').css('color', '#d63638');
-                    setTimeout(function() {
-                        resendLink.show();
-                        resendMessage.hide().text('');
-                    }, 5000);
-                }
-            });
-        });
-    }
 });

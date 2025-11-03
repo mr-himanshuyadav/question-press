@@ -82,15 +82,17 @@ if ( ! defined( 'ABSPATH' ) ) {
             </div>
             
             <div class="qp-form-group">
-                <label for="qp_reg_subject"><?php esc_html_e( 'Select Subject (Optional)', 'question-press' ); ?></label>
-                <select name="qp_reg_subject" id="qp_reg_subject">
-                    <option value=""><?php esc_html_e( '— Select a Subject —', 'question-press' ); ?></option>
+                <label for="qp_reg_subject"><?php esc_html_e( 'Select Subjects (up to 5)', 'question-press' ); ?></label>
+                <select name="qp_reg_subject[]" id="qp_reg_subject" multiple>
                     <?php foreach ( $subjects as $subject ) : ?>
                         <option value="<?php echo esc_attr( $subject->term_id ); ?>"><?php echo esc_html( $subject->name ); ?></option>
                     <?php endforeach; ?>
                 </select>
-                <p class="description"><?php esc_html_e( 'Selecting an Exam may automatically set your allowed subjects.', 'question-press' ); ?></p>
+                <p id="qp_subject_error" class="qp-validation-message qp-error" style="display: none;"></p>
+                <p class="description"><?php esc_html_e( 'Select up to 5 subjects. This will be ignored if you select an Exam.', 'question-press' ); ?></p>
             </div>
+
+            <p id="qp_scope_error" class="qp-validation-message qp-error" style="display: block; text-align: center; margin-bottom: 1rem;"><?php esc_html_e( 'Please select an Exam OR at least one Subject.', 'question-press' ); ?></p>
 
             <div class="qp-form-group qp-action-buttons" style="margin-top: 2rem;">
                 <input type="submit" name="qp_signup_submit" value="<?php esc_attr_e( 'Please complete all fields', 'question-press' ); ?>" class="qp-button qp-button-primary" disabled>
