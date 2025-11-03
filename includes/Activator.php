@@ -296,15 +296,17 @@ class Activator {
         user_course_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
         user_id BIGINT(20) UNSIGNED NOT NULL,
         course_id BIGINT(20) UNSIGNED NOT NULL,
+        entitlement_id BIGINT(20) UNSIGNED DEFAULT NULL,
         enrollment_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         completion_date DATETIME DEFAULT NULL,
         status VARCHAR(20) NOT NULL DEFAULT 'enrolled',
         progress_percent TINYINT UNSIGNED NOT NULL DEFAULT 0,
         last_accessed_item_id BIGINT(20) UNSIGNED DEFAULT NULL,
         PRIMARY KEY (user_course_id),
-        UNIQUE KEY user_course (user_id, course_id),
+        UNIQUE KEY user_course (user_id, course_id, entitlement_id),
         KEY user_id (user_id),
         KEY course_id (course_id),
+        KEY entitlement_id (entitlement_id),
         KEY status (status)
     ) $charset_collate;";
     dbDelta($sql_user_courses);

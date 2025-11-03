@@ -25,6 +25,41 @@ final class Shortcodes {
 					</div>';
 		}
 
+		// --- Check User Entitlements ---
+		global $wpdb;
+		$user_id = get_current_user_id();
+
+		// Admins always have access
+		if ( ! user_can( $user_id, 'manage_options' ) ) {
+			$entitlements_table = $wpdb->prefix . 'qp_user_entitlements';
+			$current_time = current_time( 'mysql' );
+
+			// Check if the user has at least one valid, active entitlement
+			$has_access = $wpdb->get_var($wpdb->prepare(
+				"SELECT COUNT(entitlement_id)
+				 FROM {$entitlements_table}
+				 WHERE user_id = %d
+				 AND status = 'active'
+				 AND (expiry_date IS NULL OR expiry_date > %s)
+				 AND (remaining_attempts IS NULL OR remaining_attempts > 0)",
+				$user_id,
+				$current_time
+			));
+
+			if ( ! $has_access ) {
+				// User has no valid entitlements. Show an error message.
+				$shop_page_url = function_exists( 'wc_get_page_id' ) ? get_permalink( wc_get_page_id( 'shop' ) ) : home_url( '/' );
+				
+				return '<div id="qp-practice-app-wrapper">' .
+					   '<div class="qp-container" style="text-align:center; padding: 40px 20px;">' .
+					   '<h3 style="margin-top:0; font-size: 22px;">' . esc_html__('Access Denied', 'question-press') . '</h3>' .
+					   '<p style="font-size: 16px; color: #555; margin-bottom: 25px;">' . esc_html__('You do not have an active plan or you have run out of attempts.', 'question-press') . '</p>' .
+					   '<a href="' . esc_url( $shop_page_url ) . '" class="qp-button qp-button-primary" style="text-decoration: none;">' . esc_html__('Purchase Access', 'question-press') . '</a>' .
+					   '</div>' .
+					   '</div>';
+			}
+		}
+
 		// --- Keep pre-fill logic ---
 		if ( isset( $_GET['start_section_practice'] ) && $_GET['start_section_practice'] === 'true' ) {
 			// ... (keep existing pre-fill script logic) ...

@@ -51,7 +51,7 @@ class Assets {
          global $post; // Make post object available
 
         global $post;
-    if (is_a($post, 'WP_Post') && (has_shortcode($post->post_content, 'question_press_practice') || has_shortcode($post->post_content, 'question_press_dashboard') || has_shortcode($post->post_content, 'question_press_session') || has_shortcode($post->post_content, 'question_press_review'))) {
+    if (is_a($post, 'WP_Post') && (has_shortcode($post->post_content, 'question_press_practice') || has_shortcode($post->post_content, 'question_press_dashboard') || has_shortcode($post->post_content, 'question_press_session') || has_shortcode($post->post_content, 'question_press_review') || is_singular('qp_course'))) {
 
         wp_enqueue_style('dashicons');
 
@@ -204,6 +204,10 @@ class Assets {
     if (($pagenow == 'post-new.php' && isset($_GET['post_type']) && $_GET['post_type'] == 'qp_course') ||
         ($pagenow == 'post.php' && isset($_GET['post']) && get_post_type($_GET['post']) == 'qp_course')) {
 
+        wp_enqueue_script('jquery-ui-datepicker');
+        wp_enqueue_style('wp-admin-styles'); // General admin styles
+        wp_enqueue_style('jquery-ui-style', 'https://ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/themes/smoothness/jquery-ui.css', true);
+
         // Enqueue jQuery UI Sortable
         wp_enqueue_script('jquery-ui-sortable');
 
@@ -226,6 +230,16 @@ class Assets {
         // Enqueue course editor CSS
         $course_editor_css_version = file_exists(QP_PLUGIN_PATH . 'assets/css/course-editor.css') ? filemtime(QP_PLUGIN_PATH . 'assets/css/course-editor.css') : QP_PLUGIN_VERSION;
         wp_enqueue_style('qp-course-editor-style', QP_ASSETS_URL . 'css/course-editor.css', [], $course_editor_css_version);
+    }
+    if ( ($pagenow == 'post-new.php' && isset($_GET['post_type']) && $_GET['post_type'] == 'qp_plan') ||
+         ($pagenow == 'post.php' && isset($_GET['post']) && get_post_type($_GET['post']) == 'qp_plan') ) {
+        
+        // Enqueue SweetAlert for any potential notices
+        wp_enqueue_script('sweetalert2', 'https://cdn.jsdelivr.net/npm/sweetalert2@11', [], null, true);
+        
+        // Enqueue a new, lightweight script for this page
+        $plan_editor_js_version = file_exists(QP_PLUGIN_PATH . 'assets/js/plan-editor.js') ? filemtime(QP_PLUGIN_PATH . 'assets/js/plan-editor.js') : QP_PLUGIN_VERSION;
+        wp_enqueue_script('qp-plan-editor-script', QP_ASSETS_URL . 'js/plan-editor.js', ['jquery', 'sweetalert2'], $plan_editor_js_version, true);
     }
     if ($hook_suffix === 'question-press_page_qp-organization' && isset($_GET['tab']) && $_GET['tab'] === 'labels') {
         add_action('admin_footer', function () {

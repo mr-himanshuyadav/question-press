@@ -34,13 +34,66 @@ class WooCommerce_Integration {
     public function add_plan_link_to_simple_products() {
         global $post;
 
-        // Get all published 'qp_plan' posts
+        // --- NEW: Check if this is an auto-generated product ---
+        if ( get_post_meta( $post->ID, '_qp_is_auto_generated', true ) === 'true' ) {
+            // Get Plan info
+            $linked_plan_id = get_post_meta( $post->ID, '_qp_linked_plan_id', true );
+            $plan_post = $linked_plan_id ? get_post( $linked_plan_id ) : null;
+            
+            // Get Course info
+            $linked_course_id = get_post_meta( $post->ID, '_qp_linked_course_id', true );
+            $course_post = $linked_course_id ? get_post( $linked_course_id ) : null;
+            
+            echo '<div class="options_group" style="padding: 12px; border-top: 1px solid #eee;">';
+            echo '<p style="margin: 0; padding-bottom: 10px; border-bottom: 1px solid #eee;"><strong>' . esc_html__( 'Question Press Auto-Link', 'question-press' ) . '</strong></p>';
+            echo '<div style="font-style: italic; color: #666; margin: 10px 0 0 0;">';
+
+            // CASE 1: Linked to a Course (which implies a plan)
+            if ( $course_post ) {
+                echo '<strong>' . esc_html__( 'Linked Course:', 'question-press' ) . '</strong><br>';
+                echo esc_html( $course_post->post_title ) . ' (ID: ' . esc_html( $linked_course_id ) . ')';
+                echo ' (<a href="' . esc_url( get_edit_post_link( $course_post->ID ) ) . '" target="_blank">' . esc_html__( 'Edit Course', 'question-press' ) . '</a>)';
+                
+                echo '<br><br>'; // Add spacing
+
+                echo '<strong>' . esc_html__( 'Linked Plan:', 'question-press' ) . '</strong><br>';
+                if ( $plan_post ) {
+                    echo esc_html( $plan_post->post_title ) . ' (ID: ' . esc_html( $linked_plan_id ) . ')';
+                    echo ' (<a href="' . esc_url( get_edit_post_link( $plan_post->ID ) ) . '" target="_blank">' . esc_html__( 'View Plan', 'question-press' ) . '</a>)';
+                } else {
+                    echo esc_html__( 'Plan link is missing or broken.', 'question-press' );
+                }
+            
+            // CASE 2: Linked ONLY to a Manual Plan
+            } elseif ( $plan_post ) {
+                echo '<strong>' . esc_html__( 'Linked Plan:', 'question-press' ) . '</strong><br>';
+                echo esc_html( $plan_post->post_title ) . ' (ID: ' . esc_html( $linked_plan_id ) . ')';
+                echo ' (<a href="' . esc_url( get_edit_post_link( $plan_post->ID ) ) . '" target="_blank">' . esc_html__( 'Edit Plan', 'question-press' ) . '</a>)';
+            
+            // CASE 3: Orphaned Product
+            } else {
+                echo '<span style="color: #c00;">' . esc_html__( 'This product is auto-generated but its source plan/course is missing.', 'question-press' ) . '</span>';
+            }
+
+            echo '</div></div>';
+            return; // Stop here, don't show the dropdown
+        }
+
+        // Get all published 'qp_plan' posts, excluding auto-generated ones
         $plans = get_posts( [
             'post_type'   => 'qp_plan',
             'post_status' => 'publish',
             'numberposts' => -1,
             'orderby'     => 'title',
             'order'       => 'ASC',
+            // --- NEW: Exclude auto-generated plans from the dropdown ---
+            'meta_query'  => [
+                [
+                    'key'     => '_qp_is_auto_generated',
+                    'compare' => 'NOT EXISTS', // Show manual plans
+                ]
+            ]
+            // --- END NEW ---
         ] );
 
         $options = [ '' => __( '— Select a Question Press Plan —', 'question-press' ) ];
@@ -65,6 +118,12 @@ class WooCommerce_Integration {
      * Save the custom field for Simple products.
      */
     public function save_plan_link_simple_product( $post_id ) {
+        // --- NEW: Don't save if it's an auto-generated product (it's set by the course) ---
+        if ( get_post_meta( $post_id, '_qp_is_auto_generated', true ) === 'true' ) {
+            return;
+        }
+        // --- END NEW ---
+
         $plan_id = isset( $_POST['_qp_linked_plan_id'] ) ? absint( $_POST['_qp_linked_plan_id'] ) : '';
         update_post_meta( $post_id, '_qp_linked_plan_id', $plan_id );
     }
@@ -80,6 +139,14 @@ class WooCommerce_Integration {
             'numberposts' => -1,
             'orderby'     => 'title',
             'order'       => 'ASC',
+            // --- NEW: Exclude auto-generated plans from the dropdown ---
+            'meta_query'  => [
+                [
+                    'key'     => '_qp_is_auto_generated',
+                    'compare' => 'NOT EXISTS', // Show manual plans
+                ]
+            ]
+            // --- END NEW ---
         ] );
 
         $options = [ '' => __( '— Select a Question Press Plan —', 'question-press' ) ];
@@ -179,12 +246,16 @@ class WooCommerce_Integration {
                         error_log( "QP Access Hook: Plan ID #{$plan_id} is Unlimited type." );
                     }
 
-                    // Set remaining attempts if applicable
-                    if ( ( $plan_type === 'attempt_limited' || $plan_type === 'combined' ) && ! empty( $attempts ) ) {
+                    // Set remaining attempts
+                    if ( $plan_type === 'unlimited' ) {
+                        $remaining_attempts = null; // NULL = Unlimited attempts
+                        error_log( "QP Access Hook: Setting UNLIMITED attempts for Plan ID #{$plan_id}." );
+                    } else {
+                        // This now correctly handles:
+                        // 'attempt_limited' / 'combined' -> saves the number (e.g., 100)
+                        // 'course_access' (manual or auto) -> saves 0 (because of our meta box fixes)
                         $remaining_attempts = absint( $attempts );
                         error_log( "QP Access Hook: Setting attempts for Plan ID #{$plan_id}: {$remaining_attempts}" );
-                    } elseif ( $plan_type === 'unlimited' ) {
-                        $remaining_attempts = null; // Explicitly null for unlimited attempts
                     }
 
                     // Insert the new entitlement record

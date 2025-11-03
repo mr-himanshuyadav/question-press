@@ -178,6 +178,8 @@ final class Plugin {
         add_action('admin_init', [Admin_Utils::class, 'redirect_wp_profile_page']);
         add_action('admin_post_qp_save_user_scope', [User_Entitlements_Page::class, 'handle_save_scope']);
         add_action('wp_ajax_qp_save_question_group', [Question_Editor_Page::class, 'handle_save_group']);
+        add_action('admin_notices', [Admin_Utils::class, 'display_admin_notices']);
+        add_action('pre_get_posts', [Post_Types::class, 'hide_auto_plans_from_admin_list']);
 
 
         // Register admin menus if in admin area
@@ -193,21 +195,41 @@ final class Plugin {
 
             // Course Access Meta Box (NEW)
             add_action('add_meta_boxes_qp_course', [Meta_Boxes::class, 'add_course_access']);
+            add_action('add_meta_boxes_qp_course', [Meta_Boxes::class, 'add_course_progression']);
             add_action('save_post_qp_course', [Meta_Boxes::class, 'save_course_access'], 30, 1);
+            add_action('save_post_qp_course', [Meta_Boxes::class, 'save_course_progression'], 30, 1);
 
             // Course Structure Meta Box (NEW)
             add_action('add_meta_boxes', [Meta_Boxes::class, 'add_course_structure']);
             add_action('save_post_qp_course', [Meta_Boxes::class, 'save_course_structure']);
+
+            // Course CPT Columns
+            add_filter('manage_qp_course_posts_columns', [Post_Types::class, 'set_course_columns']);
+            add_action('manage_qp_course_posts_custom_column', [Post_Types::class, 'render_course_columns'], 10, 2);
+            
+            // Plan CPT Columns
+            add_filter('manage_qp_plan_posts_columns', [Post_Types::class, 'set_plan_columns']);
+            add_action('manage_qp_plan_posts_custom_column', [Post_Types::class, 'render_plan_columns'], 10, 2);
         }
         add_action('save_post_qp_course', [Meta_Boxes::class, 'sync_course_plan'], 40, 1);
         add_action('save_post_qp_course', [Data_Cleanup::class, 'recalculate_course_progress_on_save'], 20, 1);
+        add_action('save_post_qp_plan', [Meta_Boxes::class, 'sync_plan_product'], 40, 1);
+        add_action('before_delete_post', [Data_Cleanup::class, 'cleanup_plan_data_on_delete'], 10, 1);
+        add_action('wp_trash_post', [Data_Cleanup::class, 'sync_product_on_plan_trash'], 10, 1);
+        add_action('untrash_post', [Data_Cleanup::class, 'sync_product_on_plan_untrash'], 10, 1);
         add_action('qp_check_entitlement_expiration_hook', [$this->cron, 'run_entitlement_expiration_check']);
+        add_action('qp_check_course_expiration_hook', [$this->cron, 'run_course_expiration_check']);
         add_action('qp_scheduled_backup_hook', [Backup_Manager::class, 'run_scheduled_backup_event']);
         add_action('admin_head', [User_Entitlements_Page::class, 'add_screen_options']);
         add_action('admin_head', [Assets::instance(), 'enqueue_dynamic_admin_styles']);
         add_action('wp', [$this->cron, 'schedule_session_cleanup']);
         add_action('qp_cleanup_abandoned_sessions_event', [$this->cron, 'cleanup_abandoned_sessions']);
+        add_action('pre_trash_post', [Data_Cleanup::class, 'prevent_deletion_if_linked'], 5, 1);
+        add_action('before_delete_post', [Data_Cleanup::class, 'prevent_deletion_if_linked'], 5, 1);
         add_action('before_delete_post', [Data_Cleanup::class, 'cleanup_course_data_on_delete'], 10, 1);
+        add_action('wp_trash_post', [Data_Cleanup::class, 'sync_plan_on_course_trash'], 10, 1);
+        add_action('untrash_post', [Data_Cleanup::class, 'sync_plan_on_course_untrash'], 10, 1);
+        add_filter('wp_count_posts', [Post_Types::class, 'filter_plan_view_counts'], 10, 2);
         add_action('delete_user', [Data_Cleanup::class, 'cleanup_user_data_on_delete'], 10, 1);
 
         // AJAX Actions (already using class methods)
@@ -260,11 +282,12 @@ final class Plugin {
 
         // Filters
         add_filter('query_vars', [Rewrites::class, 'register_query_vars']);
-        if ( is_admin() ) {
-            add_filter('display_post_states', [Admin_Utils::class, 'add_page_indicator'], 10, 2); // CHANGED CALLBACK
-        }
         add_filter('set-screen-option', [User_Entitlements_Page::class, 'save_screen_options'], 10, 3);
         add_filter('set-screen-option', [All_Questions_Page::class, 'save_screen_options'], 10, 3);
+        add_filter('display_post_states', [Post_Types::class, 'add_custom_post_states'], 10, 2);
+        add_filter('views_edit-qp_course', [Post_Types::class, 'add_expired_to_course_views'], 10, 1);
+        add_filter('the_content', [Post_Types::class, 'inject_course_details'], 20);
+        add_filter('display_post_states', [Admin_Utils::class, 'add_product_post_states'], 10, 2);
     }
 
     /**
@@ -306,6 +329,9 @@ final class Plugin {
         // If WooCommerce is active, load our integration
         if ( class_exists( 'WooCommerce' ) ) {
             new WooCommerce_Integration();
+        } else {
+            // If WooCommerce is NOT active, add an admin notice.
+            add_action( 'admin_notices', [ Admin_Utils::class, 'show_woocommerce_required_notice' ] );
         }
     }
 

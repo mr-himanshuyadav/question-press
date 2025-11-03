@@ -95,5 +95,130 @@ class Admin_Utils {
 		wp_safe_redirect( admin_url( 'admin.php?page=qp-organization&tab=' . $tab ) );
 		exit;
 	}
+	
+
+	/**
+     * Displays session-based admin notices globally.
+     * Hooked to 'admin_notices'.
+     */
+    public static function display_admin_notices() {
+        // Check if a session is active and the message exists
+        if ( session_status() === PHP_SESSION_ACTIVE && isset( $_SESSION['qp_admin_message'] ) ) {
+            
+            // We must use wp_kses_post here to allow the <strong> tags from our error message
+            $message = wp_kses_post( $_SESSION['qp_admin_message'] ); 
+            $type = esc_attr( $_SESSION['qp_admin_message_type'] ?? 'info' ); // Default to 'info'
+
+            echo "<div class='notice notice-{$type} is-dismissible'><p>{$message}</p></div>";
+            
+            // Clear the session variable so it doesn't show again
+            unset( $_SESSION['qp_admin_message'] );
+            unset( $_SESSION['qp_admin_message_type'] );
+        }
+    }
+
+	/**
+     * Displays a persistent admin notice if WooCommerce is not active.
+     * Hooked to 'admin_notices' from Plugin.php.
+     */
+    public static function show_woocommerce_required_notice() {
+        // Don't show this notice on the plugins page
+        global $pagenow;
+        if ( $pagenow === 'plugins.php' ) {
+            return;
+        }
+        
+        // Check if WooCommerce is installed but not active
+        $plugin_slug = 'woocommerce/woocommerce.php';
+        $all_plugins = get_plugins();
+        $is_installed = array_key_exists( $plugin_slug, $all_plugins );
+        
+        $message = '<strong>Question Press Monetization requires WooCommerce.</strong>';
+        $button_html = '';
+
+        if ( current_user_can( 'activate_plugins' ) ) {
+            if ( $is_installed ) {
+                // Is installed but not active
+                $activate_url = wp_nonce_url( self_admin_url( 'plugins.php?action=activate&plugin=' . $plugin_slug ), 'activate-plugin_' . $plugin_slug );
+                $message .= ' Please activate WooCommerce to enable course purchases.';
+                $button_html = '<a href="' . esc_url( $activate_url ) . '" class="button button-primary" style="margin-left: 10px;">Activate WooCommerce</a>';
+            } else {
+                // Is not installed
+                $install_url = wp_nonce_url( self_admin_url( 'update.php?action=install-plugin&plugin=woocommerce' ), 'install-plugin_woocommerce' );
+                $message .= ' Please install WooCommerce to enable course purchases.';
+                $button_html = '<a href="' . esc_url( $install_url ) . '" class="button button-primary" style="margin-left: 10px;">Install WooCommerce</a>';
+            }
+        } else {
+            // User cannot install/activate plugins
+            $message .= ' Please contact your site administrator to install or activate WooCommerce.';
+        }
+
+        echo '<div class="notice notice-error" style="display: flex; align-items: center; justify-content: space-between; padding: 10px 15px;">
+                <p style="margin: 0;">' . $message . '</p>
+                <p style="margin: 0;">' . $button_html . '</p>
+              </div>';
+    }
+
+    /**
+     * Adds an indicator to auto-generated WooCommerce products.
+     * Hooked to 'display_post_states'.
+     *
+     * @param array   $post_states An array of post states.
+     * @param \WP_Post $post        The current post object.
+     * @return array  The modified array of post states.
+     */
+    public static function add_product_post_states( $post_states, $post ) {
+        // Only check for 'product' post type
+        if ( $post->post_type !== 'product' ) {
+            return $post_states;
+        }
+
+        // Check if it's our auto-generated product
+        if ( get_post_meta( $post->ID, '_qp_is_auto_generated', true ) !== 'true' ) {
+            return $post_states;
+        }
+        
+        $course_id = get_post_meta( $post->ID, '_qp_linked_course_id', true );
+        $plan_id = get_post_meta( $post->ID, '_qp_linked_plan_id', true );
+        $links_html = [];
+
+        // CASE 1: Linked to a Course (which implies a plan)
+        if ( $course_id ) {
+            $course_post = get_post( $course_id );
+            if ( $course_post ) {
+                $links_html[] = sprintf(
+                    '<strong style="color:#7b0f78;">Course ID (%d) </strong><a href="%s" title="View Course" style="text-decoration:underline;color:#444444">View</a>',
+                    
+                    esc_html( $course_id ),
+                    esc_url( get_edit_post_link( $course_id ) ),
+                    // esc_html( wp_trim_words( $course_post->post_title, 5, '...' ) ),
+                );
+            }
+        // CASE 2: Linked ONLY to a Manual Plan
+        } elseif ( $plan_id ) {
+            $plan_post = get_post( $plan_id );
+            if ( $plan_post ) {
+                $links_html[] = sprintf(
+                    '<strong style="color:#a01315;">Plan ID (%d) </strong><a href="%s" title="View Plan" style="text-decoration:underline;color:#444444">View</a>',
+                    esc_html( $plan_id ),
+                    esc_url( get_edit_post_link( $plan_id ) )
+                    // esc_html( wp_trim_words( $plan_post->post_title, 5, '...' ) ),
+                    
+                );
+            }
+        }
+
+        if ( empty($links_html) ) {
+             $links_html[] = 'Source link is broken';
+        }
+
+        // Create the final red indicator text
+        $indicator_text = '<span>Linked to ' . implode(' | ', $links_html) . '</span>';
+        
+        // Add the new state
+        $post_states['qp_auto_product'] = $indicator_text;
+        
+        return $post_states;
+    }
 
 } // End class Admin_Utils

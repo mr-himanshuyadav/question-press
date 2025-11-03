@@ -335,6 +335,57 @@ class Session_Ajax {
 
         global $wpdb;
         $user_id = get_current_user_id();
+        // --- BEGIN NEW: MOCK TEST ATTEMPT CHECK ---
+		global $wpdb;
+		$current_time = current_time('mysql');
+		$entitlements_table = $wpdb->prefix . 'qp_user_entitlements';
+		$num_questions = isset($_POST['qp_mock_num_questions']) ? absint($_POST['qp_mock_num_questions']) : 20;
+
+		// Check for general practice entitlements
+		$active_entitlements = $wpdb->get_results($wpdb->prepare(
+			"SELECT entitlement_id, remaining_attempts
+			 FROM {$entitlements_table}
+			 WHERE user_id = %d AND status = 'active' AND (expiry_date IS NULL OR expiry_date > %s)
+			 AND (remaining_attempts IS NULL OR remaining_attempts > 0)",
+			$user_id,
+			$current_time
+		));
+
+		$has_access = false;
+		$has_unlimited_attempts = false;
+		$total_remaining = 0;
+
+		if (!empty($active_entitlements)) {
+			foreach ($active_entitlements as $entitlement) {
+				if (is_null($entitlement->remaining_attempts)) {
+					$has_unlimited_attempts = true;
+					$has_access = true;
+					break; // Found unlimited plan, stop checking
+				}
+				$total_remaining += (int)$entitlement->remaining_attempts;
+			}
+
+			if (!$has_unlimited_attempts && $total_remaining > 0) {
+				$has_access = true; // Has a finite number of attempts
+			}
+		}
+
+		// If user has no access at all (no plans)
+		if (!$has_access) {
+			wp_send_json_error(['message' => __('You do not have an active plan to start a mock test.', 'question-press')]);
+			return;
+		}
+
+		// If user has finite attempts, check if they have enough
+		if (!$has_unlimited_attempts && $total_remaining < $num_questions) {
+			wp_send_json_error(['message' => sprintf(
+				__('You do not have enough attempts remaining for this test. You need %d attempts but only have %d.', 'question-press'),
+				$num_questions,
+				$total_remaining
+			)]);
+			return;
+		}
+		// --- END NEW: MOCK TEST ATTEMPT CHECK ---
         $allowed_subjects = User_Access::get_allowed_subject_ids($user_id);
 
         // --- Define these variables *before* the scope check ---
@@ -997,60 +1048,87 @@ class Session_Ajax {
         }
         $user_id = get_current_user_id();
 
+        // --- FIX 1: DEFINE $current_time ---
+        $current_time = current_time('mysql');
+        // --- END FIX 1 ---
+
         // --- Get Item ID first ---
         $item_id = isset($_POST['item_id']) ? absint($_POST['item_id']) : 0;
         if (!$item_id) {
             wp_send_json_error(['message' => 'Invalid course item ID.']);
         }
 
-        // --- NEW: Entitlement Check ONLY ---
+        // --- FIX 2: REPLACED Entitlement Check ---
         global $wpdb;
         $items_table = $wpdb->prefix . 'qp_course_items';
 
-        // --- Get Course ID associated with the item ---
+        // Get Course ID associated with the item
         $course_id = $wpdb->get_var($wpdb->prepare("SELECT course_id FROM $items_table WHERE item_id = %d", $item_id));
         if (!$course_id) {
             wp_send_json_error(['message' => 'Could not determine the course for this item.']);
             return;
         }
-        // --- END Get Course ID ---
 
-
-        // --- NEW: Check Course Access FIRST ---
-        // CHANGED: Use the new User_Access class method
-        if (!\QuestionPress\Utils\User_Access::can_access_course($user_id, $course_id)) {
+        // Check if the user has access to this course.
+        // This function correctly checks for course enrollment OR a valid entitlement
+        // (including course-only plans with 0 attempts).
+        if (!User_Access::can_access_course($user_id, $course_id)) {
             wp_send_json_error(['message' => 'You do not have access to start tests in this course.', 'code' => 'access_denied']);
             return; // Stop execution
         }
-        // --- Proceed with Attempt Check (Existing Logic from previous step) ---
-        $entitlements_table = $wpdb->prefix . 'qp_user_entitlements';
-        $current_time = current_time('mysql');
-        $has_access_for_attempt = false; // Renamed variable for clarity
+        // --- END FIX 2 ---
 
-        $active_entitlements_count = $wpdb->get_var($wpdb->prepare(
-            "SELECT COUNT(entitlement_id)
-             FROM {$entitlements_table}
-             WHERE user_id = %d
-             AND status = 'active'
-             AND (expiry_date IS NULL OR expiry_date > %s)
-             AND (remaining_attempts IS NULL OR remaining_attempts > 0)",
-            $user_id,
-            $current_time
-        ));
+        // --- NEW: Step 2 - Progressive Enrollment Check ---
+        $progression_mode = get_post_meta($course_id, '_qp_course_progression_mode', true);
+        if ($progression_mode === 'progressive') {
+            
+            // 1. Get all items in this course, in their correct order
+            $sections_table = $wpdb->prefix . 'qp_course_sections';
+            $items_table = $wpdb->prefix . 'qp_course_items';
+            
+            $ordered_item_ids = $wpdb->get_col($wpdb->prepare(
+                "SELECT i.item_id
+                 FROM {$items_table} i
+                 JOIN {$sections_table} s ON i.section_id = s.section_id
+                 WHERE i.course_id = %d
+                 ORDER BY s.section_order ASC, i.item_order ASC",
+                $course_id
+            ));
 
-        if ($active_entitlements_count > 0) {
-            $has_access_for_attempt = true;
+            if (!empty($ordered_item_ids)) {
+                $current_item_index = array_search($item_id, $ordered_item_ids);
+
+                // 2. If item is found and is NOT the first item
+                if ($current_item_index !== false && $current_item_index > 0) {
+                    $previous_item_id = $ordered_item_ids[$current_item_index - 1];
+                    
+                    // 3. Check the user's progress on the *previous* item
+                    $progress_table = $wpdb->prefix . 'qp_user_items_progress';
+                    $previous_item_status = $wpdb->get_var($wpdb->prepare(
+                        "SELECT status FROM {$progress_table} WHERE user_id = %d AND item_id = %d",
+                        $user_id,
+                        $previous_item_id
+                    ));
+                    
+                    // 4. If previous item is not 'completed', block access
+                    if ($previous_item_status !== 'completed') {
+                        $previous_item_title = $wpdb->get_var($wpdb->prepare("SELECT title FROM {$items_table} WHERE item_id = %d", $previous_item_id));
+                        wp_send_json_error([
+                            'message' => sprintf(
+                                __('You must complete the previous item "%s" before starting this one.', 'question-press'),
+                                $previous_item_title ? esc_html($previous_item_title) : 'N/A'
+                            ),
+                            'code' => 'progression_locked'
+                        ]);
+                        return;
+                    }
+                }
+                // If $current_item_index is 0 (first item), or item not found (shouldn't happen),
+                // we allow access to continue.
+            }
         }
+        // --- END NEW Progressive Enrollment Check ---
 
-        if (!$has_access_for_attempt) {
-            error_log("QP Course Test Start: User #{$user_id} denied access. No suitable active entitlement found for attempt.");
-            wp_send_json_error([
-                'message' => 'You have run out of attempts or your subscription has expired.',
-                'code' => 'access_denied' // Keep same code, JS handles message
-            ]);
-            return;
-        }
-        // --- END NEW Entitlement Check ---
 
         // --- Proceed with starting the session (Original logic) ---
 

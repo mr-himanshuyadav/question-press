@@ -12,10 +12,12 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit; // Exit if accessed directly.
 }
 
+use QuestionPress\Admin\Views\Entitlements_List_Table;
+
 // Instantiate the List Table here, only if a user is found
 $entitlements_list_table = null;
 if ( $user_id_searched > 0 && $user_info ) {
-	$entitlements_list_table = new QP_Entitlements_List_Table(); // Use global class for now
+	$entitlements_list_table = new Entitlements_List_Table(); // Use global class for now
 
 	// Pass user_id to prepare_items for filtering
 	$_REQUEST['user_id_filter'] = $user_id_searched; // Use a temporary request variable

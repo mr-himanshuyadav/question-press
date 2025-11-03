@@ -70,34 +70,39 @@
     color: #a02222;
 }
 
+#qp-sections-list .qp-section{
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+}
+
 .qp-section-content {
     padding: 15px;
 }
 
 /* Items */
 .qp-items-list {
-    margin-left: 10px;
-    border-left: 3px solid #eef2f5;
-    padding-left: 15px;
+    margin: 10px !important;
+    border-left: 0px solid #eef2f5 !important;
+    padding-left: 0px !important;
     min-height: 40px; /* Drop zone */
 }
 
 .qp-course-item {
-    border: 1px solid #dcdcde;
-    padding: 10px;
-    margin-bottom: 10px;
+    border: 0px !important;
+    padding: 20px !important;
+    margin-bottom: 20px !important;
     background: #fdfdfd;
     border-radius: 3px;
     position: relative;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
 }
 
 .qp-item-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 10px;
+    margin-bottom: 0px !important;
+    border: 0px !important;
     padding-bottom: 8px;
-    border-bottom: 1px solid #eee;
 }
 .qp-item-header .handle {
     cursor: move;
@@ -131,9 +136,9 @@
 }
 
 .qp-item-config {
-    margin-top: 10px;
-    padding-top: 10px;
-    border-top: 1px solid #eee;
+    margin-top: 0px !important;
+    padding-top: 0px !important;
+    border-top: 0px !important;
 }
 
 /* Config Rows */
@@ -341,4 +346,186 @@
 
 .qp-modal-actions .button {
     margin-left: 10px;
+}
+
+/* --- New styles for compact item header --- */
+
+.qp-item-header-config {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0; /* Don't shrink */
+    margin-left: 15px; /* Space from title */
+}
+.qp-header-field {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.qp-header-field span {
+    font-size: 12px;
+    color: #555;
+    margin-right: 5px; /* Space after "Min" */
+}
+.qp-header-field label {
+    font-size: 13px;
+    font-weight: 500;
+    color: #444;
+    display: inline-flex; /* For checkbox */
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 0; /* Override default */
+}
+.qp-header-field input[type="number"] {
+    width: 60px; /* Small number fields */
+    font-size: 13px;
+    border: 1px solid #b4b9be;
+}
+.qp-header-field input[type="number"]:focus {
+    border-color: #2271b1;
+    box-shadow: 0 0 0 1px #2271b1;
+}
+.qp-header-field input[type="checkbox"] {
+    margin: 0;
+}
+.qp-header-field.qp-marks-group {
+    gap: 5px;
+    padding-left: 8px;
+    border-left: 2px solid #ddd;
+    display: flex; /* Ensure it's flex */
+}
+
+/* Make screen-reader-text truly hidden but accessible */
+.screen-reader-text {
+    border: 0;
+    clip: rect(1px, 1px, 1px, 1px);
+    -webkit-clip-path: inset(50%);
+    clip-path: inset(50%);
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    padding: 0;
+    position: absolute;
+    width: 1px;
+    word-wrap: normal !important;
+}
+
+/* Adjust item controls for new layout */
+.qp-item-controls {
+    margin-left: auto; /* Push controls to the far right */
+}
+.qp-item-title-input {
+    margin-right: 0; /* Remove right margin */
+}
+
+/* --- Styles for compact item header (v2) --- */
+
+.qp-item-header {
+    gap: 10px; /* Add gap between header elements */
+    align-items: center; /* Vertically center all header items */
+}
+
+.qp-item-title-input {
+    flex: 1 1 35%; /* Grow and shrink, with a basis of 35% */
+    min-width: 150px; /* Don't get too small */
+    margin-right: 0; /* Remove old margin */
+}
+
+.qp-item-controls {
+    flex-shrink: 0; /* Don't shrink */
+    margin-left: auto; /* Push controls to the far right */
+    display: flex;
+    align-items: center;
+    gap: 15px; /* Space between control groups */
+}
+
+.qp-item-header-config {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+    background: #fcfcfc;
+    border-radius: 4px;
+}
+
+.qp-header-field {
+    display: flex;
+    flex-direction: row; /* Stack label on top of input */
+    align-items: center;
+    gap: 2px;
+}
+
+.qp-header-field label {
+    font-size: 11px; /* Small label */
+    font-weight: 600;
+    color: #555;
+    margin-bottom: 0;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+/* Specific style for the checkbox label */
+.qp-header-field-scoring label {
+    flex-direction: row; /* Keep checkbox and text side-by-side */
+    align-items: center;
+    font-size: 13px;
+    height: 38px; /* Match height of other fields */
+    gap: 4px;
+}
+
+.qp-header-field input[type="number"] {
+    width: 65px; /* Slightly wider */
+    font-size: 13px;
+    border: 1px solid #b4b9be;
+}
+
+.qp-header-field input[type="number"]:focus {
+    border-color: #2271b1;
+    box-shadow: 0 0 0 1px #2271b1;
+}
+
+.qp-header-field input[type="checkbox"] {
+    margin: 0;
+}
+
+.qp-header-field.qp-marks-group {
+    display: flex;
+    flex-direction: row; /* Keep marks side-by-side */
+    gap: 5px;
+    padding-left: 10px;
+    border-left: 2px solid #ddd;
+    /* This rule handles the show/hide without layout shift */
+    transition: visibility 0s; 
+}
+
+.qp-marks-field-subgroup {
+     display: flex;
+     flex-direction: row;
+     gap: 2px;
+}
+
+/* Remove screen-reader-text class, we have visible labels now */
+.screen-reader-text {
+    border: 0;
+    clip: rect(1px, 1px, 1px, 1px);
+    -webkit-clip-path: inset(50%);
+    clip-path: inset(50%);
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    padding: 0;
+    position: absolute;
+    width: 1px;
+    word-wrap: normal !important;
+}
+
+/* --- Remove old styles that are now conflicts --- */
+.qp-item-header-config {
+    margin-left: 0; /* Remove the old margin */
+}
+.qp-header-field span {
+     display: none; /* Hide the old "Min" text */
+}
+.qp-header-field.qp-marks-group {
+    padding-left: 10px; /* Ensure padding is set */
 }

@@ -1371,12 +1371,17 @@ checkAttemptsBeforeAction(function() {
         if (response.success && response.data.redirect_url) {
           window.location.href = response.data.redirect_url;
         } else {
-          var errorMessage = response.data.html
-            ? response.data.html
-            : "<p>" +
-              (response.data.message || "An unknown error occurred.") +
-              "</p>";
-          wrapper.html(errorMessage);
+          // --- MODIFICATION: Use Swal.fire for error messages ---
+          var errorMessage = response.data.message || "An unknown error occurred.";
+          Swal.fire({
+            title: "Could Not Start Test",
+            text: errorMessage,
+            icon: "warning",
+            confirmButtonText: "OK",
+          });
+          // Reset the button
+          submitButton.val(originalButtonText).prop("disabled", false);
+          // --- END MODIFICATION ---
         }
       },
       error: function () {
@@ -1408,7 +1413,8 @@ checkAttemptsBeforeAction(function() {
   // Session Initialization
   if (typeof qp_session_data !== "undefined") {
     // Session state variables
-  var sessionID = 0;
+  var sessionID = qp_session_data.session_id; 
+  var sessionSettings = qp_session_data.settings;
   var sessionQuestionIDs = [];
   var currentQuestionIndex = 0;
   var highestQuestionIndexReached =
@@ -1416,7 +1422,6 @@ checkAttemptsBeforeAction(function() {
       "qp_session_" + qp_session_data.session_id + "_highest_index"
     ) || 0;
   highestQuestionIndexReached = parseInt(highestQuestionIndexReached, 10);
-  var sessionSettings = {};
   var score = 0;
   var correctCount = 0;
   var incorrectCount = 0;
@@ -1426,6 +1431,9 @@ checkAttemptsBeforeAction(function() {
   var practiceInProgress = false;
   var questionCache = {};
   var remainingTime = 0;
+  var isCourseTest = (sessionSettings && sessionSettings.course_id > 0);
+
+  if ( !isCourseTest ) {
   // --- NEW: Check Attempts on Page Load ---
     $.ajax({
         url: qp_ajax_object.ajax_url,
@@ -1490,7 +1498,7 @@ checkAttemptsBeforeAction(function() {
             });
             throw new Error("Failed to verify access.");
         }
-    });
+    });}
     // Hide preloader and show content after a delay
     setTimeout(function () {
       $("#qp-preloader").fadeOut(300, function () {
@@ -2741,14 +2749,18 @@ checkAttemptsBeforeAction(function() {
     });
 
     // --- Conditional Check for NEXT button ---
-    if (direction === 'next') {
+    if (direction === 'next') {if (isCourseTest) {
+            // This is a Course Test. Access is checked when the user *answers*
+            // the question, not when they load it. Proceed to load.
+            loadNextQuestion();
+        } else {
          var originalButtonText = $button.find('span').html(); // Get the arrow icon
          checkAttemptsBeforeAction(function() {
              // This runs ONLY if the check passes
              loadNextQuestion(); // Call the existing function to load next question
              // Button state will be handled by loadNextQuestion or if the alert pops up
          }); // Pass button for state management
-
+        }
     } else { // Handle PREV button directly (no check needed)
          if (currentQuestionIndex > 0) {
              var oldIndex = currentQuestionIndex;
