@@ -51,8 +51,7 @@ class Assets {
          global $post; // Make post object available
 
         global $post;
-    if (is_a($post, 'WP_Post') && (has_shortcode($post->post_content, 'question_press_practice') || has_shortcode($post->post_content, 'question_press_dashboard') || has_shortcode($post->post_content, 'question_press_session') || has_shortcode($post->post_content, 'question_press_review') || is_singular('qp_course'))) {
-
+    if (is_a($post, 'WP_Post') && (has_shortcode($post->post_content, 'question_press_practice') || has_shortcode($post->post_content, 'question_press_dashboard') || has_shortcode($post->post_content, 'question_press_session') || has_shortcode($post->post_content, 'question_press_review') || has_shortcode($post->post_content, 'question_press_signup') || is_singular('qp_course'))) {
         wp_enqueue_style('dashicons');
 
         // File versions for cache busting
@@ -70,6 +69,22 @@ class Assets {
         if (has_shortcode($post->post_content, 'question_press_dashboard')) {
             $dashboard_css_version = file_exists( QP_PLUGIN_PATH . 'assets/css/dashboard.css' ) ? filemtime( QP_PLUGIN_PATH . 'assets/css/dashboard.css' ) : QP_PLUGIN_VERSION; // Get version for cache busting
             wp_enqueue_style('qp-dashboard-styles', QP_ASSETS_URL . 'css/dashboard.css', ['qp-practice-styles'], $dashboard_css_version); // Make it dependent on practice styles
+        }
+        // Load auth styles if on the signup page, OR if the user is logged out (and will see a login prompt)
+        if (has_shortcode($post->post_content, 'question_press_signup') || !is_user_logged_in()) {
+            $auth_css_version = file_exists( QP_PLUGIN_PATH . 'assets/css/auth.css' ) ? filemtime( QP_PLUGIN_PATH . 'assets/css/auth.css' ) : QP_PLUGIN_VERSION;
+            wp_enqueue_style('qp-auth-styles', QP_ASSETS_URL . 'css/auth.css', ['qp-practice-styles'], $auth_css_version);
+
+            // --- ALSO: Load Auth JS only on the signup page ---
+            if (has_shortcode($post->post_content, 'question_press_signup')) {
+                // Load the main auth validation script
+                $auth_js_version = file_exists( QP_PLUGIN_PATH . 'assets/js/auth.js' ) ? filemtime( QP_PLUGIN_PATH . 'assets/js/auth.js' ) : QP_PLUGIN_VERSION;
+                wp_enqueue_script('qp-auth-script', QP_ASSETS_URL . 'js/auth.js', ['jquery', 'qp-utils-script'], $auth_js_version, true);
+
+                // --- NEW: Load the multi-select dropdown script ---
+                $multi_select_js_version = file_exists( QP_PLUGIN_PATH . 'assets/js/multi-select-dropdown.js' ) ? filemtime( QP_PLUGIN_PATH . 'assets/js/multi-select-dropdown.js' ) : QP_PLUGIN_VERSION;
+                wp_enqueue_script('qp-multi-select-dropdown-script', QP_ASSETS_URL . 'js/multi-select-dropdown.js', ['jquery'], $multi_select_js_version, true);
+            }
         }
         wp_enqueue_script('sweetalert2', 'https://cdn.jsdelivr.net/npm/sweetalert2@11', [], null, true);
 

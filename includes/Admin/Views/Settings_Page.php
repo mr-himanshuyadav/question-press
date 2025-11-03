@@ -68,6 +68,7 @@ class Settings_Page
         add_settings_field('qp_dashboard_page', 'Dashboard Page', [self::class, 'render_dashboard_page_dropdown'], 'qp-settings-page', 'qp_page_settings_section');
         add_settings_field('qp_review_page', 'Session Review Page', [self::class, 'render_review_page_dropdown'], 'qp-settings-page', 'qp_page_settings_section');
         add_settings_field('qp_session_page', 'Session Page', [self::class, 'render_session_page_dropdown'], 'qp-settings-page', 'qp_page_settings_section');
+        add_settings_field('qp_signup_page', 'Signup Page', [self::class, 'render_signup_page_dropdown'], 'qp-settings-page', 'qp_page_settings_section');
 
         // Data Management Section
         add_settings_section('qp_data_settings_section', 'Data Management', [self::class, 'render_data_section_text'], 'qp-settings-page');
@@ -86,6 +87,7 @@ class Settings_Page
         add_settings_field('qp_allow_session_termination', 'Allow Session Termination', [self::class, 'render_allow_session_termination_checkbox'], 'qp-settings-page', 'qp_data_settings_section');
 
         add_settings_field('qp_allow_course_opt_out', 'Allow Course Opt-Out', [self::class, 'render_allow_course_opt_out_checkbox'], 'qp-settings-page', 'qp_data_settings_section');
+        add_settings_field('qp_enable_otp_verification', 'Enable Email OTP Verification', [self::class, 'render_enable_otp_verification_checkbox'], 'qp-settings-page', 'qp_data_settings_section');
 
         // API Section
         add_settings_section('qp_api_settings_section', 'REST API Documentation', [self::class, 'render_api_section_text'], 'qp-settings-page');
@@ -336,6 +338,10 @@ class Settings_Page
             $new_input['session_page'] = absint($input['session_page']);
         }
 
+        if (isset($input['signup_page'])) {
+            $new_input['signup_page'] = absint($input['signup_page']);
+        }
+
         if (isset($input['delete_on_uninstall'])) {
             $new_input['delete_on_uninstall'] = absint($input['delete_on_uninstall']);
         }
@@ -391,6 +397,12 @@ class Settings_Page
             $new_input['allow_course_opt_out'] = 0;
         }
 
+        if (isset($input['enable_otp_verification'])) {
+            $new_input['enable_otp_verification'] = absint($input['enable_otp_verification']);
+        } else {
+            $new_input['enable_otp_verification'] = 0;
+        }
+
         if (isset($input['normal_practice_limit'])) {
             $limit = absint($input['normal_practice_limit']);
             // Ensure the limit is at least 10, default to 100 if not
@@ -439,5 +451,30 @@ class Settings_Page
         echo '<label><input type="checkbox" name="qp_settings[allow_course_opt_out]" value="1" ' . checked(1, $checked, false) . ' /> ';
         echo '<span>Allow users to "Deregister" (opt-out) from courses?</span></label>';
         echo '<p class="description">If enabled, you must also enable this on a per-course basis.</p>';
+    }
+
+    /**
+     * Callback to render the signup page dropdown.
+     */
+    public static function render_signup_page_dropdown()
+    {
+        $options = get_option('qp_settings');
+        $selected = isset($options['signup_page']) ? $options['signup_page'] : 0;
+        wp_dropdown_pages([
+            'name' => 'qp_settings[signup_page]',
+            'selected' => $selected,
+            'show_option_none' => '— Select a Page —',
+            'option_none_value' => '0'
+        ]);
+        echo '<p class="description">Select the page that contains the <code>[question_press_signup]</code> shortcode.</p>';
+    }
+
+    public static function render_enable_otp_verification_checkbox()
+    {
+        $options = get_option('qp_settings');
+        $checked = isset($options['enable_otp_verification']) ? $options['enable_otp_verification'] : 0;
+        echo '<label><input type="checkbox" name="qp_settings[enable_otp_verification]" value="1" ' . checked(1, $checked, false) . ' /> ';
+        echo '<span>Enable email OTP verification on new user registration.</span></label>';
+        echo '<p class="description">This helps prevent fake signups by requiring users to verify their email address.</p>';
     }
 }

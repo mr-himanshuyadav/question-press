@@ -12,8 +12,15 @@ final class Dashboard {
 
 	public static function render() {
 		if ( ! is_user_logged_in() ) {
-			// Keep login message logic here for now, or move to its own template later
-			return '<p>You must be logged in to view your dashboard. <a href="' . wp_login_url( get_permalink() ) . '">Click here to log in.</a></p>';
+            $options = get_option('qp_settings');
+            $signup_page_id = $options['signup_page'] ?? 0;
+            $signup_page_url = $signup_page_id ? get_permalink($signup_page_id) : '';
+
+            $args = [
+                'signup_page_url' => $signup_page_url,
+                'redirect_url' => get_permalink(), // Redirect back to this dashboard page
+            ];
+			return Template_Loader::get_html('auth/login-prompt-page', 'frontend', $args);
 		}
 
 		// --- Fetch common data ---

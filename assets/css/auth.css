@@ -1,0 +1,319 @@
+/* =================================================================
+   NEW: Auth Form Styles (Login & Signup)
+   ================================================================= */
+
+.qp-auth-prompt-container,
+.qp-signup-container {
+    max-width: 620px;
+    margin: 2rem auto;
+    background-color: var(--qp-dashboard-card-bg);
+    border: 1px solid var(--qp-dashboard-border-light);
+    border-radius: var(--qp-dashboard-radius);
+    box-shadow: var(--qp-dashboard-shadow);
+}
+
+.qp-auth-form-wrapper {
+    padding: 2rem;
+}
+
+.qp-auth-prompt-container h2,
+.qp-signup-container h2 {
+    text-align: center;
+    margin-top: 0;
+    margin-bottom: 1rem;
+}
+
+.qp-auth-prompt-container p {
+    text-align: center;
+    color: var(--qp-dashboard-text-light);
+    font-size: 1em;
+    margin-bottom: 1.5rem;
+}
+
+/* WordPress Login Form Styles */
+.qp-auth-form-wrapper #loginform {
+    border: none;
+    padding: 0;
+    box-shadow: none;
+    background: transparent;
+}
+.qp-auth-form-wrapper #loginform p {
+    text-align: left;
+    margin-bottom: 1rem;
+}
+.qp-auth-form-wrapper #loginform p label {
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--qp-dashboard-text-dark);
+    margin-bottom: 8px;
+}
+.qp-auth-form-wrapper #loginform input[type="text"],
+.qp-auth-form-wrapper #loginform input[type="password"] {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid var(--qp-dashboard-border);
+    border-radius: 4px;
+    font-size: 16px;
+    box-sizing: border-box;
+    box-shadow: none;
+    margin-top: 5px;
+}
+.qp-auth-form-wrapper .login-remember {
+    font-size: 13px;
+    text-align: left;
+    margin-top: 1rem;
+}
+.qp-auth-form-wrapper .login-remember input {
+    margin-right: 5px;
+}
+.qp-auth-form-wrapper .login-submit {
+    margin-top: 1.5rem;
+    margin-bottom: 0.5rem;
+    padding: 0;
+}
+.qp-auth-form-wrapper .login-submit input[type="submit"] {
+    width: 100%;
+    /* This uses your existing button class */
+    display: inline-block;
+    text-decoration: none;
+    font-weight: 600;
+    padding: 12px 24px;
+    border-radius: var(--qp-dashboard-radius);
+    transition: all 0.2s;
+    border: 1px solid transparent;
+    cursor: pointer;
+    font-size: 14px;
+    text-align: center;
+    background-color: var(--qp-dashboard-primary);
+    color: var(--qp-dashboard-text-white);
+    border-color: var(--qp-dashboard-primary);
+}
+.qp-auth-form-wrapper .login-submit input[type="submit"]:hover {
+    background-color: var(--qp-dashboard-primary-hover);
+}
+.qp-auth-form-wrapper #nav,
+.qp-auth-form-wrapper #backtoblog {
+    display: none; /* Hide default "Lost Password" and "Back to" links */
+}
+
+/* Signup Prompt Box */
+.qp-auth-signup-prompt {
+    padding: 1.5rem 2rem;
+    border-top: 1px solid var(--qp-dashboard-border-light);
+    background-color: var(--qp-dashboard-card-header-bg);
+    text-align: center;
+}
+.qp-auth-signup-prompt p {
+    margin: 0 0 1rem 0;
+    font-weight: 500;
+}
+.qp-auth-signup-prompt .qp-button {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* Signup Form Specifics */
+.qp-signup-form {
+    padding: 2rem;
+}
+.qp-signup-form .qp-form-group {
+    margin-bottom: 1.5rem;
+}
+.qp-signup-form .qp-form-group label {
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--qp-dashboard-text-dark);
+    display: block;
+    margin-bottom: 8px;
+}
+.qp-signup-form .qp-form-group input[type="text"],
+.qp-signup-form .qp-form-group input[type="email"],
+.qp-signup-form .qp-form-group input[type="password"] {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid var(--qp-dashboard-border);
+    border-radius: 4px;
+    font-size: 16px;
+    box-sizing: border-box;
+}
+.qp-signup-form .qp-form-group .description {
+    font-size: 12px;
+    color: var(--qp-dashboard-text-light);
+    margin-top: 5px;
+}
+.qp-signup-form .qp-action-buttons {
+    margin-top: 2rem;
+}
+.qp-signup-form .qp-button {
+    width: 100%;
+    box-sizing: border-box;
+}
+.qp-form-group-read-only {
+    background-color: var(--qp-dashboard-bg);
+    border: 1px dashed var(--qp-dashboard-border);
+    padding: 1rem;
+    border-radius: 4px;
+    margin-bottom: 1.5rem;
+}
+.qp-form-group-read-only p {
+    margin: 0;
+    font-size: 1em;
+    color: var(--qp-dashboard-text-light);
+}
+.qp-error-notice {
+    background-color: var(--qp-incorrect-bg);
+    border: 1px solid var(--qp-incorrect-color);
+    color: var(--qp-incorrect-color);
+    padding: 1rem 1.5rem;
+    border-radius: 4px;
+    margin: 0 2rem 1.5rem 2rem;
+}
+.qp-error-notice p {
+    margin: 0;
+    font-weight: 600;
+}
+
+/* =================================================================
+   NEW: Signup Form Validation Styles
+   ================================================================= */
+
+.qp-input-with-status {
+    position: relative;
+}
+
+.qp-validation-icon {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 20px;
+    height: 20px;
+}
+
+.qp-validation-icon.qp-loading {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='xMidYMid' width='200' height='200' style='shape-rendering: auto; display: block; background: transparent;' xmlns:xlink='http://www.w3.org/1999/xlink'%3E%3Cg%3E%3Ccircle cx='50' cy='50' fill='none' stroke='%23a0a5aa' stroke-width='10' r='35' stroke-dasharray='164.93361431346415 56.97787143782138'%3E%3CanimateTransform attributeName='transform' type='rotate' repeatCount='indefinite' dur='1s' values='0 50 50;360 50 50' keyTimes='0;1'%3E%3C/animateTransform%3E%3C/circle%3E%3Cg%3E%3C/g%3E%3C/g%3E%3C!-- [ldio] generated by https://loading.io/ --%3E");
+    background-size: contain;
+}
+
+.qp-validation-icon.qp-valid {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232e7d32' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'%3E%3C/polyline%3E%3C/svg%3E");
+    background-size: contain;
+}
+
+.qp-validation-icon.qp-invalid {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23d63638' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cline x1='18' y1='6' x2='6' y2='18'%3E%3C/line%3E%3Cline x1='6' y1='6' x2='18' y2='18'%3E%3C/line%3E%3C/svg%3E");
+    background-size: contain;
+}
+
+.qp-validation-message {
+    font-size: 12px;
+    color: #d63638;
+    margin-top: 5px;
+    display: none; /* Hidden by default */
+}
+
+.qp-signup-form .qp-form-group select {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid var(--qp-dashboard-border);
+    border-radius: 4px;
+    font-size: 16px;
+    box-sizing: border-box;
+    background-color: #fff;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2350575e'%3E%3Cpath d='M7 10l5 5 5-5H7z'%3E%3C/path%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    background-size: 20px;
+}
+
+.qp-form-group-read-only p {
+    font-size: 0.9em;
+    line-height: 1.5;
+}
+
+
+/* =================================================================
+   NEW: Multi-Select Search & Disabled Styles
+   ================================================================= */
+
+/* --- MODIFIED: List Style (No Padding) --- */
+.qp-multi-select-list {
+    display: none;
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    background-color: #fff;
+    border: 1px solid var(--qp-dashboard-border);
+    border-radius: 4px;
+    max-height: 250px; /* Increased height for search */
+    overflow-y: auto;
+    z-index: 100;
+    padding: 0; /* --- REMOVED padding --- */
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+}
+
+/* --- NEW: Search Bar (inside list) --- */
+.qp-multi-select-search-wrapper {
+    padding: 0.5rem;
+    border-bottom: 1px solid var(--qp-dashboard-border-light);
+    /* --- Sticky position --- */
+    position: sticky;
+    top: 0;
+    background-color: #fff;
+    z-index: 101; /* Above list items */
+}
+
+.qp-multi-select-search {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--qp-dashboard-border);
+    border-radius: 4px;
+    box-sizing: border-box; /* Important */
+    font-size: 14px;
+}
+.qp-multi-select-search:focus {
+    border-color: var(--qp-dashboard-primary);
+    box-shadow: 0 0 0 1px var(--qp-dashboard-primary);
+    outline: none;
+}
+
+/* --- MODIFIED: List labels (add padding back) --- */
+.qp-multi-select-list label {
+    display: flex;
+    align-items: center;
+    padding: 0.6rem 0.75rem; /* --- Padding is here now --- */
+    cursor: pointer;
+    border-radius: 0; /* No radius on items */
+    font-size: 15px;
+    font-weight: 400; 
+    color: var(--qp-dashboard-text-dark); 
+}
+
+/* ... (keep label:hover, input[type=checkbox] styles) ... */
+
+/* --- MODIFIED: Disabled Option --- */
+.qp-multi-select-list label.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background-color: #f8f9fa; /* Light grey background */
+}
+
+.qp-multi-select-list label.disabled:hover {
+    background-color: #f8f9fa; /* No hover effect */
+}
+
+.qp-multi-select-list label.disabled input[type="checkbox"] {
+    cursor: not-allowed;
+}
+
+/* --- NEW: Disabled state for the main button --- */
+.qp-multi-select-dropdown .qp-multi-select-button.disabled,
+.qp-multi-select-dropdown .qp-multi-select-button:disabled {
+     background-color: #f0f0f1;
+     cursor: not-allowed;
+     opacity: 0.7;
+}
