@@ -1819,4 +1819,40 @@ class Practice_Ajax
             wp_send_json_error(['message' => 'A database error occurred. Could not complete the action.']);
         }
     }
+
+    /**
+     * AJAX handler to check if a username is available.
+     */
+    public static function check_username_availability() {
+        // No nonce check needed for a public availability check
+        $username = isset($_POST['username']) ? sanitize_user($_POST['username']) : '';
+
+        if (empty($username)) {
+            wp_send_json_error(['message' => 'Username cannot be empty.']);
+        }
+
+        if (username_exists($username)) {
+            wp_send_json_error(['message' => 'Username is already taken.']);
+        } else {
+            wp_send_json_success(['message' => 'Username is available.']);
+        }
+    }
+
+    /**
+     * AJAX handler to check if an email is available.
+     */
+    public static function check_email_availability() {
+        // No nonce check needed for a public availability check
+        $email = isset($_POST['email']) ? sanitize_email($_POST['email']) : '';
+
+        if (!is_email($email)) {
+            wp_send_json_error(['message' => 'Please enter a valid email.']);
+        }
+
+        if (email_exists($email)) {
+            wp_send_json_error(['message' => 'Email is already registered.']);
+        } else {
+            wp_send_json_success(['message' => 'Email is available.']);
+        }
+    }
 }

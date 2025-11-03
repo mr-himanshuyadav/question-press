@@ -17,12 +17,15 @@ final class Shortcodes {
 
 	public static function render_practice_form() {
 		if ( ! is_user_logged_in() ) {
-			// Keep the login message HTML here for now, or move to its own template later
-			return '<div style="text-align:center; padding: 40px 20px; background-color: #fff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-						<h3 style="margin-top:0; font-size: 22px;">Please Log In to Begin</h3>
-						<p style="font-size: 16px; color: #555; margin-bottom: 25px;">You need to be logged in to start a new practice session and track your progress.</p>
-						<a href="' . wp_login_url( get_permalink() ) . '" class="qp-button qp-button-primary" style="text-decoration: none;">Click Here to Log In</a>
-					</div>';
+            $options = get_option('qp_settings');
+            $signup_page_id = $options['signup_page'] ?? 0;
+            $signup_page_url = $signup_page_id ? get_permalink($signup_page_id) : '';
+
+            $args = [
+                'signup_page_url' => $signup_page_url,
+                'redirect_url' => get_permalink(), // Redirect back to this practice page
+            ];
+			return Template_Loader::get_html('auth/login-prompt-page', 'frontend', $args);
 		}
 
 		// --- Check User Entitlements ---
@@ -1023,4 +1026,110 @@ final class Shortcodes {
 		echo '</div>';
 		return ob_get_clean();
 	}
+
+
+	public static function render_signup_form() {
+        if ( is_user_logged_in() ) {
+            $options = get_option('qp_settings');
+            $dashboard_url = $options['dashboard_page'] ? get_permalink($options['dashboard_page']) : home_url('/');
+            return '<div class="qp-container"><p>' . esc_html__('You are already logged in.', 'question-press') . '</p><a href="' . esc_url($dashboard_url) . '" class="qp-button qp-button-primary">' . esc_html__('Go to Dashboard', 'question-press') . '</a></div>';
+        }
+
+        if ( ! get_option('users_can_register') ) {
+            return '<div class="qp-container"><p>' . esc_html__('User registration is not currently allowed.', 'question-press') . '</p></div>';
+        }
+
+        global $wpdb;
+        $errors = [];
+
+        // --- Process Full Form Submission ---
+        if ( ! empty( $_POST ) && isset( $_POST['action'] ) && $_POST['action'] === 'qp_signup_submit' ) {
+            check_admin_referer('qp_signup_nonce');
+
+            $username = sanitize_user( $_POST['qp_reg_username'] ?? '' );
+            $email = sanitize_email( $_POST['qp_reg_email'] ?? '' );
+            $display_name = sanitize_text_field( $_POST['qp_reg_display_name'] ?? '' );
+            $password = $_POST['qp_reg_password'] ?? '';
+            $confirm_password = $_POST['qp_reg_confirm_password'] ?? '';
+            $exam_id = isset($_POST['qp_reg_exam']) ? absint($_POST['qp_reg_exam']) : 0;
+            $subject_id = isset($_POST['qp_reg_subject']) ? absint($_POST['qp_reg_subject']) : 0;
+
+            // --- Validation ---
+            if ( empty($username) || empty($email) || empty($display_name) || empty($password) || empty($confirm_password) ) {
+                $errors[] = 'All required fields (*) are mandatory.';
+            }
+            if ( ! is_email( $email ) ) {
+                $errors[] = 'Please provide a valid email address.';
+            }
+
+            if ( empty( $errors ) ) {
+                // --- Create the User ---
+                $user_id = wp_create_user( $username, $password, $email );
+
+                if ( is_wp_error( $user_id ) ) {
+                    $errors[] = 'Error creating user: ' . $user_id->get_error_message();
+                } else {
+                    // User created! Now set display name and scope.
+                    wp_update_user( [
+                        'ID'           => $user_id,
+                        'display_name' => $display_name
+                    ] );
+
+                    // Save Scope
+                    $allowed_exams = ($exam_id > 0) ? [$exam_id] : [];
+                    $allowed_subjects = ($subject_id > 0) ? [$subject_id] : [];
+                    
+                    update_user_meta( $user_id, '_qp_allowed_exam_term_ids', wp_json_encode( $allowed_exams ) );
+                    update_user_meta( $user_id, '_qp_allowed_subject_term_ids', wp_json_encode( $allowed_subjects ) );
+                    
+                    // Log the new user in
+                    $creds = [
+                        'user_login'    => $username,
+                        'user_password' => $password,
+                        'remember'      => true
+                    ];
+                    $user_signon = wp_signon( $creds, false );
+                    
+                    if ( is_wp_error($user_signon) ) {
+                        $errors[] = 'Registration successful, but auto-login failed: ' . $user_signon->get_error_message();
+                    } else {
+                        // Success! Redirect to dashboard.
+                        $options = get_option('qp_settings');
+                        $dashboard_url = $options['dashboard_page'] ? get_permalink($options['dashboard_page']) : home_url('/');
+                        wp_safe_redirect( $dashboard_url );
+                        exit;
+                    }
+                }
+            }
+        }
+        
+        // --- Fetch Data for Dropdowns (for GET request) ---
+        $term_table = $wpdb->prefix . 'qp_terms';
+        $tax_table = $wpdb->prefix . 'qp_taxonomies';
+        
+        $exam_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'exam'");
+        $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = 'subject'");
+
+        $exams = $wpdb->get_results($wpdb->prepare(
+            "SELECT term_id, name FROM $term_table WHERE taxonomy_id = %d AND parent = 0 ORDER BY name ASC",
+            $exam_tax_id
+        ));
+        $subjects = $wpdb->get_results($wpdb->prepare(
+            "SELECT term_id, name FROM $term_table WHERE taxonomy_id = %d AND parent = 0 ORDER BY name ASC",
+            $subject_tax_id
+        ));
+
+        // --- Render the new single-page form ---
+        $step_html = Template_Loader::get_html('auth/signup-form', 'frontend', [
+            'errors'   => $errors,
+            'subjects' => $subjects,
+            'exams'    => $exams
+        ]);
+        
+        // Render the main wrapper
+        return Template_Loader::get_html('auth/signup-wrapper', 'frontend', [
+            'step_html' => $step_html,
+            'errors'    => $errors
+        ]);
+    }
 }

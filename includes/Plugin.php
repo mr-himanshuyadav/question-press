@@ -280,6 +280,9 @@ final class Plugin {
         add_action('wp_ajax_get_practice_form_html', [Practice_Ajax::class, 'get_practice_form_html']);
         add_action('wp_ajax_get_course_structure', [Practice_Ajax::class, 'get_course_structure']);
         add_action('wp_ajax_qp_deregister_from_course', [Practice_Ajax::class, 'deregister_from_course']);
+        // AJAX for signup form validation
+        add_action('wp_ajax_nopriv_qp_check_username', [Practice_Ajax::class, 'check_username_availability']);
+        add_action('wp_ajax_nopriv_qp_check_email', [Practice_Ajax::class, 'check_email_availability']);
 
         // Filters
         add_filter('query_vars', [Rewrites::class, 'register_query_vars']);
@@ -303,6 +306,7 @@ final class Plugin {
         add_shortcode('question_press_practice', [Shortcodes::class, 'render_practice_form']);
         add_shortcode('question_press_session', [Shortcodes::class, 'render_session_page']);
         add_shortcode('question_press_review', [Shortcodes::class, 'render_review_page']);
+        add_shortcode('question_press_signup', [Shortcodes::class, 'render_signup_form']);
         add_shortcode('question_press_dashboard', [Dashboard::class, 'render']);
     }
 

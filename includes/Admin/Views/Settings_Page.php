@@ -68,6 +68,7 @@ class Settings_Page
         add_settings_field('qp_dashboard_page', 'Dashboard Page', [self::class, 'render_dashboard_page_dropdown'], 'qp-settings-page', 'qp_page_settings_section');
         add_settings_field('qp_review_page', 'Session Review Page', [self::class, 'render_review_page_dropdown'], 'qp-settings-page', 'qp_page_settings_section');
         add_settings_field('qp_session_page', 'Session Page', [self::class, 'render_session_page_dropdown'], 'qp-settings-page', 'qp_page_settings_section');
+        add_settings_field('qp_signup_page', 'Signup Page', [self::class, 'render_signup_page_dropdown'], 'qp-settings-page', 'qp_page_settings_section');
 
         // Data Management Section
         add_settings_section('qp_data_settings_section', 'Data Management', [self::class, 'render_data_section_text'], 'qp-settings-page');
@@ -336,6 +337,10 @@ class Settings_Page
             $new_input['session_page'] = absint($input['session_page']);
         }
 
+        if (isset($input['signup_page'])) {
+            $new_input['signup_page'] = absint($input['signup_page']);
+        }
+
         if (isset($input['delete_on_uninstall'])) {
             $new_input['delete_on_uninstall'] = absint($input['delete_on_uninstall']);
         }
@@ -439,5 +444,21 @@ class Settings_Page
         echo '<label><input type="checkbox" name="qp_settings[allow_course_opt_out]" value="1" ' . checked(1, $checked, false) . ' /> ';
         echo '<span>Allow users to "Deregister" (opt-out) from courses?</span></label>';
         echo '<p class="description">If enabled, you must also enable this on a per-course basis.</p>';
+    }
+
+    /**
+     * Callback to render the signup page dropdown.
+     */
+    public static function render_signup_page_dropdown()
+    {
+        $options = get_option('qp_settings');
+        $selected = isset($options['signup_page']) ? $options['signup_page'] : 0;
+        wp_dropdown_pages([
+            'name' => 'qp_settings[signup_page]',
+            'selected' => $selected,
+            'show_option_none' => '— Select a Page —',
+            'option_none_value' => '0'
+        ]);
+        echo '<p class="description">Select the page that contains the <code>[question_press_signup]</code> shortcode.</p>';
     }
 }
