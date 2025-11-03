@@ -135,7 +135,9 @@ final class Shortcodes {
 		}
 
 		// Prepare arguments for the template
+		$options = get_option('qp_settings');
 		$args = [
+            'normal_practice_limit' => $options['normal_practice_limit'] ?? 100,
 			'subjects'            => $subjects,
 			'allowed_subjects'    => $allowed_subjects_or_all === 'all' ? 'all' : wp_json_encode( $allowed_subjects_array ), // Pass 'all' or JSON array
 			'multiSelectDisabled' => $multiSelectDisabled,
@@ -181,7 +183,9 @@ final class Shortcodes {
 		}
 
 		// Prepare arguments for the template
+		$options = get_option( 'qp_settings' ); // <-- ADD THIS
 		$args = [
+            'normal_practice_limit' => $options['normal_practice_limit'] ?? 100, // <-- ADD THIS
 			'subjects'            => $subjects,
 			'allowed_subjects'    => $allowed_subjects_or_all === 'all' ? 'all' : wp_json_encode( $allowed_subjects_array ),
 			'multiSelectDisabled' => $multiSelectDisabled,

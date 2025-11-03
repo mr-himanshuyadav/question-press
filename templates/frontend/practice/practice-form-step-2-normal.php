@@ -52,6 +52,10 @@ if ( ! defined( 'ABSPATH' ) ) {
     </div>
 
     <div class="qp-form-group qp-checkbox-group">
+        <div class="qp-form-group">
+            <label for="qp_normal_practice_limit">Number of Questions (Max: <?php echo esc_attr($normal_practice_limit); ?>)</label>
+            <input type="number" name="qp_normal_practice_limit" id="qp_normal_practice_limit" value="20" min="1" max="<?php echo esc_attr($normal_practice_limit); ?>" required>
+        </div>
         <label class="qp-custom-checkbox">
             <input type="checkbox" name="qp_pyq_only" value="1">
             <span></span>
