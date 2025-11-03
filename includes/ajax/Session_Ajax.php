@@ -180,16 +180,19 @@ class Session_Ajax {
         if ($practice_mode === 'Section Wise Practice') {
             $order_by_sql = 'ORDER BY CAST(q.question_number_in_section AS UNSIGNED) ASC, q.question_id ASC';
         } else {
-            $order_by_sql = ($admin_order_setting === 'in_order') ? 'ORDER BY q.question_id ASC' : 'ORDER BY RAND()';
+            $order_by_sql = ($admin_order_setting === 'in_order') ? 'ORDER BY q.question_id ASC' : '';
         }
 
         $where_sql = ' WHERE ' . implode(' AND ', $where_conditions);
-        $query = "SELECT q.question_id, q.question_number_in_section {$joins} {$where_sql} {$order_by_sql}";
+        $query = "SELECT DISTINCT q.question_id, q.question_number_in_section {$joins} {$where_sql} {$order_by_sql}";
 
         $question_results = $wpdb->get_results($query);
         $question_ids = wp_list_pluck($question_results, 'question_id');
+        
+        if ($practice_mode !== 'Section Wise Practice' && $admin_order_setting !== 'in_order') {
+            shuffle($question_ids);
+        }
 
-        // --- Session Creation (Common Logic) ---
         if (empty($question_ids)) {
             wp_send_json_error(['message' => 'No questions were found for the selected criteria. Please try different options.']);
         }
@@ -496,8 +499,7 @@ class Session_Ajax {
         // If $allowed_subjects === 'all' and no specific subject/topic selected, no topic WHERE clause is added.
 
         $base_where_sql = implode(' AND ', $where_clauses);
-        $query = "SELECT q.question_id, topic_term.term_id as topic_id {$joins} WHERE {$base_where_sql}";
-        // **END REVISED FIX**
+        $query = "SELECT DISTINCT q.question_id, topic_term.term_id as topic_id {$joins} WHERE {$base_where_sql}";
 
         $question_pool = $wpdb->get_results($wpdb->prepare($query, $query_params));
 
@@ -545,6 +547,7 @@ class Session_Ajax {
             wp_send_json_error(['html' => '<div class="qp-container"><p>Could not gather enough unique questions for the test. Please select more topics or reduce the number of questions.</p><button onclick="window.location.reload();" class="qp-button qp-button-secondary">Go Back</button></div>']);
         }
 
+        $final_question_ids = array_unique($final_question_ids);
         shuffle($final_question_ids); // Final shuffle for randomness
 
         // --- Create the session (Remains the same) ---
@@ -720,19 +723,25 @@ class Session_Ajax {
 
             if (!empty($available_qids)) {
                 $ids_placeholder = implode(',', array_map('absint', $available_qids));
-                $order_by_sql = $choose_random ? "ORDER BY RAND()" : "ORDER BY q.question_id ASC"; // Simple order if not random
+                // Remove ORDER BY RAND() and LIMIT from the SQL query
+                $order_by_sql = $choose_random ? "" : "ORDER BY q.question_id ASC";
 
-                // *** THIS IS THE FIX: Apply LIMIT correctly ***
-                $q_ids = $wpdb->get_col($wpdb->prepare(
+                // Get ALL available q_ids for this topic
+                $q_ids = $wpdb->get_col(
                     "SELECT q.question_id
                      FROM {$questions_table} q
                      WHERE q.question_id IN ($ids_placeholder)
-                     {$order_by_sql}
-                     LIMIT %d", // Apply limit here
-                    $questions_per_topic // Use the variable from settings
-                ));
-                // *** END FIX ***
-                $final_question_ids = array_merge($final_question_ids, $q_ids);
+                     {$order_by_sql}"
+                );
+
+                // Shuffle in PHP if requested
+                if ($choose_random) {
+                    shuffle($q_ids);
+                }
+
+                // Apply the limit *after* shuffling (or ordering)
+                $q_ids_to_add = array_slice($q_ids, 0, $questions_per_topic);
+                $final_question_ids = array_merge($final_question_ids, $q_ids_to_add);
             }
         }
 
@@ -777,7 +786,7 @@ class Session_Ajax {
 
         // Get all question IDs from the user's review list
         $review_question_ids = $wpdb->get_col($wpdb->prepare(
-            "SELECT question_id FROM {$wpdb->prefix}qp_review_later WHERE user_id = %d ORDER BY review_id ASC",
+            "SELECT DISTINCT question_id FROM {$wpdb->prefix}qp_review_later WHERE user_id = %d ORDER BY review_id ASC",
             $user_id
         ));
 
@@ -1155,7 +1164,7 @@ class Session_Ajax {
         $reports_table = $wpdb->prefix . 'qp_question_reports';
 
         if (isset($config['selected_questions']) && is_array($config['selected_questions']) && !empty($config['selected_questions'])) {
-            $potential_ids = array_map('absint', $config['selected_questions']);
+            $potential_ids = array_unique(array_map('absint', $config['selected_questions']));
             if (!empty($potential_ids)) {
                 $ids_placeholder = implode(',', $potential_ids);
                 $reported_question_ids = $wpdb->get_col("SELECT DISTINCT question_id FROM {$reports_table} WHERE status = 'open'");

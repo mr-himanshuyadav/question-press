@@ -1222,10 +1222,16 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
 
         // Construct final query
         $where_sql = ' WHERE ' . implode( ' AND ', $where_conditions );
-        $query = $select_sql . $from_sql . $joins_sql . $where_sql . " ORDER BY RAND()";
+        $query = str_replace("SELECT q.question_id", "SELECT DISTINCT q.question_id", $select_sql)
+               . $from_sql . $joins_sql . $where_sql;
 
         $query_to_run = empty($params) ? $query : self::$wpdb->prepare($query, $params);
-        return self::$wpdb->get_col( $query_to_run );
+        
+        $question_ids = self::$wpdb->get_col( $query_to_run );
+        shuffle($question_ids);
+
+        return $question_ids;
+    }
     }
 
     /**
