@@ -68,8 +68,8 @@ if ( ! defined( 'ABSPATH' ) ) {
             </div>
 
             <hr style="border: 0; border-top: 1px solid var(--qp-dashboard-border-light); margin: 2rem 0 1.5rem 0;">
-            <h3 style="font-size: 1.2em; margin-bottom: 1rem;"><?php esc_html_e( 'Select Your Practice Scope', 'question-press' ); ?></h3>
-            <p class="description"><?php esc_html_e( 'This will set the default subjects and exams you can access.', 'question-press' ); ?></p>
+            <h3 style="font-size: .8em; margin-bottom: 7px;"><?php esc_html_e( 'Select Your Practice Scope', 'question-press' ); ?></h3>
+            <p class="description" style="font-size:.7em;margin-bottom:15px;"><?php esc_html_e( 'This will set the default subjects and exams you can access.', 'question-press' ); ?></p>
             
             <div class="qp-form-group">
                 <label for="qp_reg_exam"><?php esc_html_e( 'Select Exam (Optional)', 'question-press' ); ?></label>
@@ -90,7 +90,6 @@ if ( ! defined( 'ABSPATH' ) ) {
                     <?php endforeach; ?>
                 </select>
                 <p id="qp_subject_error" class="qp-validation-message qp-error" style="display: none;"></p>
-                <p class="description"><?php esc_html_e( 'Select up to 5 subjects. This will be ignored if you select an Exam.', 'question-press' ); ?></p>
             </div>
 
             <p id="qp_scope_error" class="qp-validation-message qp-error" style="display: block; text-align: center; margin-bottom: 1rem;"><?php esc_html_e( 'Please select an Exam OR at least one Subject.', 'question-press' ); ?></p>

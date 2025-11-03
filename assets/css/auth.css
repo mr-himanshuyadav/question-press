@@ -236,42 +236,10 @@
 
 
 /* =================================================================
-   NEW: Frontend Multi-Select Dropdown Styles
+   NEW: Multi-Select Search & Disabled Styles
    ================================================================= */
 
-.qp-multi-select-dropdown {
-    position: relative;
-    width: 100%;
-}
-
-.qp-multi-select-dropdown .qp-multi-select-button {
-    /* Use the same style as other inputs on the page */
-    width: 100%;
-    padding: 12px;
-    border: 1px solid var(--qp-dashboard-border);
-    border-radius: 4px;
-    font-size: 16px;
-    box-sizing: border-box;
-    background-color: #fff;
-    text-align: left;
-    color: var(--qp-dashboard-text-dark);
-    cursor: pointer;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    transition: border-color 0.2s ease, box-shadow 0.2s ease;
-}
-
-.qp-multi-select-dropdown .qp-multi-select-button:hover {
-    border-color: #a7aaad;
-}
-
-.qp-multi-select-dropdown .qp-multi-select-button::after {
-    content: '\25BC'; /* Downward-pointing triangle */
-    font-size: 12px;
-    transition: transform 0.2s ease;
-}
-
+/* --- MODIFIED: List Style (No Padding) --- */
 .qp-multi-select-list {
     display: none;
     position: absolute;
@@ -281,30 +249,71 @@
     background-color: #fff;
     border: 1px solid var(--qp-dashboard-border);
     border-radius: 4px;
-    max-height: 200px;
+    max-height: 250px; /* Increased height for search */
     overflow-y: auto;
     z-index: 100;
-    padding: 0.5rem;
+    padding: 0; /* --- REMOVED padding --- */
     box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
 }
 
+/* --- NEW: Search Bar (inside list) --- */
+.qp-multi-select-search-wrapper {
+    padding: 0.5rem;
+    border-bottom: 1px solid var(--qp-dashboard-border-light);
+    /* --- Sticky position --- */
+    position: sticky;
+    top: 0;
+    background-color: #fff;
+    z-index: 101; /* Above list items */
+}
+
+.qp-multi-select-search {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--qp-dashboard-border);
+    border-radius: 4px;
+    box-sizing: border-box; /* Important */
+    font-size: 14px;
+}
+.qp-multi-select-search:focus {
+    border-color: var(--qp-dashboard-primary);
+    box-shadow: 0 0 0 1px var(--qp-dashboard-primary);
+    outline: none;
+}
+
+/* --- MODIFIED: List labels (add padding back) --- */
 .qp-multi-select-list label {
     display: flex;
     align-items: center;
-    padding: 0.6rem 0.75rem;
+    padding: 0.6rem 0.75rem; /* --- Padding is here now --- */
     cursor: pointer;
-    border-radius: 4px;
+    border-radius: 0; /* No radius on items */
     font-size: 15px;
-    font-weight: 400; /* Un-bold it from the default form label */
-    color: var(--qp-dashboard-text-dark); /* Ensure text color */
+    font-weight: 400; 
+    color: var(--qp-dashboard-text-dark); 
 }
 
-.qp-multi-select-list label:hover {
-    background-color: #f0f0f1;
+/* ... (keep label:hover, input[type=checkbox] styles) ... */
+
+/* --- MODIFIED: Disabled Option --- */
+.qp-multi-select-list label.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background-color: #f8f9fa; /* Light grey background */
 }
 
-.qp-multi-select-list input[type="checkbox"] {
-    margin-right: 12px;
-    transform: scale(1.1);
-    flex-shrink: 0;
+.qp-multi-select-list label.disabled:hover {
+    background-color: #f8f9fa; /* No hover effect */
+}
+
+.qp-multi-select-list label.disabled input[type="checkbox"] {
+    cursor: not-allowed;
+}
+
+/* --- NEW: Disabled state for the main button --- */
+.qp-multi-select-dropdown .qp-multi-select-button.disabled,
+.qp-multi-select-dropdown .qp-multi-select-button:disabled {
+     background-color: #f0f0f1;
+     cursor: not-allowed;
+     opacity: 0.7;
 }

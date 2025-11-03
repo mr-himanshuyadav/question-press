@@ -40,8 +40,15 @@ jQuery(document).ready(function($) {
      * Checks the complete form validity and enables/disables the submit button.
      */
     function checkFormValidity() {
-        // 1. Password length
+        // 1. Get all current values
+        var examVal = examSelect.val();
+        var subjectVals = subjectSelect.val() || [];
+        var subjectCount = subjectVals.length;
+
         var newPass = passInput.val();
+        var confirmPass = confirmPassInput.val();
+
+        // 2. Password length
         validationState.passwordLength = (newPass.length >= 8);
         if (newPass.length > 0 && !validationState.passwordLength) {
             passLengthError.show();
@@ -49,31 +56,29 @@ jQuery(document).ready(function($) {
             passLengthError.hide();
         }
 
-        // 2. Password match
-        var confirmPass = confirmPassInput.val();
+        // 3. Password match
         validationState.passwordMatch = (newPass.length > 0 && newPass === confirmPass);
         if (confirmPass.length > 0 && !validationState.passwordMatch) {
             passMatchError.show();
         } else {
             passMatchError.hide();
         }
-
-        // 3. NEW: Scope validation (Exam OR Subjects)
-        var examVal = examSelect.val();
-        var subjectVals = subjectSelect.val() || [];
-        var subjectCount = subjectVals.length;
-
-        // --- Enforce mutual exclusivity ---
+        
+        // 4. --- THIS IS THE ROBUST MUTUAL EXCLUSIVITY LOGIC ---
         if (examVal !== '') {
-            // If an exam is selected, disable and clear subjects
-            subjectSelect.prop('disabled', true).val(null);
-            subjectError.hide();
+            // An exam is selected.
+            examSelect.prop('disabled', false); // Keep exam enabled (so it can be deselected)
+            subjectSelect.prop('disabled', true).val(null).trigger('qp:update_ui'); // Disable and clear subjects, update UI
+
             validationState.scope = true;
             scopeError.hide();
+            subjectError.hide();
+
         } else if (subjectCount > 0) {
-            // If subjects are selected, disable exam
-            examSelect.prop('disabled', true).val('');
-            
+            // Subject(s) are selected.
+            examSelect.prop('disabled', true).val(''); // Disable and clear exam
+            subjectSelect.prop('disabled', false).trigger('qp:update_ui'); // Keep subjects enabled, update UI (for 5-limit)
+
             // Check subject limit
             if (subjectCount > 5) {
                 subjectError.text('You can select a maximum of 5 subjects.').show();
@@ -81,18 +86,21 @@ jQuery(document).ready(function($) {
             } else {
                 subjectError.hide();
                 validationState.scope = true;
-                scopeError.hide();
             }
+            scopeError.hide();
+
         } else {
-            // If neither is selected, enable both and show error
+            // Neither is selected. Enable both.
             examSelect.prop('disabled', false);
-            subjectSelect.prop('disabled', false);
+            subjectSelect.prop('disabled', false).trigger('qp:update_ui'); // Enable subjects, update UI
+            
             validationState.scope = false;
             scopeError.show(); // Show the main scope error
+            subjectError.hide();
         }
-        // --- End exclusivity ---
+        // --- END ROBUST LOGIC ---
         
-        // 4. Check all conditions
+        // 5. Check all conditions (username and email are set by their own async handlers)
         if (validationState.username && validationState.email && validationState.passwordLength && validationState.passwordMatch && validationState.scope) {
             submitButton.prop('disabled', false).val('Create Account');
         } else {
@@ -228,11 +236,11 @@ jQuery(document).ready(function($) {
     emailInput.on('keyup', function() { validateEmail(false); });
     emailInput.on('blur', function() { validateEmail(true); });
 
-    // --- NEW: Add listeners for new fields ---
+    // --- Add listeners for new fields ---
     passInput.on('keyup', checkFormValidity);
     confirmPassInput.on('keyup', checkFormValidity);
     examSelect.on('change', checkFormValidity);
-    subjectSelect.on('change', checkFormValidity);
+    subjectSelect.on('change', checkFormValidity); // This is the original <select>
 
     // Set initial state of the button on page load
     checkFormValidity();
