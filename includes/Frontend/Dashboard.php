@@ -363,7 +363,8 @@ final class Dashboard {
 			$item_ids_placeholder = implode( ',', array_map( 'absint', $item_ids_in_course ) );
 			$progress_raw         = $wpdb->get_results(
 				$wpdb->prepare(
-					"SELECT item_id, status, result_data FROM $progress_table WHERE user_id = %d AND item_id IN ($item_ids_placeholder)",
+                    // Fetch attempt_count as well
+					"SELECT item_id, status, result_data, attempt_count FROM $progress_table WHERE user_id = %d AND item_id IN ($item_ids_placeholder)",
 					$user_id
 				),
 				OBJECT_K
@@ -381,6 +382,7 @@ final class Dashboard {
 				$progress_data[ $item_id ] = [
 					'status'     => $prog->status,
 					'session_id' => $session_id,
+                    'attempt_count' => $prog->attempt_count
 				];
 			}
 		}
@@ -433,66 +435,105 @@ final class Dashboard {
 								$item_progress   = $progress_data[ $item->item_id ] ?? [
 									'status'     => 'not_started',
 									'session_id' => null,
+                                    'attempt_count' => 0,
 								];
 								$status          = $item_progress['status'];
 								$session_id_attr = $item_progress['session_id'] ? ' data-session-id="' . esc_attr( $item_progress['session_id'] ) . '"' : '';
+                                $attempt_count   = (int) $item_progress['attempt_count'];
 
-                                // --- NEW: Progression Logic ---
+                                // --- Progression Logic ---
                                 $is_locked = false;
                                 if ($is_progressive && !$is_previous_item_complete) {
                                     $is_locked = true;
                                 }
-                                // --- END NEW ---
-
-								$status_icon  = '';
-								$button_text  = 'Start';
-								$button_class = 'qp-button-primary start-course-test-btn';
-                                $button_disabled = $is_locked ? 'disabled' : '';
                                 $row_class = $is_locked ? 'qp-item-locked' : '';
+                                
+                                // --- Button/Icon Logic ---
+                                $status_icon  = '';
+                                $button_html  = ''; // We will build this string
 
-                                // --- NEW: Update icon and button based on lock status ---
                                 if ($is_locked) {
                                     $status_icon  = '<span class="dashicons dashicons-lock" style="color: var(--qp-dashboard-text-light);"></span>';
-                                    $button_text  = 'Locked';
-                                    $button_class = 'qp-button-secondary';
+                                    $button_html = sprintf(
+                                        '<button class="qp-button qp-button-secondary" style="padding: 4px 10px; font-size: 12px;" disabled>%s</button>',
+                                        esc_html__('Locked', 'question-press')
+                                    );
+                                } elseif ( $item->content_type !== 'test_series' ) {
+                                    // Handle non-test items (e.g., lessons)
+                                    $status_icon  = '<span class="dashicons dashicons-text"></span>'; // Or other icon
+                                    $button_html = sprintf(
+                                        '<button class="qp-button qp-button-secondary view-course-content-btn" data-item-id="%d" style="padding: 4px 10px; font-size: 12px;">%s</button>',
+                                        esc_attr($item->item_id),
+                                        esc_html__('View', 'question-press')
+                                    );
                                 } else {
-                                    // Original logic for non-locked items
-								    switch ( $status ) {
-									    case 'completed':
-										    $status_icon  = '<span class="dashicons dashicons-yes-alt" style="color: var(--qp-dashboard-success);"></span>';
-										    $button_text  = 'Review';
-										    $button_class = 'qp-button-secondary view-test-results-btn';
-										    break;
-									    case 'in_progress':
-										    $status_icon  = '<span class="dashicons dashicons-marker" style="color: var(--qp-dashboard-warning-dark);"></span>';
-										    $button_text  = 'Continue';
-										    $button_class = 'qp-button-primary start-course-test-btn';
-										    break;
-									    default: // not_started
-										    $status_icon = '<span class="dashicons dashicons-marker" style="color: var(--qp-dashboard-border);"></span>';
-										    $button_text = 'Start';
-										    $button_class = 'qp-button-primary start-course-test-btn';
-										    break;
-								    }
+                                    // This is a test series item, handle its states
+                                    switch ( $status ) {
+                                        case 'completed':
+                                            $status_icon  = '<span class="dashicons dashicons-yes-alt" style="color: var(--qp-dashboard-success);"></span>';
+                                            
+                                            // 1. Always show the Review button
+                                            $button_html = sprintf(
+                                                '<button class="qp-button qp-button-secondary view-test-results-btn" data-item-id="%d" %s style="padding: 4px 10px; font-size: 12px;">%s</button>',
+                                                esc_attr($item->item_id),
+                                                $session_id_attr,
+                                                esc_html__('Review', 'question-press')
+                                            );
+
+                                            // 2. Conditionally show the Retake button
+                                            $allow_retakes = get_post_meta($course_id, '_qp_course_allow_retakes', true);
+                                            if ($allow_retakes === '1') {
+                                                $retake_limit = absint(get_post_meta($course_id, '_qp_course_retake_limit', true)); // 0 = unlimited
+                                                $can_retake = false;
+                                                $retake_text = esc_html__('Retake', 'question-press');
+
+                                                if ($retake_limit === 0) {
+                                                    $can_retake = true;
+                                                } else {
+                                                    $retakes_left = $retake_limit - $attempt_count;
+                                                    if ($retakes_left > 0) {
+                                                        $can_retake = true;
+                                                        $retake_text = sprintf(esc_html__('Retake (%d left)', 'question-press'), $retakes_left);
+                                                    } else {
+                                                        $retake_text = esc_html__('No Retakes Left', 'question-press');
+                                                    }
+                                                }
+                                                
+                                                $button_html .= sprintf(
+                                                    '<button class="qp-button qp-button-primary start-course-test-btn" data-item-id="%d" style="padding: 4px 10px; font-size: 12px;" %s>%s</button>',
+                                                    esc_attr($item->item_id),
+                                                    $can_retake ? '' : 'disabled',
+                                                    $retake_text
+                                                );
+                                            }
+                                            break;
+                                        case 'in_progress':
+                                            $status_icon  = '<span class="dashicons dashicons-marker" style="color: var(--qp-dashboard-warning-dark);"></span>';
+                                            $button_html = sprintf(
+                                                '<button class="qp-button qp-button-primary start-course-test-btn" data-item-id="%d" style="padding: 4px 10px; font-size: 12px;">%s</button>',
+                                                esc_attr($item->item_id),
+                                                esc_html__('Continue', 'question-press')
+                                            );
+                                            break;
+                                        default: // not_started
+                                            $status_icon = '<span class="dashicons dashicons-marker" style="color: var(--qp-dashboard-border);"></span>';
+                                            $button_html = sprintf(
+                                                '<button class="qp-button qp-button-primary start-course-test-btn" data-item-id="%d" style="padding: 4px 10px; font-size: 12px;">%s</button>',
+                                                esc_attr($item->item_id),
+                                                esc_html__('Start', 'question-press')
+                                            );
+                                            break;
+                                    }
                                 }
-
-								// Adjust button for non-test items
-								if ( $item->content_type !== 'test_series' ) {
-									$button_class    = 'qp-button-secondary view-course-content-btn'; // Generic class for other types
-									$button_text     = $is_locked ? 'Locked' : 'View'; // Use 'View' or 'Locked'
-									$session_id_attr = ''; // No session ID for non-tests
-								}
-                                // --- END NEW ---
-
 								?>
 								<div class="qp-course-item-row <?php echo esc_attr($row_class); ?>" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--qp-dashboard-border-light);">
 									<span class="qp-course-item-link" style="display: flex; align-items: center; gap: 8px;">
-										<?php echo $status_icon; // This now contains the lock icon ?>
+										<?php echo $status_icon; ?>
 										<span style="font-weight: 500;"><?php echo esc_html( $item->title ); ?></span>
 									</span>
-									<button class="qp-button <?php echo esc_attr( $button_class ); ?>" data-item-id="<?php echo esc_attr( $item->item_id ); ?>" <?php echo $session_id_attr; ?> style="padding: 4px 10px; font-size: 12px;" <?php echo $button_disabled; ?>>
-                                        <?php echo esc_html( $button_text ); ?>
-                                    </button>
+                                    <div class="qp-card-actions"> <?php // Wrap buttons in a container for proper spacing ?>
+                                        <?php echo $button_html; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+                                    </div>
 								</div>
 								<?php
 

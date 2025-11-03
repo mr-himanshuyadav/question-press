@@ -322,6 +322,7 @@ class Activator {
         completion_date DATETIME DEFAULT NULL,
         result_data TEXT DEFAULT NULL,
         last_viewed DATETIME DEFAULT NULL,
+        attempt_count INT(11) NOT NULL DEFAULT 0,
         PRIMARY KEY (user_item_id),
         UNIQUE KEY user_item (user_id, item_id),
         KEY user_id (user_id),

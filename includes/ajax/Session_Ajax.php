@@ -1087,9 +1087,45 @@ class Session_Ajax {
         }
         // --- END FIX 2 ---
 
+        // --- NEW: Step 1b - Retake Check ---
+        $progress_table = $wpdb->prefix . 'qp_user_items_progress';
+        $user_progress = $wpdb->get_row($wpdb->prepare(
+            "SELECT status, attempt_count FROM {$progress_table} WHERE user_id = %d AND item_id = %d",
+            $user_id,
+            $item_id
+        ));
+        
+        $is_completed = ($user_progress && $user_progress->status === 'completed');
+
+        if ($is_completed) {
+            $allow_retakes = get_post_meta($course_id, '_qp_course_allow_retakes', true);
+            
+            if ($allow_retakes !== '1') {
+                wp_send_json_error([
+                    'message' => __('Retakes are not allowed for this course.', 'question-press'),
+                    'code' => 'retake_disabled'
+                ]);
+                return;
+            }
+
+            $retake_limit = absint(get_post_meta($course_id, '_qp_course_retake_limit', true)); // 0 = unlimited
+            if ($retake_limit > 0) {
+                // Limit is set, check attempt count
+                $current_attempts = (int) $user_progress->attempt_count;
+                if ($current_attempts >= $retake_limit) {
+                    wp_send_json_error([
+                        'message' => __('You have no retakes left for this test.', 'question-press'),
+                        'code' => 'no_retakes_left'
+                    ]);
+                    return;
+                }
+            }
+            // If we are here, retakes are allowed (either unlimited or user has attempts left)
+        }
+
         // --- NEW: Step 2 - Progressive Enrollment Check ---
         $progression_mode = get_post_meta($course_id, '_qp_course_progression_mode', true);
-        if ($progression_mode === 'progressive') {
+        if ($progression_mode === 'progressive' && !$is_completed) {
             
             // 1. Get all items in this course, in their correct order
             $sections_table = $wpdb->prefix . 'qp_course_sections';
