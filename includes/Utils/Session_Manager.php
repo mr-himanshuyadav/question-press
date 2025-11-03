@@ -146,7 +146,7 @@ class Session_Manager extends DB { // <-- Extend DB to get self::$wpdb
 				   AND status = 'active'
 				   AND (expiry_date IS NULL OR expiry_date > %s)
 				   AND (remaining_attempts IS NULL OR remaining_attempts > 0)
-				 ORDER BY remaining_attempts ASC", // Process finite plans first (lowest attempts)
+				 ORDER BY expiry_date ASC, remaining_attempts ASC", // Prioritize expiring plans first
 				$user_id,
 				current_time('mysql')
 			));

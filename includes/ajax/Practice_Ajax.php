@@ -246,7 +246,7 @@ class Practice_Ajax
                 "SELECT entitlement_id, remaining_attempts
              FROM {$entitlements_table}
              WHERE user_id = %d AND status = 'active' AND (expiry_date IS NULL OR expiry_date > %s)
-             ORDER BY remaining_attempts ASC, expiry_date ASC",
+             ORDER BY expiry_date ASC, remaining_attempts ASC",
                 $user_id,
                 $current_time
             ));
