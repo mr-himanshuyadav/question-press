@@ -22,6 +22,7 @@ class Export_Page
 
     public static function render()
     {
+        self::handle_export_submission();
         global $wpdb;
         $term_table = $wpdb->prefix . 'qp_terms';
         $tax_table = $wpdb->prefix . 'qp_taxonomies';
