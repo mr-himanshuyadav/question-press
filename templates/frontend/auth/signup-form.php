@@ -83,7 +83,8 @@ if ( ! defined( 'ABSPATH' ) ) {
             
             <div class="qp-form-group">
                 <label for="qp_reg_subject"><?php esc_html_e( 'Select Subjects (up to 5)', 'question-press' ); ?></label>
-                <select name="qp_reg_subject[]" id="qp_reg_subject" multiple>
+                <select name="qp_reg_subject[]" id="qp_reg_subject" multiple class="qp-custom-multi-select">
+                    <option value=""><?php esc_html_e( '— Select Subjects —', 'question-press' ); ?></option>
                     <?php foreach ( $subjects as $subject ) : ?>
                         <option value="<?php echo esc_attr( $subject->term_id ); ?>"><?php echo esc_html( $subject->name ); ?></option>
                     <?php endforeach; ?>

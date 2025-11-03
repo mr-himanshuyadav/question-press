@@ -77,9 +77,13 @@ class Assets {
 
             // --- ALSO: Load Auth JS only on the signup page ---
             if (has_shortcode($post->post_content, 'question_press_signup')) {
+                // Load the main auth validation script
                 $auth_js_version = file_exists( QP_PLUGIN_PATH . 'assets/js/auth.js' ) ? filemtime( QP_PLUGIN_PATH . 'assets/js/auth.js' ) : QP_PLUGIN_VERSION;
-                // 'qp-utils-script' should already be enqueued and localized, making qp_ajax_object available
                 wp_enqueue_script('qp-auth-script', QP_ASSETS_URL . 'js/auth.js', ['jquery', 'qp-utils-script'], $auth_js_version, true);
+
+                // --- NEW: Load the multi-select dropdown script ---
+                $multi_select_js_version = file_exists( QP_PLUGIN_PATH . 'assets/js/multi-select-dropdown.js' ) ? filemtime( QP_PLUGIN_PATH . 'assets/js/multi-select-dropdown.js' ) : QP_PLUGIN_VERSION;
+                wp_enqueue_script('qp-multi-select-dropdown-script', QP_ASSETS_URL . 'js/multi-select-dropdown.js', ['jquery'], $multi_select_js_version, true);
             }
         }
         wp_enqueue_script('sweetalert2', 'https://cdn.jsdelivr.net/npm/sweetalert2@11', [], null, true);

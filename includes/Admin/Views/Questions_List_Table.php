@@ -155,7 +155,7 @@ class Questions_List_Table extends WP_List_Table
         if ($labels) {
             echo '<span style="margin-left: 5px;"></span>'; // Add a small gap
             echo '<label for="labels_to_apply" class="screen-reader-text">Add labels to selected questions</label>';
-            echo '<select name="labels_to_apply[]" id="labels_to_apply" multiple="multiple" style="min-width: 180px;">';
+            echo '<select name="labels_to_apply[]" id="labels_to_apply" multiple="multiple" style="min-width: 180px;" class="qp-custom-multi-select">';
             echo '<option value="">— Add Labels —</option>';
             foreach ($labels as $label) {
                 printf('<option value="%s">%s</option>', esc_attr($label->term_id), esc_html($label->name));
@@ -270,7 +270,7 @@ class Questions_List_Table extends WP_List_Table
             ));
 
             $current_labels = isset($_REQUEST['filter_by_label']) ? array_map('absint', (array)$_REQUEST['filter_by_label']) : [];
-            echo '<select name="filter_by_label[]" multiple="multiple" id="qp_label_filter_select" style="min-width: 200px; margin-right: 5px;">';
+            echo '<select name="filter_by_label[]" multiple="multiple" id="qp_label_filter_select" style="min-width: 200px; margin-right: 5px;" class="qp-custom-multi-select">';
             echo '<option value="" ' . (empty($current_labels) ? 'selected' : '') . '>Filter by Label(s)</option>';
             foreach ($labels as $label) {
                 printf('<option value="%s" %s>%s</option>', esc_attr($label->term_id), selected(in_array($label->term_id, $current_labels), true, false), esc_html($label->name));
