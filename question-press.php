@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       Question Press
  * Description:       A complete plugin for creating, managing, and practicing questions.
- * Version:           4.1.6
+ * Version:           4.1.7
  * Author:            Himanshu
  * Text Domain:       question-press
  * Domain Path:       /languages
