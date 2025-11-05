@@ -10,6 +10,10 @@
 if ( ! defined( 'ABSPATH' ) ) {
     exit; // Exit if accessed directly.
 }
+
+// Get the OTP generation time from the session
+// FIX: Use \time() to call the global PHP function
+$otp_time = $_SESSION['qp_signup_data']['otp_time'] ?? \time();
 ?>
 <form id="qp-signup-form-otp" class="qp-signup-form" method="post">
     <input type="hidden" name="action" value="qp_verify_otp">
@@ -26,12 +30,12 @@ if ( ! defined( 'ABSPATH' ) ) {
     </div>
 
     <div class="qp-form-group qp-action-buttons" style="display: flex; flex-direction: row; gap: 10px;">
-        <button type="submit" name="qp_signup_submit_back" class="qp-button qp-button-secondary" style="flex: 1;"><?php esc_html_e( 'Back', 'question-press' ); ?></button>
+        <button type="submit" name="qp_signup_submit_back" class="qp-button qp-button-secondary" style="flex: 1;" formnovalidate><?php esc_html_e( 'Back', 'question-press' ); ?></button>
         <input type="submit" name="qp_signup_submit_otp" value="<?php esc_attr_e( 'Verify & Create Account', 'question-press' ); ?>" class="qp-button qp-button-primary" style="flex: 2;">
     </div>
 
     <div class="qp-resend-otp-wrapper" style="text-align: center; margin-top: 1.5rem;">
-        <a href="#" id="qp-resend-otp-link"><?php esc_html_e( 'Resend Code', 'question-press' ); ?></a>
+        <a href="javascript:void(0);" id="qp-resend-otp-link" data-otp-time="<?php echo esc_attr( $otp_time ); ?>"><?php esc_html_e( 'Resend Code', 'question-press' ); ?></a>
         <span id="qp-resend-otp-message" style="display: none; color: #50575e;"></span>
     </div>
 </form>
