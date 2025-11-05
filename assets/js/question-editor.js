@@ -304,7 +304,9 @@ function updateSections() {
         // Reset all labels in the dropdown
         newBlock.find('.qp-dropdown-panel input[type="checkbox"]').prop('checked', false);
         newBlock.find('.qp-dropdown-toggle span:first-child').text('Select Labels');
-             newBlock.find('.qp-options-and-labels-wrapper').hide();
+        
+        // *** MODIFICATION 1: The following line has been DELETED ***
+        // newBlock.find('.qp-options-and-labels-wrapper').hide(); 
 
         $('#qp-question-blocks-container').append(newBlock);
         reindexQuestionBlocks();
@@ -379,10 +381,10 @@ function updateSections() {
 
     // --- NEW: SweetAlert Validation on Submit ---
     $('form[method="post"]').on('submit', function(e) {
-        // Only run this validation if the options section is visible on the page.
-        if ($('.qp-option-row').length === 0) {
-            return; // This is Step 1, so we allow submission without validation.
-        }
+        // *** MODIFICATION: This check is no longer needed as options are always present ***
+        // if ($('.qp-option-row').length === 0) {
+        //     return;
+        // }
 
         var allQuestionsValid = true;
         
@@ -592,7 +594,8 @@ function updateSections() {
                         // User was creating, show redirect message and go to the new URL.
                         Swal.fire({
                             title: 'Success!',
-                            text: 'Your changes have been saved. Redirecting to Step 2...',
+                            // *** MODIFICATION 2: Changed text from "Redirecting to Step 2..." ***
+                            text: 'Your changes have been saved.',
                             icon: 'success',
                             timer: 1500,
                             showConfirmButton: false

@@ -69,20 +69,13 @@ if ( ! defined( 'ABSPATH' ) ) {
         <?php wp_nonce_field('qp_save_question_group_nonce'); ?>
         <input type="hidden" name="group_id" value="<?php echo esc_attr($group_id); ?>">
 
-        <?php if (!$is_editing) : ?>
-            <div class="notice notice-info inline">
-                <p><b>Step 1 of 2:</b> Enter the question text and categorization details. You will add options and labels in the next step.</p>
-            </div>
-        <?php elseif ($is_editing && $has_draft_question) : // Changed from group_status ?>
-            <div class="notice notice-warning inline">
-                <p><b>Step 2 of 2:</b> This question is a draft. Please add options for each question and select a correct answer to publish it.</p>
-            </div>
-        <?php endif; ?>
+        <?php // *** MODIFICATION 1: Removed the "Step 1 of 2" / "Step 2 of 2" notices *** ?>
 
         <div id="poststuff">
             <div id="post-body" class="metabox-holder columns-2">
                 <div id="post-body-content">
-                    <?php if ($is_editing && $has_draft_question) : ?>
+                    <?php // *** MODIFICATION 2: Changed to show for new groups as well *** ?>
+                    <?php if ($has_draft_question) : ?>
                         <div class="notice notice-warning inline" style="margin: 0; margin-bottom: 5px;">
                             <p><strong>Draft Status:</strong> This group contains one or more questions that are still drafts (missing a correct answer). Draft questions will not appear on the frontend until they are completed and published.</p>
                         </div>
@@ -234,43 +227,43 @@ if ( ! defined( 'ABSPATH' ) ) {
                                         ]
                                     );
                                     ?>
-                                    <?php if ($is_editing) : ?>
-                                        <div class="qp-options-and-labels-wrapper">
-                                            <hr>
-                                            <p><strong>Options (Select the radio button for the correct answer)</strong></p>
-                                            <div class="qp-options-grid-container">
-                                                <?php
-                                                // Always show at least 4 options
-                                                $options_to_show = 4;
-                                                // If a 5th option exists and has text, make sure we show it
-                                                if (isset($question->options[4]) && !empty($question->options[4]->option_text)) {
-                                                    $options_to_show = 5;
-                                                }
-                                                // If a 6th option exists and has text, make sure we show it
-                                                if (isset($question->options[5]) && !empty($question->options[5]->option_text)) {
-                                                    $options_to_show = 6;
-                                                }
+                                    <?php // *** MODIFICATION 3: Removed the "if ($is_editing)" wrapper *** ?>
+                                    <div class="qp-options-and-labels-wrapper">
+                                        <hr>
+                                        <p><strong>Options (Select the radio button for the correct answer)</strong></p>
+                                        <div class="qp-options-grid-container">
+                                            <?php
+                                            // Always show at least 4 options
+                                            $options_to_show = 4;
+                                            // If a 5th option exists and has text, make sure we show it
+                                            if (isset($question->options[4]) && !empty($question->options[4]->option_text)) {
+                                                $options_to_show = 5;
+                                            }
+                                            // If a 6th option exists and has text, make sure we show it
+                                            if (isset($question->options[5]) && !empty($question->options[5]->option_text)) {
+                                                $options_to_show = 6;
+                                            }
 
-                                                for ($i = 0; $i < $options_to_show; $i++) :
-                                                    $option = isset($question->options[$i]) ? $question->options[$i] : null;
-                                                    $option_id_value = $option ? esc_attr($option->option_id) : 'new_' . $i;
-                                                    $is_correct = $option ? $option->is_correct : false;
-                                                ?>
-                                                    <div class="qp-option-row">
-                                                        <input type="radio" name="questions[<?php echo $q_index; ?>][correct_option_id]" value="<?php echo $option_id_value; ?>" <?php checked($is_correct); ?>>
-                                                        <input type="hidden" name="questions[<?php echo $q_index; ?>][option_ids][]" value="<?php echo $option ? esc_attr($option->option_id) : '0'; ?>">
-                                                        <input type="text" name="questions[<?php echo $q_index; ?>][options][]" class="option-text-input" value="<?php echo $option ? esc_attr($option->option_text) : ''; ?>" placeholder="Option <?php echo $i + 1; ?>">
-                                                        <?php if ($option && $option->option_id): ?>
-                                                            <small class="option-id-display">ID: <?php echo esc_html($option->option_id); ?></small>
-                                                        <?php endif; ?>
-                                                    </div>
-                                                <?php endfor; ?>
-                                            </div>
-                                            <div class="qp-options-actions">
-                                                <button type="button" class="button button-secondary add-new-option-btn" <?php if ($options_to_show >= 6) echo 'style="display:none;"'; ?>>+ Add Option</button>
-                                            </div>
+                                            for ($i = 0; $i < $options_to_show; $i++) :
+                                                $option = isset($question->options[$i]) ? $question->options[$i] : null;
+                                                $option_id_value = $option ? esc_attr($option->option_id) : 'new_' . $i;
+                                                $is_correct = $option ? $option->is_correct : false;
+                                            ?>
+                                                <div class="qp-option-row">
+                                                    <input type="radio" name="questions[<?php echo $q_index; ?>][correct_option_id]" value="<?php echo $option_id_value; ?>" <?php checked($is_correct); ?>>
+                                                    <input type="hidden" name="questions[<?php echo $q_index; ?>][option_ids][]" value="<?php echo $option ? esc_attr($option->option_id) : '0'; ?>">
+                                                    <input type="text" name="questions[<?php echo $q_index; ?>][options][]" class="option-text-input" value="<?php echo $option ? esc_attr($option->option_text) : ''; ?>" placeholder="Option <?php echo $i + 1; ?>">
+                                                    <?php if ($option && $option->option_id): ?>
+                                                        <small class="option-id-display">ID: <?php echo esc_html($option->option_id); ?></small>
+                                                    <?php endif; ?>
+                                                </div>
+                                            <?php endfor; ?>
                                         </div>
-                                    <?php endif; ?>
+                                        <div class="qp-options-actions">
+                                            <button type="button" class="button button-secondary add-new-option-btn" <?php if ($options_to_show >= 6) echo 'style="display:none;"'; ?>>+ Add Option</button>
+                                        </div>
+                                    </div>
+                                    <?php // *** End of removed "if ($is_editing)" wrapper *** ?>
                                 </div>
                             </div>
                         <?php endforeach; ?>
@@ -281,7 +274,8 @@ if ( ! defined( 'ABSPATH' ) ) {
                 <div id="postbox-container-1" class="postbox-container">
                     <div class="postbox">
                         <div id="major-publishing-actions" style="text-align: center;">
-                            <button type="button" name="save_group" class="button button-primary button-large" id="qp-save-group-btn"><?php echo $is_editing ? 'Update Group' : 'Save Draft & Add Options'; ?></button>
+                            <?php // *** MODIFICATION 4: Changed button text for new groups *** ?>
+                            <button type="button" name="save_group" class="button button-primary button-large" id="qp-save-group-btn"><?php echo $is_editing ? 'Update Group' : 'Save Group'; ?></button>
                         </div>
 
                     </div>
