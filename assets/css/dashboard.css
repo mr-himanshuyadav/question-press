@@ -49,7 +49,7 @@
 
 	/* Layout */
 	--qp-dashboard-sidebar-width: 250px;
-	--qp-dashboard-content-padding: 2rem;
+	--qp-dashboard-content-padding: 0.8rem;
 	--qp-dashboard-mobile-padding: 1rem;
 }
 
@@ -567,7 +567,7 @@ ul.qp-review-list li:last-child { border-bottom: none; }
 /* --- Mobile Responsiveness --- */
 @media (max-width: 782px) {
     .qp-main-content {
-        padding-top: calc(var(--qp-dashboard-content-padding) + 50px);
+        padding-top: calc(var(--qp-dashboard-content-padding) + 10px);
 	margin-left: 0px;
 }
     .qp-sidebar {
@@ -630,7 +630,7 @@ ul.qp-review-list li:last-child { border-bottom: none; }
 
      /* Active sessions card on mobile */
      .qp-active-session-card { flex-direction: column; align-items: flex-start; }
-     .qp-card-actions { width: 100%; margin-top: 0.5rem; }
+     .qp-card-actions { margin-top: 0.5rem; }
      .qp-card-actions .qp-button { flex-grow: 1; text-align: center; }
 
      /* Review list actions on mobile */
@@ -870,6 +870,10 @@ ul.qp-review-list li {
 .qp-course-item-row .dashicons {
     font-size: 18px;
     line-height: 1;
+}
+
+.qp-course-item-row .qp-card-actions{
+    width: auto;
 }
 
 /* =================================================================

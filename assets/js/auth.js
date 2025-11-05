@@ -1,8 +1,9 @@
 jQuery(document).ready(function($) {
     var signupForm = $('#qp-signup-form');
-    if (!signupForm.length) {
-        return; // Exit if not on the signup page
-    }
+    // We will check for the OTP form later, so don't exit here
+    // if (!signupForm.length) {
+    //     return; 
+    // }
 
     // --- Get all elements ---
     var usernameInput = $('#qp_reg_username');
@@ -40,6 +41,9 @@ jQuery(document).ready(function($) {
      * Checks the complete form validity and enables/disables the submit button.
      */
     function checkFormValidity() {
+        // This function only runs if the signupForm exists
+        if (!signupForm.length) return;
+
         // 1. Get all current values
         var examVal = examSelect.val();
         var subjectVals = subjectSelect.val() || [];
@@ -230,18 +234,122 @@ jQuery(document).ready(function($) {
     }
 
     // --- Bind the event listeners ---
-    usernameInput.on('keyup', function() { validateUsername(false); });
-    usernameInput.on('blur', function() { validateUsername(true); });
+    if (signupForm.length) {
+        usernameInput.on('keyup', function() { validateUsername(false); });
+        usernameInput.on('blur', function() { validateUsername(true); });
 
-    emailInput.on('keyup', function() { validateEmail(false); });
-    emailInput.on('blur', function() { validateEmail(true); });
+        emailInput.on('keyup', function() { validateEmail(false); });
+        emailInput.on('blur', function() { validateEmail(true); });
 
-    // --- Add listeners for new fields ---
-    passInput.on('keyup', checkFormValidity);
-    confirmPassInput.on('keyup', checkFormValidity);
-    examSelect.on('change', checkFormValidity);
-    subjectSelect.on('change', checkFormValidity); // This is the original <select>
+        // --- Add listeners for new fields ---
+        passInput.on('keyup', checkFormValidity);
+        confirmPassInput.on('keyup', checkFormValidity);
+        examSelect.on('change', checkFormValidity);
+        subjectSelect.on('change', checkFormValidity); // This is the original <select>
 
-    // Set initial state of the button on page load
-    checkFormValidity();
-});
+        // Set initial state of the button on page load
+        checkFormValidity();
+    }
+
+
+    //
+    // --- NEW CODE FOR OTP VERIFICATION FORM ---
+    //
+    var otpForm = $('#qp-signup-form-otp');
+    if (otpForm.length) {
+        var resendLink = $('#qp-resend-otp-link');
+        var resendMessage = $('#qp-resend-otp-message');
+        var timerInterval = null;
+        var countdown = 60; // 1 minute timer
+
+        /**
+         * Starts the 60-second countdown timer.
+         */
+        function startTimer() {
+            // Get the last OTP time from the link's data attribute
+            var otpGenTime = parseInt(resendLink.data('otp-time'), 10);
+            var now = Math.floor(Date.now() / 1000);
+            var secondsElapsed = now - otpGenTime;
+            
+            var remainingTime = countdown - secondsElapsed;
+
+            // Clear any existing timer
+            if (timerInterval) {
+                clearInterval(timerInterval);
+            }
+
+            resendLink.hide();
+            resendMessage.show().css('display', 'inline'); // Use inline display
+            resendLink.css('pointer-events', 'none'); // Disable click
+
+            if (remainingTime <= 0) {
+                // Time has already elapsed, enable the link immediately
+                resendMessage.hide();
+                resendLink.text('Resend Code').show();
+                resendLink.css('pointer-events', 'auto');
+            } else {
+                // Start the countdown
+                resendMessage.text('Resend in ' + remainingTime + 's');
+                
+                timerInterval = setInterval(function() {
+                    remainingTime--;
+                    resendMessage.text('Resend in ' + remainingTime + 's');
+
+                    if (remainingTime <= 0) {
+                        clearInterval(timerInterval);
+                        resendMessage.hide();
+                        resendLink.text('Resend Code').show();
+                        resendLink.css('pointer-events', 'auto'); // Re-enable click
+                    }
+                }, 1000);
+            }
+        }
+
+        // Click handler for the resend link
+        resendLink.on('click', function(e) {
+            e.preventDefault();
+
+            // Prevent double-clicks
+            if (resendLink.css('pointer-events') === 'none') {
+                return;
+            }
+
+            resendLink.css('pointer-events', 'none');
+            resendLink.hide();
+            resendMessage.text('Sending...').show().css('display', 'inline');
+
+            // Make an AJAX call to resend the OTP
+            // This AJAX action 'qp_resend_registration_otp' already exists
+            // in your Practice_Ajax.php file
+            $.ajax({
+                url: qp_ajax_object.ajax_url,
+                type: 'POST',
+                data: {
+                    action: 'qp_resend_registration_otp'
+                },
+                success: function(response) {
+                    if (response.success) {
+                        // On success, update the message, set the new time, and restart the timer
+                        resendMessage.text(response.data.message).show().css('display', 'inline');
+                        // We get the current time from JS, which is close enough
+                        resendLink.data('otp-time', Math.floor(Date.now() / 1000));
+                        // Small delay before restarting timer to let user read message
+                        setTimeout(startTimer, 2000);
+                    } else {
+                        // On failure, show the error and re-enable the link
+                        resendMessage.text(response.data.message).show().css('display', 'inline');
+                        resendLink.show().css('pointer-events', 'auto');
+                    }
+                },
+                error: function() {
+                    resendMessage.text('An error occurred. Please try again.').show().css('display', 'inline');
+                    resendLink.show().css('pointer-events', 'auto');
+                }
+            });
+        });
+
+        // Start the timer on page load
+        startTimer();
+    }
+
+}); // End of jQuery(document).ready
