@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       Question Press
  * Description:       A complete plugin for creating, managing, and practicing questions.
- * Version:           4.1.5
+ * Version:           4.1.6
  * Author:            Himanshu
  * Text Domain:       question-press
  * Domain Path:       /languages
@@ -29,23 +29,24 @@ if ( file_exists( plugin_dir_path( __FILE__ ) . 'vendor/autoload.php' ) ) {
 use YahnisElsts\PluginUpdateChecker\v5\PucFactory;
 
 try {
+    //
+    // STEP 2: Use ::github() to explicitly create a GitHub checker
+    //
     $myUpdateChecker = PucFactory::buildUpdateChecker(
-        'https://github.com/mr-himanshuyadav/question-press/', // Your GitHub repo URL
-        __FILE__, // Path to the main plugin file
-        'question-press' // The plugin's slug (from your file name)
+        'https://github.com/mr-himanshuyadav/question-press/',
+        __FILE__,
+        'question-press'
     );
 
-    // (Optional) If your repo is PRIVATE, you MUST set an authentication token.
-    // Create a "Fine-Grained Personal Access Token" on GitHub with "Contents: Read-only" permission.
+    //
+    // STEP 3: Add your authentication token (for private repos)
+    //
     $myUpdateChecker->setAuthentication('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');
 
-    // This is the CRITICAL part for the vendor/ folder.
-    // It tells the checker to download the 'question-press.zip' asset from a release,
-    // not the default "Source code (zip)". We will create this file in Step 2.
-    // $myUpdateChecker->setReleaseAsset('question-press.zip');
-
-    // (Optional) You can set it to check a specific branch, like 'main'
-    $myUpdateChecker->setBranch('feat/update-from-github'); 
+    //
+    // STEP 5: Make sure setBranch is commented out, as it overrides setReleaseAsset
+    //
+    // $myUpdateChecker->setBranch('feat/update-from-github'); // <-- DO NOT USE THIS
 
 } catch (Exception $e) {
     // Handle potential error, e.g., log it
