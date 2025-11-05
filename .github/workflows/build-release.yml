@@ -1,0 +1,52 @@
+name: Build Plugin Release ZIP
+
+on:
+  release:
+    types: [published] # This workflow runs when you publish a new "Release" on GitHub
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      # 1. Check out your repository's code
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. Set up PHP
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '7.4' # Matches your composer.json 'require'
+          extensions: mbstring, zip
+          tools: composer
+
+      # 3. Install Composer dependencies (including the --no-dev flag)
+      - name: Install Composer dependencies
+        run: composer install --no-dev --optimize-autoloader
+
+      # 4. Create the final ZIP file
+      - name: Build plugin ZIP
+        run: |
+          # Define the name of the ZIP file
+          ZIP_FILE="question-press.zip"
+
+          # Create the zip file, excluding development files
+          zip -r $ZIP_FILE . \
+            -x ".git/*" \
+            -x ".github/*" \
+            -x ".gitignore" \
+            -x "composer.json" \
+            -x "composer.lock" \
+            -x "README.md" \
+            -x "*.dist"
+
+      # 5. Attach the ZIP file as an asset to the GitHub Release
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./question-press.zip
+          asset_name: question-press.zip
+          asset_content_type: application/zip
