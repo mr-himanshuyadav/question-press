@@ -14,8 +14,19 @@ if (isset($options['delete_on_uninstall']) && $options['delete_on_uninstall'] ==
 
     global $wpdb;
 
-    $tables = [
-        // Old Tables (for cleanup during uninstall)
+    // Get all QP tables dynamically
+    $tables = $wpdb->get_col( $wpdb->prepare(
+        "SHOW TABLES LIKE %s",
+        $wpdb->prefix . 'qp_%'
+    ) );
+
+    // Drop each table
+    foreach ($tables as $table) {
+        $wpdb->query("DROP TABLE IF EXISTS $table");
+    }
+    
+    // Also drop the old tables just in case they are still around
+    $old_tables = [
         $wpdb->prefix . 'qp_subjects',
         $wpdb->prefix . 'qp_labels',
         $wpdb->prefix . 'qp_topics',
@@ -24,34 +35,37 @@ if (isset($options['delete_on_uninstall']) && $options['delete_on_uninstall'] ==
         $wpdb->prefix . 'qp_sources',
         $wpdb->prefix . 'qp_source_sections',
         $wpdb->prefix . 'qp_question_labels',
-        // Core Tables
-        $wpdb->prefix . 'qp_question_groups',
-        $wpdb->prefix . 'qp_questions',
-        $wpdb->prefix . 'qp_options',
-        // User Data Tables
-        $wpdb->prefix . 'qp_user_sessions',
-        $wpdb->prefix . 'qp_session_pauses',
-        $wpdb->prefix . 'qp_user_attempts',
-        $wpdb->prefix . 'qp_revision_attempts',
-        $wpdb->prefix . 'qp_review_later',
-        // Reporting & Logging Tables
-        $wpdb->prefix . 'qp_logs',
         $wpdb->prefix . 'qp_report_reasons',
-        $wpdb->prefix . 'qp_question_reports',
-        // New Taxonomy Tables
-        $wpdb->prefix . 'qp_taxonomies',
-        $wpdb->prefix . 'qp_terms',
-        $wpdb->prefix . 'qp_term_relationships',
-        $wpdb->prefix . 'qp_term_meta',
     ];
-
-    // Drop each table
-    foreach ($tables as $table) {
+    foreach ($old_tables as $table) {
         $wpdb->query("DROP TABLE IF EXISTS $table");
     }
 
     // Delete plugin options from the options table
     delete_option('qp_settings');
     delete_option('qp_jwt_secret_key');
-    delete_option('widget_qp_search_widget'); // Example of widget data
+    delete_option('qp_auto_backup_schedule');
+    
+    // Delete custom CPTs and their meta
+    $post_types_to_delete = ['qp_course', 'qp_plan'];
+    foreach ($post_types_to_delete as $post_type) {
+        $posts = get_posts([
+            'post_type' => $post_type,
+            'numberposts' => -1,
+            'post_status' => 'any',
+            'fields' => 'ids'
+        ]);
+        if ($posts) {
+            foreach ($posts as $post_id) {
+                wp_delete_post($post_id, true); // true = force delete
+            }
+        }
+    }
+    
+    // Clear cron jobs
+    wp_clear_scheduled_hook('qp_check_entitlement_expiration_hook');
+    wp_clear_scheduled_hook('qp_check_course_expiration_hook');
+    wp_clear_scheduled_hook('qp_cleanup_abandoned_sessions_event');
+    wp_clear_scheduled_hook('qp_scheduled_backup_hook');
+
 }
