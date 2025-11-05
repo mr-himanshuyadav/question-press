@@ -26,7 +26,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     </div>
 
     <div class="qp-form-group qp-action-buttons" style="display: flex; flex-direction: row; gap: 10px;">
-        <button type="submit" name="qp_signup_submit_back" class="qp-button qp-button-secondary" style="flex: 1;"><?php esc_html_e( 'Back', 'question-press' ); ?></button>
+        <button type="submit" name="qp_signup_submit_back" class="qp-button qp-button-secondary" style="flex: 1;" formnovalidate><?php esc_html_e( 'Back', 'question-press' ); ?></button>
         <input type="submit" name="qp_signup_submit_otp" value="<?php esc_attr_e( 'Verify & Create Account', 'question-press' ); ?>" class="qp-button qp-button-primary" style="flex: 2;">
     </div>
 
