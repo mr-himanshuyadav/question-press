@@ -113,7 +113,7 @@ jQuery(document).ready(function($) {
     }
 
     /**
-     * Reusable function to validate the username. (Unchanged)
+     * Reusable function to validate the username. (MODIFIED)
      */
     function validateUsername(isImmediate) {
         clearTimeout(usernameTimer);
@@ -127,9 +127,22 @@ jQuery(document).ready(function($) {
         usernameError.hide();
         validationState.username = false; // Set to invalid during check
 
+        // --- NEW: Regex check for standards ---
+        var usernameRegex = /^[a-z0-9]+$/;
+        if (username.length > 0 && !usernameRegex.test(username)) {
+            usernameIcon.removeClass('qp-loading');
+            usernameError.text('Only lowercase letters and numbers allowed.').show();
+            checkFormValidity();
+            return;
+        }
+        // --- END NEW ---
+
         if (username.length < 4) {
             usernameIcon.removeClass('qp-loading');
-            usernameError.text('Must be at least 4 characters.').show();
+            // Only show length error if user has typed
+            if (username.length > 0) {
+                 usernameError.text('Must be at least 4 characters.').show();
+            }
             checkFormValidity();
             return;
         }
@@ -235,6 +248,16 @@ jQuery(document).ready(function($) {
 
     // --- Bind the event listeners ---
     if (signupForm.length) {
+        // --- NEW: Real-time username input filter ---
+        usernameInput.on('input', function() {
+            var value = $(this).val();
+            // 1. Convert to lowercase
+            // 2. Replace anything that is NOT a-z or 0-9 with an empty string
+            var sanitized = value.toLowerCase().replace(/[^a-z0-9]/g, '');
+            $(this).val(sanitized);
+        });
+        // --- END NEW ---
+
         usernameInput.on('keyup', function() { validateUsername(false); });
         usernameInput.on('blur', function() { validateUsername(true); });
 
