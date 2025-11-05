@@ -37,7 +37,7 @@ try {
 
     // (Optional) If your repo is PRIVATE, you MUST set an authentication token.
     // Create a "Fine-Grained Personal Access Token" on GitHub with "Contents: Read-only" permission.
-    // $myUpdateChecker->setAuthentication('YOUR_GITHUB_TOKEN_HERE');
+    $myUpdateChecker->setAuthentication('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');
 
     // This is the CRITICAL part for the vendor/ folder.
     // It tells the checker to download the 'question-press.zip' asset from a release,
@@ -45,7 +45,7 @@ try {
     // $myUpdateChecker->setReleaseAsset('question-press.zip');
 
     // (Optional) You can set it to check a specific branch, like 'main'
-    // $myUpdateChecker->setBranch('main'); 
+    $myUpdateChecker->setBranch('feat/update-from-github'); 
 
 } catch (Exception $e) {
     // Handle potential error, e.g., log it
