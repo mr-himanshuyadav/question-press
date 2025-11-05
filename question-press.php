@@ -42,7 +42,7 @@ try {
     // This is the CRITICAL part for the vendor/ folder.
     // It tells the checker to download the 'question-press.zip' asset from a release,
     // not the default "Source code (zip)". We will create this file in Step 2.
-    $myUpdateChecker->setReleaseAsset('question-press.zip');
+    // $myUpdateChecker->setReleaseAsset('question-press.zip');
 
     // (Optional) You can set it to check a specific branch, like 'main'
     // $myUpdateChecker->setBranch('main'); 
