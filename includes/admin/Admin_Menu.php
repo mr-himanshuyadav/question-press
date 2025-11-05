@@ -100,7 +100,7 @@ class Admin_Menu {
 
 		// Hidden pages (Callbacks still global or existing global classes)
 		add_submenu_page(
-			null,                           // No parent menu item shown
+			(string)null,                           // No parent menu item shown
 			'Edit Question',                // Page title
 			'Edit Question',                // Menu title (not shown)
 			'manage_options',               // Capability
@@ -108,7 +108,7 @@ class Admin_Menu {
 			[Question_Editor_Page::class, 'render'] // Callback
 		);
 		add_submenu_page(
-			null,
+			(string)null,
 			'Merge Terms',
 			'Merge Terms',
 			'manage_options',

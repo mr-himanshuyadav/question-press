@@ -1,0 +1,55 @@
+name: Build Plugin Release ZIP
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    # --- ADD THIS BLOCK ---
+    permissions:
+      contents: write
+    # ----------------------
+      
+    steps:
+      # 1. Check out your repository's code
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. Set up PHP
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '7.4'
+          extensions: mbstring, zip
+          tools: composer
+
+      # 3. Install Composer dependencies
+      - name: Install Composer dependencies
+        run: composer install --no-dev --optimize-autoloader
+
+      # 4. Create the final ZIP file
+      - name: Build plugin ZIP
+        run: |
+          ZIP_FILE="question-press.zip"
+          zip -r $ZIP_FILE . \
+            -x ".git/*" \
+            -x ".github/*" \
+            -x ".gitignore" \
+            -x "composer.json" \
+            -x "composer.lock" \
+            -x "README.md" \
+            -x "*.dist"
+
+      # 5. Attach the ZIP file as an asset
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./question-press.zip
+          asset_name: question-press.zip
+          asset_content_type: application/zip
