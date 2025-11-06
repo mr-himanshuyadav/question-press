@@ -31,7 +31,7 @@ class Importer {
         $temp_dir = trailingslashit($upload_dir['basedir']) . 'qp_temp_import_' . time();
         wp_mkdir_p($temp_dir);
 
-        $zip = new ZipArchive;
+        $zip = new \ZipArchive;
         if ($zip->open($file_path) === TRUE) {
             $zip->extractTo($temp_dir);
             $zip->close();
@@ -248,8 +248,8 @@ class Importer {
 
     private function cleanup($dir) {
         if (!is_dir($dir)) return;
-        $it = new RecursiveDirectoryIterator($dir, RecursiveDirectoryIterator::SKIP_DOTS);
-        $files = new RecursiveIteratorIterator($it, RecursiveIteratorIterator::CHILD_FIRST);
+        $it = new \RecursiveDirectoryIterator($dir, \RecursiveDirectoryIterator::SKIP_DOTS);
+        $files = new \RecursiveIteratorIterator($it, \RecursiveIteratorIterator::CHILD_FIRST);
         foreach($files as $file) {
             if ($file->isDir()){ rmdir($file->getRealPath()); } else { unlink($file->getRealPath()); }
         }
