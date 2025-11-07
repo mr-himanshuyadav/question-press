@@ -803,7 +803,7 @@ class Practice_Ajax
         check_ajax_referer('qp_practice_nonce', 'nonce');
 
         if (!is_user_logged_in()) {
-            wp_send_json_error(['message' => 'Not logged in.']); // Add login check
+            wp_send_json_error(['message' => 'Not logged in.']);
         }
 
         $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
@@ -812,14 +812,34 @@ class Practice_Ajax
 
         if (!$question_id) {
             wp_send_json_error(['message' => 'Invalid Question ID.']);
+            return; // <-- This return is crucial
         }
 
-        // --- Call the new DB method ---
+        // --- Call the DB method ---
         $result_data = Questions_DB::get_question_details_for_practice($question_id, $user_id, $session_id);
         // --- End call ---
 
         if ($result_data) {
-            // Data fetched successfully
+            
+            // --- START NEW LOGIC (Phase 2 Revision) ---
+            global $wpdb;
+            $session_settings_json = $wpdb->get_var($wpdb->prepare(
+                "SELECT settings_snapshot FROM {$wpdb->prefix}qp_user_sessions WHERE session_id = %d AND user_id = %d",
+                $session_id,
+                $user_id
+            ));
+            $settings = $session_settings_json ? json_decode($session_settings_json, true) : [];
+            $options = get_option('qp_settings');
+
+            $is_mock_test = isset($settings['practice_mode']) && $settings['practice_mode'] === 'mock_test';
+            $allow_send_answer = isset($options['send_correct_answer']) && $options['send_correct_answer'] == 1;
+
+            // CRITICAL: Always hide the answer for mock tests, or if the setting is disabled
+            if ($is_mock_test || !$allow_send_answer) {
+                unset($result_data['correct_option_id']);
+            }
+            // --- END NEW LOGIC ---
+
             wp_send_json_success($result_data);
         } else {
             // Question not found or other error in DB method
@@ -1879,5 +1899,64 @@ class Practice_Ajax
         } else {
             wp_send_json_success(['message' => 'A new code has been sent.']);
         }
+    }
+
+   public static function get_buffered_question_data()
+    {
+        check_ajax_referer('qp_practice_nonce', 'nonce');
+
+        if (!is_user_logged_in()) {
+            wp_send_json_error(['message' => 'Not logged in.']);
+        }
+
+        $question_ids = isset($_POST['question_ids']) && is_array($_POST['question_ids'])
+            ? array_map('absint', $_POST['question_ids'])
+            : [];
+
+        $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
+        $user_id = get_current_user_id();
+
+        if (empty($question_ids) || !$session_id) {
+            wp_send_json_error(['message' => 'Invalid data provided.']);
+        }
+
+        // --- START NEW LOGIC (Phase 2 Revision) ---
+        // Get session settings and global options ONCE.
+        global $wpdb;
+        $session_settings_json = $wpdb->get_var($wpdb->prepare(
+            "SELECT settings_snapshot FROM {$wpdb->prefix}qp_user_sessions WHERE session_id = %d AND user_id = %d",
+            $session_id,
+            $user_id
+        ));
+        $settings = $session_settings_json ? json_decode($session_settings_json, true) : [];
+        $options = get_option('qp_settings');
+
+        $is_mock_test = isset($settings['practice_mode']) && $settings['practice_mode'] === 'mock_test';
+        $allow_send_answer = isset($options['send_correct_answer']) && $options['send_correct_answer'] == 1;
+        // --- END NEW LOGIC ---
+
+        $buffered_data = [];
+
+        foreach ($question_ids as $question_id) {
+            if ($question_id > 0) {
+                $result_data = Questions_DB::get_question_details_for_practice($question_id, $user_id, $session_id);
+
+                if ($result_data) {
+                    // --- MODIFIED SECURITY STEP ---
+                    // CRITICAL: Always hide the answer for mock tests, or if the setting is disabled
+                    if ($is_mock_test || !$allow_send_answer) {
+                        unset($result_data['correct_option_id']);
+                    }
+                    
+                    if (isset($result_data['question']['options']) && is_array($result_data['question']['options'])) {
+                         shuffle($result_data['question']['options']);
+                    }
+
+                    $buffered_data[$question_id] = $result_data;
+                }
+            }
+        }
+
+        wp_send_json_success(['questions' => $buffered_data]);
     }
 }
