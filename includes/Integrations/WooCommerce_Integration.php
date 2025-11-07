@@ -26,6 +26,9 @@ class WooCommerce_Integration {
 
         // Order Completion Hook
         add_action( 'woocommerce_order_status_completed', [ $this, 'grant_access_on_order_complete' ], 10, 1 );
+
+        // Redirect non-essential WooCommerce pages (optional, depending on your needs)
+        add_action( 'template_redirect', [ $this, 'redirect_non_essential_woo_pages' ], 5 );
     }
 
     /**
@@ -303,6 +306,45 @@ class WooCommerce_Integration {
 
         if ( ! $granted_entitlement ) {
             error_log( "QP Access Hook: No Question Press entitlements were granted for Order #{$order_id}." );
+        }
+    }
+/**
+     * Redirects users away from non-essential WooCommerce pages
+     * like the Shop, My Account, and single product pages.
+     * Only allows Cart, Checkout, and the Thank You page.
+     */
+    public function redirect_non_essential_woo_pages() {
+        // Don't redirect admins or on admin pages.
+        if ( is_admin() || current_user_can( 'manage_options' ) ) {
+            return;
+        }
+
+        // Get the dashboard URL.
+        // IMPORTANT: Double-check that 'dashboard' is your actual page slug.
+        $dashboard_url = get_permalink( get_page_by_path( 'dashboard' ) );
+        if ( ! $dashboard_url ) {
+            $dashboard_url = home_url( '/' ); // Fallback
+        }
+
+        // --- NEW, MORE EXPLICIT LOGIC ---
+
+        // 1. Specifically check for the "My Account" page (and all its endpoints)
+        //    and redirect it immediately.
+        if ( is_account_page() ) {
+            wp_redirect( $dashboard_url );
+            exit;
+        }
+
+        // 2. Allow Cart, Checkout, and the "Thank You" (order-received) page to load.
+        if ( is_cart() || is_checkout() || is_wc_endpoint_url( 'order-received' ) ) {
+            return;
+        }
+
+        // 3. Catch all other WooCommerce pages (like Shop, Product, Category, Tag)
+        //    and redirect them.
+        if ( is_woocommerce() ) {
+            wp_redirect( $dashboard_url );
+            exit;
         }
     }
 
