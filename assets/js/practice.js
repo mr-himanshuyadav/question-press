@@ -1724,8 +1724,8 @@ jQuery(document).ready(function ($) {
         $("#qp-skip-btn, #qp-mock-mark-review-cb").prop("disabled", false);
         
         // **ADD THIS**: Only enable Clear Response if an option is selected
-        // var isOptionSelected = $(".qp-options-area .option.selected").length > 0;
-        // $("#qp-clear-response-btn").prop("disabled", !isOptionSelected);
+        var isOptionSelected = $(".qp-options-area .option.selected").length > 0;
+        $("#qp-clear-response-btn").prop("disabled", !isOptionSelected);
         
         // Re-enable check button only if an option is selected
         if ($(".qp-options-area .option.selected").length > 0) {
@@ -2813,35 +2813,41 @@ jQuery(document).ready(function ($) {
       selectedOption.find('input[type="radio"]').prop("checked", true);
 
       if (isMockTest) {
-        // --- START: Refactored Mock Test Logic (Phase 5) ---
+        // --- START: NEW REFACTORED MOCK TEST LOGIC (SINGLE AJAX CALL) ---
         var questionID = sessionQuestionIDs[currentQuestionIndex];
         var selectedOptionId = selectedOption.find('input[type="radio"]').val();
         $("#qp-clear-response-btn").prop("disabled", false);
-        var isRobust = qp_practice_settings.ui_feedback_mode === 'robust';
+        var isRobust = qp_practice_settings.ui_feedback_mode === "robust";
+
+        const isMarked = $("#qp-mock-mark-review-cb").is(":checked");
+        const newStatus = isMarked
+          ? "answered_and_marked_for_review"
+          : "answered";
 
         // 1. Optimistic UI Update (for INSTANT mode)
-        // This is tricky. We must call updateMockStatus AFTER saving the option ID.
-        if (!answeredStates[questionID]) answeredStates[questionID] = {};
-        answeredStates[questionID].selected_option_id = selectedOptionId;
-        
-        const isMarked = $("#qp-mock-mark-review-cb").is(":checked");
-        const newStatus = isMarked ? "answered_and_marked_for_review" : "answered";
-        
         if (!isRobust) {
-          // In "Instant" mode, we just call updateMockStatus,
-          // which now handles its own optimistic update.
-          updateMockStatus(questionID, newStatus);
-        } else {
-          // In "Robust" mode, we lock the UI *before* saving.
+          if (!answeredStates[questionID]) {
+            answeredStates[questionID] = {};
+          }
+          answeredStates[questionID].selected_option_id = selectedOptionId; // Save selected option
+          answeredStates[questionID].mock_status = newStatus; // Save new status
+          saveSessionStateToStorage();
+          updatePaletteButton(questionID, newStatus);
+          scrollPaletteToCurrent();
+          updateLegendCounts();
+        }
+
+        // 2. Lock UI (for ROBUST mode)
+        if (isRobust) {
           lockNavigation();
         }
-        
-        // 2. Send AJAX to save the selected option
+
+        // 3. Send the SINGLE AJAX call to save the attempt
         $.ajax({
           url: qp_ajax_object.ajax_url,
           type: "POST",
           data: {
-            action: "qp_save_mock_attempt",
+            action: "qp_save_mock_attempt", // This PHP function already handles status logic
             nonce: qp_ajax_object.nonce,
             session_id: sessionID,
             question_id: questionID,
@@ -2849,35 +2855,51 @@ jQuery(document).ready(function ($) {
           },
           success: function (response) {
             if (response.success) {
-              // Now call updateMockStatus to set the *final* status
-              // (e.g., 'answered' or 'answered_and_marked_for_review')
-              // In "Robust" mode, this will handle its own locking.
-              // In "Instant" mode, this call is redundant but harmless.
+              // --- UI Update (for ROBUST mode) ---
               if (isRobust) {
-                 updateMockStatus(questionID, newStatus);
+                if (!answeredStates[questionID]) {
+                  answeredStates[questionID] = {};
+                }
+                answeredStates[questionID].selected_option_id = selectedOptionId; // Save selected option
+                answeredStates[questionID].mock_status = newStatus; // Save new status
+                saveSessionStateToStorage();
+                updatePaletteButton(questionID, newStatus);
+                scrollPaletteToCurrent();
+                updateLegendCounts();
               }
+              // (Instant mode already updated)
             } else if (response.data && response.data.code === "access_denied") {
               handleAccessDenied(response); // Use the new handler
-              if(isRobust) unlockNavigation(); // Manually unlock if robust check failed
             } else {
-              Swal.fire("Error!", response.data.message || "Could not save answer.", "error");
-              if(isRobust) unlockNavigation();
+              // If the server returns an error, alert the user
+              Swal.fire({
+                title: "Error!",
+                text:
+                  response.data.message ||
+                  "Could not save your progress. Please check your connection and try again.",
+                icon: "error",
+              });
+              // NOTE: In "Instant" mode, the UI will be out of sync here,
+              // which is a trade-off of the optimistic update.
             }
           },
           error: function () {
-            Swal.fire("Error!", "An unknown server error occurred.", "error");
-            if(isRobust) unlockNavigation();
+            // If the AJAX call itself fails, alert the user
+            Swal.fire({
+              title: "Network Error",
+              text: "Could not save your progress. Please check your connection.",
+              icon: "error",
+            });
           },
-          complete: function() {
-            // In "Robust" mode, the lock is released by updateMockStatus,
-            // so we don't call unlockNavigation() here.
-          }
+          complete: function () {
+            // 4. Unlock UI (for ROBUST mode)
+            if (isRobust) {
+              unlockNavigation();
+            }
+          },
         });
         return;
-        // --- END: Refactored Mock Test Logic (Phase 5) ---
-
       } else if (!isMockTest && isAutoCheckEnabled) {
-      // ...
         console.log("DEBUG: Auto-check logic - calling checkSelectedAnswer()");
         // For other modes with auto-check on
         checkSelectedAnswer();
