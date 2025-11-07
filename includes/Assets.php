@@ -39,7 +39,7 @@ class Assets {
      * Constructor. Hooks into WordPress actions.
      */
     private function __construct() {
-        add_action( 'wp_enqueue_scripts', [ $this, 'enqueue_public_scripts' ] );
+        add_action( 'wp_enqueue_scripts', [ $this, 'enqueue_public_scripts' ], 20 );
         add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_admin_scripts' ] );
     }
 
