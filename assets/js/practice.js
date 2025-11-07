@@ -1703,8 +1703,10 @@ jQuery(document).ready(function ($) {
       $("#qp-palette-docked, #qp-palette-sliding").css("pointer-events", "none");
       // Disable other actions
       $("#qp-skip-btn, #qp-check-answer-btn, #qp-clear-response-btn, #qp-mock-mark-review-cb").prop("disabled", true);
-      // Disable options
-      $(".qp-options-area").addClass("disabled");
+      // Disable options (but NOT in mock test)
+      if (!isMockTest) {
+        $(".qp-options-area").addClass("disabled");
+      }
     }
 
     /**
@@ -1718,15 +1720,21 @@ jQuery(document).ready(function ($) {
       $("#qp-palette-docked, #qp-palette-sliding").css("pointer-events", "auto");
       
       // Only re-enable buttons if the question isn't in a final state
-      if (!$(".qp-options-area").hasClass("answered")) { 
-        $("#qp-skip-btn, #qp-clear-response-btn, #qp-mock-mark-review-cb").prop("disabled", false);
+      if (!$(".qp-options-area").hasClass("answered")) {
+        $("#qp-skip-btn, #qp-mock-mark-review-cb").prop("disabled", false);
+        
+        // **ADD THIS**: Only enable Clear Response if an option is selected
+        // var isOptionSelected = $(".qp-options-area .option.selected").length > 0;
+        // $("#qp-clear-response-btn").prop("disabled", !isOptionSelected);
+        
         // Re-enable check button only if an option is selected
         if ($(".qp-options-area .option.selected").length > 0) {
             $("#qp-check-answer-btn").prop("disabled", false);
         }
-      }
+    }
       // Re-enable options
       $(".qp-options-area").removeClass("disabled");
+      
       
       // Final state check (e.g., after answering, next is enabled)
       // This is handled by functions like checkSelectedAnswer,
@@ -1735,6 +1743,10 @@ jQuery(document).ready(function ($) {
       if (answeredStates[qid] && answeredStates[qid].type === 'answered') {
           $("#qp-next-btn").prop("disabled", false);
           $(".qp-options-area").addClass("disabled");
+      }
+      // Re-enable options (but NOT in mock test)
+      if (isMockTest) {
+        $(".qp-options-area").removeClass("disabled");
       }
       if (currentQuestionIndex === 0) {
           $("#qp-prev-btn").prop("disabled", true);
@@ -2252,13 +2264,22 @@ jQuery(document).ready(function ($) {
 
     // Mode-specific logic
     if (isMockTest) {
+      optionsArea.find('input[type="radio"]').prop("checked", false);
       // In a mock test, restore the user's previously selected answer if it exists
       if (previousState.selected_option_id) {
         $('input[value="' + previousState.selected_option_id + '"]')
           .prop("checked", true)
           .closest(".option")
           .addClass("selected");
-      }
+      } else {
+        // Explicitly ensure no option is selected if null
+        $(".qp-options-area .option").removeClass("selected");
+        $('input[name="qp_option"]').prop("checked", false);
+    }
+
+    // **UPDATE THIS**: Check the ACTUAL UI state, not just the saved state
+    var isOptionCurrentlySelected = $(".qp-options-area .option.selected").length > 0;
+    $("#qp-clear-response-btn").prop("disabled", !isOptionCurrentlySelected);
 
       // Set the state of the "Mark for Review" checkbox based on the detailed status
       const isMarked =
@@ -2277,6 +2298,8 @@ jQuery(document).ready(function ($) {
         .prop("checked", isMarked)
         .closest("label")
         .toggleClass("checked", isMarked);
+
+      $("#qp-clear-response-btn").prop("disabled", !previousState.selected_option_id);
 
       // If the question has no mock_status yet, it's the first time it's being viewed.
       if (!previousState.mock_status) {
@@ -2772,11 +2795,18 @@ jQuery(document).ready(function ($) {
   wrapper
     .off("click", ".qp-options-area .option")
     .on("click", ".qp-options-area .option", function () {
-      console.log("Option clicked! isMockTest:", isMockTest);
-
       var selectedOption = $(this);
       var optionsArea = selectedOption.closest(".qp-options-area");
+
+      // --- START FIX: Prevent duplicate calls ---
+      // 1. Do nothing if the UI is locked
       if (optionsArea.hasClass("disabled")) return;
+      
+      // 2. Do nothing if this option is ALREADY selected
+      if (selectedOption.hasClass("selected")) {
+        return;
+      }
+      // --- END FIX ---
 
       optionsArea.find(".option").removeClass("selected");
       selectedOption.addClass("selected");
@@ -2786,6 +2816,7 @@ jQuery(document).ready(function ($) {
         // --- START: Refactored Mock Test Logic (Phase 5) ---
         var questionID = sessionQuestionIDs[currentQuestionIndex];
         var selectedOptionId = selectedOption.find('input[type="radio"]').val();
+        $("#qp-clear-response-btn").prop("disabled", false);
         var isRobust = qp_practice_settings.ui_feedback_mode === 'robust';
 
         // 1. Optimistic UI Update (for INSTANT mode)
@@ -3246,18 +3277,7 @@ jQuery(document).ready(function ($) {
 
     // --- Conditional Check for NEXT button ---
     if (direction === "next") {
-      if (isCourseTest) {
-        // This is a Course Test. Access is checked when the user *answers*
-        // the question, not when they load it. Proceed to load.
         loadNextQuestion();
-      } else {
-        var originalButtonText = $button.find("span").html(); // Get the arrow icon
-        checkAttemptsBeforeAction(function () {
-          // This runs ONLY if the check passes
-          loadNextQuestion(); // Call the existing function to load next question
-          // Button state will be handled by loadNextQuestion or if the alert pops up
-        }); // Pass button for state management
-      }
     } else {
       // Handle PREV button directly (no check needed)
       if (currentQuestionIndex > 0) {
@@ -3819,6 +3839,14 @@ jQuery(document).ready(function ($) {
   ) {
     // Handler for the "Clear Response" button
     wrapper.on("click", "#qp-clear-response-btn", function () {
+      var isOptionSelected = $(".qp-options-area .option.selected").length > 0;
+
+      // If no option is selected, or button is disabled, do nothing.
+      if (!isOptionSelected || $(this).is(':disabled')) {
+        $(this).prop("disabled", true); // Ensure it's disabled
+        return; 
+      }
+      $(this).prop("disabled", true);
       var questionID = sessionQuestionIDs[currentQuestionIndex];
       clearMockTestAnswer(questionID);
 
@@ -3878,6 +3906,14 @@ jQuery(document).ready(function ($) {
     // Clear the radio button selection in the UI
     $(".qp-options-area .option").removeClass("selected");
     $('input[name="qp_option"]').prop("checked", false);
+
+    $("#qp-clear-response-btn").prop("disabled", true);
+
+    // **ADD THIS**: Update the local state to remove the selected option
+    if (answeredStates[questionID]) {
+        answeredStates[questionID].selected_option_id = null; // Clear the selection
+        saveSessionStateToStorage(); // Save the updated state
+    }
 
     // Determine the correct final status based on the review checkbox
     const isMarkedForReview = $("#qp-mock-mark-review-cb").is(":checked");
@@ -3947,6 +3983,14 @@ jQuery(document).ready(function ($) {
     loadQuestion(sessionQuestionIDs[currentQuestionIndex], direction);
     updateCurrentPaletteButton(currentQuestionIndex, oldIndex);
     scrollPaletteToCurrent();
+
+    // **ADD THIS**: After loading, update the Clear Response button state
+    if (isMockTest) {
+        setTimeout(function() {
+            var isOptionSelected = $(".qp-options-area .option.selected").length > 0;
+            $("#qp-clear-response-btn").prop("disabled", !isOptionSelected);
+        }, 350); // Wait for animation to complete
+    }
   });
 
   /**
