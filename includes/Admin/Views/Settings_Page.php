@@ -20,7 +20,7 @@ class Settings_Page
         settings_errors();
 
         // --- Capture WordPress settings functions output ---
-        
+
         // Capture settings_fields()
         ob_start();
         settings_fields('qp_settings_group');
@@ -30,7 +30,7 @@ class Settings_Page
         ob_start();
         submit_button('Save Settings', 'primary', 'submit_top', false);
         $submit_button_top = ob_get_clean();
-        
+
         // Capture do_settings_sections()
         ob_start();
         do_settings_sections('qp-settings-page');
@@ -40,7 +40,7 @@ class Settings_Page
         ob_start();
         submit_button('Save Settings');
         $submit_button_bottom = ob_get_clean();
-        
+
         // --- End capturing ---
 
         // Prepare arguments for the template
@@ -50,9 +50,9 @@ class Settings_Page
             'sections_html'        => $sections_html,
             'submit_button_bottom' => $submit_button_bottom,
         ];
-        
+
         // Load and echo the template
-        echo Template_Loader::get_html( 'settings-page-wrapper', 'admin', $args );
+        echo Template_Loader::get_html('settings-page-wrapper', 'admin', $args);
     }
 
     /**
@@ -81,6 +81,25 @@ class Settings_Page
         add_settings_field('qp_show_topic_meta', 'Display Topic Meta', [self::class, 'render_show_topic_meta_checkbox'], 'qp-settings-page', 'qp_data_settings_section');
 
         add_settings_field('qp_normal_practice_limit', 'Normal Practice Question Limit', [self::class, 'render_normal_practice_limit_input'], 'qp-settings-page', 'qp_data_settings_section');
+
+        add_settings_field(
+            'qp_question_buffer_size',
+            'Question Prefetch Buffer Size',
+            [self::class, 'render_question_buffer_size_input'],
+            'qp-settings-page',
+            'qp_data_settings_section'
+        );
+
+        add_settings_field(
+            'qp_send_correct_answer',
+            'Send Correct Answer to Frontend',
+            [self::class, 'render_send_correct_answer_checkbox'],
+            'qp-settings-page',
+            'qp_data_settings_section'
+        );
+
+        add_settings_field('qp_ui_feedback_mode', 'UI Feedback Mode', [self::class, 'render_ui_feedback_mode_dropdown'],'qp-settings-page','qp_data_settings_section'
+        );
 
 
         add_settings_field('qp_can_delete_history_roles', 'Roles That Can Delete History', [self::class, 'render_can_delete_history_roles_multiselect'], 'qp-settings-page', 'qp_data_settings_section');
@@ -214,7 +233,7 @@ class Settings_Page
     {
         $options = get_option('qp_settings');
         $value = isset($options['question_order']) ? $options['question_order'] : 'random';
-    ?>
+?>
         <fieldset>
             <label>
                 <input type="radio" name="qp_settings[question_order]" value="random" <?php checked('random', $value); ?>>
@@ -321,7 +340,7 @@ class Settings_Page
                 border-radius: 4px;
             }
         </style>
-    <?php
+<?php
     }
 
     public static function sanitize_settings($input)
@@ -411,6 +430,19 @@ class Settings_Page
             $new_input['normal_practice_limit'] = 100; // Default if not set
         }
 
+        $new_input['question_buffer_size'] = isset($input['question_buffer_size']) ? absint($input['question_buffer_size']) : 5;
+        if ($new_input['question_buffer_size'] < 1) {
+            $new_input['question_buffer_size'] = 1;
+        }
+        if ($new_input['question_buffer_size'] > 20) {
+            $new_input['question_buffer_size'] = 20; // Clamp max value to 20
+        }
+
+        $new_input['ui_feedback_mode'] = isset($input['ui_feedback_mode']) && $input['ui_feedback_mode'] === 'instant' ? 'instant' : 'robust';
+
+        $new_input['send_correct_answer'] = isset($input['send_correct_answer']) ? 1 : 0;
+        // --- END NEW SETTINGS SANITIZATION ---
+
         return $new_input;
     }
 
@@ -477,4 +509,50 @@ class Settings_Page
         echo '<span>Enable email OTP verification on new user registration.</span></label>';
         echo '<p class="description">This helps prevent fake signups by requiring users to verify their email address.</p>';
     }
+
+    /**
+     * Callback to render the question buffer size input.
+     */
+    public static function render_question_buffer_size_input()
+    {
+        $options = get_option('qp_settings');
+        $value = isset($options['question_buffer_size']) ? absint($options['question_buffer_size']) : 5;
+        echo '<input type="number" name="qp_settings[question_buffer_size]" value="' . esc_attr($value) . '" min="1" max="20" />';
+        echo '<p class="description">Number of questions to prefetch in the background (e.g., 5). A higher number may use more server resources.</p>';
+    }
+
+    /**
+     * Callback to render the UI feedback mode dropdown.
+     */
+    public static function render_ui_feedback_mode_dropdown()
+    {
+        $options = get_option('qp_settings');
+        $selected = isset($options['ui_feedback_mode']) ? $options['ui_feedback_mode'] : 'robust';
+        ?>
+        <select name="qp_settings[ui_feedback_mode]">
+            <option value="robust" <?php selected($selected, 'robust'); ?>>Robust (Recommended)</option>
+            <option value="instant" <?php selected($selected, 'instant'); ?>>Instant</option>
+        </select>
+        <p class="description">
+            <strong>Robust:</strong> UI locks until the server confirms the answer is saved. (No data loss)<br>
+            <strong>Instant:</strong> UI updates instantly. Server save happens in the background. (Faster, but small risk of data loss if the user closes the window immediately)
+        </p>
+        <?php
+    }
+/**
+     * Callback to render the send correct answer checkbox.
+     */
+    public static function render_send_correct_answer_checkbox()
+    {
+        $options = get_option('qp_settings');
+        $checked = isset($options['send_correct_answer']) ? $options['send_correct_answer'] : 0;
+        echo '<label><input type="checkbox" name="qp_settings[send_correct_answer]" value="1" ' . checked(1, $checked, false) . ' /> ';
+        echo '<span>Enable Instant Frontend Answer Checking</span></label>';
+        echo '<p class"description">
+            <strong>Warning:</strong> If enabled, the correct answer ID will be sent to the user\'s browser for non-mock test sessions.<br>
+            This enables instant answer validation but is less secure. <strong>This is always disabled for Mock Tests.</strong>
+        </p>';
+    }
+
+    // ... (rest of the class)
 }

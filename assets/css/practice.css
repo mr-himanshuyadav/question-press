@@ -1557,7 +1557,8 @@ body.palette-overlay-open #qp-palette-sliding {
 
 #qp-report-btn {
     border: none;
-    min-width: 90px;
+    min-width: 80px;
+    font-size: 10px;
     background-color: #bc0d0d;
     color: #e9e9e9;
     padding: 7px 10px;
@@ -1619,9 +1620,6 @@ body.palette-overlay-open #qp-palette-sliding {
 #qp-report-options-container .qp-report-reason-report {
     background-color: #f8d7da;
     border-color: #f5c6cb;
-}
-#qp-report-options-container .qp-report-reason-report:hover {
-    
 }
 
 /* Style for Suggestion (Improvement) reasons */
@@ -3497,4 +3495,37 @@ hr.qp-divider {
         flex-grow: 1;
         text-align: center;
     }
+}
+
+
+
+/* --- UI LOCKER SPINNER (Phase 5) --- */
+#qp-ui-locker-spinner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  /* background: rgba(255, 255, 255, 0.6); */
+  z-index: 99998; /* Just below modals */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#qp-ui-locker-spinner::after {
+  content: "";
+  display: block;
+  width: 40px;
+  height: 40px;
+  border: 4px solid #aaa;
+  border-top-color: #2271b1;
+  border-radius: 50%;
+  animation: qp-spinner 0.8s linear infinite;
+}
+
+@keyframes qp-spinner {
+  to {
+    transform: rotate(360deg);
+  }
 }

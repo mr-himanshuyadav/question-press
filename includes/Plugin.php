@@ -260,6 +260,7 @@ final class Plugin {
         add_action('wp_ajax_get_report_reasons', [Practice_Ajax::class, 'get_report_reasons']);
         add_action('wp_ajax_get_unattempted_counts', [Practice_Ajax::class, 'get_unattempted_counts']);
         add_action('wp_ajax_get_question_data', [Practice_Ajax::class, 'get_question_data']);
+        add_action('wp_ajax_get_buffered_question_data', [Practice_Ajax::class, 'get_buffered_question_data']);
         add_action('wp_ajax_get_topics_for_subject', [Practice_Ajax::class, 'get_topics_for_subject']);
         add_action('wp_ajax_get_sections_for_subject', [Practice_Ajax::class, 'get_sections_for_subject']);
         add_action('wp_ajax_get_sources_for_subject', [Practice_Ajax::class, 'get_sources_for_subject_cascading']);

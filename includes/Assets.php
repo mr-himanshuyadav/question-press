@@ -133,7 +133,10 @@ class Assets {
             $qp_settings = get_option('qp_settings');
             wp_localize_script('qp-practice-script', 'qp_practice_settings', [
                 'show_counts' => !empty($qp_settings['show_question_counts']),
-                'show_topic_meta' => !empty($qp_settings['show_topic_meta'])
+                'show_topic_meta' => !empty($qp_settings['show_topic_meta']),
+                'question_buffer_size' => $options['question_buffer_size'] ?? 5,
+            'ui_feedback_mode'     => $options['ui_feedback_mode'] ?? 'robust',
+            'send_correct_answer'  => $options['send_correct_answer'] ?? 0,
             ]);
         }
 

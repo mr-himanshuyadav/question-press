@@ -730,6 +730,11 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
      * @return array|null An associative array containing question details, or null if not found.
      */
     public static function get_question_details_for_practice( int $question_id, int $user_id, int $session_id = 0 ) {
+        if (is_null(self::$wpdb)) {
+            global $wpdb;
+            self::$wpdb = $wpdb;
+        }
+        $wpdb = self::$wpdb;
         if ($question_id <= 0 || $user_id <= 0) {
             return null;
         }
@@ -1001,6 +1006,11 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
      * @return array Array of matching question objects, each containing 'question_id' and 'question_text'.
      */
     public static function search_questions( $args = [] ) {
+        if (is_null(self::$wpdb)) {
+            global $wpdb;
+            self::$wpdb = $wpdb;
+        }
+        $wpdb = self::$wpdb;
         $defaults = [
             'search'     => '',
             'subject_id' => 0,
