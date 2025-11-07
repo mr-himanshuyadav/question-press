@@ -91,11 +91,11 @@ class Settings_Page
         );
 
         add_settings_field(
-            'qpsend_correct_answer',
+            'qp_send_correct_answer',
             'Send Correct Answer to Frontend',
             [self::class, 'render_send_correct_answer_checkbox'],
             'qp-settings-page',
-            'qp_setting_section_practice'
+            'qp_data_settings_section'
         );
 
         add_settings_field('qp_ui_feedback_mode', 'UI Feedback Mode', [self::class, 'render_ui_feedback_mode_dropdown'],'qp-settings-page','qp_data_settings_section'

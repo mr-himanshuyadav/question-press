@@ -1,5 +1,6 @@
 jQuery(document).ready(function ($) {
   var wrapper = $("#qp-practice-app-wrapper");
+  wrapper.append('<div id="qp-ui-locker-spinner" style="display: none;"></div>');
   var isAutoCheckEnabled = false;
   var mockTestTimer; // Specific timer for mock tests
   var isMockTest = false;
@@ -201,8 +202,26 @@ jQuery(document).ready(function ($) {
   function updateMockStatus(questionID, newStatus) {
     if (!isMockTest) return;
 
-    // --- MODIFICATION START ---
-    // Disable the palette buttons for this question to prevent rapid clicks
+    var isRobust = qp_practice_settings.ui_feedback_mode === 'robust';
+
+    // --- Optimistic UI Update (for INSTANT mode) ---
+    if (!isRobust) {
+      if (!answeredStates[questionID]) {
+        answeredStates[questionID] = {};
+      }
+      answeredStates[questionID].mock_status = newStatus;
+      saveSessionStateToStorage();
+      updatePaletteButton(questionID, newStatus);
+      scrollPaletteToCurrent();
+      updateLegendCounts();
+    }
+    
+    // --- Lock UI (for ROBUST mode) ---
+    if (isRobust) {
+      lockNavigation();
+    }
+    
+    // Disable the palette buttons for this question to prevent rapid clicks (in both modes)
     var paletteBtn = $(
       '.qp-palette-btn[data-question-index="' +
         sessionQuestionIDs.indexOf(questionID) +
@@ -223,15 +242,18 @@ jQuery(document).ready(function ($) {
       },
       success: function (response) {
         if (response.success) {
-          // Update local state and re-render the palette ONLY on success
-          if (!answeredStates[questionID]) {
-            answeredStates[questionID] = {};
+          // --- UI Update (for ROBUST mode) ---
+          if (isRobust) {
+            if (!answeredStates[questionID]) {
+              answeredStates[questionID] = {};
+            }
+            answeredStates[questionID].mock_status = newStatus;
+            saveSessionStateToStorage();
+            updatePaletteButton(questionID, newStatus);
+            scrollPaletteToCurrent();
+            updateLegendCounts();
           }
-          answeredStates[questionID].mock_status = newStatus;
-          saveSessionStateToStorage();
-          updatePaletteButton(questionID, newStatus);
-          scrollPaletteToCurrent();
-          updateLegendCounts();
+          // (Instant mode already updated)
         } else {
           // If the server returns an error, alert the user
           Swal.fire({
@@ -239,6 +261,8 @@ jQuery(document).ready(function ($) {
             text: "Could not save your progress. Please check your connection and try again.",
             icon: "error",
           });
+          // Note: In "Instant" mode, the UI will be out of sync here.
+          // This is the trade-off the user selected.
         }
       },
       error: function () {
@@ -252,9 +276,12 @@ jQuery(document).ready(function ($) {
       complete: function () {
         // Re-enable the button regardless of success or failure
         paletteBtn.css("pointer-events", "auto").css("opacity", "1");
+        // --- Unlock UI (for ROBUST mode) ---
+        if (isRobust) {
+          unlockNavigation();
+        }
       },
     });
-    // --- MODIFICATION END ---
   }
 
   // --- NEW: Mode-Aware Palette Rendering Function ---
@@ -1593,27 +1620,47 @@ jQuery(document).ready(function ($) {
     
     /**
      * Fetches the next batch of questions for the buffer.
+     * --- NEW: Now includes a "look-behind" cache ---
      */
     function triggerBufferFetch() {
       // Get the buffer size from settings, default to 5
       var bufferSize = (qp_practice_settings && qp_practice_settings.question_buffer_size) 
                        ? parseInt(qp_practice_settings.question_buffer_size, 10) 
                        : 5;
+      
+      // --- START: New "Sliding Window" Logic ---
+      var LOOK_BEHIND_COUNT = 2; 
+      // Ensure bufferSize is at least 3
+      if (bufferSize < 3) bufferSize = 3; 
+      // The rest of the buffer looks ahead
+      var LOOK_AHEAD_COUNT = bufferSize - LOOK_BEHIND_COUNT; 
 
       var questionIDsToFetch = [];
-      var checkedIndex = currentQuestionIndex + 1; // Start checking from the *next* question
-
-      // Loop until we have enough questions to fetch, or we run out of questions
-      while (questionIDsToFetch.length < bufferSize && checkedIndex < sessionQuestionIDs.length) {
-        var qid = sessionQuestionIDs[checkedIndex];
-        
-        // Only fetch if it's NOT already in our persistent cache
-        if (qid && !questionCache[qid]) {
-          questionIDsToFetch.push(qid);
+      
+      // 1. Build list of questions to check (look-behind)
+      for (var i = 1; i <= LOOK_BEHIND_COUNT; i++) {
+        var indexToCheck = currentQuestionIndex - i;
+        if (indexToCheck >= 0) { // Check if index is valid
+          var qid = sessionQuestionIDs[indexToCheck];
+          // Check if it exists AND is not in the cache (using String key)
+          if (qid && !questionCache[String(qid)]) {
+            questionIDsToFetch.push(qid);
+          }
         }
-        
-        checkedIndex++;
       }
+
+      // 2. Build list of questions to check (look-ahead)
+      for (var i = 1; i <= LOOK_AHEAD_COUNT; i++) {
+        var indexToCheck = currentQuestionIndex + i;
+        if (indexToCheck < sessionQuestionIDs.length) { // Check if index is valid
+          var qid = sessionQuestionIDs[indexToCheck];
+          // Check if it exists AND is not in the cache (using String key)
+          if (qid && !questionCache[String(qid)]) {
+            questionIDsToFetch.push(qid);
+          }
+        }
+      }
+      // --- END: New "Sliding Window" Logic ---
 
       // If we found questions to fetch, make the AJAX call
       if (questionIDsToFetch.length > 0) {
@@ -1630,7 +1677,8 @@ jQuery(document).ready(function ($) {
             if (response.success && response.data.questions) {
               // Add each fetched question to our persistent cache
               $.each(response.data.questions, function (qid, qData) {
-                questionCache[qid] = qData;
+                // Use String(qid) to ensure cache key is a string
+                questionCache[String(qid)] = qData;
               });
               // Save the updated cache to localStorage
               saveSessionStateToStorage();
@@ -1641,6 +1689,55 @@ jQuery(document).ready(function ($) {
             console.error("QP: Background buffer fetch failed.");
           }
         });
+      }
+    }
+
+    /**
+     * Locks the UI during "Robust" mode AJAX calls.
+     */
+    function lockNavigation() {
+      $("#qp-ui-locker-spinner").show();
+      // Disable navigation
+      $("#qp-next-btn, #qp-prev-btn").prop("disabled", true);
+      // Disable palette
+      $("#qp-palette-docked, #qp-palette-sliding").css("pointer-events", "none");
+      // Disable other actions
+      $("#qp-skip-btn, #qp-check-answer-btn, #qp-clear-response-btn, #qp-mock-mark-review-cb").prop("disabled", true);
+      // Disable options
+      $(".qp-options-area").addClass("disabled");
+    }
+
+    /**
+     * Unlocks the UI after "Robust" mode AJAX calls.
+     */
+    function unlockNavigation() {
+      $("#qp-ui-locker-spinner").hide();
+      // Re-enable navigation (logic will re-disable prev/next if at ends)
+      $("#qp-next-btn, #qp-prev-btn").prop("disabled", false);
+      // Re-enable palette
+      $("#qp-palette-docked, #qp-palette-sliding").css("pointer-events", "auto");
+      
+      // Only re-enable buttons if the question isn't in a final state
+      if (!$(".qp-options-area").hasClass("answered")) { 
+        $("#qp-skip-btn, #qp-clear-response-btn, #qp-mock-mark-review-cb").prop("disabled", false);
+        // Re-enable check button only if an option is selected
+        if ($(".qp-options-area .option.selected").length > 0) {
+            $("#qp-check-answer-btn").prop("disabled", false);
+        }
+      }
+      // Re-enable options
+      $(".qp-options-area").removeClass("disabled");
+      
+      // Final state check (e.g., after answering, next is enabled)
+      // This is handled by functions like checkSelectedAnswer,
+      // but we must re-evaluate button states.
+      var qid = sessionQuestionIDs[currentQuestionIndex];
+      if (answeredStates[qid] && answeredStates[qid].type === 'answered') {
+          $("#qp-next-btn").prop("disabled", false);
+          $(".qp-options-area").addClass("disabled");
+      }
+      if (currentQuestionIndex === 0) {
+          $("#qp-prev-btn").prop("disabled", true);
       }
     }
 
@@ -1976,7 +2073,7 @@ jQuery(document).ready(function ($) {
         is_marked: isMarked,
       },
       success: function () {
-        if (questionCache[questionID]) {
+        if (questionCache[String(questionID)]) {
           questionCache[questionID].is_marked_for_review = isMarked;
         }
       },
@@ -2038,8 +2135,6 @@ jQuery(document).ready(function ($) {
     }
     return array;
   }
-
-  var questionCache = {};
 
   function renderQuestion(data, questionID) {
     if (!isMockTest) {
@@ -2337,22 +2432,17 @@ jQuery(document).ready(function ($) {
   }
 
   function loadQuestion(questionID, direction) {
-    // --- START NEW: Phase 3 Cache Check ---
-    if (questionCache[questionID]) {
-      // This question is in our cache! Render it instantly.
-      // We still run the animation logic.
+    // --- START: Refactored Phase 3 Cache Check ---
+    if (questionCache[String(questionID)]) {
       var animatableArea = $(".qp-animatable-area");
 
       function doRender() {
-        renderQuestion(questionCache[questionID], questionID);
+        renderQuestion(questionCache[String(questionID)], questionID);
         sessionStorage.setItem(
           "qp_session_" + sessionID + "_index",
           currentQuestionIndex
-        ); // Keep this for compatibility
-        
-        // --- ADD THIS: Save state on navigation ---
-        saveSessionStateToStorage(); 
-        // ---
+        ); 
+        saveSessionStateToStorage();
         
         if (direction) {
           var slideInClass =
@@ -2364,20 +2454,24 @@ jQuery(document).ready(function ($) {
       }
 
       if (direction) {
+        // This is a navigation click (Next/Prev)
         var slideOutClass =
           direction === "next" ? "slide-out-to-left" : "slide-out-to-right";
         animatableArea
           .removeClass("slide-in-from-left slide-in-from-right")
           .addClass(slideOutClass);
+        
+        // Use the 300ms delay for animation
+        setTimeout(doRender, 300);
+      } else {
+        // This is the INITIAL PAGE LOAD (direction is undefined)
+        // Run render immediately, with no delay.
+        doRender();
       }
-
-      setTimeout(
-        doRender,
-        direction ? 300 : 0
-      );
       
       return; // Stop the function here, no AJAX needed.
     }
+    // --- END: Refactored Phase 3 Cache Check ---
     
     var animatableArea = $(".qp-animatable-area");
 
@@ -2404,36 +2498,53 @@ jQuery(document).ready(function ($) {
         .addClass(slideOutClass);
     }
 
-    setTimeout(
-      function () {
-        $.ajax({
-          url: qp_ajax_object.ajax_url,
-          type: "POST",
-          data: {
-            action: "get_question_data",
-            nonce: qp_ajax_object.nonce,
-            question_id: questionID,
-            session_id: sessionID, // Pass the session_id to get correct revision status
-          },
-          success: function (response) {
-            if (response.success) {
-              // Shuffle options before rendering
-              response.data.question.options = shuffleArray(
-                response.data.question.options
-              );
-              questionCache[questionID] = response.data; // Save to cache
-              doRender(response.data);
-            }
-          },
-        });
-      },
-      direction ? 300 : 0
-    );
+    // --- START: Refactored Cache Miss Logic ---
+    var ajaxCall = function () {
+      $.ajax({
+        url: qp_ajax_object.ajax_url,
+        type: "POST",
+        data: {
+          action: "get_question_data",
+          nonce: qp_ajax_object.nonce,
+          question_id: questionID,
+          session_id: sessionID,
+        },
+        success: function (response) {
+          if (response.success) {
+            response.data.question.options = shuffleArray(
+              response.data.question.options
+            );
+            
+            questionCache[String(questionID)] = response.data; // Save to cache
+            saveSessionStateToStorage(); // Persist the new cache
+            
+            doRender(response.data);
+          }
+        },
+      });
+    };
 
+    if (direction) {
+        // This is a navigation click (Next/Prev)
+        var slideOutClass =
+          direction === "next" ? "slide-out-to-left" : "slide-out-to-right";
+        animatableArea
+          .removeClass("slide-in-from-left slide-in-from-right")
+          .addClass(slideOutClass);
+          
+        // Use the 300ms delay for animation
+        setTimeout(ajaxCall, 300);
+    } else {
+        // This is the INITIAL PAGE LOAD (direction is undefined)
+        // Run AJAX immediately, with no delay.
+        ajaxCall();
+    }
+    // --- END: Refactored Cache Miss Logic ---
     // After the question is loaded, trigger the next buffer fetch
     // Use a small timeout to let the UI render first
     setTimeout(triggerBufferFetch, 300);
-  }
+
+  } // <-- This is the end of the loadQuestion function
 
   function loadNextQuestion() {
     // --- NEW: Intelligent Palette Button Appending ---
@@ -2522,6 +2633,7 @@ jQuery(document).ready(function ($) {
     var oldIndex = currentQuestionIndex;
     // If we are not on the last question, it's safe to increment the index and load the next question.
     currentQuestionIndex++;
+    saveSessionStateToStorage();
     if (isMockTest || isRevisionMode) {
       $("#qp-question-counter").text(
         currentQuestionIndex + 1 + "/" + sessionQuestionIDs.length
@@ -2671,24 +2783,29 @@ jQuery(document).ready(function ($) {
       selectedOption.find('input[type="radio"]').prop("checked", true);
 
       if (isMockTest) {
-        // For mock tests, save the attempt and update the status
+        // --- START: Refactored Mock Test Logic (Phase 5) ---
         var questionID = sessionQuestionIDs[currentQuestionIndex];
         var selectedOptionId = selectedOption.find('input[type="radio"]').val();
+        var isRobust = qp_practice_settings.ui_feedback_mode === 'robust';
 
-        // Update local state first
+        // 1. Optimistic UI Update (for INSTANT mode)
+        // This is tricky. We must call updateMockStatus AFTER saving the option ID.
         if (!answeredStates[questionID]) answeredStates[questionID] = {};
         answeredStates[questionID].selected_option_id = selectedOptionId;
-
-        // Determine the new status based on the "Mark for Review" checkbox
+        
         const isMarked = $("#qp-mock-mark-review-cb").is(":checked");
-        const newStatus = isMarked
-          ? "answered_and_marked_for_review"
-          : "answered";
-
-        console.log(
-          "DEBUG: Mock test logic - preparing qp_save_mock_attempt AJAX"
-        );
-        // First, save the answer. The backend sets the main status to 'answered'.
+        const newStatus = isMarked ? "answered_and_marked_for_review" : "answered";
+        
+        if (!isRobust) {
+          // In "Instant" mode, we just call updateMockStatus,
+          // which now handles its own optimistic update.
+          updateMockStatus(questionID, newStatus);
+        } else {
+          // In "Robust" mode, we lock the UI *before* saving.
+          lockNavigation();
+        }
+        
+        // 2. Send AJAX to save the selected option
         $.ajax({
           url: qp_ajax_object.ajax_url,
           type: "POST",
@@ -2701,93 +2818,35 @@ jQuery(document).ready(function ($) {
           },
           success: function (response) {
             if (response.success) {
-              // --- Keep existing success logic ---
-              updateMockStatus(questionID, newStatus); // Assuming this is called on success
-              // --- End existing success logic ---
-            } else if (
-              response.data &&
-              response.data.code === "access_denied"
-            ) {
-              // --- Handle Access Denied ---
-              practiceInProgress = false; // Allow redirects from buttons
-              var alertConfig = {
-                title: "Out of Attempts!",
-                html:
-                  response.data.message ||
-                  "Please purchase more attempts to continue.",
-                icon: "error",
-                allowOutsideClick: false, // Prevent closing by clicking outside
-                allowEscapeKey: false, // Prevent closing with Esc key
-                showConfirmButton: false, // Hide default OK button
-                showCancelButton: false, // Hide default Cancel button
-              };
-
-              // Check if it's NOT section wise practice to add custom buttons
-              if (
-                sessionSettings &&
-                sessionSettings.practice_mode !== "Section Wise Practice"
-              ) {
-                alertConfig.html += `
-            <div style="margin-top: 20px; display: flex; justify-content: center; gap: 10px;">
-                <button id="swal-end-practice" class="qp-button qp-button-secondary">End Practice</button>
-                <button id="swal-purchase-more" class="qp-button qp-button-primary">Purchase More</button>
-            </div>`;
-
-                alertConfig.didOpen = () => {
-                  const endBtn =
-                    Swal.getPopup().querySelector("#swal-end-practice");
-                  const purchaseBtn = Swal.getPopup().querySelector(
-                    "#swal-purchase-more"
-                  );
-
-                  endBtn.addEventListener("click", () => {
-                    endSession(false); // Call your existing endSession function
-                    Swal.close();
-                  });
-
-                  purchaseBtn.addEventListener("click", () => {
-                    if (qp_ajax_object.shop_page_url) {
-                      window.location.href = qp_ajax_object.shop_page_url;
-                    }
-                    Swal.close();
-                  });
-                };
-              } else {
-                // For Section Wise Practice, just show an OK button to go to dashboard
-                alertConfig.confirmButtonText = "Go to Dashboard";
-                alertConfig.showConfirmButton = true; // Show the button for this case
-                alertConfig.preConfirm = () => {
-                  window.location.href = qp_ajax_object.dashboard_page_url;
-                };
+              // Now call updateMockStatus to set the *final* status
+              // (e.g., 'answered' or 'answered_and_marked_for_review')
+              // In "Robust" mode, this will handle its own locking.
+              // In "Instant" mode, this call is redundant but harmless.
+              if (isRobust) {
+                 updateMockStatus(questionID, newStatus);
               }
-
-              Swal.fire(alertConfig);
-
-              // Disable interactions for the current question (keep this)
-              $(".qp-options-area")
-                .addClass("disabled")
-                .find('input[type="radio"]')
-                .prop("disabled", true);
-              $("#qp-check-answer-btn, #qp-skip-btn, #qp-next-btn").prop(
-                "disabled",
-                true
-              );
+            } else if (response.data && response.data.code === "access_denied") {
+              handleAccessDenied(response); // Use the new handler
+              if(isRobust) unlockNavigation(); // Manually unlock if robust check failed
             } else {
-              // --- Keep existing generic error handling here ---
-              Swal.fire(
-                "Error!",
-                response.data.message || "Could not save answer.",
-                "error"
-              );
+              Swal.fire("Error!", response.data.message || "Could not save answer.", "error");
+              if(isRobust) unlockNavigation();
             }
           },
           error: function () {
-            // Keep existing network error handling
             Swal.fire("Error!", "An unknown server error occurred.", "error");
+            if(isRobust) unlockNavigation();
           },
+          complete: function() {
+            // In "Robust" mode, the lock is released by updateMockStatus,
+            // so we don't call unlockNavigation() here.
+          }
         });
         return;
+        // --- END: Refactored Mock Test Logic (Phase 5) ---
+
       } else if (!isMockTest && isAutoCheckEnabled) {
+      // ...
         console.log("DEBUG: Auto-check logic - calling checkSelectedAnswer()");
         // For other modes with auto-check on
         checkSelectedAnswer();
@@ -2796,6 +2855,8 @@ jQuery(document).ready(function ($) {
         $("#qp-check-answer-btn").prop("disabled", false);
       }
     });
+
+
   // --- NEW: Reusable function to check the selected answer ---
   function checkSelectedAnswer() {
     var optionsArea = $(".qp-options-area");
@@ -2806,74 +2867,81 @@ jQuery(document).ready(function ($) {
       return;
     }
 
-    // Lock the UI
-    optionsArea.addClass("disabled");
-    $("#qp-check-answer-btn").hide();
-    $("#qp-skip-btn").prop("disabled", true);
-
-    // Stop the timer
-    clearInterval(questionTimer);
-
+    // --- Phase 5 Logic ---
+    var isRobust = qp_practice_settings.ui_feedback_mode === 'robust';
+    var answerIsKnown = optionsArea.data("correct-option-id") !== undefined;
+    
     // Get all necessary data
     var questionID = sessionQuestionIDs[currentQuestionIndex];
     var selectedOptionId = selectedOption.find('input[type="radio"]').val();
-    var correctOptionId = optionsArea.data("correct-option-id");
-    var isCorrect = selectedOptionId == correctOptionId;
+    
+    // Stop the timer
+    clearInterval(questionTimer);
 
-    // Remove temporary selection style and apply final feedback style
-    selectedOption.removeClass("selected");
-    if (isCorrect) {
-      selectedOption.addClass("correct");
-      correctCount++;
-      score += parseFloat(sessionSettings.marks_correct);
-    } else {
-      selectedOption.addClass("incorrect");
-      optionsArea
-        .find('input[value="' + correctOptionId + '"]')
-        .closest(".option")
-        .addClass("correct");
-      incorrectCount++;
-      score += parseFloat(sessionSettings.marks_incorrect);
-    }
+    if (answerIsKnown) {
+        // --- FLOW A: Answer is KNOWN (Frontend Check) ---
+        
+        var correctOptionId = optionsArea.data("correct-option-id");
+        var isCorrect = (selectedOptionId == correctOptionId);
 
-    // Update session state
-    if (
-      answeredStates[questionID] &&
-      answeredStates[questionID].type === "skipped"
-    ) {
-      skippedCount--;
-    }
-    answeredStates[questionID] = {
-      type: "answered",
-      is_correct: isCorrect,
-      correct_option_id: correctOptionId,
-      selected_option_id: selectedOptionId,
-      reported: answeredStates[questionID]?.reported || false,
-      answered_in_session: true,
-    };
-    saveSessionStateToStorage();
-
-    // Update UI
-    updateHeaderStats();
-    var questionID = sessionQuestionIDs[currentQuestionIndex];
-    var newStatus = answeredStates[questionID].is_correct
-      ? "correct"
-      : "incorrect";
-    updatePaletteButton(questionID, newStatus);
-    scrollPaletteToCurrent();
-    $("#qp-next-btn").prop("disabled", false);
-
-    $.ajax({
-      url: qp_ajax_object.ajax_url,
-      type: "POST",
-      data: {
-        action: "check_answer",
-        nonce: qp_ajax_object.nonce,
-        session_id: sessionID,
-        question_id: questionID,
-        option_id: selectedOptionId,
-        remaining_time: remainingTime,
-      },
+        // 1. Perform UI updates (coloring, state, palette, header)
+        // This happens immediately in both "Instant" and "Robust" modes
+        selectedOption.removeClass("selected");
+        if (isCorrect) {
+          selectedOption.addClass("correct");
+          correctCount++;
+          score += parseFloat(sessionSettings.marks_correct);
+        } else {
+          selectedOption.addClass("incorrect");
+          optionsArea
+            .find('input[value="' + correctOptionId + '"]')
+            .closest(".option")
+            .addClass("correct");
+          incorrectCount++;
+          score += parseFloat(sessionSettings.marks_incorrect);
+        }
+        
+        optionsArea.addClass("disabled answered"); // Add new 'answered' class
+        $("#qp-skip-btn, #qp-check-answer-btn").prop("disabled", true);
+        $("#qp-next-btn").prop("disabled", false);
+        
+        if (answeredStates[questionID] && answeredStates[questionID].type === "skipped") {
+            skippedCount--;
+        }
+        answeredStates[questionID] = {
+            type: "answered",
+            is_correct: isCorrect,
+            correct_option_id: correctOptionId,
+            selected_option_id: selectedOptionId,
+            reported: answeredStates[questionID]?.reported || false,
+            answered_in_session: true,
+        };
+        saveSessionStateToStorage();
+        updateHeaderStats();
+        var newStatus = isCorrect ? "correct" : "incorrect";
+        updatePaletteButton(questionID, newStatus);
+        scrollPaletteToCurrent();
+        updateLegendCounts();
+        
+        // 2. Lock UI if "Robust"
+        if (isRobust) {
+            lockNavigation();
+        }
+        
+        // 3. Send AJAX to server (for logging and entitlement check)
+        $.ajax({
+            url: qp_ajax_object.ajax_url,
+            // (rest of AJAX call is the same)
+            type: "POST",
+            data: {
+                action: "check_answer",
+                nonce: qp_ajax_object.nonce,
+                session_id: sessionID,
+                question_id: questionID,
+                option_id: selectedOptionId,
+                remaining_time: remainingTime,
+            },
+            // ... (inside the original check_answer ajax call)
       success: function (response) {
         if (response.success) {
           // --- Keep existing success logic here ---
@@ -2889,129 +2957,7 @@ jQuery(document).ready(function ($) {
           // --- End existing success logic ---
         } else if (response.data && response.data.code === "access_denied") {
           // --- Handle Access Denied ---
-          practiceInProgress = false; // Allow redirects from buttons
-          var alertConfig = {
-            title: "Out of Attempts!",
-            html:
-              response.data.message ||
-              "Please purchase more attempts to continue.",
-            icon: "error",
-            allowOutsideClick: false, // Prevent closing by clicking outside
-            allowEscapeKey: false, // Prevent closing with Esc key
-            showConfirmButton: false, // Hide default OK button
-            showCancelButton: false, // Hide default Cancel button
-          };
-
-          // Check if it's NOT section wise practice to add custom buttons
-          if (
-            sessionSettings &&
-            sessionSettings.practice_mode !== "Section Wise Practice"
-          ) {
-            alertConfig.html += `
-            <div style="margin-top: 20px; display: flex; justify-content: center; gap: 10px;">
-                <button id="swal-end-practice" class="qp-button qp-button-secondary">End Practice</button>
-                <button id="swal-purchase-more" class="qp-button qp-button-primary">Purchase More</button>
-            </div>`;
-
-            alertConfig.didOpen = () => {
-              const endBtn =
-                Swal.getPopup().querySelector("#swal-end-practice");
-              const purchaseBtn = Swal.getPopup().querySelector(
-                "#swal-purchase-more"
-              );
-
-              endBtn.addEventListener("click", () => {
-                endSession(false); // Call your existing endSession function
-                Swal.close();
-              });
-
-              purchaseBtn.addEventListener("click", () => {
-                if (qp_ajax_object.shop_page_url) {
-                  window.location.href = qp_ajax_object.shop_page_url;
-                }
-                Swal.close();
-              });
-            };
-          } else {
-            // --- NEW: Section Wise Practice - Show Pause & Purchase ---
-            practiceInProgress = false; // Allow redirects
-            alertConfig.html += `
-        <div style="margin-top: 20px; display: flex; justify-content: center; gap: 10px;">
-            <button id="swal-pause-session" class="qp-button qp-button-secondary">Pause Session</button>
-            <button id="swal-purchase-more-section" class="qp-button qp-button-primary">Purchase More</button>
-        </div>`;
-
-            alertConfig.didOpen = () => {
-              const pauseBtn = Swal.getPopup().querySelector(
-                "#swal-pause-session"
-              );
-              const purchaseBtn = Swal.getPopup().querySelector(
-                "#swal-purchase-more-section"
-              );
-
-              pauseBtn.addEventListener("click", () => {
-                // --- Call AJAX to pause the session ---
-                $.ajax({
-                  url: qp_ajax_object.ajax_url,
-                  type: "POST",
-                  data: {
-                    action: "qp_pause_session", // Use the existing pause action
-                    nonce: qp_ajax_object.nonce,
-                    session_id: sessionID, // Make sure sessionID is accessible here
-                  },
-                  beforeSend: function () {
-                    Swal.showLoading(); // Show loading indicator on the alert
-                    pauseBtn.disabled = true;
-                    purchaseBtn.disabled = true;
-                  },
-                  success: function (pauseResponse) {
-                    if (pauseResponse.success) {
-                      window.location.href = qp_ajax_object.dashboard_page_url; // Redirect to dashboard after pausing
-                    } else {
-                      Swal.update({
-                        title: "Error Pausing",
-                        html:
-                          pauseResponse.data.message ||
-                          "Could not pause session.",
-                        icon: "error",
-                        showConfirmButton: true, // Show OK button on error
-                        confirmButtonText: "OK",
-                      });
-                    }
-                  },
-                  error: function () {
-                    Swal.update({
-                      title: "Error Pausing",
-                      html: "A server error occurred while trying to pause.",
-                      icon: "error",
-                      showConfirmButton: true,
-                      confirmButtonText: "OK",
-                    });
-                  },
-                });
-              });
-
-              purchaseBtn.addEventListener("click", () => {
-                if (qp_ajax_object.shop_page_url) {
-                  window.location.href = qp_ajax_object.shop_page_url;
-                }
-                Swal.close();
-              });
-            };
-            // --- END NEW Section Wise Logic ---
-          }
-
-          Swal.fire(alertConfig);
-
-          // Disable interactions for the current question (keep this)
-          $(".qp-options-area")
-            .addClass("disabled")
-            .find('input[type="radio"]')
-            .prop("disabled", true);
-          $("#qp-check-answer-btn, #qp-skip-btn, #qp-next-btn").prop(
-            "disabled",
-            true
-          );
+          handleAccessDenied(response); // Call the new helper function
         } else {
           // --- Keep existing generic error handling here ---
           Swal.fire(
@@ -3021,13 +2967,230 @@ jQuery(document).ready(function ($) {
           );
         }
       },
-      error: function () {
-        // Keep existing network error handling
-        Swal.fire("Error!", "An unknown server error occurred.", "error");
-      },
-    });
+      // ...
+            error: function () {
+                Swal.fire("Error!", "An unknown server error occurred.", "error");
+            },
+            complete: function() {
+                // 4. Unlock UI if "Robust"
+                if (isRobust) {
+                    unlockNavigation();
+                }
+            }
+        });
 
-    updateLegendCounts();
+    } else {
+        // --- FLOW B: Answer is UNKNOWN (Backend Check) ---
+        // This flow MUST be robust, regardless of the setting.
+        
+        lockNavigation(); // Lock everything
+        
+        $.ajax({
+            url: qp_ajax_object.ajax_url,
+            type: "POST",
+            data: {
+                action: "check_answer",
+                nonce: qp_ajax_object.nonce,
+                session_id: sessionID,
+                question_id: questionID,
+                option_id: selectedOptionId,
+                remaining_time: remainingTime,
+            },
+            success: function (response) {
+                if (response.success) {
+                    // Server is the source of truth
+                    var isCorrect = response.data.is_correct;
+                    var correctOptionId = response.data.correct_option_id;
+
+                    // 1. Perform UI updates (coloring, state, palette, header)
+                    selectedOption.removeClass("selected");
+                    if (isCorrect) {
+                        selectedOption.addClass("correct");
+                        correctCount++;
+                        score += parseFloat(sessionSettings.marks_correct);
+                    } else {
+                        selectedOption.addClass("incorrect");
+                        optionsArea
+                            .find('input[value="' + correctOptionId + '"]')
+                            .closest(".option")
+                            .addClass("correct");
+                        incorrectCount++;
+                        score += parseFloat(sessionSettings.marks_incorrect);
+                    }
+                    
+                    optionsArea.addClass("disabled answered"); // Add new 'answered' class
+                    $("#qp-skip-btn, #qp-check-answer-btn").prop("disabled", true);
+                    $("#qp-next-btn").prop("disabled", false);
+
+                    if (answeredStates[questionID] && answeredStates[questionID].type === "skipped") {
+                        skippedCount--;
+                    }
+                    answeredStates[questionID] = {
+                        type: "answered",
+                        is_correct: isCorrect,
+                        correct_option_id: correctOptionId,
+                        selected_option_id: selectedOptionId,
+                        reported: answeredStates[questionID]?.reported || false,
+                        answered_in_session: true,
+                    };
+                    saveSessionStateToStorage();
+                    updateHeaderStats();
+                    var newStatus = isCorrect ? "correct" : "incorrect";
+                    updatePaletteButton(questionID, newStatus);
+                    scrollPaletteToCurrent();
+                    updateLegendCounts();
+
+                    if (response.data.attempt_id) {
+                        var questionIdText = "Question ID: " + questionID + " | Attempt ID: " + response.data.attempt_id;
+                        $("#qp-question-id").text(questionIdText);
+                    }
+
+                } else if (response.data && response.data.code === "access_denied") {
+                    handleAccessDenied(response);
+                } else {
+                    Swal.fire("Error!", response.data.message || "Could not check answer.", "error");
+                }
+            },
+            error: function () {
+                Swal.fire("Error!", "An unknown server error occurred.", "error");
+            },
+            complete: function() {
+                // 2. Unlock UI
+                unlockNavigation();
+            }
+        });
+    }
+  }
+
+  /**
+   * Handles the "access_denied" response from the server.
+   * Shows a detailed SweetAlert popup.
+   * @param {object} response - The error response from the server.
+   */
+  function handleAccessDenied(response) {
+      practiceInProgress = false; // Allow redirects from buttons
+      var alertConfig = {
+        title: "Out of Attempts!",
+        html:
+          response.data.message ||
+          "Please purchase more attempts to continue.",
+        icon: "error",
+        allowOutsideClick: false, // Prevent closing by clicking outside
+        allowEscapeKey: false, // Prevent closing with Esc key
+        showConfirmButton: false, // Hide default OK button
+        showCancelButton: false, // Hide default Cancel button
+      };
+
+      // Check if it's NOT section wise practice to add custom buttons
+      if (
+        sessionSettings &&
+        sessionSettings.practice_mode !== "Section Wise Practice"
+      ) {
+        alertConfig.html += `
+        <div style="margin-top: 20px; display: flex; justify-content: center; gap: 10px;">
+            <button id="swal-end-practice" class="qp-button qp-button-secondary">End Practice</button>
+            <button id="swal-purchase-more" class="qp-button qp-button-primary">Purchase More</button>
+        </div>`;
+
+        alertConfig.didOpen = () => {
+          const endBtn =
+            Swal.getPopup().querySelector("#swal-end-practice");
+          const purchaseBtn = Swal.getPopup().querySelector(
+            "#swal-purchase-more"
+          );
+
+          endBtn.addEventListener("click", () => {
+            endSession(false); // Call your existing endSession function
+            Swal.close();
+          });
+
+          purchaseBtn.addEventListener("click", () => {
+            if (qp_ajax_object.shop_page_url) {
+              window.location.href = qp_ajax_object.shop_page_url;
+            }
+            Swal.close();
+          });
+        };
+      } else {
+        // --- NEW: Section Wise Practice - Show Pause & Purchase ---
+        practiceInProgress = false; // Allow redirects
+        alertConfig.html += `
+    <div style="margin-top: 20px; display: flex; justify-content: center; gap: 10px;">
+        <button id="swal-pause-session" class="qp-button qp-button-secondary">Pause Session</button>
+        <button id="swal-purchase-more-section" class="qp-button qp-button-primary">Purchase More</button>
+    </div>`;
+
+        alertConfig.didOpen = () => {
+          const pauseBtn = Swal.getPopup().querySelector(
+            "#swal-pause-session"
+          );
+          const purchaseBtn = Swal.getPopup().querySelector(
+            "#swal-purchase-more-section"
+          );
+
+          pauseBtn.addEventListener("click", () => {
+            // --- Call AJAX to pause the session ---
+            $.ajax({
+              url: qp_ajax_object.ajax_url,
+              type: "POST",
+              data: {
+                action: "qp_pause_session", // Use the existing pause action
+                nonce: qp_ajax_object.nonce,
+                session_id: sessionID, // Make sure sessionID is accessible here
+              },
+              beforeSend: function () {
+                Swal.showLoading(); // Show loading indicator on the alert
+                pauseBtn.disabled = true;
+                purchaseBtn.disabled = true;
+              },
+              success: function (pauseResponse) {
+                if (pauseResponse.success) {
+                  window.location.href = qp_ajax_object.dashboard_page_url; // Redirect to dashboard after pausing
+                } else {
+                  Swal.update({
+                    title: "Error Pausing",
+                    html:
+                      pauseResponse.data.message ||
+                      "Could not pause session.",
+                    icon: "error",
+                    showConfirmButton: true, // Show OK button on error
+                    confirmButtonText: "OK",
+                  });
+                }
+              },
+              error: function () {
+                Swal.update({
+                  title: "Error Pausing",
+                  html: "A server error occurred while trying to pause.",
+                  icon: "error",
+                  showConfirmButton: true,
+                  confirmButtonText: "OK",
+                });
+              },
+            });
+          });
+
+          purchaseBtn.addEventListener("click", () => {
+            if (qp_ajax_object.shop_page_url) {
+              window.location.href = qp_ajax_object.shop_page_url;
+            }
+            Swal.close();
+          });
+        };
+        // --- END NEW Section Wise Logic ---
+      }
+
+      Swal.fire(alertConfig);
+
+      // Disable interactions for the current question (keep this)
+      $(".qp-options-area")
+        .addClass("disabled")
+        .find('input[type="radio"]')
+        .prop("disabled", true);
+      $("#qp-check-answer-btn, #qp-skip-btn, #qp-next-btn").prop(
+        "disabled",
+        true
+      );
   }
 
   // --- UPDATED: Simplified click handler ---
@@ -3100,6 +3263,7 @@ jQuery(document).ready(function ($) {
       if (currentQuestionIndex > 0) {
         var oldIndex = currentQuestionIndex;
         currentQuestionIndex--;
+        saveSessionStateToStorage();
         if (isMockTest || isRevisionMode) {
           $("#qp-question-counter").text(
             currentQuestionIndex + 1 + "/" + sessionQuestionIDs.length
@@ -3170,6 +3334,7 @@ jQuery(document).ready(function ($) {
 
     if (!isAutoSubmit && totalAttempts === 0) {
       practiceInProgress = false; // Allow redirect without warning
+      localStorage.removeItem(storageKey); // Clear the cache
       Swal.fire({
         title: "Session Not Saved",
         text: "You haven't answered any questions, so this session will not be saved in your history.",
@@ -3196,6 +3361,7 @@ jQuery(document).ready(function ($) {
     }
 
     practiceInProgress = false; // Allow user to leave the page
+    localStorage.removeItem(storageKey); // Clear the cache
     if (isMockTest) {
       clearInterval(mockTestTimer);
     }
