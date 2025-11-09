@@ -133,6 +133,11 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
             'direction_image_id' => '%d',
             'is_pyq'             => '%d',
             'pyq_year'           => '%s',
+            'primary_subject_term_id'  => '%d',
+            'specific_subject_term_id' => '%d',
+            'primary_source_term_id'   => '%d',
+            'specific_source_term_id'  => '%d',
+            'exam_term_id'             => '%d',
         ];
         $insert_data = [];
         $formats = [];
@@ -173,6 +178,11 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
             'direction_image_id' => '%d',
             'is_pyq'             => '%d',
             'pyq_year'           => '%s',
+            'primary_subject_term_id'  => '%d',
+            'specific_subject_term_id' => '%d',
+            'primary_source_term_id'   => '%d',
+            'specific_source_term_id'  => '%d',
+            'exam_term_id'             => '%d',
         ];
         $update_data = [];
         $formats = [];

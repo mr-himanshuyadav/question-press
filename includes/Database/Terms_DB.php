@@ -365,4 +365,55 @@ class Terms_DB extends DB { // Inherits from DB to get $wpdb
         }
     }
 
+    /**
+     * NEW: Gets the specific term ID and its top-level parent ID.
+     *
+     * Given a term ID, this function traces its lineage up to the root
+     * (where parent = 0) and returns both the original specific term ID
+     * and the ID of the top-level ancestor.
+     *
+     * @param int $specific_term_id The term_id to start from.
+     * @return array An array with 'primary' and 'specific' keys, or ['primary' => null, 'specific' => null] if not found.
+     */
+    public static function get_term_lineage_ids( $specific_term_id ) {
+        if ( empty( $specific_term_id ) || $specific_term_id <= 0 ) {
+            return ['primary' => null, 'specific' => null];
+        }
+
+        $specific_term_id = absint( $specific_term_id );
+        $current_id = $specific_term_id;
+        $primary_id = $current_id; // Assume it's the primary until proven otherwise
+        
+        $term_table = self::get_terms_table_name();
+        
+        // Loop up to 10 times to prevent infinite loops on orphaned terms
+        for ( $i = 0; $i < 10; $i++ ) {
+            $parent_id = self::$wpdb->get_var( self::$wpdb->prepare(
+                "SELECT parent FROM {$term_table} WHERE term_id = %d",
+                $current_id
+            ) );
+
+            if ( $parent_id == 0 ) {
+                // We found the root. The $current_id is the primary parent.
+                $primary_id = $current_id;
+                break;
+            }
+
+            if ( is_null( $parent_id ) ) {
+                // Term doesn't exist or is orphaned.
+                // In this case, the term itself is all we have.
+                $primary_id = $current_id;
+                break;
+            }
+            
+            // Go up one level
+            $current_id = $parent_id;
+        }
+
+        return [
+            'primary'  => absint( $primary_id ),
+            'specific' => $specific_term_id
+        ];
+    }
+
 } // End class Terms_DB
