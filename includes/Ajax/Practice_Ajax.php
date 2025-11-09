@@ -647,7 +647,7 @@ class Practice_Ajax
                 ['%s'], // Format for status
                 ['%d']  // Format for question_id
             );
-            error_log("QP Report: Question #{$question_id} status set to 'under_review'.");
+            error_log("QP Report: Question #{$question_id} status set to 'reported'.");
         }
 
         wp_send_json_success(['message' => 'Report submitted.', 'reported_info' => $report_info]);
