@@ -48,6 +48,7 @@ class Activator {
         import_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         status VARCHAR(20) NOT NULL DEFAULT 'draft',
         last_modified DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        explanation_text LONGTEXT DEFAULT NULL,
         PRIMARY KEY (question_id),
         KEY group_id (group_id),
         KEY status (status),
@@ -62,6 +63,7 @@ class Activator {
         question_id BIGINT(20) UNSIGNED NOT NULL,
         option_text TEXT NOT NULL,
         is_correct BOOLEAN NOT NULL DEFAULT 0,
+        explanation_text TEXT DEFAULT NULL,
         PRIMARY KEY (option_id),
         KEY question_id (question_id)
     ) $charset_collate;";

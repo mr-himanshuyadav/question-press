@@ -557,6 +557,7 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
         $submitted_option_ids = [];
         $options_text = isset($q_data['options']) ? (array)$q_data['options'] : [];
         $option_ids = isset($q_data['option_ids']) ? (array)$q_data['option_ids'] : [];
+        $option_explanations = isset($q_data['option_explanations']) ? (array)$q_data['option_explanations'] : [];
         $correct_option_id_from_form = isset($q_data['correct_option_id']) ? $q_data['correct_option_id'] : null;
         $final_correct_option_id = null; // Variable to store the actual correct ID
 
@@ -565,7 +566,14 @@ class Questions_DB extends DB { // Inherits from DB to get $wpdb
             $trimmed_option_text = trim(stripslashes($option_text));
             if (empty($trimmed_option_text)) continue;
 
-            $option_data = ['option_text' => wp_kses_post($trimmed_option_text)];
+            // 1. Get and sanitize the option explanation
+            $sanitized_explanation = isset($option_explanations[$index]) ? wp_kses_post(stripslashes($option_explanations[$index])) : null;
+
+            // 2. Check if it's meaningfully empty
+            $is_empty = (trim(strip_tags($sanitized_explanation ?? '')) === '');
+            $explanation_to_save = $is_empty ? null : $sanitized_explanation;
+
+            $option_data = ['option_text' => wp_kses_post($trimmed_option_text), 'explanation_text' => $explanation_to_save];
             $current_option_actual_id = 0; // Track the ID for this iteration
 
             if ($option_id > 0) {

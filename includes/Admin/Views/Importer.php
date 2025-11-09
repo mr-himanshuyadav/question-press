@@ -207,7 +207,8 @@ class Importer {
                 'question_text' => $question_text,
                 'question_text_hash' => $hash,
                 'duplicate_of' => $existing_question_id ?: null,
-                'status' => 'draft'
+                'status' => 'draft',
+                'explanation_text' => $question['explanationText'] ?? null,
             ]);
             $question_id = $wpdb->insert_id;
 
@@ -219,7 +220,8 @@ class Importer {
                     $wpdb->insert($options_table, [
                         'question_id' => $question_id,
                         'option_text' => $option['optionText'],
-                        'is_correct' => $is_correct_val ? 1 : 0
+                        'is_correct' => $is_correct_val ? 1 : 0,
+                        'explanation_text' => $option['explanation'] ?? null
                     ]);
                     if ($is_correct_val) $has_correct_answer = true;
                 }

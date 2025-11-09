@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Template for the Admin Question Editor page.
  *
@@ -25,12 +26,13 @@
  * @var int    $current_source_id    The ID of the currently linked source.
  */
 
-if ( ! defined( 'ABSPATH' ) ) {
+if (! defined('ABSPATH')) {
     exit; // Exit if accessed directly.
 }
 ?>
 <div class="wrap">
-    <?php echo $message_html; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+    <?php echo $message_html; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped 
+    ?>
 
     <?php if (!empty($open_reports)): ?>
         <div class="notice notice-error" style="padding: 1rem; border-left-width: 4px;">
@@ -69,12 +71,14 @@ if ( ! defined( 'ABSPATH' ) ) {
         <?php wp_nonce_field('qp_save_question_group_nonce'); ?>
         <input type="hidden" name="group_id" value="<?php echo esc_attr($group_id); ?>">
 
-        <?php // *** MODIFICATION 1: Removed the "Step 1 of 2" / "Step 2 of 2" notices *** ?>
+        <?php // *** MODIFICATION 1: Removed the "Step 1 of 2" / "Step 2 of 2" notices *** 
+        ?>
 
         <div id="poststuff">
             <div id="post-body" class="metabox-holder columns-2">
                 <div id="post-body-content">
-                    <?php // *** MODIFICATION 2: Changed to show for new groups as well *** ?>
+                    <?php // *** MODIFICATION 2: Changed to show for new groups as well *** 
+                    ?>
                     <?php if ($has_draft_question) : ?>
                         <div class="notice notice-warning inline" style="margin: 0; margin-bottom: 5px;">
                             <p><strong>Draft Status:</strong> This group contains one or more questions that are still drafts (missing a correct answer). Draft questions will not appear on the frontend until they are completed and published.</p>
@@ -227,7 +231,22 @@ if ( ! defined( 'ABSPATH' ) ) {
                                         ]
                                     );
                                     ?>
-                                    <?php // *** MODIFICATION 3: Removed the "if ($is_editing)" wrapper *** ?>
+                                    <hr style="border-top: 1px dashed #ccc;">
+                                    <p style="margin-top: 10px;"><strong>General Explanation</strong></p>
+                                    <?php
+                                    wp_editor(
+                                        $question->explanation_text ?? '', // The content
+                                        'explanation_text_editor_' . $q_index, // A unique ID
+                                        [
+                                            'textarea_name' => 'questions[' . $q_index . '][explanation_text]',
+                                            'textarea_rows' => 4,
+                                            'media_buttons' => false,
+                                            'tinymce'       => ['toolbar1' => 'bold,italic,underline,link,unlink,bullist,numlist'],
+                                        ]
+                                    );
+                                    ?>
+                                    <?php // *** MODIFICATION 3: Removed the "if ($is_editing)" wrapper *** 
+                                    ?>
                                     <div class="qp-options-and-labels-wrapper">
                                         <hr>
                                         <p><strong>Options (Select the radio button for the correct answer)</strong></p>
@@ -253,6 +272,7 @@ if ( ! defined( 'ABSPATH' ) ) {
                                                     <input type="radio" name="questions[<?php echo $q_index; ?>][correct_option_id]" value="<?php echo $option_id_value; ?>" <?php checked($is_correct); ?>>
                                                     <input type="hidden" name="questions[<?php echo $q_index; ?>][option_ids][]" value="<?php echo $option ? esc_attr($option->option_id) : '0'; ?>">
                                                     <input type="text" name="questions[<?php echo $q_index; ?>][options][]" class="option-text-input" value="<?php echo $option ? esc_attr($option->option_text) : ''; ?>" placeholder="Option <?php echo $i + 1; ?>">
+                                                    <input type="text" name="questions[<?php echo $q_index; ?>][option_explanations][]" class="option-explanation-input" value="<?php echo $option ? esc_attr($option->explanation_text) : ''; ?>" placeholder="Option <?php echo $i + 1; ?> Explanation">
                                                     <?php if ($option && $option->option_id): ?>
                                                         <small class="option-id-display">ID: <?php echo esc_html($option->option_id); ?></small>
                                                     <?php endif; ?>
@@ -263,7 +283,8 @@ if ( ! defined( 'ABSPATH' ) ) {
                                             <button type="button" class="button button-secondary add-new-option-btn" <?php if ($options_to_show >= 6) echo 'style="display:none;"'; ?>>+ Add Option</button>
                                         </div>
                                     </div>
-                                    <?php // *** End of removed "if ($is_editing)" wrapper *** ?>
+                                    <?php // *** End of removed "if ($is_editing)" wrapper *** 
+                                    ?>
                                 </div>
                             </div>
                         <?php endforeach; ?>
@@ -274,7 +295,8 @@ if ( ! defined( 'ABSPATH' ) ) {
                 <div id="postbox-container-1" class="postbox-container">
                     <div class="postbox">
                         <div id="major-publishing-actions" style="text-align: center;">
-                            <?php // *** MODIFICATION 4: Changed button text for new groups *** ?>
+                            <?php // *** MODIFICATION 4: Changed button text for new groups *** 
+                            ?>
                             <button type="button" name="save_group" class="button button-primary button-large" id="qp-save-group-btn"><?php echo $is_editing ? 'Update Group' : 'Save Group'; ?></button>
                         </div>
 
@@ -447,7 +469,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
     .qp-options-grid-container {
         display: grid;
-        grid-template-columns: repeat(2, 1fr);
+        grid-template-columns: 1fr;
         /* Create two equal columns */
         gap: 10px 15px;
         /* Add space between rows and columns */
@@ -464,11 +486,13 @@ if ( ! defined( 'ABSPATH' ) ) {
     }
 
     .qp-option-row .option-text-input {
-        flex-grow: 1;
-        /* Allow text input to fill available space */
-        width: 100%;
-        /* Ensure it takes up the column width */
+        flex-basis: 40%;
     }
+
+    .qp-option-row .option-explanation-input {
+    flex-basis: 50%; /* Give a base size */
+    background-color: #f6f7f7; /* Differentiate it slightly */
+}
 
     .qp-option-row .option-id-display {
         color: #777;

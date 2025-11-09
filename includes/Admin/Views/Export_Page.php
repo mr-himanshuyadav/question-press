@@ -22,7 +22,6 @@ class Export_Page
 
     public static function render()
     {
-        self::handle_export_submission();
         global $wpdb;
         $term_table = $wpdb->prefix . 'qp_terms';
         $tax_table = $wpdb->prefix . 'qp_taxonomies';
@@ -129,13 +128,14 @@ class Export_Page
             $options_array = [];
             if (isset($options_by_question[$question->question_id])) {
                 foreach ($options_by_question[$question->question_id] as $opt) {
-                    $options_array[] = ['optionText' => $opt->option_text, 'isCorrect' => (bool)$opt->is_correct];
+                    $options_array[] = ['optionText' => $opt->option_text, 'isCorrect' => (bool)$opt->is_correct, 'explanation' => $opt->explanation_text];
                 }
             }
 
             $group_output['questions'][] = [
                 'questionId'        => 'db_question_' . $question->question_id,
                 'questionText'      => $question->question_text,
+                'explanationText'   => $question->explanation_text,
                 'questionNumber'    => $question->question_number_in_section,
                 'options'           => $options_array,
             ];
@@ -154,8 +154,8 @@ class Export_Page
     $json_data = json_encode($final_json, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
 
     $zip_path = tempnam(sys_get_temp_dir(), 'qp_export');
-    $zip = new ZipArchive();
-    if ($zip->open($zip_path, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== TRUE) {
+    $zip = new \ZipArchive();
+    if ($zip->open($zip_path, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) !== TRUE) {
         wp_die("Cannot create ZIP archive.");
     }
     $zip->addFromString($json_filename, $json_data);
