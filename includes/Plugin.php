@@ -42,6 +42,7 @@ use QuestionPress\Admin\Views\Logs_Reports_Page;
 use QuestionPress\Admin\Views\Question_Editor_Page;
 use QuestionPress\Admin\Views\Settings_Page;
 use QuestionPress\Admin\Views\Sources_Page;
+use QuestionPress\Admin\Views\Export_Page;
 use QuestionPress\Admin\Views\Subjects_Page;
 use QuestionPress\Admin\Views\User_Entitlements_Page;
 
@@ -176,6 +177,7 @@ final class Plugin {
         add_action('admin_init', [Form_Handler::class, 'handle_resolve_from_editor']);
         add_action('admin_init', [Logs_Reports_Page::class, 'handle_log_settings_forms']);
         add_action('admin_init', [Admin_Utils::class, 'redirect_wp_profile_page']);
+        add_action('admin_init', [Export_Page::class, 'handle_export_submission' ] );
         add_action('admin_post_qp_save_user_scope', [User_Entitlements_Page::class, 'handle_save_scope']);
         add_action('wp_ajax_qp_save_question_group', [Question_Editor_Page::class, 'handle_save_group']);
         add_action('admin_notices', [Admin_Utils::class, 'display_admin_notices']);

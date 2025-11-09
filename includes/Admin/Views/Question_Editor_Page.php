@@ -116,6 +116,13 @@ class Question_Editor_Page
             $question_text = isset($q_data['question_text']) ? stripslashes($q_data['question_text']) : '';
             if (empty(trim($question_text))) continue;
 
+            // 1. Get and sanitize the explanation text
+            $sanitized_explanation = isset($q_data['explanation_text']) ? wp_kses_post(stripslashes($q_data['explanation_text'])) : null;
+
+            // 2. Check if it's meaningfully empty (after stripping tags and trimming whitespace)
+            $is_empty = (trim(strip_tags($sanitized_explanation ?? '')) === '');
+            $explanation_to_save = $is_empty ? null : $sanitized_explanation;
+
             $question_id = isset($q_data['question_id']) ? absint($q_data['question_id']) : 0;
             $is_question_complete = !empty($q_data['correct_option_id']);
 
@@ -123,6 +130,7 @@ class Question_Editor_Page
                 'group_id' => $group_id,
                 'question_number_in_section' => isset($q_data['question_number_in_section']) ? sanitize_text_field($q_data['question_number_in_section']) : '',
                 'question_text' => wp_kses_post($question_text),
+                'explanation_text' => $explanation_to_save,
                 'question_text_hash' => md5(strtolower(trim(preg_replace('/\s+/', '', $question_text)))),
                 'status' => $is_question_complete ? 'publish' : 'draft',
             ];
