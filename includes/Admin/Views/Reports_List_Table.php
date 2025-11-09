@@ -6,6 +6,7 @@ if (!class_exists('WP_List_Table')) {
 }
 
 use \WP_List_Table;
+use QuestionPress\Admin\Form_Handler;
 
 class Reports_List_Table extends WP_List_Table
 {
@@ -55,11 +56,19 @@ class Reports_List_Table extends WP_List_Table
         $ids_placeholder = implode(',', $question_ids);
 
         if ('resolve_reports' === $action) {
-            $wpdb->query("UPDATE {$reports_table} SET status = 'resolved' WHERE question_id IN ({$ids_placeholder})");
+            // 1. Resolve all open reports associated with these questions
+            $wpdb->query("UPDATE {$reports_table} SET status = 'resolved' WHERE question_id IN ({$ids_placeholder}) AND status = 'open'");
+
+            // 2. Bulk check all questions to see if they can be republished
+            Form_Handler::check_and_republish_questions_bulk($question_ids);
         }
 
         if ('delete_reports' === $action) {
+            // 1. Delete all reports associated with these questions
             $wpdb->query("DELETE FROM {$reports_table} WHERE question_id IN ({$ids_placeholder})");
+
+            // 2. Bulk check all questions to see if they can be republished
+            Form_Handler::check_and_republish_questions_bulk($question_ids);
         }
     }
 

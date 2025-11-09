@@ -1332,7 +1332,6 @@ class Questions_DB extends DB
 
         $q_table = self::get_questions_table_name();
         $g_table = self::get_groups_table_name();
-        $where_conditions = array(); // Add this at the beginning
 
 
         $where_conditions = ["q.status = 'publish'"];
@@ -1363,22 +1362,10 @@ class Questions_DB extends DB
 
         $where_clause = ' WHERE ' . implode(' AND ', $where_conditions);
 
-        $sql = "SELECT q.question_id
+        $sql = "SELECT DISTINCT q.question_id
                 FROM {$q_table} q
                 JOIN {$g_table} g ON q.group_id = g.group_id
                 $where_clause";
-
-                // Log the actual SQL being executed
-error_log( "SQL Query: " . $sql );
-error_log( "Args: " . print_r( $args, true ) );
-error_log( "Where Conditions: " . print_r( $where_conditions, true ) );
-
-// Check if wpdb has any errors
-global $wpdb;
-$results = $wpdb->get_results( $sql );
-error_log( "Query Results: " . print_r( $results, true ) );
-error_log( "Last Query: " . $wpdb->last_query );
-error_log( "Last Error: " . $wpdb->last_error );
 
         // Use prepare if you add any non-numeric params, but with integer IDs this is safe.
         return self::$wpdb->get_col($sql);

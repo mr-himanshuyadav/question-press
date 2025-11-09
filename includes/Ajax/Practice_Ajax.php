@@ -637,6 +637,19 @@ class Practice_Ajax
             'has_suggestion' => in_array('suggestion', $reason_types),
         ];
 
+        // If the report was a critical 'report' (not just a 'suggestion')
+        if ($report_info['has_report']) {
+            // Set the question's status to 'under_review' to hide it from practice pools
+            $wpdb->update(
+                "{$wpdb->prefix}qp_questions",
+                ['status' => 'reported'], // The new status
+                ['question_id' => $question_id], // The question that was reported
+                ['%s'], // Format for status
+                ['%d']  // Format for question_id
+            );
+            error_log("QP Report: Question #{$question_id} status set to 'under_review'.");
+        }
+
         wp_send_json_success(['message' => 'Report submitted.', 'reported_info' => $report_info]);
     }
 

@@ -57,7 +57,13 @@ class Form_Handler {
             if ( $_GET['action'] === 'resolve_report' && isset( $_GET['question_id'] ) ) {
                 $question_id = absint( $_GET['question_id'] );
                 check_admin_referer( 'qp_resolve_report_' . $question_id );
+                
+                // Resolve all open reports for this question
                 $wpdb->update( $reports_table, [ 'status' => 'resolved' ], [ 'question_id' => $question_id, 'status' => 'open' ] );
+                
+                // Check if the question can be republished
+                self::check_and_republish_questions_bulk( [$question_id] );
+
                 wp_safe_redirect( admin_url( 'admin.php?page=qp-logs-reports&tab=reports&message=3' ) );
                 exit;
             }
@@ -66,7 +72,19 @@ class Form_Handler {
             if ( $_GET['action'] === 'reopen_report' && isset( $_GET['question_id'] ) ) {
                 $question_id = absint( $_GET['question_id'] );
                 check_admin_referer( 'qp_reopen_report_' . $question_id );
+
+                // Re-open all resolved reports for this question
                 $wpdb->update( $reports_table, [ 'status' => 'open' ], [ 'question_id' => $question_id, 'status' => 'resolved' ] );
+
+                // Set the question status back to 'under_review'
+                $wpdb->update(
+                    "{$wpdb->prefix}qp_questions",
+                    ['status' => 'reported'],
+                    ['question_id' => $question_id],
+                    ['%s'],
+                    ['%d']
+                );
+
                 wp_safe_redirect( admin_url( 'admin.php?page=qp-logs-reports&tab=reports&status=resolved&message=4' ) );
                 exit;
             }
@@ -109,7 +127,10 @@ class Form_Handler {
                 $ids_placeholder = implode( ',', $question_ids );
                 // Only update 'open' reports
                 $wpdb->query( "UPDATE $reports_table SET status = 'resolved' WHERE question_id IN ($ids_placeholder) AND status = 'open'" );
+                self::check_and_republish_questions_bulk( $question_ids );
             }
+
+            // Redirect back to the editor
 
             // Redirect back to the editor
             $redirect_url = admin_url( 'admin.php?page=qp-edit-group&group_id=' . $group_id );
@@ -188,8 +209,69 @@ class Form_Handler {
         $wpdb->query("DELETE FROM $term_table WHERE term_id IN ($ids_placeholder)");
         $wpdb->query("DELETE FROM $meta_table WHERE term_id IN ($ids_placeholder)");
         
-        \QuestionPress\Admin\Admin_Utils::set_message(count($source_term_ids_to_merge) . ' item(s) were successfully merged into "' . esc_html($final_name) . '".', 'updated');
-        \QuestionPress\Admin\Admin_Utils::redirect_to_tab($taxonomy_name . 's');
+        Admin_Utils::set_message(count($source_term_ids_to_merge) . ' item(s) were successfully merged into "' . esc_html($final_name) . '".', 'updated');
+        Admin_Utils::redirect_to_tab($taxonomy_name . 's');
     }
 
+    /**
+     * Checks a list of questions to see if they can be republished in bulk.
+     * A question is republished if it is 'under_review' and has no
+     * other open, critical 'report' type issues.
+     *
+     * @param array $question_ids Array of question IDs to check.
+     */
+    public static function check_and_republish_questions_bulk( $question_ids ) {
+        if ( empty( $question_ids ) ) {
+            return;
+        }
+
+        global $wpdb;
+        $reports_table = "{$wpdb->prefix}qp_question_reports";
+        $questions_table = "{$wpdb->prefix}qp_questions";
+        $meta_table = "{$wpdb->prefix}qp_term_meta";
+        $ids_placeholder = implode( ',', array_map('absint', $question_ids) );
+
+        // 1. Find all term IDs that are of type 'report'
+        $report_type_term_ids = $wpdb->get_col(
+            "SELECT term_id FROM {$meta_table} WHERE meta_key = 'type' AND meta_value = 'report'"
+        );
+
+        $questions_to_republish = $question_ids;
+
+        if ( ! empty( $report_type_term_ids ) ) {
+            // 2. Find all questions from our list that *STILL* have an open critical report
+            $find_in_set_clauses = [];
+            foreach ( $report_type_term_ids as $term_id ) {
+                $find_in_set_clauses[] = $wpdb->prepare( "FIND_IN_SET(%d, reason_term_ids)", $term_id );
+            }
+
+            $questions_with_open_reports = $wpdb->get_col(
+                "SELECT DISTINCT question_id 
+                 FROM {$reports_table} 
+                 WHERE question_id IN ($ids_placeholder) 
+                 AND status = 'open' 
+                 AND (" . implode( ' OR ', $find_in_set_clauses ) . ")"
+            );
+
+            // 3. Determine the final list of questions to republish
+            if ( ! empty( $questions_with_open_reports ) ) {
+                $questions_to_republish = array_diff( $question_ids, $questions_with_open_reports );
+            }
+        }
+        
+        // 4. If we have any questions to republish, do it in ONE query.
+        if ( ! empty( $questions_to_republish ) ) {
+            $republish_ids_placeholder = implode( ',', array_map('absint', $questions_to_republish) );
+
+            $wpdb->query(
+                "UPDATE {$questions_table}
+                 SET status = 'publish'
+                 WHERE question_id IN ($republish_ids_placeholder)
+                 AND status = 'reported'"
+            );
+            error_log("QP Republish: Bulk checked " . count($question_ids) . ". Republished " . count($questions_to_republish) . " questions.");
+        } else {
+             error_log("QP Republish: Bulk checked " . count($question_ids) . ". No questions eligible for republishing.");
+        }
+    }
 }
