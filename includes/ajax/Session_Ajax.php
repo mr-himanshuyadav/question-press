@@ -97,7 +97,6 @@ class Session_Ajax {
             'topics'           => $topics_raw,
             'section_id'       => $section_id,
             'pyq_only'         => isset($_POST['qp_pyq_only']),
-            'include_attempted' => isset($_POST['qp_include_attempted']),
             'marks_correct'    => isset($_POST['scoring_enabled']) ? floatval($_POST['qp_marks_correct']) : null,
             'marks_incorrect'  => isset($_POST['scoring_enabled']) ? -abs(floatval($_POST['qp_marks_incorrect'])) : null,
             'timer_enabled'    => isset($_POST['qp_timer_enabled']),
@@ -127,78 +126,97 @@ class Session_Ajax {
             }
         }
 
-        // --- Build Question Pool based on NEW Group Hierarchy ---
-        $joins = " FROM {$q_table} q JOIN {$g_table} g ON q.group_id = g.group_id";
-        $where_conditions = ["q.status = 'publish'"];
-
-        // 1. Determine the set of TOPIC term IDs to filter by.
-        $topic_term_ids_to_filter = [];
-        $subjects_selected = !empty($subjects_raw) && !in_array('all', $subjects_raw);
-        $topics_selected = !empty($topics_raw) && !in_array('all', $topics_raw);
-
-        if ($topics_selected) {
-            $topic_term_ids_to_filter = array_map('absint', $topics_raw);
-        } elseif ($subjects_selected) {
-            $subject_ids_placeholder = implode(',', array_map('absint', $subjects_raw));
-            $topic_term_ids_to_filter = $wpdb->get_col("SELECT term_id FROM {$term_table} WHERE parent IN ($subject_ids_placeholder)");
-        }
-
-        // 2. Find all groups linked to the selected topics (or all topics if no selection).
-        if (!empty($topic_term_ids_to_filter)) {
-            $topic_ids_placeholder = implode(',', $topic_term_ids_to_filter);
-            $where_conditions[] = "g.group_id IN (SELECT object_id FROM {$rel_table} WHERE object_type = 'group' AND term_id IN ($topic_ids_placeholder))";
-        }
-
-        // 3. Handle Section selection (which is a type of source term).
-        if ($practice_mode === 'Section Wise Practice') {
-            $where_conditions[] = $wpdb->prepare("g.group_id IN (SELECT object_id FROM {$rel_table} WHERE object_type = 'group' AND term_id = %d)", $section_id);
-        }
-
-        // 4. Apply PYQ filter.
-        if ($session_settings['pyq_only']) {
-            $where_conditions[] = "g.is_pyq = 1";
-        }
-
-        // 5. Exclude previously attempted questions if specified, UNLESS we are updating a session.
-        if (!$session_settings['include_attempted'] && !$is_updating_session) {
-            $attempted_q_ids_sql = $wpdb->prepare("SELECT DISTINCT question_id FROM $a_table WHERE user_id = %d AND status = 'answered'", $user_id);
-            $where_conditions[] = "q.question_id NOT IN ($attempted_q_ids_sql)";
-        }
-
-        // 6. Exclude questions with open reports.
-        $reported_question_ids = $wpdb->get_col("SELECT DISTINCT question_id FROM {$reports_table} WHERE status = 'open'");
-        if (!empty($reported_question_ids)) {
-            $reported_ids_placeholder = implode(',', $reported_question_ids);
-            $where_conditions[] = "q.question_id NOT IN ($reported_ids_placeholder)";
-        }
-
-        // --- Determine Order and Finalize Query ---
+        // --- Get Admin Settings ---
         $options = get_option('qp_settings');
         $admin_order_setting = isset($options['question_order']) ? $options['question_order'] : 'random';
         $admin_max_limit = isset($options['normal_practice_limit']) ? absint($options['normal_practice_limit']) : 100;
-        $user_requested_limit = isset($_POST['qp_normal_practice_limit']) ? absint($_POST['qp_normal_practice_limit']) : $admin_max_limit;
         
-        // Final limit is the *smaller* of the admin setting or the user's request
-        $final_limit = min($user_requested_limit, $admin_max_limit);
-        if ($final_limit <= 0) $final_limit = 100; // Failsafe
+        $question_results = null; // Used for section-wise mode later
+        $question_ids = [];
 
-        $limit_sql = $wpdb->prepare(" LIMIT %d", $final_limit);
-        $order_by_sql = '';
+        if ($practice_mode === 'normal') {
+            // --- NEW LOGIC FOR NORMAL PRACTICE ---
 
-        if ($practice_mode === 'Section Wise Practice') {
-            $order_by_sql = 'ORDER BY CAST(q.question_number_in_section AS UNSIGNED) ASC, q.question_id ASC';
+            // 1. Determine final question limit
+            $user_requested_limit = isset($_POST['qp_normal_practice_limit']) ? absint($_POST['qp_normal_practice_limit']) : $admin_max_limit;
+            $final_limit = min($user_requested_limit, $admin_max_limit);
+            if ($final_limit <= 0) $final_limit = 100; // Failsafe
+
+            // 2. Build args for the new DB function
+            $db_args = [
+                // Handle 'all' by sending an empty array
+                'subject_ids' => (!empty($subjects_raw) && !in_array('all', $subjects_raw)) ? array_map('absint', $subjects_raw) : [],
+                'topic_ids'   => (!empty($topics_raw) && !in_array('all', $topics_raw)) ? array_map('absint', $topics_raw) : [],
+                'pyq_only'    => $session_settings['pyq_only']
+            ];
+
+            // Prioritize topics over subjects if both are somehow selected
+            if (!empty($db_args['topic_ids'])) {
+                $db_args['subject_ids'] = []; 
+            }
+
+            // 3. Get the full question pool using the new denormalized function
+            // (This assumes you added the function from our last chat to Questions_DB.php)
+            $full_question_pool = Questions_DB::get_all_question_ids_for_practice($db_args);
+
+            if (!empty($full_question_pool)) {
+                // 4. Randomize the full pool in PHP
+                if ($admin_order_setting === 'random') {
+                    shuffle($full_question_pool);
+                }
+                // (If 'in_order', we respect the DB order which is likely question_id ASC)
+                
+                // 5. Slice to get the final set of questions
+                $question_ids = array_slice($full_question_pool, 0, $final_limit);
+            }
+
         } else {
-            $order_by_sql = ($admin_order_setting === 'in_order') ? 'ORDER BY q.question_id ASC' : '';
-        }
+            // --- UPDATED LOGIC FOR SECTION WISE PRACTICE ---
+            // (This is the old logic, but with the "NOT IN" query removed)
 
-        $where_sql = ' WHERE ' . implode(' AND ', $where_conditions);
-        $query = "SELECT DISTINCT q.question_id, q.question_number_in_section {$joins} {$where_sql} {$order_by_sql} {$limit_sql}";
+            $joins = " FROM {$q_table} q JOIN {$g_table} g ON q.group_id = g.group_id";
+            $where_conditions = ["q.status = 'publish'"];
 
-        $question_results = $wpdb->get_results($query);
-        $question_ids = wp_list_pluck($question_results, 'question_id');
-        
-        if ($practice_mode !== 'Section Wise Practice' && $admin_order_setting !== 'in_order') {
-            shuffle($question_ids);
+            // 1. Find all groups linked to the selected topics (if any)
+            $topic_term_ids_to_filter = [];
+            $subjects_selected = !empty($subjects_raw) && !in_array('all', $subjects_raw);
+            $topics_selected = !empty($topics_raw) && !in_array('all', $topics_raw);
+
+            if ($topics_selected) {
+                $topic_term_ids_to_filter = array_map('absint', $topics_raw);
+            } elseif ($subjects_selected) {
+                $subject_ids_placeholder = implode(',', array_map('absint', $subjects_raw));
+                $topic_term_ids_to_filter = $wpdb->get_col("SELECT term_id FROM {$term_table} WHERE parent IN ($subject_ids_placeholder)");
+            }
+            if (!empty($topic_term_ids_to_filter)) {
+                $topic_ids_placeholder = implode(',', $topic_term_ids_to_filter);
+                $where_conditions[] = "g.group_id IN (SELECT object_id FROM {$rel_table} WHERE object_type = 'group' AND term_id IN ($topic_ids_placeholder))";
+            }
+            
+            // 2. Handle Section selection
+            $where_conditions[] = $wpdb->prepare("g.group_id IN (SELECT object_id FROM {$rel_table} WHERE object_type = 'group' AND term_id = %d)", $section_id);
+            
+            // 3. Apply PYQ filter
+            if ($session_settings['pyq_only']) {
+                $where_conditions[] = "g.is_pyq = 1";
+            }
+            
+            // 4. Exclude questions with open reports
+            $reported_question_ids = $wpdb->get_col("SELECT DISTINCT question_id FROM {$reports_table} WHERE status = 'open'");
+            if (!empty($reported_question_ids)) {
+                $reported_ids_placeholder = implode(',', $reported_question_ids);
+                $where_conditions[] = "q.question_id NOT IN ($reported_ids_placeholder)";
+            }
+
+            // 5. Get all questions, ordered by section number
+            $order_by_sql = 'ORDER BY CAST(q.question_number_in_section AS UNSIGNED) ASC, q.question_id ASC';
+            $where_sql = ' WHERE ' . implode(' AND ', $where_conditions);
+            
+            // We fetch all questions for a section, so LIMIT is removed
+            $query = "SELECT DISTINCT q.question_id, q.question_number_in_section {$joins} {$where_sql} {$order_by_sql}";
+            
+            $question_results = $wpdb->get_results($query);
+            $question_ids = wp_list_pluck($question_results, 'question_id');
         }
 
         if (empty($question_ids)) {
@@ -878,8 +896,23 @@ class Session_Ajax {
         $is_auto_submit = isset($_POST['is_auto_submit']) && $_POST['is_auto_submit'] === 'true';
         $end_reason = $is_auto_submit ? 'autosubmitted_timer' : 'user_submitted';
 
+        global $wpdb;
+        $queries_before = $wpdb->num_queries; // Get query count *before*
+        $start_time = microtime(true);       // Get time *before*
+
         // Call the shared helper function (assuming qp_finalize_and_end_session is globally available for now)
         $summary_data = Session_Manager::finalize_and_end_session($session_id, 'completed', $end_reason); // <-- CHANGE THIS LINE
+
+        $time_taken = microtime(true) - $start_time;       // Calculate time difference
+        $queries_run = $wpdb->num_queries - $queries_before; // Calculate query difference
+
+        // Log the results to the debug file
+        $log_message = sprintf(
+            "--- SESSION FINALIZE [TEST] --- | Time: %.4f seconds | Queries: %d",
+            $time_taken,
+            $queries_run
+        );
+        error_log($log_message);
 
         if (is_null($summary_data)) {
             wp_send_json_success(['status' => 'no_attempts', 'message' => 'Session deleted as no questions were attempted.']);

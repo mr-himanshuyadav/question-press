@@ -6,6 +6,7 @@ namespace QuestionPress\Admin\Views;
 if (!defined('ABSPATH')) exit;
 
 use QuestionPress\Database\Questions_DB;
+use QuestionPress\Database\Terms_DB;
 use QuestionPress\Utils\Attempt_Evaluator;
 use QuestionPress\Admin\Views\Course_Editor_Helper;
 use QuestionPress\Utils\Template_Loader;
@@ -44,6 +45,26 @@ class Question_Editor_Page
              wp_send_json_error(['message' => 'At least one question is required to save a group.'], 400);
         }
 
+        // --- START: NEW DENORMALIZATION LOGIC ---
+        
+        // 1. Get the most specific term IDs submitted from the form
+        $specific_subject_term_id = !empty($_POST['topic_id']) ? absint($_POST['topic_id']) : absint($_POST['subject_id']);
+        $specific_source_term_id = !empty($_POST['section_id']) ? absint($_POST['section_id']) : (!empty($_POST['source_id']) ? absint($_POST['source_id']) : 0);
+        $exam_term_id = ($is_pyq && !empty($_POST['exam_id'])) ? absint($_POST['exam_id']) : 0;
+
+        // 2. Get the full lineage (primary + specific) for subject and source
+        $subject_lineage = Terms_DB::get_term_lineage_ids($specific_subject_term_id);
+        $source_lineage = Terms_DB::get_term_lineage_ids($specific_source_term_id);
+
+        // 3. Prepare the array of denormalized data
+        $denormalized_data = [
+            'primary_subject_term_id' => $subject_lineage['primary'],
+            'specific_subject_term_id' => $subject_lineage['specific'],
+            'primary_source_term_id' => $source_lineage['primary'],
+            'specific_source_term_id' => $source_lineage['specific'],
+            'exam_term_id' => $exam_term_id
+        ];
+
         // --- 3. Save Group Data ---
         $group_data = [
             'direction_text'     => wp_kses_post($direction_text),
@@ -52,10 +73,13 @@ class Question_Editor_Page
             'pyq_year'           => $is_pyq ? $pyq_year : null,
         ];
 
+        // Merge denormalized data with main group data
+        $group_data_to_save = array_merge($group_data, $denormalized_data);
+
         if ($is_editing) {
-            Questions_DB::update_group( $group_id, $group_data );
+            Questions_DB::update_group( $group_id, $group_data_to_save );
         } else {
-            $new_group_id = Questions_DB::insert_group( $group_data );
+            $new_group_id = Questions_DB::insert_group( $group_data_to_save );
             if ($new_group_id) {
                 $group_id = $new_group_id;
             } else {
@@ -116,10 +140,8 @@ class Question_Editor_Page
             $question_text = isset($q_data['question_text']) ? stripslashes($q_data['question_text']) : '';
             if (empty(trim($question_text))) continue;
 
-            // 1. Get and sanitize the explanation text
+            
             $sanitized_explanation = isset($q_data['explanation_text']) ? wp_kses_post(stripslashes($q_data['explanation_text'])) : null;
-
-            // 2. Check if it's meaningfully empty (after stripping tags and trimming whitespace)
             $is_empty = (trim(strip_tags($sanitized_explanation ?? '')) === '');
             $explanation_to_save = $is_empty ? null : $sanitized_explanation;
 
@@ -135,10 +157,13 @@ class Question_Editor_Page
                 'status' => $is_question_complete ? 'publish' : 'draft',
             ];
 
+            // --- Merge denormalized data into the question data ---
+            $question_db_data_to_save = array_merge($question_db_data, $denormalized_data);
+
             if ($question_id > 0 && in_array($question_id, $existing_q_ids)) {
-                $wpdb->update($q_table, $question_db_data, ['question_id' => $question_id]);
+                $wpdb->update($q_table, $question_db_data_to_save, ['question_id' => $question_id]);
             } else {
-                $wpdb->insert($q_table, $question_db_data);
+                $wpdb->insert($q_table, $question_db_data_to_save);
                 $question_id = $wpdb->insert_id;
             }
             $submitted_q_ids[] = $question_id;

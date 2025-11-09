@@ -61,11 +61,6 @@ if ( ! defined( 'ABSPATH' ) ) {
             <span></span>
             PYQ Only
         </label>
-        <label class="qp-custom-checkbox">
-            <input type="checkbox" name="qp_include_attempted" value="1">
-            <span></span>
-            Include previously attempted questions
-        </label>
     </div>
     <div class="qp-form-group-description">
         <p>Helps you practice questions from your selected exams and subjects.</p>

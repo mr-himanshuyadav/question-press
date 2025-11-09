@@ -120,40 +120,47 @@ class Importer {
     }
 
     foreach ($data['questionGroups'] as $group) {
-        // --- Term Handling ---
-        // **NEW**: Process hierarchical subject array
-        $subject_hierarchy_ids = [];
+        
+        // 1. Process Subject
+        $subject_lineage = ['primary' => null, 'specific' => null];
         $parent_subject_id = 0;
+        $most_specific_subject_id = null;
         if (isset($group['subject']) && is_array($group['subject'])) {
             foreach ($group['subject'] as $subject_name) {
                 $parent_subject_id = Terms_DB::get_or_create($subject_name, $tax_ids['subject'], $parent_subject_id);
-                $subject_hierarchy_ids[] = $parent_subject_id;
+                $most_specific_subject_id = $parent_subject_id;
             }
         }
-        $most_specific_subject_id = end($subject_hierarchy_ids) ?: null;
-        $top_level_subject_id = $subject_hierarchy_ids[0] ?? null;
+        if($most_specific_subject_id) {
+             // Use our new helper function
+            $subject_lineage = Terms_DB::get_term_lineage_ids($most_specific_subject_id);
+        }
 
-        $exam_term_id = !empty($group['examName']) ? Terms_DB::get_or_create($group['examName'], $tax_ids['exam']) : null;
-
-        // Process hierarchical source array
-        $source_hierarchy_ids = [];
+        // 2. Process Source
+        $source_lineage = ['primary' => null, 'specific' => null];
         $parent_source_id = 0;
+        $most_specific_source_id = null;
         if (isset($group['source']) && is_array($group['source'])) {
             foreach ($group['source'] as $source_name) {
                 $parent_source_id = Terms_DB::get_or_create($source_name, $tax_ids['source'], $parent_source_id);
-                $source_hierarchy_ids[] = $parent_source_id;
+                $most_specific_source_id = $parent_source_id;
             }
         }
-        $most_specific_source_id = end($source_hierarchy_ids) ?: null;
-        $top_level_source_id = $source_hierarchy_ids[0] ?? null;
+        if($most_specific_source_id) {
+            // Use our new helper function
+            $source_lineage = Terms_DB::get_term_lineage_ids($most_specific_source_id);
+        }
 
-        // Automatically link the Source to the top-level Subject
-        if ($top_level_subject_id && $top_level_source_id) {
+        // 3. Process Exam
+        $exam_term_id = !empty($group['examName']) ? Terms_DB::get_or_create($group['examName'], $tax_ids['exam']) : null;
+
+        // 4. Automatically link Source to Subject (no change here)
+        if ($subject_lineage['primary'] && $source_lineage['primary']) {
             $wpdb->insert($rel_table, [
-                'object_id'   => $top_level_source_id,
-                'term_id'     => $top_level_subject_id,
+                'object_id'   => $source_lineage['primary'],
+                'term_id'     => $subject_lineage['primary'],
                 'object_type' => 'source_subject_link'
-            ]);
+            ], ['%d', '%d', '%s']); // Add formats to be safe
         }
         
         // --- Image Handling ---
@@ -167,29 +174,37 @@ class Importer {
         }
 
         // --- Create Question Group ---
-        $wpdb->insert($groups_table, [
-            'direction_text' => isset($group['Direction']['text']) ? $group['Direction']['text'] : null,
+        $group_db_data = [
+            'direction_text' => $group['Direction']['text'] ?? null,
             'direction_image_id' => $direction_image_id,
-            'is_pyq' => isset($group['isPYQ']) ? (int)$group['isPYQ'] : 0,
-            'pyq_year' => isset($group['pyqYear']) ? sanitize_text_field($group['pyqYear']) : null,
-        ]);
+            'is_pyq' => $group['isPYQ'] ?? 0,
+            'pyq_year' => $group['pyqYear'] ?? null,
+
+            /* --- ADDED DENORMALIZED COLUMNS --- */
+            'primary_subject_term_id' => $subject_lineage['primary'],
+            'specific_subject_term_id' => $subject_lineage['specific'],
+            'primary_source_term_id' => $source_lineage['primary'],
+            'specific_source_term_id' => $source_lineage['specific'],
+            'exam_term_id' => ($group['isPYQ'] ?? 0) ? $exam_term_id : null // Only save exam if it's a PYQ
+        ];
+        $wpdb->insert($groups_table, $group_db_data);
         $group_id = $wpdb->insert_id;
 
         // --- Create Group Relationships ---
-        if ($most_specific_subject_id) {
-            $wpdb->insert($rel_table, ['object_id' => $group_id, 'term_id' => $most_specific_subject_id, 'object_type' => 'group']);
+        if ($subject_lineage['specific']) {
+            $wpdb->insert($rel_table, ['object_id' => $group_id, 'term_id' => $subject_lineage['specific'], 'object_type' => 'group']);
         }
-        if ($most_specific_source_id) {
-            $wpdb->insert($rel_table, ['object_id' => $group_id, 'term_id' => $most_specific_source_id, 'object_type' => 'group']);
+        if ($source_lineage['specific']) {
+            $wpdb->insert($rel_table, ['object_id' => $group_id, 'term_id' => $source_lineage['specific'], 'object_type' => 'group']);
         }
-        if ($exam_term_id && $group['isPYQ']) {
+        if ($exam_term_id && ($group['isPYQ'] ?? 0)) {
             $wpdb->insert($rel_table, ['object_id' => $group_id, 'term_id' => $exam_term_id, 'object_type' => 'group']);
             
-            // Automatically link the Exam to the top-level Subject
-            if ($top_level_subject_id) {
+            // Automatically link Exam to top-level Subject
+            if ($subject_lineage['primary']) {
                 $wpdb->insert($rel_table, [
                     'object_id'   => $exam_term_id, 
-                    'term_id'     => $top_level_subject_id, 
+                    'term_id'     => $subject_lineage['primary'], 
                     'object_type' => 'exam_subject_link'
                 ]);
             }
@@ -201,15 +216,23 @@ class Importer {
             $existing_question_id = $wpdb->get_var($wpdb->prepare("SELECT question_id FROM $questions_table WHERE question_text_hash = %s", $hash));
 
             // --- Create Question ---
-            $wpdb->insert($questions_table, [
+            $question_db_data = [
                 'group_id' => $group_id,
                 'question_number_in_section' => $question['questionNumber'] ?? null,
                 'question_text' => $question_text,
+                'explanation_text' => $question['explanationText'] ?? null,
                 'question_text_hash' => $hash,
                 'duplicate_of' => $existing_question_id ?: null,
                 'status' => 'draft',
-                'explanation_text' => $question['explanationText'] ?? null,
-            ]);
+
+                /* --- ADDED DENORMALIZED COLUMNS --- */
+                'primary_subject_term_id' => $subject_lineage['primary'],
+                'specific_subject_term_id' => $subject_lineage['specific'],
+                'primary_source_term_id' => $source_lineage['primary'],
+                'specific_source_term_id' => $source_lineage['specific'],
+                'exam_term_id' => ($group['isPYQ'] ?? 0) ? $exam_term_id : null
+            ];
+            $wpdb->insert($questions_table, $question_db_data);
             $question_id = $wpdb->insert_id;
 
             // --- Add Options and Set Status ---

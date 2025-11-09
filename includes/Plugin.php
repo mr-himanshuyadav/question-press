@@ -161,6 +161,10 @@ final class Plugin {
         add_action('admin_init', [Sources_Page::class, 'handle_forms']);
         add_action('admin_init', [Settings_Page::class, 'register_settings']);
 
+        // Remove this after migration
+
+        add_action('admin_init', [Admin_Menu::class, 'handle_one_time_migration']);
+
         add_action('admin_post_qp_add_subject_term', [Subjects_Page::class, 'handle_add_term']);
         add_action('admin_post_qp_update_subject_term', [Subjects_Page::class, 'handle_update_term']);
         add_action('admin_post_qp_add_label_term', [Labels_Page::class, 'handle_add_term']);

@@ -31,8 +31,18 @@ class Activator {
         direction_image_id BIGINT(20) UNSIGNED,
         is_pyq BOOLEAN NOT NULL DEFAULT 0,
         pyq_year VARCHAR(4) DEFAULT NULL,
+        primary_subject_term_id BIGINT(20) UNSIGNED DEFAULT NULL,
+        specific_subject_term_id BIGINT(20) UNSIGNED DEFAULT NULL,
+        primary_source_term_id BIGINT(20) UNSIGNED DEFAULT NULL,
+        specific_source_term_id BIGINT(20) UNSIGNED DEFAULT NULL,
+        exam_term_id BIGINT(20) UNSIGNED DEFAULT NULL,
         PRIMARY KEY (group_id),
         KEY is_pyq (is_pyq)
+        KEY primary_subject_term_id (primary_subject_term_id),
+        KEY specific_subject_term_id (specific_subject_term_id),
+        KEY primary_source_term_id (primary_source_term_id),
+        KEY specific_source_term_id (specific_source_term_id),
+        KEY exam_term_id (exam_term_id)
     ) $charset_collate;";
     dbDelta($sql_groups);
 
@@ -49,10 +59,20 @@ class Activator {
         status VARCHAR(20) NOT NULL DEFAULT 'draft',
         last_modified DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         explanation_text LONGTEXT DEFAULT NULL,
+        primary_subject_term_id BIGINT(20) UNSIGNED DEFAULT NULL,
+        specific_subject_term_id BIGINT(20) UNSIGNED DEFAULT NULL,
+        primary_source_term_id BIGINT(20) UNSIGNED DEFAULT NULL,
+        specific_source_term_id BIGINT(20) UNSIGNED DEFAULT NULL,
+        exam_term_id BIGINT(20) UNSIGNED DEFAULT NULL,
         PRIMARY KEY (question_id),
         KEY group_id (group_id),
         KEY status (status),
-        KEY question_text_hash (question_text_hash)
+        KEY question_text_hash (question_text_hash),
+        KEY primary_subject_term_id (primary_subject_term_id),
+        KEY specific_subject_term_id (specific_subject_term_id),
+        KEY primary_source_term_id (primary_source_term_id),
+        KEY specific_source_term_id (specific_source_term_id),
+        KEY exam_term_id (exam_term_id)
     ) $charset_collate;";
     dbDelta($sql_questions);
 

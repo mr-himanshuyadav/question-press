@@ -385,12 +385,36 @@ class Admin_Ajax {
         // Step 3: Get necessary IDs for processing
         $group_id = $wpdb->get_var($wpdb->prepare("SELECT group_id FROM $q_table WHERE question_id = %d", $question_id));
 
+        // 1. Get flags and specific term IDs from the form submission
+        $is_pyq = isset($data['is_pyq']) ? 1 : 0;
+        $specific_subject_term_id = !empty($data['topic_id']) ? absint($data['topic_id']) : absint($data['subject_id']);
+        $specific_source_term_id = !empty($data['section_id']) ? absint($data['section_id']) : (!empty($data['source_id']) ? absint($data['source_id']) : 0);
+        $exam_term_id = ($is_pyq && !empty($data['exam_id'])) ? absint($data['exam_id']) : 0;
+
+        // 2. Get the full lineage (primary + specific)
+        $subject_lineage = Terms_DB::get_term_lineage_ids($specific_subject_term_id);
+        $source_lineage = Terms_DB::get_term_lineage_ids($specific_source_term_id);
+
+        // 3. Prepare the array of denormalized data
+        $denormalized_data = [
+            'primary_subject_term_id'  => $subject_lineage['primary'],
+            'specific_subject_term_id' => $subject_lineage['specific'],
+            'primary_source_term_id'   => $source_lineage['primary'],
+            'specific_source_term_id'  => $source_lineage['specific'],
+            'exam_term_id'             => $exam_term_id
+        ];
+
         // Step 4: Update Group-Level Data (PYQ status)
         if ($group_id) {
-            $wpdb->update($g_table, [
-                'is_pyq' => isset($data['is_pyq']) ? 1 : 0,
-                'pyq_year' => (isset($data['is_pyq']) && !empty($data['pyq_year'])) ? sanitize_text_field($data['pyq_year']) : null
-            ], ['group_id' => $group_id]);
+            
+            // --- MODIFICATION: Merge denormalized data with existing group data ---
+            $group_data_to_save = [
+                'is_pyq' => $is_pyq,
+                'pyq_year' => ($is_pyq && !empty($data['pyq_year'])) ? sanitize_text_field($data['pyq_year']) : null
+            ];
+            $group_data_to_save = array_merge($group_data_to_save, $denormalized_data);
+            
+            $wpdb->update($g_table, $group_data_to_save, ['group_id' => $group_id]);
         }
 
         // Step 5: CONSOLIDATED Group and Question-Level Term Relationships
@@ -475,7 +499,8 @@ class Admin_Ajax {
 
             // Update question status based on whether a correct answer is now set
             $new_status = 'publish';
-            $wpdb->update($q_table, ['status' => $new_status], ['question_id' => $question_id]);
+            $question_data_to_save = array_merge($denormalized_data, ['status' => $new_status]);
+            $wpdb->update($q_table, $question_data_to_save, ['question_id' => $question_id]);
 
 
             // If the correct answer has changed, trigger the re-evaluation.
@@ -485,7 +510,8 @@ class Admin_Ajax {
 
         } else {
              // If no correct option was selected, ensure the status is 'draft'
-             $wpdb->update($q_table, ['status' => 'draft'], ['question_id' => $question_id]);
+             $question_data_to_save = array_merge($denormalized_data, ['status' => 'draft']);
+             $wpdb->update($q_table, $question_data_to_save, ['question_id' => $question_id]);
              $wpdb->update($o_table, ['is_correct' => 0], ['question_id' => $question_id]); // Ensure no option is marked correct
         }
 
