@@ -45,6 +45,7 @@ use QuestionPress\Admin\Views\Sources_Page;
 use QuestionPress\Admin\Views\Export_Page;
 use QuestionPress\Admin\Views\Subjects_Page;
 use QuestionPress\Admin\Views\User_Entitlements_Page;
+use QuestionPress\Admin\Views\Api_Settings_Page;
 
 // API Router
 use QuestionPress\Rest_Api\Router;
@@ -136,6 +137,7 @@ final class Plugin {
         // Shortcodes::instance();
         Post_Types::instance();
         Taxonomies::instance(); // Just in case if migrated to native taxonomies later
+
         $this->cron = new Cron();
         // REST_API::instance(); // Assuming REST_API is a class handling registration
         if ( is_admin() ) {
@@ -160,6 +162,7 @@ final class Plugin {
         add_action('admin_init', [Exams_Page::class, 'handle_forms']);
         add_action('admin_init', [Sources_Page::class, 'handle_forms']);
         add_action('admin_init', [Settings_Page::class, 'register_settings']);
+        add_action('admin_init', [Api_Settings_Page::class, 'register_settings']);
 
         // Remove this after migration
 
