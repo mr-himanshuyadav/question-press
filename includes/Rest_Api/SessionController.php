@@ -12,6 +12,7 @@ use WP_REST_Response;
 use QuestionPress\Database\Questions_DB; // Use our DB class
 use QuestionPress\Database\Terms_DB;   // Use our DB class
 use QuestionPress\Utils\Session_Manager;
+use QuestionPress\Utils\Practice_Manager;
 
 /**
  * Handles REST API requests for creating and managing practice sessions.
@@ -189,4 +190,158 @@ class SessionController {
         ], 200);
     }
 
+    /**
+     * Starts a new mock test session via the REST API.
+     *
+     * @param \WP_REST_Request $request
+     * @return \WP_REST_Response|\WP_Error
+     */
+    public static function start_mock_test_session( \WP_REST_Request $request ) {
+        $params = $request->get_json_params();
+        if (empty($params)) {
+            $params = $request->get_body_params();
+        }
+
+        $result = Practice_Manager::start_mock_test_session($params);
+
+        if (is_wp_error($result)) {
+            return $result;
+        }
+
+        return new \WP_REST_Response($result, 200);
+    }
+
+    /**
+     * Starts a new revision session via the REST API.
+     *
+     * @param \WP_REST_Request $request
+     * @return \WP_REST_Response|\WP_Error
+     */
+    public static function start_revision_session( \WP_REST_Request $request ) {
+        $params = $request->get_json_params();
+        if (empty($params)) {
+            $params = $request->get_body_params();
+        }
+
+        $result = Practice_Manager::start_revision_session($params);
+
+        if (is_wp_error($result)) {
+            return $result;
+        }
+
+        return new \WP_REST_Response($result, 200);
+    }
+
+    /**
+     * Starts a new practice session via the REST API.
+     *
+     * @param \WP_REST_Request $request
+     * @return \WP_REST_Response|\WP_Error
+     */
+    public static function start_practice_session( \WP_REST_Request $request ) {
+        $params = $request->get_json_params();
+        if (empty($params)) {
+            $params = $request->get_body_params();
+        }
+
+        $result = Practice_Manager::start_practice_session($params);
+
+        if (is_wp_error($result)) {
+            return $result;
+        }
+
+        return new \WP_REST_Response($result, 200);
+    }
+
+    /**
+     * Starts a new incorrect practice session via the REST API.
+     *
+     * @param \WP_REST_Request $request
+     * @return \WP_REST_Response|\WP_Error
+     */
+    public static function start_incorrect_practice_session( \WP_REST_Request $request ) {
+        $params = $request->get_json_params();
+        if (empty($params)) {
+            $params = $request->get_body_params();
+        }
+
+        $result = Practice_Manager::start_incorrect_practice_session($params);
+
+        if (is_wp_error($result)) {
+            return $result;
+        }
+
+        return new \WP_REST_Response($result, 200);
+    }
+
+    /**
+     * Starts a new review session via the REST API.
+     *
+     * @param \WP_REST_Request $request
+     * @return \WP_REST_Response|\WP_Error
+     */
+    public static function start_review_session( \WP_REST_Request $request ) {
+        $params = $request->get_json_params();
+        if (empty($params)) {
+            $params = $request->get_body_params();
+        }
+
+        $result = Practice_Manager::start_review_session($params);
+
+        if (is_wp_error($result)) {
+            return $result;
+        }
+
+        return new \WP_REST_Response($result, 200);
+    }
+
+    /**
+     * Starts a new course test series session via the REST API.
+     *
+     * @param \WP_REST_Request $request
+     * @return \WP_REST_Response|\WP_Error
+     */
+    public static function start_course_test_series( \WP_REST_Request $request ) {
+        $params = $request->get_json_params();
+        if (empty($params)) {
+            $params = $request->get_body_params();
+        }
+
+        $result = Practice_Manager::start_course_test_series($params);
+
+        if (is_wp_error($result)) {
+            return $result;
+        }
+
+        return new \WP_REST_Response($result, 200);
+    }
+
+    /**
+     * Ends a session via the REST API.
+     *
+     * @param \WP_REST_Request $request
+     * @return \WP_REST_Response|\WP_Error
+     */
+    public static function end_session( \WP_REST_Request $request ) {
+        $params = $request->get_json_params();
+        if (empty($params)) {
+            $params = $request->get_body_params();
+        }
+
+        $session_id = isset($params['session_id']) ? absint($params['session_id']) : 0;
+        if (!$session_id) {
+            return new \WP_Error('invalid_session_id', 'Invalid session ID.', ['status' => 400]);
+        }
+
+        $is_auto_submit = isset($params['is_auto_submit']) && $params['is_auto_submit'] === true;
+        $end_reason = $is_auto_submit ? 'autosubmitted_timer' : 'user_submitted';
+
+        $summary_data = \QuestionPress\Utils\Session_Manager::finalize_and_end_session($session_id, 'completed', $end_reason);
+
+        if (is_null($summary_data)) {
+            return new \WP_REST_Response(['status' => 'no_attempts', 'message' => 'Session deleted as no questions were attempted.'], 200);
+        } else {
+            return new \WP_REST_Response($summary_data, 200);
+        }
+    }
 } // End class SessionController

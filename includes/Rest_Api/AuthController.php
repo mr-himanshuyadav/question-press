@@ -13,6 +13,7 @@ use WP_REST_Server;
 use Exception;
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
+use QuestionPress\Utils\Auth_Manager; // Added
 
 /**
  * Handles REST API requests for authentication.
@@ -87,4 +88,66 @@ class AuthController {
         ], 200);
     }
 
+    /**
+     * Checks if a username is available.
+     *
+     * @param WP_REST_Request $request
+     * @return WP_REST_Response|WP_Error
+     */
+    public static function check_username_availability( WP_REST_Request $request ) {
+        $params = $request->get_json_params();
+        if ( empty( $params ) ) {
+            $params = $request->get_body_params();
+        }
+
+        $result = Auth_Manager::check_username_availability( $params );
+
+        if ( is_wp_error( $result ) ) {
+            return $result;
+        }
+
+        return new \WP_REST_Response( $result, 200 );
+    }
+
+    /**
+     * Checks if an email is available.
+     *
+     * @param WP_REST_Request $request
+     * @return WP_REST_Response|WP_Error
+     */
+    public static function check_email_availability( WP_REST_Request $request ) {
+        $params = $request->get_json_params();
+        if ( empty( $params ) ) {
+            $params = $request->get_body_params();
+        }
+
+        $result = Auth_Manager::check_email_availability( $params );
+
+        if ( is_wp_error( $result ) ) {
+            return $result;
+        }
+
+        return new \WP_REST_Response( $result, 200 );
+    }
+
+    /**
+     * Resends an OTP code for registration.
+     *
+     * @param WP_REST_Request $request
+     * @return WP_REST_Response|WP_Error
+     */
+    public static function resend_registration_otp( WP_REST_Request $request ) {
+        $params = $request->get_json_params();
+        if ( empty( $params ) ) {
+            $params = $request->get_body_params();
+        }
+
+        $result = Auth_Manager::resend_registration_otp( $params );
+
+        if ( is_wp_error( $result ) ) {
+            return $result;
+        }
+
+        return new \WP_REST_Response( $result, 200 );
+    }
 } // End class AuthController

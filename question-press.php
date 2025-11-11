@@ -16,6 +16,9 @@ if (!defined('ABSPATH')) exit;
 
 if ( file_exists( plugin_dir_path( __FILE__ ) . 'vendor/autoload.php' ) ) {
     require_once plugin_dir_path( __FILE__ ) . 'vendor/autoload.php';
+    require_once plugin_dir_path( __FILE__ ) . 'includes/Utils/Practice_Manager.php';
+require_once plugin_dir_path( __FILE__ ) . 'includes/Rest_Api/PracticeController.php';
+require_once plugin_dir_path( __FILE__ ) . 'includes/Rest_Api/CourseController.php'; // Added
 } else {
     // Add admin notice if dependencies missing
     add_action( 'admin_notices', function() {
