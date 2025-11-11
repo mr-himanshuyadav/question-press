@@ -1,8 +1,9 @@
 <?php
+
 namespace QuestionPress\Rest_Api; // PSR-4 Namespace
 
 // Exit if accessed directly.
-if ( ! defined( 'ABSPATH' ) ) {
+if (! defined('ABSPATH')) {
     exit;
 }
 
@@ -14,12 +15,14 @@ use QuestionPress\Database\Terms_DB; // Use our DB class
 /**
  * Handles REST API requests for retrieving data (subjects, topics, etc.).
  */
-class DataController {
+class DataController
+{
 
     /**
      * Callback to get all subjects.
      */
-    public static function get_subjects() {
+    public static function get_subjects()
+    {
         global $wpdb;
         $tax_table = Terms_DB::get_taxonomies_table_name();
         $term_table = Terms_DB::get_terms_table_name();
@@ -40,7 +43,8 @@ class DataController {
     /**
      * Callback to get all topics.
      */
-    public static function get_topics() {
+    public static function get_topics()
+    {
         global $wpdb;
         $tax_table = Terms_DB::get_taxonomies_table_name();
         $term_table = Terms_DB::get_terms_table_name();
@@ -61,7 +65,8 @@ class DataController {
     /**
      * Callback to get all exams.
      */
-    public static function get_exams() {
+    public static function get_exams()
+    {
         global $wpdb;
         $tax_table = Terms_DB::get_taxonomies_table_name();
         $term_table = Terms_DB::get_terms_table_name();
@@ -83,7 +88,8 @@ class DataController {
     /**
      * Callback to get all sources and sections.
      */
-    public static function get_sources() {
+    public static function get_sources()
+    {
         global $wpdb;
         $tax_table = Terms_DB::get_taxonomies_table_name();
         $term_table = Terms_DB::get_terms_table_name();
@@ -104,7 +110,8 @@ class DataController {
     /**
      * Callback to get all labels.
      */
-    public static function get_labels() {
+    public static function get_labels()
+    {
         global $wpdb;
         $tax_table = Terms_DB::get_taxonomies_table_name();
         $term_table = Terms_DB::get_terms_table_name();
@@ -128,4 +135,33 @@ class DataController {
         return new WP_REST_Response($results, 200);
     }
 
+    /**
+     * Callback to get all published qp_course posts.
+     */
+    public static function get_courses() {
+        $courses = get_posts([
+            'post_type' => 'qp_course',
+            'post_status' => 'publish',
+            'numberposts' => -1, // Get all courses
+            'orderby' => 'title',
+            'order' => 'ASC',
+        ]);
+
+        if (empty($courses)) {
+            return new \WP_REST_Response([], 200);
+        }
+
+        // Format the data for the app
+        $formatted_courses = [];
+        foreach ($courses as $course_post) {
+            $formatted_courses[] = [
+                'id' => $course_post->ID,
+                'title' => $course_post->post_title,
+                // You can add more data here if you need it in the app
+                // 'thumbnail_url' => get_the_post_thumbnail_url($course_post->ID, 'medium'),
+            ];
+        }
+
+        return new \WP_REST_Response($formatted_courses, 200);
+    }
 } // End class DataController

@@ -1,4 +1,5 @@
 <?php
+
 namespace QuestionPress\Rest_Api; // Added namespace
 
 if (!defined('ABSPATH')) exit;
@@ -6,6 +7,7 @@ if (!defined('ABSPATH')) exit;
 // Manually include the JWT library files
 require_once QP_PLUGIN_PATH . 'lib/JWT.php';
 require_once QP_PLUGIN_PATH . 'lib/Key.php';
+
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
 use QuestionPress\Rest_Api\AuthController;
@@ -14,19 +16,22 @@ use QuestionPress\Rest_Api\SessionController;
 use QuestionPress\Rest_Api\DataController; // Added missing use statement
 use \WP_REST_Server; // Added for WP_REST_Server::CREATABLE
 
-final class Router { // Changed class name
+final class Router
+{ // Changed class name
 
     /**
      * The main function to hook into WordPress.
      */
-    public static function init() {
+    public static function init()
+    {
         add_action('rest_api_init', [self::class, 'register_routes']);
     }
 
     /**
      * Register all REST API routes.
      */
-    public static function register_routes() {
+    public static function register_routes()
+    {
         // --- Authentication Endpoint (Public) ---
         register_rest_route('questionpress/v1', '/token', [
             'methods' => WP_REST_Server::CREATABLE,
@@ -61,6 +66,12 @@ final class Router { // Changed class name
             'permission_callback' => [AuthController::class, 'check_auth_token']
         ]);
 
+        register_rest_route('questionpress/v1', '/courses', [
+            'methods' => WP_REST_Server::READABLE,
+            'callback' => [DataController::class, 'get_courses'],
+            'permission_callback' => [AuthController::class, 'check_auth_token']
+        ]);
+
         // --- Question Endpoints (Protected) ---
         register_rest_route('questionpress/v1', '/questions/add', [
             'methods' => WP_REST_Server::CREATABLE,
@@ -78,7 +89,7 @@ final class Router { // Changed class name
             'permission_callback' => [AuthController::class, 'check_auth_token'],
             'args' => [
                 'id' => [
-                    'validate_callback' => function($param, $request, $key) {
+                    'validate_callback' => function ($param, $request, $key) {
                         return is_numeric($param);
                     }
                 ],
@@ -102,5 +113,4 @@ final class Router { // Changed class name
             'permission_callback' => [AuthController::class, 'check_auth_token']
         ]);
     }
-
 }
