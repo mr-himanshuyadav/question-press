@@ -20,27 +20,104 @@ class SessionController {
 
     /**
      * Creates a new practice session record.
+     * v2: Adapted logic from Session_Ajax.php to correctly start a course test.
      */
     public static function create_session( \WP_REST_Request $request ) {
-        $settings = $request->get_param('settings'); // App sends a JSON object of settings
+        
+        // 1. Get user_id
+        $user_id = get_current_user_id();
+        if ( ! $user_id ) {
+            return new WP_Error('rest_not_logged_in', 'You must be logged in.', ['status' => 401]);
+        }
+
+        // 2. Get test_id (which is the item_id) from the app's POST request
+        $item_id = $request->get_param('test_id');
+        if ( ! $item_id ) {
+            return new WP_Error('rest_invalid_param', 'Test ID (item_id) is required.', ['status' => 400]);
+        }
 
         global $wpdb;
-        $wpdb->insert("{$wpdb->prefix}qp_user_sessions", [
-            'user_id' => get_current_user_id(),
-            'status' => 'active', // Set a default status
-            'start_time' => current_time('mysql'),
-            'last_activity' => current_time('mysql'),
-            'settings_snapshot' => wp_json_encode($settings)
+
+        // 3. Get the item (test) from the database
+        // (Logic copied from Session_Ajax.php)
+        $items_table = $wpdb->prefix . 'qp_course_items';
+        $item = $wpdb->get_row( $wpdb->prepare(
+            "SELECT course_id, content_type, content_config FROM {$items_table} WHERE item_id = %d",
+            $item_id
+        ) );
+
+        if ( ! $item ) {
+            return new WP_Error('rest_not_found', 'Test item not found.', ['status' => 404]);
+        }
+
+        // 4. Check if it's a test
+        if ( $item->content_type !== 'test_series' ) {
+            return new WP_Error('rest_invalid_item', 'This is not a test item.', ['status' => 400]);
+        }
+
+        // 5. Decode the config to get the question list
+        // (Logic copied from Session_Ajax.php)
+        $config = json_decode( $item->content_config, true );
+        $final_question_ids = [];
+        
+        if ( $config && isset( $config['selected_questions'] ) && is_array( $config['selected_questions'] ) ) {
+            $final_question_ids = $config['selected_questions'];
+        }
+
+        if ( empty( $final_question_ids ) ) {
+            return new WP_Error('rest_no_questions', 'Test is not configured correctly. No questions found.', ['status' => 500]);
+        }
+
+        // 6. Create the session settings
+        // (Logic copied from Session_Ajax.php)
+        $session_settings = [
+            'type' => 'test_series',
+            'item_id' => $item_id,
+            'time_limit' => $config['time_limit'] ?? 0,
+            'scoring_enabled' => $config['scoring_enabled'] ?? 0,
+            'marks_correct' => $config['marks_correct'] ?? 1,
+            'marks_incorrect' => $config['marks_incorrect'] ?? 0,
+        ];
+
+        // 7. Create the session in the database
+        // (Logic copied from Session_Ajax.php)
+        $current_time = current_time('mysql');
+        $wpdb->insert($wpdb->prefix . 'qp_user_sessions', [
+            'user_id'                 => $user_id,
+            'status'                  => 'active', // 'active' is better for the API
+            'start_time'              => $current_time,
+            'last_activity'           => $current_time,
+            'settings_snapshot'       => wp_json_encode($session_settings),
+            'question_ids_snapshot'   => wp_json_encode(array_values($final_question_ids))
         ]);
         $session_id = $wpdb->insert_id;
 
         if ( ! $session_id ) {
-             return new WP_Error('db_error', 'Could not create the session.', ['status' => 500]);
+             return new WP_Error('db_error', 'Could not create the session record.', ['status' => 500]);
         }
 
-        return new WP_REST_Response(['session_id' => $session_id], 200);
-    }
+        // 8. Update progress
+        // (Logic copied from Session_Ajax.php)
+        $progress_table = $wpdb->prefix . 'qp_user_items_progress';
+        $wpdb->query($wpdb->prepare(
+            "REPLACE INTO {$progress_table} (user_id, item_id, course_id, status, last_viewed)
+             VALUES (%d, %d, %d, %s, %s)",
+            $user_id,
+            $item_id,
+            $item->course_id,
+            'in_progress', // Set status to 'in_progress'
+            $current_time
+        ));
 
+        // 9. --- THIS IS THE FIX ---
+        // Return both session_id AND the question list
+        $response_data = [
+            'session_id' => $session_id,
+            'selected_questions' => $final_question_ids // This is what the app needs
+        ];
+
+        return new WP_REST_Response( $response_data, 200 );
+    }
     /**
      * Records a user's attempt for a single question.
      */
@@ -86,7 +163,6 @@ class SessionController {
             'attempt_id' => $attempt_id
         ], 200);
     }
-
     /**
      * Ends a session and calculates the final results.
      */
