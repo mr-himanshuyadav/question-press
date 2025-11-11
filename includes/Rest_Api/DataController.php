@@ -11,6 +11,7 @@ use WP_REST_Request;
 use WP_Error;
 use WP_REST_Response;
 use QuestionPress\Database\Terms_DB; // Use our DB class
+use QuestionPress\Utils\User_Access; // For course access checks
 
 /**
  * Handles REST API requests for retrieving data (subjects, topics, etc.).
@@ -163,5 +164,47 @@ class DataController
         }
 
         return new \WP_REST_Response($formatted_courses, 200);
+    }
+    /**
+     * Callback to get the details for a single qp_course.
+     */
+    public static function get_course_details( \WP_REST_Request $request ) {
+        $course_id = (int) $request['id'];
+        $user_id = get_current_user_id();
+
+        if ( ! $course_id ) {
+            return new \WP_Error('rest_invalid_id', 'Invalid course ID.', ['status' => 400]);
+        }
+
+        // Check if the user is enrolled in this course
+        // (We must use your User_Access helper to keep it secure)
+        if ( ! User_Access::can_access_course( $user_id, $course_id ) ) {
+            // Also allow if the course is 'open' (no plan attached)
+            $plan_id = get_post_meta( $course_id, '_qp_linked_plan_id', true );
+            if ( ! empty( $plan_id ) ) {
+                 return new \WP_Error('rest_forbidden', 'You are not enrolled in this course.', ['status' => 403]);
+            }
+        }
+
+        $course_post = get_post( $course_id );
+        if ( ! $course_post || $course_post->post_type !== 'qp_course' || $course_post->post_status !== 'publish' ) {
+            return new \WP_Error('rest_not_found', 'Course not found.', ['status' => 404]);
+        }
+
+        // --- Success ---
+        // Get the course structure we need
+        $structure = get_post_meta( $course_id, '_qp_course_structure', true );
+        if ( empty( $structure ) ) {
+            $structure = []; // Send empty array instead of null
+        }
+
+        $data = [
+            'id' => $course_post->ID,
+            'title' => $course_post->post_title,
+            'content' => $course_post->post_content,
+            'structure' => $structure, // This is the key data!
+        ];
+
+        return new \WP_REST_Response( $data, 200 );
     }
 } // End class DataController

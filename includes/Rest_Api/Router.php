@@ -72,6 +72,17 @@ final class Router
             'permission_callback' => [AuthController::class, 'check_auth_token']
         ]);
 
+        register_rest_route('questionpress/v1', '/course/(?P<id>\d+)', [
+            'methods' => \WP_REST_Server::READABLE,
+            'callback' => [DataController::class, 'get_course_details'],
+            'permission_callback' => [AuthController::class, 'check_auth_token'],
+            'args' => [
+                'id' => [
+                    'validate_callback' => function($param) { return is_numeric($param); }
+                ],
+            ],
+        ]);
+
         // --- Question Endpoints (Protected) ---
         register_rest_route('questionpress/v1', '/questions/add', [
             'methods' => WP_REST_Server::CREATABLE,
