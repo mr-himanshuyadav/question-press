@@ -264,4 +264,57 @@ class DataController
 
         return new \WP_REST_Response( $data, 200 );
     }
+    /**
+     * Gets the results for a specific, completed session.
+     */
+    public static function get_session_results( \WP_REST_Request $request ) {
+        $session_id = (int) $request['id'];
+        $user_id = get_current_user_id();
+
+        if ( ! $session_id ) {
+            return new WP_Error('rest_invalid_id', 'Invalid session ID.', ['status' => 400]);
+        }
+
+        global $wpdb;
+        $sessions_table = $wpdb->prefix . 'qp_user_sessions';
+
+        // --- Security Check ---
+        // First, check if the session belongs to the current user
+        $session_user_id = $wpdb->get_var( $wpdb->prepare(
+            "SELECT user_id FROM {$sessions_table} WHERE session_id = %d",
+            $session_id
+        ) );
+
+        if ( ! $session_user_id ) {
+            return new WP_Error('rest_not_found', 'Session not found.', ['status' => 404]);
+        }
+        
+        if ( (int) $session_user_id !== $user_id ) {
+            return new WP_Error('rest_forbidden', 'You do not have permission to view this session.', ['status' => 403]);
+        }
+
+        // --- Fetch Results ---
+        // We know the user is allowed to see this, so get the data.
+        // We get the column names from Activator.php
+        $results = $wpdb->get_row( $wpdb->prepare(
+            "SELECT 
+                session_id, 
+                status, 
+                total_attempted, 
+                correct_count, 
+                incorrect_count, 
+                skipped_count, 
+                marks_obtained 
+             FROM {$sessions_table} 
+             WHERE session_id = %d",
+            $session_id
+        ), ARRAY_A ); // ARRAY_A gives us a clean associative array
+
+        if ( ! $results ) {
+            // This should be rare, but good to check
+             return new WP_Error('rest_no_data', 'Could not retrieve session results.', ['status' => 500]);
+        }
+
+        return new WP_REST_Response( $results, 200 );
+    }
 } // End class DataController

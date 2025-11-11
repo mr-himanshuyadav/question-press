@@ -20,7 +20,7 @@ class SessionController {
 
     /**
      * Creates a new practice session record.
-     * v2: Adapted logic from Session_Ajax.php to correctly start a course test.
+     * v3: Correctly builds the settings_snapshot based on web app logic.
      */
     public static function create_session( \WP_REST_Request $request ) {
         
@@ -39,7 +39,6 @@ class SessionController {
         global $wpdb;
 
         // 3. Get the item (test) from the database
-        // (Logic copied from Session_Ajax.php)
         $items_table = $wpdb->prefix . 'qp_course_items';
         $item = $wpdb->get_row( $wpdb->prepare(
             "SELECT course_id, content_type, content_config FROM {$items_table} WHERE item_id = %d",
@@ -49,14 +48,11 @@ class SessionController {
         if ( ! $item ) {
             return new WP_Error('rest_not_found', 'Test item not found.', ['status' => 404]);
         }
-
-        // 4. Check if it's a test
         if ( $item->content_type !== 'test_series' ) {
             return new WP_Error('rest_invalid_item', 'This is not a test item.', ['status' => 400]);
         }
 
-        // 5. Decode the config to get the question list
-        // (Logic copied from Session_Ajax.php)
+        // 4. Decode the config to get settings and question list
         $config = json_decode( $item->content_config, true );
         $final_question_ids = [];
         
@@ -68,26 +64,31 @@ class SessionController {
             return new WP_Error('rest_no_questions', 'Test is not configured correctly. No questions found.', ['status' => 500]);
         }
 
-        // 6. Create the session settings
-        // (Logic copied from Session_Ajax.php)
+        // 5. --- THIS IS THE FIX ---
+        // Build the settings_snapshot to match the web app's format
+        $time_limit_minutes = $config['time_limit'] ?? 0;
+        $timer_seconds = $time_limit_minutes > 0 ? (int)$time_limit_minutes * 60 : 0;
+
         $session_settings = [
-            'type' => 'test_series',
-            'item_id' => $item_id,
-            'time_limit' => $config['time_limit'] ?? 0,
-            'scoring_enabled' => $config['scoring_enabled'] ?? 0,
+            'practice_mode' => 'mock_test',
+            'course_id' => (string)$item->course_id, // Match example format
+            'item_id' => (int)$item_id,
+            'num_questions' => count($final_question_ids),
             'marks_correct' => $config['marks_correct'] ?? 1,
             'marks_incorrect' => $config['marks_incorrect'] ?? 0,
+            'timer_enabled' => $timer_seconds > 0,
+            'timer_seconds' => $timer_seconds,
+            'original_selection' => $final_question_ids
         ];
 
-        // 7. Create the session in the database
-        // (Logic copied from Session_Ajax.php)
+        // 6. Create the session in the database
         $current_time = current_time('mysql');
         $wpdb->insert($wpdb->prefix . 'qp_user_sessions', [
             'user_id'                 => $user_id,
-            'status'                  => 'active', // 'active' is better for the API
+            'status'                  => 'active',
             'start_time'              => $current_time,
             'last_activity'           => $current_time,
-            'settings_snapshot'       => wp_json_encode($session_settings),
+            'settings_snapshot'       => wp_json_encode($session_settings), // Use the new correct snapshot
             'question_ids_snapshot'   => wp_json_encode(array_values($final_question_ids))
         ]);
         $session_id = $wpdb->insert_id;
@@ -96,8 +97,7 @@ class SessionController {
              return new WP_Error('db_error', 'Could not create the session record.', ['status' => 500]);
         }
 
-        // 8. Update progress
-        // (Logic copied from Session_Ajax.php)
+        // 7. Update progress
         $progress_table = $wpdb->prefix . 'qp_user_items_progress';
         $wpdb->query($wpdb->prepare(
             "REPLACE INTO {$progress_table} (user_id, item_id, course_id, status, last_viewed)
@@ -105,15 +105,14 @@ class SessionController {
             $user_id,
             $item_id,
             $item->course_id,
-            'in_progress', // Set status to 'in_progress'
+            'in_progress',
             $current_time
         ));
 
-        // 9. --- THIS IS THE FIX ---
-        // Return both session_id AND the question list
+        // 8. Return both session_id AND the question list
         $response_data = [
             'session_id' => $session_id,
-            'selected_questions' => $final_question_ids // This is what the app needs
+            'selected_questions' => $final_question_ids
         ];
 
         return new WP_REST_Response( $response_data, 200 );

@@ -113,6 +113,16 @@ final class Router
             'callback' => [SessionController::class, 'create_session'], // CHANGED
             'permission_callback' => [AuthController::class, 'check_auth_token']
         ]);
+        register_rest_route('questionpress/v1', '/session/(?P<id>\d+)', [
+            'methods' => WP_REST_Server::READABLE,
+            'callback' => [SessionController::class, 'get_session_results'],
+            'permission_callback' => [AuthController::class, 'check_auth_token'],
+            'args' => [
+                'id' => [
+                    'validate_callback' => function($param) { return is_numeric($param); }
+                ],
+            ],
+        ]);
         register_rest_route('questionpress/v1', '/session/attempt', [
             'methods' => WP_REST_Server::CREATABLE,
             'callback' => [SessionController::class, 'record_attempt'], // CHANGED
