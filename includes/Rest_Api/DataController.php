@@ -164,9 +164,12 @@ class DataController
         }
 
         return new \WP_REST_Response($formatted_courses, 200);
-    }
+    }    
     /**
      * Callback to get the details for a single qp_course.
+     * v4: Corrected based on user feedback.
+     * - 'test_id' is the 'item_id' itself.
+     * - 'content_type' is 'test_series'.
      */
     public static function get_course_details( \WP_REST_Request $request ) {
         $course_id = (int) $request['id'];
@@ -176,10 +179,8 @@ class DataController
             return new \WP_Error('rest_invalid_id', 'Invalid course ID.', ['status' => 400]);
         }
 
-        // Check if the user is enrolled in this course
-        // (We must use your User_Access helper to keep it secure)
+        // --- Enrollment Check (This part is correct) ---
         if ( ! User_Access::can_access_course( $user_id, $course_id ) ) {
-            // Also allow if the course is 'open' (no plan attached)
             $plan_id = get_post_meta( $course_id, '_qp_linked_plan_id', true );
             if ( ! empty( $plan_id ) ) {
                  return new \WP_Error('rest_forbidden', 'You are not enrolled in this course.', ['status' => 403]);
@@ -191,18 +192,74 @@ class DataController
             return new \WP_Error('rest_not_found', 'Course not found.', ['status' => 404]);
         }
 
-        // --- Success ---
-        // Get the course structure we need
-        $structure = get_post_meta( $course_id, '_qp_course_structure', true );
-        if ( empty( $structure ) ) {
-            $structure = []; // Send empty array instead of null
+        // --- Build Structure from Custom Tables (CORRECTED) ---
+        global $wpdb;
+        $structure = [];
+        $sections_table = $wpdb->prefix . 'qp_course_sections';
+        $items_table = $wpdb->prefix . 'qp_course_items';
+
+        // 1. Get all sections
+        $sections = $wpdb->get_results( $wpdb->prepare(
+            "SELECT section_id, title FROM {$sections_table} WHERE course_id = %d ORDER BY section_order ASC",
+            $course_id
+        ) );
+
+        // 2. Get all items
+        $items = $wpdb->get_results( $wpdb->prepare(
+            "SELECT item_id, section_id, title, content_type
+             FROM {$items_table} 
+             WHERE course_id = %d 
+             ORDER BY section_id ASC, item_order ASC",
+            $course_id
+        ) );
+
+        // 3. Group items by their section_id for easier lookup
+        $items_by_section = [];
+        foreach ( $items as $item ) {
+            $items_by_section[ $item->section_id ][] = $item;
         }
 
+        // 4. Build the flat structure array
+        if ( ! empty( $sections ) ) {
+            foreach ( $sections as $section ) {
+                // Add the Section to the structure
+                $structure[] = [
+                    'id'    => 'section_' . $section->section_id,
+                    'type'  => 'section',
+                    'title' => $section->title,
+                ];
+
+                // Check if this section has items and add them
+                if ( isset( $items_by_section[ $section->section_id ] ) ) {
+                    foreach ( $items_by_section[ $section->section_id ] as $item ) {
+                        
+                        // --- THIS IS THE NEW LOGIC ---
+                        $test_id = null;
+                        // Check for 'test_series' (with underscore)
+                        if ( $item->content_type === 'test_series' ) {
+                            // The test_id *is* the item_id.
+                            $test_id = (string) $item->item_id;
+                        }
+                        // --- END NEW LOGIC ---
+
+                        // Add the Item to the structure
+                        $structure[] = [
+                            'id'      => 'item_' . $item->item_id,
+                            'type'    => $item->content_type,
+                            'title'   => $item->title,
+                            'test_id' => $test_id, // Pass the item_id as the test_id
+                        ];
+                    }
+                }
+            }
+        }
+
+        // --- Success ---
         $data = [
             'id' => $course_post->ID,
             'title' => $course_post->post_title,
             'content' => $course_post->post_content,
-            'structure' => $structure, // This is the key data!
+            'structure' => $structure,
         ];
 
         return new \WP_REST_Response( $data, 200 );
