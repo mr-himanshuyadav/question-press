@@ -156,11 +156,13 @@ class Importer {
 
         // 4. Automatically link Source to Subject (no change here)
         if ($subject_lineage['primary'] && $source_lineage['primary']) {
-            $wpdb->insert($rel_table, [
-                'object_id'   => $source_lineage['primary'],
-                'term_id'     => $subject_lineage['primary'],
-                'object_type' => 'source_subject_link'
-            ], ['%d', '%d', '%s']); // Add formats to be safe
+            // Use INSERT IGNORE to prevent duplicate entry errors
+						$wpdb->query($wpdb->prepare(
+							"INSERT IGNORE INTO {$rel_table} (object_id, term_id, object_type) VALUES (%d, %d, %s)",
+							$source_lineage['primary'],
+							$subject_lineage['primary'],
+							'source_subject_link'
+						));
         }
         
         // --- Image Handling ---
@@ -192,21 +194,35 @@ class Importer {
 
         // --- Create Group Relationships ---
         if ($subject_lineage['specific']) {
-            $wpdb->insert($rel_table, ['object_id' => $group_id, 'term_id' => $subject_lineage['specific'], 'object_type' => 'group']);
+            $wpdb->query($wpdb->prepare(
+							"INSERT IGNORE INTO {$rel_table} (object_id, term_id, object_type) VALUES (%d, %d, 'group')",
+							$group_id,
+							$subject_lineage['primary'],
+						));
         }
         if ($source_lineage['specific']) {
-            $wpdb->insert($rel_table, ['object_id' => $group_id, 'term_id' => $source_lineage['specific'], 'object_type' => 'group']);
+            $wpdb->query($wpdb->prepare(
+							"INSERT IGNORE INTO {$rel_table} (object_id, term_id, object_type) VALUES (%d, %d, 'group')",
+							$group_id,
+							$source_lineage['primary'],
+						));
         }
         if ($exam_term_id && ($group['isPYQ'] ?? 0)) {
-            $wpdb->insert($rel_table, ['object_id' => $group_id, 'term_id' => $exam_term_id, 'object_type' => 'group']);
+            $wpdb->query($wpdb->prepare(
+							"INSERT IGNORE INTO {$rel_table} (object_id, term_id, object_type) VALUES (%d, %d, 'group')",
+							$group_id,
+							$exam_term_id
+						));
             
             // Automatically link Exam to top-level Subject
             if ($subject_lineage['primary']) {
-                $wpdb->insert($rel_table, [
-                    'object_id'   => $exam_term_id, 
-                    'term_id'     => $subject_lineage['primary'], 
-                    'object_type' => 'exam_subject_link'
-                ]);
+                // Use INSERT IGNORE to prevent duplicate entry errors
+						$wpdb->query($wpdb->prepare(
+							"INSERT IGNORE INTO {$rel_table} (object_id, term_id, object_type) VALUES (%d, %d, %s)",
+							$exam_term_id,
+							$subject_lineage['primary'],
+							'exam_subject_link'
+						));
             }
         }
 
@@ -256,7 +272,12 @@ class Importer {
 
             // --- Handle Labels ---
             if ($existing_question_id && $duplicate_term_id) {
-                $wpdb->insert($rel_table, ['object_id' => $question_id, 'term_id' => $duplicate_term_id, 'object_type' => 'question']);
+                // Use INSERT IGNORE to prevent duplicate entry errors
+						$wpdb->query($wpdb->prepare(
+							"INSERT IGNORE INTO {$rel_table} (object_id, term_id, object_type) VALUES (%d, %d, 'question')",
+							$question_id,
+							$duplicate_term_id
+						));
                 $duplicate_count++;
             }
             $imported_count++;
