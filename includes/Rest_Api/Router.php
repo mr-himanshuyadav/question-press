@@ -94,7 +94,9 @@ final class Router
             'permission_callback' => [AuthController::class, 'check_auth_token'],
             'args' => [
                 'id' => [
-                    'validate_callback' => function($param) { return is_numeric($param); }
+                    'validate_callback' => function ($param) {
+                        return is_numeric($param);
+                    }
                 ],
             ],
         ]);
@@ -102,6 +104,12 @@ final class Router
         register_rest_route('questionpress/v1', '/dashboard/overview', [
             'methods' => WP_REST_Server::READABLE,
             'callback' => [DataController::class, 'get_dashboard_overview'],
+            'permission_callback' => [AuthController::class, 'check_auth_token']
+        ]);
+
+        register_rest_route('questionpress/v1', '/dashboard/profile', [
+            'methods'  => WP_REST_Server::READABLE,
+            'callback' => [DataController::class, 'get_dashboard_profile'],
             'permission_callback' => [AuthController::class, 'check_auth_token']
         ]);
 
@@ -171,7 +179,9 @@ final class Router
             'permission_callback' => [AuthController::class, 'check_auth_token'],
             'args' => [
                 'id' => [
-                    'validate_callback' => function($param) { return is_numeric($param); }
+                    'validate_callback' => function ($param) {
+                        return is_numeric($param);
+                    }
                 ],
             ],
         ]);

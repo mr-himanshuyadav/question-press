@@ -884,7 +884,7 @@ final class Dashboard {
 		}
 
 		$user_id      = get_current_user_id();
-		$profile_data = self::get_profile_data( $user_id ); // Use the existing helper
+		$profile_data = Dashboard_Manager::get_profile_data( $user_id ); // Use the existing helper
 
 		// Prepare arguments for the template
 		$args = [
@@ -999,78 +999,6 @@ final class Dashboard {
 
 		// Load and return the "my-courses" template
 		return Template_Loader::get_html( 'dashboard/my-courses', 'frontend', $template_args );
-	}
-
-	/**
-	 * Gathers profile data for the dashboard profile tab.
-	 * (Keep this helper method as is - no changes needed here)
-	 *
-	 * @param int $user_id The ID of the user.
-	 * @return array An array containing profile details.
-	 */
-	private static function get_profile_data( $user_id ) {
-		$user_info = get_userdata( $user_id );
-		if ( ! $user_info ) {
-			return [ // Return default empty values if user not found
-				'display_name'          => 'User Not Found',
-				'email'                 => '',
-				'avatar_url'            => get_avatar_url( 0 ), // Default avatar
-				'scope_description'     => 'N/A',
-				'allowed_subjects_list' => [],
-				'allowed_exams_list'    => [],
-			];
-		}
-		$custom_avatar_id = get_user_meta( $user_id, '_qp_avatar_attachment_id', true );
-		$avatar_url       = '';
-		if ( ! empty( $custom_avatar_id ) ) {
-			$avatar_url = wp_get_attachment_image_url( absint( $custom_avatar_id ), 'thumbnail' );
-		}
-		if ( empty( $avatar_url ) ) {
-			$avatar_url = get_avatar_url( $user_id, [ 'size' => 128, 'default' => 'mystery' ] );
-		}
-		$scope_description       = 'All Subjects & Exams';
-		$allowed_subjects_list   = [];
-		$allowed_exams_list      = [];
-		$allowed_subject_ids_or_all = User_Access::get_allowed_subject_ids( $user_id );
-		if ( $allowed_subject_ids_or_all !== 'all' ) {
-			global $wpdb;
-			$term_table            = $wpdb->prefix . 'qp_terms';
-			$allowed_subject_ids   = $allowed_subject_ids_or_all;
-			if ( ! empty( $allowed_subject_ids ) ) {
-				$subj_ids_placeholder  = implode( ',', array_map( 'absint', $allowed_subject_ids ) );
-				$allowed_subjects_list = $wpdb->get_col( "SELECT name FROM {$term_table} WHERE term_id IN ($subj_ids_placeholder) AND parent = 0 ORDER BY name ASC" );
-			}
-			$direct_exams_json = get_user_meta( $user_id, '_qp_allowed_exam_term_ids', true );
-			$direct_exam_ids   = json_decode( $direct_exams_json, true );
-			if ( ! is_array( $direct_exam_ids ) ) {
-				$direct_exam_ids = [];
-			}
-			$final_allowed_exam_ids = array_map( 'absint', $direct_exam_ids );
-			if ( ! empty( $final_allowed_exam_ids ) ) {
-				$exam_ids_placeholder = implode( ',', $final_allowed_exam_ids );
-				$allowed_exams_list   = $wpdb->get_col( "SELECT name FROM {$term_table} WHERE term_id IN ($exam_ids_placeholder) ORDER BY name ASC" );
-			}
-			if ( empty( $allowed_subjects_list ) && empty( $allowed_exams_list ) ) {
-				$scope_description = 'No specific scope assigned.';
-			} else {
-				$scope_parts = [];
-				if ( ! empty( $allowed_exams_list ) ) {
-					$scope_parts[] = 'Allowed Exams: ' . implode( ', ', array_map( 'esc_html', $allowed_exams_list ) );
-				}
-				if ( ! empty( $allowed_subjects_list ) ) {
-					$scope_parts[] = 'Accessible Subjects: ' . implode( ', ', array_map( 'esc_html', $allowed_subjects_list ) );
-				}
-				$scope_description = implode( '; ', $scope_parts );
-			}
-		}
-		return [
-			'display_name'          => $user_info->display_name,
-			'email'                 => $user_info->user_email,
-			'avatar_url'            => $avatar_url,
-			'scope_description'     => $scope_description,
-			'allowed_subjects_list' => $allowed_subjects_list,
-			'allowed_exams_list'    => $allowed_exams_list,
-		];
 	}
 
 

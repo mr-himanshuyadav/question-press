@@ -332,8 +332,7 @@ class DataController
         $user_id = get_current_user_id();
         
         // 1. Call the correct data-fetching function from Dashboard.php
-        // This function ALREADY returns all the data in one array.
-        $data = Dashboard_Manager::get_overview_data($user_id);
+        $data = Dashboard_Manager::get_overview_data($user_id); //
 
         if (is_wp_error($data)) {
             return $data; // Pass the WP_Error object on failure
@@ -347,39 +346,56 @@ class DataController
                 'session_id' => (int) $session->session_id,
                 'start_time' => $session->start_time,
                 'status' => $session->status,
-                'mode_name' => Dashboard_Manager::get_session_mode_name($session, $settings),
-                'subjects_display' => Dashboard_Manager::get_session_subjects_display($session, $settings, $data['lineage_cache_active'], $data['group_to_topic_map_active'], $data['question_to_group_map_active']),
+                'mode_name' => Dashboard_Manager::get_session_mode_name($session, $settings), //
+                'subjects_display' => Dashboard_Manager::get_session_subjects_display($session, $settings, $data['lineage_cache_active'], $data['group_to_topic_map_active'], $data['question_to_group_map_active']), //
                 'result_display' => '-', // Active sessions don't have a result
             ];
         }
 
         // 3. Process Recent History into the format the app expects
+        // THIS IS THE CRITICAL FIX FOR YOUR RECENT HISTORY
         $processed_recent_history = [];
-        foreach($data['recent_history'] as $session) {
+        foreach($data['recent_history'] as $session) { //
             $settings = json_decode($session->settings_snapshot, true);
-            $processed_recent_history[] = [
+            $processed_recent_history[] = [ //
                 'session_id' => (int) $session->session_id,
                 'start_time' => $session->start_time,
                 'status' => $session->status,
-                'mode_name' => Dashboard_Manager::get_session_mode_name($session, $settings),
-                'subjects_display' => Dashboard_Manager::get_session_subjects_display($session, $settings, $data['lineage_cache_recent'], $data['group_to_topic_map_recent'], $data['question_to_group_map_recent']),
-                'result_display' => $data['accuracy_stats'][$session->session_id] ?? Dashboard_Manager::get_session_result_display($session, $settings),
+                'mode_name' => Dashboard_Manager::get_session_mode_name($session, $settings), //
+                'subjects_display' => Dashboard_Manager::get_session_subjects_display($session, $settings, $data['lineage_cache_recent'], $data['group_to_topic_map_recent'], $data['question_to_group_map_recent']), //
+                'result_display' => $data['accuracy_stats'][$session->session_id] ?? Dashboard_Manager::get_session_result_display($session, $settings), //
             ];
         }
 
         // 4. Create the final clean data object for the app
-        // This now matches your app's "OverviewStats" and "Session" interfaces
+        // THIS IS THE CRITICAL FIX FOR YOUR STATS
         $api_response_data = [
-            'total_attempted'     => (int) $data['stats']->total_attempted,   // <-- FIX: Accessing inside 'stats'
-            'total_correct'       => (int) $data['stats']->total_correct,     // <-- FIX: Accessing inside 'stats'
+            'total_attempted'     => (int) $data['stats']->total_attempted,   // <-- FIX: Accessing inside 'stats' and casting to (int)
+            'total_correct'       => (int) $data['stats']->total_correct,     // <-- FIX: Accessing inside 'stats' and casting to (int)
             'overall_accuracy'    => (float) $data['overall_accuracy'],
             'review_count'        => (int) $data['review_count'],
             'never_correct_count' => (int) $data['never_correct_count'],
-            'active_sessions'     => $processed_active_sessions,  // <-- FIX: Using processed array
+            'active_sessions'     => $processed_active_sessions,  // <-- FIX
             'recent_history'      => $processed_recent_history, // <-- FIX: Using processed array
         ];
 
         // 5. Return the *wrapped* response that the app expects
         return new \WP_REST_Response(['success' => true, 'data' => $api_response_data], 200);
+    }
+    /**
+     * Callback to get the data for the main profile dashboard.
+     */
+    public static function get_dashboard_profile( \WP_REST_Request $request ) {
+        $user_id = get_current_user_id();
+        
+        // Call the public helper function from Dashboard.php
+        $profile_data = Dashboard_Manager::get_profile_data( $user_id );
+
+        if ( empty( $profile_data ) ) {
+             return new \WP_Error('rest_no_data', 'Could not retrieve profile data.', ['status' => 500]);
+        }
+        
+        // Return the *wrapped* response that the app expects
+        return new \WP_REST_Response(['success' => true, 'data' => $profile_data], 200);
     }
 } // End class DataController
