@@ -113,6 +113,12 @@ final class Router
             'permission_callback' => [AuthController::class, 'check_auth_token']
         ]);
 
+        register_rest_route( 'questionpress/v1', '/session/(?P<id>[\d]+)/review', [
+            'methods'  => WP_REST_Server::READABLE,
+            'callback' => [DataController::class, 'get_session_review_details'],
+            'permission_callback' => [AuthController::class, 'check_auth_token']
+        ] );
+
         // --- Question Endpoints (Protected) ---
         register_rest_route('questionpress/v1', '/questions/add', [
             'methods' => WP_REST_Server::CREATABLE,

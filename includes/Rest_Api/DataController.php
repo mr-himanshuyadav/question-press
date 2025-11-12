@@ -398,4 +398,98 @@ class DataController
         // Return the *wrapped* response that the app expects
         return new \WP_REST_Response(['success' => true, 'data' => $profile_data], 200);
     }
+
+    /**
+     * Callback to get the review details for a specific session.
+     * (This endpoint is used by the mobile app)
+     */
+    public static function get_session_review_details( \WP_REST_Request $request ) {
+        $session_id = (int) $request['id'];
+        $user_id = get_current_user_id();
+
+        if ( ! $session_id ) {
+            return new \WP_Error( 'rest_invalid_id', 'Invalid session ID.', [ 'status' => 400 ] );
+        }
+
+        // 1. Call your "correct" data-gathering function
+        $data = \QuestionPress\Utils\Dashboard_Manager::get_session_review_data( $session_id, $user_id );
+
+        if ( is_null( $data ) ) {
+            return new \WP_Error( 'rest_not_found', 'Session not found or permission denied.', [ 'status' => 404 ] );
+        }
+
+        // 2. Transform the '$data['questions']' array for the mobile app
+        $app_questions = [];
+        foreach ( $data['questions'] as $q_obj ) {
+            
+            // Transform options: The app wants {key, value}, but your DB has {id, text}.
+            // We will map 'option_id' -> 'option_key' and 'option_text' -> 'option_value'.
+            $transformed_options = [];
+            $correct_answer_keys = []; // We'll find this while we loop
+            foreach( $q_obj->options as $option_row ) {
+                $transformed_options[] = [
+                    'option_key' => (string) $option_row->option_id, // Mapping ID to Key (as string)
+                    'option_value' => $option_row->option_text, // Mapping Text to Value
+                ];
+                
+                if ( $option_row->is_correct ) {
+                    $correct_answer_keys[] = (string) $option_row->option_id; // Store all correct keys (as strings)
+                }
+            }
+            
+            // Your query doesn't select 'question_type'.
+            // We must infer it based on the number of correct answers.
+            $question_type = ( count($correct_answer_keys) > 1 ) ? 'multiple_choice' : 'single_choice';
+            
+            // Format the correct_answer for the app
+            $app_correct_answer = null;
+            if ($question_type === 'multiple_choice') {
+                $app_correct_answer = $correct_answer_keys; // e.g., ["123", "124"]
+            } else {
+                $app_correct_answer = $correct_answer_keys[0] ?? null; // e.g., "123"
+            }
+            
+            // Format the user_answer for the app.
+            // Your PHP function provides 'selected_option_id' from the DB.
+            $app_user_answer = $q_obj->selected_option_id ? (string) $q_obj->selected_option_id : null;
+            
+            // This logic assumes 'selected_option_id' is for single-choice answers.
+            // If your app supports multiple-choice answers, your 'qp_user_attempts'
+            // table would need to store a JSON array, and the 'get_session_review_data'
+            // function would need to be updated to pass 'user_answer' instead of 'selected_option_id'.
+            // Based on your provided function, this is the correct transformation.
+
+            $app_questions[] = [
+                'question_id' => $q_obj->question_id,
+                'question_text' => $q_obj->question_text,
+                'question_type' => $question_type, // Our best guess
+                'options' => $transformed_options,
+                'explanation' => $q_obj->explanation, // This is 'explanation_text'
+                'user_answer' => $app_user_answer, // This is 'selected_option_id'
+                'correct_answer' => $app_correct_answer, // This is derived from $q_obj->options
+                'is_correct' => $q_obj->is_correct,
+                'is_marked_for_review' => $q_obj->is_marked_for_review,
+            ];
+        }
+
+        // 3. Use the 'app_summary' directly from your function
+        // We just need to flatten it to match the app's 'SessionReviewDetails' interface
+        $final_app_data = [
+            'session_id' => $data['app_summary']['session_id'],
+            'status' => $data['app_summary']['status'],
+            'start_time' => $data['app_summary']['start_time'],
+            'end_time' => $data['app_summary']['end_time'],
+            'total_questions' => $data['app_summary']['total_questions'],
+            'correct_count' => $data['app_summary']['correct_count'],
+            'incorrect_count' => $data['app_summary']['incorrect_count'],
+            'skipped_count' => $data['app_summary']['skipped_count'],
+            'marks_obtained' => $data['app_summary']['marks_obtained'],
+            'total_marks' => $data['app_summary']['total_marks'],
+            'overall_accuracy' => $data['app_summary']['overall_accuracy'],
+            'questions' => $app_questions,
+        ];
+
+        // 4. Wrap and return
+        return new \WP_REST_Response( [ 'success' => true, 'data' => $final_app_data ], 200 );
+    }
 } // End class DataController

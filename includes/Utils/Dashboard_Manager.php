@@ -175,6 +175,307 @@ class Dashboard_Manager {
 		];
 	}
 
+	/**
+     * NEW: Gathers all data for a specific session review (for Web and API).
+     *
+     * @param int $session_id The ID of the session.
+     * @param int $user_id    The ID of the current user.
+     * @return array|null An associative array of all review data, or null if session not found.
+     */
+    public static function get_session_review_data( $session_id, $user_id ) {
+        global $wpdb;
+        $sessions_table = $wpdb->prefix . 'qp_user_sessions';
+        $attempts_table = $wpdb->prefix . 'qp_user_attempts';
+        $questions_table = $wpdb->prefix . 'qp_questions';
+        $options_table = $wpdb->prefix . 'qp_options';
+        $groups_table = $wpdb->prefix . 'qp_question_groups';
+        $rel_table = $wpdb->prefix . 'qp_term_relationships';
+        $term_table = $wpdb->prefix . 'qp_terms';
+        $tax_table = $wpdb->prefix . 'qp_taxonomies';
+        $review_table = $wpdb->prefix . 'qp_review_later';
+        $reports_table = $wpdb->prefix . 'qp_question_reports';
+
+        // 1. Fetch Session
+        $session = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$sessions_table} WHERE session_id = %d AND user_id = %d", $session_id, $user_id ) );
+        if ( ! $session ) {
+            return null; // Not found or no permission
+        }
+
+        $settings = json_decode( $session->settings_snapshot, true );
+
+        // 2. Get all attempts and question data
+        $attempts_raw = $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT 
+                a.attempt_id, a.question_id, a.selected_option_id, a.is_correct, a.mock_status, a.status as attempt_status,
+                q.question_text,q.explanation_text, q.question_number_in_section,
+                g.group_id, g.direction_text
+            FROM {$attempts_table} a
+            JOIN {$questions_table} q ON a.question_id = q.question_id
+            LEFT JOIN {$groups_table} g ON q.group_id = g.group_id
+            WHERE a.session_id = %d
+            ORDER BY a.attempt_id ASC",
+                $session_id
+            )
+        );
+
+        $attempted_question_ids = wp_list_pluck( $attempts_raw, 'question_id' );
+        if ( empty( $attempted_question_ids ) ) {
+            $attempted_question_ids = [0]; // Prevent empty IN clause
+        }
+        $ids_placeholder = implode( ',', array_map( 'absint', $attempted_question_ids ) );
+
+        // 3. Get all options for these questions
+        $all_options_raw = $wpdb->get_results( "SELECT question_id, option_id, option_text, is_correct FROM {$options_table} WHERE question_id IN ($ids_placeholder)" );
+        $all_options = [];
+        foreach ( $all_options_raw as $option ) {
+            $all_options[ $option->question_id ][] = $option;
+        }
+
+        // 4. Get lineage helper function
+        $lineage_cache = [];
+        if ( ! function_exists( __NAMESPACE__ . '\get_term_lineage' ) ) {
+            function get_term_lineage( $term_id, &$lineage_cache, $wpdb ) {
+                if ( isset( $lineage_cache[ $term_id ] ) ) {
+                    return $lineage_cache[ $term_id ];
+                }
+                $lineage    = [];
+                $current_id = $term_id;
+                for ( $i = 0; $i < 10; $i++ ) {
+                    if ( ! $current_id ) {
+                        break;
+                    }
+                    $term = $wpdb->get_row( $wpdb->prepare( "SELECT name, parent FROM {$wpdb->prefix}qp_terms WHERE term_id = %d", $current_id ) );
+                    if ( $term ) {
+                        array_unshift( $lineage, $term->name );
+                        $current_id = $term->parent;
+                    } else {
+                        break;
+                    }
+                }
+                $lineage_cache[ $term_id ] = $lineage;
+                return $lineage;
+            }
+        }
+
+        // 5. Get taxonomy IDs
+        $subject_tax_id = $wpdb->get_var( "SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'subject'" );
+        $source_tax_id = $wpdb->get_var( "SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'source'" );
+
+        // 6. Pre-fetch term relationships for all groups
+        $all_group_ids = array_unique( wp_list_pluck( $attempts_raw, 'group_id' ) );
+        $term_rels = [];
+        if ( ! empty( $all_group_ids ) ) {
+            $group_ids_placeholder = implode( ',', array_map( 'absint', $all_group_ids ) );
+            $rel_results = $wpdb->get_results( "SELECT object_id, term_id FROM {$rel_table} WHERE object_type = 'group' AND object_id IN ($group_ids_placeholder)" );
+            $all_term_ids = wp_list_pluck( $rel_results, 'term_id' );
+            
+            // Pre-fetch term taxonomies
+            $term_taxonomies = [];
+            if (!empty($all_term_ids)) {
+                $term_ids_placeholder = implode(',', array_map('absint', $all_term_ids));
+                $term_tax_results = $wpdb->get_results("SELECT term_id, taxonomy_id FROM {$term_table} WHERE term_id IN ($term_ids_placeholder)", OBJECT_K);
+                $term_taxonomies = wp_list_pluck($term_tax_results, 'taxonomy_id', 'term_id');
+            }
+
+            foreach ( $rel_results as $rel ) {
+                $term_id = $rel->term_id;
+                $tax_id = $term_taxonomies[$term_id] ?? 0;
+                if ( $tax_id == $subject_tax_id ) {
+                    $term_rels[ $rel->object_id ]['subject'] = $term_id;
+                } elseif ( $tax_id == $source_tax_id ) {
+                    $term_rels[ $rel->object_id ]['source'] = $term_id;
+                }
+            }
+        }
+
+        // 7. Get other metadata
+        $reported_qids_for_user = $wpdb->get_col( $wpdb->prepare( "SELECT DISTINCT question_id FROM {$reports_table} WHERE user_id = %d AND status = 'open'", $user_id ) );
+        $review_later_qids = $wpdb->get_col( $wpdb->prepare( "SELECT DISTINCT question_id FROM {$review_table} WHERE user_id = %d AND question_id IN ($ids_placeholder)", $user_id ) );
+        $review_lookup = array_flip( $review_later_qids );
+
+        // 8. Process all attempts into the final "questions" array
+        $questions = [];
+        foreach ( $attempts_raw as $attempt ) {
+            $question_id = $attempt->question_id;
+            $group_id = $attempt->group_id;
+            $options = $all_options[ $question_id ] ?? [];
+            
+            $selected_answer_text = '';
+            $correct_answer_text = '';
+            $correct_answer_keys = [];
+            $app_options = [];
+
+            foreach ( $options as $option ) {
+                if ( $option->is_correct ) {
+                    $correct_answer_text = $option->option_text; // For web
+                }
+                if ( $option->option_id == $attempt->selected_option_id ) {
+                    $selected_answer_text = $option->option_text; // For web
+                }
+            }
+
+            // Get lineage
+            $subject_term_id = $term_rels[ $group_id ]['subject'] ?? null;
+            $source_term_id = $term_rels[ $group_id ]['source'] ?? null;
+            $subject_lineage = $subject_term_id ? get_term_lineage( $subject_term_id, $lineage_cache, $wpdb ) : [];
+            $source_lineage = $source_term_id ? get_term_lineage( $source_term_id, $lineage_cache, $wpdb ) : [];
+
+            $questions[] = (object) [ // Use (object) to match the web template's $attempt->
+                // Web-specific fields
+                'attempt_id' => $attempt->attempt_id,
+                'selected_option_id' => $attempt->selected_option_id, // For $is_skipped check
+                'selected_answer' => $selected_answer_text,
+                'correct_answer' => $correct_answer_text,
+                'mock_status' => $attempt->mock_status,
+                'direction_text' => $attempt->direction_text,
+                'question_number_in_section' => $attempt->question_number_in_section,
+                'subject_lineage' => $subject_lineage,
+                'source_lineage' => $source_lineage,
+                'options' => $options, // Pass raw options for web template
+
+                // App-specific fields
+                'question_id' => $question_id,
+                'question_text' => $attempt->question_text,
+                'explanation' => $attempt->explanation_text,
+                'app_options' => $app_options,
+                
+                // Shared fields
+                'is_correct' => ( $attempt->attempt_status === 'answered' ) ? (bool) $attempt->is_correct : null,
+                'is_marked_for_review' => isset( $review_lookup[ $question_id ] ),
+            ];
+        }
+
+        // 9. Calculate final summary stats
+        $total_questions = count( $questions );
+        $accuracy = ( $session->total_attempted > 0 ) ? ( (int) $session->correct_count / (int) $session->total_attempted ) * 100 : 0;
+        $avg_time_per_question = 'N/A';
+        if ( $session->total_attempted > 0 && isset( $session->total_active_seconds ) ) {
+            $avg_seconds = round( $session->total_active_seconds / $session->total_attempted );
+            $avg_time_per_question = sprintf( '%02d:%02d', floor( $avg_seconds / 60 ), $avg_seconds % 60 );
+        }
+        $marks_correct = $settings['marks_correct'] ?? 1;
+        $marks_incorrect = $settings['marks_incorrect'] ?? 0;
+        $total_marks = 0;
+        if ( isset( $settings['marks_correct'] ) ) {
+             $total_marks = $total_questions * (float) $marks_correct;
+        }
+
+        // 10. Check if course item was deleted
+        $is_course_item_deleted = false;
+        if ( isset( $settings['course_id'] ) && isset( $settings['item_id'] ) ) {
+            $items_table = $wpdb->prefix . 'qp_course_items';
+            $item_exists = $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$items_table} WHERE item_id = %d AND course_id = %d", absint( $settings['item_id'] ), absint( $settings['course_id'] ) ) );
+            if ( ! $item_exists ) {
+                $is_course_item_deleted = true;
+            }
+        }
+        
+        // 11. Get Mode and Topic List
+        // (Copied from your original function)
+        $topics_in_session = [];
+        if (! empty($all_group_ids)) {
+             $group_ids_placeholder = implode(',', $all_group_ids);
+             $topics_in_session = $wpdb->get_col("
+                SELECT DISTINCT t.name
+                FROM {$term_table} t
+                JOIN {$rel_table} r ON t.term_id = r.term_id
+                WHERE r.object_id IN ($group_ids_placeholder)
+                  AND r.object_type = 'group'
+                  AND t.taxonomy_id = (SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'subject')
+                ORDER BY t.name ASC
+            ");
+        }
+        
+        // (Copied from your original function)
+        $is_mock_test = isset( $settings['practice_mode'] ) && $settings['practice_mode'] === 'mock_test';
+        $is_section_wise_practice = isset( $settings['practice_mode'] ) && $settings['practice_mode'] === 'Section Wise Practice';
+        $mode_class = 'mode-normal';
+        $mode = 'Practice';
+
+        if ( $is_mock_test ) {
+            if ( isset( $settings['course_id'] ) && $settings['course_id'] > 0 && isset( $settings['item_id'] ) && $settings['item_id'] > 0 ) {
+                $course_id = absint( $settings['course_id'] );
+                $item_id = absint( $settings['item_id'] );
+                $course_title = get_the_title( $course_id );
+                $items_table = $wpdb->prefix . 'qp_course_items';
+                $sections_table = $wpdb->prefix . 'qp_course_sections';
+                $item_info = $wpdb->get_row( $wpdb->prepare( "SELECT i.title AS item_title, s.title AS section_title FROM {$items_table} i LEFT JOIN {$sections_table} s ON i.section_id = s.section_id WHERE i.item_id = %d", $item_id ) );
+                $item_title = $item_info ? $item_info->item_title : null;
+                $section_title = $item_info ? $item_info->section_title : null;
+                $mode = 'Course Test';
+                $name_parts = [];
+                if ( $course_title ) $name_parts[] = esc_html( $course_title );
+                if ( $section_title ) $name_parts[] = esc_html( $section_title );
+                if ( $item_title ) $name_parts[] = esc_html( $item_title );
+                if ( ! empty( $name_parts ) ) {
+                    $mode = implode( ' / ', $name_parts );
+                } elseif ( $item_title ) {
+                    $mode = esc_html( $item_title );
+                }
+                $mode_class = 'mode-course-test';
+            } else {
+                $mode_class = 'mode-mock-test';
+                $mode = 'Mock Test';
+            }
+        } elseif ( isset( $settings['practice_mode'] ) ) {
+            switch ( $settings['practice_mode'] ) {
+                case 'revision':
+                    $mode_class = 'mode-revision';
+                    $mode = 'Revision Mode';
+                    break;
+                case 'Incorrect Que. Practice':
+                    $mode_class = 'mode-incorrect';
+                    $mode = 'Incorrect Practice';
+                    break;
+                case 'Section Wise Practice':
+                    $mode_class = 'mode-section-wise';
+                    $mode = 'Section Wise Practice';
+                    break;
+            }
+        } elseif ( isset( $settings['subject_id'] ) && $settings['subject_id'] === 'review' ) {
+            $mode_class = 'mode-review';
+            $mode = 'Review Mode';
+        }
+
+        // 12. Assemble the final package
+        return [
+            // Summary Stats
+            'session' => $session, // Pass the raw session object for the template
+            'accuracy' => $accuracy,
+            'avg_time_per_question' => $avg_time_per_question,
+            'marks_correct' => $marks_correct,
+            'marks_incorrect' => $marks_incorrect,
+            'topics_in_session' => $topics_in_session,
+            
+            // Mode and Context
+            'mode' => $mode,
+            'mode_class' => $mode_class,
+            'is_course_item_deleted' => $is_course_item_deleted,
+            'is_section_wise_practice' => $is_section_wise_practice,
+            'reported_qids_for_user' => $reported_qids_for_user,
+            
+            // Session Content
+            'questions' => $questions, // This is the new "attempts" array
+            'settings' => $settings,
+
+            // App-specific Summary (built from above)
+            'app_summary' => [
+                'session_id' => $session->session_id,
+                'status' => $session->status,
+                'start_time' => $session->start_time,
+                'end_time' => $session->end_time,
+                'total_questions' => $total_questions,
+                'correct_count' => (int) $session->correct_count,
+                'incorrect_count' => (int) $session->incorrect_count,
+                'skipped_count' => (int) $session->skipped_count + (int) $session->not_viewed_count,
+                'marks_obtained' => (float) $session->marks_obtained,
+                'total_marks' => (float) $total_marks,
+                'overall_accuracy' => (float) $accuracy,
+            ]
+        ];
+    }
+
 
     /**
 	 * NEW HELPER: Prefetches lineage data needed for session lists.
