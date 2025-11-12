@@ -878,7 +878,8 @@ class Practice_Manager
     }
 
     /**
-     * Starts a test series session for a specific course.
+     * Starts a Test Series session launched from a course item.
+     * This is the refactored version of the *original* logic from Session_Ajax.php.
      *
      * @param array $params The parameters for the session, typically from $_POST.
      * @return array|WP_Error An array with the redirect URL on success, or a WP_Error on failure.
@@ -888,68 +889,207 @@ class Practice_Manager
         if (!is_user_logged_in()) {
             return new WP_Error('not_logged_in', 'You must be logged in.', ['status' => 401]);
         }
-
-        $course_id = isset($params['course_id']) ? absint($params['course_id']) : 0;
-        $test_id = isset($params['test_id']) ? absint($params['test_id']) : 0;
-
-        if (empty($course_id) || empty($test_id)) {
-            return new WP_Error('invalid_parameters', 'Invalid course or test ID.');
-        }
-
-        global $wpdb;
         $user_id = get_current_user_id();
+        $current_time = current_time('mysql');
 
-        // Check if the user is enrolled in the course
-        if (!\QuestionPress\Utils\User_Access::is_enrolled($user_id, $course_id)) {
-            return new WP_Error('not_enrolled', 'You are not enrolled in this course.');
+        // Get Item ID from $params, not $_POST
+        $item_id = isset($params['item_id']) ? absint($params['item_id']) : 0;
+        if (!$item_id) {
+            // return WP_Error, not wp_send_json_error
+            return new WP_Error('invalid_item_id', 'Invalid course item ID.');
         }
 
-        // Get test details from course meta
-        $tests = get_post_meta($course_id, 'qp_course_tests', true);
-        if (empty($tests) || !isset($tests[$test_id])) {
-            return new WP_Error('test_not_found', 'The selected test could not be found in this course.');
-        }
-        $test = $tests[$test_id];
+        $is_retake = isset($params['is_retake']) && $params['is_retake'] === 'true';
 
-        // Get question IDs from the test settings
-        $question_ids = !empty($test['questions']) ? array_map('absint', $test['questions']) : [];
-        if (empty($question_ids)) {
-            return new WP_Error('no_questions_in_test', 'This test contains no questions.');
+        // --- Check for existing active/paused session ---
+        global $wpdb;
+        $sessions_table = $wpdb->prefix . 'qp_user_sessions';
+        $existing_session_id = $wpdb->get_var($wpdb->prepare(
+            "SELECT session_id FROM {$sessions_table} 
+             WHERE user_id = %d 
+               AND status IN ('active', 'mock_test', 'paused') 
+               AND settings_snapshot LIKE %s",
+            $user_id,
+            '%"item_id":' . $item_id . '%'
+        ));
+
+        if ($existing_session_id) {
+            $options = get_option('qp_settings');
+            $session_page_id = isset($options['session_page']) ? absint($options['session_page']) : 0;
+            if (!$session_page_id) {
+                return new WP_Error('no_session_page', 'The administrator has not configured a session page.');
+            }
+            $redirect_url = add_query_arg('session_id', $existing_session_id, get_permalink($session_page_id));
+            // return data array, not wp_send_json_success
+            return ['redirect_url' => $redirect_url, 'session_id' => $existing_session_id];
         }
 
-        // Get the Session Page URL from settings
+        // --- Entitlement Check (using item_id to find course_id) ---
+        $items_table = $wpdb->prefix . 'qp_course_items';
+        $course_id = $wpdb->get_var($wpdb->prepare("SELECT course_id FROM $items_table WHERE item_id = %d", $item_id));
+        if (!$course_id) {
+            return new WP_Error('invalid_course_for_item', 'Could not determine the course for this item.');
+        }
+
+        // Use the correct User_Access class
+        if (!User_Access::can_access_course($user_id, $course_id)) {
+            return new WP_Error('access_denied', 'You do not have access to start tests in this course.', ['status' => 403]);
+        }
+
+        // --- Retake Check ---
+        $progress_table = $wpdb->prefix . 'qp_user_items_progress';
+        $user_progress = $wpdb->get_row($wpdb->prepare(
+            "SELECT status, attempt_count FROM {$progress_table} WHERE user_id = %d AND item_id = %d",
+            $user_id,
+            $item_id
+        ));
+        
+        $is_completed = ($user_progress && $user_progress->status === 'completed');
+
+        if ($is_completed) {
+            $allow_retakes = get_post_meta($course_id, '_qp_course_allow_retakes', true);
+            
+            if ($allow_retakes !== '1') {
+                return new WP_Error('retake_disabled', __('Retakes are not allowed for this course.', 'question-press'), ['status' => 403]);
+            }
+
+            $retake_limit = absint(get_post_meta($course_id, '_qp_course_retake_limit', true)); // 0 = unlimited
+            if ($retake_limit > 0) {
+                $current_attempts = (int) $user_progress->attempt_count;
+                if ($current_attempts >= $retake_limit) {
+                    return new WP_Error('no_retakes_left', __('You have no retakes left for this test.', 'question-press'), ['status' => 403]);
+                }
+            }
+        }
+
+        // --- Progressive Enrollment Check ---
+        $progression_mode = get_post_meta($course_id, '_qp_course_progression_mode', true);
+        if ($progression_mode === 'progressive' && !$is_completed) {
+            $sections_table = $wpdb->prefix . 'qp_course_sections';
+            // items_table is already defined
+            
+            $ordered_item_ids = $wpdb->get_col($wpdb->prepare(
+                "SELECT i.item_id
+                 FROM {$items_table} i
+                 JOIN {$sections_table} s ON i.section_id = s.section_id
+                 WHERE i.course_id = %d
+                 ORDER BY s.section_order ASC, i.item_order ASC",
+                $course_id
+            ));
+
+            if (!empty($ordered_item_ids)) {
+                $current_item_index = array_search($item_id, $ordered_item_ids);
+
+                if ($current_item_index !== false && $current_item_index > 0) {
+                    $previous_item_id = $ordered_item_ids[$current_item_index - 1];
+                    
+                    // progress_table is already defined
+                    $previous_item_status = $wpdb->get_var($wpdb->prepare(
+                        "SELECT status FROM {$progress_table} WHERE user_id = %d AND item_id = %d",
+                        $user_id,
+                        $previous_item_id
+                    ));
+                    
+                    if ($previous_item_status !== 'completed') {
+                        $previous_item_title = $wpdb->get_var($wpdb->prepare("SELECT title FROM {$items_table} WHERE item_id = %d", $previous_item_id));
+                        return new WP_Error('progression_locked', sprintf(
+                            __('You must complete the previous item "%s" before starting this one.', 'question-press'),
+                            $previous_item_title ? esc_html($previous_item_title) : 'N/A'
+                        ), ['status' => 403]);
+                    }
+                }
+            }
+        }
+
+        // --- Proceed with starting the session ---
+        $item = $wpdb->get_row($wpdb->prepare(
+            "SELECT course_id, content_config FROM $items_table WHERE item_id = %d AND content_type = 'test_series'",
+            $item_id
+        ));
+
+        if (!$item || empty($item->content_config)) {
+            return new WP_Error('no_test_config', 'Could not find test configuration for this item.');
+        }
+
+        $config = json_decode($item->content_config, true);
+        if (json_last_error() !== JSON_ERROR_NONE || empty($config)) {
+             error_log("QP Course Test Start: Invalid JSON in content_config for item ID: " . $item_id . ". Error: " . json_last_error_msg());
+            return new WP_Error('invalid_test_config', 'Invalid test configuration data stored. Please contact an administrator.');
+        }
+
+        // --- Determine Question IDs ---
+        $final_question_ids = [];
+        $q_table = $wpdb->prefix . 'qp_questions';
+        $reports_table = $wpdb->prefix . 'qp_question_reports';
+
+        if (isset($config['selected_questions']) && is_array($config['selected_questions']) && !empty($config['selected_questions'])) {
+            $potential_ids = array_unique(array_map('absint', $config['selected_questions']));
+            if (!empty($potential_ids)) {
+                $ids_placeholder = implode(',', $potential_ids);
+                $reported_question_ids = $wpdb->get_col("SELECT DISTINCT question_id FROM {$reports_table} WHERE status = 'open'");
+                $exclude_reported_sql = !empty($reported_question_ids) ? ' AND question_id NOT IN (' . implode(',', $reported_question_ids) . ')' : '';
+                $verified_ids = $wpdb->get_col("SELECT question_id FROM {$q_table} WHERE question_id IN ($ids_placeholder) AND status = 'publish' {$exclude_reported_sql}");
+                $final_question_ids = array_intersect($potential_ids, $verified_ids);
+            }
+        } else {
+            return new WP_Error('no_questions_selected', 'No questions have been manually selected for this test item.');
+        }
+
+        if (empty($final_question_ids)) {
+             return new WP_Error('no_questions_available', 'None of the selected questions are currently available.');
+        }
+
+        shuffle($final_question_ids);
+
+        // --- Prepare Session Settings ---
         $options = get_option('qp_settings');
         $session_page_id = isset($options['session_page']) ? absint($options['session_page']) : 0;
         if (!$session_page_id) {
             return new WP_Error('no_session_page', 'The administrator has not configured a session page.');
         }
 
-        // Create the session settings snapshot
         $session_settings = [
-            'practice_mode'   => 'course_test',
-            'course_id'       => $course_id,
-            'test_id'         => $test_id,
-            'test_name'       => $test['name'],
-            'marks_correct'   => isset($test['marks_correct']) ? floatval($test['marks_correct']) : 1,
-            'marks_incorrect' => isset($test['marks_incorrect']) ? -abs(floatval($test['marks_incorrect'])) : 0,
-            'timer_enabled'   => isset($test['timer_enabled']) && $test['timer_enabled'],
-            'timer_seconds'   => isset($test['duration']) ? absint($test['duration']) * 60 : 0,
+            'practice_mode'       => 'mock_test', // This is correct, as it's a timed test
+            'course_id'           => $item->course_id,
+            'item_id'             => $item_id, // THIS IS THE CRITICAL FIELD
+            'num_questions'       => count($final_question_ids),
+            'marks_correct'       => $config['scoring_enabled'] ? ($config['marks_correct'] ?? 1) : null,
+            'marks_incorrect'     => $config['scoring_enabled'] ? -abs($config['marks_incorrect'] ?? 0) : null,
+            'timer_enabled'       => ($config['time_limit'] > 0),
+            'timer_seconds'       => ($config['time_limit'] ?? 0) * 60,
+            'original_selection'  => $config['selected_questions'] ?? [],
         ];
 
-        // Create the new session record
-        $wpdb->insert($wpdb->prefix . 'qp_user_sessions', [
+        // sessions_table is already defined
+        $wpdb->insert($sessions_table, [
             'user_id'                 => $user_id,
-            'status'                  => 'active',
-            'start_time'              => current_time('mysql'),
-            'last_activity'           => current_time('mysql'),
+            'status'                  => 'mock_test', // Use 'mock_test' status
+            'start_time'              => $current_time,
+            'last_activity'           => $current_time,
             'settings_snapshot'       => wp_json_encode($session_settings),
-            'question_ids_snapshot'   => wp_json_encode($question_ids)
+            'question_ids_snapshot'   => wp_json_encode(array_values($final_question_ids))
         ]);
         $session_id = $wpdb->insert_id;
 
-        // Build the redirect URL
+        if (!$session_id) {
+             return new WP_Error('session_creation_failed', 'Failed to create the session record.');
+        }
+
+        // --- Update the progress table ---
+        // progress_table is already defined
+        $wpdb->query($wpdb->prepare(
+            "REPLACE INTO {$progress_table} (user_id, item_id, course_id, status, last_viewed)
+             VALUES (%d, %d, %d, %s, %s)",
+            $user_id,
+            $item_id,
+            $item->course_id,
+            'in_progress',
+            $current_time
+        ));
+
         $redirect_url = add_query_arg('session_id', $session_id, get_permalink($session_page_id));
-        return ['redirect_url' => $redirect_url];
+        // return data array
+        return ['redirect_url' => $redirect_url, 'session_id' => $session_id];
     }
 
     /**
@@ -2285,55 +2425,57 @@ class Practice_Manager
             return new WP_Error('not_logged_in', 'You must be logged in.', ['status' => 401]);
         }
 
+        // --- FIX: Get question IDs from the params (like the OLD function) ---
+        $question_ids = isset($params['question_ids']) && is_array($params['question_ids'])
+            ? array_map('absint', $params['question_ids'])
+            : [];
+
         $session_id = isset($params['session_id']) ? absint($params['session_id']) : 0;
         $user_id = get_current_user_id();
 
-        if (!$session_id) {
-            return new WP_Error('invalid_session_id', 'Invalid session ID.');
+        if (empty($question_ids) || !$session_id) {
+            return new WP_Error('invalid_data', 'Invalid data provided (session_id or question_ids).');
         }
 
+        // --- This part from the new function is good, we keep it ---
         global $wpdb;
-        $session_table = $wpdb->prefix . 'qp_user_sessions';
-
-        $session_data = $wpdb->get_row($wpdb->prepare(
-            "SELECT buffered_questions, current_question_index, settings_snapshot FROM {$session_table} WHERE session_id = %d AND user_id = %d",
+        $session_settings_json = $wpdb->get_var($wpdb->prepare(
+            "SELECT settings_snapshot FROM {$wpdb->prefix}qp_user_sessions WHERE session_id = %d AND user_id = %d",
             $session_id,
             $user_id
-        ), ARRAY_A);
+        ));
+        $settings = $session_settings_json ? json_decode($session_settings_json, true) : [];
+        $options = get_option('qp_settings');
 
-        if (!$session_data) {
-            return new WP_Error('session_not_found', 'Session not found or does not belong to user.');
-        }
+        $is_mock_test = isset($settings['practice_mode']) && $settings['practice_mode'] === 'mock_test';
+        $allow_send_answer = isset($options['send_correct_answer']) && $options['send_correct_answer'] == 1;
+        // --- End of good part ---
 
-        $buffered_questions = json_decode($session_data['buffered_questions'], true);
-        $current_question_index = (int) $session_data['current_question_index'];
-        $settings = json_decode($session_data['settings_snapshot'], true);
+        $buffered_data = []; // Will store our results
 
-        $question_ids_to_fetch = [];
-        $buffer_size = 5; // Number of questions to buffer ahead
+        // --- FIX: Loop over the provided $question_ids (from the OLD function) ---
+        foreach ($question_ids as $question_id) {
+            if ($question_id > 0) {
+                $result_data = \QuestionPress\Database\Questions_DB::get_question_details_for_practice($question_id, $user_id, $session_id);
 
-        for ($i = 0; $i < $buffer_size; $i++) {
-            $index = $current_question_index + 1 + $i;
-            if (isset($buffered_questions[$index])) {
-                $question_ids_to_fetch[] = $buffered_questions[$index];
-            }
-        }
+                if ($result_data) {
+                    // Security check: Hide correct answer if mock test or setting is off
+                    if ($is_mock_test || !$allow_send_answer) {
+                        unset($result_data['correct_option_id']);
+                    }
+                    
+                    // --- FIX: ADD SHUFFLE BACK (from the OLD function) ---
+                    if (isset($result_data['question']['options']) && is_array($result_data['question']['options'])) {
+                         shuffle($result_data['question']['options']);
+                    }
 
-        $buffered_question_data = [];
-        foreach ($question_ids_to_fetch as $q_id) {
-            $data = \QuestionPress\Database\Questions_DB::get_question_details_for_practice($q_id, $user_id, $session_id);
-            if ($data) {
-                $is_mock_test = isset($settings['practice_mode']) && $settings['practice_mode'] === 'mock_test';
-                $options = get_option('qp_settings');
-                $allow_send_answer = isset($options['send_correct_answer']) && $options['send_correct_answer'] == 1;
-
-                if ($is_mock_test || !$allow_send_answer) {
-                    unset($data['correct_option_id']);
+                    // Use question_id as the key to make it easy for JS to find
+                    $buffered_data[$question_id] = $result_data;
                 }
-                $buffered_question_data[] = $data;
             }
         }
-
-        return ['buffered_questions' => $buffered_question_data];
+        
+        // Return just the data array. The AJAX handler will wrap it.
+        return $buffered_data;
     }
 }

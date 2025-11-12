@@ -639,14 +639,12 @@ class Practice_Ajax
     {
         check_ajax_referer('qp_practice_nonce', 'nonce');
 
-        $result = \QuestionPress\Utils\Practice_Manager::get_buffered_question_data([
-            'session_id' => isset($_POST['session_id']) ? absint($_POST['session_id']) : 0
-        ]);
+        $result = \QuestionPress\Utils\Practice_Manager::get_buffered_question_data($_POST);
 
         if (is_wp_error($result)) {
             wp_send_json_error(['message' => $result->get_error_message()]);
         } else {
-            wp_send_json_success($result);
+            wp_send_json_success(['questions' => $result]);
         }
     }
 }

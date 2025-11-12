@@ -163,32 +163,6 @@ class SessionController {
             'attempt_id' => $attempt_id
         ], 200);
     }
-    /**
-     * Ends a session and calculates the final results.
-     */
-    public static function end_session( \WP_REST_Request $request ) {
-        $session_id = $request->get_param('session_id');
-        if (!$session_id) {
-            return new WP_Error('rest_invalid_request', 'Session ID is required.', ['status' => 400]);
-        }
-
-        // Call the global helper function (which we also use for AJAX)
-        // This ensures logic is consistent
-        $summary_data = Session_Manager::finalize_and_end_session($session_id, 'completed', 'api_submitted');
-
-        if (is_null($summary_data)) {
-             // Session was empty and got deleted
-             return new WP_REST_Response(['message' => 'Session ended. No attempts were recorded.', 'final_score' => 0], 200);
-        }
-
-        return new WP_REST_Response([
-            'message' => 'Session ended successfully.', 
-            'final_score' => $summary_data['final_score'],
-            'correct_count' => $summary_data['correct_count'],
-            'incorrect_count' => $summary_data['incorrect_count'],
-            'skipped_count' => $summary_data['skipped_count'],
-        ], 200);
-    }
 
     /**
      * Starts a new mock test session via the REST API.
