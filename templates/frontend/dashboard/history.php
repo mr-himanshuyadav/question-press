@@ -11,6 +11,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 use QuestionPress\Frontend\Dashboard;
+use QuestionPress\Utils\Dashboard_Manager;
 
 // Helper function to get mode-specific details
 if ( ! function_exists( 'qp_get_history_mode_details' ) ) {
@@ -32,7 +33,7 @@ if ( ! function_exists( 'qp_get_history_mode_details' ) ) {
                 $details = [
                     'icon'  => 'dashicons-analytics',
                     'class' => 'mode-mock-test',
-                    'label' => Dashboard::get_session_mode_name( $session, $settings ),
+                    'label' => Dashboard_Manager::get_session_mode_name( $session, $settings ),
                 ];
             }
         } elseif ( isset( $settings['practice_mode'] ) ) {
@@ -99,7 +100,7 @@ if ( ! function_exists( 'qp_get_history_mode_details' ) ) {
             if ( isset( $accuracy_stats[ $session->session_id ] ) && ! $is_scored ) {
                 $result_display = $accuracy_stats[ $session->session_id ];
             } else {
-                $result_display = Dashboard::get_session_result_display( $session, $settings );
+                $result_display = Dashboard_Manager::get_session_result_display( $session, $settings );
             }
 
             // Get context (subjects or course)
@@ -138,7 +139,7 @@ if ( ! function_exists( 'qp_get_history_mode_details' ) ) {
 				}
 			} else {
 				// --- Original logic for non-course tests ---
-				$context_display = Dashboard::get_session_subjects_display( $session, $settings, $lineage_cache_completed, $group_to_topic_map_completed, $question_to_group_map_completed );
+				$context_display = Dashboard_Manager::get_session_subjects_display( $session, $settings, $lineage_cache_completed, $group_to_topic_map_completed, $question_to_group_map_completed );
 			}
             
             // Check for deleted course item

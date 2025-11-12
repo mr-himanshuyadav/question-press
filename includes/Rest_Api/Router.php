@@ -99,6 +99,12 @@ final class Router
             ],
         ]);
 
+        register_rest_route('questionpress/v1', '/dashboard/overview', [
+            'methods' => WP_REST_Server::READABLE,
+            'callback' => [DataController::class, 'get_dashboard_overview'],
+            'permission_callback' => [AuthController::class, 'check_auth_token']
+        ]);
+
         // --- Question Endpoints (Protected) ---
         register_rest_route('questionpress/v1', '/questions/add', [
             'methods' => WP_REST_Server::CREATABLE,

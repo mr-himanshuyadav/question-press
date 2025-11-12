@@ -2,6 +2,9 @@
 
 namespace QuestionPress\Rest_Api; // PSR-4 Namespace
 
+use QuestionPress\Utils\Dashboard_Manager;
+use QuestionPress\Frontend\Dashboard;
+
 // Exit if accessed directly.
 if (! defined('ABSPATH')) {
     exit;
@@ -139,7 +142,8 @@ class DataController
     /**
      * Callback to get all published qp_course posts.
      */
-    public static function get_courses() {
+    public static function get_courses()
+    {
         $courses = get_posts([
             'post_type' => 'qp_course',
             'post_status' => 'publish',
@@ -164,31 +168,32 @@ class DataController
         }
 
         return new \WP_REST_Response($formatted_courses, 200);
-    }    
+    }
     /**
      * Callback to get the details for a single qp_course.
      * v4: Corrected based on user feedback.
      * - 'test_id' is the 'item_id' itself.
      * - 'content_type' is 'test_series'.
      */
-    public static function get_course_details( \WP_REST_Request $request ) {
+    public static function get_course_details(\WP_REST_Request $request)
+    {
         $course_id = (int) $request['id'];
         $user_id = get_current_user_id();
 
-        if ( ! $course_id ) {
+        if (! $course_id) {
             return new \WP_Error('rest_invalid_id', 'Invalid course ID.', ['status' => 400]);
         }
 
         // --- Enrollment Check (This part is correct) ---
-        if ( ! User_Access::can_access_course( $user_id, $course_id ) ) {
-            $plan_id = get_post_meta( $course_id, '_qp_linked_plan_id', true );
-            if ( ! empty( $plan_id ) ) {
-                 return new \WP_Error('rest_forbidden', 'You are not enrolled in this course.', ['status' => 403]);
+        if (! User_Access::can_access_course($user_id, $course_id)) {
+            $plan_id = get_post_meta($course_id, '_qp_linked_plan_id', true);
+            if (! empty($plan_id)) {
+                return new \WP_Error('rest_forbidden', 'You are not enrolled in this course.', ['status' => 403]);
             }
         }
 
-        $course_post = get_post( $course_id );
-        if ( ! $course_post || $course_post->post_type !== 'qp_course' || $course_post->post_status !== 'publish' ) {
+        $course_post = get_post($course_id);
+        if (! $course_post || $course_post->post_type !== 'qp_course' || $course_post->post_status !== 'publish') {
             return new \WP_Error('rest_not_found', 'Course not found.', ['status' => 404]);
         }
 
@@ -199,29 +204,29 @@ class DataController
         $items_table = $wpdb->prefix . 'qp_course_items';
 
         // 1. Get all sections
-        $sections = $wpdb->get_results( $wpdb->prepare(
+        $sections = $wpdb->get_results($wpdb->prepare(
             "SELECT section_id, title FROM {$sections_table} WHERE course_id = %d ORDER BY section_order ASC",
             $course_id
-        ) );
+        ));
 
         // 2. Get all items
-        $items = $wpdb->get_results( $wpdb->prepare(
+        $items = $wpdb->get_results($wpdb->prepare(
             "SELECT item_id, section_id, title, content_type
              FROM {$items_table} 
              WHERE course_id = %d 
              ORDER BY section_id ASC, item_order ASC",
             $course_id
-        ) );
+        ));
 
         // 3. Group items by their section_id for easier lookup
         $items_by_section = [];
-        foreach ( $items as $item ) {
-            $items_by_section[ $item->section_id ][] = $item;
+        foreach ($items as $item) {
+            $items_by_section[$item->section_id][] = $item;
         }
 
         // 4. Build the flat structure array
-        if ( ! empty( $sections ) ) {
-            foreach ( $sections as $section ) {
+        if (! empty($sections)) {
+            foreach ($sections as $section) {
                 // Add the Section to the structure
                 $structure[] = [
                     'id'    => 'section_' . $section->section_id,
@@ -230,13 +235,13 @@ class DataController
                 ];
 
                 // Check if this section has items and add them
-                if ( isset( $items_by_section[ $section->section_id ] ) ) {
-                    foreach ( $items_by_section[ $section->section_id ] as $item ) {
-                        
+                if (isset($items_by_section[$section->section_id])) {
+                    foreach ($items_by_section[$section->section_id] as $item) {
+
                         // --- THIS IS THE NEW LOGIC ---
                         $test_id = null;
                         // Check for 'test_series' (with underscore)
-                        if ( $item->content_type === 'test_series' ) {
+                        if ($item->content_type === 'test_series') {
                             // The test_id *is* the item_id.
                             $test_id = (string) $item->item_id;
                         }
@@ -262,16 +267,17 @@ class DataController
             'structure' => $structure,
         ];
 
-        return new \WP_REST_Response( $data, 200 );
+        return new \WP_REST_Response($data, 200);
     }
     /**
      * Gets the results for a specific, completed session.
      */
-    public static function get_session_results( \WP_REST_Request $request ) {
+    public static function get_session_results(\WP_REST_Request $request)
+    {
         $session_id = (int) $request['id'];
         $user_id = get_current_user_id();
 
-        if ( ! $session_id ) {
+        if (! $session_id) {
             return new WP_Error('rest_invalid_id', 'Invalid session ID.', ['status' => 400]);
         }
 
@@ -280,23 +286,23 @@ class DataController
 
         // --- Security Check ---
         // First, check if the session belongs to the current user
-        $session_user_id = $wpdb->get_var( $wpdb->prepare(
+        $session_user_id = $wpdb->get_var($wpdb->prepare(
             "SELECT user_id FROM {$sessions_table} WHERE session_id = %d",
             $session_id
-        ) );
+        ));
 
-        if ( ! $session_user_id ) {
+        if (! $session_user_id) {
             return new WP_Error('rest_not_found', 'Session not found.', ['status' => 404]);
         }
-        
-        if ( (int) $session_user_id !== $user_id ) {
+
+        if ((int) $session_user_id !== $user_id) {
             return new WP_Error('rest_forbidden', 'You do not have permission to view this session.', ['status' => 403]);
         }
 
         // --- Fetch Results ---
         // We know the user is allowed to see this, so get the data.
         // We get the column names from Activator.php
-        $results = $wpdb->get_row( $wpdb->prepare(
+        $results = $wpdb->get_row($wpdb->prepare(
             "SELECT 
                 session_id, 
                 status, 
@@ -308,13 +314,72 @@ class DataController
              FROM {$sessions_table} 
              WHERE session_id = %d",
             $session_id
-        ), ARRAY_A ); // ARRAY_A gives us a clean associative array
+        ), ARRAY_A); // ARRAY_A gives us a clean associative array
 
-        if ( ! $results ) {
+        if (! $results) {
             // This should be rare, but good to check
-             return new WP_Error('rest_no_data', 'Could not retrieve session results.', ['status' => 500]);
+            return new WP_Error('rest_no_data', 'Could not retrieve session results.', ['status' => 500]);
         }
 
-        return new WP_REST_Response( $results, 200 );
+        return new WP_REST_Response($results, 200);
+    }
+
+    /**
+     * Callback to get the data for the main overview dashboard.
+     * (REVISED TO FIX DATA MISMATCH)
+     */
+    public static function get_dashboard_overview( \WP_REST_Request $request ) {
+        $user_id = get_current_user_id();
+        
+        // 1. Call the correct data-fetching function from Dashboard.php
+        // This function ALREADY returns all the data in one array.
+        $data = Dashboard_Manager::get_overview_data($user_id);
+
+        if (is_wp_error($data)) {
+            return $data; // Pass the WP_Error object on failure
+        }
+
+        // 2. Process Active Sessions into the format the app expects
+        $processed_active_sessions = [];
+        foreach($data['active_sessions'] as $session) {
+            $settings = json_decode($session->settings_snapshot, true);
+            $processed_active_sessions[] = [
+                'session_id' => (int) $session->session_id,
+                'start_time' => $session->start_time,
+                'status' => $session->status,
+                'mode_name' => Dashboard_Manager::get_session_mode_name($session, $settings),
+                'subjects_display' => Dashboard_Manager::get_session_subjects_display($session, $settings, $data['lineage_cache_active'], $data['group_to_topic_map_active'], $data['question_to_group_map_active']),
+                'result_display' => '-', // Active sessions don't have a result
+            ];
+        }
+
+        // 3. Process Recent History into the format the app expects
+        $processed_recent_history = [];
+        foreach($data['recent_history'] as $session) {
+            $settings = json_decode($session->settings_snapshot, true);
+            $processed_recent_history[] = [
+                'session_id' => (int) $session->session_id,
+                'start_time' => $session->start_time,
+                'status' => $session->status,
+                'mode_name' => Dashboard_Manager::get_session_mode_name($session, $settings),
+                'subjects_display' => Dashboard_Manager::get_session_subjects_display($session, $settings, $data['lineage_cache_recent'], $data['group_to_topic_map_recent'], $data['question_to_group_map_recent']),
+                'result_display' => $data['accuracy_stats'][$session->session_id] ?? Dashboard_Manager::get_session_result_display($session, $settings),
+            ];
+        }
+
+        // 4. Create the final clean data object for the app
+        // This now matches your app's "OverviewStats" and "Session" interfaces
+        $api_response_data = [
+            'total_attempted'     => (int) $data['stats']->total_attempted,   // <-- FIX: Accessing inside 'stats'
+            'total_correct'       => (int) $data['stats']->total_correct,     // <-- FIX: Accessing inside 'stats'
+            'overall_accuracy'    => (float) $data['overall_accuracy'],
+            'review_count'        => (int) $data['review_count'],
+            'never_correct_count' => (int) $data['never_correct_count'],
+            'active_sessions'     => $processed_active_sessions,  // <-- FIX: Using processed array
+            'recent_history'      => $processed_recent_history, // <-- FIX: Using processed array
+        ];
+
+        // 5. Return the *wrapped* response that the app expects
+        return new \WP_REST_Response(['success' => true, 'data' => $api_response_data], 200);
     }
 } // End class DataController
