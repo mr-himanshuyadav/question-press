@@ -288,7 +288,9 @@ class DataController
     }
 
     /**
-     * Gets the results for a specific, completed session.
+     * Gets the data manifest for a specific session (active or completed).
+     * - If 'active' or 'paused', it returns the practice manifest.
+     * - If 'completed' or 'abandoned', it returns the final results summary.
      */
     public static function get_session_results(\WP_REST_Request $request)
     {
@@ -296,50 +298,55 @@ class DataController
         $user_id = get_current_user_id();
 
         if (! $session_id) {
-            return new WP_Error('rest_invalid_id', 'Invalid session ID.', ['status' => 400]);
+            return new \WP_Error('rest_invalid_id', 'Invalid session ID.', ['status' => 400]);
         }
 
+        // 1. Check the session status
         global $wpdb;
         $sessions_table = $wpdb->prefix . 'qp_user_sessions';
-
-        // --- Security Check ---
-        // First, check if the session belongs to the current user
-        $session_user_id = $wpdb->get_var($wpdb->prepare(
-            "SELECT user_id FROM {$sessions_table} WHERE session_id = %d",
-            $session_id
+        $session_status = $wpdb->get_var($wpdb->prepare(
+            "SELECT status FROM {$sessions_table} WHERE session_id = %d AND user_id = %d",
+            $session_id, $user_id
         ));
 
-        if (! $session_user_id) {
-            return new WP_Error('rest_not_found', 'Session not found.', ['status' => 404]);
+        if (! $session_status) {
+             return new \WP_Error('rest_not_found', 'Session not found or permission denied.', ['status' => 404]);
         }
 
-        if ((int) $session_user_id !== $user_id) {
-            return new WP_Error('rest_forbidden', 'You do not have permission to view this session.', ['status' => 403]);
+        // 2. Branch the logic
+        if ($session_status === 'active' || $session_status === 'paused') {
+            // --- SESSION IS ACTIVE ---
+            // Call our centralized function from Practice_Manager to get the manifest
+            $session_manifest = \QuestionPress\Utils\Practice_Manager::get_active_session_data($session_id, $user_id);
+            
+            if (is_wp_error($session_manifest)) {
+                return $session_manifest;
+            }
+            
+            // The app's interface expects a 'questions' key, but it will be empty.
+            // We will add it here to prevent 'undefined' errors in the app.
+            $session_manifest['questions'] = []; // App will need to fetch these
+
+            return new \WP_REST_Response(['success' => true, 'data' => $session_manifest], 200);
+
+        } else {
+            // --- SESSION IS COMPLETED ---
+            // Get final results (the original purpose of this function)
+            $results = $wpdb->get_row($wpdb->prepare(
+                "SELECT 
+                    session_id, status, total_attempted, correct_count, 
+                    incorrect_count, skipped_count, marks_obtained 
+                 FROM {$sessions_table} 
+                 WHERE session_id = %d",
+                $session_id
+            ), ARRAY_A); 
+
+            if (! $results) {
+                return new \WP_Error('rest_no_data', 'Could not retrieve session results.', ['status' => 500]);
+            }
+
+            return new \WP_REST_Response(['success' => true, 'data' => $results], 200);
         }
-
-        // --- Fetch Results ---
-        // We know the user is allowed to see this, so get the data.
-        // We get the column names from Activator.php
-        $results = $wpdb->get_row($wpdb->prepare(
-            "SELECT 
-                session_id, 
-                status, 
-                total_attempted, 
-                correct_count, 
-                incorrect_count, 
-                skipped_count, 
-                marks_obtained 
-             FROM {$sessions_table} 
-             WHERE session_id = %d",
-            $session_id
-        ), ARRAY_A); // ARRAY_A gives us a clean associative array
-
-        if (! $results) {
-            // This should be rare, but good to check
-            return new WP_Error('rest_no_data', 'Could not retrieve session results.', ['status' => 500]);
-        }
-
-        return new WP_REST_Response($results, 200);
     }
 
     /**

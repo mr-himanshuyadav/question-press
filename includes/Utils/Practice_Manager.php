@@ -943,12 +943,12 @@ class Practice_Manager
             $user_id,
             $item_id
         ));
-        
+
         $is_completed = ($user_progress && $user_progress->status === 'completed');
 
         if ($is_completed) {
             $allow_retakes = get_post_meta($course_id, '_qp_course_allow_retakes', true);
-            
+
             if ($allow_retakes !== '1') {
                 return new WP_Error('retake_disabled', __('Retakes are not allowed for this course.', 'question-press'), ['status' => 403]);
             }
@@ -967,7 +967,7 @@ class Practice_Manager
         if ($progression_mode === 'progressive' && !$is_completed) {
             $sections_table = $wpdb->prefix . 'qp_course_sections';
             // items_table is already defined
-            
+
             $ordered_item_ids = $wpdb->get_col($wpdb->prepare(
                 "SELECT i.item_id
                  FROM {$items_table} i
@@ -982,14 +982,14 @@ class Practice_Manager
 
                 if ($current_item_index !== false && $current_item_index > 0) {
                     $previous_item_id = $ordered_item_ids[$current_item_index - 1];
-                    
+
                     // progress_table is already defined
                     $previous_item_status = $wpdb->get_var($wpdb->prepare(
                         "SELECT status FROM {$progress_table} WHERE user_id = %d AND item_id = %d",
                         $user_id,
                         $previous_item_id
                     ));
-                    
+
                     if ($previous_item_status !== 'completed') {
                         $previous_item_title = $wpdb->get_var($wpdb->prepare("SELECT title FROM {$items_table} WHERE item_id = %d", $previous_item_id));
                         return new WP_Error('progression_locked', sprintf(
@@ -1013,7 +1013,7 @@ class Practice_Manager
 
         $config = json_decode($item->content_config, true);
         if (json_last_error() !== JSON_ERROR_NONE || empty($config)) {
-             error_log("QP Course Test Start: Invalid JSON in content_config for item ID: " . $item_id . ". Error: " . json_last_error_msg());
+            error_log("QP Course Test Start: Invalid JSON in content_config for item ID: " . $item_id . ". Error: " . json_last_error_msg());
             return new WP_Error('invalid_test_config', 'Invalid test configuration data stored. Please contact an administrator.');
         }
 
@@ -1036,7 +1036,7 @@ class Practice_Manager
         }
 
         if (empty($final_question_ids)) {
-             return new WP_Error('no_questions_available', 'None of the selected questions are currently available.');
+            return new WP_Error('no_questions_available', 'None of the selected questions are currently available.');
         }
 
         shuffle($final_question_ids);
@@ -1072,7 +1072,7 @@ class Practice_Manager
         $session_id = $wpdb->insert_id;
 
         if (!$session_id) {
-             return new WP_Error('session_creation_failed', 'Failed to create the session record.');
+            return new WP_Error('session_creation_failed', 'Failed to create the session record.');
         }
 
         // --- Update the progress table ---
@@ -1773,6 +1773,126 @@ class Practice_Manager
     }
 
     /**
+     * Gets the complete data manifest for an active or paused session.
+     * This function also handles the "resume" logic, setting a paused session to active.
+     *
+     * @param int $session_id The ID of the session.
+     * @param int $user_id The ID of the user.
+     * @return array|WP_Error An array of session data or a WP_Error on failure.
+     */
+    public static function get_active_session_data($session_id, $user_id)
+    {
+        global $wpdb;
+        $sessions_table = $wpdb->prefix . 'qp_user_sessions';
+        $pauses_table = $wpdb->prefix . 'qp_session_pauses';
+
+        $session_data_from_db = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$sessions_table} WHERE session_id = %d", $session_id));
+
+        // --- Validation ---
+        if (! $session_data_from_db) {
+            return new \WP_Error('session_not_found', 'Session not found.', ['status' => 404]);
+        }
+        if ((int) $session_data_from_db->user_id !== $user_id) {
+            return new \WP_Error('permission_denied', 'You do not have permission to view this session.', ['status' => 403]);
+        }
+        if ($session_data_from_db->status === 'completed' || $session_data_from_db->status === 'abandoned') {
+            return new \WP_Error('session_completed', 'This session is already completed.', ['status' => 410]);
+        }
+
+        // --- Resume Logic (Moved from Shortcodes.php) ---
+        if ($session_data_from_db->status === 'paused') {
+            $last_pause_id = $wpdb->get_var($wpdb->prepare(
+                "SELECT pause_id FROM {$pauses_table} WHERE session_id = %d AND resume_time IS NULL ORDER BY pause_time DESC LIMIT 1",
+                $session_id
+            ));
+            if ($last_pause_id) {
+                $wpdb->update(
+                    $pauses_table,
+                    ['resume_time' => current_time('mysql')],
+                    ['pause_id' => $last_pause_id]
+                );
+            }
+            $wpdb->update(
+                $sessions_table,
+                ['status' => 'active', 'last_activity' => current_time('mysql')],
+                ['session_id' => $session_id]
+            );
+            $session_data_from_db->status = 'active'; // Update the object for the return value
+        }
+
+        // --- Calculate Elapsed Time (Moved from Shortcodes.php) ---
+        $pauses = $wpdb->get_results($wpdb->prepare(
+            "SELECT pause_time, resume_time FROM {$pauses_table} WHERE session_id = %d",
+            $session_id
+        ));
+        $total_paused_duration = 0;
+        foreach ($pauses as $pause) {
+            if ($pause->resume_time) {
+                $total_paused_duration += strtotime($pause->resume_time) - strtotime($pause->pause_time);
+            }
+        }
+        $initial_elapsed_time = (strtotime(current_time('mysql')) - strtotime($session_data_from_db->start_time)) - $total_paused_duration;
+        $initial_elapsed_time = max(0, $initial_elapsed_time);
+
+        // --- Build the Manifest Data ---
+        $session_settings = json_decode($session_data_from_db->settings_snapshot, true);
+        $session_manifest = [
+            'session_id'              => $session_id,
+            'status'                  => $session_data_from_db->status,
+            'question_ids'            => json_decode($session_data_from_db->question_ids_snapshot, true),
+            'settings'                => $session_settings,
+            'initial_elapsed_seconds' => $initial_elapsed_time,
+            'test_end_timestamp'      => null, // Will be set below if mock test
+        ];
+
+        if (isset($session_settings['practice_mode']) && $session_settings['practice_mode'] === 'mock_test') {
+            $start_time_gmt_string = get_gmt_from_date($session_data_from_db->start_time);
+            $start_time_timestamp = strtotime($start_time_gmt_string);
+            $duration_seconds = $session_settings['timer_seconds'];
+            $session_manifest['test_end_timestamp'] = $start_time_timestamp + $duration_seconds;
+        }
+
+        // --- Get Attempt History (Moved from Shortcodes.php) ---
+        $session_manifest['attempt_history'] = $wpdb->get_results($wpdb->prepare(
+            "SELECT a.question_id, a.selected_option_id, a.is_correct, a.status, a.mock_status, a.remaining_time, o.option_id as correct_option_id
+             FROM {$wpdb->prefix}qp_user_attempts a
+             LEFT JOIN {$wpdb->prefix}qp_options o ON a.question_id = o.question_id AND o.is_correct = 1
+             WHERE a.session_id = %d",
+            $session_id
+        ), OBJECT_K);
+
+        // --- Get Reported Info (Moved from Shortcodes.php) ---
+        $reports_table = $wpdb->prefix . 'qp_question_reports';
+        $terms_table = $wpdb->prefix . 'qp_terms';
+        $meta_table = $wpdb->prefix . 'qp_term_meta';
+        $all_user_reports = $wpdb->get_results($wpdb->prepare(
+            "SELECT r.question_id, r.reason_term_ids FROM {$reports_table} r WHERE r.user_id = %d AND r.status = 'open'",
+            $user_id
+        ));
+
+        $reported_info = [];
+        foreach ($all_user_reports as $report) {
+            if (! isset($reported_info[$report->question_id])) {
+                $reported_info[$report->question_id] = ['has_report' => false, 'has_suggestion' => false];
+            }
+            $reason_ids = array_filter(explode(',', $report->reason_term_ids));
+            if (! empty($reason_ids)) {
+                $ids_placeholder = implode(',', array_map('absint', $reason_ids));
+                $reason_types = $wpdb->get_col("SELECT m.meta_value FROM {$terms_table} t JOIN {$meta_table} m ON t.term_id = m.term_id AND m.meta_key = 'type' WHERE t.term_id IN ($ids_placeholder)");
+                if (in_array('report', $reason_types)) $reported_info[$report->question_id]['has_report'] = true;
+                if (in_array('suggestion', $reason_types)) $reported_info[$report->question_id]['has_suggestion'] = true;
+            }
+        }
+        $session_manifest['reported_info'] = $reported_info;
+
+        // --- Add App-specific fields (for the app's 'SessionDetails' interface)
+        $session_manifest['current_question_index'] = 0; // App can derive this, but 0 is a safe default.
+        $session_manifest['total_questions'] = count($session_manifest['question_ids']);
+
+        return $session_manifest;
+    }
+
+    /**
      * Retrieves the full data for a single question for the practice UI.
      *
      * @param array $params The parameters for the request, typically from $_POST.
@@ -2463,10 +2583,10 @@ class Practice_Manager
                     if ($is_mock_test || !$allow_send_answer) {
                         unset($result_data['correct_option_id']);
                     }
-                    
+
                     // --- FIX: ADD SHUFFLE BACK (from the OLD function) ---
                     if (isset($result_data['question']['options']) && is_array($result_data['question']['options'])) {
-                         shuffle($result_data['question']['options']);
+                        shuffle($result_data['question']['options']);
                     }
 
                     // Use question_id as the key to make it easy for JS to find
@@ -2474,7 +2594,7 @@ class Practice_Manager
                 }
             }
         }
-        
+
         // Return just the data array. The AJAX handler will wrap it.
         return $buffered_data;
     }

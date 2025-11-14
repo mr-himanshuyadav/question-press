@@ -24,13 +24,23 @@ class PracticeController {
 			$params = $request->get_body_params();
 		}
 
+		// --- THIS IS THE FIX (Part 1) ---
+		// Map the app's 'user_answer' to the backend's expected 'option_id'
+		if ( isset( $params['user_answer'] ) && ! isset( $params['option_id'] ) ) {
+			$params['option_id'] = $params['user_answer'];
+			unset( $params['user_answer'] );
+		}
+		// --- END FIX (Part 1) ---
+
 		$result = Practice_Manager::check_answer( $params );
 
 		if ( is_wp_error( $result ) ) {
 			return $result;
 		}
 
-		return new \WP_REST_Response( $result, 200 );
+		// --- THIS IS THE FIX (Part 2) ---
+		// Wrap the successful response
+		return new \WP_REST_Response( [ 'success' => true, 'data' => $result ], 200 );
 	}
 
 	/**
@@ -51,7 +61,7 @@ class PracticeController {
 			return $result;
 		}
 
-		return new \WP_REST_Response( $result, 200 );
+		return new \WP_REST_Response( [ 'success' => true, 'data' => $result ], 200 );
 	}
 
 	/**
@@ -72,7 +82,7 @@ class PracticeController {
 			return $result;
 		}
 
-		return new \WP_REST_Response( $result, 200 );
+		return new \WP_REST_Response( [ 'success' => true, 'data' => $result ], 200 );
 	}
 
 	/**
@@ -93,7 +103,7 @@ class PracticeController {
 			return $result;
 		}
 
-		return new \WP_REST_Response( $result, 200 );
+		return new \WP_REST_Response( [ 'success' => true, 'data' => $result ], 200 );
 	}
 
 	/**
@@ -114,7 +124,7 @@ class PracticeController {
 			return $result;
 		}
 
-		return new \WP_REST_Response( $result, 200 );
+		return new \WP_REST_Response( [ 'success' => true, 'data' => $result ], 200 );
 	}
 
 	/**
@@ -135,7 +145,7 @@ class PracticeController {
 			return $result;
 		}
 
-		return new \WP_REST_Response( $result, 200 );
+		return new \WP_REST_Response( [ 'success' => true, 'data' => $result ], 200 );
 	}
 
 	/**
@@ -156,7 +166,7 @@ class PracticeController {
 			return $result;
 		}
 
-		return new \WP_REST_Response( $result, 200 );
+		return new \WP_REST_Response( [ 'success' => true, 'data' => $result ], 200 );
 	}
 
 	/**
@@ -166,10 +176,7 @@ class PracticeController {
 	 * @return \WP_REST_Response|\WP_Error
 	 */
 	public static function get_single_question_for_review( \WP_REST_Request $request ) {
-		$params = $request->get_json_params();
-		if ( empty( $params ) ) {
-			$params = $request->get_body_params();
-		}
+		$params = $request->get_query_params(); // Use query params for GET
 
 		$result = Practice_Manager::get_single_question_for_review( $params );
 
@@ -177,7 +184,7 @@ class PracticeController {
 			return $result;
 		}
 
-		return new \WP_REST_Response( $result, 200 );
+		return new \WP_REST_Response( [ 'success' => true, 'data' => $result ], 200 );
 	}
 
 	/**
@@ -193,7 +200,7 @@ class PracticeController {
 			return $result;
 		}
 
-		return new \WP_REST_Response( $result, 200 );
+		return new \WP_REST_Response( [ 'success' => true, 'data' => $result ], 200 );
 	}
 
 	/**
@@ -209,20 +216,18 @@ class PracticeController {
 			return $result;
 		}
 
-		return new \WP_REST_Response( $result, 200 );
+		return new \WP_REST_Response( [ 'success' => true, 'data' => $result ], 200 );
 	}
 
 	/**
 	 * Retrieves the full data for a single question for the practice UI.
+	 * (This was fixed in the previous step, but is included here)
 	 *
 	 * @param \WP_REST_Request $request
 	 * @return \WP_REST_Response|\WP_Error
 	 */
 	public static function get_question_data( \WP_REST_Request $request ) {
-		$params = $request->get_json_params();
-		if ( empty( $params ) ) {
-			$params = $request->get_body_params();
-		}
+		$params = $request->get_query_params();
 
 		$result = Practice_Manager::get_question_data( $params );
 
@@ -230,7 +235,7 @@ class PracticeController {
 			return $result;
 		}
 
-		return new \WP_REST_Response( $result, 200 );
+		return new \WP_REST_Response( [ 'success' => true, 'data' => $result ], 200 );
 	}
 
 	/**
@@ -240,10 +245,7 @@ class PracticeController {
 	 * @return \WP_REST_Response|\WP_Error
 	 */
 	public static function get_topics_for_subject( \WP_REST_Request $request ) {
-		$params = $request->get_json_params();
-		if ( empty( $params ) ) {
-			$params = $request->get_body_params();
-		}
+		$params = $request->get_query_params();
 
 		$result = Practice_Manager::get_topics_for_subject( $params );
 
@@ -251,7 +253,7 @@ class PracticeController {
 			return $result;
 		}
 
-		return new \WP_REST_Response( $result, 200 );
+		return new \WP_REST_Response( [ 'success' => true, 'data' => $result ], 200 );
 	}
 
 	/**
@@ -261,10 +263,7 @@ class PracticeController {
 	 * @return \WP_REST_Response|\WP_Error
 	 */
 	public static function get_sections_for_subject( \WP_REST_Request $request ) {
-		$params = $request->get_json_params();
-		if ( empty( $params ) ) {
-			$params = $request->get_body_params();
-		}
+		$params = $request->get_query_params();
 
 		$result = Practice_Manager::get_sections_for_subject( $params );
 
@@ -272,7 +271,7 @@ class PracticeController {
 			return $result;
 		}
 
-		return new \WP_REST_Response( $result, 200 );
+		return new \WP_REST_Response( [ 'success' => true, 'data' => $result ], 200 );
 	}
 
 	/**
@@ -282,10 +281,7 @@ class PracticeController {
 	 * @return \WP_REST_Response|\WP_Error
 	 */
 	public static function get_sources_for_subject( \WP_REST_Request $request ) {
-		$params = $request->get_json_params();
-		if ( empty( $params ) ) {
-			$params = $request->get_body_params();
-		}
+		$params = $request->get_query_params();
 
 		$result = Practice_Manager::get_sources_for_subject( $params );
 
@@ -293,7 +289,7 @@ class PracticeController {
 			return $result;
 		}
 
-		return new \WP_REST_Response( $result, 200 );
+		return new \WP_REST_Response( [ 'success' => true, 'data' => $result ], 200 );
 	}
 
 	/**
@@ -303,10 +299,7 @@ class PracticeController {
 	 * @return \WP_REST_Response|\WP_Error
 	 */
 	public static function get_child_terms( \WP_REST_Request $request ) {
-		$params = $request->get_json_params();
-		if ( empty( $params ) ) {
-			$params = $request->get_body_params();
-		}
+		$params = $request->get_query_params();
 
 		$result = Practice_Manager::get_child_terms( $params );
 
@@ -314,7 +307,7 @@ class PracticeController {
 			return $result;
 		}
 
-		return new \WP_REST_Response( $result, 200 );
+		return new \WP_REST_Response( [ 'success' => true, 'data' => $result ], 200 );
 	}
 
 	/**
@@ -324,10 +317,7 @@ class PracticeController {
 	 * @return \WP_REST_Response|\WP_Error
 	 */
 	public static function get_progress_data( \WP_REST_Request $request ) {
-		$params = $request->get_json_params();
-		if ( empty( $params ) ) {
-			$params = $request->get_body_params();
-		}
+		$params = $request->get_query_params();
 
 		$result = Practice_Manager::get_progress_data( $params );
 
@@ -335,7 +325,7 @@ class PracticeController {
 			return $result;
 		}
 
-		return new \WP_REST_Response( $result, 200 );
+		return new \WP_REST_Response( [ 'success' => true, 'data' => $result ], 200 );
 	}
 
 	/**
@@ -345,10 +335,7 @@ class PracticeController {
 	 * @return \WP_REST_Response|\WP_Error
 	 */
 	public static function get_sources_for_subject_cascading( \WP_REST_Request $request ) {
-		$params = $request->get_json_params();
-		if ( empty( $params ) ) {
-			$params = $request->get_body_params();
-		}
+		$params = $request->get_query_params();
 
 		$result = Practice_Manager::get_sources_for_subject_cascading( $params );
 
@@ -356,7 +343,7 @@ class PracticeController {
 			return $result;
 		}
 
-		return new \WP_REST_Response( $result, 200 );
+		return new \WP_REST_Response( [ 'success' => true, 'data' => $result ], 200 );
 	}
 
 	/**
@@ -366,10 +353,7 @@ class PracticeController {
 	 * @return \WP_REST_Response|\WP_Error
 	 */
 	public static function get_child_terms_cascading( \WP_REST_Request $request ) {
-		$params = $request->get_json_params();
-		if ( empty( $params ) ) {
-			$params = $request->get_body_params();
-		}
+		$params = $request->get_query_params();
 
 		$result = Practice_Manager::get_child_terms_cascading( $params );
 
@@ -377,7 +361,7 @@ class PracticeController {
 			return $result;
 		}
 
-		return new \WP_REST_Response( $result, 200 );
+		return new \WP_REST_Response( [ 'success' => true, 'data' => $result ], 200 );
 	}
 
 	/**
@@ -387,10 +371,7 @@ class PracticeController {
 	 * @return \WP_REST_Response|\WP_Error
 	 */
 	public static function get_sources_for_subject_progress( \WP_REST_Request $request ) {
-		$params = $request->get_json_params();
-		if ( empty( $params ) ) {
-			$params = $request->get_body_params();
-		}
+		$params = $request->get_query_params();
 
 		$result = Practice_Manager::get_sources_for_subject_progress( $params );
 
@@ -398,7 +379,7 @@ class PracticeController {
 			return $result;
 		}
 
-		return new \WP_REST_Response( $result, 200 );
+		return new \WP_REST_Response( [ 'success' => true, 'data' => $result ], 200 );
 	}
 
 	/**
@@ -414,7 +395,7 @@ class PracticeController {
 			return $result;
 		}
 
-		return new \WP_REST_Response( $result, 200 );
+		return new \WP_REST_Response( [ 'success' => true, 'data' => $result ], 200 );
 	}
 
 	/**
@@ -424,10 +405,7 @@ class PracticeController {
 	 * @return \WP_REST_Response|\WP_Error
 	 */
 	public static function get_buffered_question_data( \WP_REST_Request $request ) {
-		$params = $request->get_json_params();
-		if ( empty( $params ) ) {
-			$params = $request->get_body_params();
-		}
+		$params = $request->get_query_params();
 
 		$result = Practice_Manager::get_buffered_question_data( $params );
 
@@ -435,6 +413,6 @@ class PracticeController {
 			return $result;
 		}
 
-		return new \WP_REST_Response( $result, 200 );
+		return new \WP_REST_Response( [ 'success' => true, 'data' => $result ], 200 );
 	}
 }

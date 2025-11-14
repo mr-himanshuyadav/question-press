@@ -306,223 +306,48 @@ final class Shortcodes
 		$session_id = absint($_GET['session_id']);
 		$user_id    = get_current_user_id();
 
-		global $wpdb;
-		$sessions_table       = $wpdb->prefix . 'qp_user_sessions';
-		$pauses_table         = $wpdb->prefix . 'qp_session_pauses';
-		$session_data_from_db = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$sessions_table} WHERE session_id = %d", $session_id));
+        // --- 1. Call the new centralized function ---
+        $session_data = \QuestionPress\Utils\Practice_Manager::get_active_session_data($session_id, $user_id);
 
-		if (! $session_data_from_db) {
-			// Session does not exist at all.
-			$options              = get_option('qp_settings');
-			$dashboard_page_url = isset($options['dashboard_page']) ? get_permalink($options['dashboard_page']) : home_url('/');
-			return '<div class="qp-container" style="text-align: center; padding: 40px 20px;">
-			<h3 style="margin-top:0; font-size: 22px;">Session Not Found</h3>
-			<p style="font-size: 16px; color: #555; margin-bottom: 25px;">This session is either invalid, has been completed, or was abandoned and has been removed.</p>
-			<a href="' . esc_url($dashboard_page_url) . '" class="qp-button qp-button-primary" style="text-decoration: none;">View Dashboard</a>
-		</div>';
-		}
+        // --- 2. Handle errors & edge cases ---
+        if (is_wp_error($session_data)) {
+            $error_code = $session_data->get_error_code();
 
-		if ((int) $session_data_from_db->user_id !== $user_id) {
+            if ($error_code === 'session_completed') {
+                // Session is completed, show the summary UI
+                global $wpdb;
+                $sessions_table = $wpdb->prefix . 'qp_user_sessions';
+                $session_data_from_db = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$sessions_table} WHERE session_id = %d", $session_id));
+                
+                $summary_data = [
+                    'final_score'     => $session_data_from_db->marks_obtained,
+                    'total_attempted' => $session_data_from_db->total_attempted,
+                    'correct_count'   => $session_data_from_db->correct_count,
+                    'incorrect_count' => $session_data_from_db->incorrect_count,
+                    'skipped_count'   => $session_data_from_db->skipped_count,
+                ];
+                $session_settings = json_decode($session_data_from_db->settings_snapshot, true);
+                return '<div id="qp-practice-app-wrapper">' . self::render_summary_ui($summary_data, $session_id, $session_settings) . '</div>';
+            
+            } else {
+                // All other errors (not found, permission denied, etc.)
+                $options = get_option('qp_settings');
+                $dashboard_page_url = isset($options['dashboard_page']) ? get_permalink($options['dashboard_page']) : home_url('/');
+                return '<div class="qp-container" style="text-align: center; padding: 40px 20px;">
+                    <h3 style="margin-top:0; font-size: 22px;">Session Not Found</h3>
+                    <p style="font-size: 16px; color: #555; margin-bottom: 25px;">' . esc_html($session_data->get_error_message()) . '</p>
+                    <a href="' . esc_url($dashboard_page_url) . '" class="qp-button qp-button-primary" style="text-decoration: none;">View Dashboard</a>
+                </div>';
+            }
+        }
 
-			// Attention! There is no immediate return back for unauthorised access.
-			// --- NEW: Handle sessions that are paused after the last question is answered ---
-			$question_ids   = json_decode($session_data_from_db->question_ids_snapshot, true);
-			$attempts_table = $wpdb->prefix . 'qp_user_attempts';
-			$attempt_count  = $wpdb->get_var(
-				$wpdb->prepare(
-					"SELECT COUNT(DISTINCT question_id) FROM {$attempts_table} WHERE session_id = %d",
-					$session_id
-				)
-			);
-
-			if ($session_data_from_db->status !== 'completed' && count($question_ids) > 0 && $attempt_count >= count($question_ids)) {
-				// If all questions have been attempted but the session isn't marked as 'completed',
-				// it means the user paused on the very last question. Treat it as completed.
-				$summary_data     = [
-					'final_score'     => $session_data_from_db->marks_obtained,
-					'total_attempted' => $session_data_from_db->total_attempted,
-					'correct_count'   => $session_data_from_db->correct_count,
-					'incorrect_count' => $session_data_from_db->incorrect_count,
-					'skipped_count'   => $session_data_from_db->skipped_count,
-				];
-				$session_settings = json_decode($session_data_from_db->settings_snapshot, true);
-				// Force the summary UI to render, preventing the user from getting stuck.
-				return '<div id="qp-practice-app-wrapper">' . self::render_summary_ui($summary_data, $session_id, $session_settings) . '</div>';
-			}
-			$options              = get_option('qp_settings');
-			$dashboard_page_url = isset($options['dashboard_page']) ? get_permalink($options['dashboard_page']) : home_url('/');
-			$accuracy             = 0;
-			if ($session_data_from_db && $session_data_from_db->total_attempted > 0) {
-				$accuracy = ($session_data_from_db->correct_count / $session_data_from_db->total_attempted) * 100;
-			}
-
-			return '<div class="qp-container" style="text-align: center; padding: 40px 20px;">
-					<h3 style="margin-top:0; font-size: 22px;">Session Not Found</h3>
-					<p style="font-size: 16px; color: #555; margin-bottom: 25px;">This session is either invalid or was abandoned and has been removed.</p>
-					<a href="' . esc_url($dashboard_page_url) . '" class="qp-button qp-button-primary" style="text-decoration: none;">View Dashboard</a>
-				</div>';
-		}
-
-		// --- Handle Resuming a Paused Session ---
-		if ($session_data_from_db->status === 'paused') {
-			// Find the last open pause record for this session
-			$last_pause_id = $wpdb->get_var(
-				$wpdb->prepare(
-					"SELECT pause_id FROM {$pauses_table} WHERE session_id = %d AND resume_time IS NULL ORDER BY pause_time DESC LIMIT 1",
-					$session_id
-				)
-			);
-
-			// If an open pause record is found, update it with the current time
-			if ($last_pause_id) {
-				$wpdb->update(
-					$pauses_table,
-					['resume_time' => current_time('mysql')],
-					['pause_id' => $last_pause_id]
-				);
-			}
-
-			// Set the main session status back to 'active'
-			$wpdb->update(
-				$sessions_table,
-				[
-					'status'        => 'active',
-					'last_activity' => current_time('mysql'),
-				],
-				['session_id' => $session_id]
-			);
-
-			// Re-fetch the session data to reflect the 'active' status
-			$session_data_from_db->status = 'active';
-		}
-
-		// --- Check if the session is already completed ---
-		if ($session_data_from_db->status === 'completed') {
-			$summary_data     = [
-				'final_score'     => $session_data_from_db->marks_obtained,
-				'total_attempted' => $session_data_from_db->total_attempted,
-				'correct_count'   => $session_data_from_db->correct_count,
-				'incorrect_count' => $session_data_from_db->incorrect_count,
-				'skipped_count'   => $session_data_from_db->skipped_count,
-			];
-			$session_settings = json_decode($session_data_from_db->settings_snapshot, true);
-			return '<div id="qp-practice-app-wrapper">' . self::render_summary_ui($summary_data, $session_id, $session_settings) . '</div>';
-		}
-
-		// --- Calculate Initial Elapsed Active Time for the Stopwatch ---
-		$pauses = $wpdb->get_results(
-			$wpdb->prepare(
-				"SELECT pause_time, resume_time FROM {$pauses_table} WHERE session_id = %d",
-				$session_id
-			)
-		);
-
-		$total_paused_duration = 0;
-		foreach ($pauses as $pause) {
-			// Only count completed pause intervals
-			if ($pause->resume_time) {
-				$total_paused_duration += strtotime($pause->resume_time) - strtotime($pause->pause_time);
-			}
-		}
-
-		$initial_elapsed_time = (strtotime(current_time('mysql')) - strtotime($session_data_from_db->start_time)) - $total_paused_duration;
-		$initial_elapsed_time = max(0, $initial_elapsed_time);
-
-		// --- If the session is active, proceed as normal ---
-		$session_settings = json_decode($session_data_from_db->settings_snapshot, true);
-		$session_data     = [
-			'session_id'              => $session_id,
-			'question_ids'            => json_decode($session_data_from_db->question_ids_snapshot, true),
-			'settings'                => $session_settings,
-			'initial_elapsed_seconds' => $initial_elapsed_time,
-		];
-
-		// If it's a mock test, calculate the absolute end time based on start time and duration
-		if (isset($session_settings['practice_mode']) && $session_settings['practice_mode'] === 'mock_test') {
-			// Get the start time (which was saved in WP's timezone) and convert it to a proper UTC timestamp.
-			// This is the correct way to handle timezones in WordPress.
-			$start_time_gmt_string = get_gmt_from_date($session_data_from_db->start_time);
-			$start_time_timestamp  = strtotime($start_time_gmt_string);
-
-			$duration_seconds = $session_settings['timer_seconds'];
-
-			// The end time is passed as a UTC timestamp (seconds since epoch) for JavaScript
-			$session_data['test_end_timestamp'] = $start_time_timestamp + $duration_seconds;
-		}
-
-		$attempt_history = $wpdb->get_results(
-			$wpdb->prepare(
-				"SELECT a.question_id, a.selected_option_id, a.is_correct, a.status, a.mock_status, a.remaining_time, o.option_id as correct_option_id
-		 FROM {$wpdb->prefix}qp_user_attempts a
-		 LEFT JOIN {$wpdb->prefix}qp_options o ON a.question_id = o.question_id AND o.is_correct = 1
-		 WHERE a.session_id = %d",
-				$session_id
-			),
-			OBJECT_K
-		);
-
-		$session_data['attempt_history'] = $attempt_history;
-
-		// --- NEW: Fetch detailed report info, including the type ---
-		$reports_table = $wpdb->prefix . 'qp_question_reports';
-		$terms_table   = $wpdb->prefix . 'qp_terms';
-		$meta_table    = $wpdb->prefix . 'qp_term_meta';
-
-		// Get all individual open reports for the user
-		$all_user_reports = $wpdb->get_results(
-			$wpdb->prepare(
-				"
-			SELECT
-				r.question_id,
-				r.reason_term_ids
-			FROM {$reports_table} r
-			WHERE r.user_id = %d AND r.status = 'open'
-		",
-				$user_id
-			)
-		);
-
-		// Process the raw reports into the structured format JS expects
-		$reported_info = [];
-		foreach ($all_user_reports as $report) {
-			if (! isset($reported_info[$report->question_id])) {
-				$reported_info[$report->question_id] = [
-					'has_report'     => false,
-					'has_suggestion' => false,
-				];
-			}
-
-			// Get the types for the reasons in this specific report
-			$reason_ids = array_filter(explode(',', $report->reason_term_ids));
-			if (! empty($reason_ids)) {
-				$ids_placeholder = implode(',', array_map('absint', $reason_ids));
-				$reason_types    = $wpdb->get_col(
-					"
-			SELECT m.meta_value 
-			FROM {$terms_table} t
-			JOIN {$meta_table} m ON t.term_id = m.term_id AND m.meta_key = 'type'
-			WHERE t.term_id IN ($ids_placeholder)
-		"
-				);
-
-				if (in_array('report', $reason_types)) {
-					$reported_info[$report->question_id]['has_report'] = true;
-				}
-				if (in_array('suggestion', $reason_types)) {
-					$reported_info[$report->question_id]['has_suggestion'] = true;
-				}
-			}
-		}
-
-		$session_data['reported_info'] = $reported_info;
-
+        // --- 3. Pass data to script and render UI (as before) ---
 		self::$session_data_for_script = $session_data;
 
 		$preloader_html = '<div id="qp-preloader"><div class="qp-spinner"></div></div>';
 		return '<div id="qp-practice-app-wrapper">' . self::render_practice_ui() . '</div>';
 	}
 
-	// In public/class-qp-shortcodes.php
 
 	public static function render_summary_ui($summaryData, $session_id = 0, $settings = [])
 	{
