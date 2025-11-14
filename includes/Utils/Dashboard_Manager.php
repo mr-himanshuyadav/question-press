@@ -638,4 +638,200 @@ class Dashboard_Manager {
 			return number_format( $accuracy, 2 ) . '%';
 		}
 	}
+
+	/**
+	 * HELPER: Gets mode-specific details for a history session.
+     * (Moved from history.php template)
+	 */
+    public static function qp_get_history_mode_details( $session, $settings ) {
+        $details = [
+            'icon'  => 'dashicons-edit',
+            'class' => 'mode-normal',
+            'label' => 'Practice',
+        ];
+
+        if ( isset( $settings['practice_mode'] ) && $settings['practice_mode'] === 'mock_test' ) {
+            if ( isset( $settings['course_id'] ) && $settings['course_id'] > 0 ) {
+                $details = [
+                    'icon'  => 'dashicons-welcome-learn-more',
+                    'class' => 'mode-course-test',
+                    'label' => 'Course Test', // Will show "Course / Section / Item"
+                ];
+            } else {
+                $details = [
+                    'icon'  => 'dashicons-analytics',
+                    'class' => 'mode-mock-test',
+                    'label' => self::get_session_mode_name( $session, $settings ), // Use existing helper
+                ];
+            }
+        } elseif ( isset( $settings['practice_mode'] ) ) {
+            $mode_map = [
+                'revision'                => [ 'icon' => 'dashicons-backup', 'class' => 'mode-revision', 'label' => 'Revision' ],
+                'Incorrect Que. Practice' => [ 'icon' => 'dashicons-warning', 'class' => 'mode-incorrect', 'label' => 'Incorrect Practice' ],
+                'Section Wise Practice'   => [ 'icon' => 'dashicons-layout', 'class' => 'mode-section-wise', 'label' => 'Section Practice' ],
+            ];
+            if ( isset( $mode_map[ $settings['practice_mode'] ] ) ) {
+                $details = $mode_map[ $settings['practice_mode'] ];
+            } else {
+                 if ( $settings['practice_mode'] !== 'normal' ) {
+                             $details['label'] = $settings['practice_mode'];
+                        }
+            }
+        } elseif ( isset( $settings['subject_id'] ) && $settings['subject_id'] === 'review' ) {
+            $details = [
+                'icon'  => 'dashicons-book-alt',
+                'class' => 'mode-review',
+                'label' => 'Review Session',
+            ];
+        }
+
+        return $details;
+    }
+
+    /**
+	 * HELPER: Gets the context display (subjects or course name) for a session.
+     * (Moved from history.php template)
+	 */
+    public static function get_session_context_display( $session, $settings, $lineage_cache, $group_to_topic_map, $question_to_group_map, $existing_course_item_ids = [] ) {
+        
+        $mode_details = self::qp_get_history_mode_details($session, $settings);
+        $context_display = '';
+        
+        if ( $mode_details['class'] === 'mode-course-test' ) {
+            global $wpdb; // Make sure $wpdb is available
+            $course_id = absint($settings['course_id']);
+            $item_id = absint($settings['item_id']);
+            
+            $course_title = get_the_title($course_id);
+            
+            // Fetch Item and Section Title
+            $items_table = $wpdb->prefix . 'qp_course_items';
+            $sections_table = $wpdb->prefix . 'qp_course_sections';
+            $item_info = $wpdb->get_row($wpdb->prepare(
+                "SELECT i.title AS item_title, s.title AS section_title
+                 FROM {$items_table} i
+                 LEFT JOIN {$sections_table} s ON i.section_id = s.section_id
+                 WHERE i.item_id = %d",
+                $item_id
+            ));
+
+            $item_title = $item_info ? $item_info->item_title : null;
+            $section_title = $item_info ? $item_info->section_title : null;
+
+            // Build the new name string
+            $name_parts = [];
+            if ($course_title) $name_parts[] = esc_html($course_title);
+            if ($section_title) $name_parts[] = esc_html($section_title);
+            if ($item_title) $name_parts[] = esc_html($item_title);
+
+            if (!empty($name_parts)) {
+                $context_display = implode(' / ', $name_parts);
+            }
+        } else {
+            // --- Original logic for non-course tests ---
+            $context_display = self::get_session_subjects_display( $session, $settings, $lineage_cache, $group_to_topic_map, $question_to_group_map );
+        }
+        
+        // Check for deleted course item
+        if ( isset( $settings['course_id'] ) && isset( $settings['item_id'] ) ) {
+            if ( ! empty($existing_course_item_ids) && ! isset( $existing_course_item_ids[ absint( $settings['item_id'] ) ] ) ) {
+                $context_display .= ' <em style="color:#777; font-size:0.9em;">(Item removed)</em>';
+            }
+        }
+
+        return $context_display;
+    }
+
+	/**
+	 * Gathers all data required for the dashboard history tab.
+	 *
+	 * @param int $user_id The ID of the current user.
+	 * @return array An associative array containing all history data.
+	 */
+	public static function get_history_data( $user_id ): array {
+		global $wpdb;
+		$sessions_table = $wpdb->prefix . 'qp_user_sessions';
+		$attempts_table = $wpdb->prefix . 'qp_user_attempts';
+		$items_table    = $wpdb->prefix . 'qp_course_items';
+
+		$options           = get_option( 'qp_settings' );
+		$session_page_url  = isset( $options['session_page'] ) ? get_permalink( $options['session_page'] ) : home_url( '/' );
+		$review_page_url   = isset( $options['review_page'] ) ? get_permalink( $options['review_page'] ) : home_url( '/' );
+		$practice_page_url = isset( $options['practice_page'] ) ? get_permalink( $options['practice_page'] ) : home_url( '/' );
+
+		$user          = wp_get_current_user();
+		$user_roles    = (array) $user->roles;
+		$allowed_roles = isset( $options['can_delete_history_roles'] ) ? $options['can_delete_history_roles'] : [ 'administrator' ];
+		$can_delete    = ! empty( array_intersect( $user_roles, $allowed_roles ) );
+		$can_terminate = isset($options['allow_session_termination']) && $options['allow_session_termination'] === '1';
+
+		// Fetch Paused Sessions
+		$paused_sessions = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT * FROM $sessions_table WHERE user_id = %d AND status = 'paused' ORDER BY start_time DESC",
+				$user_id
+			)
+		);
+
+		// Fetch Completed/Abandoned Sessions
+		$session_history = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT * FROM $sessions_table WHERE user_id = %d AND status IN ('completed', 'abandoned') ORDER BY start_time DESC",
+				$user_id
+			)
+		);
+
+		$all_sessions_for_history = array_merge( $paused_sessions, $session_history );
+
+		// Pre-fetch lineage data for BOTH lists
+		list($lineage_cache_paused, $group_to_topic_map_paused, $question_to_group_map_paused) = self::prefetch_lineage_data( $paused_sessions );
+		list($lineage_cache_completed, $group_to_topic_map_completed, $question_to_group_map_completed) = self::prefetch_lineage_data( $session_history );
+
+		// Fetch accuracy stats
+		$session_ids_history = wp_list_pluck( $all_sessions_for_history, 'session_id' );
+		$accuracy_stats      = [];
+		if ( ! empty( $session_ids_history ) ) {
+			$ids_placeholder = implode( ',', array_map( 'absint', $session_ids_history ) );
+			$results         = $wpdb->get_results(
+				"SELECT session_id,
+			 COUNT(CASE WHEN is_correct = 1 THEN 1 END) as correct,
+			 COUNT(CASE WHEN is_correct = 0 THEN 1 END) as incorrect
+			 FROM {$attempts_table}
+			 WHERE session_id IN ({$ids_placeholder}) AND status = 'answered'
+			 GROUP BY session_id"
+			);
+			foreach ( $results as $result ) {
+				$total_attempted                = (int) $result->correct + (int) $result->incorrect;
+				$accuracy                       = ( $total_attempted > 0 ) ? ( ( (int) $result->correct / $total_attempted ) * 100 ) : 0;
+				$accuracy_stats[ $result->session_id ] = number_format( $accuracy, 2 ) . '%';
+			}
+		}
+
+		// Pre-fetch existing course item IDs
+		$existing_course_item_ids = $wpdb->get_col( "SELECT item_id FROM $items_table" );
+		$existing_course_item_ids = array_flip( $existing_course_item_ids ); // Convert to hash map
+
+		// Prepare arguments for the template
+		return [
+			'practice_page_url'     => $practice_page_url,
+			'can_delete'            => $can_delete,
+			'can_terminate'         => $can_terminate,
+			'session_page_url'      => $session_page_url,
+			'review_page_url'       => $review_page_url,
+			'existing_course_item_ids' => $existing_course_item_ids,
+			'accuracy_stats'        => $accuracy_stats,
+
+			// Pass Paused Sessions and their data
+			'paused_sessions'       => $paused_sessions,
+			'lineage_cache_paused'  => $lineage_cache_paused,
+			'group_to_topic_map_paused' => $group_to_topic_map_paused,
+			'question_to_group_map_paused' => $question_to_group_map_paused,
+
+			// Pass Completed Sessions and their data
+			'completed_sessions'    => $session_history,
+			'lineage_cache_completed' => $lineage_cache_completed,
+			'group_to_topic_map_completed' => $group_to_topic_map_completed,
+			'question_to_group_map_completed' => $question_to_group_map_completed,
+		];
+	}
 }

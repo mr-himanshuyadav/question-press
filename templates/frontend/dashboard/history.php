@@ -2,6 +2,7 @@
 /**
  * Template for the Dashboard History Tab content.
  * (Redesigned with Material-style tabs and list layout)
+ * (Refactored to use Dashboard_Manager helpers)
  *
  * @package QuestionPress/Templates/Frontend/Dashboard
  */
@@ -10,56 +11,11 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit; // Exit if accessed directly.
 }
 
-use QuestionPress\Frontend\Dashboard;
+// Use the Dashboard_Manager class
 use QuestionPress\Utils\Dashboard_Manager;
 
-// Helper function to get mode-specific details
-if ( ! function_exists( 'qp_get_history_mode_details' ) ) {
-    function qp_get_history_mode_details( $session, $settings ) {
-        $details = [
-            'icon'  => 'dashicons-edit',
-            'class' => 'mode-normal',
-            'label' => 'Practice',
-        ];
-
-        if ( isset( $settings['practice_mode'] ) && $settings['practice_mode'] === 'mock_test' ) {
-            if ( isset( $settings['course_id'] ) && $settings['course_id'] > 0 ) {
-                $details = [
-                    'icon'  => 'dashicons-welcome-learn-more',
-                    'class' => 'mode-course-test',
-                    'label' => 'Course Test', // Will show "Course / Section / Item"
-                ];
-            } else {
-                $details = [
-                    'icon'  => 'dashicons-analytics',
-                    'class' => 'mode-mock-test',
-                    'label' => Dashboard_Manager::get_session_mode_name( $session, $settings ),
-                ];
-            }
-        } elseif ( isset( $settings['practice_mode'] ) ) {
-            $mode_map = [
-                'revision'                => [ 'icon' => 'dashicons-backup', 'class' => 'mode-revision', 'label' => 'Revision' ],
-                'Incorrect Que. Practice' => [ 'icon' => 'dashicons-warning', 'class' => 'mode-incorrect', 'label' => 'Incorrect Practice' ],
-                'Section Wise Practice'   => [ 'icon' => 'dashicons-layout', 'class' => 'mode-section-wise', 'label' => 'Section Practice' ],
-            ];
-            if ( isset( $mode_map[ $settings['practice_mode'] ] ) ) {
-                $details = $mode_map[ $settings['practice_mode'] ];
-            } else {
-                 if ( $settings['practice_mode'] !== 'normal' ) {
-                             $details['label'] = $settings['practice_mode'];
-                        }
-            }
-        } elseif ( isset( $settings['subject_id'] ) && $settings['subject_id'] === 'review' ) {
-            $details = [
-                'icon'  => 'dashicons-book-alt',
-                'class' => 'mode-review',
-                'label' => 'Review Session',
-            ];
-        }
-
-        return $details;
-    }
-}
+// --- REMOVED local function qp_get_history_mode_details ---
+// It is now in Dashboard_Manager.php
 
 ?>
 <div class="qp-history-header">
@@ -93,8 +49,8 @@ if ( ! function_exists( 'qp_get_history_mode_details' ) ) {
             $settings = json_decode( $session->settings_snapshot, true );
             $is_scored = isset( $settings['marks_correct'] );
             
-            // Get all mode details (icon, class, label)
-            $mode_details = qp_get_history_mode_details( $session, $settings );
+            // --- UPDATED: Call Dashboard_Manager helper ---
+            $mode_details = Dashboard_Manager::qp_get_history_mode_details( $session, $settings );
 
             // Get result display
             if ( isset( $accuracy_stats[ $session->session_id ] ) && ! $is_scored ) {
@@ -103,51 +59,16 @@ if ( ! function_exists( 'qp_get_history_mode_details' ) ) {
                 $result_display = Dashboard_Manager::get_session_result_display( $session, $settings );
             }
 
-            // Get context (subjects or course)
-			if ( $mode_details['class'] === 'mode-course-test' ) {
-				// --- NEW: Fetch full course/section/item name ---
-				global $wpdb; // Make sure $wpdb is available
-				$course_id = absint($settings['course_id']);
-				$item_id = absint($settings['item_id']);
-				
-				$course_title = get_the_title($course_id); // This is correct (it's a post)
-				
-				// Fetch Item and Section Title
-				$items_table = $wpdb->prefix . 'qp_course_items';
-				$sections_table = $wpdb->prefix . 'qp_course_sections';
-				$item_info = $wpdb->get_row($wpdb->prepare(
-					"SELECT i.title AS item_title, s.title AS section_title
-					 FROM {$items_table} i
-					 LEFT JOIN {$sections_table} s ON i.section_id = s.section_id
-					 WHERE i.item_id = %d",
-					$item_id
-				));
-
-				$item_title = $item_info ? $item_info->item_title : null;
-				$section_title = $item_info ? $item_info->section_title : null;
-
-				// Build the new name string
-				$name_parts = [];
-				if ($course_title) $name_parts[] = esc_html($course_title);
-				if ($section_title) $name_parts[] = esc_html($section_title);
-				if ($item_title) $name_parts[] = esc_html($item_title);
-
-				if (!empty($name_parts)) {
-					$context_display = implode(' / ', $name_parts);
-				} else {
-					$context_display = ''; // Blank it if we couldn't find names
-				}
-			} else {
-				// --- Original logic for non-course tests ---
-				$context_display = Dashboard_Manager::get_session_subjects_display( $session, $settings, $lineage_cache_completed, $group_to_topic_map_completed, $question_to_group_map_completed );
-			}
+            // --- UPDATED: Call Dashboard_Manager helper ---
+            $context_display = Dashboard_Manager::get_session_context_display(
+                $session, 
+                $settings, 
+                $lineage_cache_completed, 
+                $group_to_topic_map_completed, 
+                $question_to_group_map_completed,
+                $existing_course_item_ids // Pass the pre-fetched IDs
+            );
             
-            // Check for deleted course item
-            if ( isset( $settings['course_id'] ) && isset( $settings['item_id'] ) ) {
-                if ( ! isset( $existing_course_item_ids[ absint( $settings['item_id'] ) ] ) ) {
-                    $context_display .= ' <em style="color:#777; font-size:0.9em;">(Item removed)</em>';
-                }
-            }
         ?>
             <div class="qp-card qp-history-item-card <?php echo esc_attr( $mode_details['class'] ); ?>">
                 <div class="qp-history-item-icon">
@@ -163,8 +84,8 @@ if ( ! function_exists( 'qp_get_history_mode_details' ) ) {
                     <div class="qp-history-item-context <?php echo ( $mode_details['class'] === 'mode-course-test' ? 'course-context' : '' ); ?>">
 						<?php if ( ! empty( $context_display ) ) : ?>
 							
-							<?php // --- THIS IS THE FIX: Only show label if NOT a course test --- ?>
-							<?php if ( $mode_details['class'] !== 'mode-course-test' ) : ?>
+							<?php // This logic remains the same
+							if ( $mode_details['class'] !== 'mode-course-test' ) : ?>
 								<span class="context-label">Subjects:</span>
 							<?php endif; ?>
 
@@ -213,7 +134,9 @@ if ( ! function_exists( 'qp_get_history_mode_details' ) ) {
         <?php
         foreach ( $paused_sessions as $session ) :
             $settings = json_decode( $session->settings_snapshot, true );
-            $mode_details = qp_get_history_mode_details( $session, $settings );
+            
+            // --- UPDATED: Call Dashboard_Manager helper ---
+            $mode_details = Dashboard_Manager::qp_get_history_mode_details( $session, $settings );
         ?>
             <div class="qp-card qp-history-item-card qp-history-item-paused <?php echo esc_attr( $mode_details['class'] ); ?>">
                 <div class="qp-history-item-icon">

@@ -107,6 +107,13 @@ final class Router
             'permission_callback' => [AuthController::class, 'check_auth_token']
         ]);
 
+        // Dashboard - History
+        register_rest_route('questionpress/v1', '/dashboard/history',[
+                'methods'             => \WP_REST_Server::READABLE,
+                'callback'            => [DataController::class, 'get_dashboard_history' ],
+                'permission_callback' => [AuthController::class, 'check_auth_token'],
+        ]);
+
         register_rest_route('questionpress/v1', '/dashboard/profile', [
             'methods'  => WP_REST_Server::READABLE,
             'callback' => [DataController::class, 'get_dashboard_profile'],
