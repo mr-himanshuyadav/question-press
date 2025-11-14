@@ -182,7 +182,7 @@ class SessionController {
             return $result;
         }
 
-        return new \WP_REST_Response($result, 200);
+        return new \WP_REST_Response( [ 'success' => true, 'data' => $result ], 200 );
     }
 
     /**
@@ -203,11 +203,12 @@ class SessionController {
             return $result;
         }
 
-        return new \WP_REST_Response($result, 200);
+        return new \WP_REST_Response( [ 'success' => true, 'data' => $result ], 200 );
     }
 
     /**
      * Starts a new practice session via the REST API.
+     * MODIFIED to also return 'session_id' for the app.
      *
      * @param \WP_REST_Request $request
      * @return \WP_REST_Response|\WP_Error
@@ -218,13 +219,34 @@ class SessionController {
             $params = $request->get_body_params();
         }
 
+        // 1. Get the result from the Practice Manager (which contains the redirect_url)
         $result = Practice_Manager::start_practice_session($params);
 
         if (is_wp_error($result)) {
             return $result;
         }
 
-        return new \WP_REST_Response($result, 200);
+        // --- THIS IS THE FIX ---
+        // 2. Check if we got the redirect URL
+        if (is_array($result) && isset($result['redirect_url'])) {
+            
+            // 3. Parse the URL to extract the session_id
+            $url = $result['redirect_url'];
+            $query_str = parse_url($url, PHP_URL_QUERY);
+            parse_str($query_str, $query_params);
+
+            if (isset($query_params['session_id'])) {
+                // 4. Add the session_id to the result
+                // The $result array now contains *both* keys.
+                $result['session_id'] = absint($query_params['session_id']);
+            }
+        }
+        // --- END FIX ---
+
+        // 5. Return the enhanced result
+        // Web will find: response.data.data.redirect_url
+        // App will find: response.data.data.session_id
+        return new \WP_REST_Response( [ 'success' => true, 'data' => $result ], 200 );
     }
 
     /**
@@ -245,7 +267,7 @@ class SessionController {
             return $result;
         }
 
-        return new \WP_REST_Response($result, 200);
+        return new \WP_REST_Response( [ 'success' => true, 'data' => $result ], 200 );
     }
 
     /**
@@ -266,7 +288,7 @@ class SessionController {
             return $result;
         }
 
-        return new \WP_REST_Response($result, 200);
+        return new \WP_REST_Response( [ 'success' => true, 'data' => $result ], 200 );
     }
 
     /**
@@ -287,7 +309,7 @@ class SessionController {
             return $result;
         }
 
-        return new \WP_REST_Response($result, 200);
+        return new \WP_REST_Response( [ 'success' => true, 'data' => $result ], 200 );
     }
 
     /**
