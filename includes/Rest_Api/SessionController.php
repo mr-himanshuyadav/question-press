@@ -198,9 +198,25 @@ class SessionController {
         }
 
         $result = Practice_Manager::start_revision_session($params);
+        
 
         if (is_wp_error($result)) {
+            error_log( 'PRACTICE MANAGER ERROR: ' . $result->get_error_message() );
             return $result;
+        }
+
+        if (is_array($result) && isset($result['redirect_url'])) {
+            
+            // 3. Parse the URL to extract the session_id
+            $url = $result['redirect_url'];
+            $query_str = parse_url($url, PHP_URL_QUERY);
+            parse_str($query_str, $query_params);
+
+            if (isset($query_params['session_id'])) {
+                // 4. Add the session_id to the result
+                // The $result array now contains *both* keys.
+                $result['session_id'] = absint($query_params['session_id']);
+            }
         }
 
         return new \WP_REST_Response( [ 'success' => true, 'data' => $result ], 200 );
@@ -286,6 +302,21 @@ class SessionController {
 
         if (is_wp_error($result)) {
             return $result;
+        }
+
+        // 2. Check if we got the redirect URL
+        if (is_array($result) && isset($result['redirect_url'])) {
+            
+            // 3. Parse the URL to extract the session_id
+            $url = $result['redirect_url'];
+            $query_str = parse_url($url, PHP_URL_QUERY);
+            parse_str($query_str, $query_params);
+
+            if (isset($query_params['session_id'])) {
+                // 4. Add the session_id to the result
+                // The $result array now contains *both* keys.
+                $result['session_id'] = absint($query_params['session_id']);
+            }
         }
 
         return new \WP_REST_Response( [ 'success' => true, 'data' => $result ], 200 );
