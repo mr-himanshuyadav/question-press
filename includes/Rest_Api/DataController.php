@@ -574,4 +574,77 @@ class DataController
 
         return new \WP_REST_Response( [ 'success' => true, 'data' => $api_response_data ], 200 );
     }
+
+    /**
+     * Callback to get the data for the "My Courses" dashboard tab.
+     * (REVISED to match app's 'Course' interface and expected keys)
+     */
+    public static function get_dashboard_my_courses( \WP_REST_Request $request ) {
+        $user_id = get_current_user_id();
+        
+        // 1. Call the centralized data function
+        $data = Dashboard_Manager::get_my_courses_data( $user_id );
+
+        if ( is_wp_error( $data ) ) {
+            return $data;
+        }
+
+        // 2. Process Enrolled Courses (from WP_Query) for the app
+        $processed_enrolled = [];
+        // Get the global opt-out setting
+        $global_opt_out = $data['allow_global_opt_out'] ?? false;
+
+        if ( $data['enrolled_courses_query'] instanceof \WP_Query && $data['enrolled_courses_query']->have_posts() ) {
+            foreach ( $data['enrolled_courses_query']->posts as $course_post ) {
+                $course_id = $course_post->ID;
+                $progress_data = $data['enrolled_courses_data'][ $course_id ] ?? [ 'progress' => 0, 'is_complete' => false ];
+                
+                // Check per-course opt-out meta
+                $course_opt_out = get_post_meta($course_id, '_qp_course_allow_opt_out', true);
+                
+                // Logic: Allow if global is on AND per-course is not '0'
+                // (empty or '1' means allow, '0' means disallow)
+                $allow_opt_out = $global_opt_out && ($course_opt_out !== '0');
+
+                $processed_enrolled[] = [
+                    'id'            => $course_id,
+                    'title'         => $course_post->post_title,
+                    'status'        => $course_post->post_status,
+                    'thumbnail'     => get_the_post_thumbnail_url( $course_id, 'medium' ),
+                    'progress'      => $progress_data['progress'],
+                    'is_complete'   => $progress_data['is_complete'],
+                    'allow_opt_out' => $allow_opt_out,
+                    'access_mode'   => get_post_meta($course_id, '_qp_course_access_mode', true) ?: 'free', // Get access mode, default to 'free'
+                ];
+            }
+        }
+
+        // 3. Process Purchased-but-Not-Enrolled Courses for the app
+        $processed_purchased = [];
+        if ( ! empty( $data['purchased_not_enrolled_posts'] ) ) {
+            foreach ( $data['purchased_not_enrolled_posts'] as $course_post ) {
+                $course_id = $course_post->ID;
+                $processed_purchased[] = [
+                    'id'            => $course_id,
+                    'title'         => $course_post->post_title,
+                    'status'        => $course_post->post_status,
+                    'thumbnail'     => get_the_post_thumbnail_url( $course_id, 'medium' ),
+                    'progress'      => 0,
+                    'is_complete'   => false,
+                    'allow_opt_out' => false, // Can't opt-out if not enrolled
+                    'access_mode'   => get_post_meta($course_id, '_qp_course_access_mode', true) ?: 'free',
+                ];
+            }
+        }
+
+        // 4. Create the final clean data object
+        // --- THIS IS THE FIX ---
+        $api_response_data = [
+            'enrolled_courses'             => $processed_enrolled,
+            'purchased_not_enrolled_courses' => $processed_purchased,
+        ];
+        // --- END FIX ---
+
+        return new \WP_REST_Response( [ 'success' => true, 'data' => $api_response_data ], 200 );
+    }
 } // End class DataController

@@ -815,108 +815,20 @@ final class Dashboard {
 
 	/**
 	 * Renders the content specifically for the "My Courses" section.
-	 * NEW FUNCTION.
+	 * (Refactored to use Dashboard_Manager)
 	 * @return string Rendered HTML content.
 	 */
 	public static function render_my_courses_content() {
-		if ( ! is_user_logged_in() ) {
+		$user_id = get_current_user_id();
+		if ( ! $user_id ) {
 			return '';
 		}
 
-		$user_id = get_current_user_id();
-		global $wpdb;
-		$user_courses_table = $wpdb->prefix . 'qp_user_courses';
-		$options = get_option('qp_settings');
-        $allow_global_opt_out = (bool) ($options['allow_course_opt_out'] ?? 0);
-		$items_table = $wpdb->prefix . 'qp_course_items';
-		$progress_table = $wpdb->prefix . 'qp_user_items_progress';
-
-		// Get *only* enrolled course IDs
-		$enrolled_course_ids = $wpdb->get_col(
-			$wpdb->prepare(
-				"SELECT course_id FROM $user_courses_table WHERE user_id = %d AND status IN ('enrolled', 'in_progress', 'completed')",
-				$user_id
-			)
-		);
-
-		// --- 1. Query for Enrolled Courses ---
-		$enrolled_courses_query = new \WP_Query(); // Empty query by default
-		$enrolled_courses_data = [];
-
-		if ( ! empty( $enrolled_course_ids ) ) {
-			// Query for the enrolled courses
-			$args = [
-				'post_type'      => 'qp_course',
-				'post_status'    => ['publish', 'expired'], // Show expired courses if enrolled
-				'posts_per_page' => -1,
-				'orderby'        => 'menu_order title',
-				'order'          => 'ASC',
-				'post__in'       => $enrolled_course_ids, // <-- Key change: only query these IDs
-			];
-			$enrolled_courses_query = new \WP_Query( $args );
-
-			// Prepare progress data
-			$ids_placeholder = implode( ',', array_map( 'absint', $enrolled_course_ids ) );
-			$total_items_results = $wpdb->get_results(
-				"SELECT course_id, COUNT(item_id) as total_items FROM $items_table WHERE course_id IN ($ids_placeholder) GROUP BY course_id",
-				OBJECT_K
-			);
-			$completed_items_results = $wpdb->get_results(
-				$wpdb->prepare(
-					"SELECT course_id, COUNT(user_item_id) as completed_items FROM $progress_table WHERE user_id = %d AND course_id IN ($ids_placeholder) AND status = 'completed' GROUP BY course_id",
-					$user_id
-				),
-				OBJECT_K
-			);
-
-			foreach ( $enrolled_course_ids as $course_id ) {
-				$total_items = $total_items_results[ $course_id ]->total_items ?? 0;
-				$completed_items = $completed_items_results[ $course_id ]->completed_items ?? 0;
-				$progress_percent = ( $total_items > 0 ) ? round( ( $completed_items / $total_items ) * 100 ) : 0;
-				$enrolled_courses_data[ $course_id ] = [
-					'progress'    => $progress_percent,
-					'is_complete' => ( $total_items > 0 && $completed_items >= $total_items ),
-				];
-			}
-		}
-
-		// --- 2. Query for Purchased but Not Enrolled Courses ---
-		$purchased_not_enrolled_posts = [];
+        // Get all data from the centralized manager function
+        $data = Dashboard_Manager::get_my_courses_data( $user_id );
 		
-		// Get all published courses
-		$all_published_courses = new \WP_Query( [
-			'post_type'      => 'qp_course',
-			'post_status'    => 'publish',
-			'posts_per_page' => -1,
-			'fields'         => 'ids', // Only get IDs
-		] );
-
-		if ( $all_published_courses->have_posts() ) {
-			foreach ( $all_published_courses->posts as $course_id ) {
-				// If NOT enrolled
-				if ( ! in_array( $course_id, $enrolled_course_ids ) ) {
-					// Check if user has a *paid* entitlement
-					$access_result = User_Access::can_access_course( $user_id, $course_id, true );
-					
-					// is_numeric() checks if access was granted by a specific entitlement ID
-					if ( is_numeric( $access_result ) ) {
-						$purchased_not_enrolled_posts[] = get_post( $course_id );
-					}
-				}
-			}
-		}
-
-		// --- 3. Prepare arguments for the template ---
-		$template_args = [
-			'allow_global_opt_out'         => $allow_global_opt_out,
-			'enrolled_courses_query'       => $enrolled_courses_query,
-			'enrolled_courses_data'        => $enrolled_courses_data,
-			'purchased_not_enrolled_posts' => $purchased_not_enrolled_posts,
-			'user_id'                      => $user_id,
-		];
-
 		// Load and return the "my-courses" template
-		return Template_Loader::get_html( 'dashboard/my-courses', 'frontend', $template_args );
+		return Template_Loader::get_html( 'dashboard/my-courses', 'frontend', $data );
 	}
 
 
