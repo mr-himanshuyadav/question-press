@@ -128,6 +128,17 @@ final class Router
                 'permission_callback' => [ AuthController::class, 'check_auth_token' ],
         ]);
 
+        // Dashboard - Review
+        register_rest_route(
+            'questionpress/v1',
+            '/dashboard/review', // Matches the app's fetch URL
+            [
+                'methods'             => \WP_REST_Server::READABLE,
+                'callback'            => [ DataController::class, 'get_dashboard_review' ],
+                'permission_callback' => [ AuthController::class, 'check_auth_token' ],
+            ]
+        );
+
         register_rest_route('questionpress/v1', '/dashboard/profile', [
             'methods'  => WP_REST_Server::READABLE,
             'callback' => [DataController::class, 'get_dashboard_profile'],

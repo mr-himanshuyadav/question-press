@@ -1006,4 +1006,69 @@ class Dashboard_Manager {
 			'user_id'                 => $user_id,
 		];
 	}
+
+	/**
+	 * Gathers all data required for the dashboard review tab.
+	 * (This function includes the CORRECTED bug fix for duplicate "Marked for Review" questions)
+	 *
+	 * @param int $user_id The ID of the current user.
+	 * @return array An associative array containing all review data.
+	 */
+	public static function get_review_data( $user_id ): array {
+		global $wpdb;
+		$attempts_table  = $wpdb->prefix . 'qp_user_attempts';
+		$review_table    = $wpdb->prefix . 'qp_review_later';
+		$questions_table = $wpdb->prefix . 'qp_questions';
+		$groups_table    = $wpdb->prefix . 'qp_question_groups';
+		$rel_table       = $wpdb->prefix . 'qp_term_relationships';
+		$term_table      = $wpdb->prefix . 'qp_terms';
+		$tax_table       = $wpdb->prefix . 'qp_taxonomies';
+
+		// Fetch Review Later questions
+		$subject_tax_id   = $wpdb->get_var( $wpdb->prepare( "SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = %s", 'subject' ) );
+		
+        // --- THIS IS THE CORRECTED BUG FIX ---
+        $review_questions = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT
+                    q.question_id,
+                    q.question_text,
+                    -- Use MIN() to select only ONE subject name if multiple exist
+                    COALESCE(MIN(parent_term.name), 'Uncategorized') as subject_name
+                FROM {$review_table} rl
+                JOIN {$questions_table} q ON rl.question_id = q.question_id
+                LEFT JOIN {$groups_table} g ON q.group_id = g.group_id
+                LEFT JOIN {$rel_table} topic_rel ON g.group_id = topic_rel.object_id AND topic_rel.object_type = 'group'
+                LEFT JOIN {$term_table} topic_term ON topic_rel.term_id = topic_term.term_id AND topic_term.taxonomy_id = %d AND topic_term.parent != 0
+                LEFT JOIN {$term_table} parent_term ON topic_term.parent = parent_term.term_id
+                WHERE rl.user_id = %d
+                -- Use GROUP BY to ensure one row per question
+                GROUP BY q.question_id, q.question_text
+                -- Order by the most recent time this question was marked for review
+                ORDER BY MAX(rl.review_id) DESC",
+				$subject_tax_id,
+				$user_id
+			)
+		);
+        // --- END CORRECTED BUG FIX ---
+
+		// Calculate counts for "Practice Your Mistakes"
+		$total_incorrect_count = (int) $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT COUNT(DISTINCT question_id) FROM {$attempts_table} WHERE user_id = %d AND is_correct = 0",
+				$user_id
+			)
+		);
+		$correctly_answered_qids = $wpdb->get_col( $wpdb->prepare( "SELECT DISTINCT question_id FROM {$attempts_table} WHERE user_id = %d AND is_correct = 1", $user_id ) );
+		$all_answered_qids       = $wpdb->get_col( $wpdb->prepare( "SELECT DISTINCT question_id FROM {$attempts_table} WHERE user_id = %d AND status = 'answered'", $user_id ) );
+		$never_correct_qids      = array_diff( $all_answered_qids, $correctly_answered_qids );
+		$never_correct_count     = count( $never_correct_qids );
+
+		// Prepare arguments for the template
+		return [
+			'review_questions'      => $review_questions,
+			'never_correct_count'   => $never_correct_count,
+			'total_incorrect_count' => $total_incorrect_count,
+		];
+	}
 }

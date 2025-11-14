@@ -702,4 +702,62 @@ class DataController
 
         return new \WP_REST_Response( [ 'success' => true, 'data' => $api_response_data ], 200 );
     }
+
+    /**
+     * Callback to get the data for the "Review" dashboard tab.
+     * (REVISED with robust sanitization to prevent JSON encoding errors)
+     */
+    public static function get_dashboard_review( \WP_REST_Request $request ) {
+        $user_id = get_current_user_id();
+        
+        // 1. Call the centralized data function
+        $data = Dashboard_Manager::get_review_data( $user_id );
+
+        if ( is_wp_error( $data ) ) {
+            return $data;
+        }
+
+        // 2. Process data for the app
+        $processed_questions = [];
+        if ( is_array( $data['review_questions'] ) ) { // Check if it's an array first
+            foreach ( $data['review_questions'] as $q ) {
+                
+                // --- THIS IS THE FIX ---
+                // We must aggressively sanitize text to prevent JSON errors
+                
+                // 1. Ensure text is a string, handle nulls
+                $text = (string) ( $q->question_text ?? '' );
+                // 2. Remove all HTML/PHP tags
+                $text = strip_tags( $text );
+                // 3. Convert HTML entities (like &amp;) to characters
+                $text = html_entity_decode( $text );
+                // 4. Trim it
+                $text = wp_trim_words( $text, 25, '...' );
+                // 5. Final check to remove any lingering non-UTF8 characters
+                $text = wp_check_invalid_utf8( $text, true );
+
+                // Also sanitize the subject name
+                $subject = (string) ( $q->subject_name ?? 'N/A' );
+                if ( empty( $subject ) || $subject === 'Uncategorized' ) {
+                    $subject = 'N/A';
+                }
+                // --- END FIX ---
+
+                $processed_questions[] = [
+                    'question_id'   => (int) $q->question_id,
+                    'question_text' => $text,
+                    'subject_name'  => esc_html( $subject ),
+                ];
+            }
+        }
+
+        // 3. Create the final clean data object
+        $api_response_data = [
+            'review_questions'      => $processed_questions,
+            'never_correct_count'   => (int) $data['never_correct_count'],
+            'total_incorrect_count' => (int) $data['total_incorrect_count'],
+        ];
+
+        return new \WP_REST_Response( [ 'success' => true, 'data' => $api_response_data ], 200 );
+    }
 } // End class DataController

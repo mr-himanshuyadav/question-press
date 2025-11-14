@@ -613,60 +613,17 @@ final class Dashboard {
 
 	/**
 	 * Renders the content specifically for the Review section by loading a template.
-	 * NOW PUBLIC STATIC and RETURNS HTML.
+	 * (Refactored to use Dashboard_Manager)
 	 */
 	public static function render_review_content() {
-		global $wpdb;
-		$user_id         = get_current_user_id();
-		$attempts_table  = $wpdb->prefix . 'qp_user_attempts';
-		$review_table    = $wpdb->prefix . 'qp_review_later';
-		$questions_table = $wpdb->prefix . 'qp_questions';
-		$groups_table    = $wpdb->prefix . 'qp_question_groups';
-		$rel_table       = $wpdb->prefix . 'qp_term_relationships';
-		$term_table      = $wpdb->prefix . 'qp_terms';
-		$tax_table       = $wpdb->prefix . 'qp_taxonomies';
+		$user_id = get_current_user_id();
+        
+        // 1. Get all data from the centralized manager function
+		$data = Dashboard_Manager::get_review_data( $user_id );
 
-		// Fetch Review Later questions (JOIN to get subject name efficiently)
-		$subject_tax_id   = $wpdb->get_var( $wpdb->prepare( "SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = %s", 'subject' ) );
-		$review_questions = $wpdb->get_results(
-			$wpdb->prepare(
-				"SELECT
-			 q.question_id, q.question_text,
-			 COALESCE(parent_term.name, 'Uncategorized') as subject_name -- Use COALESCE for fallback
-			 FROM {$review_table} rl
-			 JOIN {$questions_table} q ON rl.question_id = q.question_id
-			 LEFT JOIN {$groups_table} g ON q.group_id = g.group_id
-			 LEFT JOIN {$rel_table} topic_rel ON g.group_id = topic_rel.object_id AND topic_rel.object_type = 'group'
-			 LEFT JOIN {$term_table} topic_term ON topic_rel.term_id = topic_term.term_id AND topic_term.taxonomy_id = %d AND topic_term.parent != 0
-			 LEFT JOIN {$term_table} parent_term ON topic_term.parent = parent_term.term_id
-			 WHERE rl.user_id = %d
-			 ORDER BY rl.review_id DESC",
-				$subject_tax_id,
-				$user_id
-			)
-		);
-
-		// Calculate counts for "Practice Your Mistakes"
-		$total_incorrect_count = (int) $wpdb->get_var(
-			$wpdb->prepare(
-				"SELECT COUNT(DISTINCT question_id) FROM {$attempts_table} WHERE user_id = %d AND is_correct = 0",
-				$user_id
-			)
-		);
-		$correctly_answered_qids = $wpdb->get_col( $wpdb->prepare( "SELECT DISTINCT question_id FROM {$attempts_table} WHERE user_id = %d AND is_correct = 1", $user_id ) );
-		$all_answered_qids       = $wpdb->get_col( $wpdb->prepare( "SELECT DISTINCT question_id FROM {$attempts_table} WHERE user_id = %d AND status = 'answered'", $user_id ) );
-		$never_correct_qids      = array_diff( $all_answered_qids, $correctly_answered_qids );
-		$never_correct_count     = count( $never_correct_qids );
-
-		// Prepare arguments for the template
-		$args = [
-			'review_questions'      => $review_questions,
-			'never_correct_count'   => $never_correct_count,
-			'total_incorrect_count' => $total_incorrect_count,
-		];
-
-		// Load and return the template HTML
-		return Template_Loader::get_html( 'dashboard/review', 'frontend', $args );
+		// 2. Load and return the template HTML
+        // The template 'dashboard/review.php' doesn't need any changes.
+		return Template_Loader::get_html( 'dashboard/review', 'frontend', $data );
 	}
 
 	/**
