@@ -88,18 +88,27 @@ final class Router
             'permission_callback' => [AuthController::class, 'check_auth_token']
         ]);
 
-        register_rest_route('questionpress/v1', '/course/(?P<id>\d+)', [
-            'methods' => \WP_REST_Server::READABLE,
-            'callback' => [DataController::class, 'get_course_details'],
-            'permission_callback' => [AuthController::class, 'check_auth_token'],
-            'args' => [
-                'id' => [
-                    'validate_callback' => function ($param) {
-                        return is_numeric($param);
-                    }
+        // Get Single Course Details (for app's course/[id].tsx)
+        register_rest_route(
+            'questionpress/v1',
+            '/course/(?P<id>\\d+)',
+            [
+                'methods'             => \WP_REST_Server::READABLE,
+                'callback'            => [ DataController::class, 'get_course_details' ],
+                'permission_callback' => [ AuthController::class, 'check_auth_token' ],
+                'args'                => [
+                    'id' => [
+                        // --- THIS IS THE FIX ---
+                        // Use an anonymous function to correctly handle the arguments
+                        'validate_callback' => function( $param, $request, $key ) {
+                            return is_numeric( $param );
+                        },
+                        // --- END FIX ---
+                        'required' => true,
+                    ],
                 ],
-            ],
-        ]);
+            ]
+        );
 
         register_rest_route('questionpress/v1', '/dashboard/overview', [
             'methods' => WP_REST_Server::READABLE,

@@ -260,295 +260,38 @@ final class Dashboard {
 	}
 
 	/**
-	 * Renders the view for a single specific course, fetching its structure and user progress.
+	 * Renders the view for a single specific course.
+     * (Refactored to use Dashboard_Manager and load a template)
 	 */
 	public static function render_single_course_view( $course_slug, $user_id ) {
-		// Get course WP_Post object by slug, allowing 'expired' status
+		// Get course WP_Post object by slug
 		$posts_array = get_posts([
 			'post_type' => 'qp_course',
 			'name' => $course_slug,
 			'post_status' => ['publish', 'expired'],
 			'posts_per_page' => 1,
-			'fields' => 'ids' // Only get ID for efficiency
+			'fields' => 'ids'
 		]);
 		
 		$course_id = $posts_array[0] ?? 0;
-		$course_post = get_post($course_id);
 
-		// --- Get base dashboard URL ---
+        // --- Get base dashboard URL (for error display) ---
 		$options            = get_option( 'qp_settings' );
 		$dashboard_page_id  = isset( $options['dashboard_page'] ) ? absint( $options['dashboard_page'] ) : 0;
 		$base_dashboard_url = $dashboard_page_id ? trailingslashit( get_permalink( $dashboard_page_id ) ) : trailingslashit( home_url() );
-		$is_front_page      = ( $dashboard_page_id > 0 && get_option( 'show_on_front' ) == 'page' && get_option( 'page_on_front' ) == $dashboard_page_id );
-		$session_page_url   = isset( $options['session_page'] ) ? get_permalink( $options['session_page'] ) : home_url( '/' );
-		$tab_prefix         = $is_front_page ? 'tab/' : '';
 
-		// --- Basic Course Validation ---
-		if ( ! $course_post || $course_post->post_type !== 'qp_course' ) {
-			echo '<div class="qp-card"><div class="qp-card-content"><p>Error: Course not found.</p></div></div>';
+        // 1. Get all data from the centralized manager function
+        $data = Dashboard_Manager::get_course_structure_data( $course_id, $user_id );
+
+        // 2. Handle errors
+        if ( is_null( $data ) ) {
+			echo '<div class="qp-card"><div class="qp-card-content"><p>Error: Course not found or you do not have permission to view it.</p></div></div>';
 			echo '<a href="' . esc_url( $base_dashboard_url ) . '" class="qp-button qp-button-secondary qp-back-to-courses-btn">&laquo; Back to Dashboard</a>';
 			return;
-		}
+        }
 
-		// --- Access Check ---
-		if ( ! User_Access::can_access_course( $user_id, $course_id ) ) {
-			echo '<div class="qp-card"><div class="qp-card-content"><p>You do not have permission to view this course.</p></div></div>';
-			echo '<a href="' . esc_url( $base_dashboard_url ) . '" class="qp-button qp-button-secondary qp-back-to-courses-btn">&laquo; Back to Dashboard</a>';
-			return;
-		}
-
-		// --- Fetch Structure Data (Similar to old AJAX handler) ---
-		global $wpdb;
-		$sections_table = $wpdb->prefix . 'qp_course_sections';
-		$items_table    = $wpdb->prefix . 'qp_course_items';
-		$progress_table = $wpdb->prefix . 'qp_user_items_progress';
-
-		// Get sections
-		$sections = $wpdb->get_results(
-			$wpdb->prepare(
-				"SELECT section_id, title, description, section_order FROM $sections_table WHERE course_id = %d ORDER BY section_order ASC",
-				$course_id
-			)
-		);
-
-		$items_by_section      = [];
-		$all_items_in_course = []; // Store all items flat for progress fetching
-
-		if ( ! empty( $sections ) ) {
-			$section_ids     = wp_list_pluck( $sections, 'section_id' );
-			$ids_placeholder = implode( ',', array_map( 'absint', $section_ids ) );
-
-			// Get all items for these sections
-			$items_raw             = $wpdb->get_results(
-				"SELECT item_id, section_id, title, item_order, content_type, content_config
-			 FROM $items_table
-			 WHERE section_id IN ($ids_placeholder)
-			 ORDER BY item_order ASC"
-			);
-			$all_items_in_course = $items_raw; // Store for progress lookup
-
-			// Organize items by section
-			foreach ( $items_raw as $item ) {
-				if ( ! isset( $items_by_section[ $item->section_id ] ) ) {
-					$items_by_section[ $item->section_id ] = [];
-				}
-				$items_by_section[ $item->section_id ][] = $item;
-			}
-		}
-
-		// Fetch user's progress for all items in this course in one query
-		$item_ids_in_course = wp_list_pluck( $all_items_in_course, 'item_id' );
-		$progress_data      = [];
-		if ( ! empty( $item_ids_in_course ) ) {
-			$item_ids_placeholder = implode( ',', array_map( 'absint', $item_ids_in_course ) );
-			$progress_raw         = $wpdb->get_results(
-				$wpdb->prepare(
-                    // Fetch attempt_count as well
-					"SELECT item_id, status, result_data, attempt_count FROM $progress_table WHERE user_id = %d AND item_id IN ($item_ids_placeholder)",
-					$user_id
-				),
-				OBJECT_K
-			); // Keyed by item_id
-
-			// Process progress data to extract session_id
-			foreach ( $progress_raw as $item_id => $prog ) {
-				$session_id = null;
-				if ( ! empty( $prog->result_data ) ) {
-					$result_data_decoded = json_decode( $prog->result_data, true );
-					if ( isset( $result_data_decoded['session_id'] ) ) {
-						$session_id = absint( $result_data_decoded['session_id'] );
-					}
-				}
-				$progress_data[ $item_id ] = [
-					'status'     => $prog->status,
-					'session_id' => $session_id,
-                    'attempt_count' => $prog->attempt_count
-				];
-			}
-		}
-
-		// --- NEW: Determine the correct "Back" URL ---
-		$user_courses_table = $wpdb->prefix . 'qp_user_courses';
-		$is_enrolled = $wpdb->get_var( $wpdb->prepare(
-			"SELECT user_course_id FROM $user_courses_table WHERE user_id = %d AND course_id = %d",
-			$user_id, $course_id
-		) );
-		
-		if ( $is_enrolled ) {
-			$back_url = $base_dashboard_url . $tab_prefix . 'my-courses/';
-		} else {
-			$back_url = $base_dashboard_url . $tab_prefix . 'available-courses/';
-		}
-		// --- END NEW ---
-
-
-		// --- Render Structure HTML ---
-		echo '<div class="qp-course-structure-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">';
-		echo '<h2>' . esc_html( get_the_title( $course_id ) ) . '</h2>';
-		echo '<a href="' . esc_url( $back_url ) . '" class="qp-button qp-button-secondary qp-back-to-courses-btn">&laquo; Back to Courses</a>';
-		echo '</div>'; // Close qp-course-structure-header
-
-		echo '<div class="qp-course-structure-content">';
-
-		if ( ! empty( $sections ) ) {
-            
-            // --- NEW: Get progression mode ---
-            $progression_mode = get_post_meta($course_id, '_qp_course_progression_mode', true);
-            $is_progressive = ($progression_mode === 'progressive'); // Admins bypass
-            $is_previous_item_complete = true; // First item is always unlocked
-            // --- END NEW ---
-
-			foreach ( $sections as $section ) {
-				?>
-				<div class="qp-course-section-card qp-card">
-					<div class="qp-card-header">
-						<h3><?php echo esc_html( $section->title ); ?></h3>
-						<?php if ( ! empty( $section->description ) ) : ?>
-							<p style="font-size: 0.9em; color: var(--qp-dashboard-text-light); margin-top: 5px;"><?php echo esc_html( $section->description ); ?></p>
-						<?php endif; ?>
-					</div>
-					<div class="qp-card-content qp-course-items-list">
-						<?php
-						$items = $items_by_section[ $section->section_id ] ?? [];
-						if ( ! empty( $items ) ) {
-							foreach ( $items as $item ) {
-								$item_progress   = $progress_data[ $item->item_id ] ?? [
-									'status'     => 'not_started',
-									'session_id' => null,
-                                    'attempt_count' => 0,
-								];
-								$status          = $item_progress['status'];
-								$session_id_attr = $item_progress['session_id'] ? ' data-session-id="' . esc_attr( $item_progress['session_id'] ) . '"' : '';
-                                $attempt_count   = (int) $item_progress['attempt_count'];
-
-                                // --- Progression Logic ---
-                                $is_locked = false;
-                                if ($is_progressive && !$is_previous_item_complete) {
-                                    $is_locked = true;
-                                }
-                                $row_class = $is_locked ? 'qp-item-locked' : '';
-                                
-                                // --- Button/Icon Logic ---
-                                $status_icon  = '';
-                                $button_html  = ''; // We will build this string
-
-                                if ($is_locked) {
-                                    $status_icon  = '<span class="dashicons dashicons-lock" style="color: var(--qp-dashboard-text-light);"></span>';
-                                    $button_html = sprintf(
-                                        '<button class="qp-button qp-button-secondary" style="padding: 4px 10px; font-size: 12px;" disabled>%s</button>',
-                                        esc_html__('Locked', 'question-press')
-                                    );
-                                } elseif ( $item->content_type !== 'test_series' ) {
-                                    // Handle non-test items (e.g., lessons)
-                                    $status_icon  = '<span class="dashicons dashicons-text"></span>'; // Or other icon
-                                    $button_html = sprintf(
-                                        '<button class="qp-button qp-button-secondary view-course-content-btn" data-item-id="%d" style="padding: 4px 10px; font-size: 12px;">%s</button>',
-                                        esc_attr($item->item_id),
-                                        esc_html__('View', 'question-press')
-                                    );
-                                } else {
-                                    // This is a test series item, handle its states
-                                    switch ( $status ) {
-                                        case 'completed':
-                                            $status_icon  = '<span class="dashicons dashicons-yes-alt" style="color: var(--qp-dashboard-success);"></span>';
-                                            
-                                            // 1. Always show the Review button
-                                            $button_html = sprintf(
-                                                '<button class="qp-button qp-button-secondary view-test-results-btn" data-item-id="%d" %s style="padding: 4px 10px; font-size: 12px;">%s</button>',
-                                                esc_attr($item->item_id),
-                                                $session_id_attr,
-                                                esc_html__('Review', 'question-press')
-                                            );
-
-                                            // 2. Conditionally show the Retake button
-                                            $allow_retakes = get_post_meta($course_id, '_qp_course_allow_retakes', true);
-                                            if ($allow_retakes === '1') {
-                                                $retake_limit = absint(get_post_meta($course_id, '_qp_course_retake_limit', true)); // 0 = unlimited
-                                                $can_retake = false;
-                                                $retake_text = esc_html__('Retake', 'question-press');
-
-                                                if ($retake_limit === 0) {
-                                                    $can_retake = true;
-                                                } else {
-                                                    $retakes_left = $retake_limit - $attempt_count;
-                                                    if ($retakes_left > 0) {
-                                                        $can_retake = true;
-                                                        $retake_text = sprintf(esc_html__('Retake (%d left)', 'question-press'), $retakes_left);
-                                                    } else {
-                                                        $retake_text = esc_html__('No Retakes Left', 'question-press');
-                                                    }
-                                                }
-                                                
-                                                $button_html .= sprintf(
-                                                    '<button class="qp-button qp-button-primary start-course-test-btn" data-item-id="%d" style="padding: 4px 10px; font-size: 12px;" %s>%s</button>',
-                                                    esc_attr($item->item_id),
-                                                    $can_retake ? '' : 'disabled',
-                                                    $retake_text
-                                                );
-                                            }
-                                            break;
-                                        case 'in_progress':
-										    $status_icon  = '<span class="dashicons dashicons-marker" style="color: var(--qp-dashboard-warning-dark);"></span>';
-                                            
-                                            // Check if we have a valid session ID to resume
-                                            if ( ! empty( $item_progress['session_id'] ) ) {
-                                                // Create a direct link to the session page
-                                                $resume_url = add_query_arg('session_id', $item_progress['session_id'], $session_page_url);
-                                                $button_html = sprintf(
-                                                    '<a href="%s" class="qp-button qp-button-primary" style="padding: 4px 10px; font-size: 12px; text-decoration: none;">%s</a>',
-                                                    esc_url($resume_url),
-                                                    esc_html__('Continue', 'question-press')
-                                                );
-                                            } else {
-                                                // Fallback: If session ID is missing (should not happen), use the old button
-                                                $button_html = sprintf(
-                                                    '<button class="qp-button qp-button-primary start-course-test-btn" data-item-id="%d" style="padding: 4px 10px; font-size: 12px;">%s</button>',
-                                                    esc_attr($item->item_id),
-                                                    esc_html__('Continue', 'question-press')
-                                                );
-                                            }
-										    break;
-                                        default: // not_started
-                                            $status_icon = '<span class="dashicons dashicons-marker" style="color: var(--qp-dashboard-border);"></span>';
-                                            $button_html = sprintf(
-                                                '<button class="qp-button qp-button-primary start-course-test-btn" data-item-id="%d" style="padding: 4px 10px; font-size: 12px;">%s</button>',
-                                                esc_attr($item->item_id),
-                                                esc_html__('Start', 'question-press')
-                                            );
-                                            break;
-                                    }
-                                }
-								?>
-								<div class="qp-course-item-row <?php echo esc_attr($row_class); ?>" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--qp-dashboard-border-light);">
-									<span class="qp-course-item-link" style="display: flex; align-items: center; gap: 8px;">
-										<?php echo $status_icon; ?>
-										<span style="font-weight: 500;"><?php echo esc_html( $item->title ); ?></span>
-									</span>
-                                    <div class="qp-card-actions"> <?php // Wrap buttons in a container for proper spacing ?>
-                                        <?php echo $button_html; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
-                                    </div>
-								</div>
-								<?php
-
-                                // --- NEW: Update lock for next iteration ---
-                                if ($is_progressive) {
-                                    $is_previous_item_complete = ($status === 'completed');
-                                }
-                                // --- END NEW ---
-							}
-						} else {
-							echo '<p style="text-align: center; color: var(--qp-dashboard-text-light); font-style: italic;">No items in this section.</p>';
-						}
-						?>
-					</div>
-				</div>
-				<?php
-			} // end foreach section
-		} else {
-			echo '<div class="qp-card"><div class="qp-card-content"><p style="text-align: center;">This course has no content yet.</p></div></div>';
-		}
-
-		echo '</div>'; // Close qp-course-structure-content
+		// 3. Load the template
+		echo Template_Loader::get_html( 'dashboard/single-course-view', 'frontend', $data );
 	}
 
 	/**

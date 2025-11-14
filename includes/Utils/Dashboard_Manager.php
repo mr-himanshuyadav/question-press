@@ -1071,4 +1071,134 @@ class Dashboard_Manager {
 			'total_incorrect_count' => $total_incorrect_count,
 		];
 	}
+
+	/**
+	 * Gathers all data required for the Single Course View.
+	 * This is used by both the web view and the /course/{id} API endpoint.
+	 *
+	 * @param int $course_id The ID of the course.
+	 * @param int $user_id   The ID of the current user.
+	 * @return array|null An associative array of all course data, or null if access denied.
+	 */
+	public static function get_course_structure_data( $course_id, $user_id ) {
+		$course_post = get_post($course_id);
+
+		// --- Basic Course Validation ---
+		if ( ! $course_post || $course_post->post_type !== 'qp_course' || ! in_array( $course_post->post_status, ['publish', 'expired'], true ) ) {
+			return null; // Course not found or not valid
+		}
+
+		// --- Access Check ---
+		if ( ! User_Access::can_access_course( $user_id, $course_id ) ) {
+			return null; // No permission
+		}
+        
+        // --- Get Page URLs ---
+		$options            = get_option( 'qp_settings' );
+		$dashboard_page_id  = isset( $options['dashboard_page'] ) ? absint( $options['dashboard_page'] ) : 0;
+		$base_dashboard_url = $dashboard_page_id ? trailingslashit( get_permalink( $dashboard_page_id ) ) : trailingslashit( home_url() );
+		$is_front_page      = ( $dashboard_page_id > 0 && get_option( 'show_on_front' ) == 'page' && get_option( 'page_on_front' ) == $dashboard_page_id );
+		$session_page_url   = isset( $options['session_page'] ) ? get_permalink( $options['session_page'] ) : home_url( '/' );
+		$tab_prefix         = $is_front_page ? 'tab/' : '';
+
+		// --- Fetch Structure Data ---
+		global $wpdb;
+		$sections_table = $wpdb->prefix . 'qp_course_sections';
+		$items_table    = $wpdb->prefix . 'qp_course_items';
+		$progress_table = $wpdb->prefix . 'qp_user_items_progress';
+
+		// Get sections
+		$sections = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT section_id, title, description, section_order FROM $sections_table WHERE course_id = %d ORDER BY section_order ASC",
+				$course_id
+			)
+		);
+
+		$items_by_section      = [];
+		$all_items_in_course = []; // Store all items flat for progress fetching
+
+		if ( ! empty( $sections ) ) {
+			$section_ids     = wp_list_pluck( $sections, 'section_id' );
+			$ids_placeholder = implode( ',', array_map( 'absint', $section_ids ) );
+
+			// Get all items for these sections
+			$items_raw             = $wpdb->get_results(
+				"SELECT item_id, section_id, title, item_order, content_type, content_config
+			 FROM $items_table
+			 WHERE section_id IN ($ids_placeholder)
+			 ORDER BY item_order ASC"
+			);
+			$all_items_in_course = $items_raw; // Store for progress lookup
+
+			// Organize items by section
+			foreach ( $items_raw as $item ) {
+				if ( ! isset( $items_by_section[ $item->section_id ] ) ) {
+					$items_by_section[ $item->section_id ] = [];
+				}
+				$items_by_section[ $item->section_id ][] = $item;
+			}
+		}
+
+		// Fetch user's progress for all items in this course in one query
+		$item_ids_in_course = wp_list_pluck( $all_items_in_course, 'item_id' );
+		$progress_data      = [];
+		if ( ! empty( $item_ids_in_course ) ) {
+			$item_ids_placeholder = implode( ',', array_map( 'absint', $item_ids_in_course ) );
+			$progress_raw         = $wpdb->get_results(
+				$wpdb->prepare(
+					"SELECT item_id, status, result_data, attempt_count FROM $progress_table WHERE user_id = %d AND item_id IN ($item_ids_placeholder)",
+					$user_id
+				),
+				OBJECT_K
+			); // Keyed by item_id
+
+			foreach ( $progress_raw as $item_id => $prog ) {
+				$session_id = null;
+				if ( ! empty( $prog->result_data ) ) {
+					$result_data_decoded = json_decode( $prog->result_data, true );
+					if ( isset( $result_data_decoded['session_id'] ) ) {
+						$session_id = absint( $result_data_decoded['session_id'] );
+					}
+				}
+				$progress_data[ $item_id ] = [
+					'status'     => $prog->status,
+					'session_id' => $session_id,
+                    'attempt_count' => $prog->attempt_count
+				];
+			}
+		}
+
+		// --- Determine the correct "Back" URL ---
+		$user_courses_table = $wpdb->prefix . 'qp_user_courses';
+		$is_enrolled = $wpdb->get_var( $wpdb->prepare(
+			"SELECT user_course_id FROM $user_courses_table WHERE user_id = %d AND course_id = %d",
+			$user_id, $course_id
+		) );
+		
+		if ( $is_enrolled ) {
+			$back_url = $base_dashboard_url . $tab_prefix . 'my-courses/';
+		} else {
+			$back_url = $base_dashboard_url . $tab_prefix . 'available-courses/';
+		}
+
+        // --- Get Course Settings ---
+        $progression_mode = get_post_meta($course_id, '_qp_course_progression_mode', true);
+        $allow_retakes = get_post_meta($course_id, '_qp_course_allow_retakes', true);
+        $retake_limit = absint(get_post_meta($course_id, '_qp_course_retake_limit', true)); // 0 = unlimited
+
+		// --- Assemble all data ---
+		return [
+            'success'           => true,
+			'course_post'       => $course_post,
+			'sections'          => $sections,
+			'items_by_section'  => $items_by_section,
+			'progress_data'     => $progress_data,
+			'back_url'          => $back_url,
+			'session_page_url'  => $session_page_url,
+            'is_progressive'    => ($progression_mode === 'progressive'),
+            'allow_retakes'     => ($allow_retakes === '1'),
+            'retake_limit'      => $retake_limit,
+		];
+	}
 }

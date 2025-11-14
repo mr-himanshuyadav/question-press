@@ -169,106 +169,124 @@ class DataController
 
         return new \WP_REST_Response($formatted_courses, 200);
     }
+    
     /**
      * Callback to get the details for a single qp_course.
-     * v4: Corrected based on user feedback.
-     * - 'test_id' is the 'item_id' itself.
-     * - 'content_type' is 'test_series'.
+     * (REVISED to match the app's detailed course/[id].tsx interfaces)
      */
     public static function get_course_details(\WP_REST_Request $request)
     {
         $course_id = (int) $request['id'];
         $user_id = get_current_user_id();
 
-        if (! $course_id) {
+        if ( ! $course_id ) {
             return new \WP_Error('rest_invalid_id', 'Invalid course ID.', ['status' => 400]);
         }
 
-        // --- Enrollment Check (This part is correct) ---
-        if (! User_Access::can_access_course($user_id, $course_id)) {
-            $plan_id = get_post_meta($course_id, '_qp_linked_plan_id', true);
-            if (! empty($plan_id)) {
-                return new \WP_Error('rest_forbidden', 'You are not enrolled in this course.', ['status' => 403]);
-            }
+        // 1. Call the centralized data function. It has all the data we need.
+        $data = Dashboard_Manager::get_course_structure_data( $course_id, $user_id );
+
+        // 2. Handle errors
+        if ( is_null( $data ) ) {
+            return new \WP_Error('rest_forbidden', 'Course not found or you do not have access.', ['status' => 403]);
         }
 
-        $course_post = get_post($course_id);
-        if (! $course_post || $course_post->post_type !== 'qp_course' || $course_post->post_status !== 'publish') {
-            return new \WP_Error('rest_not_found', 'Course not found.', ['status' => 404]);
-        }
+        // 3. Process data to match the app's interfaces (CourseDetails, CourseSection, CourseItem)
+        $processed_sections = [];
+        $is_previous_item_complete = true; // For progression logic
 
-        // --- Build Structure from Custom Tables (CORRECTED) ---
-        global $wpdb;
-        $structure = [];
-        $sections_table = $wpdb->prefix . 'qp_course_sections';
-        $items_table = $wpdb->prefix . 'qp_course_items';
-
-        // 1. Get all sections
-        $sections = $wpdb->get_results($wpdb->prepare(
-            "SELECT section_id, title FROM {$sections_table} WHERE course_id = %d ORDER BY section_order ASC",
-            $course_id
-        ));
-
-        // 2. Get all items
-        $items = $wpdb->get_results($wpdb->prepare(
-            "SELECT item_id, section_id, title, content_type
-             FROM {$items_table} 
-             WHERE course_id = %d 
-             ORDER BY section_id ASC, item_order ASC",
-            $course_id
-        ));
-
-        // 3. Group items by their section_id for easier lookup
-        $items_by_section = [];
-        foreach ($items as $item) {
-            $items_by_section[$item->section_id][] = $item;
-        }
-
-        // 4. Build the flat structure array
-        if (! empty($sections)) {
-            foreach ($sections as $section) {
-                // Add the Section to the structure
-                $structure[] = [
-                    'id'    => 'section_' . $section->section_id,
-                    'type'  => 'section',
-                    'title' => $section->title,
-                ];
-
-                // Check if this section has items and add them
-                if (isset($items_by_section[$section->section_id])) {
-                    foreach ($items_by_section[$section->section_id] as $item) {
-
-                        // --- THIS IS THE NEW LOGIC ---
-                        $test_id = null;
-                        // Check for 'test_series' (with underscore)
-                        if ($item->content_type === 'test_series') {
-                            // The test_id *is* the item_id.
-                            $test_id = (string) $item->item_id;
-                        }
-                        // --- END NEW LOGIC ---
-
-                        // Add the Item to the structure
-                        $structure[] = [
-                            'id'      => 'item_' . $item->item_id,
-                            'type'    => $item->content_type,
-                            'title'   => $item->title,
-                            'test_id' => $test_id, // Pass the item_id as the test_id
+        if ( ! empty( $data['sections'] ) ) {
+            foreach ( $data['sections'] as $section ) {
+                $processed_items = [];
+                
+                // Get the items for this section
+                $items_in_section = $data['items_by_section'][ $section->section_id ] ?? [];
+                
+                if ( ! empty( $items_in_section ) ) {
+                    foreach ( $items_in_section as $item ) {
+                        $item_id = $item->item_id;
+                        
+                        // Get progress for this item
+                        $progress = $data['progress_data'][ $item_id ] ?? [
+                            'status'        => 'not_started',
+                            'session_id'    => null,
+                            'attempt_count' => 0,
                         ];
-                    }
-                }
-            }
-        }
+                        
+                        // Progression logic
+                        $is_locked = false;
+                        if ( $data['is_progressive'] && ! $is_previous_item_complete ) {
+                            $is_locked = true;
+                        }
 
-        // --- Success ---
-        $data = [
-            'id' => $course_post->ID,
-            'title' => $course_post->post_title,
-            'content' => $course_post->post_content,
-            'structure' => $structure,
+                        // Retake logic
+                        $retake_limit = $data['retake_limit'];
+                        $attempt_count = (int) $progress['attempt_count'];
+                        $can_retake = false;
+                        $retakes_left = null;
+
+                        if ( $data['allow_retakes'] ) {
+                            if ( $retake_limit === 0 ) {
+                                $can_retake = true; // Unlimited retakes
+                                $retakes_left = null; // App should interpret null as '∞'
+                            } else {
+                                $retakes_left = $retake_limit - $attempt_count;
+                                if ( $retakes_left > 0 ) {
+                                    $can_retake = true;
+                                }
+                            }
+                        }
+
+                        // Build the final CourseItem object
+                        $processed_items[] = [
+                            'item_id'       => $item_id,
+                            'title'         => $item->title,
+                            'content_type'  => $item->content_type,
+                            'status'        => $progress['status'],
+                            'session_id'    => $progress['session_id'],
+                            'attempt_count' => $attempt_count,
+                            'is_locked'     => $is_locked,
+                            'retake_limit'  => $retake_limit,
+                            'can_retake'    => $can_retake,
+                            'retakes_left'  => $retakes_left,
+                        ];
+                        
+                        // Update progression for next loop iteration
+                        if ( $data['is_progressive'] ) {
+                            $is_previous_item_complete = ($progress['status'] === 'completed');
+                        }
+                    } // end foreach item
+                } // end if items
+
+                // Build the final CourseSection object
+                $processed_sections[] = [
+                    'section_id'  => $section->section_id,
+                    'title'       => $section->title,
+                    'description' => $section->description,
+                    'items'       => $processed_items,
+                ];
+            } // end foreach section
+        } // end if sections
+
+        // 4. Determine enrollment status
+        // We check if the 'back_url' (which we already calculated) goes to 'my-courses'
+        $is_enrolled = ( strpos( $data['back_url'], 'my-courses' ) !== false );
+
+        // 5. Assemble final response for the app
+        $api_response_data = [
+            'course_id'        => $data['course_post']->ID,
+            'title'            => $data['course_post']->post_title,
+            'description'      => $data['course_post']->post_content, // Map 'content' to 'description'
+            'sections'         => $processed_sections, // Use 'sections' key
+            'is_enrolled'      => $is_enrolled,
+            'allow_retakes'    => $data['allow_retakes'],
+            'progression_mode' => $data['is_progressive'] ? 'progressive' : 'free',
         ];
 
-        return new \WP_REST_Response($data, 200);
+        // Wrap the response in our standard { success: true, data: ... } structure
+        return new \WP_REST_Response( [ 'success' => true, 'data' => $api_response_data ], 200 );
     }
+
     /**
      * Gets the results for a specific, completed session.
      */
