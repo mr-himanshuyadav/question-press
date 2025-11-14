@@ -647,4 +647,59 @@ class DataController
 
         return new \WP_REST_Response( [ 'success' => true, 'data' => $api_response_data ], 200 );
     }
+    /**
+     * Callback to get the data for the "Available Courses" dashboard tab.
+     * (Designed to match app's 'available-courses.tsx' screen)
+     */
+    public static function get_dashboard_available_courses( \WP_REST_Request $request ) {
+        $user_id = get_current_user_id();
+        
+        // 1. Call the centralized data function
+        $data = Dashboard_Manager::get_available_courses_data( $user_id );
+
+        if ( is_wp_error( $data ) ) {
+            return $data;
+        }
+
+        // 2. Process the WP_Query results into a clean array for the app
+        $processed_courses = [];
+        if ( $data['available_courses_query'] instanceof \WP_Query && $data['available_courses_query']->have_posts() ) {
+            foreach ( $data['available_courses_query']->posts as $course_post ) {
+                $course_id = $course_post->ID;
+                $access_mode = get_post_meta( $course_id, '_qp_course_access_mode', true ) ?: 'free';
+                $price_html = null;
+
+                // Get price if it's a paid course
+                if ( $access_mode === 'paid' && function_exists('wc_get_product') ) {
+                    $product_id = get_post_meta( $course_id, '_qp_linked_product_id', true );
+                    if ( $product_id ) {
+                        $product = wc_get_product( $product_id );
+                        if ( $product ) {
+                            // Get the raw price string (e.g., "$10.00")
+                            $price_html = $product->get_price_html() ? wp_strip_all_tags($product->get_price_html()) : 'N/A';
+                        }
+                    }
+                }
+
+                // Build the object matching the app's interface
+                $processed_courses[] = [
+                    'id'          => $course_id,
+                    'title'       => $course_post->post_title,
+                    'status'      => $course_post->post_status, // 'publish' or 'expired'
+                    'access_mode' => $access_mode, // 'free' or 'paid'
+                    'price'       => $price_html, // e.g., "$10.00" or null
+                ];
+            }
+        }
+
+        // 3. Create the final clean data object
+        // --- THIS IS THE FIX ---
+        // The key 'available_courses' MUST match the app screen's expectation
+        $api_response_data = [
+            'available_courses' => $processed_courses,
+        ];
+        // --- END FIX ---
+
+        return new \WP_REST_Response( [ 'success' => true, 'data' => $api_response_data ], 200 );
+    }
 } // End class DataController

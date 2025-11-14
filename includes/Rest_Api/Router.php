@@ -121,6 +121,13 @@ final class Router
                 'permission_callback' => [ AuthController::class, 'check_auth_token' ],
         ]);
 
+        // Dashboard - Available Courses
+        register_rest_route('questionpress/v1','/dashboard/available-courses',[
+                'methods'             => \WP_REST_Server::READABLE,
+                'callback'            => [ DataController::class, 'get_dashboard_available_courses' ],
+                'permission_callback' => [ AuthController::class, 'check_auth_token' ],
+        ]);
+
         register_rest_route('questionpress/v1', '/dashboard/profile', [
             'methods'  => WP_REST_Server::READABLE,
             'callback' => [DataController::class, 'get_dashboard_profile'],

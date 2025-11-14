@@ -717,78 +717,22 @@ final class Dashboard {
 
 	/**
 	 * Renders the content specifically for the "Available Courses" section.
-	 * MODIFIED from old render_courses_content().
+	 * (Refactored to use Dashboard_Manager)
 	 * @return string Rendered HTML content.
 	 */
 	public static function render_available_courses_content() {
-		if ( ! is_user_logged_in() ) {
+		$user_id = get_current_user_id();
+		if ( ! $user_id ) {
 			return '';
 		}
 
-		$user_id = get_current_user_id();
-		global $wpdb;
-		$user_courses_table = $wpdb->prefix . 'qp_user_courses';
+        // 1. Get all data from the centralized manager function
+        $data = Dashboard_Manager::get_available_courses_data( $user_id );
 
-		// 1. Get enrolled course IDs (courses to EXCLUDE)
-		$enrolled_course_ids = $wpdb->get_col(
-			$wpdb->prepare(
-				"SELECT course_id FROM $user_courses_table WHERE user_id = %d",
-				$user_id
-			)
-		);
-		if ( ! is_array( $enrolled_course_ids ) ) {
-			$enrolled_course_ids = []; // Ensure it's an array
-		}
-
-		// --- NEW: Find courses the user has purchased but not enrolled in (also to EXCLUDE) ---
-		$purchased_course_ids = [];
-		$all_published_courses = new \WP_Query( [
-			'post_type'      => 'qp_course',
-			'post_status'    => 'publish', // Only check 'publish' status for purchasable
-			'posts_per_page' => -1,
-			'fields'         => 'ids',
-			'post__not_in'   => $enrolled_course_ids, // Only check non-enrolled courses
-		] );
-
-		if ( $all_published_courses->have_posts() ) {
-			foreach ( $all_published_courses->posts as $course_id ) {
-				$access_result = User_Access::can_access_course( $user_id, $course_id, true );
-				// If access is granted by an entitlement (numeric ID), it's a "purchased" course
-				if ( is_numeric( $access_result ) ) {
-					$purchased_course_ids[] = $course_id;
-				}
-			}
-		}
-		// --- END NEW ---
-
-		// 3. Combine all IDs to exclude
-		$all_excluded_ids = array_unique( array_merge( $enrolled_course_ids, $purchased_course_ids ) );
-
-		// 4. Get all published/expired courses, EXCLUDING the ones found above
-		$args = [
-			'post_type'      => 'qp_course',
-			'post_status'    => ['publish', 'expired'], // Include expired to show them as "Expired"
-			'posts_per_page' => -1,
-			'orderby'        => 'menu_order title',
-			'order'          => 'ASC',
-		];
-
-		if ( ! empty( $all_excluded_ids ) ) {
-			$args['post__not_in'] = $all_excluded_ids; // <-- Key change: EXCLUDE enrolled AND purchased courses
-		}
-		
-		$available_courses_query = new \WP_Query( $args );
-		// --- END MODIFIED QUERY ---
-
-		// 5. Prepare arguments for the template
-		$template_args = [
-			'available_courses_query' => $available_courses_query,
-			'user_id'                 => $user_id,
-			// No progress data needed for available courses
-		];
-
-		// Load and return the "courses" template (which is now our "available" template)
-		return Template_Loader::get_html( 'dashboard/courses', 'frontend', $template_args );
+		// 2. Load and return the "courses" template
+        // This template (dashboard/courses.php) doesn't need any changes
+        // as it already expects the '$available_courses_query' variable.
+		return Template_Loader::get_html( 'dashboard/courses', 'frontend', $data );
 	}
 
 	/**
