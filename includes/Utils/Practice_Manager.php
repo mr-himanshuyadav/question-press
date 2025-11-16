@@ -1886,7 +1886,9 @@ class Practice_Manager
         $session_manifest['reported_info'] = $reported_info;
 
         // --- Add App-specific fields (for the app's 'SessionDetails' interface)
-        $session_manifest['current_question_index'] = 0; // App can derive this, but 0 is a safe default.
+        $session_manifest['current_question_index'] = isset($session_settings['current_question_index']) 
+                                                    ? (int) $session_settings['current_question_index'] 
+                                                    : 0;
         $session_manifest['total_questions'] = count($session_manifest['question_ids']);
 
         return $session_manifest;
@@ -1935,6 +1937,53 @@ class Practice_Manager
         }
 
         return $result_data;
+    }
+
+    /**
+     * Updates only the current_question_index in the session_config.
+     *
+     * @param int $session_id The ID of the session.
+     * @param int $new_index  The new question index to save.
+     * @return bool True on success, false on failure.
+     */
+    public static function update_current_question_index( $session_id, $new_index ) {
+        global $wpdb;
+        $session_table = $wpdb->prefix . 'qp_user_sessions';
+        $current_user_id = get_current_user_id();
+
+        // 1. Get the current session config
+        $session_data = $wpdb->get_row(
+            $wpdb->prepare(
+                "SELECT user_id, settings_snapshot FROM $session_table WHERE session_id = %d",
+                $session_id
+            )
+        );
+
+        if ( ! $session_data ) {
+            // Session not found
+            return false;
+        }
+
+        if ( (int) $session_data->user_id !== (int) $current_user_id ) {
+            // User does not own this session. Stop execution.
+            return false;
+        }
+
+        // 2. Decode, update, and re-encode
+        $config = json_decode( $session_data->settings_snapshot, true );
+        $config['current_question_index'] = (int) $new_index;
+        $new_config_json = wp_json_encode( $config );
+
+        // 3. Update the row in the database
+        $result = $wpdb->update(
+            $session_table,
+            [ 'settings_snapshot' => $new_config_json ], // Data
+            [ 'session_id' => $session_id ],          // Where
+            [ '%s' ],                                 // Format data
+            [ '%d' ]                                  // Format where
+        );
+
+        return $result !== false;
     }
 
     /**

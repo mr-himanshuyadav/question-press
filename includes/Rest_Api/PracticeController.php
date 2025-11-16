@@ -5,7 +5,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+use Error;
 use QuestionPress\Utils\Practice_Manager;
+use QuestionPress\Utils\Session_Manager;
 
 /**
  * REST API endpoints for in-practice actions.
@@ -415,4 +417,42 @@ class PracticeController {
 
 		return new \WP_REST_Response( [ 'success' => true, 'data' => $result ], 200 );
 	}
+
+    /**
+     * Updates the current question index for a session.
+     *
+     * @param WP_REST_Request $request
+     * @return WP_REST_Response|WP_Error
+     */
+    public static function update_index( \WP_REST_Request $request ) {
+        $user_id = get_current_user_id();
+        if ( ! $user_id ) {
+            return new \WP_Error( 'rest_not_logged_in', 'You are not logged in.', [ 'status' => 401 ] );
+        }
+
+		error_log("Updating index for user" . $user_id);
+
+        $session_id = (int) $request->get_param('session_id');
+		error_log("Session ID" . $session_id);
+        $new_index  = (int) $request->get_param('new_index');
+		error_log("New index" . $new_index);
+
+        if ( empty( $session_id ) ) {
+            return new \WP_Error( 'rest_invalid_param', 'Session ID is required.', [ 'status' => 400 ] );
+        }
+
+        // --- THE PERMISSION CHECK IS NOW REMOVED FROM HERE ---
+
+        // Call the Session Manager to do the update
+        // The security check is now handled INSIDE this function.
+        $success = Practice_Manager::update_current_question_index( $session_id, $new_index );
+		error_log($success);
+
+        if ( $success ) {
+            return new \WP_REST_Response( [ 'success' => true, 'message' => 'Index updated.' ], 200 );
+        } else {
+            // This now handles both "not found" and "permission denied"
+            return new \WP_Error( 'rest_update_failed', 'Failed to update session index. Check permissions or session ID.', [ 'status' => 403 ] );
+        }
+    }
 }

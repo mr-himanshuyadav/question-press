@@ -285,6 +285,11 @@ final class Router
             'callback' => [PracticeController::class, 'get_question_data'],
             'permission_callback' => [AuthController::class, 'check_auth_token']
         ]);
+        register_rest_route('questionpress/v1', '/practice/update-index', [
+            'methods'             => WP_REST_Server::CREATABLE,
+            'callback'            => [PracticeController::class, 'update_index' ],
+            'permission_callback' => [AuthController::class, 'check_auth_token'],
+        ]);
         register_rest_route('questionpress/v1', '/practice/topics-for-subject', [
             'methods' => WP_REST_Server::READABLE,
             'callback' => [PracticeController::class, 'get_topics_for_subject'],
