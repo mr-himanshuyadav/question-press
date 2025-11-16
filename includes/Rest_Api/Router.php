@@ -138,15 +138,11 @@ final class Router
         ]);
 
         // Dashboard - Review
-        register_rest_route(
-            'questionpress/v1',
-            '/dashboard/review', // Matches the app's fetch URL
-            [
+        register_rest_route('questionpress/v1','/dashboard/review', [
                 'methods'             => \WP_REST_Server::READABLE,
                 'callback'            => [ DataController::class, 'get_dashboard_review' ],
                 'permission_callback' => [ AuthController::class, 'check_auth_token' ],
-            ]
-        );
+        ]);
 
         register_rest_route('questionpress/v1', '/dashboard/profile', [
             'methods'  => WP_REST_Server::READABLE,
@@ -160,12 +156,6 @@ final class Router
             'permission_callback' => [AuthController::class, 'check_auth_token']
         ] );
 
-        // --- Question Endpoints (Protected) ---
-        register_rest_route('questionpress/v1', '/questions/add', [
-            'methods' => WP_REST_Server::CREATABLE,
-            'callback' => [QuestionController::class, 'add_question_group'],
-            'permission_callback' => [AuthController::class, 'check_auth_token']
-        ]);
         register_rest_route('questionpress/v1', '/start-session', [
             'methods' => WP_REST_Server::CREATABLE,
             'callback' => [QuestionController::class, 'start_session_and_get_questions'],
@@ -215,14 +205,10 @@ final class Router
             'callback' => [SessionController::class, 'start_mock_test_session'],
             'permission_callback' => [AuthController::class, 'check_auth_token']
         ]);
-        register_rest_route('questionpress/v1', '/session/create', [
-            'methods' => WP_REST_Server::CREATABLE,
-            'callback' => [SessionController::class, 'create_session'], // CHANGED
-            'permission_callback' => [AuthController::class, 'check_auth_token']
-        ]);
+
         register_rest_route('questionpress/v1', '/session/(?P<id>\d+)', [
             'methods' => WP_REST_Server::READABLE,
-            'callback' => [SessionController::class, 'get_session_results'],
+            'callback' => [SessionController::class, 'get_session_data'],
             'permission_callback' => [AuthController::class, 'check_auth_token'],
             'args' => [
                 'id' => [
@@ -234,7 +220,7 @@ final class Router
         ]);
         register_rest_route('questionpress/v1', '/session/attempt', [
             'methods' => WP_REST_Server::CREATABLE,
-            'callback' => [SessionController::class, 'record_attempt'], // CHANGED
+            'callback' => [SessionController::class, 'record_attempt'],
             'permission_callback' => [AuthController::class, 'check_auth_token']
         ]);
         register_rest_route('questionpress/v1', '/session/end', [
