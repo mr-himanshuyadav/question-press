@@ -298,7 +298,7 @@ class Course_Manager {
             $wpdb->query('COMMIT');
             return ['message' => 'You have been successfully deregistered from the course.'];
 
-        } catch (Exception $e) {
+        } catch (\Exception $e) {
             $wpdb->query('ROLLBACK');
             return new WP_Error('db_error', 'A database error occurred. Could not complete the action.', ['status' => 500]);
         }

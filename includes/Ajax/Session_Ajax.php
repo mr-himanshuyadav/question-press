@@ -6,13 +6,8 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-use QuestionPress\Database\Terms_DB;
-use QuestionPress\Database\Questions_DB;
-use QuestionPress\Utils\User_Access;
 use QuestionPress\Utils\Session_Manager;
 use QuestionPress\Utils\Practice_Manager;
-use WP_Error; // Use statement for WP_Error
-use WP_Query; // Use statement for WP_Query
 
 /**
  * Handles AJAX requests related to practice sessions.
@@ -131,23 +126,8 @@ class Session_Ajax {
         $is_auto_submit = isset($_POST['is_auto_submit']) && $_POST['is_auto_submit'] === 'true';
         $end_reason = $is_auto_submit ? 'autosubmitted_timer' : 'user_submitted';
 
-        global $wpdb;
-        $queries_before = $wpdb->num_queries; // Get query count *before*
-        $start_time = microtime(true);       // Get time *before*
-
         // Call the shared helper function (assuming qp_finalize_and_end_session is globally available for now)
-        $summary_data = Session_Manager::finalize_and_end_session($session_id, 'completed', $end_reason); // <-- CHANGE THIS LINE
-
-        $time_taken = microtime(true) - $start_time;       // Calculate time difference
-        $queries_run = $wpdb->num_queries - $queries_before; // Calculate query difference
-
-        // Log the results to the debug file
-        $log_message = sprintf(
-            "--- SESSION FINALIZE [TEST] --- | Time: %.4f seconds | Queries: %d",
-            $time_taken,
-            $queries_run
-        );
-        error_log($log_message);
+        $summary_data = Session_Manager::finalize_and_end_session($session_id, 'completed', $end_reason);
 
         if (is_null($summary_data)) {
             wp_send_json_success(['status' => 'no_attempts', 'message' => 'Session deleted as no questions were attempted.']);

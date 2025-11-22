@@ -1,8 +1,9 @@
 <?php
+
 namespace QuestionPress\Utils;
 
 // Exit if accessed directly.
-if ( ! defined( 'ABSPATH' ) ) {
+if (! defined('ABSPATH')) {
 	exit;
 }
 
@@ -13,7 +14,8 @@ use QuestionPress\Database\DB;
  *
  * @package QuestionPress\Utils
  */
-class Session_Manager extends DB { // <-- Extend DB to get self::$wpdb
+class Session_Manager extends DB
+{ // <-- Extend DB to get self::$wpdb
 
 	/**
 	 * Helper function to calculate final stats and update a session record.
@@ -26,379 +28,291 @@ class Session_Manager extends DB { // <-- Extend DB to get self::$wpdb
 	 */
 	public static function finalize_and_end_session($session_id, $new_status = 'completed', $end_reason = null)
 	{
+		// 1. Capture Start State
+		$start_time = microtime(true);
+		$start_queries = get_num_queries();
+
+
 		$wpdb = self::$wpdb;
-		$sessions_table = $wpdb->prefix . 'qp_user_sessions';
-		$attempts_table = $wpdb->prefix . 'qp_user_attempts';
-		$pauses_table = $wpdb->prefix . 'qp_session_pauses';
+		$sessions_table     = $wpdb->prefix . 'qp_user_sessions';
+		$attempts_table     = $wpdb->prefix . 'qp_user_attempts';
+		$pauses_table       = $wpdb->prefix . 'qp_session_pauses';
+		$options_table      = $wpdb->prefix . 'qp_options';
+		$entitlements_table = $wpdb->prefix . 'qp_user_entitlements';
+		$progress_table     = $wpdb->prefix . 'qp_user_items_progress';
+		$items_table        = $wpdb->prefix . 'qp_course_items';
+		$user_courses_table = $wpdb->prefix . 'qp_user_courses';
 
-		$session = $wpdb->get_row($wpdb->prepare("SELECT * FROM $sessions_table WHERE session_id = %d", $session_id));
-		if (!$session) {
-			return null;
-		}
+		// Start Transaction
+		$wpdb->query('START TRANSACTION');
 
-		// Check for any answered attempts.
-		$total_answered_attempts = (int) $wpdb->get_var($wpdb->prepare(
-			"SELECT COUNT(*) FROM {$attempts_table} WHERE session_id = %d AND status = 'answered'",
-			$session_id
-		));
+		try {
+			$session = $wpdb->get_row($wpdb->prepare("SELECT * FROM $sessions_table WHERE session_id = %d", $session_id));
+			if (!$session) {
+				$wpdb->query('COMMIT');
+				return null;
+			}
 
-		// If there are no answered attempts, delete the session immediately and stop.
-		if ($total_answered_attempts === 0) {
-			$wpdb->delete($sessions_table, ['session_id' => $session_id]);
-			$wpdb->delete($attempts_table, ['session_id' => $session_id]); // Also clear any skipped/expired attempts
-			$wpdb->delete($pauses_table, ['session_id' => $session_id]);   // Also clear any pause records
-			return null; // Indicate that the session was empty and deleted
-		}
-
-		// If we are here, it means there were attempts, so we proceed to finalize.
-		$settings = json_decode($session->settings_snapshot, true);
-		$marks_correct = $settings['marks_correct'] ?? 0;
-		$marks_incorrect = $settings['marks_incorrect'] ?? 0;
-		$is_mock_test = isset($settings['practice_mode']) && $settings['practice_mode'] === 'mock_test';
-
-		if ($is_mock_test) {
-			
-			// ##################################################################
-			// ### OPTIMIZATION 1: Mock Test Grading (Loop replaced) ###
-			// ##################################################################
-			// Replaces the loop that checked each answer one-by-one.
-			// This single query grades all 'answered' attempts in the mock test at once.
-
-			$options_table = $wpdb->prefix . 'qp_options';
-			
-			// This LEFT JOIN query sets is_correct to 1 if a matching correct option is found,
-			// and 0 otherwise, all in one operation.
-			$wpdb->query($wpdb->prepare(
-				"UPDATE {$attempts_table} a
-				 LEFT JOIN {$options_table} o ON a.question_id = o.question_id
-											 AND a.selected_option_id = o.option_id
-											 AND o.is_correct = 1
-				 SET a.is_correct = CASE WHEN o.option_id IS NOT NULL THEN 1 ELSE 0 END
-				 WHERE a.session_id = %d
-				   AND a.mock_status IN ('answered', 'answered_and_marked_for_review')",
-				$session_id
-			));
-			// ##################################################################
-			// ### END OPTIMIZATION 1 ###
-			// ##################################################################
-
-
-			// ##################################################################
-			// ### OPTIMIZATION 2: Bulk Insert 'not_viewed' (Loop replaced) ###
-			// ##################################################################
-			// Replaces the loop that inserted 'not_viewed' records one-by-one.
-
-			$all_question_ids_in_session = json_decode($session->question_ids_snapshot, true);
-			if (!is_array($all_question_ids_in_session)) $all_question_ids_in_session = []; // Failsafe
-
-			// Get all questions the user interacted with (answered, viewed, marked, etc.)
-			$interacted_question_ids = $wpdb->get_col($wpdb->prepare(
-				"SELECT DISTINCT question_id FROM {$attempts_table} WHERE session_id = %d",
+			// Check for any answered attempts efficiently
+			$has_answers = $wpdb->get_var($wpdb->prepare(
+				"SELECT 1 FROM {$attempts_table} WHERE session_id = %d AND status = 'answered' LIMIT 1",
 				$session_id
 			));
 
-			// Find questions that were never touched
-			$not_viewed_ids = array_diff($all_question_ids_in_session, $interacted_question_ids);
+			if (!$has_answers) {
+				// Delete from all tables in one query
+				$wpdb->query($wpdb->prepare(
+					"DELETE s, a, p FROM $sessions_table s
+                 LEFT JOIN $attempts_table a ON a.session_id = s.session_id
+                 LEFT JOIN $pauses_table p ON p.session_id = s.session_id
+                 WHERE s.session_id = %d",
+					$session_id
+				));
+				$wpdb->query('COMMIT');
+				return null;
+			}
 
-			if (!empty($not_viewed_ids)) {
-				$values_sql = [];
-				$sql_params = [];
-				
-				// Prepare placeholders for each row
-				foreach ($not_viewed_ids as $question_id) {
-					// Ensure question_id is valid before adding
-					if (absint($question_id) > 0) {
-						$values_sql[] = "(%d, %d, %d, 'skipped', 'not_viewed')";
-						$sql_params[] = $session_id;
-						$sql_params[] = $session->user_id;
-						$sql_params[] = $question_id;
+			$settings = json_decode($session->settings_snapshot, true);
+			$marks_correct = $settings['marks_correct'] ?? 0;
+			$marks_incorrect = $settings['marks_incorrect'] ?? 0;
+			$is_mock_test = isset($settings['practice_mode']) && $settings['practice_mode'] === 'mock_test';
+
+			if ($is_mock_test) {
+				// Grade attempts
+				$wpdb->query($wpdb->prepare(
+					"UPDATE {$attempts_table} a
+                 LEFT JOIN {$options_table} o ON a.question_id = o.question_id AND a.selected_option_id = o.option_id AND o.is_correct = 1
+                 SET a.is_correct = CASE WHEN o.option_id IS NOT NULL THEN 1 ELSE 0 END
+                 WHERE a.session_id = %d AND a.mock_status IN ('answered', 'answered_and_marked_for_review')",
+					$session_id
+				));
+
+				// Insert 'not_viewed' records
+				$all_question_ids = json_decode($session->question_ids_snapshot, true);
+				if (!is_array($all_question_ids)) $all_question_ids = [];
+
+				$interacted_ids = $wpdb->get_col($wpdb->prepare("SELECT DISTINCT question_id FROM {$attempts_table} WHERE session_id = %d", $session_id));
+				$not_viewed_ids = array_diff($all_question_ids, $interacted_ids);
+
+				if (!empty($not_viewed_ids)) {
+					$values_sql = [];
+					foreach ($not_viewed_ids as $qid) {
+						if (absint($qid) > 0) {
+							$values_sql[] = $wpdb->prepare("(%d, %d, %d, 'skipped', 'not_viewed')", $session_id, $session->user_id, $qid);
+						}
+					}
+					// Insert in chunks of 200 to prevent query size limits
+					if (!empty($values_sql)) {
+						foreach (array_chunk($values_sql, 200) as $chunk) {
+							$wpdb->query("INSERT INTO {$attempts_table} (session_id, user_id, question_id, status, mock_status) VALUES " . implode(', ', $chunk));
+						}
 					}
 				}
 
-				if (!empty($values_sql)) {
-					// Construct the full bulk insert query
-					$bulk_insert_sql = "INSERT INTO {$attempts_table} (session_id, user_id, question_id, status, mock_status) VALUES " . implode(', ', $values_sql);
-					
-					// Execute the bulk insert
-					$wpdb->query($wpdb->prepare($bulk_insert_sql, $sql_params));
-				}
+				// Update remaining viewed items to skipped
+				$wpdb->query($wpdb->prepare(
+					"UPDATE {$attempts_table} SET status = 'skipped' WHERE session_id = %d AND mock_status IN ('viewed', 'marked_for_review')",
+					$session_id
+				));
 			}
-			// ##################################################################
-			// ### END OPTIMIZATION 2 ###
-			// ##################################################################
 
-
-			// This query is already bulk, so it's efficient.
-			$wpdb->query($wpdb->prepare(
-				"UPDATE {$attempts_table} SET status = 'skipped' WHERE session_id = %d AND mock_status IN ('viewed', 'marked_for_review')",
+			// Calculate Stats (Aggregated Query)
+			$stats = $wpdb->get_row($wpdb->prepare(
+				"SELECT 
+                COUNT(*) as total,
+                COALESCE(SUM(CASE WHEN is_correct = 1 THEN 1 ELSE 0 END), 0) as correct,
+                COALESCE(SUM(CASE WHEN is_correct = 0 THEN 1 ELSE 0 END), 0) as incorrect,
+                COALESCE(SUM(CASE WHEN mock_status = 'not_viewed' THEN 1 ELSE 0 END), 0) as not_viewed,
+                COALESCE(SUM(CASE WHEN status = 'skipped' THEN 1 ELSE 0 END), 0) as skipped
+             FROM {$attempts_table} 
+             WHERE session_id = %d",
 				$session_id
 			));
-		}
 
-		// Recalculate all stats (these are already efficient single queries)
-		$correct_count = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $attempts_table WHERE session_id = %d AND is_correct = 1", $session_id));
-		$incorrect_count = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $attempts_table WHERE session_id = %d AND is_correct = 0", $session_id));
-		$total_attempted = $correct_count + $incorrect_count;
-		$not_viewed_count = 0;
-        $skipped_count = 0;
+			$correct_count = (int)$stats->correct;
+			$incorrect_count = (int)$stats->incorrect;
+			$total_attempted = $correct_count + $incorrect_count;
+			$not_viewed_count = ($is_mock_test) ? (int)$stats->not_viewed : 0;
+			$skipped_count = ($is_mock_test) ? ((int)$stats->skipped - $not_viewed_count) : (int)$stats->skipped;
 
-		if ($is_mock_test) {
-			$not_viewed_count = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $attempts_table WHERE session_id = %d AND mock_status = 'not_viewed'", $session_id));
-            $skipped_count = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $attempts_table WHERE session_id = %d AND mock_status IN ('viewed', 'marked_for_review')", $session_id));
-		} else {
-			$skipped_count = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $attempts_table WHERE session_id = %d AND status = 'skipped'", $session_id));
-		}
+			$final_score = ($correct_count * $marks_correct) + ($incorrect_count * $marks_incorrect);
 
-		$final_score = ($correct_count * $marks_correct) + ($incorrect_count * $marks_incorrect);
-		$end_time_for_calc = ($new_status === 'abandoned' && !empty($session->last_activity) && $session->last_activity !== '0000-00-00 00:00:00') ? $session->last_activity : current_time('mysql');
-		$end_time_gmt = get_gmt_from_date($end_time_for_calc);
-		$start_time_gmt = get_gmt_from_date($session->start_time);
-		$total_session_duration = strtotime($end_time_gmt) - strtotime($start_time_gmt);
-		$total_active_seconds = max(0, $total_session_duration);
+			// Time Calculation
+			$end_time_for_calc = ($new_status === 'abandoned' && !empty($session->last_activity) && $session->last_activity !== '0000-00-00 00:00:00') ? $session->last_activity : current_time('mysql');
+			$end_time_gmt = get_gmt_from_date($end_time_for_calc);
+			$start_time_gmt = get_gmt_from_date($session->start_time);
+			$total_session_duration = strtotime($end_time_gmt) - strtotime($start_time_gmt);
 
-		if (!$is_mock_test) {
-			$pause_records = $wpdb->get_results($wpdb->prepare("SELECT pause_time, resume_time FROM {$pauses_table} WHERE session_id = %d", $session_id));
 			$total_pause_duration = 0;
-			foreach ($pause_records as $pause) {
-				$resume_time_gmt = $pause->resume_time ? get_gmt_from_date($pause->resume_time) : $end_time_gmt;
-				$pause_time_gmt = get_gmt_from_date($pause->pause_time);
-				$total_pause_duration += strtotime($resume_time_gmt) - strtotime($pause_time_gmt);
+			if (!$is_mock_test) {
+				$total_pause_duration = (int) $wpdb->get_var($wpdb->prepare(
+					"SELECT SUM(TIMESTAMPDIFF(SECOND, pause_time, COALESCE(resume_time, %s))) FROM {$pauses_table} WHERE session_id = %d",
+					$end_time_for_calc,
+					$session_id
+				));
 			}
 			$total_active_seconds = max(0, $total_session_duration - $total_pause_duration);
-		}
 
-		// Update the main session table
-		$wpdb->update($sessions_table, [
-			'end_time' => $end_time_for_calc,
-			'status' => $new_status,
-			'end_reason' => $end_reason,
-			'total_active_seconds' => $total_active_seconds,
-			'total_attempted' => $total_attempted,
-			'correct_count' => $correct_count,
-			'incorrect_count' => $incorrect_count,
-			'skipped_count' => $skipped_count,
-			'not_viewed_count' => $not_viewed_count,
-			'marks_obtained' => $final_score
-		], ['session_id' => $session_id]);
+			// Update Session
+			$wpdb->update($sessions_table, [
+				'end_time' => $end_time_for_calc,
+				'status' => $new_status,
+				'end_reason' => $end_reason,
+				'total_active_seconds' => $total_active_seconds,
+				'total_attempted' => $total_attempted,
+				'correct_count' => $correct_count,
+				'incorrect_count' => $incorrect_count,
+				'skipped_count' => $skipped_count,
+				'not_viewed_count' => $not_viewed_count,
+				'marks_obtained' => $final_score
+			], ['session_id' => $session_id]);
 
-		// --- BEGIN: Deduct Attempts for General Mock Tests on Finalization ---
-		if (
-			$is_mock_test &&
-			(!isset($settings['course_id']) || $settings['course_id'] <= 0) &&
-			($new_status === 'completed' || $new_status === 'abandoned') &&
-			$total_attempted > 0
-		) {
-			$user_id = $session->user_id;
-			$entitlements_table = $wpdb->prefix . 'qp_user_entitlements';
-			$attempts_to_deduct = $total_attempted;
+			// Deduct Entitlements
+			if ($is_mock_test && (!isset($settings['course_id']) || $settings['course_id'] <= 0) && ($new_status === 'completed' || $new_status === 'abandoned') && $total_attempted > 0) {
+				$user_id = $session->user_id;
+				$attempts_to_deduct = $total_attempted;
 
-			// Get all active, non-expired entitlements that have attempts (finite or unlimited)
-			$active_entitlements = $wpdb->get_results($wpdb->prepare(
-				"SELECT entitlement_id, remaining_attempts
-				 FROM {$entitlements_table}
-				 WHERE user_id = %d
-				   AND status = 'active'
-				   AND (expiry_date IS NULL OR expiry_date > %s)
-				   AND (remaining_attempts IS NULL OR remaining_attempts > 0)
-				 ORDER BY expiry_date ASC, remaining_attempts ASC", // Prioritize expiring plans first
-				$user_id,
-				current_time('mysql')
-			));
-
-			$has_unlimited = false;
-			$finite_entitlements = [];
-
-			foreach ($active_entitlements as $entitlement) {
-				if (is_null($entitlement->remaining_attempts)) {
-					$has_unlimited = true;
-					break; // User has an unlimited plan, no deduction needed.
-				}
-				$finite_entitlements[] = $entitlement;
-			}
-
-			// ##################################################################
-			// ### OPTIMIZATION 3: Entitlement Deduction (Loop replaced) ###
-			// ##################################################################
-			// Replaces the loop that updated entitlement rows one-by-one.
-
-			if (!$has_unlimited && !empty($finite_entitlements)) {
-				error_log("QP Finalize: User #{$user_id} finalizing mock test. Deducting {$attempts_to_deduct} attempts.");
-				
-				$attempt_update_cases = [];
-				$status_update_cases = [];
-				$attempt_update_ids = [];
-				$status_update_ids = [];
-
-				foreach ($finite_entitlements as $entitlement) {
-					if ($attempts_to_deduct <= 0) {
-						break; // All attempts have been deducted
-					}
-
-					$attempts_on_this_plan = (int)$entitlement->remaining_attempts;
-					$new_attempts = 0;
-					$attempts_deducted_from_this = 0;
-					
-					if ($attempts_on_this_plan >= $attempts_to_deduct) {
-						// This plan can cover the remaining attempts
-						$new_attempts = $attempts_on_this_plan - $attempts_to_deduct;
-						$attempts_deducted_from_this = $attempts_to_deduct;
-						$attempts_to_deduct = 0;
-					} else {
-						// This plan is used up
-						$new_attempts = 0;
-						$attempts_deducted_from_this = $attempts_on_this_plan;
-						$attempts_to_deduct = $attempts_to_deduct - $attempts_on_this_plan;
-					}
-
-					// Store the data for the bulk query
-					$attempt_update_cases[] = $wpdb->prepare("WHEN %d THEN %d", $entitlement->entitlement_id, $new_attempts);
-					$attempt_update_ids[] = $entitlement->entitlement_id;
-
-					if ($new_attempts === 0) {
-						$status_update_cases[] = $wpdb->prepare("WHEN %d THEN 'expired'", $entitlement->entitlement_id);
-						$status_update_ids[] = $entitlement->entitlement_id;
-						error_log("QP Finalize: Entitlement #{$entitlement->entitlement_id} will be marked as expired.");
-					}
-
-					error_log("QP Finalize: Deducted {$attempts_deducted_from_this} attempts from Entitlement #{$entitlement->entitlement_id}. New total: {$new_attempts}.");
-				}
-
-				// Now, execute the bulk updates if there's anything to update
-				if (!empty($attempt_update_ids)) {
-					$ids_placeholder = implode(',', $attempt_update_ids);
-					
-					// 1. Bulk update remaining_attempts
-					$wpdb->query(
-						"UPDATE {$entitlements_table}
-						 SET remaining_attempts = CASE entitlement_id " . implode(' ', $attempt_update_cases) . " END
-						 WHERE entitlement_id IN ({$ids_placeholder})"
-					);
-
-					// 2. Bulk update status for those that hit 0
-					if (!empty($status_update_ids)) {
-						$ids_placeholder_status = implode(',', $status_update_ids);
-						$wpdb->query(
-							"UPDATE {$entitlements_table}
-							 SET status = CASE entitlement_id " . implode(' ', $status_update_cases) . " END
-							 WHERE entitlement_id IN ({$ids_placeholder_status})"
-						);
-					}
-				}
-			} elseif ($has_unlimited) {
-				error_log("QP Finalize: User #{$user_id} has unlimited plan. No attempts deducted for mock test.");
-			}
-			// ##################################################################
-			// ### END OPTIMIZATION 3 ###
-			// ##################################################################
-		}
-		// --- END: Deduct Attempts for General Mock Tests ---
-
-		// --- NEW: Update Course Item Progress if applicable ---
-		if (($new_status === 'completed' || $new_status === 'abandoned') &&
-			isset($settings['course_id']) && isset($settings['item_id'])) {
-
-			$course_id = absint($settings['course_id']);
-			$item_id = absint($settings['item_id']);
-			$user_id = $session->user_id;
-			$progress_table = $wpdb->prefix . 'qp_user_items_progress';
-			$items_table = $wpdb->prefix . 'qp_course_items';
-
-			// Get the current attempt count for this specific item
-			$current_attempt_count = (int) $wpdb->get_var($wpdb->prepare(
-				"SELECT attempt_count FROM {$progress_table} WHERE user_id = %d AND item_id = %d",
-				$user_id,
-				$item_id
-			));
-			$new_attempt_count = $current_attempt_count + 1;
-
-			// Check if the course item still exists before trying to update progress
-			$item_exists = $wpdb->get_var($wpdb->prepare(
-				"SELECT COUNT(*) FROM {$items_table} WHERE item_id = %d AND course_id = %d",
-				$item_id,
-				$course_id
-			));
-
-			if ($item_exists) {
-				// Prepare result data
-				$result_data = json_encode([
-					'score' => $final_score,
-					'correct' => $correct_count,
-					'incorrect' => $incorrect_count,
-					'skipped' => $skipped_count,
-					'not_viewed' => $not_viewed_count,
-					'total_attempted' => $total_attempted,
-					'session_id' => $session_id
-				]);
-
-				$wpdb->query($wpdb->prepare(
-					"REPLACE INTO {$progress_table} (user_id, item_id, course_id, status, completion_date, result_data, last_viewed, attempt_count)
-					 VALUES (%d, %d, %d, %s, %s, %s, %s, %d)",
+				$active_entitlements = $wpdb->get_results($wpdb->prepare(
+					"SELECT entitlement_id, remaining_attempts FROM {$entitlements_table}
+                 WHERE user_id = %d AND status = 'active' AND (expiry_date IS NULL OR expiry_date > %s) AND (remaining_attempts IS NULL OR remaining_attempts > 0)
+                 ORDER BY expiry_date ASC, remaining_attempts ASC",
 					$user_id,
-					$item_id,
-					$course_id,
-					'completed',
-					current_time('mysql'),
-					$result_data,
-					current_time('mysql'),
-					$new_attempt_count
+					current_time('mysql')
 				));
 
-				// Calculate and Update Overall Course Progress
-				$user_courses_table = $wpdb->prefix . 'qp_user_courses';
-
-				$total_items = (int) $wpdb->get_var($wpdb->prepare(
-					"SELECT COUNT(item_id) FROM $items_table WHERE course_id = %d",
-					$course_id
-				));
-
-				$completed_items = (int) $wpdb->get_var($wpdb->prepare(
-					"SELECT COUNT(user_item_id) FROM $progress_table WHERE user_id = %d AND course_id = %d AND status = 'completed'",
-					$user_id,
-					$course_id
-				));
-
-				$progress_percent = ($total_items > 0) ? round(($completed_items / $total_items) * 100) : 0;
-				$new_course_status = ($total_items > 0 && $completed_items >= $total_items) ? 'completed' : 'in_progress';
-
-				$current_completion_date = $wpdb->get_var($wpdb->prepare(
-					"SELECT completion_date FROM {$user_courses_table} WHERE user_id = %d AND course_id = %d",
-					$user_id, $course_id
-				));
-				
-				$completion_date_to_set = $current_completion_date;
-				if ($new_course_status === 'completed' && is_null($current_completion_date)) {
-					$completion_date_to_set = current_time('mysql');
-				} elseif ($new_course_status !== 'completed') {
-					 $completion_date_to_set = null;
+				$has_unlimited = false;
+				$finite_entitlements = [];
+				foreach ($active_entitlements as $entitlement) {
+					if (is_null($entitlement->remaining_attempts)) {
+						$has_unlimited = true;
+						break;
+					}
+					$finite_entitlements[] = $entitlement;
 				}
 
-				// Update the user's overall course record
-				$wpdb->update(
-					$user_courses_table,
-					[
-						'progress_percent' => $progress_percent,
-						'status'           => $new_course_status,
-						'completion_date'  => $completion_date_to_set
-					],
-					[ 'user_id'   => $user_id, 'course_id' => $course_id ],
-					['%d', '%s', '%s'],
-					['%d', '%d']
-				);
+				if (!$has_unlimited && !empty($finite_entitlements)) {
+					$attempt_update_cases = [];
+					$status_update_cases = [];
+					$ids_to_update = [];
 
-			} else {
-				error_log("QP Session Finalize: Skipped progress update for user {$user_id}, course {$course_id}, because item {$item_id} no longer exists.");
+					foreach ($finite_entitlements as $entitlement) {
+						if ($attempts_to_deduct <= 0) break;
+
+						$attempts_on_this_plan = (int)$entitlement->remaining_attempts;
+						if ($attempts_on_this_plan >= $attempts_to_deduct) {
+							$new_attempts = $attempts_on_this_plan - $attempts_to_deduct;
+							$attempts_to_deduct = 0;
+						} else {
+							$new_attempts = 0;
+							$attempts_to_deduct -= $attempts_on_this_plan;
+						}
+
+						$attempt_update_cases[] = $wpdb->prepare("WHEN %d THEN %d", $entitlement->entitlement_id, $new_attempts);
+						if ($new_attempts === 0) {
+							$status_update_cases[] = $wpdb->prepare("WHEN %d THEN 'expired'", $entitlement->entitlement_id);
+						}
+						$ids_to_update[] = $entitlement->entitlement_id;
+					}
+
+					if (!empty($ids_to_update)) {
+						$ids_placeholder = implode(',', $ids_to_update);
+						$wpdb->query("UPDATE {$entitlements_table} SET remaining_attempts = CASE entitlement_id " . implode(' ', $attempt_update_cases) . " END WHERE entitlement_id IN ({$ids_placeholder})");
+						if (!empty($status_update_cases)) {
+							$wpdb->query("UPDATE {$entitlements_table} SET status = CASE entitlement_id " . implode(' ', $status_update_cases) . " END WHERE entitlement_id IN ({$ids_placeholder})");
+						}
+					}
+				}
 			}
-		}
-		// --- END Course Item Progress Update ---
 
-		return [
-			'final_score' => $final_score,
-			'total_attempted' => $total_attempted,
-			'correct_count' => $correct_count,
-			'incorrect_count' => $incorrect_count,
-			'skipped_count' => $skipped_count,
-			'not_viewed_count' => $not_viewed_count,
-			'settings' => $settings,
-		];
+			// Update Course Progress
+			if (($new_status === 'completed' || $new_status === 'abandoned') && isset($settings['course_id'], $settings['item_id'])) {
+				$course_id = absint($settings['course_id']);
+				$item_id = absint($settings['item_id']);
+				$user_id = $session->user_id;
+
+				// Check item exists and insert/update progress in one atomic operation
+				$item_exists = $wpdb->get_var($wpdb->prepare("SELECT item_id FROM {$items_table} WHERE item_id = %d AND course_id = %d", $item_id, $course_id));
+
+				if ($item_exists) {
+					$result_data = json_encode([
+						'score' => $final_score,
+						'correct' => $correct_count,
+						'incorrect' => $incorrect_count,
+						'skipped' => $skipped_count,
+						'not_viewed' => $not_viewed_count,
+						'total_attempted' => $total_attempted,
+						'session_id' => $session_id
+					]);
+
+					$wpdb->query($wpdb->prepare(
+						"INSERT INTO {$progress_table} (user_id, item_id, course_id, status, completion_date, result_data, last_viewed, attempt_count)
+                     VALUES (%d, %d, %d, 'completed', %s, %s, %s, 1)
+                     ON DUPLICATE KEY UPDATE 
+                        status = VALUES(status), completion_date = VALUES(completion_date), result_data = VALUES(result_data), last_viewed = VALUES(last_viewed), attempt_count = attempt_count + 1",
+						$user_id,
+						$item_id,
+						$course_id,
+						current_time('mysql'),
+						$result_data,
+						current_time('mysql')
+					));
+
+					// Update Course Overall Status
+					$course_stats = $wpdb->get_row($wpdb->prepare(
+						"SELECT 
+                        (SELECT COUNT(item_id) FROM {$items_table} WHERE course_id = %d) as total,
+                        (SELECT COUNT(user_item_id) FROM {$progress_table} WHERE user_id = %d AND course_id = %d AND status = 'completed') as completed",
+						$course_id,
+						$user_id,
+						$course_id
+					));
+
+					$total_items = (int)$course_stats->total;
+					$completed_items = (int)$course_stats->completed;
+					$progress_percent = ($total_items > 0) ? round(($completed_items / $total_items) * 100) : 0;
+					$new_course_status = ($total_items > 0 && $completed_items >= $total_items) ? 'completed' : 'in_progress';
+
+					$completion_date_sql = "NULL";
+					if ($new_course_status === 'completed') {
+						$completion_date_sql = "COALESCE(completion_date, '" . current_time('mysql') . "')";
+					}
+
+					$wpdb->query($wpdb->prepare(
+						"UPDATE {$user_courses_table} SET progress_percent = %d, status = %s, completion_date = $completion_date_sql WHERE user_id = %d AND course_id = %d",
+						$progress_percent,
+						$new_course_status,
+						$user_id,
+						$course_id
+					));
+				}
+			}
+
+			$wpdb->query('COMMIT');
+
+			// 3. Capture End State
+			$end_time = microtime(true);
+			$end_queries = get_num_queries();
+
+			// 4. Calculate Results
+			$total_time = number_format($end_time - $start_time, 5);
+			$total_queries = $end_queries - $start_queries;
+
+			error_log("Total time taken:" . $total_time . "seconds");
+			error_log("Database Queries:" . $total_queries);
+
+			return [
+				'final_score' => $final_score,
+				'total_attempted' => $total_attempted,
+				'correct_count' => $correct_count,
+				'incorrect_count' => $incorrect_count,
+				'skipped_count' => $skipped_count,
+				'not_viewed_count' => $not_viewed_count,
+				'settings' => $settings,
+			];
+		} catch (\Exception $e) {
+			$wpdb->query('ROLLBACK');
+			error_log("QP Finalize Error: " . $e->getMessage());
+			return null;
+		}
 	}
 }
