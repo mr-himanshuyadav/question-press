@@ -306,223 +306,48 @@ final class Shortcodes
 		$session_id = absint($_GET['session_id']);
 		$user_id    = get_current_user_id();
 
-		global $wpdb;
-		$sessions_table       = $wpdb->prefix . 'qp_user_sessions';
-		$pauses_table         = $wpdb->prefix . 'qp_session_pauses';
-		$session_data_from_db = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$sessions_table} WHERE session_id = %d", $session_id));
+        // --- 1. Call the new centralized function ---
+        $session_data = \QuestionPress\Utils\Practice_Manager::get_active_session_data($session_id, $user_id);
 
-		if (! $session_data_from_db) {
-			// Session does not exist at all.
-			$options              = get_option('qp_settings');
-			$dashboard_page_url = isset($options['dashboard_page']) ? get_permalink($options['dashboard_page']) : home_url('/');
-			return '<div class="qp-container" style="text-align: center; padding: 40px 20px;">
-			<h3 style="margin-top:0; font-size: 22px;">Session Not Found</h3>
-			<p style="font-size: 16px; color: #555; margin-bottom: 25px;">This session is either invalid, has been completed, or was abandoned and has been removed.</p>
-			<a href="' . esc_url($dashboard_page_url) . '" class="qp-button qp-button-primary" style="text-decoration: none;">View Dashboard</a>
-		</div>';
-		}
+        // --- 2. Handle errors & edge cases ---
+        if (is_wp_error($session_data)) {
+            $error_code = $session_data->get_error_code();
 
-		if ((int) $session_data_from_db->user_id !== $user_id) {
+            if ($error_code === 'session_completed') {
+                // Session is completed, show the summary UI
+                global $wpdb;
+                $sessions_table = $wpdb->prefix . 'qp_user_sessions';
+                $session_data_from_db = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$sessions_table} WHERE session_id = %d", $session_id));
+                
+                $summary_data = [
+                    'final_score'     => $session_data_from_db->marks_obtained,
+                    'total_attempted' => $session_data_from_db->total_attempted,
+                    'correct_count'   => $session_data_from_db->correct_count,
+                    'incorrect_count' => $session_data_from_db->incorrect_count,
+                    'skipped_count'   => $session_data_from_db->skipped_count,
+                ];
+                $session_settings = json_decode($session_data_from_db->settings_snapshot, true);
+                return '<div id="qp-practice-app-wrapper">' . self::render_summary_ui($summary_data, $session_id, $session_settings) . '</div>';
+            
+            } else {
+                // All other errors (not found, permission denied, etc.)
+                $options = get_option('qp_settings');
+                $dashboard_page_url = isset($options['dashboard_page']) ? get_permalink($options['dashboard_page']) : home_url('/');
+                return '<div class="qp-container" style="text-align: center; padding: 40px 20px;">
+                    <h3 style="margin-top:0; font-size: 22px;">Session Not Found</h3>
+                    <p style="font-size: 16px; color: #555; margin-bottom: 25px;">' . esc_html($session_data->get_error_message()) . '</p>
+                    <a href="' . esc_url($dashboard_page_url) . '" class="qp-button qp-button-primary" style="text-decoration: none;">View Dashboard</a>
+                </div>';
+            }
+        }
 
-			// Attention! There is no immediate return back for unauthorised access.
-			// --- NEW: Handle sessions that are paused after the last question is answered ---
-			$question_ids   = json_decode($session_data_from_db->question_ids_snapshot, true);
-			$attempts_table = $wpdb->prefix . 'qp_user_attempts';
-			$attempt_count  = $wpdb->get_var(
-				$wpdb->prepare(
-					"SELECT COUNT(DISTINCT question_id) FROM {$attempts_table} WHERE session_id = %d",
-					$session_id
-				)
-			);
-
-			if ($session_data_from_db->status !== 'completed' && count($question_ids) > 0 && $attempt_count >= count($question_ids)) {
-				// If all questions have been attempted but the session isn't marked as 'completed',
-				// it means the user paused on the very last question. Treat it as completed.
-				$summary_data     = [
-					'final_score'     => $session_data_from_db->marks_obtained,
-					'total_attempted' => $session_data_from_db->total_attempted,
-					'correct_count'   => $session_data_from_db->correct_count,
-					'incorrect_count' => $session_data_from_db->incorrect_count,
-					'skipped_count'   => $session_data_from_db->skipped_count,
-				];
-				$session_settings = json_decode($session_data_from_db->settings_snapshot, true);
-				// Force the summary UI to render, preventing the user from getting stuck.
-				return '<div id="qp-practice-app-wrapper">' . self::render_summary_ui($summary_data, $session_id, $session_settings) . '</div>';
-			}
-			$options              = get_option('qp_settings');
-			$dashboard_page_url = isset($options['dashboard_page']) ? get_permalink($options['dashboard_page']) : home_url('/');
-			$accuracy             = 0;
-			if ($session_data_from_db && $session_data_from_db->total_attempted > 0) {
-				$accuracy = ($session_data_from_db->correct_count / $session_data_from_db->total_attempted) * 100;
-			}
-
-			return '<div class="qp-container" style="text-align: center; padding: 40px 20px;">
-					<h3 style="margin-top:0; font-size: 22px;">Session Not Found</h3>
-					<p style="font-size: 16px; color: #555; margin-bottom: 25px;">This session is either invalid or was abandoned and has been removed.</p>
-					<a href="' . esc_url($dashboard_page_url) . '" class="qp-button qp-button-primary" style="text-decoration: none;">View Dashboard</a>
-				</div>';
-		}
-
-		// --- Handle Resuming a Paused Session ---
-		if ($session_data_from_db->status === 'paused') {
-			// Find the last open pause record for this session
-			$last_pause_id = $wpdb->get_var(
-				$wpdb->prepare(
-					"SELECT pause_id FROM {$pauses_table} WHERE session_id = %d AND resume_time IS NULL ORDER BY pause_time DESC LIMIT 1",
-					$session_id
-				)
-			);
-
-			// If an open pause record is found, update it with the current time
-			if ($last_pause_id) {
-				$wpdb->update(
-					$pauses_table,
-					['resume_time' => current_time('mysql')],
-					['pause_id' => $last_pause_id]
-				);
-			}
-
-			// Set the main session status back to 'active'
-			$wpdb->update(
-				$sessions_table,
-				[
-					'status'        => 'active',
-					'last_activity' => current_time('mysql'),
-				],
-				['session_id' => $session_id]
-			);
-
-			// Re-fetch the session data to reflect the 'active' status
-			$session_data_from_db->status = 'active';
-		}
-
-		// --- Check if the session is already completed ---
-		if ($session_data_from_db->status === 'completed') {
-			$summary_data     = [
-				'final_score'     => $session_data_from_db->marks_obtained,
-				'total_attempted' => $session_data_from_db->total_attempted,
-				'correct_count'   => $session_data_from_db->correct_count,
-				'incorrect_count' => $session_data_from_db->incorrect_count,
-				'skipped_count'   => $session_data_from_db->skipped_count,
-			];
-			$session_settings = json_decode($session_data_from_db->settings_snapshot, true);
-			return '<div id="qp-practice-app-wrapper">' . self::render_summary_ui($summary_data, $session_id, $session_settings) . '</div>';
-		}
-
-		// --- Calculate Initial Elapsed Active Time for the Stopwatch ---
-		$pauses = $wpdb->get_results(
-			$wpdb->prepare(
-				"SELECT pause_time, resume_time FROM {$pauses_table} WHERE session_id = %d",
-				$session_id
-			)
-		);
-
-		$total_paused_duration = 0;
-		foreach ($pauses as $pause) {
-			// Only count completed pause intervals
-			if ($pause->resume_time) {
-				$total_paused_duration += strtotime($pause->resume_time) - strtotime($pause->pause_time);
-			}
-		}
-
-		$initial_elapsed_time = (strtotime(current_time('mysql')) - strtotime($session_data_from_db->start_time)) - $total_paused_duration;
-		$initial_elapsed_time = max(0, $initial_elapsed_time);
-
-		// --- If the session is active, proceed as normal ---
-		$session_settings = json_decode($session_data_from_db->settings_snapshot, true);
-		$session_data     = [
-			'session_id'              => $session_id,
-			'question_ids'            => json_decode($session_data_from_db->question_ids_snapshot, true),
-			'settings'                => $session_settings,
-			'initial_elapsed_seconds' => $initial_elapsed_time,
-		];
-
-		// If it's a mock test, calculate the absolute end time based on start time and duration
-		if (isset($session_settings['practice_mode']) && $session_settings['practice_mode'] === 'mock_test') {
-			// Get the start time (which was saved in WP's timezone) and convert it to a proper UTC timestamp.
-			// This is the correct way to handle timezones in WordPress.
-			$start_time_gmt_string = get_gmt_from_date($session_data_from_db->start_time);
-			$start_time_timestamp  = strtotime($start_time_gmt_string);
-
-			$duration_seconds = $session_settings['timer_seconds'];
-
-			// The end time is passed as a UTC timestamp (seconds since epoch) for JavaScript
-			$session_data['test_end_timestamp'] = $start_time_timestamp + $duration_seconds;
-		}
-
-		$attempt_history = $wpdb->get_results(
-			$wpdb->prepare(
-				"SELECT a.question_id, a.selected_option_id, a.is_correct, a.status, a.mock_status, a.remaining_time, o.option_id as correct_option_id
-		 FROM {$wpdb->prefix}qp_user_attempts a
-		 LEFT JOIN {$wpdb->prefix}qp_options o ON a.question_id = o.question_id AND o.is_correct = 1
-		 WHERE a.session_id = %d",
-				$session_id
-			),
-			OBJECT_K
-		);
-
-		$session_data['attempt_history'] = $attempt_history;
-
-		// --- NEW: Fetch detailed report info, including the type ---
-		$reports_table = $wpdb->prefix . 'qp_question_reports';
-		$terms_table   = $wpdb->prefix . 'qp_terms';
-		$meta_table    = $wpdb->prefix . 'qp_term_meta';
-
-		// Get all individual open reports for the user
-		$all_user_reports = $wpdb->get_results(
-			$wpdb->prepare(
-				"
-			SELECT
-				r.question_id,
-				r.reason_term_ids
-			FROM {$reports_table} r
-			WHERE r.user_id = %d AND r.status = 'open'
-		",
-				$user_id
-			)
-		);
-
-		// Process the raw reports into the structured format JS expects
-		$reported_info = [];
-		foreach ($all_user_reports as $report) {
-			if (! isset($reported_info[$report->question_id])) {
-				$reported_info[$report->question_id] = [
-					'has_report'     => false,
-					'has_suggestion' => false,
-				];
-			}
-
-			// Get the types for the reasons in this specific report
-			$reason_ids = array_filter(explode(',', $report->reason_term_ids));
-			if (! empty($reason_ids)) {
-				$ids_placeholder = implode(',', array_map('absint', $reason_ids));
-				$reason_types    = $wpdb->get_col(
-					"
-			SELECT m.meta_value 
-			FROM {$terms_table} t
-			JOIN {$meta_table} m ON t.term_id = m.term_id AND m.meta_key = 'type'
-			WHERE t.term_id IN ($ids_placeholder)
-		"
-				);
-
-				if (in_array('report', $reason_types)) {
-					$reported_info[$report->question_id]['has_report'] = true;
-				}
-				if (in_array('suggestion', $reason_types)) {
-					$reported_info[$report->question_id]['has_suggestion'] = true;
-				}
-			}
-		}
-
-		$session_data['reported_info'] = $reported_info;
-
+        // --- 3. Pass data to script and render UI (as before) ---
 		self::$session_data_for_script = $session_data;
 
 		$preloader_html = '<div id="qp-preloader"><div class="qp-spinner"></div></div>';
 		return '<div id="qp-practice-app-wrapper">' . self::render_practice_ui() . '</div>';
 	}
 
-	// In public/class-qp-shortcodes.php
 
 	public static function render_summary_ui($summaryData, $session_id = 0, $settings = [])
 	{
@@ -686,463 +511,85 @@ final class Shortcodes
 		return Template_Loader::get_html('practice/practice-ui', 'frontend', $args);
 	}
 
-	public static function render_review_page()
-	{
-		if (! is_user_logged_in()) {
-			return '<p>You must be logged in to review a session. <a href="' . wp_login_url(get_permalink()) . '">Click here to log in.</a></p>';
-		}
+	public static function render_review_page() {
+        if ( ! is_user_logged_in() ) {
+            return '<p>You must be logged in to review a session. <a href="' . wp_login_url( get_permalink() ) . '">Click here to log in.</a></p>';
+        }
 
-		if (! isset($_GET['session_id']) || ! is_numeric($_GET['session_id'])) {
-			return '<div class="qp-container"><p>Error: No valid session ID was provided.</p></div>';
-		}
+        if ( ! isset( $_GET['session_id'] ) || ! is_numeric( $_GET['session_id'] ) ) {
+            return '<div class="qp-container"><p>Error: No valid session ID was provided.</p></div>';
+        }
 
-		$session_id = absint($_GET['session_id']);
-		$user_id    = get_current_user_id();
+        $session_id = absint( $_GET['session_id'] );
+        $user_id    = get_current_user_id();
 
-		global $wpdb;
-		$sessions_table = $wpdb->prefix . 'qp_user_sessions';
-		$session        = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$sessions_table} WHERE session_id = %d AND user_id = %d", $session_id, $user_id));
+        // 1. Get all data from our new reusable function
+        $data = \QuestionPress\Utils\Dashboard_Manager::get_session_review_data( $session_id, $user_id );
 
-		if (! $session) {
-			return '<div class="qp-container"><p>Error: Session not found or you do not have permission to view it.</p></div>';
-		}
+        if ( is_null( $data ) ) {
+            return '<div class="qp-container"><p>Error: Session not found or you do not have permission to view it.</p></div>';
+        }
 
-		$options              = get_option('qp_settings');
-		$dashboard_page_url = isset($options['dashboard_page']) ? get_permalink($options['dashboard_page']) : home_url('/');
+        // 2. Prepare args for the web template
+        $options = get_option( 'qp_settings' );
+        $dashboard_page_url = isset( $options['dashboard_page'] ) ? get_permalink( $options['dashboard_page'] ) : home_url( '/' );
 
-		$settings        = json_decode($session->settings_snapshot, true);
-		// --- NEW: Context-Aware Back Button Logic for Review Page ---
-		$is_course_test = isset($settings['course_id']) && $settings['course_id'] > 0;
-		$back_button_text = esc_html__('Go Back', 'question-press');
-		$back_button_url = "javascript:window.history.back();"; // Default action
-		$back_button_onclick = "window.history.back(); return false;"; // Default onclick
-		$back_button_tag = "button"; // Default to a button
+        // --- Context-Aware Back Button Logic (from your original function) ---
+        $settings = $data['settings'];
+        $is_course_test = isset( $settings['course_id'] ) && $settings['course_id'] > 0;
+        $back_button_text = esc_html__( 'Go Back', 'question-press' );
+        $back_button_url = "javascript:window.history.back();";
+        $back_button_onclick = "window.history.back(); return false;";
+        $back_button_tag = "button";
 
-		if ($is_course_test) {
-			$course_id = absint($settings['course_id']);
-			$course_slug = get_post_field('post_name', $course_id);
-			
-			if ($course_slug) {
-				$dashboard_page_id = isset($options['dashboard_page']) ? absint($options['dashboard_page']) : 0;
-				$base_dashboard_url = $dashboard_page_id ? trailingslashit( get_permalink( $dashboard_page_id ) ) : trailingslashit( home_url( '/' ) );
-				$is_front_page = ($dashboard_page_id > 0 && get_option('show_on_front') == 'page' && get_option('page_on_front') == $dashboard_page_id);
-				$tab_prefix = $is_front_page ? 'tab/' : '';
+        if ( $is_course_test ) {
+            $course_id = absint( $settings['course_id'] );
+            $course_slug = get_post_field( 'post_name', $course_id );
+            
+            if ( $course_slug ) {
+                $dashboard_page_id = isset( $options['dashboard_page'] ) ? absint( $options['dashboard_page'] ) : 0;
+                $base_dashboard_url = $dashboard_page_id ? trailingslashit( get_permalink( $dashboard_page_id ) ) : trailingslashit( home_url( '/' ) );
+                $is_front_page = ( $dashboard_page_id > 0 && get_option( 'show_on_front' ) == 'page' && get_option( 'page_on_front' ) == $dashboard_page_id );
+                $tab_prefix = $is_front_page ? 'tab/' : '';
 
-				$back_button_text = esc_html__('Go to Course', 'question-press');
-				$back_button_url = $base_dashboard_url . $tab_prefix . 'courses/' . $course_slug . '/';
-				$back_button_onclick = ""; // No onclick needed for a link
-				$back_button_tag = "a"; // Change to a link
-			}
-		}
-		// --- END NEW LOGIC ---
-		$marks_correct   = $settings['marks_correct'] ?? 1;
-		$marks_incorrect = $settings['marks_incorrect'] ?? 0;
+                $back_button_text = esc_html__( 'Go to Course', 'question-press' );
+                $back_button_url = $base_dashboard_url . $tab_prefix . 'courses/' . $course_slug . '/';
+                $back_button_onclick = ""; 
+                $back_button_tag = "a";
+            }
+        }
+        // --- End Back Button Logic ---
 
-		$accuracy                = ($session->total_attempted > 0) ? ($session->correct_count / $session->total_attempted) * 100 : 0;
-		$avg_time_per_question = 'N/A';
-		if ($session->total_attempted > 0 && isset($session->total_active_seconds)) {
-			$avg_seconds           = round($session->total_active_seconds / $session->total_attempted);
-			$avg_time_per_question = sprintf('%02d:%02d', floor($avg_seconds / 60), $avg_seconds % 60);
-		}
+        // 3. Pass all data to the template loader
+        $args = [
+            'session' => $data['session'],
+            'accuracy' => $data['accuracy'],
+            'avg_time_per_question' => $data['avg_time_per_question'],
+            'marks_correct' => $data['marks_correct'],
+            'marks_incorrect' => $data['marks_incorrect'],
+            'topics_in_session' => $data['topics_in_session'],
+            'mode' => $data['mode'],
+            'mode_class' => $data['mode_class'],
+            'is_course_item_deleted' => $data['is_course_item_deleted'],
+            'is_section_wise_practice' => $data['is_section_wise_practice'],
+            'reported_qids_for_user' => $data['reported_qids_for_user'],
+            'attempts' => $data['questions'], // <-- KEY CHANGE: $attempts is now $data['questions']
+            'settings' => $data['settings'],
+            'session_id' => $session_id, // Pass this explicitly
+            'options' => $options, // Pass options for admin roles
+            
+            // Back button vars
+            'dashboard_page_url' => $dashboard_page_url,
+            'back_button_text' => $back_button_text,
+            'back_button_url' => $back_button_url,
+            'back_button_tag' => $back_button_tag,
+            'back_button_onclick' => $back_button_onclick,
+        ];
 
-		// Get all unique group IDs from the attempts in this session
-		$group_ids_in_session = $wpdb->get_col(
-			$wpdb->prepare(
-				"
-			SELECT DISTINCT q.group_id
-			FROM {$wpdb->prefix}qp_user_attempts a
-			JOIN {$wpdb->prefix}qp_questions q ON a.question_id = q.question_id
-			WHERE a.session_id = %d
-		",
-				$session_id
-			)
-		);
-
-		$topics_in_session = [];
-		if (! empty($group_ids_in_session)) {
-			$group_ids_placeholder = implode(',', $group_ids_in_session);
-			// Get the names of the terms in the 'subject' taxonomy linked to those groups
-			$topics_in_session = $wpdb->get_col(
-				"
-				SELECT DISTINCT t.name
-				FROM {$wpdb->prefix}qp_terms t
-				JOIN {$wpdb->prefix}qp_term_relationships r ON t.term_id = r.term_id
-				WHERE r.object_id IN ($group_ids_placeholder)
-				  AND r.object_type = 'group'
-				  AND t.taxonomy_id = (SELECT taxonomy_id FROM {$wpdb->prefix}qp_taxonomies WHERE taxonomy_name = 'subject')
-				ORDER BY t.name ASC
-			"
-			);
-		}
-
-		// --- NEW, CORRECTED QUERY TO FETCH ALL ATTEMPT DATA ---
-		$attempts_raw = $wpdb->get_results(
-			$wpdb->prepare(
-				"SELECT 
-				a.attempt_id, a.question_id, a.selected_option_id, a.is_correct, a.mock_status,
-				q.question_text, q.question_number_in_section,
-				g.group_id, g.direction_text
-			FROM {$wpdb->prefix}qp_user_attempts a
-			JOIN {$wpdb->prefix}qp_questions q ON a.question_id = q.question_id
-			LEFT JOIN {$wpdb->prefix}qp_question_groups g ON q.group_id = g.group_id
-			WHERE a.session_id = %d
-			ORDER BY a.attempt_id ASC",
-				$session_id
-			)
-		);
-
-		$attempted_question_ids = wp_list_pluck($attempts_raw, 'question_id');
-		$all_options            = [];
-		if (! empty($attempted_question_ids)) {
-			$ids_placeholder   = implode(',', array_map('absint', $attempted_question_ids));
-			$options_results = $wpdb->get_results("SELECT question_id, option_id, option_text, is_correct FROM {$wpdb->prefix}qp_options WHERE question_id IN ($ids_placeholder)");
-			foreach ($options_results as $option) {
-				$all_options[$option->question_id][] = $option;
-			}
-		}
-
-		// --- NEW: Fetch all lineage data in fewer queries for efficiency ---
-		$lineage_cache = [];
-		if (! function_exists(__NAMESPACE__ . '\get_term_lineage')) {
-			function get_term_lineage($term_id, &$lineage_cache, $wpdb)
-			{
-				if (isset($lineage_cache[$term_id])) {
-					return $lineage_cache[$term_id];
-				}
-				$lineage    = [];
-				$current_id = $term_id;
-				for ($i = 0; $i < 10; $i++) {
-					if (! $current_id) {
-						break;
-					}
-					$term = $wpdb->get_row($wpdb->prepare("SELECT name, parent FROM {$wpdb->prefix}qp_terms WHERE term_id = %d", $current_id));
-					if ($term) {
-						array_unshift($lineage, $term->name);
-						$current_id = $term->parent;
-					} else {
-						break;
-					}
-				}
-				$lineage_cache[$term_id] = $lineage;
-				return $lineage;
-			}
-		}
-
-		$attempts = [];
-		foreach ($attempts_raw as $attempt) {
-			$attempt->options          = $all_options[$attempt->question_id] ?? [];
-			$attempt->selected_answer = '';
-			$attempt->correct_answer  = '';
-			foreach ($attempt->options as $option) {
-				if ($option->is_correct) {
-					$attempt->correct_answer = $option->option_text;
-				}
-				if ($option->option_id == $attempt->selected_option_id) {
-					$attempt->selected_answer = $option->option_text;
-				}
-			}
-
-			// Get group and term relationships
-			$group_id        = $attempt->group_id;
-			$subject_term_id = $wpdb->get_var($wpdb->prepare("SELECT term_id FROM {$wpdb->prefix}qp_term_relationships WHERE object_id = %d AND object_type = 'group' AND term_id IN (SELECT term_id FROM {$wpdb->prefix}qp_terms WHERE taxonomy_id = (SELECT taxonomy_id FROM {$wpdb->prefix}qp_taxonomies WHERE taxonomy_name = 'subject'))", $group_id));
-			$source_term_id  = $wpdb->get_var($wpdb->prepare("SELECT term_id FROM {$wpdb->prefix}qp_term_relationships WHERE object_id = %d AND object_type = 'group' AND term_id IN (SELECT term_id FROM {$wpdb->prefix}qp_terms WHERE taxonomy_id = (SELECT taxonomy_id FROM {$wpdb->prefix}qp_taxonomies WHERE taxonomy_name = 'source'))", $group_id));
-
-			$attempt->subject_lineage = $subject_term_id ? get_term_lineage($subject_term_id, $lineage_cache, $wpdb) : [];
-			$attempt->source_lineage  = $source_term_id ? get_term_lineage($source_term_id, $lineage_cache, $wpdb) : [];
-
-			$attempts[] = $attempt;
-		}
-
-		$is_course_item_deleted = false;
-		if (isset($settings['course_id']) && isset($settings['item_id'])) {
-			$items_table = $wpdb->prefix . 'qp_course_items';
-			$item_exists = $wpdb->get_var(
-				$wpdb->prepare(
-					"SELECT COUNT(*) FROM {$items_table} WHERE item_id = %d AND course_id = %d",
-					absint($settings['item_id']),
-					absint($settings['course_id'])
-				)
-			);
-			if (! $item_exists) {
-				$is_course_item_deleted = true;
-			}
-		}
-
-		ob_start();
-		echo '<div id="qp-practice-app-wrapper">';
-		$is_mock_test               = isset($settings['practice_mode']) && $settings['practice_mode'] === 'mock_test';
-		$is_section_wise_practice = isset($settings['practice_mode']) && $settings['practice_mode'] === 'Section Wise Practice'; // *** THIS IS THE FIX ***
-		$reported_qids_for_user   = $wpdb->get_col(
-			$wpdb->prepare(
-				"SELECT DISTINCT question_id FROM {$wpdb->prefix}qp_question_reports WHERE user_id = %d AND status = 'open'",
-				$user_id
-			)
-		);
-
-		$mode_class = 'mode-normal';
-		$mode       = 'Practice';
-
-		if ($is_mock_test) {
-			// --- MODIFIED: Check if it's a Course Test ---
-			if (isset($settings['course_id']) && $settings['course_id'] > 0 && isset($settings['item_id']) && $settings['item_id'] > 0) {
-				global $wpdb; // <-- Make sure $wpdb is available
-				$course_id = absint($settings['course_id']);
-				$item_id = absint($settings['item_id']);
-				
-				$course_title = get_the_title($course_id); // This is correct (it's a post)
-				
-				// --- NEW: Fetch Item and Section Title ---
-				$items_table = $wpdb->prefix . 'qp_course_items';
-				$sections_table = $wpdb->prefix . 'qp_course_sections';
-				$item_info = $wpdb->get_row($wpdb->prepare(
-					"SELECT i.title AS item_title, s.title AS section_title
-					 FROM {$items_table} i
-					 LEFT JOIN {$sections_table} s ON i.section_id = s.section_id
-					 WHERE i.item_id = %d",
-					$item_id
-				));
-
-				$item_title = $item_info ? $item_info->item_title : null;
-				$section_title = $item_info ? $item_info->section_title : null;
-				// --- END NEW FETCH ---
-
-				$mode = 'Course Test'; // Default fallback
-
-				// Build the new name string
-				$name_parts = [];
-				if ($course_title) $name_parts[] = esc_html($course_title);
-				if ($section_title) $name_parts[] = esc_html($section_title);
-				if ($item_title) $name_parts[] = esc_html($item_title);
-
-				if (!empty($name_parts)) {
-					$mode = implode(' / ', $name_parts);
-				} elseif ($item_title) {
-					// Fallback to just the item title if course is missing
-					$mode = esc_html($item_title);
-				}
-				
-				$mode_class = 'mode-course-test'; // Keep the same class
-			} else {
-				$mode_class = 'mode-mock-test';
-				$mode       = 'Mock Test';
-			}
-		} elseif (isset($settings['practice_mode'])) {
-			switch ($settings['practice_mode']) {
-				case 'revision':
-					$mode_class = 'mode-revision';
-					$mode       = 'Revision Mode';
-					break;
-				case 'Incorrect Que. Practice':
-					$mode_class = 'mode-incorrect';
-					$mode       = 'Incorrect Practice';
-					break;
-				case 'Section Wise Practice':
-					$mode_class = 'mode-section-wise';
-					$mode       = 'Section Wise Practice';
-					break;
-			}
-		} elseif (isset($settings['subject_id']) && $settings['subject_id'] === 'review') {
-			$mode_class = 'mode-review';
-			$mode       = 'Review Mode';
-		}
-	?>
-		<div class="qp-container qp-review-wrapper <?php echo esc_attr($mode_class); ?>">
-			<div style="display: flex; flex-direction: column; justify-content: space-between; margin-bottom: 1.5rem; gap: 1rem;">
-				<div style="display: flex; flex-direction: row; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
-					<h2>Review</h2>
-					<div class="qp-review-header-actions" style="display: flex; align-items: center; gap: 10px;">
-						<?php
-						if ($back_button_tag === 'a') :
-						?>
-							<a href="<?php echo esc_url($back_button_url); ?>" class="qp-button qp-button-secondary">&laquo; <?php echo $back_button_text; ?></a>
-						<?php else : ?>
-							<button type="button" onclick="<?php echo esc_attr($back_button_onclick); ?>" class="qp-button qp-button-secondary">&laquo; <?php echo $back_button_text; ?></button>
-						<?php endif; ?>
-						<a href="<?php echo esc_url($dashboard_page_url); ?>" class="qp-button qp-button-primary">Dashboard</a>
-					</div>
-				</div>
-				<div style="display: flex; align-items: center; gap: 15px;">
-					<span class="qp-session-mode-indicator" style="padding: 5px 12px; font-size: 12px;"><?php echo esc_html($mode); ?></span>
-					<p style="margin: 0; color: #50575e; font-size: 14px;"><strong>Session ID:</strong> <?php echo esc_html($session_id); ?></p>
-					<?php if ($is_course_item_deleted) : ?>
-						<em style="color:#777; font-size:13px;">(Original course item removed)</em>
-					<?php endif; ?>
-				</div>
-			</div>
-
-			<div class="qp-summary-wrapper qp-review-summary">
-				<div class="qp-summary-stats">
-					<?php if (isset($settings['marks_correct'])) : ?>
-						<div class="stat">
-							<div class="value"><?php echo number_format($session->marks_obtained, 2); ?></div>
-							<div class="label">Final Score</div>
-						</div>
-					<?php endif; ?>
-					<div class="stat">
-						<div class="value"><?php echo esc_html($avg_time_per_question); ?></div>
-						<div class="label">Avg. Time / Q</div>
-					</div>
-					<div class="stat accuracy">
-						<div class="value"><?php echo round($accuracy, 2); ?>%</div>
-						<div class="label">Accuracy</div>
-					</div>
-					<div class="stat">
-						<div class="value"><?php echo (int) $session->correct_count; ?></div>
-						<div class="label">Correct<?php if (isset($settings['marks_correct'])) {
-														echo ' (+' . esc_html($marks_correct) . '/Q)';
-													} ?></div>
-					</div>
-					<div class="stat">
-						<div class="value"><?php echo (int) $session->incorrect_count; ?></div>
-						<div class="label">Incorrect<?php if (isset($settings['marks_correct'])) {
-														echo ' (' . esc_html($marks_incorrect) . '/Q)';
-													} ?></div>
-					</div>
-
-					<?php if (isset($settings['practice_mode']) && $settings['practice_mode'] === 'mock_test') : ?>
-						<div class="stat">
-							<div class="value"><?php echo (int) $session->skipped_count; ?></div>
-							<div class="label">Viewed & Unattempted</div>
-						</div>
-						<div class="stat">
-							<div class="value"><?php echo (int) $session->not_viewed_count; ?></div>
-							<div class="label">Not Viewed</div>
-						</div>
-					<?php elseif (! $is_section_wise_practice) : // *** THIS IS THE FIX ***
-					?>
-						<div class="stat">
-							<div class="value"><?php echo (int) $session->skipped_count; ?></div>
-							<div class="label">Skipped</div>
-						</div>
-					<?php endif; ?>
-				</div>
-				<?php if (! empty($topics_in_session)) : ?>
-					<div class="qp-review-topics-list">
-						<strong>Topics in this session:</strong> <?php echo implode(', ', array_map('esc_html', $topics_in_session)); ?>
-					</div>
-				<?php endif; ?>
-			</div>
-
-			<div class="qp-review-questions-list">
-				<?php
-				foreach ($attempts as $index => $attempt) :
-					$is_skipped          = empty($attempt->selected_option_id);
-					$answer_display_text = 'Skipped';
-					$answer_class        = $is_skipped ? 'skipped' : ($attempt->is_correct ? 'correct' : 'incorrect');
-
-					if (isset($settings['practice_mode']) && $settings['practice_mode'] === 'mock_test') {
-						if ($attempt->mock_status === 'not_viewed') {
-							$answer_display_text = 'Not Viewed';
-							$answer_class        = 'not-viewed';
-						} elseif ($attempt->mock_status === 'viewed' || $attempt->mock_status === 'marked_for_review') {
-							$answer_display_text = 'Unattempted';
-							$answer_class        = 'unattempted';
-						}
-					}
-				?>
-					<div class="qp-review-question-item">
-						<div class="qp-review-question-meta" style="display: flex; justify-content: space-between; align-items: flex-start;">
-							<div class="meta-left" style="display: flex; flex-direction: column; gap: 5px;">
-								<span><strong>Question ID: </strong><?php echo esc_html($attempt->question_id); ?><?php
-																													if (! empty($attempt->attempt_id)) {
-																														echo ' | <strong>Attempt ID: </strong>' . esc_html($attempt->attempt_id);
-																													}
-																													?></span>
-								<span>
-									<strong>Topic: </strong>
-									<?php echo esc_html(implode(' / ', $attempt->subject_lineage)); ?>
-								</span>
-							</div>
-							<div class="meta-right">
-								<?php $is_reported = in_array($attempt->question_id, $reported_qids_for_user); ?>
-								<button class="qp-report-button qp-report-btn-review" data-question-id="<?php echo esc_attr($attempt->question_id); ?>" <?php echo $is_reported ? 'disabled' : ''; ?>>
-									<span>&#9888;</span> <?php echo $is_reported ? 'Reported' : 'Report'; ?>
-								</button>
-							</div>
-						</div>
-						<?php
-						$user_can_view_source = ! empty(array_intersect((array) wp_get_current_user()->roles, (array) ($options['show_source_meta_roles'] ?? [])));
-						if ($mode === 'Section Wise Practice' && $user_can_view_source && ! empty($attempt->source_lineage)) :
-							$source_parts = $attempt->source_lineage;
-							if ($attempt->question_number_in_section) {
-								$source_parts[] = 'Q ' . esc_html($attempt->question_number_in_section);
-							}
-						?>
-							<div class="qp-review-source-meta">
-								<?php echo implode(' / ', $source_parts); ?>
-							</div>
-						<?php endif; ?>
-						<?php if (! empty($attempt->direction_text)) : ?>
-							<div class="qp-review-direction-text">
-								<?php echo wp_kses_post(nl2br($attempt->direction_text)); ?>
-							</div>
-						<?php endif; ?>
-
-						<div class="qp-review-question-text">
-							<strong>Q<?php echo $index + 1; ?>:</strong> <?php echo wp_kses_post(nl2br($attempt->question_text)); ?>
-						</div>
-
-						<div class="qp-review-answer-row">
-							<span class="qp-review-label">Your Answer:</span>
-							<span class="qp-review-answer <?php echo $answer_class; ?>">
-								<?php
-								if ($is_skipped) {
-									echo esc_html($answer_display_text);
-								} else {
-									echo esc_html($attempt->selected_answer);
-								}
-								?>
-							</span>
-						</div>
-
-						<?php if ($is_skipped || ! $attempt->is_correct) : ?>
-							<div class="qp-review-answer-row">
-								<span class="qp-review-label">Correct Answer:</span>
-								<span class="qp-review-answer correct">
-									<?php echo esc_html($attempt->correct_answer); ?>
-								</span>
-							</div>
-						<?php endif; ?>
-
-						<div class="qp-review-all-options-wrapper" style="margin-top: 0.5rem; padding-top: 0.5rem;">
-							<details>
-								<summary style="cursor: pointer; font-weight: bold; color: #2271b1; font-size: 13px; list-style-position: inside; outline: none;">
-									Show All Options
-								</summary>
-								<ul style="margin: 10px 0 0 0; padding-left: 20px; list-style-type: upper-alpha;">
-									<?php foreach ($attempt->options as $option) : ?>
-										<li style="padding: 2px 0; <?php echo $option->is_correct ? 'font-weight: bold; color: #2e7d32;' : ''; ?>">
-											<?php echo esc_html($option->option_text); ?>
-											<span style="font-weight: normal; color: #888; font-size: 0.6em; margin-left: 5px;">(ID: <?php echo esc_html($option->option_id); ?>)</span>
-										</li>
-									<?php endforeach; ?>
-								</ul>
-							</details>
-						</div>
-					</div>
-				<?php endforeach; ?>
-			</div>
-		</div>
-		<div id="qp-report-modal-backdrop" style="display: none;">
-			<div id="qp-report-modal-content">
-				<button class="qp-modal-close-btn">&times;</button>
-				<h3>Report an Issue</h3>
-				<p>Please select all issues that apply to the current question.</p>
-				<form id="qp-report-form">
-					<input type="hidden" id="qp-report-question-id-field" value="">
-					<div id="qp-report-options-container"></div>
-					<label for="qp-report-comment-review" style="font-size: .8em;">Comment<span style="color: red;">*</span></label>
-					<textarea id="qp-report-comment-review" name="report_comment" rows="3" placeholder="Add a comment to explain the issue..." required></textarea>
-					<div class="qp-modal-footer">
-						<button type="submit" class="qp-button qp-button-primary">Submit Report</button>
-					</div>
-				</form>
-			</div>
-		</div>
-<?php
-		echo '</div>';
-		return ob_get_clean();
-	}
+        // 4. Load the template
+        // We use 'session/review' for organization
+        return \QuestionPress\Utils\Template_Loader::get_html( 'session/review', 'frontend', $args );
+    }
 
 
 	public static function render_signup_form()

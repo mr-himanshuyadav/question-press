@@ -2798,7 +2798,6 @@ jQuery(document).ready(function ($) {
       var selectedOption = $(this);
       var optionsArea = selectedOption.closest(".qp-options-area");
 
-      // --- START FIX: Prevent duplicate calls ---
       // 1. Do nothing if the UI is locked
       if (optionsArea.hasClass("disabled")) return;
       
@@ -2806,14 +2805,12 @@ jQuery(document).ready(function ($) {
       if (selectedOption.hasClass("selected")) {
         return;
       }
-      // --- END FIX ---
 
       optionsArea.find(".option").removeClass("selected");
       selectedOption.addClass("selected");
       selectedOption.find('input[type="radio"]').prop("checked", true);
 
       if (isMockTest) {
-        // --- START: NEW REFACTORED MOCK TEST LOGIC (SINGLE AJAX CALL) ---
         var questionID = sessionQuestionIDs[currentQuestionIndex];
         var selectedOptionId = selectedOption.find('input[type="radio"]').val();
         $("#qp-clear-response-btn").prop("disabled", false);
@@ -3537,6 +3534,250 @@ jQuery(document).ready(function ($) {
     scrollPaletteToCurrent();
   });
 
+  // --- NEW: Mock Test Specific Event Handlers ---
+  if (
+    typeof qp_session_data !== "undefined" &&
+    qp_session_data.settings.practice_mode === "mock_test"
+  ) {
+    // Handler for the "Clear Response" button
+    wrapper.on("click", "#qp-clear-response-btn", function () {
+      var isOptionSelected = $(".qp-options-area .option.selected").length > 0;
+
+      // If no option is selected, or button is disabled, do nothing.
+      if (!isOptionSelected || $(this).is(':disabled')) {
+        $(this).prop("disabled", true); // Ensure it's disabled
+        return; 
+      }
+      $(this).prop("disabled", true);
+      var questionID = sessionQuestionIDs[currentQuestionIndex];
+      clearMockTestAnswer(questionID);
+
+      // Clear the radio button selection in the UI first
+      $(".qp-options-area .option").removeClass("selected");
+      $('input[name="qp_option"]').prop("checked", false);
+
+      // Determine the correct final status
+      const isMarkedForReview = $("#qp-mock-mark-review-cb").is(":checked");
+      const newStatus = isMarkedForReview ? "marked_for_review" : "viewed";
+
+      // Send a single, definitive update to the backend
+      updateMockStatus(questionID, newStatus);
+    });
+
+    // Handler for the "Mark for Review" checkbox
+    wrapper.on("change", "#qp-mock-mark-review-cb", function () {
+      var questionID = sessionQuestionIDs[currentQuestionIndex];
+      const isChecked = $(this).is(":checked");
+      const currentState =
+        (answeredStates[questionID] &&
+          answeredStates[questionID].mock_status) ||
+        "viewed";
+      let newStatus = "";
+
+      if (isChecked) {
+        // When checking the box
+        newStatus =
+          currentState === "answered" ||
+          currentState === "answered_and_marked_for_review"
+            ? "answered_and_marked_for_review"
+            : "marked_for_review";
+      } else {
+        // When unchecking the box
+        newStatus =
+          currentState === "answered_and_marked_for_review" ||
+          currentState === "answered"
+            ? "answered"
+            : "viewed";
+      }
+
+      // Visually update the button style immediately
+      $(this).closest("label").toggleClass("checked", isChecked);
+
+      updateMockStatus(questionID, newStatus);
+      var reviewButtonLabel = $(this).closest("label").find("span");
+      if (isChecked) {
+        reviewButton - Label.text("Marked for Review");
+      } else {
+        reviewButtonLabel.text("Mark for Review");
+      }
+    });
+  }
+
+  // ADD THIS NEW, REUSABLE FUNCTION anywhere in the main scope of the script
+  function clearMockTestAnswer(questionID) {
+    // Clear the radio button selection in the UI
+    $(".qp-options-area .option").removeClass("selected");
+    $('input[name="qp_option"]').prop("checked", false);
+
+    $("#qp-clear-response-btn").prop("disabled", true);
+
+    // **ADD THIS**: Update the local state to remove the selected option
+    if (answeredStates[questionID]) {
+        answeredStates[questionID].selected_option_id = null; // Clear the selection
+        saveSessionStateToStorage(); // Save the updated state
+    }
+
+    // Determine the correct final status based on the review checkbox
+    const isMarkedForReview = $("#qp-mock-mark-review-cb").is(":checked");
+    const newStatus = isMarkedForReview ? "marked_for_review" : "viewed";
+
+    // Send a single, definitive update to the backend
+    updateMockStatus(questionID, newStatus);
+  }
+
+  // --- NEW: Mock Test Scoring Checkbox UI Toggle ---
+  wrapper.on("change", "#qp_mock_scoring_enabled_cb", function () {
+    var isChecked = $(this).is(":checked");
+    var marksWrapper = $("#qp-mock-marks-group-wrapper");
+    if (isChecked) {
+      marksWrapper.slideDown();
+      marksWrapper.find("input").prop("disabled", false);
+    } else {
+      marksWrapper.slideUp();
+      marksWrapper.find("input").prop("disabled", true);
+    }
+  });
+
+  // --- NEW: Advanced Palette Activation Logic ---
+  if (typeof qp_session_data !== "undefined") {
+    var isMockTest = qp_session_data.settings.practice_mode === "mock_test";
+    var isSectionWise =
+      qp_session_data.settings.practice_mode === "Section Wise Practice";
+    var isPaletteMandatory = isMockTest || isSectionWise;
+
+    // For mandatory modes, add the permanent layout class.
+    if (isPaletteMandatory) {
+      $("body").addClass("palette-mandatory");
+    }
+
+    // Handler for the buttons: This will always toggle the palette.
+    $("#qp-palette-toggle-btn, #qp-palette-close-btn").on("click", function () {
+      $("body").toggleClass("palette-overlay-open");
+    });
+
+    // Handler for the overlay: This closes the palette ONLY if the dark backdrop itself is clicked.
+    $("#qp-palette-overlay").on("click", function (e) {
+      if (e.target === this) {
+        // Check if the click is on the overlay div, not its children.
+        $("body").removeClass("palette-overlay-open");
+      }
+    });
+  }
+
+  // --- NEW: Palette Button Click Handler ---
+  // Use event delegation on the document in case palettes are not visible on load
+  $(document).on("click", ".qp-palette-btn", function () {
+    var newIndex = parseInt($(this).data("question-index"), 10);
+    if (newIndex === currentQuestionIndex) {
+      return; // Do nothing if clicking the current question
+    }
+
+    var direction = newIndex > currentQuestionIndex ? "next" : "prev";
+    var oldIndex = currentQuestionIndex;
+    currentQuestionIndex = newIndex;
+
+    if (isMockTest || isRevisionMode) {
+      $("#qp-question-counter").text(
+        currentQuestionIndex + 1 + "/" + sessionQuestionIDs.length
+      );
+    }
+
+    loadQuestion(sessionQuestionIDs[currentQuestionIndex], direction);
+    updateCurrentPaletteButton(currentQuestionIndex, oldIndex);
+    scrollPaletteToCurrent();
+
+    // **ADD THIS**: After loading, update the Clear Response button state
+    if (isMockTest) {
+        setTimeout(function() {
+            var isOptionSelected = $(".qp-options-area .option.selected").length > 0;
+            $("#qp-clear-response-btn").prop("disabled", !isOptionSelected);
+        }, 350); // Wait for animation to complete
+    }
+  });
+
+  /**
+   * Robustly checks if an element is fully visible within its scrollable container.
+   *
+   * @param {HTMLElement} element - The element to check (the button).
+   * @param {HTMLElement} container - The scrollable container (the palette grid).
+   * @returns {boolean} - True if the element is fully visible, false otherwise.
+   */
+  function isElementFullyVisibleInContainer(element, container) {
+    // Ensure we have the raw DOM elements
+    const elem = $(element)[0];
+    const cont = $(container)[0];
+
+    if (!elem || !cont) return false;
+
+    // 1. Get positions relative to the viewport.
+    const elemRect = elem.getBoundingClientRect();
+    const containerRect = cont.getBoundingClientRect();
+
+    // 2. Define Tolerance (1px) to ignore sub-pixel rendering issues.
+    const tolerance = 1;
+
+    // 3. Calculate the precise top boundary of the visible content area.
+    // cont.clientTop is the width of the top border. We exclude it because
+    // getBoundingClientRect includes the border, but scrolling happens inside it.
+    const containerVisibleTop = containerRect.top + cont.clientTop;
+
+    // 4. Calculate the precise bottom boundary.
+    // cont.clientHeight is the visible inner height (excludes borders/scrollbars).
+    const containerVisibleBottom = containerVisibleTop + cont.clientHeight;
+
+    // 5. Check Visibility against the tolerance.
+
+    // Is the element's top edge below the container's top edge? (Forgiving minor top overflow)
+    const isTopVisible = elemRect.top + tolerance >= containerVisibleTop;
+
+    // Is the element's bottom edge above the container's bottom edge? (Forgiving minor bottom overflow)
+    const isBottomVisible =
+      elemRect.bottom - tolerance <= containerVisibleBottom;
+
+    // The element is only considered visible if both the top and bottom are visible within tolerance.
+    return isTopVisible && isBottomVisible;
+  }
+
+  function scrollPaletteToCurrent() {
+    // Use double requestAnimationFrame (rAF) instead of setTimeout.
+    // This guarantees that the browser has finished all layout calculations
+    // after the .current class moved, ensuring we measure the final positions.
+    setTimeout(function () {
+      requestAnimationFrame(function () {
+        // Select only visible palette grids (handles docked vs. sliding views)
+        var $paletteGrids = $(
+          "#qp-palette-docked .qp-palette-grid:visible, #qp-palette-sliding .qp-palette-grid:visible"
+        );
+
+        $paletteGrids.each(function () {
+          // 'this' is the grid container DOM element.
+          var gridElement = this;
+          // Find the current button within this grid.
+          var $currentBtn = $(gridElement).find(".qp-palette-btn.current");
+
+          if ($currentBtn.length) {
+            var btnElement = $currentBtn[0];
+            // If (and ONLY if) the manual check fails, initiate the scroll.
+            if (!isElementFullyVisibleInContainer(btnElement, gridElement)) {
+              // If (and ONLY if) the check fails, initiate the scroll.
+              btnElement.scrollIntoView({
+                behavior: "smooth",
+                block: "center",
+              });
+            }
+            // If it returns true, we do absolutely nothing, preventing the erratic jumps.
+          }
+        });
+      });
+    }, 200);
+  }
+
+
+
+  //----------------------------
+  //  ROUGH CANVAS HANDLING LOGIC
+  //----------------------------
+
   // --- FINAL: Draggable, Resizable, Touch-Enabled Rough Work Popup with Undo/Redo ---
   var overlay = $("#qp-rough-work-overlay");
   var popup = $("#qp-rough-work-popup");
@@ -3853,242 +4094,4 @@ jQuery(document).ready(function ($) {
       updateVisibleCanvas();
     }
   });
-
-  // --- NEW: Mock Test Specific Event Handlers ---
-  if (
-    typeof qp_session_data !== "undefined" &&
-    qp_session_data.settings.practice_mode === "mock_test"
-  ) {
-    // Handler for the "Clear Response" button
-    wrapper.on("click", "#qp-clear-response-btn", function () {
-      var isOptionSelected = $(".qp-options-area .option.selected").length > 0;
-
-      // If no option is selected, or button is disabled, do nothing.
-      if (!isOptionSelected || $(this).is(':disabled')) {
-        $(this).prop("disabled", true); // Ensure it's disabled
-        return; 
-      }
-      $(this).prop("disabled", true);
-      var questionID = sessionQuestionIDs[currentQuestionIndex];
-      clearMockTestAnswer(questionID);
-
-      // Clear the radio button selection in the UI first
-      $(".qp-options-area .option").removeClass("selected");
-      $('input[name="qp_option"]').prop("checked", false);
-
-      // Determine the correct final status
-      const isMarkedForReview = $("#qp-mock-mark-review-cb").is(":checked");
-      const newStatus = isMarkedForReview ? "marked_for_review" : "viewed";
-
-      // Send a single, definitive update to the backend
-      updateMockStatus(questionID, newStatus);
-    });
-
-    // Handler for the "Mark for Review" checkbox
-    wrapper.on("change", "#qp-mock-mark-review-cb", function () {
-      var questionID = sessionQuestionIDs[currentQuestionIndex];
-      const isChecked = $(this).is(":checked");
-      const currentState =
-        (answeredStates[questionID] &&
-          answeredStates[questionID].mock_status) ||
-        "viewed";
-      let newStatus = "";
-
-      if (isChecked) {
-        // When checking the box
-        newStatus =
-          currentState === "answered" ||
-          currentState === "answered_and_marked_for_review"
-            ? "answered_and_marked_for_review"
-            : "marked_for_review";
-      } else {
-        // When unchecking the box
-        newStatus =
-          currentState === "answered_and_marked_for_review" ||
-          currentState === "answered"
-            ? "answered"
-            : "viewed";
-      }
-
-      // Visually update the button style immediately
-      $(this).closest("label").toggleClass("checked", isChecked);
-
-      updateMockStatus(questionID, newStatus);
-      var reviewButtonLabel = $(this).closest("label").find("span");
-      if (isChecked) {
-        reviewButton - Label.text("Marked for Review");
-      } else {
-        reviewButtonLabel.text("Mark for Review");
-      }
-    });
-  }
-
-  // ADD THIS NEW, REUSABLE FUNCTION anywhere in the main scope of the script
-  function clearMockTestAnswer(questionID) {
-    // Clear the radio button selection in the UI
-    $(".qp-options-area .option").removeClass("selected");
-    $('input[name="qp_option"]').prop("checked", false);
-
-    $("#qp-clear-response-btn").prop("disabled", true);
-
-    // **ADD THIS**: Update the local state to remove the selected option
-    if (answeredStates[questionID]) {
-        answeredStates[questionID].selected_option_id = null; // Clear the selection
-        saveSessionStateToStorage(); // Save the updated state
-    }
-
-    // Determine the correct final status based on the review checkbox
-    const isMarkedForReview = $("#qp-mock-mark-review-cb").is(":checked");
-    const newStatus = isMarkedForReview ? "marked_for_review" : "viewed";
-
-    // Send a single, definitive update to the backend
-    updateMockStatus(questionID, newStatus);
-  }
-
-  // --- NEW: Mock Test Scoring Checkbox UI Toggle ---
-  wrapper.on("change", "#qp_mock_scoring_enabled_cb", function () {
-    var isChecked = $(this).is(":checked");
-    var marksWrapper = $("#qp-mock-marks-group-wrapper");
-    if (isChecked) {
-      marksWrapper.slideDown();
-      marksWrapper.find("input").prop("disabled", false);
-    } else {
-      marksWrapper.slideUp();
-      marksWrapper.find("input").prop("disabled", true);
-    }
-  });
-
-  // --- NEW: Advanced Palette Activation Logic ---
-  if (typeof qp_session_data !== "undefined") {
-    var isMockTest = qp_session_data.settings.practice_mode === "mock_test";
-    var isSectionWise =
-      qp_session_data.settings.practice_mode === "Section Wise Practice";
-    var isPaletteMandatory = isMockTest || isSectionWise;
-
-    // For mandatory modes, add the permanent layout class.
-    if (isPaletteMandatory) {
-      $("body").addClass("palette-mandatory");
-    }
-
-    // Handler for the buttons: This will always toggle the palette.
-    $("#qp-palette-toggle-btn, #qp-palette-close-btn").on("click", function () {
-      $("body").toggleClass("palette-overlay-open");
-    });
-
-    // Handler for the overlay: This closes the palette ONLY if the dark backdrop itself is clicked.
-    $("#qp-palette-overlay").on("click", function (e) {
-      if (e.target === this) {
-        // Check if the click is on the overlay div, not its children.
-        $("body").removeClass("palette-overlay-open");
-      }
-    });
-  }
-
-  // --- NEW: Palette Button Click Handler ---
-  // Use event delegation on the document in case palettes are not visible on load
-  $(document).on("click", ".qp-palette-btn", function () {
-    var newIndex = parseInt($(this).data("question-index"), 10);
-    if (newIndex === currentQuestionIndex) {
-      return; // Do nothing if clicking the current question
-    }
-
-    var direction = newIndex > currentQuestionIndex ? "next" : "prev";
-    var oldIndex = currentQuestionIndex;
-    currentQuestionIndex = newIndex;
-
-    if (isMockTest || isRevisionMode) {
-      $("#qp-question-counter").text(
-        currentQuestionIndex + 1 + "/" + sessionQuestionIDs.length
-      );
-    }
-
-    loadQuestion(sessionQuestionIDs[currentQuestionIndex], direction);
-    updateCurrentPaletteButton(currentQuestionIndex, oldIndex);
-    scrollPaletteToCurrent();
-
-    // **ADD THIS**: After loading, update the Clear Response button state
-    if (isMockTest) {
-        setTimeout(function() {
-            var isOptionSelected = $(".qp-options-area .option.selected").length > 0;
-            $("#qp-clear-response-btn").prop("disabled", !isOptionSelected);
-        }, 350); // Wait for animation to complete
-    }
-  });
-
-  /**
-   * Robustly checks if an element is fully visible within its scrollable container.
-   *
-   * @param {HTMLElement} element - The element to check (the button).
-   * @param {HTMLElement} container - The scrollable container (the palette grid).
-   * @returns {boolean} - True if the element is fully visible, false otherwise.
-   */
-  function isElementFullyVisibleInContainer(element, container) {
-    // Ensure we have the raw DOM elements
-    const elem = $(element)[0];
-    const cont = $(container)[0];
-
-    if (!elem || !cont) return false;
-
-    // 1. Get positions relative to the viewport.
-    const elemRect = elem.getBoundingClientRect();
-    const containerRect = cont.getBoundingClientRect();
-
-    // 2. Define Tolerance (1px) to ignore sub-pixel rendering issues.
-    const tolerance = 1;
-
-    // 3. Calculate the precise top boundary of the visible content area.
-    // cont.clientTop is the width of the top border. We exclude it because
-    // getBoundingClientRect includes the border, but scrolling happens inside it.
-    const containerVisibleTop = containerRect.top + cont.clientTop;
-
-    // 4. Calculate the precise bottom boundary.
-    // cont.clientHeight is the visible inner height (excludes borders/scrollbars).
-    const containerVisibleBottom = containerVisibleTop + cont.clientHeight;
-
-    // 5. Check Visibility against the tolerance.
-
-    // Is the element's top edge below the container's top edge? (Forgiving minor top overflow)
-    const isTopVisible = elemRect.top + tolerance >= containerVisibleTop;
-
-    // Is the element's bottom edge above the container's bottom edge? (Forgiving minor bottom overflow)
-    const isBottomVisible =
-      elemRect.bottom - tolerance <= containerVisibleBottom;
-
-    // The element is only considered visible if both the top and bottom are visible within tolerance.
-    return isTopVisible && isBottomVisible;
-  }
-
-  function scrollPaletteToCurrent() {
-    // Use double requestAnimationFrame (rAF) instead of setTimeout.
-    // This guarantees that the browser has finished all layout calculations
-    // after the .current class moved, ensuring we measure the final positions.
-    setTimeout(function () {
-      requestAnimationFrame(function () {
-        // Select only visible palette grids (handles docked vs. sliding views)
-        var $paletteGrids = $(
-          "#qp-palette-docked .qp-palette-grid:visible, #qp-palette-sliding .qp-palette-grid:visible"
-        );
-
-        $paletteGrids.each(function () {
-          // 'this' is the grid container DOM element.
-          var gridElement = this;
-          // Find the current button within this grid.
-          var $currentBtn = $(gridElement).find(".qp-palette-btn.current");
-
-          if ($currentBtn.length) {
-            var btnElement = $currentBtn[0];
-            // If (and ONLY if) the manual check fails, initiate the scroll.
-            if (!isElementFullyVisibleInContainer(btnElement, gridElement)) {
-              // If (and ONLY if) the check fails, initiate the scroll.
-              btnElement.scrollIntoView({
-                behavior: "smooth",
-                block: "center",
-              });
-            }
-            // If it returns true, we do absolutely nothing, preventing the erratic jumps.
-          }
-        });
-      });
-    }, 200);
-  }
 });

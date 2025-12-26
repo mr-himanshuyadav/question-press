@@ -15,7 +15,9 @@ use QuestionPress\Admin\Views\Logs_Reports_Page;
 use QuestionPress\Admin\Views\Question_Editor_Page;
 use QuestionPress\Admin\Views\Settings_Page;
 use QuestionPress\Admin\Views\Questions_List_Table;
+use QuestionPress\Admin\Views\Api_Settings_Page;
 use QuestionPress\Database\Terms_DB;
+
 
 /**
  * Handles the registration of WordPress admin menu items.
@@ -97,6 +99,15 @@ class Admin_Menu {
 			'manage_options',
 			'qp-settings',
 			[Settings_Page::class, 'render'] // Callback using existing global class
+		);
+
+        add_submenu_page(
+			'question-press',               // Parent slug
+			'REST API',                     // Page title
+			'REST API',                     // Menu title
+			'manage_options',               // Capability
+			'qp-api-settings',              // Menu slug
+			[Api_Settings_Page::class, 'render'] // NEW Callback
 		);
 
 		// Hidden pages (Callbacks still global or existing global classes)

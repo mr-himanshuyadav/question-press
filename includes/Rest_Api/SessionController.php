@@ -1,8 +1,9 @@
 <?php
+
 namespace QuestionPress\Rest_Api; // PSR-4 Namespace
 
 // Exit if accessed directly.
-if ( ! defined( 'ABSPATH' ) ) {
+if (! defined('ABSPATH')) {
     exit;
 }
 
@@ -12,39 +13,46 @@ use WP_REST_Response;
 use QuestionPress\Database\Questions_DB; // Use our DB class
 use QuestionPress\Database\Terms_DB;   // Use our DB class
 use QuestionPress\Utils\Session_Manager;
+use QuestionPress\Utils\Practice_Manager;
 
 /**
  * Handles REST API requests for creating and managing practice sessions.
  */
-class SessionController {
+class SessionController
+{
 
-    /**
-     * Creates a new practice session record.
-     */
-    public static function create_session( \WP_REST_Request $request ) {
-        $settings = $request->get_param('settings'); // App sends a JSON object of settings
+    // In qp-upload/includes/Rest_Api/SessionController.php
 
-        global $wpdb;
-        $wpdb->insert("{$wpdb->prefix}qp_user_sessions", [
-            'user_id' => get_current_user_id(),
-            'status' => 'active', // Set a default status
-            'start_time' => current_time('mysql'),
-            'last_activity' => current_time('mysql'),
-            'settings_snapshot' => wp_json_encode($settings)
-        ]);
-        $session_id = $wpdb->insert_id;
-
-        if ( ! $session_id ) {
-             return new WP_Error('db_error', 'Could not create the session.', ['status' => 500]);
+    public static function get_session_data(\WP_REST_Request $request)
+    {
+        $session_id = $request->get_param('id');
+        if (! $session_id) {
+            return new \WP_Error('invalid_session_id', 'Invalid session ID.', ['status' => 400]);
         }
 
-        return new WP_REST_Response(['session_id' => $session_id], 200);
+        $user_id = get_current_user_id();
+        if (! $user_id) {
+            return new \WP_Error('rest_not_logged_in', 'You must be logged in.', ['status' => 401]);
+        }
+
+        $session_data = Practice_Manager::get_active_session_data($session_id, $user_id);
+
+        if (!$session_data) {
+            return new \WP_Error('session_not_found', 'Session data could not be loaded.', ['status' => 404]);
+        }
+
+        // --- CLEANED UP ---
+        // The $session_data *is* the manifest. 
+        // Just return it directly. The app will handle fetching the question.
+
+        return new \WP_REST_Response(['success' => true, 'data' => $session_data], 200);
     }
 
     /**
      * Records a user's attempt for a single question.
      */
-    public static function record_attempt( \WP_REST_Request $request ) {
+    public static function record_attempt(\WP_REST_Request $request)
+    {
         $session_id = $request->get_param('session_id');
         $question_id = $request->get_param('question_id'); // This is the internal DB ID
         $option_id = $request->get_param('option_id'); // Can be null if skipped
@@ -88,30 +96,259 @@ class SessionController {
     }
 
     /**
-     * Ends a session and calculates the final results.
+     * Starts a new mock test session via the REST API.
+     *
+     * @param \WP_REST_Request $request
+     * @return \WP_REST_Response|\WP_Error
      */
-    public static function end_session( \WP_REST_Request $request ) {
-        $session_id = $request->get_param('session_id');
-        if (!$session_id) {
-            return new WP_Error('rest_invalid_request', 'Session ID is required.', ['status' => 400]);
+    public static function start_mock_test_session(\WP_REST_Request $request)
+    {
+        $params = $request->get_json_params();
+        if (empty($params)) {
+            $params = $request->get_body_params();
         }
 
-        // Call the global helper function (which we also use for AJAX)
-        // This ensures logic is consistent
-        $summary_data = Session_Manager::finalize_and_end_session($session_id, 'completed', 'api_submitted');
+        $result = Practice_Manager::start_mock_test_session($params);
 
-        if (is_null($summary_data)) {
-             // Session was empty and got deleted
-             return new WP_REST_Response(['message' => 'Session ended. No attempts were recorded.', 'final_score' => 0], 200);
+        if (is_wp_error($result)) {
+            return $result;
         }
 
-        return new WP_REST_Response([
-            'message' => 'Session ended successfully.', 
-            'final_score' => $summary_data['final_score'],
-            'correct_count' => $summary_data['correct_count'],
-            'incorrect_count' => $summary_data['incorrect_count'],
-            'skipped_count' => $summary_data['skipped_count'],
-        ], 200);
+        if (is_array($result) && isset($result['redirect_url'])) {
+
+            // 3. Parse the URL to extract the session_id
+            $url = $result['redirect_url'];
+            $query_str = parse_url($url, PHP_URL_QUERY);
+            parse_str($query_str, $query_params);
+
+            if (isset($query_params['session_id'])) {
+                // 4. Add the session_id to the result
+                // The $result array now contains *both* keys.
+                $result['session_id'] = absint($query_params['session_id']);
+            }
+        }
+
+        return new \WP_REST_Response(['success' => true, 'data' => $result], 200);
     }
 
+    /**
+     * Starts a new revision session via the REST API.
+     *
+     * @param \WP_REST_Request $request
+     * @return \WP_REST_Response|\WP_Error
+     */
+    public static function start_revision_session(\WP_REST_Request $request)
+    {
+        $params = $request->get_json_params();
+        if (empty($params)) {
+            $params = $request->get_body_params();
+        }
+
+        $result = Practice_Manager::start_revision_session($params);
+
+
+        if (is_wp_error($result)) {
+            error_log('PRACTICE MANAGER ERROR: ' . $result->get_error_message());
+            return $result;
+        }
+
+        if (is_array($result) && isset($result['redirect_url'])) {
+
+            // 3. Parse the URL to extract the session_id
+            $url = $result['redirect_url'];
+            $query_str = parse_url($url, PHP_URL_QUERY);
+            parse_str($query_str, $query_params);
+
+            if (isset($query_params['session_id'])) {
+                // 4. Add the session_id to the result
+                // The $result array now contains *both* keys.
+                $result['session_id'] = absint($query_params['session_id']);
+            }
+        }
+
+        return new \WP_REST_Response(['success' => true, 'data' => $result], 200);
+    }
+
+    /**
+     * Starts a new practice session via the REST API.
+     * MODIFIED to also return 'session_id' for the app.
+     *
+     * @param \WP_REST_Request $request
+     * @return \WP_REST_Response|\WP_Error
+     */
+    public static function start_practice_session(\WP_REST_Request $request)
+    {
+        $params = $request->get_json_params();
+        if (empty($params)) {
+            $params = $request->get_body_params();
+        }
+
+        // 1. Get the result from the Practice Manager (which contains the redirect_url)
+        $result = Practice_Manager::start_practice_session($params);
+
+        if (is_wp_error($result)) {
+            return $result;
+        }
+
+        // --- THIS IS THE FIX ---
+        // 2. Check if we got the redirect URL
+        if (is_array($result) && isset($result['redirect_url'])) {
+
+            // 3. Parse the URL to extract the session_id
+            $url = $result['redirect_url'];
+            $query_str = parse_url($url, PHP_URL_QUERY);
+            parse_str($query_str, $query_params);
+
+            if (isset($query_params['session_id'])) {
+                // 4. Add the session_id to the result
+                // The $result array now contains *both* keys.
+                $result['session_id'] = absint($query_params['session_id']);
+            }
+        }
+        // --- END FIX ---
+
+        // 5. Return the enhanced result
+        // Web will find: response.data.data.redirect_url
+        // App will find: response.data.data.session_id
+        return new \WP_REST_Response(['success' => true, 'data' => $result], 200);
+    }
+
+    /**
+     * Starts a new incorrect practice session via the REST API.
+     *
+     * @param \WP_REST_Request $request
+     * @return \WP_REST_Response|\WP_Error
+     */
+    public static function start_incorrect_practice_session(\WP_REST_Request $request)
+    {
+        $params = $request->get_json_params();
+        if (empty($params)) {
+            $params = $request->get_body_params();
+        }
+
+        $result = Practice_Manager::start_incorrect_practice_session($params);
+
+        if (is_wp_error($result)) {
+            return $result;
+        }
+
+        if (is_array($result) && isset($result['redirect_url'])) {
+
+            // 3. Parse the URL to extract the session_id
+            $url = $result['redirect_url'];
+            $query_str = parse_url($url, PHP_URL_QUERY);
+            parse_str($query_str, $query_params);
+
+            if (isset($query_params['session_id'])) {
+                // 4. Add the session_id to the result
+                // The $result array now contains *both* keys.
+                $result['session_id'] = absint($query_params['session_id']);
+            }
+        }
+
+        return new \WP_REST_Response(['success' => true, 'data' => $result], 200);
+    }
+
+    /**
+     * Starts a new review session via the REST API.
+     *
+     * @param \WP_REST_Request $request
+     * @return \WP_REST_Response|\WP_Error
+     */
+    public static function start_review_session(\WP_REST_Request $request)
+    {
+        $params = $request->get_json_params();
+        if (empty($params)) {
+            $params = $request->get_body_params();
+        }
+
+        $result = Practice_Manager::start_review_session($params);
+
+        if (is_wp_error($result)) {
+            return $result;
+        }
+
+        // 2. Check if we got the redirect URL
+        if (is_array($result) && isset($result['redirect_url'])) {
+
+            // 3. Parse the URL to extract the session_id
+            $url = $result['redirect_url'];
+            $query_str = parse_url($url, PHP_URL_QUERY);
+            parse_str($query_str, $query_params);
+
+            if (isset($query_params['session_id'])) {
+                // 4. Add the session_id to the result
+                // The $result array now contains *both* keys.
+                $result['session_id'] = absint($query_params['session_id']);
+            }
+        }
+
+        return new \WP_REST_Response(['success' => true, 'data' => $result], 200);
+    }
+
+    /**
+     * Starts a new course test series session via the REST API.
+     *
+     * @param \WP_REST_Request $request
+     * @return \WP_REST_Response|\WP_Error
+     */
+    public static function start_course_test_series(\WP_REST_Request $request)
+    {
+        $params = $request->get_json_params();
+        if (empty($params)) {
+            $params = $request->get_body_params();
+        }
+
+        $result = Practice_Manager::start_course_test_series($params);
+
+        if (is_wp_error($result)) {
+            return $result;
+        }
+
+        if (is_array($result) && isset($result['redirect_url'])) {
+
+            // 3. Parse the URL to extract the session_id
+            $url = $result['redirect_url'];
+            $query_str = parse_url($url, PHP_URL_QUERY);
+            parse_str($query_str, $query_params);
+
+            if (isset($query_params['session_id'])) {
+                // 4. Add the session_id to the result
+                // The $result array now contains *both* keys.
+                $result['session_id'] = absint($query_params['session_id']);
+            }
+        }
+
+        return new \WP_REST_Response(['success' => true, 'data' => $result], 200);
+    }
+
+    /**
+     * Ends a session via the REST API.
+     *
+     * @param \WP_REST_Request $request
+     * @return \WP_REST_Response|\WP_Error
+     */
+    public static function end_session(\WP_REST_Request $request)
+    {
+        $params = $request->get_json_params();
+        if (empty($params)) {
+            $params = $request->get_body_params();
+        }
+
+        $session_id = isset($params['session_id']) ? absint($params['session_id']) : 0;
+        if (!$session_id) {
+            return new \WP_Error('invalid_session_id', 'Invalid session ID.', ['status' => 400]);
+        }
+
+        $is_auto_submit = isset($params['is_auto_submit']) && $params['is_auto_submit'] === true;
+        $end_reason = $is_auto_submit ? 'autosubmitted_timer' : 'user_submitted';
+
+        $summary_data = Session_Manager::finalize_and_end_session($session_id, 'completed', $end_reason);
+
+        if (is_null($summary_data)) {
+            return new \WP_REST_Response(['status' => 'no_attempts', 'message' => 'Session deleted as no questions were attempted.'], 200);
+        } else {
+            return new \WP_REST_Response($summary_data, 200);
+        }
+    }
 } // End class SessionController

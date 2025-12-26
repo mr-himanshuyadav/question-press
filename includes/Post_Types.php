@@ -101,7 +101,7 @@ class Post_Types
             'hierarchical'       => false, // Courses are not hierarchical like pages
             'menu_position'      => 26,    // Position below Question Press (usually 25)
             'menu_icon'          => 'dashicons-welcome-learn-more', // Choose an appropriate icon
-            'supports'           => ['title', 'author'], // Features we want initially
+            'supports'           => ['title', 'author', 'editor'], // Features we want initially
             'show_in_rest'       => false, // Disable Block Editor support for now
         ];
 
