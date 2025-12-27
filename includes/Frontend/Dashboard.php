@@ -368,20 +368,25 @@ final class Dashboard {
         // The template 'dashboard/review.php' doesn't need any changes.
 		return Template_Loader::get_html( 'dashboard/review', 'frontend', $data );
 	}
-
+	
 	/**
 	 * Renders the content specifically for the Progress section by loading a template.
-	 * NOW PUBLIC STATIC and RETURNS HTML.
+	 * * @return string Rendered HTML content.
 	 */
 	public static function render_progress_content() {
 		global $wpdb;
+		$user_id = get_current_user_id();
+
+		// 1. Fetch performance data using the centralized manager (Architect's Path)
+		$progress_data = Dashboard_Manager::get_progress_data( $user_id );
+
+		// 2. Fetch subjects for administrative filters (Preserving existing scope logic)
 		$term_table     = $wpdb->prefix . 'qp_terms';
 		$tax_table      = $wpdb->prefix . 'qp_taxonomies';
 		$subject_tax_id = $wpdb->get_var( $wpdb->prepare( "SELECT taxonomy_id FROM $tax_table WHERE taxonomy_name = %s", 'subject' ) );
 		$subjects       = [];
+
 		if ( $subject_tax_id ) {
-			// --- NEW: Filter subjects based on user scope ---
-			$user_id                   = get_current_user_id();
 			$allowed_subjects_or_all = User_Access::get_allowed_subject_ids( $user_id );
 
 			if ( $allowed_subjects_or_all === 'all' ) {
@@ -402,13 +407,12 @@ final class Dashboard {
 					)
 				);
 			}
-			// If $allowed_subjects_or_all is an empty array, $subjects remains empty, which is correct.
-			// --- END NEW SCOPE FILTER ---
 		}
 
-		// Prepare arguments for the template
+		// 3. Prepare arguments for the template loader
 		$args = [
-			'subjects' => $subjects,
+			'subjects'      => $subjects,
+			'progress_data' => $progress_data, // Wire the aggregated stats to the template
 		];
 
 		// Load and return the template HTML
