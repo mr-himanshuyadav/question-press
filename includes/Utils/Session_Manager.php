@@ -289,6 +289,9 @@ class Session_Manager extends DB
 
 			$wpdb->query('COMMIT');
 
+			// Architect's Path: Aggressively update aggregated user stats after session finalize
+			Analytics_Manager::update_user_stats($session->user_id);
+
 			// 3. Capture End State
 			$end_time = microtime(true);
 			$end_queries = get_num_queries();

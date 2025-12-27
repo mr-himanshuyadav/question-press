@@ -176,6 +176,23 @@ class Dashboard_Manager {
 	}
 
 	/**
+     * Returns all aggregated performance data for the Web Progress tab.
+     * (Single source of truth for dashboard analytics)
+     *
+     * @param int $user_id
+     * @return array
+     */
+    public static function get_progress_data( $user_id ): array {
+        return [
+            'total_time'       => (int) get_user_meta( $user_id, '_qp_total_time_spent', true ),
+            'total_attempts'   => (int) get_user_meta( $user_id, '_qp_total_attempts', true ),
+            'correct_count'    => (int) get_user_meta( $user_id, '_qp_correct_count', true ),
+            'accuracy'         => (float) get_user_meta( $user_id, '_qp_overall_accuracy', true ),
+            'streak'           => (int) get_user_meta( $user_id, '_qp_current_streak', true ),
+        ];
+    }
+
+	/**
      * NEW: Gathers all data for a specific session review (for Web and API).
      *
      * @param int $session_id The ID of the session.

@@ -785,4 +785,24 @@ class DataController
 
         return new \WP_REST_Response( [ 'success' => true, 'data' => $api_response_data ], 200 );
     }
+
+    /**
+     * Callback to get basic user analytics directly from user meta.
+     * Updated to include the current streak.
+     */
+    public static function get_basic_analytics(\WP_REST_Request $request)
+    {
+        $user_id = get_current_user_id();
+
+        $data = [
+            'total_time'       => (int) get_user_meta($user_id, '_qp_total_time_spent', true),
+            'total_attempts'   => (int) get_user_meta($user_id, '_qp_total_attempts', true),
+            'correct_count'    => (int) get_user_meta($user_id, '_qp_correct_count', true),
+            'accuracy'         => (float) get_user_meta($user_id, '_qp_overall_accuracy', true),
+            'streak'           => (int) get_user_meta($user_id, '_qp_current_streak', true), // Added
+            'advanced_enabled' => false,
+        ];
+
+        return new \WP_REST_Response(['success' => true, 'data' => $data], 200);
+    }
 } // End class DataController
