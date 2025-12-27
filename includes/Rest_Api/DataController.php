@@ -494,6 +494,7 @@ class DataController
                 'correct_answer' => $app_correct_answer, // This is derived from $q_obj->options
                 'is_correct' => $q_obj->is_correct,
                 'is_marked_for_review' => $q_obj->is_marked_for_review,
+                'reported_info' => $q_obj->reported_info ?? ['has_report' => false, 'has_suggestion' => false],
             ];
         }
 
