@@ -14,7 +14,7 @@ if (! defined('ABSPATH')) {
 }
 ?>
 <style>
-    /* Styles specific to this page (can be moved to a CSS file later) */
+    /* Styles specific to this page */
     .qp-backups-table th.column-date {
         width: 18%;
     }
@@ -44,34 +44,34 @@ if (! defined('ABSPATH')) {
         display: table-cell;
         vertical-align: middle;
     }
+
+    /* Styles for the Restore Mode selection in the upload form */
+    .qp-restore-mode-group {
+        background: #fff;
+        border: 1px solid #ccd0d4;
+        padding: 15px;
+        border-radius: 4px;
+        margin-bottom: 15px;
+        max-width: 600px;
+    }
+    .qp-restore-mode-option {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        margin-bottom: 15px;
+        cursor: pointer;
+    }
+    .qp-restore-mode-option:last-child {
+        margin-bottom: 0;
+    }
+    .qp-restore-mode-option input[type="radio"] {
+        margin-top: 3px;
+    }
 </style>
 
 <div id="col-container" class="wp-clearfix">
     <div id="col-left">
         <div class="col-wrap">
-
-
-
-        <!-- Remove this after migration -->
-            <h1>QuestionPress Tools</h1>
-
-            <nav class="nav-tab-wrapper wp-clearfix" aria-label="Secondary menu">
-            </nav>
-
-            <div id="qp-migration-tool" class="notice notice-warning" style="padding: 1rem; border-left-width: 4px; margin-top: 20px;">
-                <h3 style="margin-top: 0;">Update Database Structure</h3>
-                <p>Run this one-time script to update all your existing questions and groups with the new, faster database structure (denormalized term IDs). This is required for your old data to work with the latest filtering and query improvements.</p>
-                <p><strong>Warning:</strong> This process may take several minutes if you have many thousands of questions. Please do not close this tab until you see a "Complete" message.</p>
-                <?php
-                $migration_url = wp_nonce_url(
-                    admin_url('admin.php?page=qp-tools&tab=backup&qp_run_migration=true&batch=1'),
-                    'qp_term_migration_nonce'
-                );
-                ?>
-                <a href="<?php echo esc_url($migration_url); ?>" class="button button-primary">Run Data Migration Script</a>
-            </div>
-
-        <!-- End remove -->
 
             <?php // --- Create New Backup --- 
             ?>
@@ -89,18 +89,42 @@ if (! defined('ABSPATH')) {
             ?>
             <div class="form-wrap">
                 <h2><?php esc_html_e('Restore from Backup', 'question-press'); ?></h2>
-                <p><?php esc_html_e('Upload a .zip backup file', 'question-press'); ?></p>
-                <p> <strong><?php esc_html_e('Warning:', 'question-press'); ?></strong> <?php esc_html_e('This action will overwrite existing data.', 'question-press'); ?></p>
+                <p><?php esc_html_e('Upload a .zip backup file to restore data.', 'question-press'); ?></p>
                 <p><strong><?php esc_html_e('Filename Format: qp(-auto)-backup-YYYY-MM-DD_HH-MM-SS_IST.zip', 'question-press'); ?></strong></p>
+                
                 <form id="qp-restore-form" method="post" enctype="multipart/form-data" action="<?php echo esc_url(admin_url('admin.php?page=qp-tools&tab=backup_restore')); ?>">
                     <input type="hidden" name="action" value="qp_restore_from_upload">
                     <?php wp_nonce_field('qp_restore_nonce_action', 'qp_restore_nonce_field'); ?>
+                    
                     <div class="form-field">
-                        <label for="backup_zip_file"></label>
+                        <label for="backup_zip_file" style="margin-bottom: 10px; display:block;"><strong><?php esc_html_e('Select Backup File', 'question-press'); ?></strong></label>
                         <input type="file" name="backup_zip_file" id="backup_zip_file" accept=".zip,application/zip" required>
                     </div>
+
+                    <div class="form-field">
+                        <p style="margin-top: 20px; margin-bottom: 10px;"><strong><?php esc_html_e('Select Restore Mode:', 'question-press'); ?></strong></p>
+                        
+                        <div class="qp-restore-mode-group">
+                            <label class="qp-restore-mode-option">
+                                <input type="radio" name="restore_mode" value="merge" checked>
+                                <div>
+                                    <strong><?php esc_html_e('Merge (Recommended)', 'question-press'); ?></strong><br>
+                                    <span class="description" style="margin:0;"><?php esc_html_e('Adds new data from the backup. Existing users, questions, and progress are preserved. Useful for combining data.', 'question-press'); ?></span>
+                                </div>
+                            </label>
+                            
+                            <label class="qp-restore-mode-option">
+                                <input type="radio" name="restore_mode" value="overwrite">
+                                <div>
+                                    <strong style="color: #d63638;"><?php esc_html_e('Overwrite (Destructive)', 'question-press'); ?></strong><br>
+                                    <span class="description" style="margin:0;"><?php esc_html_e('WARNING: Deletes ALL current Question Press data (questions, users, history) and replaces it exactly with this backup.', 'question-press'); ?></span>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
                     <p class="submit">
-                        <input type="submit" class="button button-danger" value="<?php esc_attr_e('Upload and Restore', 'question-press'); ?>">
+                        <input type="submit" class="button button-danger" value="<?php esc_attr_e('Upload and Restore', 'question-press'); ?>" onclick="return confirm('<?php esc_attr_e('Are you sure you want to proceed with the selected restore mode?', 'question-press'); ?>');">
                     </p>
                 </form>
             </div>

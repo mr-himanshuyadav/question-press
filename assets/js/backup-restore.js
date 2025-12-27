@@ -112,22 +112,52 @@ jQuery(document).ready(function($) {
         var filename = $row.data('filename');
 
         Swal.fire({
-            title: 'ARE YOU SURE?',
-            html: `This will <strong>permanently delete</strong> all current Question Press data and replace it with the data from:<br><strong>${filename}</strong>.<br><br>This action cannot be undone. It is highly recommended to create a new backup before restoring.`,
+            title: 'Restore Data',
+            html: `
+                <div style="text-align: left;">
+                    <p style="margin-bottom: 15px;">Restoring from: <strong>${filename}</strong></p>
+                    
+                    <div style="background: #f8f9fa; padding: 15px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 15px;">
+                        <p style="margin-top: 0; margin-bottom: 10px; font-weight: bold;">Select Restore Mode:</p>
+                        
+                        <label style="display: flex; gap: 10px; align-items: flex-start; margin-bottom: 12px; cursor: pointer;">
+                            <input type="radio" name="swal_restore_mode" value="merge" checked style="margin-top: 3px;">
+                            <div>
+                                <strong>Merge (Recommended)</strong><br>
+                                <span style="font-size: 0.9em; color: #666;">Adds new data. Existing users, questions, and progress are preserved. Useful for combining backups.</span>
+                            </div>
+                        </label>
+                        
+                        <label style="display: flex; gap: 10px; align-items: flex-start; cursor: pointer;">
+                            <input type="radio" name="swal_restore_mode" value="overwrite" style="margin-top: 3px;">
+                            <div>
+                                <strong style="color: #d63638;">Overwrite (Destructive)</strong><br>
+                                <span style="font-size: 0.9em; color: #666;">Deletes ALL current Question Press data and replaces it with this backup. Use with caution.</span>
+                            </div>
+                        </label>
+                    </div>
+
+                    <p style="font-size: 0.9em; color: #d63638;"><strong>Note:</strong> It is highly recommended to create a new backup before restoring.</p>
+                </div>
+            `,
             icon: 'warning',
             showCancelButton: true,
-            confirmButtonColor: '#d33',
+            confirmButtonColor: '#d33', // Keep red for caution
             cancelButtonColor: '#3085d6',
-            confirmButtonText: 'Yes, Overwrite and Restore!',
+            confirmButtonText: 'Proceed with Restore',
             showLoaderOnConfirm: true,
             preConfirm: () => {
+                // Get the selected mode from the radio buttons inside the modal
+                var selectedMode = Swal.getPopup().querySelector('input[name="swal_restore_mode"]:checked').value;
+
                 return $.ajax({
                     url: ajaxurl,
                     type: 'POST',
                     data: {
                         action: 'qp_restore_backup',
                         nonce: qp_backup_restore_data.nonce,
-                        filename: filename
+                        filename: filename,
+                        mode: selectedMode // Pass the selected mode
                     }
                 }).fail(function(jqXHR, textStatus, errorThrown) {
                     Swal.showValidationMessage(`Request failed: ${errorThrown}`);
@@ -139,14 +169,12 @@ jQuery(document).ready(function($) {
                 if (result.value.success) {
                     const stats = result.value.data.stats;
                     let statsHtml = '<div style="text-align: left; display: inline-block; margin-top: 1rem;">';
-                    statsHtml += `<p><strong>Questions:</strong> ${stats.questions}</p>`;
-                    statsHtml += `<p><strong>Options:</strong> ${stats.options}</p>`;
-                    statsHtml += `<p><strong>Sessions:</strong> ${stats.sessions}</p>`;
-                    statsHtml += `<p><strong>Attempts:</strong> ${stats.attempts}</p>`;
-                    statsHtml += `<p><strong>Reports:</strong> ${stats.reports}</p>`;
-                    if (stats.duplicates_handled > 0) {
-                        statsHtml += `<p><strong>Duplicate Attempts Handled:</strong> ${stats.duplicates_handled}</p>`;
-                    }
+                    // Show relevant stats
+                    if (stats.tables_cleared > 0) statsHtml += `<p><strong>Tables Cleared:</strong> ${stats.tables_cleared}</p>`;
+                    statsHtml += `<p><strong>Users Processed:</strong> ${stats.users_mapped + stats.users_created} (Created: ${stats.users_created})</p>`;
+                    statsHtml += `<p><strong>Questions Restored:</strong> ${stats.questions}</p>`;
+                    statsHtml += `<p><strong>Posts/Plans Restored:</strong> ${stats.cpts_restored}</p>`;
+                    statsHtml += `<p><strong>Media Files Restored:</strong> ${stats.media_restored}</p>`;
                     statsHtml += '</div>';
 
                     Swal.fire({

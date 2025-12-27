@@ -56,8 +56,43 @@ class Backup_Restore_Page {
 			} elseif ($_POST['action'] === 'qp_restore_from_upload' && check_admin_referer('qp_restore_nonce_action', 'qp_restore_nonce_field')) {
 				// Handle file upload restore
 				if (isset($_FILES['backup_zip_file']) && $_FILES['backup_zip_file']['error'] === UPLOAD_ERR_OK) {
-					// This logic should be expanded, but for now, we'll just acknowledge it
-					Admin_Utils::set_message('Restore from uploaded file was received.', 'info');
+					
+                    $file = $_FILES['backup_zip_file'];
+                    $filename = sanitize_file_name($file['name']);
+                    $file_type = wp_check_filetype($filename);
+                    
+                    // Capture the selected mode
+                    $mode = isset($_POST['restore_mode']) ? sanitize_key($_POST['restore_mode']) : 'merge';
+                    if (!in_array($mode, ['merge', 'overwrite'])) $mode = 'merge';
+
+                    if ($file_type['ext'] === 'zip') {
+                        // Move file to the correct backup directory so Backup_Manager can find it
+                        $upload_dir = wp_upload_dir();
+                        $backup_dir = trailingslashit($upload_dir['basedir']) . 'qp-backups';
+                        if (!file_exists($backup_dir)) wp_mkdir_p($backup_dir);
+                        
+                        $target_path = trailingslashit($backup_dir) . $filename;
+                        
+                        if (move_uploaded_file($file['tmp_name'], $target_path)) {
+                            // Perform the restore
+                            $result = Backup_Manager::perform_restore($filename, $mode);
+                            
+                            if ($result['success']) {
+                                $msg = 'Restore complete successfully.';
+                                if (isset($result['stats'])) {
+                                    $msg .= sprintf(' (Questions: %d, Users Processed: %d)', $result['stats']['questions'], ($result['stats']['users_mapped'] + $result['stats']['users_created']));
+                                }
+                                Admin_Utils::set_message($msg, 'success'); // Green message
+                            } else {
+                                Admin_Utils::set_message('Restore failed: ' . $result['message'], 'error');
+                            }
+                        } else {
+                            Admin_Utils::set_message('Failed to move uploaded file to backup directory.', 'error');
+                        }
+                    } else {
+                        Admin_Utils::set_message('Invalid file type. Please upload a .zip file.', 'error');
+                    }
+
 				} else {
 					Admin_Utils::set_message('File upload error or no file selected.', 'error');
 				}
