@@ -788,21 +788,36 @@ class DataController
 
     /**
      * Callback to get basic user analytics directly from user meta.
-     * Updated to include the current streak.
+     * Implementation of Streak Decay Logic (Step 1.4).
      */
-    public static function get_basic_analytics(\WP_REST_Request $request)
+    public static function get_basic_analytics(WP_REST_Request $request)
     {
         $user_id = get_current_user_id();
 
+        // 1. Streak Decay Logic
+        $today = current_time('Y-m-d');
+        $yesterday = date('Y-m-d', strtotime('-1 day', strtotime($today)));
+        
+        $last_act_date  = get_user_meta($user_id, '_qp_last_activity_date', true);
+        $current_streak = (int) get_user_meta($user_id, '_qp_current_streak', true);
+
+        // If activity was not today AND not yesterday, the streak has decayed
+        if (!empty($last_act_date) && $last_act_date !== $today && $last_act_date !== $yesterday) {
+            $current_streak = 0;
+            update_user_meta($user_id, '_qp_current_streak', 0);
+            // Note: We keep _qp_last_activity_date as is; it will be updated on the next session finalize.
+        }
+
+        // 2. Assemble pre-calculated stats (Architect's Path)
         $data = [
             'total_time'       => (int) get_user_meta($user_id, '_qp_total_time_spent', true),
             'total_attempts'   => (int) get_user_meta($user_id, '_qp_total_attempts', true),
             'correct_count'    => (int) get_user_meta($user_id, '_qp_correct_count', true),
             'accuracy'         => (float) get_user_meta($user_id, '_qp_overall_accuracy', true),
-            'streak'           => (int) get_user_meta($user_id, '_qp_current_streak', true), // Added
-            'advanced_enabled' => false,
+            'streak'           => $current_streak,
+            'advanced_enabled' => false, // Hook for Analytics Addon
         ];
 
-        return new \WP_REST_Response(['success' => true, 'data' => $data], 200);
+        return new WP_REST_Response(['success' => true, 'data' => $data], 200);
     }
 } // End class DataController
