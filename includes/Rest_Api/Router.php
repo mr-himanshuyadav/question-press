@@ -150,6 +150,23 @@ final class Router
             'permission_callback' => [AuthController::class, 'check_auth_token']
         ]);
 
+        // --- Profile Management Endpoints (Protected) ---
+        register_rest_route('questionpress/v1', '/profile/update', [
+            'methods' => WP_REST_Server::CREATABLE,
+            'callback' => [ProfileController::class, 'update_profile'],
+            'permission_callback' => [AuthController::class, 'check_auth_token']
+        ]);
+        register_rest_route('questionpress/v1', '/profile/password', [
+            'methods' => WP_REST_Server::CREATABLE,
+            'callback' => [ProfileController::class, 'change_password'],
+            'permission_callback' => [AuthController::class, 'check_auth_token']
+        ]);
+        register_rest_route('questionpress/v1', '/profile/avatar', [
+            'methods' => WP_REST_Server::CREATABLE,
+            'callback' => [ProfileController::class, 'upload_avatar'],
+            'permission_callback' => [AuthController::class, 'check_auth_token']
+        ]);
+
         register_rest_route( 'questionpress/v1', '/session/(?P<id>[\d]+)/review', [
             'methods'  => WP_REST_Server::READABLE,
             'callback' => [DataController::class, 'get_session_review_details'],
