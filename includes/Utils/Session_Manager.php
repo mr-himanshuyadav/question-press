@@ -318,4 +318,36 @@ class Session_Manager extends DB
 			return null;
 		}
 	}
+
+
+	/**
+     * Deletes a session and its associated attempts after verifying ownership.
+     * Centralized logic for AJAX and REST API.
+     *
+     * @param int $session_id The ID of the session to delete.
+     * @param int $user_id    The ID of the user attempting the deletion.
+     * @return bool True on success, false if session not found or ownership fails.
+     */
+    public static function delete_session($session_id, $user_id)
+    {
+        $wpdb = self::$wpdb;
+        $sessions_table = $wpdb->prefix . 'qp_user_sessions';
+        $attempts_table = $wpdb->prefix . 'qp_user_attempts';
+
+        // Security check: ensure the session belongs to the current user
+        $session_owner = $wpdb->get_var($wpdb->prepare(
+            "SELECT user_id FROM $sessions_table WHERE session_id = %d",
+            $session_id
+        ));
+
+        if (!$session_owner || (int)$session_owner !== (int)$user_id) {
+            return false;
+        }
+
+        // Delete the session and its related attempts
+        $wpdb->delete($attempts_table, ['session_id' => $session_id], ['%d']);
+        $wpdb->delete($sessions_table, ['session_id' => $session_id], ['%d']);
+
+        return true;
+    }
 }

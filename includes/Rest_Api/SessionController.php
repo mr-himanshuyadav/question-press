@@ -351,4 +351,24 @@ class SessionController
             return new \WP_REST_Response($summary_data, 200);
         }
     }
+
+    /**
+     * Deletes a session via the REST API.
+     */
+    public static function delete_session($request) {
+        $session_id = absint($request->get_param('id'));
+        $user_id = get_current_user_id();
+
+        if (!$session_id) {
+            return new WP_Error('rest_invalid_id', 'Invalid session ID.', ['status' => 400]);
+        }
+
+        $success = Session_Manager::delete_session($session_id, $user_id);
+
+        if (!$success) {
+            return new WP_Error('rest_forbidden', 'You do not have permission to delete this session.', ['status' => 403]);
+        }
+
+        return new WP_REST_Response(['success' => true, 'message' => 'Session deleted.'], 200);
+    }
 } // End class SessionController

@@ -164,38 +164,31 @@ class Session_Ajax {
     }
 
     /**
-     * AJAX Handler to delete a session from user history
+     * AJAX handler to delete a session from user history.
      */
     public static function delete_user_session() {
         check_ajax_referer('qp_practice_nonce', 'nonce');
+        
         $options = get_option('qp_settings');
         $user = wp_get_current_user();
         $user_roles = (array) $user->roles;
         $allowed_roles = isset($options['can_delete_history_roles']) ? $options['can_delete_history_roles'] : ['administrator'];
+        
         if (empty(array_intersect($user_roles, $allowed_roles))) {
             wp_send_json_error(['message' => 'You do not have permission to perform this action.']);
         }
-        $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
 
+        $session_id = isset($_POST['session_id']) ? absint($_POST['session_id']) : 0;
         if (!$session_id) {
             wp_send_json_error(['message' => 'Invalid session ID.']);
         }
 
-        global $wpdb;
         $user_id = get_current_user_id();
-        $sessions_table = $wpdb->prefix . 'qp_user_sessions';
-        $attempts_table = $wpdb->prefix . 'qp_user_attempts';
+        $success = Session_Manager::delete_session($session_id, $user_id);
 
-        // Security check: ensure the session belongs to the current user
-        $session_owner = $wpdb->get_var($wpdb->prepare("SELECT user_id FROM $sessions_table WHERE session_id = %d", $session_id));
-
-        if ((int)$session_owner !== $user_id) {
+        if (!$success) {
             wp_send_json_error(['message' => 'You do not have permission to delete this session.']);
         }
-
-        // Delete the session and its related attempts
-        $wpdb->delete($attempts_table, ['session_id' => $session_id], ['%d']);
-        $wpdb->delete($sessions_table, ['session_id' => $session_id], ['%d']);
 
         wp_send_json_success(['message' => 'Session deleted.']);
     }

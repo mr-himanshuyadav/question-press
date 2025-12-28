@@ -523,30 +523,19 @@ class DataController
      * Callback to get the data for the dashboard history tab.
      * (REVISED to match app's 'Session' interface)
      */
-    public static function get_dashboard_history( \WP_REST_Request $request ) {
+    public static function get_dashboard_history(\WP_REST_Request $request) {
         $user_id = get_current_user_id();
-        
-        // 1. Call the centralized data function
-        $data = Dashboard_Manager::get_history_data( $user_id );
+        $data = Dashboard_Manager::get_history_data($user_id);
 
-        if ( is_wp_error( $data ) ) {
+        if (is_wp_error($data)) {
             return $data;
         }
 
-        // 2. Process Completed Sessions for the app
         $processed_completed = [];
-        foreach ( $data['completed_sessions'] as $session ) {
-            $settings = json_decode( $session->settings_snapshot, true );
-            $is_scored = isset( $settings['marks_correct'] );
-
-            $mode_details = Dashboard_Manager::qp_get_history_mode_details( $session, $settings );
+        foreach ($data['completed_sessions'] as $session) {
+            $settings = json_decode($session->settings_snapshot, true);
+            $mode_details = Dashboard_Manager::qp_get_history_mode_details($session, $settings);
             
-            if ( isset( $data['accuracy_stats'][ $session->session_id ] ) && ! $is_scored ) {
-                $result_display = $data['accuracy_stats'][ $session->session_id ];
-            } else {
-                $result_display = Dashboard_Manager::get_session_result_display( $session, $settings );
-            }
-
             $context_display = Dashboard_Manager::get_session_context_display(
                 $session,
                 $settings,
@@ -557,50 +546,48 @@ class DataController
             );
 
             $processed_completed[] = [
-                'session_id'        => (int) $session->session_id,
-                'status'            => $session->status, // 'completed' or 'abandoned'
-                'mode_name'         => $mode_details['label'], // Renamed from mode_label
-                'subjects_display'  => wp_strip_all_tags( $context_display ), // Renamed from context_display
-                'result_display'    => $result_display,
-                'start_time'        => $session->start_time,
-                'review_url'        => add_query_arg( 'session_id', $session->session_id, $data['review_page_url'] ),
-                
-                // Add fields from interface (even if null) to maintain shape
-                'end_reason'        => $session->end_reason ?? null,
-                'last_activity'     => $session->last_activity, 
+                'session_id'       => (int) $session->session_id,
+                'status'           => $session->status,
+                'mode_name'        => $mode_details['label'],
+                'subjects_display' => wp_strip_all_tags($context_display),
+                'result_display'   => Dashboard_Manager::get_session_result_display($session, $settings),
+                'start_time'       => $session->start_time,
+                'can_delete'       => true, // API-based deletion allowed
+                'review_url'       => add_query_arg('session_id', $session->session_id, $data['review_page_url']),
+                'last_activity'    => $session->last_activity,
             ];
         }
 
-        // 3. Process Paused Sessions for the app
         $processed_paused = [];
-        foreach ( $data['paused_sessions'] as $session ) {
-            $settings = json_decode( $session->settings_snapshot, true );
-            $mode_details = Dashboard_Manager::qp_get_history_mode_details( $session, $settings );
+        foreach ($data['paused_sessions'] as $session) {
+            $settings = json_decode($session->settings_snapshot, true);
+            $mode_details = Dashboard_Manager::qp_get_history_mode_details($session, $settings);
+
+            // FIX: Use dynamic context display for paused sessions
+            $context_display = Dashboard_Manager::get_session_context_display(
+                $session,
+                $settings,
+                $data['lineage_cache_paused'],
+                $data['group_to_topic_map_paused'],
+                $data['question_to_group_map_paused'],
+                $data['existing_course_item_ids']
+            );
 
             $processed_paused[] = [
-                'session_id'        => (int) $session->session_id,
-                'status'            => $session->status, // 'paused'
-                'mode_name'         => $mode_details['label'], // Renamed from mode_label
-                'subjects_display'  => 'Paused Session', // Paused sessions don't have this context
-                'result_display'    => '-', // No result for paused
-                'start_time'        => $session->start_time,
-                'resume_url'        => add_query_arg( 'session_id', $session->session_id, $data['session_page_url'] ),
-
-                // Add fields from interface (even if null) to maintain shape
-                'end_reason'        => null,
-                'last_activity'     => $session->last_activity,
+                'session_id'       => (int) $session->session_id,
+                'status'           => $session->status,
+                'mode_name'        => $mode_details['label'],
+                'subjects_display' => wp_strip_all_tags($context_display),
+                'result_display'   => '-',
+                'start_time'       => $session->start_time,
+                'can_delete'       => true, // API-based deletion allowed
+                'resume_url'       => add_query_arg('session_id', $session->session_id, $data['session_page_url']),
+                'last_activity'    => $session->last_activity,
             ];
         }
 
-        // 4. Create the final clean data object
-        $api_response_data = [
-            'completed' => $processed_completed,
-            'paused'    => $processed_paused,
-        ];
-
-        return new \WP_REST_Response( [ 'success' => true, 'data' => $api_response_data ], 200 );
+        return new WP_REST_Response(['success' => true, 'data' => ['completed' => $processed_completed, 'paused' => $processed_paused]], 200);
     }
-
     /**
      * Callback to get the data for the "My Courses" dashboard tab.
      * (REVISED to match app's 'Course' interface and expected keys)
