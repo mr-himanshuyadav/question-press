@@ -23,20 +23,32 @@ class Analytics_Manager extends DB
     {
         $wpdb = self::$wpdb;
         $sessions_table = $wpdb->prefix . 'qp_user_sessions';
+        $attempts_table = $wpdb->prefix . 'qp_user_attempts';
+        
+        $user_id = absint($user_id);
 
         // 1. Aggregate Core Metrics
-        $stats = $wpdb->get_row($wpdb->prepare(
-            "SELECT 
-                SUM(total_active_seconds) as total_time,
-                SUM(total_attempted) as total_attempts,
-                SUM(correct_count) as total_correct
-             FROM {$sessions_table}
-             WHERE user_id = %d AND (status = 'completed' OR status = 'abandoned')",
-            absint($user_id)
+        
+        // A. Get Time from Sessions (include paused/completed/abandoned to be as accurate as possible)
+        $total_time = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT SUM(total_active_seconds) 
+             FROM {$sessions_table} 
+             WHERE user_id = %d AND status IN ('completed', 'abandoned', 'paused')",
+            $user_id
         ));
 
-        $total_time     = (int) ($stats->total_time ?? 0);
-        $total_attempts = (int) ($stats->total_attempts ?? 0);
+        // B. Get Attempts & Accuracy from Attempts Table (The true source of truth)
+        // This ensures parity with Dashboard_Manager::get_overview_data
+        $stats = $wpdb->get_row($wpdb->prepare(
+            "SELECT 
+                COUNT(CASE WHEN status = 'answered' THEN 1 END) as total_attempted, 
+                COUNT(CASE WHEN is_correct = 1 THEN 1 END) as total_correct
+             FROM {$attempts_table} 
+             WHERE user_id = %d AND status = 'answered'",
+            $user_id
+        ));
+
+        $total_attempts = (int) ($stats->total_attempted ?? 0);
         $correct_count  = (int) ($stats->total_correct ?? 0);
         $accuracy       = ($total_attempts > 0) ? round(($correct_count / $total_attempts) * 100, 2) : 0;
 

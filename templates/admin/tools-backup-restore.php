@@ -73,6 +73,21 @@ if (! defined('ABSPATH')) {
     <div id="col-left">
         <div class="col-wrap">
 
+            <?php // --- Migration Tool (Re-added) --- ?>
+            <div id="qp-migration-tool" class="notice notice-warning" style="padding: 1rem; border-left-width: 4px; margin-bottom: 30px;">
+                <h3 style="margin-top: 0;">Update Database Structure</h3>
+                <p>Run this one-time script to update all your existing questions and groups with the new, faster database structure (denormalized term IDs). This is required for your old data to work with the latest filtering and query improvements.</p>
+                <p><strong>Warning:</strong> This process may take several minutes if you have many thousands of questions. Please do not close this tab until you see a "Complete" message.</p>
+                <?php
+                // Note: using tab=backup_restore to match this page's slug
+                $migration_url = wp_nonce_url(
+                    admin_url('admin.php?page=qp-tools&tab=backup_restore&qp_run_migration=true&batch=1'),
+                    'qp_term_migration_nonce'
+                );
+                ?>
+                <a href="<?php echo esc_url($migration_url); ?>" class="button button-primary">Run Data Migration Script</a>
+            </div>
+
             <?php // --- Create New Backup --- 
             ?>
             <div class="form-wrap" style="margin-bottom: 30px;">
