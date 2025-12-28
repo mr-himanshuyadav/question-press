@@ -19,6 +19,7 @@ class QuestionController {
 
     /**
      * Callback to start a session (get question IDs).
+     * Standardized to return { success: true, data: { question_ids: [] } }
      */
     public static function start_session_and_get_questions( \WP_REST_Request $request ) {
         // 1. Sanitize Parameters
@@ -38,19 +39,21 @@ class QuestionController {
         // 3. Call DB Method
         $question_ids = Questions_DB::get_question_ids_for_api_session( $args );
 
-        // Ensure IDs are integers
-        $question_ids = array_map('intval', $question_ids);
+        // Ensure IDs are integers and handle empty results
+        $question_ids = ! empty( $question_ids ) ? array_map('intval', $question_ids) : [];
 
-        // 4. Handle Response
-        if ( empty( $question_ids ) ) {
-            return new WP_REST_Response( ['question_ids' => []], 200 );
-        }
-
-        return new WP_REST_Response( ['question_ids' => $question_ids], 200 );
+        // 4. Return standardized wrapped response
+        return new WP_REST_Response( [
+            'success' => true,
+            'data'    => [
+                'question_ids' => $question_ids
+            ]
+        ], 200 );
     }
 
     /**
      * Callback to get a single question by its ID.
+     * Standardized to return { success: true, data: { ...question_details... } }
      */
     public static function get_single_question_by_id( \WP_REST_Request $request ) {
         // Get the question's actual database ID from the URL parameter
@@ -60,13 +63,16 @@ class QuestionController {
              return new WP_Error('rest_invalid_id', 'Invalid Question ID provided.', ['status' => 400]);
         }
 
-        // Call the new DB method
+        // Call the DB method (updated in previous step to include is_correct and explanation)
         $question_data = Questions_DB::get_question_details_for_api($question_id);
 
         // Check the result
         if ( $question_data ) {
-            // Found and formatted data successfully
-            return new WP_REST_Response( $question_data, 200 );
+            // Found and formatted data successfully - wrap in standard format
+            return new WP_REST_Response( [
+                'success' => true,
+                'data'    => $question_data
+            ], 200 );
         } else {
             // Question not found or not published
             return new WP_Error( 'rest_question_not_found', 'Question not found or is not published.', ['status' => 404] );

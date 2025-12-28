@@ -1166,6 +1166,7 @@ class Questions_DB extends DB
 
     /**
      * Retrieves detailed data for a single question for the REST API.
+     * Updated to include is_correct flag for options and explanation_text.
      *
      * @param int $question_id The ID of the question.
      * @return array|null An associative array containing question details, or null if not found/published.
@@ -1177,10 +1178,11 @@ class Questions_DB extends DB
         }
 
         // 1. Fetch Basic Question & Group Data (only if published)
+        // Added q.explanation_text to the SELECT statement
         $q_table = self::get_questions_table_name();
         $g_table = self::get_groups_table_name();
         $question_base = self::$wpdb->get_row(self::$wpdb->prepare(
-            "SELECT q.question_id, q.question_text, q.status, g.group_id, g.direction_text, g.direction_image_id
+            "SELECT q.question_id, q.question_text, q.explanation_text, q.status, g.group_id, g.direction_text, g.direction_image_id
              FROM {$q_table} q
              LEFT JOIN {$g_table} g ON q.group_id = g.group_id
              WHERE q.question_id = %d",
@@ -1215,22 +1217,30 @@ class Questions_DB extends DB
             }
         }
 
-        // 3. Get Options (ID and Text only)
+        // 3. Get Options (ID, Text, and is_correct flag)
+        // Updated query to include is_correct
         $o_table = self::get_options_table_name();
         $options_raw = self::$wpdb->get_results(self::$wpdb->prepare(
-            "SELECT option_id, option_text FROM {$o_table} WHERE question_id = %d ORDER BY option_id ASC",
+            "SELECT option_id, option_text, is_correct FROM {$o_table} WHERE question_id = %d ORDER BY option_id ASC",
             $question_id
         ), ARRAY_A);
 
         $question_data['options'] = array_map(function ($opt) {
-            $opt['option_text'] = wp_kses_post(nl2br(stripslashes($opt['option_text'])));
-            return $opt;
+            return [
+                'option_id'   => (int) $opt['option_id'],
+                'option_text' => wp_kses_post(nl2br(stripslashes($opt['option_text']))),
+                'is_correct'  => (bool) $opt['is_correct'] // Cast to boolean for the app
+            ];
         }, $options_raw);
 
 
-        // 4. Apply formatting to question/direction text
+        // 4. Apply formatting to question/explanation/direction text
         if (!empty($question_data['question_text'])) {
             $question_data['question_text'] = wp_kses_post(nl2br(stripslashes($question_data['question_text'])));
+        }
+        // Added formatting for explanation_text
+        if (!empty($question_data['explanation_text'])) {
+            $question_data['explanation_text'] = wp_kses_post(nl2br(stripslashes($question_data['explanation_text'])));
         }
         if (!empty($question_data['direction_text'])) {
             $question_data['direction_text'] = wp_kses_post(nl2br(stripslashes($question_data['direction_text'])));
