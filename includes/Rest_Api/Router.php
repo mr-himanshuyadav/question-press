@@ -33,6 +33,12 @@ final class Router
      */
     public static function register_routes()
     {
+        // --- App Configuration (Public) ---
+        register_rest_route('questionpress/v1', '/app-config', [
+            'methods'             => \WP_REST_Server::READABLE,
+            'callback'            => [AppController::class, 'get_app_config'],
+            'permission_callback' => '__return_true' // Accessible before login
+        ]);
         // --- Authentication Endpoint (Public) ---
         register_rest_route('questionpress/v1', '/token', [
             'methods' => WP_REST_Server::CREATABLE,

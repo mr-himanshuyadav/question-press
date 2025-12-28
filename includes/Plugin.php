@@ -303,6 +303,8 @@ final class Plugin {
         add_filter('views_edit-qp_course', [Post_Types::class, 'add_expired_to_course_views'], 10, 1);
         add_filter('the_content', [Post_Types::class, 'inject_course_details'], 20);
         add_filter('display_post_states', [Admin_Utils::class, 'add_product_post_states'], 10, 2);
+        add_filter('upload_mimes', [Admin_Utils::class, 'add_custom_upload_mimes']); // Added for APK support
+        add_filter('query_vars', [Rewrites::class, 'register_query_vars']);
     }
 
     /**

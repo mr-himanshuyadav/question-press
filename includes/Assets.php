@@ -207,8 +207,10 @@ class Assets {
     }
 
     if (strpos($hook_suffix, 'qp-') !== false || strpos($hook_suffix, 'question-press') !== false) {
+        wp_enqueue_media();
         wp_enqueue_style('wp-color-picker');
         wp_enqueue_script('wp-color-picker');
+        wp_enqueue_script('sweetalert2', 'https://cdn.jsdelivr.net/npm/sweetalert2@11', [], null, true);
     }
     if ($hook_suffix === 'question-press_page_qp-question-editor' || $hook_suffix === 'admin_page_qp-edit-group') {
         wp_enqueue_media();
@@ -275,8 +277,8 @@ class Assets {
     }
 
     if ($hook_suffix === 'question-press_page_qp-settings') {
-        wp_enqueue_script('qp-settings-script', QP_ASSETS_URL . 'js/settings-page.js', ['jquery'], '1.0.0', true);
-    }
+            wp_enqueue_script('qp-settings-script', QP_ASSETS_URL . 'js/settings-page.js', ['jquery', 'sweetalert2'], QP_PLUGIN_VERSION, true);
+        }
 
     if (
         $hook_suffix === 'question-press_page_qp-settings' ||
@@ -364,6 +366,8 @@ class Assets {
         ]);
         wp_enqueue_script('qp-multi-select-dropdown-script', QP_ASSETS_URL . 'js/multi-select-dropdown.js', ['jquery'], '1.0.1', true);
     }
+
+
     }
 
     /**

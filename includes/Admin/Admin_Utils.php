@@ -221,4 +221,16 @@ class Admin_Utils {
         return $post_states;
     }
 
+    /**
+     * Allows APK file uploads in the WordPress Media Library.
+     * Hooked to 'upload_mimes'.
+     *
+     * @param array $mimes Existing allowed mime types.
+     * @return array Modified list of allowed mime types.
+     */
+    public static function add_custom_upload_mimes( $mimes ) {
+        $mimes['apk'] = 'application/vnd.android.package-archive';
+        return $mimes;
+    }
+
 } // End class Admin_Utils

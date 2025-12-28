@@ -107,6 +107,15 @@ class Settings_Page
 
         add_settings_field('qp_allow_course_opt_out', 'Allow Course Opt-Out', [self::class, 'render_allow_course_opt_out_checkbox'], 'qp-settings-page', 'qp_data_settings_section');
         add_settings_field('qp_enable_otp_verification', 'Enable Email OTP Verification', [self::class, 'render_enable_otp_verification_checkbox'], 'qp-settings-page', 'qp_data_settings_section');
+
+        add_settings_section('qp_app_control_section', 'App Command Center', [self::class, 'render_app_section_text'], 'qp-settings-page');
+        
+        add_settings_field('qp_min_app_version', 'Minimum Required Version', [self::class, 'render_min_version_input'], 'qp-settings-page', 'qp_app_control_section');
+        add_settings_field('qp_latest_app_version', 'Latest App Version', [self::class, 'render_latest_version_input'], 'qp-settings-page', 'qp_app_control_section');
+        add_settings_field('qp_maintenance_mode', 'Maintenance Mode', [self::class, 'render_maintenance_mode_checkbox'], 'qp-settings-page', 'qp_app_control_section');
+        add_settings_field('qp_maintenance_message', 'Maintenance Message', [self::class, 'render_maintenance_message_textarea'], 'qp-settings-page', 'qp_app_control_section');
+        add_settings_field('qp_store_url_android', 'Play Store URL', [self::class, 'render_android_url_input'], 'qp-settings-page', 'qp_app_control_section');
+        add_settings_field('qp_store_url_ios', 'App Store URL', [self::class, 'render_ios_url_input'], 'qp-settings-page', 'qp_app_control_section');
     }
 
     /**
@@ -259,6 +268,56 @@ class Settings_Page
         echo '<span>Check this box to permanently delete all questions, subjects, labels, and user history when the plugin is uninstalled. This action cannot be undone.</span></label>';
     }
 
+    // --- App Section Callbacks ---
+
+    public static function render_app_section_text() {
+        echo '<p>Manage mobile app version control and system-wide maintenance alerts.</p>';
+    }
+
+    public static function render_min_version_input() {
+        $options = get_option('qp_settings');
+        $val = $options['min_app_version'] ?? '1.0.0';
+        echo '<input type="text" name="qp_settings[min_app_version]" value="' . esc_attr($val) . '" class="small-text" placeholder="1.0.0" />';
+        echo '<p class="description">Versions below this will be forced to update.</p>';
+    }
+
+    public static function render_latest_version_input() {
+        $options = get_option('qp_settings');
+        $val = $options['latest_app_version'] ?? '1.0.0';
+        echo '<input type="text" name="qp_settings[latest_app_version]" value="' . esc_attr($val) . '" class="small-text" placeholder="1.1.0" />';
+        echo '<p class="description">The most current version available in stores.</p>';
+    }
+
+    public static function render_maintenance_mode_checkbox() {
+        $options = get_option('qp_settings');
+        $checked = isset($options['maintenance_mode']) ? $options['maintenance_mode'] : 0;
+        echo '<label><input type="checkbox" name="qp_settings[maintenance_mode]" value="1" ' . checked(1, $checked, false) . ' /> Enable Maintenance Mode</label>';
+    }
+
+    public static function render_maintenance_message_textarea() {
+        $options = get_option('qp_settings');
+        $val = $options['maintenance_message'] ?? '';
+        echo '<textarea name="qp_settings[maintenance_message]" rows="3" class="large-text">' . esc_textarea($val) . '</textarea>';
+    }
+
+    public static function render_android_url_input() {
+        $options = get_option('qp_settings');
+        $val = $options['store_url_android'] ?? '';
+        echo '<div style="display: flex; gap: 10px; align-items: center;">';
+        echo '<input type="url" name="qp_settings[store_url_android]" id="qp_android_url" value="' . esc_url($val) . '" class="regular-text" />';
+        echo '<button type="button" class="button qp-upload-file-btn" data-target="#qp_android_url">Upload APK/File</button>';
+        echo '</div>';
+    }
+
+    public static function render_ios_url_input() {
+        $options = get_option('qp_settings');
+        $val = $options['store_url_ios'] ?? '';
+        echo '<div style="display: flex; gap: 10px; align-items: center;">';
+        echo '<input type="url" name="qp_settings[store_url_ios]" id="qp_ios_url" value="' . esc_url($val) . '" class="regular-text" />';
+        echo '<button type="button" class="button qp-upload-file-btn" data-target="#qp_ios_url">Upload File</button>';
+        echo '</div>';
+    }
+
     public static function sanitize_settings($input)
     {
         $new_input = [];
@@ -359,7 +418,17 @@ class Settings_Page
         $new_input['send_correct_answer'] = isset($input['send_correct_answer']) ? 1 : 0;
         // --- END NEW SETTINGS SANITIZATION ---
 
-        return $new_input;
+        // Sanitize App Control Fields
+        $new_input['min_app_version'] = sanitize_text_field($input['min_app_version'] ?? '1.0.0');
+        $new_input['latest_app_version'] = sanitize_text_field($input['latest_app_version'] ?? '1.0.0');
+        $new_input['maintenance_mode'] = isset($input['maintenance_mode']) ? 1 : 0;
+        $new_input['maintenance_message'] = sanitize_textarea_field($input['maintenance_message'] ?? '');
+        $new_input['store_url_android'] = esc_url_raw($input['store_url_android'] ?? '');
+        $new_input['store_url_ios'] = esc_url_raw($input['store_url_ios'] ?? '');
+
+        // Merge with existing sanitized logic from your snippet...
+        // Ensure you return $new_input at the end
+        return array_merge($input, $new_input);
     }
 
     public static function render_review_page_dropdown()

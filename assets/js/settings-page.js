@@ -41,4 +41,38 @@ jQuery(document).ready(function($) {
             }
         });
     });
+    /**
+     * APK/App File Uploader Logic
+     */
+    $('.qp-upload-file-btn').on('click', function(e) {
+        e.preventDefault();
+
+        var button = $(this);
+        var targetInput = $(button.data('target'));
+        var custom_uploader;
+
+        // If the uploader object has already been created, reopen the dialog
+        if (custom_uploader) {
+            custom_uploader.open();
+            return;
+        }
+
+        // Extend the wp.media object
+        custom_uploader = wp.media({
+            title: 'Select App File',
+            button: {
+                text: 'Use this File'
+            },
+            multiple: false // Set to true to allow multiple files to be selected
+        });
+
+        // When a file is selected, grab the URL and set it as the text field's value
+        custom_uploader.on('select', function() {
+            var attachment = custom_uploader.state().get('selection').first().toJSON();
+            targetInput.val(attachment.url);
+        });
+
+        // Open the uploader dialog
+        custom_uploader.open();
+    });
 });
