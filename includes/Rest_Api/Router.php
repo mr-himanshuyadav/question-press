@@ -39,6 +39,34 @@ final class Router
             'callback' => [AuthController::class, 'get_auth_token'],
             'permission_callback' => '__return_true'
         ]);
+        // Registration Flow (Public)
+        register_rest_route('questionpress/v1', '/auth/request-registration', [
+            'methods' => WP_REST_Server::CREATABLE,
+            'callback' => [AuthController::class, 'request_registration_otp'],
+            'permission_callback' => '__return_true'
+        ]);
+        register_rest_route('questionpress/v1', '/auth/register', [
+            'methods' => WP_REST_Server::CREATABLE,
+            'callback' => [AuthController::class, 'register_user'],
+            'permission_callback' => '__return_true'
+        ]);
+
+        // Password Reset Flow (Public)
+        register_rest_route('questionpress/v1', '/auth/request-reset', [
+            'methods' => WP_REST_Server::CREATABLE,
+            'callback' => [AuthController::class, 'request_password_reset'],
+            'permission_callback' => '__return_true'
+        ]);
+        register_rest_route('questionpress/v1', '/auth/verify-reset', [
+            'methods' => WP_REST_Server::CREATABLE,
+            'callback' => [AuthController::class, 'verify_password_reset'],
+            'permission_callback' => '__return_true'
+        ]);
+        register_rest_route('questionpress/v1', '/auth/finalize-reset', [
+            'methods' => WP_REST_Server::CREATABLE,
+            'callback' => [AuthController::class, 'finalize_password_reset'],
+            'permission_callback' => '__return_true'
+        ]);
         register_rest_route('questionpress/v1', '/auth/check-username', [
             'methods' => WP_REST_Server::CREATABLE,
             'callback' => [AuthController::class, 'check_username_availability'],

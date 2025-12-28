@@ -375,20 +375,24 @@ class Activator {
     ) $charset_collate;";
     dbDelta($sql_user_entitlements);
 
-    // 11. OTP Verification Table
-    $table_otp = $wpdb->prefix . 'qp_otp_verification';
-    $sql_otp = "CREATE TABLE $table_otp (
-        id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
-        email VARCHAR(100) NOT NULL,
-        code_hash VARCHAR(255) NOT NULL,
-        expires_at DATETIME NOT NULL,
-        status VARCHAR(20) NOT NULL DEFAULT 'pending',
-        PRIMARY KEY (id),
-        KEY email (email),
-        KEY expires_at (expires_at),
-        KEY status (status)
-    ) $charset_collate;";
-    dbDelta($sql_otp);
+    // 11. OTP Verification Table (Updated for Multi-Purpose Engine)
+        $table_otp = $wpdb->prefix . 'qp_otp_verification';
+        $sql_otp = "CREATE TABLE $table_otp (
+            id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+            email VARCHAR(100) NOT NULL,
+            code_hash VARCHAR(255) NOT NULL,
+            reset_token VARCHAR(255) DEFAULT NULL,
+            purpose VARCHAR(50) NOT NULL DEFAULT 'registration',
+            expires_at DATETIME NOT NULL,
+            status VARCHAR(20) NOT NULL DEFAULT 'pending',
+            PRIMARY KEY (id),
+            KEY email (email),
+            KEY expires_at (expires_at),
+            KEY status (status),
+            KEY purpose (purpose),
+            KEY reset_token (reset_token(191))
+        ) $charset_collate;";
+        dbDelta($sql_otp);
 
     // === SCHEDULE CRON JOBS ===
     if (!wp_next_scheduled('qp_check_entitlement_expiration_hook')) {

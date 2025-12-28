@@ -821,4 +821,27 @@ class DataController
 
         return new WP_REST_Response(['success' => true, 'data' => $data], 200);
     }
+
+    /**
+     * Returns sanitized content for Terms and Privacy pages.
+     */
+    public static function get_legal_pages(WP_REST_Request $request) {
+        $options = get_option('qp_settings');
+        $pages = [
+            'terms' => isset($options['terms_page']) ? (int) $options['terms_page'] : 0,
+            'privacy' => isset($options['privacy_page']) ? (int) $options['privacy_page'] : 0
+        ];
+
+        $data = [];
+        foreach ($pages as $key => $id) {
+            if ($id > 0) {
+                $post = get_post($id);
+                $data[$key] = $post ? wp_kses_post(apply_filters('the_content', $post->post_content)) : null;
+            } else {
+                $data[$key] = null;
+            }
+        }
+
+        return new WP_REST_Response(['success' => true, 'data' => $data], 200);
+    }
 } // End class DataController
