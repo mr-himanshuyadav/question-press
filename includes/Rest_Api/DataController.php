@@ -487,6 +487,7 @@ class DataController
             $app_questions[] = [
                 'question_id' => $q_obj->question_id,
                 'question_text' => $q_obj->question_text,
+                'direction_text' => $q_obj->direction_text,
                 'question_type' => $question_type, // Our best guess
                 'options' => $transformed_options,
                 'explanation' => $q_obj->explanation, // This is 'explanation_text'
@@ -759,6 +760,7 @@ class DataController
                 $processed_questions[] = [
                     'question_id'   => (int) $q->question_id,
                     'question_text' => $text,
+                    'direction_text' => $q->direction_text,
                     'subject_name'  => esc_html( $subject ),
                 ];
             }
