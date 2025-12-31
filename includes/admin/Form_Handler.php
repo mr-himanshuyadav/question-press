@@ -7,6 +7,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 use QuestionPress\Database\Terms_DB;
+use QuestionPress\Utils\Update_Manager;
 
 /**
  * Handles various admin-side form submissions.
@@ -14,6 +15,50 @@ use QuestionPress\Database\Terms_DB;
  * refactored to use 'admin_post_' hooks.
  */
 class Form_Handler {
+
+    /**
+     * Inits the Admin Form Handlers.
+     */
+    public static function init() {
+        add_action('wp_ajax_qp_upload_release_zip', [self::class, 'handle_release_upload']);
+    }
+
+    /**
+     * Handles AJAX ZIP upload for new app releases.
+     */
+    public static function handle_release_upload() {
+        check_ajax_referer('qp_admin_nonce', 'security');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error('Permission denied.');
+        }
+
+        if (empty($_FILES['release_zip'])) {
+            wp_send_json_error('No file uploaded.');
+        }
+
+        $file = $_FILES['release_zip'];
+        
+        // Move to temp
+        $upload = wp_handle_upload($file, ['test_form' => false]);
+        if (isset($upload['error'])) {
+            wp_send_json_error($upload['error']);
+        }
+
+        $result = Update_Manager::handle_zip_upload($upload['file']);
+
+        // Cleanup the temp zip
+        @unlink($upload['file']);
+
+        if (is_wp_error($result)) {
+            wp_send_json_error($result->get_error_message());
+        }
+
+        wp_send_json_success([
+            'message' => 'Release uploaded and processed successfully.',
+            'info'    => Update_Manager::get_update_info()
+        ]);
+    }
 
 	/**
      * Handles all report actions, including bulk, single, and clear.

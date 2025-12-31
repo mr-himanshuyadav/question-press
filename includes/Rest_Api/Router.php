@@ -436,5 +436,12 @@ final class Router
             'callback'            => [DataController::class, 'get_basic_analytics'],
             'permission_callback' => [AuthController::class, 'check_auth_token']
         ]);
+
+        // --- Multi-ABI Update Management (Public) ---
+        register_rest_route('questionpress/v1', '/update/check', [
+            'methods'             => \WP_REST_Server::READABLE,
+            'callback'            => [UpdateController::class, 'check_update'],
+            'permission_callback' => '__return_true'
+        ]);
     }
 }
