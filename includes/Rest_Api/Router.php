@@ -15,6 +15,7 @@ use QuestionPress\Rest_Api\QuestionController;
 use QuestionPress\Rest_Api\SessionController;
 use QuestionPress\Rest_Api\PracticeController;
 use QuestionPress\Rest_Api\CourseController; // Added
+use QuestionPress\Rest_Api\UpdateController;
 use WP_REST_Server;
 
 final class Router
@@ -39,6 +40,13 @@ final class Router
             'callback'            => [AppController::class, 'get_app_config'],
             'permission_callback' => '__return_true' // Accessible before login
         ]);
+        register_rest_route('questionpress/v1', '/update/check', [
+            'methods'             => \WP_REST_Server::READABLE,
+            'callback'            => [UpdateController::class, 'check_update'],
+            'permission_callback' => '__return_true'
+        ]);
+
+
         // --- Authentication Endpoint (Public) ---
         register_rest_route('questionpress/v1', '/token', [
             'methods' => WP_REST_Server::CREATABLE,
@@ -435,13 +443,6 @@ final class Router
             'methods'             => \WP_REST_Server::READABLE,
             'callback'            => [DataController::class, 'get_basic_analytics'],
             'permission_callback' => [AuthController::class, 'check_auth_token']
-        ]);
-
-        // --- Multi-ABI Update Management (Public) ---
-        register_rest_route('questionpress/v1', '/update/check', [
-            'methods'             => \WP_REST_Server::READABLE,
-            'callback'            => [UpdateController::class, 'check_update'],
-            'permission_callback' => '__return_true'
         ]);
     }
 }

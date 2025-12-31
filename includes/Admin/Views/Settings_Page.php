@@ -114,13 +114,18 @@ class Settings_Page
         add_settings_field('qp_allow_course_opt_out', 'Allow Course Opt-Out', [self::class, 'render_allow_course_opt_out_checkbox'], 'qp-settings-page', 'qp_data_settings_section');
         add_settings_field('qp_enable_otp_verification', 'Enable Email OTP Verification', [self::class, 'render_enable_otp_verification_checkbox'], 'qp-settings-page', 'qp_data_settings_section');
 
+        // App Command Center Section
         add_settings_section('qp_app_control_section', 'App Command Center', [self::class, 'render_app_section_text'], 'qp-settings-page');
-
+        
+        // Dynamic Release Center (Replaces old URL and Version fields)
+        add_settings_field('qp_release_center', 'Release Center', [self::class, 'render_release_center'], 'qp-settings-page', 'qp_app_control_section');
+        
         add_settings_field('qp_min_app_version', 'Minimum Required Version', [self::class, 'render_min_version_input'], 'qp-settings-page', 'qp_app_control_section');
-        add_settings_field('qp_latest_app_version', 'Latest App Version', [self::class, 'render_latest_version_input'], 'qp-settings-page', 'qp_app_control_section');
+        
+        // REMOVED: Manual qp_latest_app_version field as it is now auto-detected
+        
         add_settings_field('qp_maintenance_mode', 'Maintenance Mode', [self::class, 'render_maintenance_mode_checkbox'], 'qp-settings-page', 'qp_app_control_section');
         add_settings_field('qp_maintenance_message', 'Maintenance Message', [self::class, 'render_maintenance_message_textarea'], 'qp-settings-page', 'qp_app_control_section');
-        add_settings_field('qp_release_center', 'Release Center', [self::class, 'render_release_center'], 'qp-settings-page', 'qp_app_control_section');
     }
 
     /**
@@ -286,14 +291,6 @@ class Settings_Page
         $val = $options['min_app_version'] ?? '1.0.0';
         echo '<input type="text" name="qp_settings[min_app_version]" value="' . esc_attr($val) . '" class="small-text" placeholder="1.0.0" />';
         echo '<p class="description">Versions below this will be forced to update.</p>';
-    }
-
-    public static function render_latest_version_input()
-    {
-        $options = get_option('qp_settings');
-        $val = $options['latest_app_version'] ?? '1.0.0';
-        echo '<input type="text" name="qp_settings[latest_app_version]" value="' . esc_attr($val) . '" class="small-text" placeholder="1.1.0" />';
-        echo '<p class="description">The most current version available in stores.</p>';
     }
 
     public static function render_maintenance_mode_checkbox()
@@ -475,7 +472,7 @@ class Settings_Page
 
         // Sanitize App Control Fields
         $new_input['min_app_version'] = sanitize_text_field($input['min_app_version'] ?? '1.0.0');
-        $new_input['latest_app_version'] = sanitize_text_field($input['latest_app_version'] ?? '1.0.0');
+        $new_input['latest_app_version'] = $options['latest_app_version'] ?? '1.0.0';
         $new_input['maintenance_mode'] = isset($input['maintenance_mode']) ? 1 : 0;
         $new_input['maintenance_message'] = sanitize_textarea_field($input['maintenance_message'] ?? '');
         $new_input['store_url_android'] = esc_url_raw($input['store_url_android'] ?? '');
