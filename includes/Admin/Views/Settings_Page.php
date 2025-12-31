@@ -13,11 +13,10 @@ use QuestionPress\Utils\Update_Manager;
 class Settings_Page
 {
     /**
-     * Main render function for the settings page.
+     * Renders the settings page HTML.
      */
     public static function render()
     {
-        // Display admin messages and settings errors
         if (isset($_SESSION['qp_admin_message'])) {
             $message = html_entity_decode($_SESSION['qp_admin_message']);
             echo '<div id="message" class="notice notice-' . esc_attr($_SESSION['qp_admin_message_type']) . ' is-dismissible"><p>' . $message . '</p></div>';
@@ -25,7 +24,6 @@ class Settings_Page
         }
         settings_errors();
 
-        // Capture standard WordPress settings output into variables for the template
         ob_start();
         settings_fields('qp_settings_group');
         $settings_fields_html = ob_get_clean();
@@ -49,7 +47,6 @@ class Settings_Page
             'submit_button_bottom' => $submit_button_bottom,
         ];
 
-        // Echo the settings wrapper template
         echo Template_Loader::get_html('settings-page-wrapper', 'admin', $args);
     }
 
@@ -60,7 +57,7 @@ class Settings_Page
     {
         register_setting('qp_settings_group', 'qp_settings', ['sanitize_callback' => [self::class, 'sanitize_settings']]);
 
-        // --- Section: Page Settings ---
+        // Page Settings Section
         add_settings_section('qp_page_settings_section', 'Page Settings', [self::class, 'render_page_section_text'], 'qp-settings-page');
         add_settings_field('qp_practice_page', 'Practice Page', [self::class, 'render_practice_page_dropdown'], 'qp-settings-page', 'qp_page_settings_section');
         add_settings_field('qp_dashboard_page', 'Dashboard Page', [self::class, 'render_dashboard_page_dropdown'], 'qp-settings-page', 'qp_page_settings_section');
@@ -68,30 +65,26 @@ class Settings_Page
         add_settings_field('qp_session_page', 'Session Page', [self::class, 'render_session_page_dropdown'], 'qp-settings-page', 'qp_page_settings_section');
         add_settings_field('qp_signup_page', 'Signup Page', [self::class, 'render_signup_page_dropdown'], 'qp-settings-page', 'qp_page_settings_section');
 
-        // --- Section: Data Management ---
+        // Data Management Section
         add_settings_section('qp_data_settings_section', 'Data Management', [self::class, 'render_data_section_text'], 'qp-settings-page');
         add_settings_field('qp_question_order', 'Question Order', [self::class, 'render_question_order_input'], 'qp-settings-page', 'qp_data_settings_section');
         add_settings_field('qp_show_source_meta_roles', 'Display Source Meta To', [self::class, 'render_source_meta_role_multiselect'], 'qp-settings-page', 'qp_data_settings_section');
         add_settings_field('qp_delete_on_uninstall', 'Delete Data on Uninstall', [self::class, 'render_delete_data_checkbox'], 'qp-settings-page', 'qp_data_settings_section');
-        add_settings_field('qp_session_timeout', 'Session Timeout (Min)', [self::class, 'render_session_timeout_input'], 'qp-settings-page', 'qp_data_settings_section');
-        add_settings_field('qp_show_question_counts', 'Show Counts', [self::class, 'render_show_question_counts_checkbox'], 'qp-settings-page', 'qp_data_settings_section');
+        add_settings_field('qp_session_timeout', 'Session Timeout', [self::class, 'render_session_timeout_input'], 'qp-settings-page', 'qp_data_settings_section');
+        add_settings_field('qp_show_question_counts', 'Show Unattempted Counts', [self::class, 'render_show_question_counts_checkbox'], 'qp-settings-page', 'qp_data_settings_section');
         add_settings_field('qp_show_topic_meta', 'Display Topic Meta', [self::class, 'render_show_topic_meta_checkbox'], 'qp-settings-page', 'qp_data_settings_section');
-        add_settings_field('qp_normal_practice_limit', 'Practice Limit', [self::class, 'render_normal_practice_limit_input'], 'qp-settings-page', 'qp_data_settings_section');
+        add_settings_field('qp_normal_practice_limit', 'Practice Question Limit', [self::class, 'render_normal_practice_limit_input'], 'qp-settings-page', 'qp_data_settings_section');
         add_settings_field('qp_question_buffer_size', 'Prefetch Buffer Size', [self::class, 'render_question_buffer_size_input'], 'qp-settings-page', 'qp_data_settings_section');
-        add_settings_field('qp_send_correct_answer', 'Instant Check (Client)', [self::class, 'render_send_correct_answer_checkbox'], 'qp-settings-page', 'qp_data_settings_section');
+        add_settings_field('qp_send_correct_answer', 'Instant Frontend Check', [self::class, 'render_send_correct_answer_checkbox'], 'qp-settings-page', 'qp_data_settings_section');
         add_settings_field('qp_ui_feedback_mode', 'UI Feedback Mode', [self::class, 'render_ui_feedback_mode_dropdown'], 'qp-settings-page', 'qp_data_settings_section');
-        add_settings_field('qp_can_delete_history_roles', 'Delete History Roles', [self::class, 'render_can_delete_history_roles_multiselect'], 'qp-settings-page', 'qp_data_settings_section');
-        add_settings_field('qp_allow_session_termination', 'Allow Termination', [self::class, 'render_allow_session_termination_checkbox'], 'qp-settings-page', 'qp_data_settings_section');
+        add_settings_field('qp_can_delete_history_roles', 'Roles That Can Delete History', [self::class, 'render_can_delete_history_roles_multiselect'], 'qp-settings-page', 'qp_data_settings_section');
+        add_settings_field('qp_allow_session_termination', 'Allow Session Termination', [self::class, 'render_allow_session_termination_checkbox'], 'qp-settings-page', 'qp_data_settings_section');
         add_settings_field('qp_allow_course_opt_out', 'Allow Course Opt-Out', [self::class, 'render_allow_course_opt_out_checkbox'], 'qp-settings-page', 'qp_data_settings_section');
-        add_settings_field('qp_enable_otp_verification', 'Enable Email OTP', [self::class, 'render_enable_otp_verification_checkbox'], 'qp-settings-page', 'qp_data_settings_section');
+        add_settings_field('qp_enable_otp_verification', 'Enable Signup OTP', [self::class, 'render_enable_otp_verification_checkbox'], 'qp-settings-page', 'qp_data_settings_section');
 
-        // --- Section: App Command Center ---
+        // App Command Center Section
         add_settings_section('qp_app_control_section', 'App Command Center', [self::class, 'render_app_section_text'], 'qp-settings-page');
-        
-        // Automated Release Center
         add_settings_field('qp_release_center', 'Release Center', [self::class, 'render_release_center'], 'qp-settings-page', 'qp_app_control_section');
-        
-        // Manual Configuration
         add_settings_field('qp_min_app_version', 'Min Required Version', [self::class, 'render_min_version_input'], 'qp-settings-page', 'qp_app_control_section');
         add_settings_field('qp_maintenance_mode', 'Maintenance Mode', [self::class, 'render_maintenance_mode_checkbox'], 'qp-settings-page', 'qp_app_control_section');
         add_settings_field('qp_maintenance_message', 'Maintenance Message', [self::class, 'render_maintenance_message_textarea'], 'qp-settings-page', 'qp_app_control_section');
@@ -100,7 +93,7 @@ class Settings_Page
     }
 
     /**
-     * Renders the Dynamic Release Center Card with ABI mapping.
+     * Renders the high-end Release Center Card.
      */
     public static function render_release_center()
     {
@@ -115,7 +108,7 @@ class Settings_Page
         }
 
         $version_display = $info ? "v{$info['version']} (Build {$info['build']})" : "No Active Release";
-        ?>
+    ?>
         <div class="qp-release-card">
             <div class="qp-release-header">
                 <h3 style="margin:0;">Active Production Build</h3>
@@ -158,104 +151,91 @@ class Settings_Page
                 </p>
             </div>
         </div>
-        <?php
+    <?php
     }
 
     /**
      * Hardened Sanitization Callback.
-     * Prevents data loss for programmatic release info and fixes maintenance mode toggle.
+     * Fixed: Prevents accidental maintenance mode activation and release data loss.
      */
     public static function sanitize_settings($input)
     {
-        // 1. Load existing settings to ensure data persistence
+        // 1. Load existing settings to preserve all non-form data
         $old_settings = get_option('qp_settings', []);
-        $new_input = [];
+        $new_input    = $old_settings; 
 
-        // 2. Handle standard Page Dropdowns
+        // 2. Identify if this is a standard UI form save via POST
+        $is_form_submission = !empty($_POST['option_page']) && $_POST['option_page'] === 'qp_settings_group';
+
+        // 3. Page Mapping
         $page_keys = ['practice_page', 'dashboard_page', 'session_page', 'signup_page', 'review_page'];
         foreach ($page_keys as $key) {
-            if (isset($input[$key])) {
-                $new_input[$key] = absint($input[$key]);
-            }
+            if (isset($input[$key])) $new_input[$key] = absint($input[$key]);
         }
 
-        // 3. Handle Multiselects & Radio
-        if (isset($input['question_order'])) {
-            $new_input['question_order'] = in_array($input['question_order'], ['random', 'in_order']) ? $input['question_order'] : 'random';
-        }
-        if (isset($input['show_source_meta_roles'])) {
-            $new_input['show_source_meta_roles'] = array_map('sanitize_key', (array)$input['show_source_meta_roles']);
-        }
-        if (isset($input['can_delete_history_roles'])) {
-            $new_input['can_delete_history_roles'] = array_map('sanitize_key', (array)$input['can_delete_history_roles']);
-        }
-
-        // 4. Handle Checkboxes Reliably
-        // Use !empty() to check form submission. Note: 'maintenance_mode' is included here.
+        // 4. Checkboxes: ONLY set to 0 if we are in a form submission and the key is missing
         $checkbox_keys = [
             'delete_on_uninstall', 'show_question_counts', 'show_topic_meta', 
             'allow_session_termination', 'allow_course_opt_out', 
             'enable_otp_verification', 'send_correct_answer', 'maintenance_mode'
         ];
+        
         foreach ($checkbox_keys as $key) {
-            // Only update if the key exists in $input (it's a form submission)
-            if (isset($input[$key]) || isset($_POST['qp_settings'])) { 
+            if ($is_form_submission) {
+                $new_input[$key] = !empty($input[$key]) ? 1 : 0;
+            } elseif (isset($input[$key])) {
+                // Programmatic update (like ZIP upload) only changes it if explicitly provided
                 $new_input[$key] = !empty($input[$key]) ? 1 : 0;
             }
         }
 
-        // 5. Numeric Fields & Limits
+        // 5. App Control & Data Persistence
+        if (isset($input['min_app_version']))       $new_input['min_app_version']       = sanitize_text_field($input['min_app_version']);
+        if (isset($input['maintenance_message']))   $new_input['maintenance_message']   = sanitize_textarea_field($input['maintenance_message']);
+        if (isset($input['store_url_android']))     $new_input['store_url_android']     = esc_url_raw($input['store_url_android']);
+        if (isset($input['store_url_ios']))         $new_input['store_url_ios']         = esc_url_raw($input['store_url_ios']);
+        
+        // Explicitly preserve release data unless explicitly passed (e.g. from Update_Manager)
+        if (isset($input['latest_app_version']))    $new_input['latest_app_version']    = sanitize_text_field($input['latest_app_version']);
+        if (isset($input['latest_app_build']))      $new_input['latest_app_build']      = absint($input['latest_app_build']);
+        if (isset($input['latest_release_info']))   $new_input['latest_release_info']   = (array) $input['latest_release_info'];
+
+        // 6. Behavioral Settings
+        if (isset($input['question_order']))        $new_input['question_order']        = in_array($input['question_order'], ['random', 'in_order']) ? $input['question_order'] : 'random';
+        if (isset($input['ui_feedback_mode']))      $new_input['ui_feedback_mode']      = in_array($input['ui_feedback_mode'], ['instant', 'robust']) ? $input['ui_feedback_mode'] : 'robust';
         if (isset($input['session_timeout']))       $new_input['session_timeout']       = max(5, absint($input['session_timeout']));
         if (isset($input['normal_practice_limit'])) $new_input['normal_practice_limit'] = max(10, absint($input['normal_practice_limit']));
         if (isset($input['question_buffer_size']))  $new_input['question_buffer_size']  = min(20, max(1, absint($input['question_buffer_size'])));
-        
-        // 6. Text & URLs
-        if (isset($input['maintenance_message']))   $new_input['maintenance_message']   = sanitize_textarea_field($input['maintenance_message']);
-        if (isset($input['min_app_version']))       $new_input['min_app_version']       = sanitize_text_field($input['min_app_version']);
-        if (isset($input['store_url_android']))     $new_input['store_url_android']     = esc_url_raw($input['store_url_android']);
-        if (isset($input['store_url_ios']))         $new_input['store_url_ios']         = esc_url_raw($input['store_url_ios']);
 
-        if (isset($input['ui_feedback_mode'])) {
-            $new_input['ui_feedback_mode'] = in_array($input['ui_feedback_mode'], ['instant', 'robust']) ? $input['ui_feedback_mode'] : 'robust';
-        }
+        // Roles
+        if (isset($input['show_source_meta_roles']))   $new_input['show_source_meta_roles']   = array_map('sanitize_key', (array)$input['show_source_meta_roles']);
+        if (isset($input['can_delete_history_roles'])) $new_input['can_delete_history_roles'] = array_map('sanitize_key', (array)$input['can_delete_history_roles']);
 
-        // 7. --- PERSIST PROGRAMMATIC RELEASE DATA ---
-        // These fields are NOT in the HTML form, so they must be pulled from $old_settings 
-        // unless they are explicitly provided (e.g., during the ZIP upload process).
-        $new_input['latest_app_version']  = $input['latest_app_version']  ?? ($old_settings['latest_app_version'] ?? '1.0.0');
-        $new_input['latest_app_build']    = $input['latest_app_build']    ?? ($old_settings['latest_app_build'] ?? 0);
-        $new_input['latest_release_info'] = $input['latest_release_info'] ?? ($old_settings['latest_release_info'] ?? []);
-
-        // 8. Merge and Return
-        return array_merge($old_settings, $new_input);
+        return $new_input;
     }
 
-    // --- Standard Rendering Callbacks ---
+    // --- Template & Section Helpers ---
 
-    public static function render_page_section_text() { echo '<p>Map QuestionPress shortcodes to pages for internal routing.</p>'; }
+    public static function render_page_section_text() { echo '<p>Map QuestionPress shortcodes to pages.</p>'; }
     public static function render_data_section_text() { echo '<p>General behavioral and data management settings.</p>'; }
-    public static function render_app_section_text()  { echo '<p>Mobile app version control and maintenance alerting.</p>'; }
+    public static function render_app_section_text()  { echo '<p>Mobile app version control and maintenance alerts.</p>'; }
 
     public static function render_practice_page_dropdown() {
         $opts = get_option('qp_settings');
         wp_dropdown_pages(['name' => 'qp_settings[practice_page]', 'selected' => $opts['practice_page'] ?? 0, 'show_option_none' => '— Select Page —']);
     }
-
     public static function render_dashboard_page_dropdown() {
         $opts = get_option('qp_settings');
         wp_dropdown_pages(['name' => 'qp_settings[dashboard_page]', 'selected' => $opts['dashboard_page'] ?? 0, 'show_option_none' => '— Select Page —']);
     }
-
     public static function render_review_page_dropdown() {
         $opts = get_option('qp_settings');
         wp_dropdown_pages(['name' => 'qp_settings[review_page]', 'selected' => $opts['review_page'] ?? 0, 'show_option_none' => '— Select Page —']);
     }
-
     public static function render_session_page_dropdown() {
         $opts = get_option('qp_settings');
         wp_dropdown_pages(['name' => 'qp_settings[session_page]', 'selected' => $opts['session_page'] ?? 0, 'show_option_none' => '— Select Page —']);
     }
-
     public static function render_signup_page_dropdown() {
         $opts = get_option('qp_settings');
         wp_dropdown_pages(['name' => 'qp_settings[signup_page]', 'selected' => $opts['signup_page'] ?? 0, 'show_option_none' => '— Select Page —']);
@@ -265,7 +245,7 @@ class Settings_Page
         $opts = get_option('qp_settings');
         $val = $opts['question_order'] ?? 'random';
         echo '<label><input type="radio" name="qp_settings[question_order]" value="random" ' . checked('random', $val, false) . '> Random</label><br>';
-        echo '<label><input type="radio" name="qp_settings[question_order]" value="in_order" ' . checked('in_order', $val, false) . '> In Order (ID)</label>';
+        echo '<label><input type="radio" name="qp_settings[question_order]" value="in_order" ' . checked('in_order', $val, false) . '> In Order</label>';
     }
 
     public static function render_source_meta_role_multiselect() {
@@ -327,12 +307,12 @@ class Settings_Page
 
     public static function render_show_question_counts_checkbox() {
         $opts = get_option('qp_settings');
-        echo '<label><input type="checkbox" name="qp_settings[show_question_counts]" value="1" ' . checked(1, $opts['show_question_counts'] ?? 0, false) . '> Show unattempted counts in forms</label>';
+        echo '<label><input type="checkbox" name="qp_settings[show_question_counts]" value="1" ' . checked(1, $opts['show_question_counts'] ?? 0, false) . '> Show unattempted counts</label>';
     }
 
     public static function render_show_topic_meta_checkbox() {
         $opts = get_option('qp_settings');
-        echo '<label><input type="checkbox" name="qp_settings[show_topic_meta]" value="1" ' . checked(1, $opts['show_topic_meta'] ?? 0, false) . '> Show topic meta in session UI</label>';
+        echo '<label><input type="checkbox" name="qp_settings[show_topic_meta]" value="1" ' . checked(1, $opts['show_topic_meta'] ?? 0, false) . '> Show topic meta in session</label>';
     }
 
     public static function render_normal_practice_limit_input() {
@@ -347,7 +327,7 @@ class Settings_Page
 
     public static function render_send_correct_answer_checkbox() {
         $opts = get_option('qp_settings');
-        echo '<label><input type="checkbox" name="qp_settings[send_correct_answer]" value="1" ' . checked(1, $opts['send_correct_answer'] ?? 0, false) . '> Send correct answer to client (Less Secure)</label>';
+        echo '<label><input type="checkbox" name="qp_settings[send_correct_answer]" value="1" ' . checked(1, $opts['send_correct_answer'] ?? 0, false) . '> Send correct answer to client</label>';
     }
 
     public static function render_ui_feedback_mode_dropdown() {
@@ -358,7 +338,7 @@ class Settings_Page
 
     public static function render_allow_session_termination_checkbox() {
         $opts = get_option('qp_settings');
-        echo '<label><input type="checkbox" name="qp_settings[allow_session_termination]" value="1" ' . checked(1, $opts['allow_session_termination'] ?? 0, false) . '> Allow user session termination</label>';
+        echo '<label><input type="checkbox" name="qp_settings[allow_session_termination]" value="1" ' . checked(1, $opts['allow_session_termination'] ?? 0, false) . '> Allow session termination</label>';
     }
 
     public static function render_allow_course_opt_out_checkbox() {
