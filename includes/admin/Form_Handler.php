@@ -1,37 +1,38 @@
 <?php
 namespace QuestionPress\Admin;
 
-// Exit if accessed directly.
-if ( ! defined( 'ABSPATH' ) ) {
-	exit;
-}
+if ( ! defined( 'ABSPATH' ) ) exit;
 
-use QuestionPress\Database\Terms_DB;
 use QuestionPress\Utils\Update_Manager;
 
 /**
- * Handles various admin-side form submissions.
- * Initially, these are hooked to 'admin_init', but will be
- * refactored to use 'admin_post_' hooks.
+ * Handles Admin Form Submissions and AJAX Releases.
  */
 class Form_Handler {
 
     /**
-     * Inits the Admin Form Handlers.
+     * Registers Hooks and AJAX handlers.
      */
     public static function init() {
+        // Register AJAX action for release uploads
         add_action('wp_ajax_qp_upload_release_zip', [self::class, 'handle_release_upload']);
     }
 
     /**
      * Handles AJAX ZIP upload for new app releases.
+     * Hardened for high-capacity environments and large APKs.
      */
     public static function handle_release_upload() {
+        // Verify referer against 'security' parameter sent by JS
         check_ajax_referer('qp_admin_nonce', 'security');
 
         if (!current_user_can('manage_options')) {
             wp_send_json_error('Permission denied.');
         }
+
+        // Resource Hardening
+        @set_time_limit(600); 
+        wp_raise_memory_limit('admin');
 
         if (empty($_FILES['release_zip'])) {
             wp_send_json_error('No file uploaded.');
@@ -39,18 +40,24 @@ class Form_Handler {
 
         $file = $_FILES['release_zip'];
         
-        // Move to temp
+        // Native WP Upload handling
         $upload = wp_handle_upload($file, ['test_form' => false]);
+        
         if (isset($upload['error'])) {
+            error_log("QP Release Upload Error: " . $upload['error']);
             wp_send_json_error($upload['error']);
         }
 
+        // Process extraction and metadata parsing
         $result = Update_Manager::handle_zip_upload($upload['file']);
 
-        // Cleanup the temp zip
-        @unlink($upload['file']);
+        // Cleanup temporary ZIP
+        if (file_exists($upload['file'])) {
+            @unlink($upload['file']);
+        }
 
         if (is_wp_error($result)) {
+            error_log("QP Release Processing Failure: " . $result->get_error_message());
             wp_send_json_error($result->get_error_message());
         }
 

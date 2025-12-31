@@ -5,6 +5,7 @@ namespace QuestionPress\Admin\Views;
 if (!defined('ABSPATH')) exit;
 
 use QuestionPress\Utils\Template_Loader;
+use QuestionPress\Utils\Update_Manager;
 
 class Settings_Page
 {
@@ -98,7 +99,12 @@ class Settings_Page
             'qp_data_settings_section'
         );
 
-        add_settings_field('qp_ui_feedback_mode', 'UI Feedback Mode', [self::class, 'render_ui_feedback_mode_dropdown'],'qp-settings-page','qp_data_settings_section'
+        add_settings_field(
+            'qp_ui_feedback_mode',
+            'UI Feedback Mode',
+            [self::class, 'render_ui_feedback_mode_dropdown'],
+            'qp-settings-page',
+            'qp_data_settings_section'
         );
 
 
@@ -109,13 +115,12 @@ class Settings_Page
         add_settings_field('qp_enable_otp_verification', 'Enable Email OTP Verification', [self::class, 'render_enable_otp_verification_checkbox'], 'qp-settings-page', 'qp_data_settings_section');
 
         add_settings_section('qp_app_control_section', 'App Command Center', [self::class, 'render_app_section_text'], 'qp-settings-page');
-        
+
         add_settings_field('qp_min_app_version', 'Minimum Required Version', [self::class, 'render_min_version_input'], 'qp-settings-page', 'qp_app_control_section');
         add_settings_field('qp_latest_app_version', 'Latest App Version', [self::class, 'render_latest_version_input'], 'qp-settings-page', 'qp_app_control_section');
         add_settings_field('qp_maintenance_mode', 'Maintenance Mode', [self::class, 'render_maintenance_mode_checkbox'], 'qp-settings-page', 'qp_app_control_section');
         add_settings_field('qp_maintenance_message', 'Maintenance Message', [self::class, 'render_maintenance_message_textarea'], 'qp-settings-page', 'qp_app_control_section');
-        add_settings_field('qp_store_url_android', 'Play Store URL', [self::class, 'render_android_url_input'], 'qp-settings-page', 'qp_app_control_section');
-        add_settings_field('qp_store_url_ios', 'App Store URL', [self::class, 'render_ios_url_input'], 'qp-settings-page', 'qp_app_control_section');
+        add_settings_field('qp_release_center', 'Release Center', [self::class, 'render_release_center'], 'qp-settings-page', 'qp_app_control_section');
     }
 
     /**
@@ -270,52 +275,102 @@ class Settings_Page
 
     // --- App Section Callbacks ---
 
-    public static function render_app_section_text() {
+    public static function render_app_section_text()
+    {
         echo '<p>Manage mobile app version control and system-wide maintenance alerts.</p>';
     }
 
-    public static function render_min_version_input() {
+    public static function render_min_version_input()
+    {
         $options = get_option('qp_settings');
         $val = $options['min_app_version'] ?? '1.0.0';
         echo '<input type="text" name="qp_settings[min_app_version]" value="' . esc_attr($val) . '" class="small-text" placeholder="1.0.0" />';
         echo '<p class="description">Versions below this will be forced to update.</p>';
     }
 
-    public static function render_latest_version_input() {
+    public static function render_latest_version_input()
+    {
         $options = get_option('qp_settings');
         $val = $options['latest_app_version'] ?? '1.0.0';
         echo '<input type="text" name="qp_settings[latest_app_version]" value="' . esc_attr($val) . '" class="small-text" placeholder="1.1.0" />';
         echo '<p class="description">The most current version available in stores.</p>';
     }
 
-    public static function render_maintenance_mode_checkbox() {
+    public static function render_maintenance_mode_checkbox()
+    {
         $options = get_option('qp_settings');
         $checked = isset($options['maintenance_mode']) ? $options['maintenance_mode'] : 0;
         echo '<label><input type="checkbox" name="qp_settings[maintenance_mode]" value="1" ' . checked(1, $checked, false) . ' /> Enable Maintenance Mode</label>';
     }
 
-    public static function render_maintenance_message_textarea() {
+    public static function render_maintenance_message_textarea()
+    {
         $options = get_option('qp_settings');
         $val = $options['maintenance_message'] ?? '';
         echo '<textarea name="qp_settings[maintenance_message]" rows="3" class="large-text">' . esc_textarea($val) . '</textarea>';
     }
 
-    public static function render_android_url_input() {
-        $options = get_option('qp_settings');
-        $val = $options['store_url_android'] ?? '';
-        echo '<div style="display: flex; gap: 10px; align-items: center;">';
-        echo '<input type="url" name="qp_settings[store_url_android]" id="qp_android_url" value="' . esc_url($val) . '" class="regular-text" />';
-        echo '<button type="button" class="button qp-upload-file-btn" data-target="#qp_android_url">Upload APK/File</button>';
-        echo '</div>';
-    }
+    /**
+     * Renders the high-end Release Center Card.
+     */
+    public static function render_release_center()
+    {
+        $info = Update_Manager::get_update_info();
+        $expected_abis = ['arm64-v8a', 'armeabi-v7a', 'universal'];
 
-    public static function render_ios_url_input() {
-        $options = get_option('qp_settings');
-        $val = $options['store_url_ios'] ?? '';
-        echo '<div style="display: flex; gap: 10px; align-items: center;">';
-        echo '<input type="url" name="qp_settings[store_url_ios]" id="qp_ios_url" value="' . esc_url($val) . '" class="regular-text" />';
-        echo '<button type="button" class="button qp-upload-file-btn" data-target="#qp_ios_url">Upload File</button>';
-        echo '</div>';
+        // Map current variants for easy lookup
+        $detected_map = [];
+        if ($info && !empty($info['variants'])) {
+            foreach ($info['variants'] as $v) {
+                $detected_map[$v['abi']] = $v;
+            }
+        }
+
+        $version_display = $info ? "v{$info['version']} (Build {$info['build']})" : "No Active Release";
+    ?>
+        <div class="qp-release-card">
+            <div class="qp-release-header">
+                <h3 style="margin:0;">Active Production Build</h3>
+                <span class="qp-version-pill"><?php echo esc_html($version_display); ?></span>
+            </div>
+
+            <div class="qp-file-list">
+                <?php foreach ($expected_abis as $abi) : ?>
+                    <?php if (isset($detected_map[$abi])) :
+                        $v = $detected_map[$abi]; ?>
+                        <div class="qp-file-item detected">
+                            <div class="qp-status-icon">✅</div>
+                            <div class="qp-file-info">
+                                <strong><?php echo esc_html($v['abi']); ?>.apk</strong>
+                                <span>Detected: <?php echo esc_html($v['size'] ?? 'Unknown'); ?> • MD5: <?php echo esc_html(substr($v['md5'], 0, 8)); ?>...</span>
+                            </div>
+                        </div>
+                    <?php else : ?>
+                        <div class="qp-file-item" style="opacity: 0.5;">
+                            <div class="qp-status-icon">🔘</div>
+                            <div class="qp-file-info">
+                                <strong><?php echo esc_html($abi); ?>.apk</strong>
+                                <span>Missing from server (Optional)</span>
+                            </div>
+                        </div>
+                    <?php endif; ?>
+                <?php endforeach; ?>
+            </div>
+
+            <div class="qp-upload-container">
+                <div class="qp-upload-btn-row">
+                    <input type="file" id="qp_release_zip_input" style="display:none;" accept=".zip">
+                    <button type="button" class="button button-primary" onclick="document.getElementById('qp_release_zip_input').click();">
+                        Upload New Release (.zip)
+                    </button>
+                    <span id="qp_upload_status"></span>
+                </div>
+                <p style="font-size:11px; color:#a0aec0; margin-top:10px;">
+                    Note: Upload a ZIP containing APKs and output-metadata.json. Existing files will be overwritten.
+                </p>
+            </div>
+        </div>
+    <?php
     }
 
     public static function sanitize_settings($input)
@@ -513,7 +568,7 @@ class Settings_Page
     {
         $options = get_option('qp_settings');
         $selected = isset($options['ui_feedback_mode']) ? $options['ui_feedback_mode'] : 'robust';
-        ?>
+    ?>
         <select name="qp_settings[ui_feedback_mode]">
             <option value="robust" <?php selected($selected, 'robust'); ?>>Robust (Recommended)</option>
             <option value="instant" <?php selected($selected, 'instant'); ?>>Instant</option>
@@ -522,9 +577,9 @@ class Settings_Page
             <strong>Robust:</strong> UI locks until the server confirms the answer is saved. (No data loss)<br>
             <strong>Instant:</strong> UI updates instantly. Server save happens in the background. (Faster, but small risk of data loss if the user closes the window immediately)
         </p>
-        <?php
+<?php
     }
-/**
+    /**
      * Callback to render the send correct answer checkbox.
      */
     public static function render_send_correct_answer_checkbox()

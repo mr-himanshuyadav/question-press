@@ -153,6 +153,7 @@ final class Plugin {
         // Actions
         add_action('plugins_loaded', [$this, 'on_plugins_loaded']);
         add_action('init', [$this, 'start_session'], 1);
+        Form_Handler::init();
         add_action('init', [$this->cron, 'ensure_cron_scheduled']);
         add_action('init', [$this, 'register_shortcodes']);
         add_action('init', [Rewrites::class, 'add_dashboard_rewrite_rules']);
