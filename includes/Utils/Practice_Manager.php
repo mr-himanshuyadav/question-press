@@ -1670,27 +1670,35 @@ class Practice_Manager
 
         $reason_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'report_reason'");
 
+        error_log("Fetching report reasons for taxonomy ID: " . $reason_tax_id);
+
         $reasons_raw = $wpdb->get_results($wpdb->prepare(
-            "SELECT
-                                                                        t.term_id as reason_id,
-                                                                        t.name as reason_text,
-                                                                        MAX(CASE WHEN m.meta_key = 'type' THEN m.meta_value END) as type
-                                                                     FROM {$term_table} t
-                                                                     LEFT JOIN {$meta_table} m ON t.term_id = m.term_id
-                                                                     WHERE t.taxonomy_id = %d AND (
-                                                                        NOT EXISTS (SELECT 1 FROM {$meta_table} meta_active WHERE meta_active.term_id = t.term_id AND meta_active.meta_key = 'is_active')
-                                                                        OR
-                                                                        (SELECT meta_active.meta_value FROM {$meta_table} meta_active WHERE meta_active.term_id = t.term_id AND meta_active.meta_key = 'is_active') = '1'
-                                                                     )
-                                                                     GROUP BY t.term_id
-                                                                     ORDER BY t.name ASC",
-            $reason_tax_id
-        ));
+    "SELECT
+        t.term_id as reason_id,
+        t.name as reason_text,
+        MAX(CASE WHEN m.meta_key = 'type' THEN m.meta_value END) as type
+    FROM {$term_table} t
+    LEFT JOIN {$meta_table} m ON t.term_id = m.term_id
+    WHERE t.taxonomy_id = %d AND (
+        NOT EXISTS (SELECT 1 FROM {$meta_table} meta_active WHERE meta_active.term_id = t.term_id AND meta_active.meta_key = 'is_active')
+        OR
+        (SELECT meta_active.meta_value FROM {$meta_table} meta_active WHERE meta_active.term_id = t.term_id AND meta_active.meta_key = 'is_active' LIMIT 1) = '1'
+    )
+    GROUP BY t.term_id
+    ORDER BY t.name ASC",
+    $reason_tax_id
+));
+
+        error_log("Retrieved " . count($reasons_raw) . " report reasons from the database.");
+        error_log("Report Reasons Data: " . print_r($reasons_raw, true));
 
         $reasons_by_type = [
             'report' => [],
             'suggestion' => []
         ];
+
+        error_log("Organizing report reasons by type.");
+        error_log("Initial reasons by type structure: " . print_r($reasons_by_type, true));
 
         $other_reasons = [];
         foreach ($reasons_raw as $reason) {
@@ -1708,6 +1716,8 @@ class Practice_Manager
         if (isset($other_reasons['suggestion'])) {
             $reasons_by_type['suggestion'] = array_merge($reasons_by_type['suggestion'], $other_reasons['suggestion']);
         }
+
+        error_log("Final reasons by type structure: " . print_r($reasons_by_type, true));
 
         return $reasons_by_type;
     }
