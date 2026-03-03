@@ -1459,4 +1459,53 @@ class Questions_DB extends DB
 
         return true;
     }
+
+    /**
+     * Centralized logic to check Current Affairs status for a user on a given date.
+     * * @param int    $user_id The current user ID.
+     * @param string $date    The date in YYYY-MM-DD format.
+     * @return array Status data.
+     */
+    public static function get_daily_current_affairs_status(int $user_id, string $date)
+    {
+        $g_table = self::get_groups_table_name();
+        $q_table = self::get_questions_table_name();
+        $a_table = self::$wpdb->prefix . 'qp_user_attempts';
+
+        // 1. Fetch published question IDs for the specified date and current affair flag
+        $question_ids = self::$wpdb->get_col(self::$wpdb->prepare(
+            "SELECT q.question_id 
+             FROM {$q_table} q
+             JOIN {$g_table} g ON q.group_id = g.group_id
+             WHERE g.is_current_affair = 1 AND g.ca_date = %s AND q.status = 'publish'",
+            $date
+        ));
+
+        if (empty($question_ids)) {
+            return [
+                'status'         => 'none',
+                'question_count' => 0,
+                'question_ids'   => [],
+                'date'           => $date
+            ];
+        }
+
+        // 2. Check user attempts for these specific questions
+        $placeholders = implode(',', array_fill(0, count($question_ids), '%d'));
+        $answered_count = (int) self::$wpdb->get_var(self::$wpdb->prepare(
+            "SELECT COUNT(DISTINCT question_id) 
+             FROM {$a_table} 
+             WHERE user_id = %d AND question_id IN ($placeholders) AND status = 'answered'",
+            array_merge([$user_id], $question_ids)
+        ));
+
+        $status = ($answered_count >= count($question_ids)) ? 'completed' : 'available';
+
+        return [
+            'status'         => $status,
+            'question_count' => count($question_ids),
+            'question_ids'   => array_map('intval', $question_ids),
+            'date'           => $date
+        ];
+    }   
 } // End class Questions_DB

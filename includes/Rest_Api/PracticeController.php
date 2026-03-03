@@ -8,6 +8,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 use Error;
 use QuestionPress\Utils\Practice_Manager;
 use QuestionPress\Utils\Session_Manager;
+use QuestionPress\Database\Questions_DB;
 
 /**
  * REST API endpoints for in-practice actions.
@@ -454,5 +455,20 @@ class PracticeController {
             // This now handles both "not found" and "permission denied"
             return new \WP_Error( 'rest_update_failed', 'Failed to update session index. Check permissions or session ID.', [ 'status' => 403 ] );
         }
+    }
+
+
+	/**
+     * REST API callback to retrieve today's Current Affairs status.
+     * * @param \WP_REST_Request $request
+     * @return \WP_REST_Response
+     */
+    public static function get_daily_status( \WP_REST_Request $request ) {
+        $user_id = get_current_user_id();
+        $today   = date('Y-m-d');
+
+        $result = Questions_DB::get_daily_current_affairs_status($user_id, $today);
+
+        return new \WP_REST_Response($result, 200);
     }
 }
