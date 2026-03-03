@@ -437,11 +437,15 @@ final class Router
             'callback' => [CourseController::class, 'deregister_from_course'],
             'permission_callback' => [AuthController::class, 'check_auth_token']
         ]);
-
         // --- Analytics Endpoints (Architect's Path) ---
         register_rest_route('questionpress/v1', '/analytics/basic', [
             'methods'             => \WP_REST_Server::READABLE,
             'callback'            => [DataController::class, 'get_basic_analytics'],
+            'permission_callback' => [AuthController::class, 'check_auth_token']
+        ]);
+        register_rest_route('questionpress/v1', '/ca-daily-status', [
+            'methods'             => \WP_REST_Server::READABLE,
+            'callback'            => [PracticeController::class, 'get_daily_status'],
             'permission_callback' => [AuthController::class, 'check_auth_token']
         ]);
     }

@@ -31,6 +31,8 @@ class Activator {
         direction_image_id BIGINT(20) UNSIGNED,
         is_pyq BOOLEAN NOT NULL DEFAULT 0,
         pyq_year VARCHAR(4) DEFAULT NULL,
+        is_current_affair TINYINT(1) NOT NULL DEFAULT 0,
+        ca_date DATE DEFAULT NULL,
         primary_subject_term_id BIGINT(20) UNSIGNED DEFAULT NULL,
         specific_subject_term_id BIGINT(20) UNSIGNED DEFAULT NULL,
         primary_source_term_id BIGINT(20) UNSIGNED DEFAULT NULL,

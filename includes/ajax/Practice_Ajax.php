@@ -647,4 +647,20 @@ class Practice_Ajax
             wp_send_json_success(['questions' => $result]);
         }
     }
+    /**
+     * AJAX handler for checking Current Affairs status.
+     */
+    public static function get_daily_status() {
+        check_ajax_referer('qp_practice_nonce', 'nonce');
+
+        $user_id = get_current_user_id();
+        if (!$user_id) {
+            wp_send_json_error(['message' => 'User not logged in.']);
+        }
+
+        $today  = date('Y-m-d');
+        $result = Questions_DB::get_daily_current_affairs_status($user_id, $today);
+
+        wp_send_json_success($result);
+    }
 }

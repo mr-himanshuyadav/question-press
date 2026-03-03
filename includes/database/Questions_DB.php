@@ -57,7 +57,7 @@ class Questions_DB extends DB
         $g_table = self::get_groups_table_name();
 
         return self::$wpdb->get_row(self::$wpdb->prepare(
-            "SELECT q.*, g.direction_text, g.direction_image_id, g.is_pyq, g.pyq_year
+            "SELECT q.*, g.direction_text, g.direction_image_id, g.is_pyq, g.pyq_year, g.is_current_affair, g.ca_date
              FROM {$q_table} q
              LEFT JOIN {$g_table} g ON q.group_id = g.group_id
              WHERE q.question_id = %d",
@@ -144,6 +144,8 @@ class Questions_DB extends DB
             'direction_image_id' => '%d',
             'is_pyq'             => '%d',
             'pyq_year'           => '%s',
+            'is_current_affair'        => '%d',
+            'ca_date'                  => '%s',
             'primary_subject_term_id'  => '%d',
             'specific_subject_term_id' => '%d',
             'primary_source_term_id'   => '%d',
@@ -189,6 +191,8 @@ class Questions_DB extends DB
             'direction_text'     => '%s',
             'direction_image_id' => '%d',
             'is_pyq'             => '%d',
+            'is_current_affair'        => '%d',
+            'ca_date'                  => '%s',
             'pyq_year'           => '%s',
             'primary_subject_term_id'  => '%d',
             'specific_subject_term_id' => '%d',
@@ -320,7 +324,7 @@ class Questions_DB extends DB
         $tax_table = Terms_DB::get_taxonomies_table_name();
 
         // Base query structure
-        $select_sql = $args['count_only'] ? "SELECT COUNT(DISTINCT q.question_id)" : "SELECT DISTINCT q.*, g.group_id, g.direction_text, g.direction_image_id, g.is_pyq, g.pyq_year";
+        $select_sql = $args['count_only'] ? "SELECT COUNT(DISTINCT q.question_id)" : "SELECT DISTINCT q.*, g.group_id, g.direction_text, g.direction_image_id, g.is_pyq, g.pyq_year, g.is_current_affair, g.ca_date";
         $query_from = "FROM {$q_table} q";
         $query_joins = " LEFT JOIN {$g_table} g ON q.group_id = g.group_id";
         $where_conditions = [];
@@ -1182,7 +1186,7 @@ class Questions_DB extends DB
         $q_table = self::get_questions_table_name();
         $g_table = self::get_groups_table_name();
         $question_base = self::$wpdb->get_row(self::$wpdb->prepare(
-            "SELECT q.question_id, q.question_text, q.explanation_text, q.status, g.group_id, g.direction_text, g.direction_image_id
+            "SELECT q.question_id, q.question_text, q.explanation_text, q.status, g.group_id, g.direction_text, g.direction_image_id, g.is_current_affair, g.ca_date,
              FROM {$q_table} q
              LEFT JOIN {$g_table} g ON q.group_id = g.group_id
              WHERE q.question_id = %d",
@@ -1465,4 +1469,53 @@ class Questions_DB extends DB
 
         return true;
     }
+
+    /**
+     * Centralized logic to check Current Affairs status for a user on a given date.
+     * * @param int    $user_id The current user ID.
+     * @param string $date    The date in YYYY-MM-DD format.
+     * @return array Status data.
+     */
+    public static function get_daily_current_affairs_status(int $user_id, string $date)
+    {
+        $g_table = self::get_groups_table_name();
+        $q_table = self::get_questions_table_name();
+        $a_table = self::$wpdb->prefix . 'qp_user_attempts';
+
+        // 1. Fetch published question IDs for the specified date and current affair flag
+        $question_ids = self::$wpdb->get_col(self::$wpdb->prepare(
+            "SELECT q.question_id 
+             FROM {$q_table} q
+             JOIN {$g_table} g ON q.group_id = g.group_id
+             WHERE g.is_current_affair = 1 AND g.ca_date = %s AND q.status = 'publish'",
+            $date
+        ));
+
+        if (empty($question_ids)) {
+            return [
+                'status'         => 'none',
+                'question_count' => 0,
+                'question_ids'   => [],
+                'date'           => $date
+            ];
+        }
+
+        // 2. Check user attempts for these specific questions
+        $placeholders = implode(',', array_fill(0, count($question_ids), '%d'));
+        $answered_count = (int) self::$wpdb->get_var(self::$wpdb->prepare(
+            "SELECT COUNT(DISTINCT question_id) 
+             FROM {$a_table} 
+             WHERE user_id = %d AND question_id IN ($placeholders) AND status = 'answered'",
+            array_merge([$user_id], $question_ids)
+        ));
+
+        $status = ($answered_count >= count($question_ids)) ? 'completed' : 'available';
+
+        return [
+            'status'         => $status,
+            'question_count' => count($question_ids),
+            'question_ids'   => array_map('intval', $question_ids),
+            'date'           => $date
+        ];
+    }   
 } // End class Questions_DB
