@@ -356,6 +356,22 @@ if (! defined('ABSPATH')) {
                         </div>
                     </div>
                     <div class="postbox">
+                        <h2 class="hndle"><span>Daily Current Affairs</span></h2>
+                        <div class="inside">
+                            <p>
+                                <label for="is_current_affair_checkbox">
+                                    <input type="checkbox" name="is_current_affair" id="is_current_affair_checkbox" value="1" <?php checked($is_current_affair, 1); ?>>
+                                    <strong>Mark as Daily Current Affairs</strong>
+                                </label>
+                            </p>
+                            <div id="ca_date_wrapper" style="<?php echo $is_current_affair ? '' : 'display: none;'; ?> margin-top: 10px;">
+                                <label for="ca_date"><strong>Event Date</strong></label>
+                                <input type="date" name="ca_date" id="ca_date" value="<?php echo esc_attr($ca_date); ?>" style="width: 100%;" />
+                                <p class="description">Select the specific date this news/question belongs to.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="postbox">
                         <h2 class="hndle"><span>Source Details</span></h2>
                         <div class="inside">
                             <p>
@@ -490,9 +506,11 @@ if (! defined('ABSPATH')) {
     }
 
     .qp-option-row .option-explanation-input {
-    flex-basis: 50%; /* Give a base size */
-    background-color: #f6f7f7; /* Differentiate it slightly */
-}
+        flex-basis: 50%;
+        /* Give a base size */
+        background-color: #f6f7f7;
+        /* Differentiate it slightly */
+    }
 
     .qp-option-row .option-id-display {
         color: #777;

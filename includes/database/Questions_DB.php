@@ -57,7 +57,7 @@ class Questions_DB extends DB
         $g_table = self::get_groups_table_name();
 
         return self::$wpdb->get_row(self::$wpdb->prepare(
-            "SELECT q.*, g.direction_text, g.direction_image_id, g.is_pyq, g.pyq_year
+            "SELECT q.*, g.direction_text, g.direction_image_id, g.is_pyq, g.pyq_year, g.is_current_affair, g.ca_date
              FROM {$q_table} q
              LEFT JOIN {$g_table} g ON q.group_id = g.group_id
              WHERE q.question_id = %d",
@@ -144,6 +144,8 @@ class Questions_DB extends DB
             'direction_image_id' => '%d',
             'is_pyq'             => '%d',
             'pyq_year'           => '%s',
+            'is_current_affair'        => '%d',
+            'ca_date'                  => '%s',
             'primary_subject_term_id'  => '%d',
             'specific_subject_term_id' => '%d',
             'primary_source_term_id'   => '%d',
@@ -189,6 +191,8 @@ class Questions_DB extends DB
             'direction_text'     => '%s',
             'direction_image_id' => '%d',
             'is_pyq'             => '%d',
+            'is_current_affair'        => '%d',
+            'ca_date'                  => '%s',
             'pyq_year'           => '%s',
             'primary_subject_term_id'  => '%d',
             'specific_subject_term_id' => '%d',
@@ -320,7 +324,7 @@ class Questions_DB extends DB
         $tax_table = Terms_DB::get_taxonomies_table_name();
 
         // Base query structure
-        $select_sql = $args['count_only'] ? "SELECT COUNT(DISTINCT q.question_id)" : "SELECT DISTINCT q.*, g.group_id, g.direction_text, g.direction_image_id, g.is_pyq, g.pyq_year";
+        $select_sql = $args['count_only'] ? "SELECT COUNT(DISTINCT q.question_id)" : "SELECT DISTINCT q.*, g.group_id, g.direction_text, g.direction_image_id, g.is_pyq, g.pyq_year, g.is_current_affair, g.ca_date";
         $query_from = "FROM {$q_table} q";
         $query_joins = " LEFT JOIN {$g_table} g ON q.group_id = g.group_id";
         $where_conditions = [];
@@ -1180,7 +1184,11 @@ class Questions_DB extends DB
         $q_table = self::get_questions_table_name();
         $g_table = self::get_groups_table_name();
         $question_base = self::$wpdb->get_row(self::$wpdb->prepare(
+<<<<<<< Updated upstream
             "SELECT q.question_id, q.question_text, q.status, g.group_id, g.direction_text, g.direction_image_id
+=======
+            "SELECT q.question_id, q.question_text, q.explanation_text, q.status, g.group_id, g.direction_text, g.direction_image_id, g.is_current_affair, g.ca_date,
+>>>>>>> Stashed changes
              FROM {$q_table} q
              LEFT JOIN {$g_table} g ON q.group_id = g.group_id
              WHERE q.question_id = %d",

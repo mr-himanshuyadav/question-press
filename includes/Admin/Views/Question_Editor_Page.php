@@ -35,6 +35,11 @@ class Question_Editor_Page
         $direction_image_id = absint($_POST['direction_image_id']);
         $is_pyq = isset($_POST['is_pyq']) ? 1 : 0;
         $pyq_year = isset($_POST['pyq_year']) ? sanitize_text_field($_POST['pyq_year']) : '';
+
+        // --- ADDED: Capture Current Affairs data ---
+        $is_current_affair = isset($_POST['is_current_affair']) ? 1 : 0;
+        $ca_date = !empty($_POST['ca_date']) ? sanitize_text_field($_POST['ca_date']) : null;
+
         $questions_from_form = isset($_POST['questions']) ? (array) $_POST['questions'] : [];
 
         // 2. Validation
@@ -71,6 +76,8 @@ class Question_Editor_Page
             'direction_image_id' => $direction_image_id,
             'is_pyq'             => $is_pyq,
             'pyq_year'           => $is_pyq ? $pyq_year : null,
+            'is_current_affair'  => $is_current_affair,
+            'ca_date'            => $ca_date,
         ];
 
         // Merge denormalized data with main group data
@@ -267,6 +274,9 @@ class Question_Editor_Page
         $current_section_id = 0;
         $has_draft_question = false;
 
+        $is_current_affair = false;
+        $ca_date = '';
+
 
         if ($is_editing) {
             // --- NEW: Fetch all data using the DB class method ---
@@ -280,6 +290,10 @@ class Question_Editor_Page
                 $direction_image_id = $group_data->direction_image_id;
                 $is_pyq_group = !empty($group_data->is_pyq);
                 $current_pyq_year = $group_data->pyq_year ?? '';
+
+                // --- Extract Current Affairs data ---
+                $is_current_affair = !empty($group_data->is_current_affair);
+                $ca_date = $group_data->ca_date ?? '';
 
                 // Assign term IDs directly from the processed array
                 $current_subject_id = $group_terms['subject'];
@@ -388,6 +402,8 @@ class Question_Editor_Page
             'all_subjects'         => $all_subjects,
             'current_subject_id'   => $current_subject_id,
             'is_pyq_group'         => $is_pyq_group,
+            'is_current_affair'    => $is_current_affair,
+            'ca_date'              => $ca_date,
             'all_exams'            => $all_exams,
             'current_exam_id'      => $current_exam_id,
             'current_pyq_year'     => $current_pyq_year,
