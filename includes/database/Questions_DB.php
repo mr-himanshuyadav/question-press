@@ -1184,11 +1184,7 @@ class Questions_DB extends DB
         $q_table = self::get_questions_table_name();
         $g_table = self::get_groups_table_name();
         $question_base = self::$wpdb->get_row(self::$wpdb->prepare(
-<<<<<<< Updated upstream
-            "SELECT q.question_id, q.question_text, q.status, g.group_id, g.direction_text, g.direction_image_id
-=======
             "SELECT q.question_id, q.question_text, q.explanation_text, q.status, g.group_id, g.direction_text, g.direction_image_id, g.is_current_affair, g.ca_date,
->>>>>>> Stashed changes
              FROM {$q_table} q
              LEFT JOIN {$g_table} g ON q.group_id = g.group_id
              WHERE q.question_id = %d",
