@@ -1509,7 +1509,7 @@ class Questions_DB extends DB
             array_merge([$user_id], $question_ids)
         ));
 
-        $status = ($answered_count >= count($question_ids)) ? 'completed' : 'available';
+        $status = ($answered_count > 0) ? 'completed' : 'available';
 
         return [
             'status'         => $status,

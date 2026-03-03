@@ -264,6 +264,11 @@ final class Router
             'callback' => [SessionController::class, 'start_mock_test_session'],
             'permission_callback' => [AuthController::class, 'check_auth_token']
         ]);
+        register_rest_route('questionpress/v1', '/session/start-from-ids', [
+            'methods'             => \WP_REST_Server::CREATABLE,
+            'callback'            => [PracticeController::class, 'start_from_ids'],
+            'permission_callback' => [AuthController::class, 'check_auth_token']
+        ]);
 
         register_rest_route('questionpress/v1', '/session/(?P<id>\d+)', [
             'methods' => WP_REST_Server::READABLE,

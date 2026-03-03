@@ -471,4 +471,30 @@ class PracticeController {
 
         return new \WP_REST_Response(['success' => true, 'data' => $result], 200);
     }
+
+	/**
+     * REST API callback to start a session from a list of IDs.
+     * * @param \WP_REST_Request $request
+     * @return \WP_REST_Response|\WP_Error
+     */
+    public static function start_from_ids(\WP_REST_Request $request) {
+        $question_ids = $request->get_param('question_ids');
+        $mode         = $request->get_param('mode') ?: "Custom Practice";
+
+        if (empty($question_ids) || !is_array($question_ids)) {
+            return new \WP_Error('rest_invalid_param', 'question_ids must be a non-empty array.', ['status' => 400]);
+        }
+
+        $session_id = Practice_Manager::start_session_from_ids($question_ids, $mode);
+
+        if (is_wp_error($session_id)) {
+            return $session_id;
+        }
+
+        return new \WP_REST_Response([
+            'success'    => true,
+            'session_id' => (int) $session_id,
+            'message'    => 'Session started successfully.'
+        ], 200);
+    }
 }
