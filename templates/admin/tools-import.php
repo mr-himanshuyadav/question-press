@@ -69,8 +69,8 @@ if ( ! defined( 'ABSPATH' ) ) {
                 <p><?php esc_html_e( 'Your questions.json file must follow this structure. Note the new hierarchical format for sources.', 'question-press' ); ?></p>
                 <pre style="background: #fdf6e3; color: #657b83; padding: 1rem; border-radius: 4px; white-space: pre-wrap; word-wrap: break-word;"><?php
                         echo esc_html( '{
-    "schemaVersion": "3.2",
-    "exportTimestamp": "2025-08-02T10:15:00Z",
+    "schemaVersion": "3.3",
+    "exportTimestamp": "2024-05-20T10:15:00Z",
     "questionGroups": [
         {
             "groupId": "unique-group-id-1",
@@ -86,6 +86,8 @@ if ( ! defined( 'ABSPATH' ) ) {
             "isPYQ": true,
             "examName": "NEET",
             "pyqYear": "2022",
+            "isCurrentAffair": true,
+            "caDate": "2024-05-20",
             "Direction": {
                 "text": "The following questions relate to wave optics.",
                 "image": "optional_image_filename.png"
