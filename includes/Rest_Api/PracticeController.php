@@ -469,6 +469,6 @@ class PracticeController {
 
         $result = Questions_DB::get_daily_current_affairs_status($user_id, $today);
 
-        return new \WP_REST_Response($result, 200);
+        return new \WP_REST_Response(['success' => true, 'data' => $result], 200);
     }
 }
