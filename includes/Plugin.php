@@ -153,6 +153,7 @@ final class Plugin {
         // Actions
         add_action('plugins_loaded', [$this, 'on_plugins_loaded']);
         add_action('init', [$this, 'start_session'], 1);
+        Form_Handler::init();
         add_action('init', [$this->cron, 'ensure_cron_scheduled']);
         add_action('init', [$this, 'register_shortcodes']);
         add_action('init', [Rewrites::class, 'add_dashboard_rewrite_rules']);
@@ -303,6 +304,8 @@ final class Plugin {
         add_filter('views_edit-qp_course', [Post_Types::class, 'add_expired_to_course_views'], 10, 1);
         add_filter('the_content', [Post_Types::class, 'inject_course_details'], 20);
         add_filter('display_post_states', [Admin_Utils::class, 'add_product_post_states'], 10, 2);
+        add_filter('upload_mimes', [Admin_Utils::class, 'add_custom_upload_mimes']); // Added for APK support
+        add_filter('query_vars', [Rewrites::class, 'register_query_vars']);
     }
 
     /**

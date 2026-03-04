@@ -640,11 +640,21 @@ class Admin_Ajax {
         }
 
         $filename = isset($_POST['filename']) ? sanitize_file_name($_POST['filename']) : '';
+        // --- NEW: Handle restore mode ---
+        $mode = isset($_POST['mode']) ? sanitize_key($_POST['mode']) : 'merge'; // Default to merge
+
         if (empty($filename)) {
             wp_send_json_error(['message' => 'Invalid filename.']);
         }
 
-        $result = Backup_Manager::perform_restore($filename);
+        // Validate mode
+        if (!in_array($mode, ['merge', 'overwrite'])) {
+             $mode = 'merge'; // Safety fallback
+        }
+
+        // Pass the mode to the manager
+        $result = Backup_Manager::perform_restore($filename, $mode);
+        
         if ($result['success']) {
             wp_send_json_success(['message' => 'Data has been successfully restored.', 'stats' => $result['stats']]);
         } else {

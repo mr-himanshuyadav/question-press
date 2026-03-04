@@ -176,6 +176,23 @@ class Dashboard_Manager {
 	}
 
 	/**
+     * Returns all aggregated performance data for the Web Progress tab.
+     * (Single source of truth for dashboard analytics)
+     *
+     * @param int $user_id
+     * @return array
+     */
+    public static function get_progress_data( $user_id ): array {
+        return [
+            'total_time'       => (int) get_user_meta( $user_id, '_qp_total_time_spent', true ),
+            'total_attempts'   => (int) get_user_meta( $user_id, '_qp_total_attempts', true ),
+            'correct_count'    => (int) get_user_meta( $user_id, '_qp_correct_count', true ),
+            'accuracy'         => (float) get_user_meta( $user_id, '_qp_overall_accuracy', true ),
+            'streak'           => (int) get_user_meta( $user_id, '_qp_current_streak', true ),
+        ];
+    }
+
+	/**
      * NEW: Gathers all data for a specific session review (for Web and API).
      *
      * @param int $session_id The ID of the session.
@@ -291,7 +308,8 @@ class Dashboard_Manager {
 
         // 7. Get other metadata
         $reported_qids_for_user = $wpdb->get_col( $wpdb->prepare( "SELECT DISTINCT question_id FROM {$reports_table} WHERE user_id = %d AND status = 'open'", $user_id ) );
-        $review_later_qids = $wpdb->get_col( $wpdb->prepare( "SELECT DISTINCT question_id FROM {$review_table} WHERE user_id = %d AND question_id IN ($ids_placeholder)", $user_id ) );
+		$report_lookup = array_flip( $reported_qids_for_user );
+		$review_later_qids = $wpdb->get_col( $wpdb->prepare( "SELECT DISTINCT question_id FROM {$review_table} WHERE user_id = %d AND question_id IN ($ids_placeholder)", $user_id ) );
         $review_lookup = array_flip( $review_later_qids );
 
         // 8. Process all attempts into the final "questions" array
@@ -343,6 +361,10 @@ class Dashboard_Manager {
                 // Shared fields
                 'is_correct' => ( $attempt->attempt_status === 'answered' ) ? (bool) $attempt->is_correct : null,
                 'is_marked_for_review' => isset( $review_lookup[ $question_id ] ),
+				'reported_info' => [
+                    'has_report' => isset( $report_lookup[ $question_id ] ),
+                    'has_suggestion' => false, // Defaulting to false for simple review list checks
+                ],
             ];
         }
 

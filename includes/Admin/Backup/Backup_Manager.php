@@ -45,6 +45,7 @@ class Backup_Manager {
 
     /**
      * Returns a list of QP tables in an order that respects foreign key dependencies.
+     * Tables are listed in order of creation (Parents first, Children last).
      *
      * @return array
      */
@@ -52,43 +53,47 @@ class Backup_Manager {
         global $wpdb;
         $prefix = $wpdb->prefix;
         
-        // Tables with no dependencies come first.
-        // Tables that reference other tables come last.
         return [
-            // Core Data
+            // Level 1: Core Definitions (No FK dependencies)
             $prefix . 'qp_taxonomies',
+            
+            // Level 2: Terms (Depends on Taxonomies)
             $prefix . 'qp_terms',
+            
+            // Level 3: Term Meta (Depends on Terms)
             $prefix . 'qp_term_meta',
+            
+            // Level 4: Groups (Can depend on Terms via denormalized columns)
             $prefix . 'qp_question_groups',
             
-            // Questions (depend on Groups)
+            // Level 5: Questions (Depends on Groups, Terms)
             $prefix . 'qp_questions',
             
-            // Options & Relationships (depend on Questions, Groups, Terms, AND CPTs)
+            // Level 6: Options & Relationships (Depends on Questions, Groups, Terms)
             $prefix . 'qp_options',
-            $prefix . 'qp_term_relationships', // Will be remapped
+            $prefix . 'qp_term_relationships',
 
-            // Courses
-            $prefix . 'qp_course_sections', // Depends on course_id (post)
-            $prefix . 'qp_course_items',    // Depends on section_id
+            // Level 7: Course Structure (Depends on CPTs)
+            $prefix . 'qp_course_sections',
+            $prefix . 'qp_course_items',
 
-            // User Data
-            $prefix . 'qp_user_entitlements', // Depends on plan_id (post)
-            $prefix . 'qp_user_courses',      // Depends on course_id (post), entitlement_id
-            $prefix . 'qp_user_items_progress', // Depends on user, item, course
-
-            // Sessions
-            $prefix . 'qp_user_sessions',
+            // Level 8: User Data, Entitlements & Sessions
+            $prefix . 'qp_otp_verification',
+            $prefix . 'qp_user_entitlements',
+            $prefix . 'qp_user_courses',
+            $prefix . 'qp_user_sessions',     
             
-            // Attempts & Pauses
+            // Level 9: Progress
+            $prefix . 'qp_user_items_progress', 
+            
+            // Level 10: Attempts & Pauses
             $prefix . 'qp_user_attempts',
             $prefix . 'qp_session_pauses',
+            $prefix . 'qp_revision_attempts',
             
-            // Other data
+            // Level 11: Other
             $prefix . 'qp_review_later',
             $prefix . 'qp_question_reports',
-            $prefix . 'qp_revision_attempts',
-            $prefix . 'qp_otp_verification',
             $prefix . 'qp_logs',
         ];
     }
@@ -103,11 +108,11 @@ class Backup_Manager {
         global $wpdb;
         self::$wpdb = $wpdb;
         $backup_data = [
-            'version'   => 1.2, // Version for CPT support
+            'version'   => 1.6, // Version bump for user meta fix
             'timestamp' => current_time( 'timestamp' ),
             'users'     => [], // User manifest
             'media'     => [], // Media manifest [old_id => filename]
-            'cpts'      => [ // NEW: For qp_course and qp_plan
+            'cpts'      => [ 
                 'posts' => [],
                 'postmeta' => [],
             ],
@@ -123,7 +128,6 @@ class Backup_Manager {
             $table_data = self::$wpdb->get_results( "SELECT * FROM {$table}", ARRAY_A );
             $backup_data['tables'][ $table ] = $table_data;
 
-            // 2. Collect all user IDs and media IDs from QP tables
             foreach ( $table_data as $row ) {
                 if ( isset( $row['user_id'] ) && ! empty( $row['user_id'] ) ) {
                     $all_user_ids[] = (int) $row['user_id'];
@@ -134,7 +138,7 @@ class Backup_Manager {
             }
         }
 
-        // 3. NEW: Export CPTs (qp_course, qp_plan)
+        // 2. Export CPTs (qp_course, qp_plan)
         $post_types_to_backup = ['qp_course', 'qp_plan'];
         $cpt_posts = self::$wpdb->get_results(
             "SELECT * FROM {$wpdb->posts} WHERE post_type IN ('" . implode("','", $post_types_to_backup) . "') AND post_status != 'auto-draft'",
@@ -150,7 +154,7 @@ class Backup_Manager {
             }
         }
 
-        // 4. NEW: Export Post Meta for those CPTs
+        // 3. Export Post Meta for those CPTs
         if ( ! empty( $cpt_post_ids ) ) {
             $cpt_postmeta = self::$wpdb->get_results(
                 "SELECT * FROM {$wpdb->postmeta} WHERE post_id IN (" . implode(',', $cpt_post_ids) . ")",
@@ -158,7 +162,6 @@ class Backup_Manager {
             );
             $backup_data['cpts']['postmeta'] = $cpt_postmeta;
             
-            // 5. NEW: Collect featured images from CPTs
             foreach ($cpt_postmeta as $meta) {
                 if ($meta['meta_key'] === '_thumbnail_id' && !empty($meta['meta_value'])) {
                     $all_media_ids[] = (int) $meta['meta_value'];
@@ -166,14 +169,16 @@ class Backup_Manager {
             }
         }
 
-        // 6. Create the User Manifest (from CPT authors and qp_ table users)
+        // 4. Create User Manifest & Backup ALL User Meta
         $unique_user_ids = array_unique( $all_user_ids );
         foreach ( $unique_user_ids as $user_id ) {
             $user = get_userdata( $user_id );
             if ( $user ) {
-                $avatar_id = get_user_meta( $user_id, '_qp_avatar_attachment_id', true );
-                if ( ! empty( $avatar_id ) ) {
-                    $all_media_ids[] = (int) $avatar_id;
+                $all_meta = get_user_meta( $user_id );
+                
+                // Collect avatar ID
+                if ( isset( $all_meta['_qp_avatar_attachment_id'][0] ) ) {
+                    $all_media_ids[] = (int) $all_meta['_qp_avatar_attachment_id'][0];
                 }
                 
                 $backup_data['users'][ $user_id ] = [
@@ -181,14 +186,13 @@ class Backup_Manager {
                     'user_login'   => $user->user_login,
                     'user_email'   => $user->user_email,
                     'display_name' => $user->display_name,
-                    'meta'         => [
-                        '_qp_avatar_attachment_id' => $avatar_id,
-                    ],
+                    'roles'        => $user->roles,
+                    'all_meta'     => $all_meta,
                 ];
             }
         }
 
-        // 7. Prepare Media Files (Avatars, Directions, Featured Images)
+        // 5. Prepare Media Files
         $unique_media_ids = array_unique( $all_media_ids );
         $temp_media_files = [];
         foreach ( $unique_media_ids as $media_id ) {
@@ -204,7 +208,7 @@ class Backup_Manager {
             }
         }
 
-        // 8. Create the JSON file
+        // 6. Write JSON
         $prefix = ( $type === 'auto' ) ? 'qp-auto-backup-' : 'qp-backup-';
         $filename_base = $prefix . current_time( 'Y-m-d-H-i-s' );
         $json_filename = 'backup.json';
@@ -212,10 +216,10 @@ class Backup_Manager {
 
         $json_data = wp_json_encode( $backup_data, JSON_PRETTY_PRINT );
         if ( ! file_put_contents( $json_filepath, $json_data ) ) {
-            return ['success' => false, 'message' => 'Could not write JSON backup file to disk. Check permissions.'];
+            return ['success' => false, 'message' => 'Could not write JSON backup file.'];
         }
 
-        // 9. Create the ZIP file
+        // 7. Zip it up
         $zip_filename = $filename_base . '.zip';
         $zip_filepath = trailingslashit( self::get_backup_dir_path() ) . $zip_filename;
         $zip = new \ZipArchive();
@@ -226,11 +230,9 @@ class Backup_Manager {
         }
 
         $zip->addFile( $json_filepath, $json_filename );
-        
         foreach ( $temp_media_files as $media_id => $file_info ) {
             $zip->addFile( $file_info['path'], 'uploads/' . $file_info['filename'] );
         }
-
         $zip->close();
         unlink( $json_filepath );
 
@@ -241,11 +243,13 @@ class Backup_Manager {
      * Performs a restore from a .zip backup file.
      *
      * @param string $filename The name of the backup .zip file.
+     * @param string $mode     'merge' (default) or 'overwrite'.
      * @return array Result of the restore operation.
      */
-    public static function perform_restore( $filename ) {
+    public static function perform_restore( $filename, $mode = 'merge' ) {
         global $wpdb;
         self::$wpdb = $wpdb;
+        $prefix = $wpdb->prefix;
         
         $filepath = trailingslashit( self::get_backup_dir_path() ) . sanitize_file_name( $filename );
         if ( ! file_exists( $filepath ) ) {
@@ -275,7 +279,7 @@ class Backup_Manager {
         $json_data = file_get_contents( $json_filepath );
         $backup_data = json_decode( $json_data, true );
 
-        if ( is_null( $backup_data ) || !isset( $backup_data['tables'] ) || !isset( $backup_data['users'] ) ) {
+        if ( is_null( $backup_data ) || !isset( $backup_data['tables'] ) ) {
             self::cleanup_temp_dir( $temp_dir );
             return ['success' => false, 'message' => 'Invalid or corrupt backup.json file.'];
         }
@@ -286,34 +290,41 @@ class Backup_Manager {
 
             $stats = ['users_mapped' => 0, 'users_created' => 0, 'media_restored' => 0, 'cpts_restored' => 0, 'tables_cleared' => 0, 'rows_inserted' => 0];
             
-            // --- 1. Cleanup Old Data ---
-            self::cleanup_existing_data();
-            $stats['tables_cleared'] = count(self::get_all_qp_tables());
-            
-            // --- 2. Build User ID Map ---
-            $user_id_map = []; // [old_id => new_id]
-            foreach ( $backup_data['users'] as $old_id => $user_info ) {
-                $existing_user = get_user_by( 'email', $user_info['user_email'] );
-                
-                if ( $existing_user ) {
-                    $user_id_map[ $old_id ] = $existing_user->ID;
-                    $stats['users_mapped']++;
-                } else {
-                    $username = $user_info['user_login'];
-                    if ( username_exists( $username ) ) {
-                        $username = $username . '_' . wp_generate_password( 4, false );
-                    }
-                    $new_user_id = wp_create_user( $username, wp_generate_password( 12 ), $user_info['user_email'] );
-                    
-                    if ( is_wp_error( $new_user_id ) ) continue;
+            // --- 1. Handle Overwrite Mode ---
+            if ( $mode === 'overwrite' ) {
+                self::cleanup_existing_data();
+                $stats['tables_cleared'] = count(self::get_all_qp_tables());
+            }
 
-                    wp_update_user( ['ID' => $new_user_id, 'display_name' => $user_info['display_name']] );
-                    $user_id_map[ $old_id ] = $new_user_id;
-                    $stats['users_created']++;
+            // --- 2. Restore Users (Just Create/Map - Meta done LATER) ---
+            $user_id_map = []; // [old_id => new_id]
+            $newly_created_users = []; // [new_id => true]
+
+            if ( isset( $backup_data['users'] ) ) {
+                foreach ( $backup_data['users'] as $old_id => $user_info ) {
+                    $existing_user = get_user_by( 'email', $user_info['user_email'] );
+                    
+                    if ( $existing_user ) {
+                        $user_id_map[ $old_id ] = $existing_user->ID;
+                        $stats['users_mapped']++;
+                    } else {
+                        $username = $user_info['user_login'];
+                        if ( username_exists( $username ) ) {
+                            $username = $username . '_' . wp_generate_password( 4, false );
+                        }
+                        $new_user_id = wp_create_user( $username, wp_generate_password( 12 ), $user_info['user_email'] );
+                        
+                        if ( ! is_wp_error( $new_user_id ) ) {
+                            wp_update_user( ['ID' => $new_user_id, 'display_name' => $user_info['display_name']] );
+                            $user_id_map[ $old_id ] = $new_user_id;
+                            $newly_created_users[$new_user_id] = true; // Mark as new
+                            $stats['users_created']++;
+                        }
+                    }
                 }
             }
-            
-            // --- 3. Restore Media Files ---
+
+            // --- 3. Restore Media ---
             $media_id_map = []; // [old_id => new_id]
             $media_manifest = $backup_data['media'] ?? [];
             if ( ! empty( $media_manifest ) ) {
@@ -324,12 +335,8 @@ class Backup_Manager {
                 foreach ( $media_manifest as $old_media_id => $filename ) {
                     $old_file_path = trailingslashit( $temp_dir ) . 'uploads/' . $filename;
                     if ( file_exists( $old_file_path ) ) {
-                        $file_array = [
-                            'name'     => $filename,
-                            'tmp_name' => $old_file_path
-                        ];
+                        $file_array = [ 'name' => $filename, 'tmp_name' => $old_file_path ];
                         $new_attachment_id = media_handle_sideload( $file_array, 0 );
-                        
                         if ( ! is_wp_error( $new_attachment_id ) ) {
                             $media_id_map[ $old_media_id ] = $new_attachment_id;
                             $stats['media_restored']++;
@@ -337,26 +344,19 @@ class Backup_Manager {
                     }
                 }
             }
-
-            // --- 3.5. NEW: Restore CPTs (Posts and Postmeta) ---
+            
+            // --- 4. Restore CPTs ---
             $post_id_map = []; // [old_post_id => new_post_id]
             $cpt_data = $backup_data['cpts'] ?? [];
             
-            // First pass: Insert posts
             if (!empty($cpt_data['posts'])) {
                 foreach ($cpt_data['posts'] as $post) {
                     $old_post_id = $post['ID'];
-                    $post_author = $post['post_author'];
-                    
-                    // Prepare post data for insertion
                     $post_data = $post;
-                    unset($post_data['ID']); // Remove old ID
-                    
-                    // Remap post author
-                    $post_data['post_author'] = $user_id_map[$post_author] ?? get_current_user_id();
+                    unset($post_data['ID']);
+                    $post_data['post_author'] = $user_id_map[$post['post_author']] ?? get_current_user_id();
                     
                     $new_post_id = wp_insert_post($post_data, true);
-                    
                     if (!is_wp_error($new_post_id)) {
                         $post_id_map[$old_post_id] = $new_post_id;
                         $stats['cpts_restored']++;
@@ -364,93 +364,252 @@ class Backup_Manager {
                 }
             }
             
-            // Second pass: Update post parents (if any)
+            // Update CPT Parents
             if (!empty($cpt_data['posts'])) {
                 foreach ($cpt_data['posts'] as $post) {
                     $old_post_id = $post['ID'];
                     $old_parent_id = $post['post_parent'];
-                    
                     if ($old_parent_id > 0 && isset($post_id_map[$old_post_id]) && isset($post_id_map[$old_parent_id])) {
-                        $new_post_id = $post_id_map[$old_post_id];
-                        $new_parent_id = $post_id_map[$old_parent_id];
-                        wp_update_post(['ID' => $new_post_id, 'post_parent' => $new_parent_id]);
+                        wp_update_post(['ID' => $post_id_map[$old_post_id], 'post_parent' => $post_id_map[$old_parent_id]]);
                     }
                 }
             }
 
-            // Third pass: Insert post meta
+            // Insert CPT Meta
              if (!empty($cpt_data['postmeta'])) {
                 foreach ($cpt_data['postmeta'] as $meta) {
                     $old_post_id = $meta['post_id'];
                     $meta_key = $meta['meta_key'];
                     $meta_value = $meta['meta_value'];
                     
-                    // Check if this post was successfully restored
                     if (isset($post_id_map[$old_post_id])) {
                         $new_post_id = $post_id_map[$old_post_id];
-                        
-                        // Remap featured image
+                        // Remap Featured Image
                         if ($meta_key === '_thumbnail_id' && isset($media_id_map[$meta_value])) {
                             $meta_value = $media_id_map[$meta_value];
                         }
-                        
-                        // Add other meta value remapping here if needed
-                        
+                        // Remap Linked Items
+                        if (in_array($meta_key, ['_qp_linked_plan_id', '_qp_course_auto_plan_id', '_qp_linked_course_id'])) {
+                             if (isset($post_id_map[$meta_value])) $meta_value = $post_id_map[$meta_value];
+                        }
+                        // Remap Linked Courses Array
+                        if ($meta_key === '_qp_plan_linked_courses') {
+                             $courses = maybe_unserialize($meta_value);
+                             if (is_array($courses)) {
+                                 $new_courses = [];
+                                 foreach($courses as $cid) {
+                                     if (isset($post_id_map[$cid])) $new_courses[] = $post_id_map[$cid];
+                                 }
+                                 $meta_value = $new_courses;
+                             }
+                        }
                         add_post_meta($new_post_id, $meta_key, $meta_value);
                     }
                 }
             }
 
-
-            // --- 4. Import Table Data & Remap IDs ---
+            // --- 5. Import Table Data & Remap IDs ---
             $tables_in_order = self::get_tables_in_dependency_order();
             $backup_tables = $backup_data['tables'];
             
-            $id_map = [
-                $wpdb->prefix . 'qp_question_groups' => [],
-                $wpdb->prefix . 'qp_questions'       => [],
-                $wpdb->prefix . 'qp_options'         => [],
-                $wpdb->prefix . 'qp_terms'           => [],
-                $wpdb->prefix . 'qp_taxonomies'      => [],
-                $wpdb->prefix . 'qp_user_sessions'   => [],
-                $wpdb->prefix . 'qp_user_entitlements' => [],
-                $wpdb->prefix . 'qp_course_sections' => [],
-                $wpdb->prefix . 'qp_course_items'    => [],
-            ];
+            $id_map = [];
+            foreach ($tables_in_order as $t) $id_map[$t] = [];
 
             foreach ( $tables_in_order as $table ) {
-                if ( isset( $backup_tables[ $table ] ) && is_array( $backup_tables[ $table ] ) ) {
-                    
-                    $pk_column = self::get_primary_key_for_table($table);
+                if ( !isset( $backup_tables[ $table ] ) || !is_array( $backup_tables[ $table ] ) ) continue;
 
-                    foreach ( $backup_tables[ $table ] as $row ) {
-                        $old_pk_value = ($pk_column && isset($row[$pk_column])) ? $row[$pk_column] : null;
-                        
-                        // --- REMAP ALL FOREIGN KEYS ---
-                        $row = self::remap_foreign_keys($row, $table, $user_id_map, $media_id_map, $post_id_map, $id_map);
-                        
-                        if ($pk_column && $old_pk_value) {
-                            unset($row[$pk_column]);
+                $pk_column = self::get_primary_key_for_table($table);
+                $table_rows = $backup_tables[ $table ];
+
+                // Sort terms by parent (Root first) to ensure hierarchy remapping works
+                if ( $table === $prefix . 'qp_terms' ) {
+                    usort($table_rows, function($a, $b) {
+                        $a_parent = (int)$a['parent'];
+                        $b_parent = (int)$b['parent'];
+                        if ($a_parent === $b_parent) return 0;
+                        return ($a_parent < $b_parent) ? -1 : 1;
+                    });
+                }
+
+                foreach ( $table_rows as $row ) {
+                    $old_pk = ($pk_column && isset($row[$pk_column])) ? $row[$pk_column] : null;
+
+                    // --- Smart Mapping for MERGE Mode ---
+                    if ( $mode === 'merge' && $table === $prefix . 'qp_taxonomies' ) {
+                        $existing_id = $wpdb->get_var( $wpdb->prepare("SELECT taxonomy_id FROM $table WHERE taxonomy_name = %s", $row['taxonomy_name']) );
+                        if ( $existing_id ) {
+                            $id_map[$table][$old_pk] = $existing_id;
+                            continue;
+                        }
+                    }
+                    if ( $mode === 'merge' && $table === $prefix . 'qp_terms' ) {
+                        $check_tax_id = $row['taxonomy_id'];
+                        if (isset($id_map[$prefix.'qp_taxonomies'][$check_tax_id])) {
+                             $check_tax_id = $id_map[$prefix.'qp_taxonomies'][$check_tax_id];
                         }
                         
-                        self::$wpdb->insert( $table, $row );
-                        $new_pk_value = self::$wpdb->insert_id;
-                        
-                        if ($pk_column && $old_pk_value && $new_pk_value > 0 && isset($id_map[$table])) {
-                            $id_map[$table][$old_pk_value] = $new_pk_value;
+                        $check_parent_id = $row['parent'];
+                        if ($check_parent_id > 0 && isset($id_map[$prefix . 'qp_terms'][$check_parent_id])) {
+                             $check_parent_id = $id_map[$prefix . 'qp_terms'][$check_parent_id];
                         }
-                        $stats['rows_inserted']++;
+
+                        $existing_term_id = $wpdb->get_var( $wpdb->prepare(
+                            "SELECT term_id FROM $table WHERE slug = %s AND taxonomy_id = %d AND parent = %d", 
+                            $row['slug'], $check_tax_id, $check_parent_id
+                        ) );
+                        
+                        if ( $existing_term_id ) {
+                            $id_map[$table][$old_pk] = $existing_term_id;
+                            continue; 
+                        }
+                    }
+
+                    // --- Standard Remapping ---
+                    $row = self::remap_foreign_keys($row, $table, $user_id_map, $media_id_map, $post_id_map, $id_map);
+                    
+                    // --- Special JSON Remapping for Session Snapshots ---
+                    if ($table === $prefix . 'qp_user_sessions') {
+                        if (!empty($row['settings_snapshot'])) {
+                            $settings = json_decode($row['settings_snapshot'], true);
+                            if (is_array($settings)) {
+                                if (isset($settings['section_id']) && isset($id_map[$prefix . 'qp_terms'][$settings['section_id']])) {
+                                    $settings['section_id'] = $id_map[$prefix . 'qp_terms'][$settings['section_id']];
+                                }
+                                if (isset($settings['subjects']) && is_array($settings['subjects'])) {
+                                    $new_subjects = [];
+                                    foreach ($settings['subjects'] as $sid) {
+                                        $new_subjects[] = $id_map[$prefix . 'qp_terms'][$sid] ?? $sid;
+                                    }
+                                    $settings['subjects'] = $new_subjects;
+                                }
+                                if (isset($settings['topics']) && is_array($settings['topics'])) {
+                                    $new_topics = [];
+                                    foreach ($settings['topics'] as $tid) {
+                                        $new_topics[] = $id_map[$prefix . 'qp_terms'][$tid] ?? $tid;
+                                    }
+                                    $settings['topics'] = $new_topics;
+                                }
+                                if (isset($settings['question_numbers']) && is_array($settings['question_numbers'])) {
+                                    $new_q_nums = [];
+                                    foreach ($settings['question_numbers'] as $old_qid => $num) {
+                                        if (isset($id_map[$prefix . 'qp_questions'][$old_qid])) {
+                                            $new_q_nums[$id_map[$prefix . 'qp_questions'][$old_qid]] = $num;
+                                        }
+                                    }
+                                    $settings['question_numbers'] = $new_q_nums;
+                                }
+                                if (isset($settings['original_selection']) && is_array($settings['original_selection'])) {
+                                    $new_selection = [];
+                                    foreach ($settings['original_selection'] as $old_qid) {
+                                        if (isset($id_map[$prefix . 'qp_questions'][$old_qid])) {
+                                            $new_selection[] = $id_map[$prefix . 'qp_questions'][$old_qid];
+                                        }
+                                    }
+                                    $settings['original_selection'] = $new_selection;
+                                }
+                                if (isset($settings['course_id']) && isset($post_id_map[$settings['course_id']])) {
+                                    $settings['course_id'] = $post_id_map[$settings['course_id']];
+                                }
+                                if (isset($settings['item_id']) && isset($id_map[$prefix . 'qp_course_items'][$settings['item_id']])) {
+                                    $settings['item_id'] = $id_map[$prefix . 'qp_course_items'][$settings['item_id']];
+                                }
+                                $row['settings_snapshot'] = wp_json_encode($settings);
+                            }
+                        }
+
+                        if (!empty($row['question_ids_snapshot'])) {
+                            $qids = json_decode($row['question_ids_snapshot'], true);
+                            if (is_array($qids)) {
+                                $new_qids = [];
+                                foreach ($qids as $qid) {
+                                    if (isset($id_map[$prefix . 'qp_questions'][$qid])) {
+                                        $new_qids[] = $id_map[$prefix . 'qp_questions'][$qid];
+                                    }
+                                }
+                                $row['question_ids_snapshot'] = wp_json_encode($new_qids);
+                            }
+                        }
+                    }
+
+                    // --- Special JSON Remapping for Progress Table ---
+                    if ($table === $prefix . 'qp_user_items_progress') {
+                        if (!empty($row['result_data'])) {
+                            $res_data = json_decode($row['result_data'], true);
+                            if (is_array($res_data)) {
+                                if (isset($res_data['session_id']) && isset($id_map[$prefix . 'qp_user_sessions'][$res_data['session_id']])) {
+                                    $res_data['session_id'] = $id_map[$prefix . 'qp_user_sessions'][$res_data['session_id']];
+                                }
+                                $row['result_data'] = wp_json_encode($res_data);
+                            }
+                        }
+                    }
+
+                    if ($pk_column && isset($row[$pk_column])) unset($row[$pk_column]);
+
+                    $result = self::$wpdb->insert( $table, $row );
+                    
+                    if ($result !== false) {
+                        $new_pk = self::$wpdb->insert_id;
+                        if ($pk_column && $old_pk) {
+                            $id_map[$table][$old_pk] = $new_pk;
+                        }
+                        if ($table === $prefix . 'qp_questions') $stats['questions']++;
                     }
                 }
             }
+            
+            // --- 6. Restore User Meta (AFTER table data so IDs are available) ---
+            if ( isset( $backup_data['users'] ) ) {
+                foreach ($backup_data['users'] as $old_id => $user_info) {
+                    // Check if we have a mapped user ID
+                    if (!isset($user_id_map[$old_id])) continue;
+                    
+                    $new_user_id = $user_id_map[$old_id];
+                    $is_new_user = isset($newly_created_users[$new_user_id]);
+                    
+                    if (empty($user_info['all_meta'])) continue;
 
-            // --- 5. Restore User Meta ---
-            foreach ( $backup_data['users'] as $old_id => $user_info ) {
-                if ( isset( $user_id_map[ $old_id ] ) ) {
-                    $new_user_id = $user_id_map[ $old_id ];
-                    $old_avatar_id = $user_info['meta']['_qp_avatar_attachment_id'] ?? 0;
-                    if ( $old_avatar_id && isset( $media_id_map[ $old_avatar_id ] ) ) {
-                        update_user_meta( $new_user_id, '_qp_avatar_attachment_id', $media_id_map[ $old_avatar_id ] );
+                    foreach ($user_info['all_meta'] as $key => $values) {
+                        // Filter: Only restore QP meta for existing users, All meta for new users (skip sensitive)
+                        if (!$is_new_user && strpos($key, '_qp_') !== 0) {
+                            continue; 
+                        }
+                        if ($key === 'session_tokens') continue;
+
+                        foreach ($values as $v) {
+                            $val = maybe_unserialize($v);
+                            
+                            // --- REMAPPING LOGIC for User Meta ---
+                            
+                            // 1. Avatars
+                            if ($key === '_qp_avatar_attachment_id' && isset($media_id_map[$val])) {
+                                $val = $media_id_map[$val];
+                            }
+                            
+                            // 2. Allowed Terms (Exams/Subjects) - Array of IDs
+                            // This fixes the issue of user permissions pointing to old term IDs
+                            if (in_array($key, ['_qp_allowed_exam_term_ids', '_qp_allowed_subject_term_ids'])) {
+                                if (is_array($val)) {
+                                    $new_ids = [];
+                                    foreach ($val as $tid) {
+                                        // If term was remapped, use new ID. Else (if merge reused old ID), keep it.
+                                        if (isset($id_map[$prefix . 'qp_terms'][$tid])) {
+                                            $new_ids[] = $id_map[$prefix . 'qp_terms'][$tid];
+                                        } else {
+                                            // Fallback: If not in map, it might have been skipped or not remapped?
+                                            // In "Overwrite" mode, everything is in the map.
+                                            // In "Merge" mode, if term existed, it's in the map. 
+                                            // If not in map, it likely wasn't restored or error occurred. Safe to skip?
+                                            // Or maybe it's the same ID? No, safer to only include if mapped or confirmed.
+                                        }
+                                    }
+                                    $val = $new_ids;
+                                }
+                            }
+                            
+                            // Update (add if new, update if exists)
+                            update_user_meta($new_user_id, $key, $val);
+                        }
                     }
                 }
             }
@@ -465,7 +624,7 @@ class Backup_Manager {
             $wpdb->query( 'ROLLBACK' );
             $wpdb->query( 'SET foreign_key_checks = 1' );
             self::cleanup_temp_dir( $temp_dir );
-            return ['success' => false, 'message' => 'A database error occurred during restore: ' . $e->getMessage()];
+            return ['success' => false, 'message' => 'Restore failed: ' . $e->getMessage()];
         }
     }
 
@@ -518,28 +677,21 @@ class Backup_Manager {
      * @return string|null The PK column name, or null.
      */
     private static function get_primary_key_for_table($table) {
-        $pk_map = [
-            self::$wpdb->prefix . 'qp_taxonomies' => 'taxonomy_id',
-            self::$wpdb->prefix . 'qp_terms' => 'term_id',
-            self::$wpdb->prefix . 'qp_term_meta' => 'meta_id',
-            self::$wpdb->prefix . 'qp_question_groups' => 'group_id',
-            self::$wpdb->prefix . 'qp_questions' => 'question_id',
-            self::$wpdb->prefix . 'qp_options' => 'option_id',
-            self::$wpdb->prefix . 'qp_user_entitlements' => 'entitlement_id',
-            self::$wpdb->prefix . 'qp_user_courses' => 'user_course_id',
-            self::$wpdb->prefix . 'qp_user_items_progress' => 'user_item_id',
-            self::$wpdb->prefix . 'qp_user_sessions' => 'session_id',
-            self::$wpdb->prefix . 'qp_user_attempts' => 'attempt_id',
-            self::$wpdb->prefix . 'qp_session_pauses' => 'pause_id',
-            self::$wpdb->prefix . 'qp_review_later' => 'review_id',
-            self::$wpdb->prefix . 'qp_question_reports' => 'report_id',
-            self::$wpdb->prefix . 'qp_revision_attempts' => 'revision_attempt_id',
-            self::$wpdb->prefix . 'qp_otp_verification' => 'id',
-            self::$wpdb->prefix . 'qp_logs' => 'log_id',
-            self::$wpdb->prefix . 'qp_course_sections' => 'section_id',
-            self::$wpdb->prefix . 'qp_course_items' => 'item_id',
+        $map = [
+            'qp_taxonomies' => 'taxonomy_id', 'qp_terms' => 'term_id', 'qp_term_meta' => 'meta_id',
+            'qp_question_groups' => 'group_id', 'qp_questions' => 'question_id', 'qp_options' => 'option_id',
+            'qp_user_sessions' => 'session_id', 'qp_user_attempts' => 'attempt_id',
+            'qp_course_sections' => 'section_id', 'qp_course_items' => 'item_id',
+            'qp_user_entitlements' => 'entitlement_id', 'qp_user_courses' => 'user_course_id',
+            'qp_user_items_progress' => 'user_item_id', 'qp_otp_verification' => 'id',
+            'qp_session_pauses' => 'pause_id', 'qp_review_later' => 'review_id', 
+            'qp_question_reports' => 'report_id', 'qp_revision_attempts' => 'revision_attempt_id',
+            'qp_logs' => 'log_id'
         ];
-        return $pk_map[$table] ?? null;
+        // Strip prefix for lookup
+        global $wpdb;
+        $clean_table = str_replace($wpdb->prefix, '', $table);
+        return $map[$clean_table] ?? null;
     }
 
     /**
@@ -553,89 +705,67 @@ class Backup_Manager {
      * @return array The re-mapped row.
      */
     private static function remap_foreign_keys($row, $table, $user_id_map, $media_id_map, $post_id_map, $id_map) {
-        
-        // --- User ID ---
+        global $wpdb;
+        $prefix = $wpdb->prefix;
+
+        // 1. Common Columns
         if (isset($row['user_id']) && isset($user_id_map[$row['user_id']])) {
             $row['user_id'] = $user_id_map[$row['user_id']];
         }
         
-        // --- Media ID ---
         if (isset($row['direction_image_id']) && isset($media_id_map[$row['direction_image_id']])) {
             $row['direction_image_id'] = $media_id_map[$row['direction_image_id']];
         }
 
-        // --- NEW: CPT Post IDs (Courses, Plans) ---
-        if (isset($row['course_id']) && isset($post_id_map[$row['course_id']])) {
-            $row['course_id'] = $post_id_map[$row['course_id']];
-        }
-        if (isset($row['plan_id']) && isset($post_id_map[$row['plan_id']])) {
-            $row['plan_id'] = $post_id_map[$row['plan_id']];
+        // 2. CPT References
+        $cpt_cols = ['course_id', 'plan_id', 'order_id'];
+        foreach ($cpt_cols as $col) {
+            if (isset($row[$col]) && isset($post_id_map[$row[$col]])) {
+                $row[$col] = $post_id_map[$row[$col]];
+            }
         }
 
-        // --- Internal QP Table Foreign Keys ---
-        $db_prefix = self::$wpdb->prefix;
+        // 3. Internal Table References
+        $mappings = [
+            'group_id' => $prefix.'qp_question_groups',
+            'question_id' => $prefix.'qp_questions',
+            'duplicate_of' => $prefix.'qp_questions',
+            'selected_option_id' => $prefix.'qp_options',
+            'session_id' => $prefix.'qp_user_sessions',
+            'entitlement_id' => $prefix.'qp_user_entitlements',
+            'section_id' => $prefix.'qp_course_sections',
+            'item_id' => $prefix.'qp_course_items',
+            'last_accessed_item_id' => $prefix.'qp_course_items',
+            'term_id' => $prefix.'qp_terms',
+            'topic_id' => $prefix.'qp_terms', // Revision attempts use topic_id
+            'taxonomy_id' => $prefix.'qp_taxonomies',
+            'primary_subject_term_id' => $prefix.'qp_terms',
+            'specific_subject_term_id' => $prefix.'qp_terms',
+            'primary_source_term_id' => $prefix.'qp_terms',
+            'specific_source_term_id' => $prefix.'qp_terms',
+            'exam_term_id' => $prefix.'qp_terms',
+            'parent' => $prefix.'qp_terms', // Only for qp_terms table
+        ];
 
-        if (isset($row['group_id']) && isset($id_map[$db_prefix . 'qp_question_groups'][$row['group_id']])) {
-            $row['group_id'] = $id_map[$db_prefix . 'qp_question_groups'][$row['group_id']];
-        }
-        if (isset($row['question_id']) && isset($id_map[$db_prefix . 'qp_questions'][$row['question_id']])) {
-            $row['question_id'] = $id_map[$db_prefix . 'qp_questions'][$row['question_id']];
-        }
-        if (isset($row['duplicate_of']) && isset($id_map[$db_prefix . 'qp_questions'][$row['duplicate_of']])) {
-            $row['duplicate_of'] = $id_map[$db_prefix . 'qp_questions'][$row['duplicate_of']];
-        }
-        if (isset($row['selected_option_id']) && isset($id_map[$db_prefix . 'qp_options'][$row['selected_option_id']])) {
-            $row['selected_option_id'] = $id_map[$db_prefix . 'qp_options'][$row['selected_option_id']];
-        }
-        if (isset($row['term_id']) && isset($id_map[$db_prefix . 'qp_terms'][$row['term_id']])) {
-            $row['term_id'] = $id_map[$db_prefix . 'qp_terms'][$row['term_id']];
-        }
-        if (isset($row['parent']) && $table === $db_prefix . 'qp_terms' && $row['parent'] != 0) {
-             if (isset($id_map[$db_prefix . 'qp_terms'][$row['parent']])) {
-                 $row['parent'] = $id_map[$db_prefix . 'qp_terms'][$row['parent']];
-             } else {
-                 $row['parent'] = 0;
-             }
-        }
-        if (isset($row['taxonomy_id']) && isset($id_map[$db_prefix . 'qp_taxonomies'][$row['taxonomy_id']])) {
-            $row['taxonomy_id'] = $id_map[$db_prefix . 'qp_taxonomies'][$row['taxonomy_id']];
-        }
-        if (isset($row['session_id']) && isset($id_map[$db_prefix . 'qp_user_sessions'][$row['session_id']])) {
-            $row['session_id'] = $id_map[$db_prefix . 'qp_user_sessions'][$row['session_id']];
-        }
-        if (isset($row['entitlement_id']) && isset($id_map[$db_prefix . 'qp_user_entitlements'][$row['entitlement_id']])) {
-            $row['entitlement_id'] = $id_map[$db_prefix . 'qp_user_entitlements'][$row['entitlement_id']];
-        }
-        if (isset($row['section_id']) && isset($id_map[$db_prefix . 'qp_course_sections'][$row['section_id']])) {
-            $row['section_id'] = $id_map[$db_prefix . 'qp_course_sections'][$row['section_id']];
-        }
-        if (isset($row['item_id']) && isset($id_map[$db_prefix . 'qp_course_items'][$row['item_id']])) {
-            $row['item_id'] = $id_map[$db_prefix . 'qp_course_items'][$row['item_id']];
-        }
-        if (isset($row['last_accessed_item_id']) && isset($id_map[$db_prefix . 'qp_course_items'][$row['last_accessed_item_id']])) {
-            $row['last_accessed_item_id'] = $id_map[$db_prefix . 'qp_course_items'][$row['last_accessed_item_id']];
+        foreach ($mappings as $col => $target_table) {
+            if (isset($row[$col]) && $row[$col] > 0 && isset($id_map[$target_table][$row[$col]])) {
+                $row[$col] = $id_map[$target_table][$row[$col]];
+            }
         }
         
-        // Handle qp_term_relationships composite key (object_id)
-        if ($table === $db_prefix . 'qp_term_relationships') {
-            $obj_type = $row['object_type'];
-            $old_obj_id = $row['object_id'];
+        // 4. Special Case: qp_term_relationships (Poly-morphic object_id)
+        if ($table === $prefix . 'qp_term_relationships') {
+            $type = $row['object_type'];
+            $old_id = $row['object_id'];
+            $new_id = null;
             
-            if ($obj_type === 'group' && isset($id_map[$db_prefix . 'qp_question_groups'][$old_obj_id])) {
-                $row['object_id'] = $id_map[$db_prefix . 'qp_question_groups'][$old_obj_id];
-            } elseif ($obj_type === 'question' && isset($id_map[$db_prefix . 'qp_questions'][$old_obj_id])) {
-                 $row['object_id'] = $id_map[$db_prefix . 'qp_questions'][$old_obj_id];
-            } 
-            // --- NEW: Remap CPTs in term relationships ---
-            elseif ($obj_type === 'course' && isset($post_id_map[$old_obj_id])) {
-                 $row['object_id'] = $post_id_map[$old_obj_id];
-            }
-            elseif ($obj_type === 'plan' && isset($post_id_map[$old_obj_id])) {
-                 $row['object_id'] = $post_id_map[$old_obj_id];
-            }
-            elseif (($obj_type === 'source_subject_link' || $obj_type === 'exam_subject_link') && isset($id_map[$db_prefix . 'qp_terms'][$old_obj_id])) {
-                 $row['object_id'] = $id_map[$db_prefix . 'qp_terms'][$old_obj_id];
-            }
+            if ($type === 'question' && isset($id_map[$prefix.'qp_questions'][$old_id])) $new_id = $id_map[$prefix.'qp_questions'][$old_id];
+            elseif ($type === 'group' && isset($id_map[$prefix.'qp_question_groups'][$old_id])) $new_id = $id_map[$prefix.'qp_question_groups'][$old_id];
+            elseif ($type === 'course' && isset($post_id_map[$old_id])) $new_id = $post_id_map[$old_id];
+            elseif ($type === 'plan' && isset($post_id_map[$old_id])) $new_id = $post_id_map[$old_id];
+            elseif (strpos($type, '_link') !== false && isset($id_map[$prefix.'qp_terms'][$old_id])) $new_id = $id_map[$prefix.'qp_terms'][$old_id];
+            
+            if ($new_id) $row['object_id'] = $new_id;
         }
 
         return $row;

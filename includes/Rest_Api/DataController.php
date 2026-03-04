@@ -487,6 +487,7 @@ class DataController
             $app_questions[] = [
                 'question_id' => $q_obj->question_id,
                 'question_text' => $q_obj->question_text,
+                'direction_text' => $q_obj->direction_text,
                 'question_type' => $question_type, // Our best guess
                 'options' => $transformed_options,
                 'explanation' => $q_obj->explanation, // This is 'explanation_text'
@@ -494,6 +495,7 @@ class DataController
                 'correct_answer' => $app_correct_answer, // This is derived from $q_obj->options
                 'is_correct' => $q_obj->is_correct,
                 'is_marked_for_review' => $q_obj->is_marked_for_review,
+                'reported_info' => $q_obj->reported_info ?? ['has_report' => false, 'has_suggestion' => false],
             ];
         }
 
@@ -522,30 +524,19 @@ class DataController
      * Callback to get the data for the dashboard history tab.
      * (REVISED to match app's 'Session' interface)
      */
-    public static function get_dashboard_history( \WP_REST_Request $request ) {
+    public static function get_dashboard_history(\WP_REST_Request $request) {
         $user_id = get_current_user_id();
-        
-        // 1. Call the centralized data function
-        $data = Dashboard_Manager::get_history_data( $user_id );
+        $data = Dashboard_Manager::get_history_data($user_id);
 
-        if ( is_wp_error( $data ) ) {
+        if (is_wp_error($data)) {
             return $data;
         }
 
-        // 2. Process Completed Sessions for the app
         $processed_completed = [];
-        foreach ( $data['completed_sessions'] as $session ) {
-            $settings = json_decode( $session->settings_snapshot, true );
-            $is_scored = isset( $settings['marks_correct'] );
-
-            $mode_details = Dashboard_Manager::qp_get_history_mode_details( $session, $settings );
+        foreach ($data['completed_sessions'] as $session) {
+            $settings = json_decode($session->settings_snapshot, true);
+            $mode_details = Dashboard_Manager::qp_get_history_mode_details($session, $settings);
             
-            if ( isset( $data['accuracy_stats'][ $session->session_id ] ) && ! $is_scored ) {
-                $result_display = $data['accuracy_stats'][ $session->session_id ];
-            } else {
-                $result_display = Dashboard_Manager::get_session_result_display( $session, $settings );
-            }
-
             $context_display = Dashboard_Manager::get_session_context_display(
                 $session,
                 $settings,
@@ -556,50 +547,48 @@ class DataController
             );
 
             $processed_completed[] = [
-                'session_id'        => (int) $session->session_id,
-                'status'            => $session->status, // 'completed' or 'abandoned'
-                'mode_name'         => $mode_details['label'], // Renamed from mode_label
-                'subjects_display'  => wp_strip_all_tags( $context_display ), // Renamed from context_display
-                'result_display'    => $result_display,
-                'start_time'        => $session->start_time,
-                'review_url'        => add_query_arg( 'session_id', $session->session_id, $data['review_page_url'] ),
-                
-                // Add fields from interface (even if null) to maintain shape
-                'end_reason'        => $session->end_reason ?? null,
-                'last_activity'     => $session->last_activity, 
+                'session_id'       => (int) $session->session_id,
+                'status'           => $session->status,
+                'mode_name'        => $mode_details['label'],
+                'subjects_display' => wp_strip_all_tags($context_display),
+                'result_display'   => Dashboard_Manager::get_session_result_display($session, $settings),
+                'start_time'       => $session->start_time,
+                'can_delete'       => true, // API-based deletion allowed
+                'review_url'       => add_query_arg('session_id', $session->session_id, $data['review_page_url']),
+                'last_activity'    => $session->last_activity,
             ];
         }
 
-        // 3. Process Paused Sessions for the app
         $processed_paused = [];
-        foreach ( $data['paused_sessions'] as $session ) {
-            $settings = json_decode( $session->settings_snapshot, true );
-            $mode_details = Dashboard_Manager::qp_get_history_mode_details( $session, $settings );
+        foreach ($data['paused_sessions'] as $session) {
+            $settings = json_decode($session->settings_snapshot, true);
+            $mode_details = Dashboard_Manager::qp_get_history_mode_details($session, $settings);
+
+            // FIX: Use dynamic context display for paused sessions
+            $context_display = Dashboard_Manager::get_session_context_display(
+                $session,
+                $settings,
+                $data['lineage_cache_paused'],
+                $data['group_to_topic_map_paused'],
+                $data['question_to_group_map_paused'],
+                $data['existing_course_item_ids']
+            );
 
             $processed_paused[] = [
-                'session_id'        => (int) $session->session_id,
-                'status'            => $session->status, // 'paused'
-                'mode_name'         => $mode_details['label'], // Renamed from mode_label
-                'subjects_display'  => 'Paused Session', // Paused sessions don't have this context
-                'result_display'    => '-', // No result for paused
-                'start_time'        => $session->start_time,
-                'resume_url'        => add_query_arg( 'session_id', $session->session_id, $data['session_page_url'] ),
-
-                // Add fields from interface (even if null) to maintain shape
-                'end_reason'        => null,
-                'last_activity'     => $session->last_activity,
+                'session_id'       => (int) $session->session_id,
+                'status'           => $session->status,
+                'mode_name'        => $mode_details['label'],
+                'subjects_display' => wp_strip_all_tags($context_display),
+                'result_display'   => '-',
+                'start_time'       => $session->start_time,
+                'can_delete'       => true, // API-based deletion allowed
+                'resume_url'       => add_query_arg('session_id', $session->session_id, $data['session_page_url']),
+                'last_activity'    => $session->last_activity,
             ];
         }
 
-        // 4. Create the final clean data object
-        $api_response_data = [
-            'completed' => $processed_completed,
-            'paused'    => $processed_paused,
-        ];
-
-        return new \WP_REST_Response( [ 'success' => true, 'data' => $api_response_data ], 200 );
+        return new WP_REST_Response(['success' => true, 'data' => ['completed' => $processed_completed, 'paused' => $processed_paused]], 200);
     }
-
     /**
      * Callback to get the data for the "My Courses" dashboard tab.
      * (REVISED to match app's 'Course' interface and expected keys)
@@ -771,6 +760,7 @@ class DataController
                 $processed_questions[] = [
                     'question_id'   => (int) $q->question_id,
                     'question_text' => $text,
+                    'direction_text' => $q->direction_text,
                     'subject_name'  => esc_html( $subject ),
                 ];
             }
@@ -784,5 +774,63 @@ class DataController
         ];
 
         return new \WP_REST_Response( [ 'success' => true, 'data' => $api_response_data ], 200 );
+    }
+
+    /**
+     * Callback to get basic user analytics directly from user meta.
+     * Implementation of Streak Decay Logic (Step 1.4).
+     */
+    public static function get_basic_analytics(WP_REST_Request $request)
+    {
+        $user_id = get_current_user_id();
+
+        // 1. Streak Decay Logic
+        $today = current_time('Y-m-d');
+        $yesterday = date('Y-m-d', strtotime('-1 day', strtotime($today)));
+        
+        $last_act_date  = get_user_meta($user_id, '_qp_last_activity_date', true);
+        $current_streak = (int) get_user_meta($user_id, '_qp_current_streak', true);
+
+        // If activity was not today AND not yesterday, the streak has decayed
+        if (!empty($last_act_date) && $last_act_date !== $today && $last_act_date !== $yesterday) {
+            $current_streak = 0;
+            update_user_meta($user_id, '_qp_current_streak', 0);
+            // Note: We keep _qp_last_activity_date as is; it will be updated on the next session finalize.
+        }
+
+        // 2. Assemble pre-calculated stats (Architect's Path)
+        $data = [
+            'total_time'       => (int) get_user_meta($user_id, '_qp_total_time_spent', true),
+            'total_attempts'   => (int) get_user_meta($user_id, '_qp_total_attempts', true),
+            'correct_count'    => (int) get_user_meta($user_id, '_qp_correct_count', true),
+            'accuracy'         => (float) get_user_meta($user_id, '_qp_overall_accuracy', true),
+            'streak'           => $current_streak,
+            'advanced_enabled' => false, // Hook for Analytics Addon
+        ];
+
+        return new WP_REST_Response(['success' => true, 'data' => $data], 200);
+    }
+
+    /**
+     * Returns sanitized content for Terms and Privacy pages.
+     */
+    public static function get_legal_pages(WP_REST_Request $request) {
+        $options = get_option('qp_settings');
+        $pages = [
+            'terms' => isset($options['terms_page']) ? (int) $options['terms_page'] : 0,
+            'privacy' => isset($options['privacy_page']) ? (int) $options['privacy_page'] : 0
+        ];
+
+        $data = [];
+        foreach ($pages as $key => $id) {
+            if ($id > 0) {
+                $post = get_post($id);
+                $data[$key] = $post ? wp_kses_post(apply_filters('the_content', $post->post_content)) : null;
+            } else {
+                $data[$key] = null;
+            }
+        }
+
+        return new WP_REST_Response(['success' => true, 'data' => $data], 200);
     }
 } // End class DataController

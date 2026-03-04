@@ -3,6 +3,7 @@
 /wp-includes/
 wp-config.php
 .htaccess
+question-press.zip
 
 # Dependencies
 node_modules/
