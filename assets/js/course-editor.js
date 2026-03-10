@@ -461,6 +461,14 @@ jQuery(document).ready(function ($) {
   // --- Open Modal ---
   structureContainer.on("click", ".qp-select-questions-btn", function () {
     const $button = $(this);
+    // Find Section and Item Titles for Context
+        const $item = $button.closest('.qp-course-item');
+        const $section = $button.closest('.qp-section');
+        const itemTitle = $item.find('.qp-item-title-input').val() || 'Untitled Item';
+        const sectionTitle = $section.find('.qp-section-title-input').val() || 'Untitled Section';
+
+        // Update modal title with context
+        modal.find('h2').html(`Select Questions <span style="font-size: 14px; font-weight: normal; color: #666; margin-left: 10px;">(${sectionTitle} / ${itemTitle})</span>`);
     const $itemConfig = $button.closest(".qp-item-config");
     currentModalTargetInput = $itemConfig.find(".qp-selected-questions-input");
     currentModalTargetDisplay = $itemConfig.find(
