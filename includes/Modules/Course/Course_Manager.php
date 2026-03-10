@@ -98,27 +98,42 @@ class Course_Manager {
             return new WP_Error('permission_denied', 'Permission denied.', ['status' => 403]);
         }
 
+        $limit = 100; // <--- CHANGE THIS NUMBER to set questions per page
+        $page  = isset($params['page']) ? max(1, absint($params['page'])) : 1;
+        $offset = ($page - 1) * $limit;
+
         $search_args = [
             'search'     => isset($params['search']) ? sanitize_text_field(wp_unslash($params['search'])) : '',
             'subject_id' => isset($params['subject_id']) ? absint($params['subject_id']) : 0,
             'topic_id'   => isset($params['topic_id']) ? absint($params['topic_id']) : 0,
             'source_id'  => isset($params['source_id']) ? absint($params['source_id']) : 0,
-            'limit'      => 100
+            'limit'      => $limit,
+            'offset'     => $offset
         ];
 
-        $results = \QuestionPress\Database\Questions_DB::search_questions($search_args);
+        $results_data = \QuestionPress\Database\Questions_DB::search_questions($search_args);
+        $questions = $results_data['items'];
 
-        $formatted_results = [];
-        if ($results) {
-            foreach ($results as $question) {
-                $formatted_results[] = [
-                    'id' => $question->question_id,
-                    'text' => wp_strip_all_tags(wp_trim_words(stripslashes($question->question_text), 15, '...'))
-                ];
-            }
+        // Enrich with term names for badges
+        if (!empty($questions)) {
+            \QuestionPress\Database\Questions_DB::enrich_questions_with_terms($questions);
         }
 
-        return ['questions' => $formatted_results];
+        $formatted_results = [];
+        foreach ($questions as $q) {
+            $formatted_results[] = [
+                'id'            => $q['question_id'],
+                'text'          => wp_strip_all_tags(wp_trim_words(stripslashes($q['question_text']), 15, '...')),
+                'subject_badge' => $q['subject_name'] ?? 'General',
+                'topic_badge'   => $q['topic_name'] ?? ''
+            ];
+        }
+
+        return [
+            'questions'    => $formatted_results,
+            'total_pages'  => ceil($results_data['total'] / $limit),
+            'current_page' => $page
+        ];
     }
 
     /**
