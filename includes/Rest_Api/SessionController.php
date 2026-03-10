@@ -10,10 +10,8 @@ if (! defined('ABSPATH')) {
 use WP_REST_Request;
 use WP_Error;
 use WP_REST_Response;
-use QuestionPress\Database\Questions_DB; // Use our DB class
-use QuestionPress\Database\Terms_DB;   // Use our DB class
-use QuestionPress\Utils\Session_Manager;
-use QuestionPress\Utils\Practice_Manager;
+use QuestionPress\Modules\Session\Session_Manager;
+use QuestionPress\Modules\Practice\Practice_Manager;
 
 /**
  * Handles REST API requests for creating and managing practice sessions.

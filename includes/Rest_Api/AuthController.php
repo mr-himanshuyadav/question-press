@@ -13,8 +13,8 @@ use WP_REST_Server;
 use Exception;
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
-use QuestionPress\Utils\Auth_Manager; // Business logic for availability
-use QuestionPress\Utils\OTP_Manager;  // Multi-purpose OTP engine
+use QuestionPress\Modules\Auth\Auth_Manager; // For username/email checks
+use QuestionPress\Modules\Auth\OTP_Manager;  // Multi-purpose OTP engine
 
 /**
  * Handles REST API requests for authentication, registration, and password management.

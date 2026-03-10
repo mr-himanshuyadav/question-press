@@ -1,5 +1,5 @@
 <?php
-namespace QuestionPress\Utils;
+namespace QuestionPress\Modules\Practice;
 
 // Exit if accessed directly.
 if ( ! defined( 'ABSPATH' ) ) {

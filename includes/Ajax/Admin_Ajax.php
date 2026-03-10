@@ -8,7 +8,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 use QuestionPress\Database\Terms_DB;
 use QuestionPress\Database\Questions_DB;
-use QuestionPress\Utils\Attempt_Evaluator;
+use QuestionPress\Modules\Practice\Attempt_Evaluator;
 use QuestionPress\Admin\Backup\Backup_Manager;
 use QuestionPress\Admin\Views\Questions_List_Table;
 use WP_Error; // Use statement for WP_Error

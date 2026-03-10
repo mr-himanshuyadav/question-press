@@ -1,14 +1,15 @@
 <?php
 
-namespace QuestionPress\Utils;
+namespace QuestionPress\Modules\Course;
 
 if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
 use WP_Error;
+use QuestionPress\Utils\User_Access;
 
-/**
+/**Get-ChildItem -Recurse -Filter *.php | ForEach-Object { php -l $_.FullName }
  * Handles course-related business logic.
  */
 class Course_Manager {

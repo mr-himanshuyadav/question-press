@@ -5,7 +5,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-use QuestionPress\Utils\Course_Manager;
+use QuestionPress\Modules\Course\Course_Manager;
 use WP_REST_Request;
 use WP_REST_Response;
 use WP_Error;

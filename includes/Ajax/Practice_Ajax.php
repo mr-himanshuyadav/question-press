@@ -7,12 +7,11 @@ if (! defined('ABSPATH')) {
     exit;
 }
 
-use QuestionPress\Database\Terms_DB;
 use QuestionPress\Database\Questions_DB;
-use QuestionPress\Utils\User_Access;
 use QuestionPress\Frontend\Shortcodes;
-use WP_Error; // Use statement for WP_Error
-use Exception; // Use statement for Exception
+use QuestionPress\Modules\Course\Course_Manager;
+use QuestionPress\Modules\Practice\Practice_Manager;
+use QuestionPress\Modules\Auth\Auth_Manager;
 
 /**
  * Handles AJAX requests related to the practice/session UI interactions.
@@ -28,7 +27,7 @@ class Practice_Ajax
     {
         check_ajax_referer('qp_practice_nonce', 'nonce');
 
-        $result = \QuestionPress\Utils\Practice_Manager::check_answer($_POST);
+        $result = Practice_Manager::check_answer($_POST);
 
         if (is_wp_error($result)) {
             wp_send_json_error(['message' => $result->get_error_message(), 'code' => $result->get_error_code()]);
@@ -45,7 +44,7 @@ class Practice_Ajax
     {
         check_ajax_referer('qp_practice_nonce', 'nonce');
 
-        $result = \QuestionPress\Utils\Practice_Manager::save_mock_attempt($_POST);
+        $result = Practice_Manager::save_mock_attempt($_POST);
 
         if (is_wp_error($result)) {
             wp_send_json_error(['message' => $result->get_error_message(), 'code' => $result->get_error_code()]);
@@ -62,7 +61,7 @@ class Practice_Ajax
     {
         check_ajax_referer('qp_practice_nonce', 'nonce');
         
-        $result = \QuestionPress\Utils\Practice_Manager::update_mock_status($_POST);
+        $result = Practice_Manager::update_mock_status($_POST);
 
         if (is_wp_error($result)) {
             wp_send_json_error(['message' => $result->get_error_message()]);
@@ -78,7 +77,7 @@ class Practice_Ajax
     {
         check_ajax_referer('qp_practice_nonce', 'nonce');
         
-        $result = \QuestionPress\Utils\Practice_Manager::expire_question($_POST);
+        $result = Practice_Manager::expire_question($_POST);
 
         if (is_wp_error($result)) {
             wp_send_json_error(['message' => $result->get_error_message()]);
@@ -94,7 +93,7 @@ class Practice_Ajax
     {
         check_ajax_referer('qp_practice_nonce', 'nonce');
         
-        $result = \QuestionPress\Utils\Practice_Manager::skip_question($_POST);
+        $result = Practice_Manager::skip_question($_POST);
 
         if (is_wp_error($result)) {
             wp_send_json_error(['message' => $result->get_error_message()]);
@@ -110,7 +109,7 @@ class Practice_Ajax
     {
         check_ajax_referer('qp_practice_nonce', 'nonce');
 
-        $result = \QuestionPress\Utils\Practice_Manager::toggle_review_later([
+        $result = Practice_Manager::toggle_review_later([
             'question_id' => isset($_POST['question_id']) ? absint($_POST['question_id']) : 0,
             'is_marked' => isset($_POST['is_marked']) && $_POST['is_marked'] === 'true'
         ]);
@@ -135,7 +134,7 @@ class Practice_Ajax
             wp_send_json_error(['message' => 'Security check failed.']);
         }
 
-        $result = \QuestionPress\Utils\Practice_Manager::get_single_question_for_review($_POST);
+        $result = Practice_Manager::get_single_question_for_review($_POST);
 
         if (is_wp_error($result)) {
             wp_send_json_error(['message' => $result->get_error_message()]);
@@ -151,7 +150,7 @@ class Practice_Ajax
     {
         check_ajax_referer('qp_practice_nonce', 'nonce');
 
-        $result = \QuestionPress\Utils\Practice_Manager::submit_question_report($_POST);
+        $result = Practice_Manager::submit_question_report($_POST);
 
         if (is_wp_error($result)) {
             wp_send_json_error(['message' => $result->get_error_message()]);
@@ -167,7 +166,7 @@ class Practice_Ajax
     {
         check_ajax_referer('qp_practice_nonce', 'nonce');
 
-        $result = \QuestionPress\Utils\Practice_Manager::get_report_reasons([]); // No params needed
+        $result = Practice_Manager::get_report_reasons([]); // No params needed
 
         if (is_wp_error($result)) {
             wp_send_json_error(['message' => $result->get_error_message()]);
@@ -212,7 +211,7 @@ class Practice_Ajax
     {
         check_ajax_referer('qp_practice_nonce', 'nonce');
         
-        $result = \QuestionPress\Utils\Practice_Manager::get_unattempted_counts();
+        $result = Practice_Manager::get_unattempted_counts();
 
         if (is_wp_error($result)) {
             wp_send_json_error(['message' => $result->get_error_message()]);
@@ -228,7 +227,7 @@ class Practice_Ajax
     {
         check_ajax_referer('qp_practice_nonce', 'nonce');
 
-        $result_data = \QuestionPress\Utils\Practice_Manager::get_question_data([
+        $result_data = Practice_Manager::get_question_data([
             'question_id' => isset($_POST['question_id']) ? absint($_POST['question_id']) : 0,
             'session_id' => isset($_POST['session_id']) ? absint($_POST['session_id']) : 0
         ]);
@@ -247,7 +246,7 @@ class Practice_Ajax
     {
         check_ajax_referer('qp_practice_nonce', 'nonce');
 
-        $result = \QuestionPress\Utils\Practice_Manager::get_topics_for_subject([
+        $result = Practice_Manager::get_topics_for_subject([
             'subject_id' => isset($_POST['subject_id']) ? $_POST['subject_id'] : []
         ]);
 
@@ -265,7 +264,7 @@ class Practice_Ajax
     {
         check_ajax_referer('qp_practice_nonce', 'nonce');
 
-        $result = \QuestionPress\Utils\Practice_Manager::get_sections_for_subject([
+        $result = Practice_Manager::get_sections_for_subject([
             'topic_id' => isset($_POST['topic_id']) ? absint($_POST['topic_id']) : 0
         ]);
 
@@ -283,7 +282,7 @@ class Practice_Ajax
     {
         check_ajax_referer('qp_practice_nonce', 'nonce');
 
-        $result = \QuestionPress\Utils\Practice_Manager::get_sources_for_subject([
+        $result = Practice_Manager::get_sources_for_subject([
             'subject_id' => isset($_POST['subject_id']) ? absint($_POST['subject_id']) : 0
         ]);
 
@@ -301,7 +300,7 @@ class Practice_Ajax
     {
         check_ajax_referer('qp_practice_nonce', 'nonce');
 
-        $result = \QuestionPress\Utils\Practice_Manager::get_child_terms([
+        $result = Practice_Manager::get_child_terms([
             'parent_id' => isset($_POST['parent_id']) ? absint($_POST['parent_id']) : 0
         ]);
 
@@ -320,7 +319,7 @@ class Practice_Ajax
     {
         check_ajax_referer('qp_practice_nonce', 'nonce');
         
-        $result = \QuestionPress\Utils\Practice_Manager::get_progress_data([
+        $result = Practice_Manager::get_progress_data([
             'subject_id' => isset($_POST['subject_id']) ? absint($_POST['subject_id']) : 0,
             'source_id' => isset($_POST['source_id']) ? absint($_POST['source_id']) : 0,
             'exclude_incorrect' => isset($_POST['exclude_incorrect']) && $_POST['exclude_incorrect'] === 'true'
@@ -425,7 +424,7 @@ class Practice_Ajax
     {
         check_ajax_referer('qp_practice_nonce', 'nonce');
 
-        $result = \QuestionPress\Utils\Practice_Manager::get_sources_for_subject_cascading([
+        $result = Practice_Manager::get_sources_for_subject_cascading([
             'subject_id' => isset($_POST['subject_id']) ? absint($_POST['subject_id']) : 0
         ]);
 
@@ -443,7 +442,7 @@ class Practice_Ajax
     {
         check_ajax_referer('qp_practice_nonce', 'nonce');
 
-        $result = \QuestionPress\Utils\Practice_Manager::get_child_terms_cascading([
+        $result = Practice_Manager::get_child_terms_cascading([
             'parent_id' => isset($_POST['parent_id']) ? absint($_POST['parent_id']) : 0
         ]);
 
@@ -462,7 +461,7 @@ class Practice_Ajax
     {
         check_ajax_referer('qp_practice_nonce', 'nonce');
         
-        $result = \QuestionPress\Utils\Practice_Manager::get_sources_for_subject_progress([
+        $result = Practice_Manager::get_sources_for_subject_progress([
             'subject_id' => isset($_POST['subject_id']) ? absint($_POST['subject_id']) : 0
         ]);
 
@@ -484,7 +483,7 @@ class Practice_Ajax
             return;
         }
 
-        $result = \QuestionPress\Utils\Practice_Manager::check_remaining_attempts();
+        $result = Practice_Manager::check_remaining_attempts();
 
         if (is_wp_error($result)) {
             wp_send_json_error(['has_access' => false, 'message' => $result->get_error_message(), 'reason_code' => $result->get_error_code()]);
@@ -499,7 +498,7 @@ class Practice_Ajax
     public static function enroll_in_course() {
         check_ajax_referer('qp_enroll_course_nonce', 'nonce');
 
-        $result = \QuestionPress\Utils\Course_Manager::enroll_in_course($_POST);
+        $result = Course_Manager::enroll_in_course($_POST);
 
         if (is_wp_error($result)) {
             wp_send_json_error(['message' => $result->get_error_message(), 'code' => $result->get_error_code()]);
@@ -518,7 +517,7 @@ class Practice_Ajax
             wp_send_json_error(['message' => 'Permission denied.'], 403);
         }
 
-        $result = \QuestionPress\Utils\Course_Manager::search_questions_for_course($_POST);
+        $result = Course_Manager::search_questions_for_course($_POST);
 
         if (is_wp_error($result)) {
             wp_send_json_error(['message' => $result->get_error_message(), 'code' => $result->get_error_code()]);
@@ -537,7 +536,7 @@ class Practice_Ajax
     {
         check_ajax_referer('qp_practice_nonce', 'nonce');
         
-        $result = \QuestionPress\Utils\Course_Manager::get_practice_form_data();
+        $result = Course_Manager::get_practice_form_data();
 
         if (is_wp_error($result)) {
             wp_send_json_error(['message' => $result->get_error_message(), 'code' => $result->get_error_code()]);
@@ -556,7 +555,7 @@ class Practice_Ajax
     {
         check_ajax_referer('qp_practice_nonce', 'nonce'); // Re-use the existing frontend nonce
 
-        $result = \QuestionPress\Utils\Course_Manager::get_course_structure([
+        $result = Course_Manager::get_course_structure([
             'course_id' => isset($_POST['course_id']) ? absint($_POST['course_id']) : 0
         ]);
 
@@ -573,7 +572,7 @@ class Practice_Ajax
     public static function deregister_from_course() {
         check_ajax_referer('qp_practice_nonce', 'nonce');
 
-        $result = \QuestionPress\Utils\Course_Manager::deregister_from_course([
+        $result = Course_Manager::deregister_from_course([
             'course_id' => isset($_POST['course_id']) ? absint($_POST['course_id']) : 0
         ]);
 
@@ -589,7 +588,7 @@ class Practice_Ajax
      */
     public static function check_username_availability() {
         // No nonce check needed for a public availability check
-        $result = \QuestionPress\Utils\Auth_Manager::check_username_availability($_POST);
+        $result = Auth_Manager::check_username_availability($_POST);
 
         if (is_wp_error($result)) {
             wp_send_json_error(['message' => $result->get_error_message(), 'code' => $result->get_error_code()]);
@@ -603,7 +602,7 @@ class Practice_Ajax
      */
     public static function check_email_availability() {
         // No nonce check needed for a public availability check
-        $result = \QuestionPress\Utils\Auth_Manager::check_email_availability($_POST);
+        $result = Auth_Manager::check_email_availability($_POST);
 
         if (is_wp_error($result)) {
             wp_send_json_error(['message' => $result->get_error_message(), 'code' => $result->get_error_code()]);
@@ -623,7 +622,7 @@ class Practice_Ajax
         // No nonce needed here, as we're acting on session data, not POST data.
         $email = $_SESSION['qp_signup_data']['email'] ?? '';
 
-        $result = \QuestionPress\Utils\Auth_Manager::resend_registration_otp(['email' => $email]);
+        $result = Auth_Manager::resend_registration_otp(['email' => $email]);
 
         if (is_wp_error($result)) {
             wp_send_json_error(['message' => $result->get_error_message(), 'code' => $result->get_error_code()]);
@@ -639,7 +638,7 @@ class Practice_Ajax
     {
         check_ajax_referer('qp_practice_nonce', 'nonce');
 
-        $result = \QuestionPress\Utils\Practice_Manager::get_buffered_question_data($_POST);
+        $result = Practice_Manager::get_buffered_question_data($_POST);
 
         if (is_wp_error($result)) {
             wp_send_json_error(['message' => $result->get_error_message()]);

@@ -1,6 +1,6 @@
 <?php
 
-namespace QuestionPress\Utils;
+namespace QuestionPress\Modules\Auth;
 
 if ( ! defined( 'ABSPATH' ) ) {
     exit;
@@ -70,7 +70,7 @@ class Auth_Manager {
             return new WP_Error('session_expired', 'Your session has expired. Please go back.', ['status' => 400]);
         }
         
-        $result = \QuestionPress\Utils\OTP_Manager::generate_and_send($email);
+        $result = OTP_Manager::generate_and_send($email);
 
         if (is_wp_error($result)) {
             return $result;

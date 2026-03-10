@@ -3,7 +3,7 @@
 namespace QuestionPress\Rest_Api; // PSR-4 Namespace
 
 use QuestionPress\Utils\Dashboard_Manager;
-use QuestionPress\Frontend\Dashboard;
+use QuestionPress\Modules\Practice\Practice_Manager;
 
 // Exit if accessed directly.
 if (! defined('ABSPATH')) {
@@ -317,7 +317,7 @@ class DataController
         if ($session_status === 'active' || $session_status === 'paused') {
             // --- SESSION IS ACTIVE ---
             // Call our centralized function from Practice_Manager to get the manifest
-            $session_manifest = \QuestionPress\Utils\Practice_Manager::get_active_session_data($session_id, $user_id);
+            $session_manifest = Practice_Manager::get_active_session_data($session_id, $user_id);
             
             if (is_wp_error($session_manifest)) {
                 return $session_manifest;

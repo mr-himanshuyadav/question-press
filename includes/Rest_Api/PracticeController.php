@@ -6,8 +6,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 use Error;
-use QuestionPress\Utils\Practice_Manager;
-use QuestionPress\Utils\Session_Manager;
+use QuestionPress\Modules\Practice\Practice_Manager;
 use QuestionPress\Database\Questions_DB;
 
 /**

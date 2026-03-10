@@ -1,6 +1,6 @@
 <?php
 
-namespace QuestionPress\Utils;
+namespace QuestionPress\Modules\Session;
 
 // Exit if accessed directly.
 if (! defined('ABSPATH')) {
@@ -8,6 +8,7 @@ if (! defined('ABSPATH')) {
 }
 
 use QuestionPress\Database\DB;
+use QuestionPress\Utils\Analytics_Manager;
 
 /**
  * Handles session-related logic like finalization and state calculation.

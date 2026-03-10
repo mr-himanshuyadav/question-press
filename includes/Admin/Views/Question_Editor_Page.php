@@ -7,7 +7,7 @@ if (!defined('ABSPATH')) exit;
 
 use QuestionPress\Database\Questions_DB;
 use QuestionPress\Database\Terms_DB;
-use QuestionPress\Utils\Attempt_Evaluator;
+use QuestionPress\Modules\Practice\Attempt_Evaluator;
 use QuestionPress\Admin\Views\Course_Editor_Helper;
 use QuestionPress\Utils\Template_Loader;
 

@@ -6,8 +6,8 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-use QuestionPress\Utils\Session_Manager;
-use QuestionPress\Utils\Practice_Manager;
+use QuestionPress\Modules\Session\Session_Manager;
+use QuestionPress\Modules\Practice\Practice_Manager;
 
 /**
  * Handles AJAX requests related to practice sessions.

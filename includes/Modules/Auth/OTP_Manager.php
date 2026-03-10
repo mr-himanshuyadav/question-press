@@ -1,5 +1,5 @@
 <?php
-namespace QuestionPress\Utils;
+namespace QuestionPress\Modules\Auth;
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 

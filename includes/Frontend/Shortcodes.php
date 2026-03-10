@@ -4,6 +4,9 @@ namespace QuestionPress\Frontend;
 
 use QuestionPress\Utils\Template_Loader;
 use QuestionPress\Utils\User_Access;
+use QuestionPress\Modules\Practice\Practice_Manager;
+use QuestionPress\Modules\Auth\OTP_Manager;
+
 
 /**
  * Class Shortcodes
@@ -307,7 +310,7 @@ final class Shortcodes
 		$user_id    = get_current_user_id();
 
         // --- 1. Call the new centralized function ---
-        $session_data = \QuestionPress\Utils\Practice_Manager::get_active_session_data($session_id, $user_id);
+        $session_data = Practice_Manager::get_active_session_data($session_id, $user_id);
 
         // --- 2. Handle errors & edge cases ---
         if (is_wp_error($session_data)) {
@@ -673,7 +676,7 @@ final class Shortcodes
 
 					if ($enable_otp) {
 						// --- OTP is ON: Send code and show Step 2 ---
-						$otp_result = \QuestionPress\Utils\OTP_Manager::generate_and_send($email);
+						$otp_result = OTP_Manager::generate_and_send($email);
 						if (is_wp_error($otp_result)) {
 							$errors[] = $otp_result->get_error_message();
 							// Stay on step 1 and show the error
@@ -729,7 +732,7 @@ final class Shortcodes
 
 					if (isset($_POST['qp_signup_submit_otp'])) {
 						$otp_code = $_POST['qp_reg_otp'] ?? '';
-						$verify_result = \QuestionPress\Utils\OTP_Manager::verify($email, $otp_code);
+						$verify_result = OTP_Manager::verify($email, $otp_code);
 
 						if (is_wp_error($verify_result)) {
 							$errors[] = $verify_result->get_error_message();
