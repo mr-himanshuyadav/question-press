@@ -471,5 +471,17 @@ final class Router
             'callback'            => [PracticeController::class, 'start_priority_session'],
             'permission_callback' => [AuthController::class, 'check_auth_token'],
         ]);
+
+        register_rest_route('questionpress/v1', '/notifications/register', [
+            'methods'             => \WP_REST_Server::CREATABLE,
+            'callback'            => [NotificationController::class, 'register_device_token'],
+            'permission_callback' => [AuthController::class, 'check_auth_token'],
+        ]);
+
+        register_rest_route('questionpress/v1', '/notifications/deregister', [
+            'methods'             => \WP_REST_Server::CREATABLE,
+            'callback'            => [NotificationController::class, 'deregister_device_token'],
+            'permission_callback' => [AuthController::class, 'check_auth_token'],
+        ]);
     }
 }
