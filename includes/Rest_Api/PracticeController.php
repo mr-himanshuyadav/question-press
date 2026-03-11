@@ -606,8 +606,10 @@ class PracticeController
 
 		return new \WP_REST_Response([
 			'success'    => true,
-			'session_id' => (int) $session_id,
-			'task'       => $task
+			'data'       => [
+				'session_id' => (int) $session_id,
+				'task'       => $task
+			]
 		], 200);
 	}
 }
