@@ -8,6 +8,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 use Error;
 use QuestionPress\Modules\Practice\Practice_Manager;
 use QuestionPress\Database\Questions_DB;
+use QuestionPress\Utils\Vault_Manager;
 
 /**
  * REST API endpoints for in-practice actions.
@@ -494,6 +495,34 @@ class PracticeController {
             'success'    => true,
             'session_id' => (int) $session_id,
             'message'    => 'Session started successfully.'
+        ], 200);
+    }
+
+	/**
+     * Handles confidence rating submissions via REST.
+     * POST /questionpress/v1/practice/confidence
+     */
+    public static function submit_confidence_rating( $request ) {
+        $user_id     = get_current_user_id();
+        $question_id = $request->get_param('question_id');
+        $rating      = $request->get_param('rating');
+
+        if ( !$question_id || !$rating ) {
+            return new \WP_REST_Response( ['message' => 'Missing question_id or rating'], 400 );
+        }
+
+        $next_review = Vault_Manager::update_mastery_rating( $user_id, (int)$question_id, $rating );
+
+        if ( !$next_review ) {
+            return new \WP_REST_Response( ['message' => 'Failed to update SRS data'], 500 );
+        }
+
+        $days = round( ( strtotime($next_review) - time() ) / 86400 );
+
+        return new \WP_REST_Response([
+            'success'          => true,
+            'next_review_date' => $next_review,
+            'message'          => sprintf( 'See you again in %d days', $days )
         ], 200);
     }
 }

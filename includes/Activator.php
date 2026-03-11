@@ -395,6 +395,33 @@ class Activator {
             KEY reset_token (reset_token(191))
         ) $charset_collate;";
         dbDelta($sql_otp);
+    
+        // 12. User Vault Table (Centralized user state)
+    $table_vault = $wpdb->get_blog_prefix() . 'qp_user_vault';
+    $sql_vault = "CREATE TABLE $table_vault (
+        user_id BIGINT(20) UNSIGNED NOT NULL,
+        access_scope JSON NOT NULL,
+        revision_config JSON NOT NULL,
+        performance_snapshot JSON NOT NULL,
+        streak_data JSON NOT NULL,
+        last_sync TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY  (user_id)
+    ) $charset_collate;";
+    dbDelta($sql_vault);
+
+    // 13. User Mastery Table (SRS Tracking)
+    $table_mastery = $wpdb->get_blog_prefix() . 'qp_user_mastery';
+    $sql_mastery = "CREATE TABLE $table_mastery (
+        user_id BIGINT(20) UNSIGNED NOT NULL,
+        question_id BIGINT(20) UNSIGNED NOT NULL,
+        box_number INT NOT NULL DEFAULT 0,
+        ease_factor DECIMAL(5,2) NOT NULL DEFAULT 2.50,
+        next_review_date DATETIME DEFAULT NULL,
+        last_result TINYINT DEFAULT NULL,
+        PRIMARY KEY  (user_id, question_id),
+        KEY next_review_date (next_review_date)
+    ) $charset_collate;";
+    dbDelta($sql_mastery);
 
     // === SCHEDULE CRON JOBS ===
     if (!wp_next_scheduled('qp_check_entitlement_expiration_hook')) {
