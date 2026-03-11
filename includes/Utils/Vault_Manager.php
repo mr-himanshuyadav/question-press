@@ -194,4 +194,36 @@ class Vault_Manager {
 
         return 'Daily Review';
     }
+
+    /**
+     * Updates the user's revision configuration within the vault.
+     * * @param int   $user_id
+     * @param array $settings Map containing weekly_day, monthly_date, session_min_questions, or focus_subjects.
+     * @return bool
+     */
+    public static function update_revision_settings(int $user_id, array $settings): bool {
+        global $wpdb;
+        $table = $wpdb->prefix . 'qp_user_vault';
+
+        self::ensure_vault_exists($user_id);
+        $vault = self::get_vault($user_id);
+        
+        if (!$vault) return false;
+
+        // revision_config is already decoded as an array by get_vault()
+        $config = (array) $vault->revision_config;
+
+        $valid_keys = ['weekly_day', 'monthly_date', 'session_min_questions', 'focus_subjects'];
+        foreach ($valid_keys as $key) {
+            if (isset($settings[$key])) {
+                $config[$key] = $settings[$key];
+            }
+        }
+
+        return (bool) $wpdb->update(
+            $table,
+            ['revision_config' => wp_json_encode($config)],
+            ['user_id' => $user_id]
+        );
+    }
 }

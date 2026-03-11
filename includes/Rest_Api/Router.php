@@ -483,5 +483,11 @@ final class Router
             'callback'            => [NotificationController::class, 'deregister_device_token'],
             'permission_callback' => [AuthController::class, 'check_auth_token'],
         ]);
+
+        register_rest_route('questionpress/v1', '/practice/vault-settings', [
+            'methods'             => \WP_REST_Server::CREATABLE,
+            'callback'            => [PracticeController::class, 'update_vault_settings'],
+            'permission_callback' => [AuthController::class, 'check_auth_token'],
+        ]);
     }
 }

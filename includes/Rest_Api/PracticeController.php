@@ -612,4 +612,25 @@ class PracticeController
 			]
 		], 200);
 	}
+
+	/**
+	 * Updates the user vault revision settings via REST.
+	 * POST /questionpress/v1/practice/vault-settings
+	 */
+	public static function update_vault_settings( \WP_REST_Request $request ) {
+		$user_id = get_current_user_id();
+		$params  = $request->get_json_params();
+
+		if ( empty( $params ) ) {
+			return new \WP_REST_Response( [ 'success' => false, 'message' => 'No settings provided.' ], 400 );
+		}
+
+		$success = Vault_Manager::update_revision_settings( $user_id, $params );
+
+		if ( ! $success ) {
+			return new \WP_REST_Response( [ 'success' => false, 'message' => 'Failed to update vault settings.' ], 500 );
+		}
+
+		return new \WP_REST_Response( [ 'success' => true, 'message' => 'Vault settings updated successfully.' ], 200 );
+	}
 }
