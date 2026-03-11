@@ -9,6 +9,7 @@ if (! defined('ABSPATH')) {
 
 use WP_Error;
 use QuestionPress\Utils\User_Access;
+use QuestionPress\Utils\Vault_Manager;
 
 /**
  * Handles the core business logic for creating and managing practice sessions.
@@ -2700,5 +2701,94 @@ class Practice_Manager
         }
 
         return $wpdb->insert_id;
+    }
+
+    /**
+     * Fetches a weighted mix of question IDs for "Smart Revision".
+     * Mix: 40% SRS, 20% Mistakes, 20% Interleaved (New), 20% Bookmarks.
+     * Failsafe: If empty, gets 20 random published questions from allowed subjects.
+     *
+     * @param int $user_id
+     * @param string $mode
+     * @return int[]|\WP_Error
+     */
+    public static function get_smart_revision_ids(int $user_id, string $mode) {
+        global $wpdb;
+        $vault = \QuestionPress\Utils\Vault_Manager::get_vault($user_id);
+        $limit = $vault->revision_config['session_min_questions'] ?? 20;
+
+        $ids = [];
+
+        // 1. 40% SRS (Due now or overdue)
+        $srs_limit = ceil($limit * 0.4);
+        $srs_ids = $wpdb->get_col($wpdb->prepare(
+            "SELECT question_id FROM {$wpdb->prefix}qp_user_mastery 
+             WHERE user_id = %d AND next_review_date <= NOW() 
+             ORDER BY next_review_date ASC LIMIT %d",
+            $user_id, $srs_limit
+        ));
+        if (!empty($srs_ids)) $ids = array_merge($ids, array_map('intval', $srs_ids));
+
+        // 2. 20% Recent Mistakes (Last 7 days)
+        $mistake_limit = ceil($limit * 0.2);
+        $mistake_ids = $wpdb->get_col($wpdb->prepare(
+            "SELECT DISTINCT question_id FROM {$wpdb->prefix}qp_user_attempts 
+             WHERE user_id = %d AND is_correct = 0 AND attempt_time >= DATE_SUB(NOW(), INTERVAL 7 DAY) 
+             LIMIT %d",
+            $user_id, $mistake_limit
+        ));
+        if (!empty($mistake_ids)) $ids = array_merge($ids, array_map('intval', $mistake_ids));
+
+        // 3. 20% Interleaved (Focus Subjects, never attempted)
+        $focus_subjects = $vault->access_scope['focus_subjects'] ?? [];
+        if (!empty($focus_subjects)) {
+            $new_limit = ceil($limit * 0.2);
+            $subj_placeholders = implode(',', array_map('intval', $focus_subjects));
+            $new_ids = $wpdb->get_col($wpdb->prepare(
+                "SELECT q.question_id FROM {$wpdb->prefix}qp_questions q
+                 LEFT JOIN {$wpdb->prefix}qp_user_attempts a ON q.question_id = a.question_id AND a.user_id = %d
+                 WHERE q.primary_subject_term_id IN ($subj_placeholders) AND a.attempt_id IS NULL
+                 LIMIT %d",
+                $user_id, $new_limit
+            ));
+            if (!empty($new_ids)) $ids = array_merge($ids, array_map('intval', $new_ids));
+        }
+
+        // 4. 20% Bookmarks
+        $bookmark_limit = ceil($limit * 0.2);
+        $bookmark_ids = $wpdb->get_col($wpdb->prepare(
+            "SELECT question_id FROM {$wpdb->prefix}qp_review_later WHERE user_id = %d LIMIT %d",
+            $user_id, $bookmark_limit
+        ));
+        if (!empty($bookmark_ids)) $ids = array_merge($ids, array_map('intval', $bookmark_ids));
+
+        $ids = array_unique($ids);
+
+        // --- FAILSAFE FALLBACK ---
+        if (empty($ids)) {
+            $allowed_subjects = \QuestionPress\Utils\User_Access::get_allowed_subject_ids($user_id);
+            $where_subjects = "";
+            if ($allowed_subjects !== 'all' && is_array($allowed_subjects)) {
+                if (empty($allowed_subjects)) {
+                    return new \WP_Error('empty_vault', 'Your vault is empty. Please complete some standard practice first.');
+                }
+                $subj_placeholders = implode(',', array_map('intval', $allowed_subjects));
+                $where_subjects = " AND primary_subject_term_id IN ($subj_placeholders)";
+            }
+
+            $fallback_ids = $wpdb->get_col(
+                "SELECT question_id FROM {$wpdb->prefix}qp_questions 
+                 WHERE status = 'publish' $where_subjects 
+                 ORDER BY RAND() LIMIT 20"
+            );
+
+            if (empty($fallback_ids)) {
+                return new \WP_Error('empty_vault', 'Your vault is empty. Please complete some standard practice first.');
+            }
+
+            $ids = array_map('intval', $fallback_ids);
+        }
+
+        return $ids;
     }
 }

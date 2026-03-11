@@ -525,4 +525,36 @@ class PracticeController {
             'message'          => sprintf( 'See you again in %d days', $days )
         ], 200);
     }
+
+	/**
+     * REST API callback to get daily guidance and start a smart revision session.
+     * GET /questionpress/v1/practice/guidance
+     */
+    public static function get_daily_guidance( \WP_REST_Request $request ) {
+        $user_id = get_current_user_id();
+
+        // 1. Get the Priority Task (Daily/Weekly/Monthly) from Vault_Manager
+        $task = Vault_Manager::get_today_priority_task( $user_id );
+
+        // 2. Get the Weighted Mix of IDs from Practice_Manager (with failsafe)
+        $ids = Practice_Manager::get_smart_revision_ids( $user_id, $task );
+
+        if ( is_wp_error( $ids ) ) {
+            return $ids;
+        }
+
+        // 3. Start the session using the Practice_Manager internal method
+        $session_id = Practice_Manager::start_session_from_ids( $ids, $task );
+
+        if ( is_wp_error( $session_id ) ) {
+            return $session_id;
+        }
+
+        return new \WP_REST_Response([
+            'success'        => true,
+            'priority_task'  => $task,
+            'session_id'     => (int) $session_id,
+            'question_count' => count( $ids )
+        ], 200);
+    }
 }

@@ -168,4 +168,30 @@ class Vault_Manager {
 
         return $next_review;
     }
+
+    /**
+     * Determines the priority task for a user based on their revision schedule.
+     * * @param int $user_id
+     * @return string
+     */
+    public static function get_today_priority_task(int $user_id): string {
+        $vault = self::get_vault($user_id);
+        if (!$vault || empty($vault->revision_config)) {
+            return 'Daily Review';
+        }
+
+        $config = $vault->revision_config;
+        $today_day  = gmdate('l'); // e.g., 'Monday'
+        $today_date = (int) gmdate('j'); // 1-31
+
+        if (isset($config['monthly_date']) && (int)$config['monthly_date'] === $today_date) {
+            return 'Monthly Review';
+        }
+
+        if (isset($config['weekly_day']) && strcasecmp($config['weekly_day'], $today_day) === 0) {
+            return 'Weekly Review';
+        }
+
+        return 'Daily Review';
+    }
 }

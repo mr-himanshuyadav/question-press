@@ -459,5 +459,11 @@ final class Router
             'callback'            => [PracticeController::class, 'submit_confidence_rating'],
             'permission_callback' => [AuthController::class, 'check_auth_token'],
         ]);
+
+        register_rest_route('questionpress/v1', '/practice/guidance', [
+            'methods'             => \WP_REST_Server::READABLE,
+            'callback'            => [PracticeController::class, 'get_daily_guidance'],
+            'permission_callback' => [AuthController::class, 'check_auth_token'],
+        ]);
     }
 }
