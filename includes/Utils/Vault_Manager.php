@@ -97,22 +97,28 @@ class Vault_Manager
         }
         return $count;
     }
-
     /**
      * Recalculates mastery data using a high-performance single query.
+     * Incorporates warm-start logic to initialize SRS metadata for all attempts.
      *
      * @return int Number of mastery records affected.
      */
-    public static function recalculate_mastery_from_history(): int
-    {
+    public static function recalculate_mastery_from_history(): int {
         global $wpdb;
         $attempts_table = $wpdb->get_blog_prefix() . 'qp_user_attempts';
         $mastery_table  = $wpdb->get_blog_prefix() . 'qp_user_mastery';
+        $now = current_time('mysql');
 
-        // Optimized INSERT...SELECT: Hits attempt_id (PK) to find latest result per user/question
-        $affected = $wpdb->query("
-            INSERT INTO $mastery_table (user_id, question_id, box_number, last_result)
-            SELECT a.user_id, a.question_id, IF(a.is_correct, 2, 1), a.is_correct
+        // Optimized INSERT...SELECT: Initializes SRS values to ensure immediate revision eligibility
+        $affected = $wpdb->query($wpdb->prepare("
+            INSERT INTO $mastery_table (user_id, question_id, box_number, ease_factor, last_result, next_review_date)
+            SELECT 
+                a.user_id, 
+                a.question_id, 
+                IF(a.is_correct, 2, 1), 
+                2.50, 
+                IF(a.is_correct, 'correct', 'incorrect'), 
+                %s
             FROM $attempts_table a
             INNER JOIN (
                 SELECT MAX(attempt_id) as max_id
@@ -120,9 +126,9 @@ class Vault_Manager
                 GROUP BY user_id, question_id
             ) b ON a.attempt_id = b.max_id
             ON DUPLICATE KEY UPDATE 
-                box_number = VALUES(box_number), 
-                last_result = VALUES(last_result)
-        ");
+                last_result = VALUES(last_result),
+                next_review_date = IFNULL(next_review_date, VALUES(next_review_date))
+        ", $now));
 
         return (int) $affected;
     }
