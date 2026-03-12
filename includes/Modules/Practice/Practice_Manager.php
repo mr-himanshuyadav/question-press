@@ -2714,7 +2714,7 @@ class Practice_Manager
      */
     public static function get_smart_revision_ids(int $user_id, string $mode) {
         global $wpdb;
-        $vault = \QuestionPress\Utils\Vault_Manager::get_vault($user_id);
+        $vault = Vault_Manager::get_vault($user_id);
         $limit = $vault->revision_config['session_min_questions'] ?? 20;
 
         $ids = [];
@@ -2766,7 +2766,7 @@ class Practice_Manager
 
         // --- FAILSAFE FALLBACK ---
         if (empty($ids)) {
-            $allowed_subjects = \QuestionPress\Utils\User_Access::get_allowed_subject_ids($user_id);
+            $allowed_subjects = User_Access::get_allowed_subject_ids($user_id);
             $where_subjects = "";
             if ($allowed_subjects !== 'all' && is_array($allowed_subjects)) {
                 if (empty($allowed_subjects)) {
