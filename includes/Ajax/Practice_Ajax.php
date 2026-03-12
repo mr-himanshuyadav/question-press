@@ -615,7 +615,7 @@ class Practice_Ajax
      * AJAX handler for resending an OTP code.
      */
     public static function resend_registration_otp() {
-        if ( session_status() === PHP_SESSION_NONE ) {
+        if ( session_status() === PHP_SESSION_NONE && ! headers_sent() ) {
             session_start();
         }
 

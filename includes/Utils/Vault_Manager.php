@@ -1,4 +1,5 @@
 <?php
+
 namespace QuestionPress\Utils;
 
 use QuestionPress\Database\DB;
@@ -7,7 +8,8 @@ use QuestionPress\Database\DB;
  * Manages user vault data and mastery progress.
  * Centralized logic for user state and SRS metadata.
  */
-class Vault_Manager {
+class Vault_Manager
+{
 
     /**
      * Ensures a vault entry exists for the user.
@@ -15,7 +17,8 @@ class Vault_Manager {
      * @param int $user_id
      * @return bool
      */
-    public static function ensure_vault_exists(int $user_id): bool {
+    public static function ensure_vault_exists(int $user_id): bool
+    {
         global $wpdb;
         $table = $wpdb->get_blog_prefix() . 'qp_user_vault';
 
@@ -28,7 +31,7 @@ class Vault_Manager {
             return (bool) $wpdb->insert($table, [
                 'user_id'              => $user_id,
                 'access_scope'         => '{}',
-                'revision_config'      => '{}',
+                'revision_config'      => '{"daily_practice_time":"09:00"}',
                 'performance_snapshot' => '{}',
                 'streak_data'          => '{}'
             ]);
@@ -43,7 +46,8 @@ class Vault_Manager {
      * @param int $user_id
      * @return \stdClass|null
      */
-    public static function get_vault(int $user_id): ?\stdClass {
+    public static function get_vault(int $user_id): ?\stdClass
+    {
         global $wpdb;
         $table = $wpdb->get_blog_prefix() . 'qp_user_vault';
 
@@ -70,10 +74,11 @@ class Vault_Manager {
      *
      * @return int Number of users synced.
      */
-    public static function sync_all_vaults(): int {
+    public static function sync_all_vaults(): int
+    {
         global $wpdb;
         $vault_table = $wpdb->get_blog_prefix() . 'qp_user_vault';
-        
+
         // Find users who exist in WP but don't have a vault row yet
         $missing_user_ids = $wpdb->get_col("
             SELECT u.ID 
@@ -98,7 +103,8 @@ class Vault_Manager {
      *
      * @return int Number of mastery records affected.
      */
-    public static function recalculate_mastery_from_history(): int {
+    public static function recalculate_mastery_from_history(): int
+    {
         global $wpdb;
         $attempts_table = $wpdb->get_blog_prefix() . 'qp_user_attempts';
         $mastery_table  = $wpdb->get_blog_prefix() . 'qp_user_mastery';
@@ -130,24 +136,38 @@ class Vault_Manager {
      * @param string $rating 'again', 'hard', 'good', 'easy'
      * @return string|null The next review date (ISO 8601) or null on failure.
      */
-    public static function update_mastery_rating(int $user_id, int $question_id, string $rating): ?string {
+    public static function update_mastery_rating(int $user_id, int $question_id, string $rating): ?string
+    {
         global $wpdb;
         $table = $wpdb->get_blog_prefix() . 'qp_user_mastery';
 
         $mastery = $wpdb->get_row($wpdb->prepare(
             "SELECT box_number, ease_factor FROM $table WHERE user_id = %d AND question_id = %d",
-            $user_id, $question_id
+            $user_id,
+            $question_id
         ));
 
         $box  = $mastery ? (int) $mastery->box_number : 0;
         $ease = $mastery ? (float) $mastery->ease_factor : 2.50;
 
         switch ($rating) {
-            case 'again': $box = 1; $ease -= 0.20; break;
-            case 'hard':  $box += 1; $ease -= 0.15; break;
-            case 'good':  $box += 1; break;
-            case 'easy':  $box += 2; $ease += 0.15; break;
-            default: return null;
+            case 'again':
+                $box = 1;
+                $ease -= 0.20;
+                break;
+            case 'hard':
+                $box += 1;
+                $ease -= 0.15;
+                break;
+            case 'good':
+                $box += 1;
+                break;
+            case 'easy':
+                $box += 2;
+                $ease += 0.15;
+                break;
+            default:
+                return null;
         }
 
         $box = max(1, min(5, $box));
@@ -163,7 +183,11 @@ class Vault_Manager {
                 box_number = VALUES(box_number), 
                 ease_factor = VALUES(ease_factor), 
                 next_review_date = VALUES(next_review_date)",
-            $user_id, $question_id, $box, $ease, $next_review
+            $user_id,
+            $question_id,
+            $box,
+            $ease,
+            $next_review
         ));
 
         return $next_review;
@@ -174,7 +198,8 @@ class Vault_Manager {
      * * @param int $user_id
      * @return string
      */
-    public static function get_today_priority_task(int $user_id): string {
+    public static function get_today_priority_task(int $user_id): string
+    {
         $vault = self::get_vault($user_id);
         if (!$vault || empty($vault->revision_config)) {
             return 'Daily Review';
@@ -201,32 +226,32 @@ class Vault_Manager {
      * @param array $settings Map containing weekly_day, monthly_date, session_min_questions, or focus_subjects.
      * @return bool
      */
-    public static function update_revision_settings(int $user_id, array $settings): bool {
+    public static function update_revision_settings(int $user_id, array $settings): bool
+    {
         global $wpdb;
         $table = $wpdb->prefix . 'qp_user_vault';
 
         self::ensure_vault_exists($user_id);
         $vault = self::get_vault($user_id);
-        error_log("Updating revision settings for user_id: $user_id with settings: " . json_encode($settings));
-        
+
         if (!$vault) return false;
 
         // revision_config is already decoded as an array by get_vault()
         $config = (array) $vault->revision_config;
 
-        error_log("Current revision_config for user_id $user_id: " . json_encode($config));
-
-        $valid_keys = ['weekly_day', 'monthly_date', 'session_min_questions', 'focus_subjects'];
+        $valid_keys = ['weekly_day', 'monthly_date', 'session_min_questions', 'focus_subjects', 'daily_practice_time'];
         foreach ($valid_keys as $key) {
             if (isset($settings[$key])) {
                 $config[$key] = $settings[$key];
             }
         }
 
-        return (bool) $wpdb->update(
+        $result = $wpdb->update(
             $table,
             ['revision_config' => wp_json_encode($config)],
             ['user_id' => $user_id]
         );
+
+        return $result !== false;
     }
 }

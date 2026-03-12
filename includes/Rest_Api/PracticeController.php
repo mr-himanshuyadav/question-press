@@ -620,25 +620,22 @@ class PracticeController
         $user_id = get_current_user_id();
         $params  = $request->get_json_params();
 
-        // 1. Sanitize and structure the data
-        $new_settings = [
-            'weekly_day'       => (int) ($params['weekly_day'] ?? 7),
-            'monthly_date'     => (int) ($params['monthly_date'] ?? 28),
-            'session_min_questions' => (int) ($params['session_min_questions'] ?? 10),
-        ];
-
-        // 2. Save to User Meta
-        // update_user_meta returns true on success, or false if it failed OR IF THE VALUE IS THE SAME
-        $updated = update_user_meta( $user_id, 'qp_vault_settings', $new_settings );
-
-        // 3. FIXED LOGIC: Only error if it's a genuine failure
-        // We get existing data to verify if 'false' was just because of identical data
-        $existing = get_user_meta( $user_id, 'qp_vault_settings', true );
-        
-        if ( ! $updated && $existing != $new_settings ) {
-            return new \WP_Error( 'save_failed', 'Could not save settings to database.', [ 'status' => 500 ] );
+        if ( empty( $params ) ) {
+            return new \WP_Error( 'rest_invalid_param', 'No settings provided.', [ 'status' => 400 ] );
         }
 
-        return new \WP_REST_Response( [ 'success' => true, 'data' => $new_settings ], 200 );
+        // Call the Manager to handle database logic and JSON synchronization
+        $success = Vault_Manager::update_revision_settings( $user_id, $params );
+
+		error_log("Vault settings update for user_id $user_id with params: " . json_encode($params) . " resulted in success: " . ($success ? 'true' : 'false'));
+
+        if ( ! $success ) {
+            return new \WP_Error( 'save_failed', 'Could not update vault settings in the database.', [ 'status' => 500 ] );
+        }
+
+        return new \WP_REST_Response( [ 
+            'success' => true, 
+            'message' => 'Vault settings updated successfully.' 
+        ], 200 );
     }
 }
