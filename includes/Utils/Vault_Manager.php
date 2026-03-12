@@ -38,7 +38,6 @@ class Vault_Manager
                     'weekly_day'           => 'Monday',
                     'monthly_date'         => 1,
                     'alert_time'           => '09:00',
-                    'daily_practice_time'  => '09:00', // Synced with alert_time for TS compatibility
                     'session_min_questions'=> 10
                 ]),
                 'performance_snapshot' => '{}',
@@ -79,13 +78,13 @@ class Vault_Manager
             'weekly_day'            => 'Monday',
             'monthly_date'          => 1,
             'alert_time'            => '09:00',
-            'daily_practice_time'   => '09:00',
             'session_min_questions' => 10
         ];
 
         // Decode JSON fields for business logic use
         $current_config = json_decode($row->revision_config, true) ?: [];
         $row->revision_config = wp_parse_args( $current_config, $defaults );
+        unset( $row->revision_config['daily_practice_time'] );
         $row->performance_snapshot = json_decode($row->performance_snapshot, true) ?: [];
         $row->streak_data          = json_decode($row->streak_data, true) ?: [];
 
@@ -269,8 +268,7 @@ class Vault_Manager
         $config = (array) $vault->revision_config;
 
         $valid_keys = [
-            'weekly_day', 'monthly_date', 'session_min_questions', 'focus_subjects', 
-            'daily_practice_time', 'alert_time', 'daily_count', 'weekly_count', 'monthly_count'
+            'weekly_day', 'monthly_date', 'session_min_questions', 'focus_subjects', 'alert_time', 'daily_count', 'weekly_count', 'monthly_count'
         ];
         foreach ($valid_keys as $key) {
             if (isset($settings[$key])) {
