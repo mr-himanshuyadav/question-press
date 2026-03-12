@@ -561,10 +561,18 @@ class PracticeController
 	{
 		$user_id = get_current_user_id();
 
-		// 1. Determine the Priority Task from Vault_Manager
+		// 1. Check if user already completed a revision session today
+		if (Practice_Manager::has_completed_revision_today($user_id)) {
+			return new \WP_REST_Response([
+				'success' => true,
+				'data'    => null
+			], 200);
+		}
+
+		// 2. Determine the Priority Task from Vault_Manager
 		$task = Vault_Manager::get_today_priority_task($user_id);
 
-		// 2. Fetch the mix of IDs to get the due count
+		// 3. Fetch the mix of IDs to get the due count
 		$ids = Practice_Manager::get_smart_revision_ids($user_id, $task);
 
 		// If it's a WP_Error (e.g. empty vault), or empty array, return data: null

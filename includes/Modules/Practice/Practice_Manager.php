@@ -2791,4 +2791,36 @@ class Practice_Manager
 
         return $ids;
     }
+
+
+    /**
+     * Checks if the user has already completed a revision session today.
+     *
+     * @param int $user_id
+     * @return bool
+     */
+    public static function has_completed_revision_today(int $user_id): bool {
+        global $wpdb;
+        $table = $wpdb->prefix . 'qp_user_sessions';
+        $today = gmdate('Y-m-d');
+
+        $exists = $wpdb->get_var($wpdb->prepare(
+            "SELECT 1 FROM $table 
+             WHERE user_id = %d 
+             AND status = 'completed' 
+             AND DATE(end_time) = %s 
+             AND (
+                settings_snapshot LIKE '%%\"practice_mode\":\"Daily Review\"%%' OR 
+                settings_snapshot LIKE '%%\"practice_mode\":\"Weekly Review\"%%' OR 
+                settings_snapshot LIKE '%%\"practice_mode\":\"Monthly Review\"%%'
+             )
+             LIMIT 1",
+            $user_id,
+            $today
+        ));
+
+        error_log("Checked revision completion for user_id $user_id on $today: " . ($exists ? 'completed' : 'not completed'));
+
+        return (bool) $exists;
+    }
 }
