@@ -212,7 +212,7 @@ class Vault_Manager
         }
 
         $config = $vault->revision_config;
-        $today_day  = gmdate('l'); // e.g., 'Monday'
+        $today_day = (int) gmdate('N'); // 1 (Mon) → 7 (Sun)
         $today_date = (int) gmdate('j'); // 1-31
 
         if (isset($config['monthly_date']) && (int)$config['monthly_date'] === $today_date) {
