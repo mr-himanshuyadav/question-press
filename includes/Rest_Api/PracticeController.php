@@ -614,23 +614,31 @@ class PracticeController
 	}
 
 	/**
-	 * Updates the user vault revision settings via REST.
-	 * POST /questionpress/v1/practice/vault-settings
-	 */
-	public static function update_vault_settings( \WP_REST_Request $request ) {
-		$user_id = get_current_user_id();
-		$params  = $request->get_json_params();
+     * Updates the user's Smart Revision (Vault) settings.
+     */
+    public static function update_vault_settings( \WP_REST_Request $request ) {
+        $user_id = get_current_user_id();
+        $params  = $request->get_json_params();
 
-		if ( empty( $params ) ) {
-			return new \WP_REST_Response( [ 'success' => false, 'message' => 'No settings provided.' ], 400 );
-		}
+        // 1. Sanitize and structure the data
+        $new_settings = [
+            'weekly_day'       => (int) ($params['weekly_day'] ?? 7),
+            'monthly_date'     => (int) ($params['monthly_date'] ?? 28),
+            'session_min_questions' => (int) ($params['session_min_questions'] ?? 10),
+        ];
 
-		$success = Vault_Manager::update_revision_settings( $user_id, $params );
+        // 2. Save to User Meta
+        // update_user_meta returns true on success, or false if it failed OR IF THE VALUE IS THE SAME
+        $updated = update_user_meta( $user_id, 'qp_vault_settings', $new_settings );
 
-		if ( ! $success ) {
-			return new \WP_REST_Response( [ 'success' => false, 'message' => 'Failed to update vault settings.' ], 500 );
-		}
+        // 3. FIXED LOGIC: Only error if it's a genuine failure
+        // We get existing data to verify if 'false' was just because of identical data
+        $existing = get_user_meta( $user_id, 'qp_vault_settings', true );
+        
+        if ( ! $updated && $existing != $new_settings ) {
+            return new \WP_Error( 'save_failed', 'Could not save settings to database.', [ 'status' => 500 ] );
+        }
 
-		return new \WP_REST_Response( [ 'success' => true, 'message' => 'Vault settings updated successfully.' ], 200 );
-	}
+        return new \WP_REST_Response( [ 'success' => true, 'data' => $new_settings ], 200 );
+    }
 }

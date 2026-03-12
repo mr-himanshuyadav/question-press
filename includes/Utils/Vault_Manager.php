@@ -207,11 +207,14 @@ class Vault_Manager {
 
         self::ensure_vault_exists($user_id);
         $vault = self::get_vault($user_id);
+        error_log("Updating revision settings for user_id: $user_id with settings: " . json_encode($settings));
         
         if (!$vault) return false;
 
         // revision_config is already decoded as an array by get_vault()
         $config = (array) $vault->revision_config;
+
+        error_log("Current revision_config for user_id $user_id: " . json_encode($config));
 
         $valid_keys = ['weekly_day', 'monthly_date', 'session_min_questions', 'focus_subjects'];
         foreach ($valid_keys as $key) {
