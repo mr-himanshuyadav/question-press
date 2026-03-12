@@ -165,6 +165,9 @@ class Dashboard_Manager {
 				$scope_description = implode( '; ', $scope_parts );
 			}
 		}
+
+		Vault_Manager::ensure_vault_exists( $user_id );
+		$vault = Vault_Manager::get_vault( $user_id );
 		return [
 			'display_name'          => $user_info->display_name,
 			'email'                 => $user_info->user_email,
@@ -172,6 +175,7 @@ class Dashboard_Manager {
 			'scope_description'     => $scope_description,
 			'allowed_subjects_list' => $allowed_subjects_list,
 			'allowed_exams_list'    => $allowed_exams_list,
+			'vault_settings'        => $vault ? $vault->revision_config : [],
 		];
 	}
 

@@ -31,7 +31,16 @@ class Vault_Manager
             return (bool) $wpdb->insert($table, [
                 'user_id'              => $user_id,
                 'access_scope'         => '{}',
-                'revision_config'      => '{"daily_practice_time":"09:00"}',
+                'revision_config'      => wp_json_encode([
+                    'daily_count'          => 20,
+                    'weekly_count'         => 50,
+                    'monthly_count'        => 100,
+                    'weekly_day'           => 'Monday',
+                    'monthly_date'         => 1,
+                    'alert_time'           => '09:00',
+                    'daily_practice_time'  => '09:00', // Synced with alert_time for TS compatibility
+                    'session_min_questions'=> 10
+                ]),
                 'performance_snapshot' => '{}',
                 'streak_data'          => '{}'
             ]);
@@ -60,9 +69,23 @@ class Vault_Manager
             return null;
         }
 
-        // Decode JSON fields for business logic use
+        // Decode JSON fields and merge revision_config with system defaults for backward compatibility
         $row->access_scope         = json_decode($row->access_scope, true) ?: [];
-        $row->revision_config      = json_decode($row->revision_config, true) ?: [];
+        
+        $defaults = [
+            'daily_count'           => 20,
+            'weekly_count'          => 50,
+            'monthly_count'         => 100,
+            'weekly_day'            => 'Monday',
+            'monthly_date'          => 1,
+            'alert_time'            => '09:00',
+            'daily_practice_time'   => '09:00',
+            'session_min_questions' => 10
+        ];
+
+        // Decode JSON fields for business logic use
+        $current_config = json_decode($row->revision_config, true) ?: [];
+        $row->revision_config = wp_parse_args( $current_config, $defaults );
         $row->performance_snapshot = json_decode($row->performance_snapshot, true) ?: [];
         $row->streak_data          = json_decode($row->streak_data, true) ?: [];
 
@@ -245,7 +268,10 @@ class Vault_Manager
         // revision_config is already decoded as an array by get_vault()
         $config = (array) $vault->revision_config;
 
-        $valid_keys = ['weekly_day', 'monthly_date', 'session_min_questions', 'focus_subjects', 'daily_practice_time'];
+        $valid_keys = [
+            'weekly_day', 'monthly_date', 'session_min_questions', 'focus_subjects', 
+            'daily_practice_time', 'alert_time', 'daily_count', 'weekly_count', 'monthly_count'
+        ];
         foreach ($valid_keys as $key) {
             if (isset($settings[$key])) {
                 $config[$key] = $settings[$key];
