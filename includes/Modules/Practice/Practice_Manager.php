@@ -2720,13 +2720,17 @@ class Practice_Manager
         $vault = Vault_Manager::get_vault($user_id);
         $config = (array) ($vault->revision_config ?? []);
 
-        $min_counts = [
-            'Daily Review'   => 10,
-            'Weekly Review'  => 20,
-            'Monthly Review' => 30,
+        // ACT AS PHP ARCHITECT: Map session modes to their respective configuration keys
+        $mode_key_map = [
+            'Daily Review'   => 'daily_count',
+            'Weekly Review'  => 'weekly_count',
+            'Monthly Review' => 'monthly_count',
         ];
 
-        $mode_min = $min_counts[$mode] ?? 10;
+        $config_key = $mode_key_map[$mode] ?? 'daily_count';
+        
+        // Vault_Manager::get_vault already ensures these defaults (20, 50, 100) are merged
+        $mode_min = (int) ($config[$config_key] ?? 20);
         $user_target = isset($config['session_min_questions']) ? (int)$config['session_min_questions'] : 20;
         $limit = max($mode_min, $user_target);
 
@@ -2756,21 +2760,43 @@ class Practice_Manager
         1. SRS DUE (PRIMARY)
         =========================
         */
+        $srs_pool_size = ceil($mode_min * 0.60);
+        $consolidation_percent = rand(5, 15) / 100;
+        $target_consolidation = ceil($srs_pool_size * $consolidation_percent);
+        
+        // Memory Consolidation: Target questions from the previous cycle interval
+        $cycle_days = ($mode === 'Weekly Review') ? 7 : (($mode === 'Monthly Review') ? 30 : 1);
 
-        $srs_ids = $wpdb->get_col($wpdb->prepare(
-            "SELECT question_id
-         FROM {$wpdb->prefix}qp_user_mastery
-         WHERE user_id = %d
-         AND next_review_date <= NOW()
-         ORDER BY next_review_date ASC
-         LIMIT %d",
+        // 1.1 Consolidation Layer: Reinforce questions from yesterday, last week, or last month
+        $consolidation_ids = $wpdb->get_col($wpdb->prepare(
+            "SELECT DISTINCT question_id 
+             FROM {$wpdb->prefix}qp_user_attempts 
+             WHERE user_id = %d 
+             AND DATE(attempt_time) = DATE_SUB(CURRENT_DATE(), INTERVAL %d DAY)
+             ORDER BY RAND() 
+             LIMIT %d",
             $user_id,
-            $srs_limit
+            $cycle_days,
+            $target_consolidation
         ));
 
-        $add_ids($srs_ids);
+        // 1.2 Core SRS Layer: Questions that are currently due/overdue
+        $remaining_limit = $srs_pool_size - count($consolidation_ids);
+        $due_ids = $wpdb->get_col($wpdb->prepare(
+            "SELECT question_id
+             FROM {$wpdb->prefix}qp_user_mastery
+             WHERE user_id = %d
+             AND next_review_date <= NOW()
+             ORDER BY next_review_date ASC
+             LIMIT %d",
+            $user_id,
+            $remaining_limit
+        ));
 
-        error_log("[SR] SRS added: " . count($srs_ids));
+        $srs_ids = array_unique(array_merge($consolidation_ids, $due_ids));
+
+        $add_ids($srs_ids);
+        error_log("[SR] SRS Logic: Core=" . count($due_ids) . ", Consolidation=" . count($consolidation_ids));
 
         /*
         =========================

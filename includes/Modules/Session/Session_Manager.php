@@ -9,6 +9,7 @@ if (! defined('ABSPATH')) {
 
 use QuestionPress\Database\DB;
 use QuestionPress\Utils\Analytics_Manager;
+use QuestionPress\Utils\Vault_Manager;
 
 /**
  * Handles session-related logic like finalization and state calculation.
@@ -167,6 +168,12 @@ class Session_Manager extends DB
 				'not_viewed_count' => $not_viewed_count,
 				'marks_obtained' => $final_score
 			], ['session_id' => $session_id]);
+
+            try {
+                Vault_Manager::sync_mastery_from_session($session_id);
+            } catch (\Exception $e) {
+                error_log("QP Mastery Sync snag for Session $session_id: " . $e->getMessage());
+            }
 
 			// Deduct Entitlements
 			if ($is_mock_test && (!isset($settings['course_id']) || $settings['course_id'] <= 0) && ($new_status === 'completed' || $new_status === 'abandoned') && $total_attempted > 0) {
