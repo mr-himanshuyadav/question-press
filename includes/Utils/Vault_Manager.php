@@ -110,15 +110,15 @@ class Vault_Manager
         $now = current_time('mysql');
 
         // Optimized INSERT...SELECT: Initializes SRS values to ensure immediate revision eligibility
-        $affected = $wpdb->query($wpdb->prepare("
+        $affected = $wpdb->query("
             INSERT INTO $mastery_table (user_id, question_id, box_number, ease_factor, last_result, next_review_date)
             SELECT 
                 a.user_id, 
                 a.question_id, 
                 IF(a.is_correct, 2, 1), 
                 2.50, 
-                IF(a.is_correct, 'correct', 'incorrect'), 
-                %s
+                a.is_correct, 
+                NULL
             FROM $attempts_table a
             INNER JOIN (
                 SELECT MAX(attempt_id) as max_id
@@ -127,8 +127,8 @@ class Vault_Manager
             ) b ON a.attempt_id = b.max_id
             ON DUPLICATE KEY UPDATE 
                 last_result = VALUES(last_result),
-                next_review_date = IFNULL(next_review_date, VALUES(next_review_date))
-        ", $now));
+                next_review_date = IFNULL(next_review_date, NULL)
+        ");
 
         return (int) $affected;
     }

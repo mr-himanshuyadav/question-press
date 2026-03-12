@@ -2706,7 +2706,7 @@ class Practice_Manager
     /**
      * Fetches a weighted mix of question IDs for "Smart Revision".
      * Mix: 40% SRS, 20% Mistakes, 20% Interleaved (New), 20% Bookmarks.
-     * Failsafe: If empty, gets 20 random published questions from allowed subjects.
+     * Includes verbose logging for manual verification of each selection stage.
      *
      * @param int $user_id
      * @param string $mode
@@ -2715,35 +2715,49 @@ class Practice_Manager
     public static function get_smart_revision_ids(int $user_id, string $mode) {
         global $wpdb;
         $vault = Vault_Manager::get_vault($user_id);
-        $limit = $vault->revision_config['session_min_questions'] ?? 20;
+        $config = (array) ($vault->revision_config ?? []);
+        $limit = isset($config['session_min_questions']) ? (int)$config['session_min_questions'] : 20;
+
+        error_log("--- [DEBUG] Smart Revision Start: User $user_id | Mode: $mode ---");
+        error_log("[DEBUG] Configured limit: $limit questions.");
 
         $ids = [];
 
         // 1. 40% SRS (Due now or overdue)
-        $srs_limit = ceil($limit * 0.4);
+        $srs_limit = (int) ceil($limit * 0.4);
         $srs_ids = $wpdb->get_col($wpdb->prepare(
             "SELECT question_id FROM {$wpdb->prefix}qp_user_mastery 
              WHERE user_id = %d AND next_review_date <= NOW() 
              ORDER BY next_review_date ASC LIMIT %d",
             $user_id, $srs_limit
         ));
-        if (!empty($srs_ids)) $ids = array_merge($ids, array_map('intval', $srs_ids));
+        if (!empty($srs_ids)) {
+            $ids = array_merge($ids, array_map('intval', $srs_ids));
+            error_log("[DEBUG] Step 1 (SRS): Collected " . count($srs_ids) . " questions due for review.");
+        } else {
+            error_log("[DEBUG] Step 1 (SRS): 0 questions currently due.");
+        }
 
         // 2. 20% Recent Mistakes (Last 7 days)
-        $mistake_limit = ceil($limit * 0.2);
+        $mistake_limit = (int) ceil($limit * 0.2);
         $mistake_ids = $wpdb->get_col($wpdb->prepare(
             "SELECT DISTINCT question_id FROM {$wpdb->prefix}qp_user_attempts 
              WHERE user_id = %d AND is_correct = 0 AND attempt_time >= DATE_SUB(NOW(), INTERVAL 7 DAY) 
              LIMIT %d",
             $user_id, $mistake_limit
         ));
-        if (!empty($mistake_ids)) $ids = array_merge($ids, array_map('intval', $mistake_ids));
+        if (!empty($mistake_ids)) {
+            $ids = array_merge($ids, array_map('intval', $mistake_ids));
+            error_log("[DEBUG] Step 2 (Mistakes): Collected " . count($mistake_ids) . " questions from recent errors.");
+        } else {
+            error_log("[DEBUG] Step 2 (Mistakes): 0 recent errors found.");
+        }
 
         // 3. 20% Interleaved (Focus Subjects, never attempted)
-        $focus_subjects = $vault->access_scope['focus_subjects'] ?? [];
+        $focus_subjects = $config['focus_subjects'] ?? [];
         if (!empty($focus_subjects)) {
-            $new_limit = ceil($limit * 0.2);
-            $subj_placeholders = implode(',', array_map('intval', $focus_subjects));
+            $new_limit = (int) ceil($limit * 0.2);
+            $subj_placeholders = implode(',', array_map('intval', (array)$focus_subjects));
             $new_ids = $wpdb->get_col($wpdb->prepare(
                 "SELECT q.question_id FROM {$wpdb->prefix}qp_questions q
                  LEFT JOIN {$wpdb->prefix}qp_user_attempts a ON q.question_id = a.question_id AND a.user_id = %d
@@ -2751,25 +2765,40 @@ class Practice_Manager
                  LIMIT %d",
                 $user_id, $new_limit
             ));
-            if (!empty($new_ids)) $ids = array_merge($ids, array_map('intval', $new_ids));
+            if (!empty($new_ids)) {
+                $ids = array_merge($ids, array_map('intval', $new_ids));
+                error_log("[DEBUG] Step 3 (Interleaved): Collected " . count($new_ids) . " new questions from focus subjects.");
+            } else {
+                error_log("[DEBUG] Step 3 (Interleaved): 0 unattempted questions found in focus subjects.");
+            }
+        } else {
+            error_log("[DEBUG] Step 3 (Interleaved): No focus subjects defined in vault.");
         }
 
         // 4. 20% Bookmarks
-        $bookmark_limit = ceil($limit * 0.2);
+        $bookmark_limit = (int) ceil($limit * 0.2);
         $bookmark_ids = $wpdb->get_col($wpdb->prepare(
             "SELECT question_id FROM {$wpdb->prefix}qp_review_later WHERE user_id = %d LIMIT %d",
             $user_id, $bookmark_limit
         ));
-        if (!empty($bookmark_ids)) $ids = array_merge($ids, array_map('intval', $bookmark_ids));
+        if (!empty($bookmark_ids)) {
+            $ids = array_merge($ids, array_map('intval', $bookmark_ids));
+            error_log("[DEBUG] Step 4 (Bookmarks): Collected " . count($bookmark_ids) . " bookmarked questions.");
+        } else {
+            error_log("[DEBUG] Step 4 (Bookmarks): 0 bookmarks found.");
+        }
 
         $ids = array_unique($ids);
+        error_log("[DEBUG] Total unique IDs identified from mix: " . count($ids));
 
         // --- FAILSAFE FALLBACK ---
         if (empty($ids)) {
-            $allowed_subjects = User_Access::get_allowed_subject_ids($user_id);
+            error_log("[DEBUG] Pool is empty. Triggering random fallback...");
+            $allowed_subjects = \QuestionPress\Utils\User_Access::get_allowed_subject_ids($user_id);
             $where_subjects = "";
             if ($allowed_subjects !== 'all' && is_array($allowed_subjects)) {
                 if (empty($allowed_subjects)) {
+                    error_log("[CRITICAL] User has no allowed subjects. Fallback impossible.");
                     return new \WP_Error('empty_vault', 'Your vault is empty. Please complete some standard practice first.');
                 }
                 $subj_placeholders = implode(',', array_map('intval', $allowed_subjects));
@@ -2783,11 +2812,16 @@ class Practice_Manager
             );
 
             if (empty($fallback_ids)) {
+                error_log("[CRITICAL] Random fallback returned 0 results.");
                 return new \WP_Error('empty_vault', 'Your vault is empty. Please complete some standard practice first.');
             }
 
             $ids = array_map('intval', $fallback_ids);
+            error_log("[DEBUG] Fallback successful: Selected " . count($ids) . " random questions.");
         }
+
+        error_log("[DEBUG] Final Revision IDs: [" . implode(',', $ids) . "]");
+        error_log("--- [DEBUG] Smart Revision Calculation Finished ---");
 
         return $ids;
     }
