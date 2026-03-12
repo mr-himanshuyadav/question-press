@@ -572,22 +572,23 @@ class PracticeController
 		// 2. Determine the Priority Task from Vault_Manager
 		$task = Vault_Manager::get_today_priority_task($user_id);
 
-		// 3. Fetch the mix of IDs to get the due count
-		$ids = Practice_Manager::get_smart_revision_ids($user_id, $task);
+		// 3. OPTIMIZATION: Get due count from vault configuration instead of calculating IDs
+		$vault        = Vault_Manager::get_vault($user_id);
+		$config       = (array) ($vault->revision_config ?? []);
+		$mode_key_map = [
+			'Daily Review'   => 'daily_count',
+			'Weekly Review'  => 'weekly_count',
+			'Monthly Review' => 'monthly_count',
+		];
 
-		// If it's a WP_Error (e.g. empty vault), or empty array, return data: null
-		if (is_wp_error($ids) || empty($ids)) {
-			return new \WP_REST_Response([
-				'success' => true,
-				'data'    => null
-			], 200);
-		}
+		$config_key = $mode_key_map[$task] ?? 'daily_count';
+		$due_count  = (int) ($config[$config_key] ?? 20);
 
 		return new \WP_REST_Response([
 			'success' => true,
 			'data'    => [
 				'priority_task' => $task,
-				'due_count'     => count($ids)
+				'due_count'     => $due_count
 			]
 		], 200);
 	}
