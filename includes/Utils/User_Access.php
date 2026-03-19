@@ -84,7 +84,7 @@ class User_Access {
 
 		// 1. Admins always have access
 		if ( user_can( $user_id, 'manage_options' ) ) {
-			return true; // CHANGED: Return true for admin
+			return true;
 		}
 
 		$entitlements_table = $wpdb->prefix . 'qp_user_entitlements';
@@ -99,17 +99,16 @@ class User_Access {
 				$course_id
 			) );
 			if ( $is_enrolled ) {
-				return true; // CHANGED: Return true for already enrolled
+				return true;
 			}
 		}
 
 		// 3. Check if the course is free
 		$access_mode = get_post_meta( $course_id, '_qp_course_access_mode', true ) ?: 'free';
 		if ( $access_mode === 'free' ) {
-			return true; // CHANGED: Return true for free course
+			return true;
 		}
 
-		// --- START REFINED ACCESS LOGIC ---
 		// 4. Get ALL active, non-expired entitlements for the user
 		$active_entitlements = $wpdb->get_results( $wpdb->prepare(
 			"SELECT plan_id, entitlement_id FROM {$entitlements_table}
@@ -121,54 +120,62 @@ class User_Access {
 		) );
 
 		if ( empty( $active_entitlements ) ) {
-			return false; // User has no active entitlements at all.
+			return false;
 		}
 
-		// Map plan IDs to their entitlement IDs
-		$active_plan_entitlement_map = [];
-		foreach ($active_entitlements as $entitlement) {
-			$active_plan_entitlement_map[ absint($entitlement->plan_id) ] = absint($entitlement->entitlement_id);
-		}
-		$active_plan_ids = array_keys($active_plan_entitlement_map);
+		// 5. Schema-Aware Access Loop
+		// We loop through each active plan and check for access based on its path (Course Only vs Combined).
+		foreach ( $active_entitlements as $entitlement ) {
+			$plan_id        = absint($entitlement->plan_id);
+			$entitlement_id = absint($entitlement->entitlement_id);
+			
+			// Identify the plan schema (Course Only vs Combined/Legacy)
+			$plan_schema = get_post_meta( $plan_id, '_qp_plan_schema', true );
 
+			// PATH 1: Course Only Schema
+			if ( $plan_schema === 'course_only' ) {
+				$scope = get_post_meta( $plan_id, '_qp_plan_course_scope', true ) ?: 'all';
+				
+				// "All Courses" grants access immediately
+				if ( $scope === 'all' ) {
+					return $entitlement_id;
+				}
+				
+				// "Single" or "Multiple" check the linked courses list
+				$linked_courses = get_post_meta( $plan_id, '_qp_plan_linked_courses', true );
+				if ( is_array( $linked_courses ) && in_array( $course_id, $linked_courses, true ) ) {
+					return $entitlement_id;
+				}
+				
+				continue; // Skip Path 2 checks for this specific plan
+			}
 
-		// 5. Fast Check: Does the user have the specific auto-plan for this course?
-		$course_auto_plan_id = get_post_meta( $course_id, '_qp_course_auto_plan_id', true );
-		if ( ! empty( $course_auto_plan_id ) && in_array( absint( $course_auto_plan_id ), $active_plan_ids, true ) ) {
-			// CHANGED: Return the entitlement_id
-			return $active_plan_entitlement_map[ absint( $course_auto_plan_id ) ];
-		}
+			// PATH 2: Combined Schema (or Legacy / Auto-Generated Plans)
+			// These plans use the '_qp_plan_course_access_type' logic.
+			$access_type = get_post_meta( $plan_id, '_qp_plan_course_access_type', true ) ?: 'none';
 
-		// 6. Slow Check: Loop through all other active entitlements (e.g., manual "All Access" plans)
-		foreach ( $active_plan_ids as $plan_id ) {
-			// Skip the course-specific plan we already checked
-			if ( $plan_id == $course_auto_plan_id ) {
+			// If explicitly set to 'none', this plan never grants course enrollment
+			if ( $access_type === 'none' ) {
 				continue;
 			}
-			
-			// Get the course access rules for this plan
-			$plan_course_access_type = get_post_meta( $plan_id, '_qp_plan_course_access_type', true );
 
-			// Check if this plan grants "All Courses"
-			if ( $plan_course_access_type === 'all' ) {
-				// CHANGED: Return the entitlement_id
-				return $active_plan_entitlement_map[ $plan_id ];
+			// Case A: The plan grants "All Courses" (Legacy or unrestricted Combined)
+			if ( $access_type === 'all' ) {
+				return $entitlement_id;
 			}
 
-			// Check if this plan grants "Specific Courses"
-			if ( $plan_course_access_type === 'specific' ) {
+			// Case B: The plan grants "Specific Courses" (New Combined or Auto-Plans)
+			if ( $access_type === 'specific' ) {
 				$linked_courses = get_post_meta( $plan_id, '_qp_plan_linked_courses', true );
 				
-				// Check if the plan's list of courses is an array and contains the course ID
+				// Verify if the course is in the allowed list
 				if ( is_array( $linked_courses ) && in_array( $course_id, $linked_courses, true ) ) {
-					// CHANGED: Return the entitlement_id
-					return $active_plan_entitlement_map[ $plan_id ];
+					return $entitlement_id;
 				}
 			}
 		}
-		// --- END REFINED ACCESS LOGIC ---
 
-		return false; // All checks failed.
+		return false; // No plan granted access.
 	}
 
 }
