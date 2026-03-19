@@ -16,6 +16,7 @@ use QuestionPress\Rest_Api\SessionController;
 use QuestionPress\Rest_Api\PracticeController;
 use QuestionPress\Rest_Api\CourseController; // Added
 use QuestionPress\Rest_Api\UpdateController;
+use QuestionPress\Rest_Api\LogController;
 use WP_REST_Server;
 
 final class Router
@@ -44,6 +45,12 @@ final class Router
             'methods'             => \WP_REST_Server::READABLE,
             'callback'            => [UpdateController::class, 'check_update'],
             'permission_callback' => '__return_true'
+        ]);
+
+        register_rest_route('questionpress/v1', '/log', [
+            'methods' => \WP_REST_Server::CREATABLE,
+            'callback' => [LogController::class, 'create_log'],
+            'permission_callback' => '__return_true' // or protect if needed
         ]);
 
 
@@ -136,14 +143,14 @@ final class Router
             '/course/(?P<id>\\d+)',
             [
                 'methods'             => \WP_REST_Server::READABLE,
-                'callback'            => [ DataController::class, 'get_course_details' ],
-                'permission_callback' => [ AuthController::class, 'check_auth_token' ],
+                'callback'            => [DataController::class, 'get_course_details'],
+                'permission_callback' => [AuthController::class, 'check_auth_token'],
                 'args'                => [
                     'id' => [
                         // --- THIS IS THE FIX ---
                         // Use an anonymous function to correctly handle the arguments
-                        'validate_callback' => function( $param, $request, $key ) {
-                            return is_numeric( $param );
+                        'validate_callback' => function ($param, $request, $key) {
+                            return is_numeric($param);
                         },
                         // --- END FIX ---
                         'required' => true,
@@ -159,31 +166,31 @@ final class Router
         ]);
 
         // Dashboard - History
-        register_rest_route('questionpress/v1', '/dashboard/history',[
-                'methods'             => \WP_REST_Server::READABLE,
-                'callback'            => [DataController::class, 'get_dashboard_history' ],
-                'permission_callback' => [AuthController::class, 'check_auth_token'],
+        register_rest_route('questionpress/v1', '/dashboard/history', [
+            'methods'             => \WP_REST_Server::READABLE,
+            'callback'            => [DataController::class, 'get_dashboard_history'],
+            'permission_callback' => [AuthController::class, 'check_auth_token'],
         ]);
 
         // Dashboard - My Courses
-        register_rest_route('questionpress/v1','/dashboard/my-courses',[
-                'methods'             => \WP_REST_Server::READABLE,
-                'callback'            => [ DataController::class, 'get_dashboard_my_courses' ],
-                'permission_callback' => [ AuthController::class, 'check_auth_token' ],
+        register_rest_route('questionpress/v1', '/dashboard/my-courses', [
+            'methods'             => \WP_REST_Server::READABLE,
+            'callback'            => [DataController::class, 'get_dashboard_my_courses'],
+            'permission_callback' => [AuthController::class, 'check_auth_token'],
         ]);
 
         // Dashboard - Available Courses
-        register_rest_route('questionpress/v1','/dashboard/available-courses',[
-                'methods'             => \WP_REST_Server::READABLE,
-                'callback'            => [ DataController::class, 'get_dashboard_available_courses' ],
-                'permission_callback' => [ AuthController::class, 'check_auth_token' ],
+        register_rest_route('questionpress/v1', '/dashboard/available-courses', [
+            'methods'             => \WP_REST_Server::READABLE,
+            'callback'            => [DataController::class, 'get_dashboard_available_courses'],
+            'permission_callback' => [AuthController::class, 'check_auth_token'],
         ]);
 
         // Dashboard - Review
-        register_rest_route('questionpress/v1','/dashboard/review', [
-                'methods'             => \WP_REST_Server::READABLE,
-                'callback'            => [ DataController::class, 'get_dashboard_review' ],
-                'permission_callback' => [ AuthController::class, 'check_auth_token' ],
+        register_rest_route('questionpress/v1', '/dashboard/review', [
+            'methods'             => \WP_REST_Server::READABLE,
+            'callback'            => [DataController::class, 'get_dashboard_review'],
+            'permission_callback' => [AuthController::class, 'check_auth_token'],
         ]);
 
         register_rest_route('questionpress/v1', '/dashboard/profile', [
@@ -209,11 +216,11 @@ final class Router
             'permission_callback' => [AuthController::class, 'check_auth_token']
         ]);
 
-        register_rest_route( 'questionpress/v1', '/session/(?P<id>[\d]+)/review', [
+        register_rest_route('questionpress/v1', '/session/(?P<id>[\d]+)/review', [
             'methods'  => WP_REST_Server::READABLE,
             'callback' => [DataController::class, 'get_session_review_details'],
             'permission_callback' => [AuthController::class, 'check_auth_token']
-        ] );
+        ]);
 
         register_rest_route('questionpress/v1', '/start-session', [
             'methods' => WP_REST_Server::CREATABLE,
@@ -288,7 +295,9 @@ final class Router
             'permission_callback' => [AuthController::class, 'check_auth_token'],
             'args'                => [
                 'id' => [
-                    'validate_callback' => function($param) { return is_numeric($param); },
+                    'validate_callback' => function ($param) {
+                        return is_numeric($param);
+                    },
                     'required'          => true,
                 ],
             ],
@@ -362,7 +371,7 @@ final class Router
         ]);
         register_rest_route('questionpress/v1', '/practice/update-index', [
             'methods'             => WP_REST_Server::CREATABLE,
-            'callback'            => [PracticeController::class, 'update_index' ],
+            'callback'            => [PracticeController::class, 'update_index'],
             'permission_callback' => [AuthController::class, 'check_auth_token'],
         ]);
         register_rest_route('questionpress/v1', '/practice/topics-for-subject', [

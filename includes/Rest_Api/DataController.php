@@ -795,7 +795,16 @@ class DataController
         if (!empty($last_act_date) && $last_act_date !== $today && $last_act_date !== $yesterday) {
             $current_streak = 0;
             update_user_meta($user_id, '_qp_current_streak', 0);
-            // Note: We keep _qp_last_activity_date as is; it will be updated on the next session finalize.
+        }
+
+        // Determine activity status for today
+        $completed_today = ($last_act_date === $today);
+        $streak_status   = 'inactive';
+        
+        if ($completed_today) {
+            $streak_status = 'active';
+        } elseif ($current_streak > 0) {
+            $streak_status = 'at_risk';
         }
 
         // 2. Assemble pre-calculated stats (Architect's Path)
@@ -804,7 +813,11 @@ class DataController
             'total_attempts'   => (int) get_user_meta($user_id, '_qp_total_attempts', true),
             'correct_count'    => (int) get_user_meta($user_id, '_qp_correct_count', true),
             'accuracy'         => (float) get_user_meta($user_id, '_qp_overall_accuracy', true),
-            'streak'           => $current_streak,
+            'streak'           => [
+                'count'           => $current_streak,
+                'completed_today' => $completed_today,
+                'status'          => $streak_status,
+            ],
             'advanced_enabled' => false, // Hook for Analytics Addon
         ];
 

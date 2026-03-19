@@ -2728,11 +2728,25 @@ class Practice_Manager
         ];
 
         $config_key = $mode_key_map[$mode] ?? 'daily_count';
-        
+
         // Vault_Manager::get_vault already ensures these defaults (20, 50, 100) are merged
         $mode_min = (int) ($config[$config_key] ?? 20);
         $user_target = isset($config['session_min_questions']) ? (int)$config['session_min_questions'] : 20;
         $limit = max($mode_min, $user_target);
+
+        // --- NEW: Access Control Setup ---
+        $allowed = User_Access::get_allowed_subject_ids($user_id);
+        $subject_restriction_sql = "";
+
+        if ($allowed !== 'all') {
+            $allowed_array = array_filter(array_map('intval', (array)$allowed));
+            if (empty($allowed_array)) {
+                return new \WP_Error('no_access', 'You do not have access to any subjects for revision.');
+            }
+            $allowed_ids_str = implode(',', $allowed_array);
+            $subject_restriction_sql = " AND q.primary_subject_term_id IN ($allowed_ids_str)";
+        }
+        // --- End Access Control Setup ---
 
         error_log("--- [SR LOG] START User $user_id | Mode: $mode | Target: $limit ---");
 
@@ -2763,16 +2777,19 @@ class Practice_Manager
         $srs_pool_size = ceil($mode_min * 0.60);
         $consolidation_percent = rand(5, 15) / 100;
         $target_consolidation = ceil($srs_pool_size * $consolidation_percent);
-        
+
         // Memory Consolidation: Target questions from the previous cycle interval
         $cycle_days = ($mode === 'Weekly Review') ? 7 : (($mode === 'Monthly Review') ? 30 : 1);
 
-        // 1.1 Consolidation Layer: Reinforce questions from yesterday, last week, or last month
+        // 1.1 Consolidation Layer (Attempts JOIN Questions)
         $consolidation_ids = $wpdb->get_col($wpdb->prepare(
-            "SELECT DISTINCT question_id 
-             FROM {$wpdb->prefix}qp_user_attempts 
-             WHERE user_id = %d 
-             AND DATE(attempt_time) = DATE_SUB(CURRENT_DATE(), INTERVAL %d DAY)
+            "SELECT DISTINCT a.question_id 
+             FROM {$wpdb->prefix}qp_user_attempts a
+             JOIN {$wpdb->prefix}qp_questions q ON a.question_id = q.question_id
+             WHERE a.user_id = %d 
+             AND DATE(a.attempt_time) = DATE_SUB(CURRENT_DATE(), INTERVAL %d DAY)
+             AND q.status = 'publish'
+             {$subject_restriction_sql}
              ORDER BY RAND() 
              LIMIT %d",
             $user_id,
@@ -2780,14 +2797,17 @@ class Practice_Manager
             $target_consolidation
         ));
 
-        // 1.2 Core SRS Layer: Questions that are currently due/overdue
+        // 1.2 Core SRS Layer (Mastery JOIN Questions)
         $remaining_limit = $srs_pool_size - count($consolidation_ids);
         $due_ids = $wpdb->get_col($wpdb->prepare(
-            "SELECT question_id
-             FROM {$wpdb->prefix}qp_user_mastery
-             WHERE user_id = %d
-             AND next_review_date <= NOW()
-             ORDER BY next_review_date ASC
+            "SELECT m.question_id
+             FROM {$wpdb->prefix}qp_user_mastery m
+             JOIN {$wpdb->prefix}qp_questions q ON m.question_id = q.question_id
+             WHERE m.user_id = %d
+             AND m.next_review_date <= NOW()
+             AND q.status = 'publish'
+             {$subject_restriction_sql}
+             ORDER BY m.next_review_date ASC
              LIMIT %d",
             $user_id,
             $remaining_limit
@@ -2805,16 +2825,16 @@ class Practice_Manager
         */
 
         $mistake_ids = $wpdb->get_col($wpdb->prepare(
-            "SELECT question_id
-         FROM {$wpdb->prefix}qp_user_attempts
-         WHERE user_id = %d
-         AND is_correct = 0
-         ORDER BY attempt_time DESC
-         LIMIT %d",
+            "SELECT a.question_id
+             FROM {$wpdb->prefix}qp_user_attempts a
+             JOIN {$wpdb->prefix}qp_questions q ON a.question_id = q.question_id
+             WHERE a.user_id = %d AND a.is_correct = 0 AND q.status = 'publish'
+             {$subject_restriction_sql}
+             ORDER BY a.attempt_time DESC
+             LIMIT %d",
             $user_id,
             $mistake_limit
         ));
-
         $add_ids($mistake_ids);
 
         error_log("[SR] Mistakes added: " . count($mistake_ids));
@@ -2826,16 +2846,16 @@ class Practice_Manager
         */
 
         $reinforce_ids = $wpdb->get_col($wpdb->prepare(
-            "SELECT question_id
-         FROM {$wpdb->prefix}qp_user_mastery
-         WHERE user_id = %d
-         AND box_number <= 2
-         ORDER BY box_number ASC
-         LIMIT %d",
+            "SELECT m.question_id
+             FROM {$wpdb->prefix}qp_user_mastery m
+             JOIN {$wpdb->prefix}qp_questions q ON m.question_id = q.question_id
+             WHERE m.user_id = %d AND m.box_number <= 2 AND q.status = 'publish'
+             {$subject_restriction_sql}
+             ORDER BY m.box_number ASC
+             LIMIT %d",
             $user_id,
             $reinforce_limit
         ));
-
         $add_ids($reinforce_ids);
 
         error_log("[SR] Reinforcement added: " . count($reinforce_ids));
@@ -2847,14 +2867,15 @@ class Practice_Manager
         */
 
         $bookmark_ids = $wpdb->get_col($wpdb->prepare(
-            "SELECT question_id
-         FROM {$wpdb->prefix}qp_review_later
-         WHERE user_id = %d
-         LIMIT %d",
+            "SELECT r.question_id
+             FROM {$wpdb->prefix}qp_review_later r
+             JOIN {$wpdb->prefix}qp_questions q ON r.question_id = q.question_id
+             WHERE r.user_id = %d AND q.status = 'publish'
+             {$subject_restriction_sql}
+             LIMIT %d",
             $user_id,
             $bookmark_limit
         ));
-
         $add_ids($bookmark_ids);
 
         error_log("[SR] Bookmarks added: " . count($bookmark_ids));
@@ -2887,147 +2908,105 @@ class Practice_Manager
             */
 
             $subject_ids = [];
-
             if (!empty($ids_list)) {
-
                 $subject_ids = $wpdb->get_col(
                     "SELECT DISTINCT primary_subject_term_id
-                 FROM {$wpdb->prefix}qp_questions
-                 WHERE question_id IN (" . implode(',', array_map('intval', $ids_list)) . ")
-                 AND primary_subject_term_id != 0"
+                     FROM {$wpdb->prefix}qp_questions
+                     WHERE question_id IN (" . implode(',', array_map('intval', $ids_list)) . ")
+                     AND primary_subject_term_id != 0"
                 );
             }
 
             /*
-            If still empty → use allowed subjects
+            2. Scope Validation: Filter detected subjects by what user is CURRENTLY allowed to see
             */
+            $allowed = User_Access::get_allowed_subject_ids($user_id);
+            if ($allowed !== 'all') {
+                $allowed_array = array_map('intval', (array)$allowed);
+                // If the pool had subjects the user is no longer allowed to see, remove them
+                $subject_ids = !empty($subject_ids) ? array_intersect($subject_ids, $allowed_array) : $allowed_array;
+            }
 
-            if (empty($subject_ids)) {
+            // If we ended up with no subjects (e.g., empty pool + no allowed subjects), we must stop
+            if (empty($subject_ids) && $allowed !== 'all') {
+                error_log("[SR] Fallback failed: No allowed subjects found for user $user_id");
+            } else {
+                $subject_where = !empty($subject_ids)
+                    ? " AND q.primary_subject_term_id IN (" . implode(',', array_map('intval', $subject_ids)) . ")"
+                    : "";
 
-                $allowed = User_Access::get_allowed_subject_ids($user_id);
+                /*
+                3. Primary Fallback: Questions attempted within the specific Time Window
+                */
+                $interval = ($mode === 'Weekly Review') ? '7 DAY' : (($mode === 'Monthly Review') ? '30 DAY' : '1 DAY');
 
-                if ($allowed !== 'all') {
-                    $subject_ids = (array)$allowed;
+                $common_ids = $wpdb->get_col($wpdb->prepare(
+                    "SELECT DISTINCT q.question_id
+                     FROM {$wpdb->prefix}qp_questions q
+                     JOIN {$wpdb->prefix}qp_user_attempts a ON q.question_id = a.question_id
+                     WHERE a.user_id = %d
+                     AND a.attempt_time >= DATE_SUB(NOW(), INTERVAL $interval)
+                     AND q.status = 'publish'
+                     $subject_where",
+                    $user_id
+                ));
+
+                if (!empty($common_ids)) {
+                    shuffle($common_ids);
+                    $added_from_common = array_slice($common_ids, 0, $needed);
+                    $add_ids($added_from_common);
+                    error_log("[SR] Fallback stage 1 (Intersection) added: " . count($added_from_common));
+                }
+
+                /*
+                4. Secondary Fallback: Purely random questions from allowed subjects
+                */
+                $ids_list = array_keys($ids);
+                $current_count = count($ids_list);
+
+                if ($current_count < $limit) {
+                    $needed = $limit - $current_count;
+                    error_log("[SR] Fallback stage 2 (Random Fill) triggered. Need $needed more.");
+
+                    $rand_ids = $wpdb->get_col(
+                        "SELECT q.question_id
+                         FROM {$wpdb->prefix}qp_questions q
+                         WHERE q.status = 'publish'
+                         $subject_where
+                         ORDER BY RAND()
+                         LIMIT $needed"
+                    );
+
+                    $add_ids($rand_ids);
                 }
             }
 
-            $subject_where = '';
-
-            if (!empty($subject_ids)) {
-                $subject_where = " AND q.primary_subject_term_id IN (" .
-                    implode(',', array_map('intval', $subject_ids)) . ")";
-            }
-
             /*
-            =========================
-            TIME WINDOW
-            =========================
-            */
-
-            $interval = '1 DAY';
-
-            if ($mode === 'Weekly Review') {
-                $interval = '7 DAY';
-            }
-
-            if ($mode === 'Monthly Review') {
-                $interval = '30 DAY';
-            }
-
-            /*
-            Recent attempts in window
-            */
-
-            $recent_ids = $wpdb->get_col($wpdb->prepare(
-                "SELECT DISTINCT question_id
-             FROM {$wpdb->prefix}qp_user_attempts
-             WHERE user_id = %d
-             AND attempt_time >= DATE_SUB(NOW(), INTERVAL $interval)",
-                $user_id
-            ));
-
-            /*
-            Questions from same subjects
-            */
-
-            $subject_question_ids = $wpdb->get_col(
-                "SELECT q.question_id
-             FROM {$wpdb->prefix}qp_questions q
-             WHERE q.status='publish'
-             $subject_where"
-            );
-
-            /*
-            INTERSECTION
-            */
-
-            $common_ids = array_intersect(
-                array_map('intval', $recent_ids),
-                array_map('intval', $subject_question_ids)
-            );
-
-            if (!empty($common_ids)) {
-
-                shuffle($common_ids);
-
-                $common_ids = array_slice($common_ids, 0, $needed);
-
-                $add_ids($common_ids);
-
-                error_log("[SR] Fallback intersection added: " . count($common_ids));
-            }
-
-            /*
-            STILL NEED MORE
-            */
-
-            $ids_list = array_keys($ids);
-            $current_count = count($ids_list);
-
-            if ($current_count < $limit) {
-
-                $needed = $limit - $current_count;
-
-                error_log("[SR] Secondary fallback random subjects: $needed");
-
-                $rand_ids = $wpdb->get_col(
-                    "SELECT q.question_id
-                 FROM {$wpdb->prefix}qp_questions q
-                 WHERE q.status='publish'
-                 $subject_where
-                 ORDER BY RAND()
-                 LIMIT $needed"
-                );
-
-                $add_ids($rand_ids);
-            }
-        }
-
-        /*
         =========================
         FINAL GUARD
         =========================
         */
 
-        $final_ids = array_keys($ids);
+            $final_ids = array_keys($ids);
 
-        if (empty($final_ids)) {
+            if (empty($final_ids)) {
 
-            error_log("[SR] CRITICAL: empty pool");
+                error_log("[SR] CRITICAL: empty pool");
 
-            return new \WP_Error(
-                'empty_pool',
-                'No questions found for revision.'
-            );
+                return new \WP_Error(
+                    'empty_pool',
+                    'No questions found for revision.'
+                );
+            }
+
+            shuffle($final_ids);
+
+            $final_selection = array_slice($final_ids, 0, $limit);
+
+            error_log("[SR] FINISHED with " . count($final_selection) . " questions");
+
+            return $final_selection;
         }
-
-        shuffle($final_ids);
-
-        $final_selection = array_slice($final_ids, 0, $limit);
-
-        error_log("[SR] FINISHED with " . count($final_selection) . " questions");
-
-        return $final_selection;
     }
 
 
