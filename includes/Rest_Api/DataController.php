@@ -169,7 +169,7 @@ class DataController
 
         return new \WP_REST_Response($formatted_courses, 200);
     }
-    
+
     /**
      * Callback to get the details for a single qp_course.
      * (REVISED to match the app's detailed course/[id].tsx interfaces)
@@ -179,15 +179,15 @@ class DataController
         $course_id = (int) $request['id'];
         $user_id = get_current_user_id();
 
-        if ( ! $course_id ) {
+        if (! $course_id) {
             return new \WP_Error('rest_invalid_id', 'Invalid course ID.', ['status' => 400]);
         }
 
         // 1. Call the centralized data function. It has all the data we need.
-        $data = Dashboard_Manager::get_course_structure_data( $course_id, $user_id );
+        $data = Dashboard_Manager::get_course_structure_data($course_id, $user_id);
 
         // 2. Handle errors
-        if ( is_null( $data ) ) {
+        if (is_null($data)) {
             return new \WP_Error('rest_forbidden', 'Course not found or you do not have access.', ['status' => 403]);
         }
 
@@ -195,27 +195,27 @@ class DataController
         $processed_sections = [];
         $is_previous_item_complete = true; // For progression logic
 
-        if ( ! empty( $data['sections'] ) ) {
-            foreach ( $data['sections'] as $section ) {
+        if (! empty($data['sections'])) {
+            foreach ($data['sections'] as $section) {
                 $processed_items = [];
-                
+
                 // Get the items for this section
-                $items_in_section = $data['items_by_section'][ $section->section_id ] ?? [];
-                
-                if ( ! empty( $items_in_section ) ) {
-                    foreach ( $items_in_section as $item ) {
+                $items_in_section = $data['items_by_section'][$section->section_id] ?? [];
+
+                if (! empty($items_in_section)) {
+                    foreach ($items_in_section as $item) {
                         $item_id = $item->item_id;
-                        
+
                         // Get progress for this item
-                        $progress = $data['progress_data'][ $item_id ] ?? [
+                        $progress = $data['progress_data'][$item_id] ?? [
                             'status'        => 'not_started',
                             'session_id'    => null,
                             'attempt_count' => 0,
                         ];
-                        
+
                         // Progression logic
                         $is_locked = false;
-                        if ( $data['is_progressive'] && ! $is_previous_item_complete ) {
+                        if ($data['is_progressive'] && ! $is_previous_item_complete) {
                             $is_locked = true;
                         }
 
@@ -225,13 +225,13 @@ class DataController
                         $can_retake = false;
                         $retakes_left = null;
 
-                        if ( $data['allow_retakes'] ) {
-                            if ( $retake_limit === 0 ) {
+                        if ($data['allow_retakes']) {
+                            if ($retake_limit === 0) {
                                 $can_retake = true; // Unlimited retakes
                                 $retakes_left = null; // App should interpret null as '∞'
                             } else {
                                 $retakes_left = $retake_limit - $attempt_count;
-                                if ( $retakes_left > 0 ) {
+                                if ($retakes_left > 0) {
                                     $can_retake = true;
                                 }
                             }
@@ -250,9 +250,9 @@ class DataController
                             'can_retake'    => $can_retake,
                             'retakes_left'  => $retakes_left,
                         ];
-                        
+
                         // Update progression for next loop iteration
-                        if ( $data['is_progressive'] ) {
+                        if ($data['is_progressive']) {
                             $is_previous_item_complete = ($progress['status'] === 'completed');
                         }
                     } // end foreach item
@@ -270,7 +270,7 @@ class DataController
 
         // 4. Determine enrollment status
         // We check if the 'back_url' (which we already calculated) goes to 'my-courses'
-        $is_enrolled = ( strpos( $data['back_url'], 'my-courses' ) !== false );
+        $is_enrolled = (strpos($data['back_url'], 'my-courses') !== false);
 
         // 5. Assemble final response for the app
         $api_response_data = [
@@ -284,7 +284,7 @@ class DataController
         ];
 
         // Wrap the response in our standard { success: true, data: ... } structure
-        return new \WP_REST_Response( [ 'success' => true, 'data' => $api_response_data ], 200 );
+        return new \WP_REST_Response(['success' => true, 'data' => $api_response_data], 200);
     }
 
     /**
@@ -306,11 +306,12 @@ class DataController
         $sessions_table = $wpdb->prefix . 'qp_user_sessions';
         $session_status = $wpdb->get_var($wpdb->prepare(
             "SELECT status FROM {$sessions_table} WHERE session_id = %d AND user_id = %d",
-            $session_id, $user_id
+            $session_id,
+            $user_id
         ));
 
         if (! $session_status) {
-             return new \WP_Error('rest_not_found', 'Session not found or permission denied.', ['status' => 404]);
+            return new \WP_Error('rest_not_found', 'Session not found or permission denied.', ['status' => 404]);
         }
 
         // 2. Branch the logic
@@ -318,17 +319,16 @@ class DataController
             // --- SESSION IS ACTIVE ---
             // Call our centralized function from Practice_Manager to get the manifest
             $session_manifest = Practice_Manager::get_active_session_data($session_id, $user_id);
-            
+
             if (is_wp_error($session_manifest)) {
                 return $session_manifest;
             }
-            
+
             // The app's interface expects a 'questions' key, but it will be empty.
             // We will add it here to prevent 'undefined' errors in the app.
             $session_manifest['questions'] = []; // App will need to fetch these
 
             return new \WP_REST_Response(['success' => true, 'data' => $session_manifest], 200);
-
         } else {
             // --- SESSION IS COMPLETED ---
             // Get final results (the original purpose of this function)
@@ -339,7 +339,7 @@ class DataController
                  FROM {$sessions_table} 
                  WHERE session_id = %d",
                 $session_id
-            ), ARRAY_A); 
+            ), ARRAY_A);
 
             if (! $results) {
                 return new \WP_Error('rest_no_data', 'Could not retrieve session results.', ['status' => 500]);
@@ -353,9 +353,10 @@ class DataController
      * Callback to get the data for the main overview dashboard.
      * (REVISED TO FIX DATA MISMATCH)
      */
-    public static function get_dashboard_overview( \WP_REST_Request $request ) {
+    public static function get_dashboard_overview(\WP_REST_Request $request)
+    {
         $user_id = get_current_user_id();
-        
+
         // 1. Call the correct data-fetching function from Dashboard.php
         $data = Dashboard_Manager::get_overview_data($user_id); //
 
@@ -365,7 +366,7 @@ class DataController
 
         // 2. Process Active Sessions into the format the app expects
         $processed_active_sessions = [];
-        foreach($data['active_sessions'] as $session) {
+        foreach ($data['active_sessions'] as $session) {
             $settings = json_decode($session->settings_snapshot, true);
             $processed_active_sessions[] = [
                 'session_id' => (int) $session->session_id,
@@ -380,7 +381,7 @@ class DataController
         // 3. Process Recent History into the format the app expects
         // THIS IS THE CRITICAL FIX FOR YOUR RECENT HISTORY
         $processed_recent_history = [];
-        foreach($data['recent_history'] as $session) { //
+        foreach ($data['recent_history'] as $session) { //
             $settings = json_decode($session->settings_snapshot, true);
             $processed_recent_history[] = [ //
                 'session_id' => (int) $session->session_id,
@@ -410,16 +411,17 @@ class DataController
     /**
      * Callback to get the data for the main profile dashboard.
      */
-    public static function get_dashboard_profile( \WP_REST_Request $request ) {
+    public static function get_dashboard_profile(\WP_REST_Request $request)
+    {
         $user_id = get_current_user_id();
-        
-        // Call the public helper function from Dashboard.php
-        $profile_data = Dashboard_Manager::get_profile_data( $user_id );
 
-        if ( empty( $profile_data ) ) {
-             return new \WP_Error('rest_no_data', 'Could not retrieve profile data.', ['status' => 500]);
+        // Call the public helper function from Dashboard.php
+        $profile_data = Dashboard_Manager::get_profile_data($user_id);
+
+        if (empty($profile_data)) {
+            return new \WP_Error('rest_no_data', 'Could not retrieve profile data.', ['status' => 500]);
         }
-        
+
         // Return the *wrapped* response that the app expects
         return new \WP_REST_Response(['success' => true, 'data' => $profile_data], 200);
     }
@@ -428,44 +430,45 @@ class DataController
      * Callback to get the review details for a specific session.
      * (This endpoint is used by the mobile app)
      */
-    public static function get_session_review_details( \WP_REST_Request $request ) {
+    public static function get_session_review_details(\WP_REST_Request $request)
+    {
         $session_id = (int) $request['id'];
         $user_id = get_current_user_id();
 
-        if ( ! $session_id ) {
-            return new \WP_Error( 'rest_invalid_id', 'Invalid session ID.', [ 'status' => 400 ] );
+        if (! $session_id) {
+            return new \WP_Error('rest_invalid_id', 'Invalid session ID.', ['status' => 400]);
         }
 
         // 1. Call your "correct" data-gathering function
-        $data = \QuestionPress\Utils\Dashboard_Manager::get_session_review_data( $session_id, $user_id );
+        $data = \QuestionPress\Utils\Dashboard_Manager::get_session_review_data($session_id, $user_id);
 
-        if ( is_null( $data ) ) {
-            return new \WP_Error( 'rest_not_found', 'Session not found or permission denied.', [ 'status' => 404 ] );
+        if (is_null($data)) {
+            return new \WP_Error('rest_not_found', 'Session not found or permission denied.', ['status' => 404]);
         }
 
         // 2. Transform the '$data['questions']' array for the mobile app
         $app_questions = [];
-        foreach ( $data['questions'] as $q_obj ) {
-            
+        foreach ($data['questions'] as $q_obj) {
+
             // Transform options: The app wants {key, value}, but your DB has {id, text}.
             // We will map 'option_id' -> 'option_key' and 'option_text' -> 'option_value'.
             $transformed_options = [];
             $correct_answer_keys = []; // We'll find this while we loop
-            foreach( $q_obj->options as $option_row ) {
+            foreach ($q_obj->options as $option_row) {
                 $transformed_options[] = [
                     'option_key' => (string) $option_row->option_id, // Mapping ID to Key (as string)
                     'option_value' => $option_row->option_text, // Mapping Text to Value
                 ];
-                
-                if ( $option_row->is_correct ) {
+
+                if ($option_row->is_correct) {
                     $correct_answer_keys[] = (string) $option_row->option_id; // Store all correct keys (as strings)
                 }
             }
-            
+
             // Your query doesn't select 'question_type'.
             // We must infer it based on the number of correct answers.
-            $question_type = ( count($correct_answer_keys) > 1 ) ? 'multiple_choice' : 'single_choice';
-            
+            $question_type = (count($correct_answer_keys) > 1) ? 'multiple_choice' : 'single_choice';
+
             // Format the correct_answer for the app
             $app_correct_answer = null;
             if ($question_type === 'multiple_choice') {
@@ -473,11 +476,11 @@ class DataController
             } else {
                 $app_correct_answer = $correct_answer_keys[0] ?? null; // e.g., "123"
             }
-            
+
             // Format the user_answer for the app.
             // Your PHP function provides 'selected_option_id' from the DB.
             $app_user_answer = $q_obj->selected_option_id ? (string) $q_obj->selected_option_id : null;
-            
+
             // This logic assumes 'selected_option_id' is for single-choice answers.
             // If your app supports multiple-choice answers, your 'qp_user_attempts'
             // table would need to store a JSON array, and the 'get_session_review_data'
@@ -517,14 +520,15 @@ class DataController
         ];
 
         // 4. Wrap and return
-        return new \WP_REST_Response( [ 'success' => true, 'data' => $final_app_data ], 200 );
+        return new \WP_REST_Response(['success' => true, 'data' => $final_app_data], 200);
     }
 
     /**
      * Callback to get the data for the dashboard history tab.
      * (REVISED to match app's 'Session' interface)
      */
-    public static function get_dashboard_history(\WP_REST_Request $request) {
+    public static function get_dashboard_history(\WP_REST_Request $request)
+    {
         $user_id = get_current_user_id();
         $data = Dashboard_Manager::get_history_data($user_id);
 
@@ -536,7 +540,7 @@ class DataController
         foreach ($data['completed_sessions'] as $session) {
             $settings = json_decode($session->settings_snapshot, true);
             $mode_details = Dashboard_Manager::qp_get_history_mode_details($session, $settings);
-            
+
             $context_display = Dashboard_Manager::get_session_context_display(
                 $session,
                 $settings,
@@ -593,13 +597,14 @@ class DataController
      * Callback to get the data for the "My Courses" dashboard tab.
      * (REVISED to match app's 'Course' interface and expected keys)
      */
-    public static function get_dashboard_my_courses( \WP_REST_Request $request ) {
+    public static function get_dashboard_my_courses(\WP_REST_Request $request)
+    {
         $user_id = get_current_user_id();
-        
-        // 1. Call the centralized data function
-        $data = Dashboard_Manager::get_my_courses_data( $user_id );
 
-        if ( is_wp_error( $data ) ) {
+        // 1. Call the centralized data function
+        $data = Dashboard_Manager::get_my_courses_data($user_id);
+
+        if (is_wp_error($data)) {
             return $data;
         }
 
@@ -608,14 +613,14 @@ class DataController
         // Get the global opt-out setting
         $global_opt_out = $data['allow_global_opt_out'] ?? false;
 
-        if ( $data['enrolled_courses_query'] instanceof \WP_Query && $data['enrolled_courses_query']->have_posts() ) {
-            foreach ( $data['enrolled_courses_query']->posts as $course_post ) {
+        if ($data['enrolled_courses_query'] instanceof \WP_Query && $data['enrolled_courses_query']->have_posts()) {
+            foreach ($data['enrolled_courses_query']->posts as $course_post) {
                 $course_id = $course_post->ID;
-                $progress_data = $data['enrolled_courses_data'][ $course_id ] ?? [ 'progress' => 0, 'is_complete' => false ];
-                
+                $progress_data = $data['enrolled_courses_data'][$course_id] ?? ['progress' => 0, 'is_complete' => false];
+
                 // Check per-course opt-out meta
                 $course_opt_out = get_post_meta($course_id, '_qp_course_allow_opt_out', true);
-                
+
                 // Logic: Allow if global is on AND per-course is not '0'
                 // (empty or '1' means allow, '0' means disallow)
                 $allow_opt_out = $global_opt_out && ($course_opt_out !== '0');
@@ -624,7 +629,7 @@ class DataController
                     'id'            => $course_id,
                     'title'         => $course_post->post_title,
                     'status'        => $course_post->post_status,
-                    'thumbnail'     => get_the_post_thumbnail_url( $course_id, 'medium' ),
+                    'thumbnail'     => get_the_post_thumbnail_url($course_id, 'medium'),
                     'progress'      => $progress_data['progress'],
                     'is_complete'   => $progress_data['is_complete'],
                     'allow_opt_out' => $allow_opt_out,
@@ -635,14 +640,14 @@ class DataController
 
         // 3. Process Purchased-but-Not-Enrolled Courses for the app
         $processed_purchased = [];
-        if ( ! empty( $data['purchased_not_enrolled_posts'] ) ) {
-            foreach ( $data['purchased_not_enrolled_posts'] as $course_post ) {
+        if (! empty($data['purchased_not_enrolled_posts'])) {
+            foreach ($data['purchased_not_enrolled_posts'] as $course_post) {
                 $course_id = $course_post->ID;
                 $processed_purchased[] = [
                     'id'            => $course_id,
                     'title'         => $course_post->post_title,
                     'status'        => $course_post->post_status,
-                    'thumbnail'     => get_the_post_thumbnail_url( $course_id, 'medium' ),
+                    'thumbnail'     => get_the_post_thumbnail_url($course_id, 'medium'),
                     'progress'      => 0,
                     'is_complete'   => false,
                     'allow_opt_out' => false, // Can't opt-out if not enrolled
@@ -659,38 +664,47 @@ class DataController
         ];
         // --- END FIX ---
 
-        return new \WP_REST_Response( [ 'success' => true, 'data' => $api_response_data ], 200 );
+        return new \WP_REST_Response(['success' => true, 'data' => $api_response_data], 200);
     }
     /**
      * Callback to get the data for the "Available Courses" dashboard tab.
      * (Designed to match app's 'available-courses.tsx' screen)
      */
-    public static function get_dashboard_available_courses( \WP_REST_Request $request ) {
+    public static function get_dashboard_available_courses(\WP_REST_Request $request)
+    {
         $user_id = get_current_user_id();
-        
-        // 1. Call the centralized data function
-        $data = Dashboard_Manager::get_available_courses_data( $user_id );
 
-        if ( is_wp_error( $data ) ) {
+        // 1. Call the centralized data function
+        $data = Dashboard_Manager::get_available_courses_data($user_id);
+
+        if (is_wp_error($data)) {
             return $data;
         }
 
         // 2. Process the WP_Query results into a clean array for the app
         $processed_courses = [];
-        if ( $data['available_courses_query'] instanceof \WP_Query && $data['available_courses_query']->have_posts() ) {
-            foreach ( $data['available_courses_query']->posts as $course_post ) {
+        if ($data['available_courses_query'] instanceof \WP_Query && $data['available_courses_query']->have_posts()) {
+            foreach ($data['available_courses_query']->posts as $course_post) {
                 $course_id = $course_post->ID;
-                $access_mode = get_post_meta( $course_id, '_qp_course_access_mode', true ) ?: 'free';
-                $price_html = null;
+                $access_mode = get_post_meta($course_id, '_qp_course_access_mode', true) ?: 'free';
+                $price_data = [
+                    'regular_price' => null,
+                    'sale_price'    => null,
+                    'is_on_sale'    => false,
+                ];
 
                 // Get price if it's a paid course
-                if ( $access_mode === 'paid' && function_exists('wc_get_product') ) {
-                    $product_id = get_post_meta( $course_id, '_qp_linked_product_id', true );
-                    if ( $product_id ) {
-                        $product = wc_get_product( $product_id );
-                        if ( $product ) {
-                            // Get the raw price string (e.g., "$10.00")
-                            $price_html = $product->get_price_html() ? wp_strip_all_tags($product->get_price_html()) : 'N/A';
+                if ($access_mode === 'requires_purchase' && function_exists('wc_get_product')) {
+                    $product_id = get_post_meta($course_id, '_qp_linked_product_id', true);
+                    if ($product_id) {
+                        $product = wc_get_product($product_id);
+                        if ($product) {
+                            $regular_price = $product->get_regular_price();
+                            $sale_price    = $product->get_sale_price();
+
+                            $price_data['regular_price'] = $regular_price ? (string)$regular_price : null;
+                            $price_data['sale_price']    = $sale_price ? (string)$sale_price : null;
+                            $price_data['is_on_sale']    = $product->is_on_sale();
                         }
                     }
                 }
@@ -700,8 +714,9 @@ class DataController
                     'id'          => $course_id,
                     'title'       => $course_post->post_title,
                     'status'      => $course_post->post_status, // 'publish' or 'expired'
-                    'access_mode' => $access_mode, // 'free' or 'paid'
-                    'price'       => $price_html, // e.g., "$10.00" or null
+                    'access_mode' => $access_mode, // 'free' or 'requires_purchase'
+                    'price_data'       => $price_data,
+                    'price'       => $price_data['sale_price'],   // TODO: Remove after updating app. Kept here for legacy support, but app should use 'price_data' object.
                 ];
             }
         }
@@ -714,45 +729,46 @@ class DataController
         ];
         // --- END FIX ---
 
-        return new \WP_REST_Response( [ 'success' => true, 'data' => $api_response_data ], 200 );
+        return new \WP_REST_Response(['success' => true, 'data' => $api_response_data], 200);
     }
 
     /**
      * Callback to get the data for the "Review" dashboard tab.
      * (REVISED with robust sanitization to prevent JSON encoding errors)
      */
-    public static function get_dashboard_review( \WP_REST_Request $request ) {
+    public static function get_dashboard_review(\WP_REST_Request $request)
+    {
         $user_id = get_current_user_id();
-        
-        // 1. Call the centralized data function
-        $data = Dashboard_Manager::get_review_data( $user_id );
 
-        if ( is_wp_error( $data ) ) {
+        // 1. Call the centralized data function
+        $data = Dashboard_Manager::get_review_data($user_id);
+
+        if (is_wp_error($data)) {
             return $data;
         }
 
         // 2. Process data for the app
         $processed_questions = [];
-        if ( is_array( $data['review_questions'] ) ) { // Check if it's an array first
-            foreach ( $data['review_questions'] as $q ) {
-                
+        if (is_array($data['review_questions'])) { // Check if it's an array first
+            foreach ($data['review_questions'] as $q) {
+
                 // --- THIS IS THE FIX ---
                 // We must aggressively sanitize text to prevent JSON errors
-                
+
                 // 1. Ensure text is a string, handle nulls
-                $text = (string) ( $q->question_text ?? '' );
+                $text = (string) ($q->question_text ?? '');
                 // 2. Remove all HTML/PHP tags
-                $text = strip_tags( $text );
+                $text = strip_tags($text);
                 // 3. Convert HTML entities (like &amp;) to characters
-                $text = html_entity_decode( $text );
+                $text = html_entity_decode($text);
                 // 4. Trim it
-                $text = wp_trim_words( $text, 25, '...' );
+                $text = wp_trim_words($text, 25, '...');
                 // 5. Final check to remove any lingering non-UTF8 characters
-                $text = wp_check_invalid_utf8( $text, true );
+                $text = wp_check_invalid_utf8($text, true);
 
                 // Also sanitize the subject name
-                $subject = (string) ( $q->subject_name ?? 'N/A' );
-                if ( empty( $subject ) || $subject === 'Uncategorized' ) {
+                $subject = (string) ($q->subject_name ?? 'N/A');
+                if (empty($subject) || $subject === 'Uncategorized') {
                     $subject = 'N/A';
                 }
                 // --- END FIX ---
@@ -761,7 +777,7 @@ class DataController
                     'question_id'   => (int) $q->question_id,
                     'question_text' => $text,
                     'direction_text' => $q->direction_text,
-                    'subject_name'  => esc_html( $subject ),
+                    'subject_name'  => esc_html($subject),
                 ];
             }
         }
@@ -773,7 +789,7 @@ class DataController
             'total_incorrect_count' => (int) $data['total_incorrect_count'],
         ];
 
-        return new \WP_REST_Response( [ 'success' => true, 'data' => $api_response_data ], 200 );
+        return new \WP_REST_Response(['success' => true, 'data' => $api_response_data], 200);
     }
 
     /**
@@ -787,7 +803,7 @@ class DataController
         // 1. Streak Decay Logic
         $today = current_time('Y-m-d');
         $yesterday = date('Y-m-d', strtotime('-1 day', strtotime($today)));
-        
+
         $last_act_date  = get_user_meta($user_id, '_qp_last_activity_date', true);
         $current_streak = (int) get_user_meta($user_id, '_qp_current_streak', true);
 
@@ -800,7 +816,7 @@ class DataController
         // Determine activity status for today
         $completed_today = ($last_act_date === $today);
         $streak_status   = 'inactive';
-        
+
         if ($completed_today) {
             $streak_status = 'active';
         } elseif ($current_streak > 0) {
@@ -827,7 +843,8 @@ class DataController
     /**
      * Returns sanitized content for Terms and Privacy pages.
      */
-    public static function get_legal_pages(WP_REST_Request $request) {
+    public static function get_legal_pages(WP_REST_Request $request)
+    {
         $options = get_option('qp_settings');
         $pages = [
             'terms' => isset($options['terms_page']) ? (int) $options['terms_page'] : 0,
