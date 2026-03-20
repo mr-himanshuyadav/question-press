@@ -1092,6 +1092,50 @@ class Practice_Manager
         // return data array
         return ['redirect_url' => $redirect_url, 'session_id' => $session_id];
     }
+    
+    /**
+     * Starts a practice session from a provided list of Question IDs.
+     * * @param array  $question_ids List of question IDs.
+     * @param string $mode_name    The name of the practice mode (e.g., "Daily Current Affairs").
+     * @return int|\WP_Error       The new session ID or a WP_Error on failure.
+     */
+    public static function start_session_from_ids($question_ids, $mode_name = "Custom Practice")
+    {
+        if (!is_user_logged_in()) {
+            return new \WP_Error('not_logged_in', 'You must be logged in to start a session.', ['status' => 401]);
+        }
+
+        if (!is_array($question_ids) || empty($question_ids)) {
+            return new \WP_Error('invalid_questions', 'A valid array of question IDs is required.', ['status' => 400]);
+        }
+
+        global $wpdb;
+        $user_id = get_current_user_id();
+        $cleaned_ids = array_unique(array_map('absint', $question_ids));
+        $session_table = $wpdb->prefix . 'qp_user_sessions';
+
+        $session_settings = [
+            'practice_mode' => sanitize_text_field($mode_name),
+            'num_questions' => count($cleaned_ids),
+        ];
+
+        $insert_data = [
+            'user_id'               => $user_id,
+            'start_time'            => current_time('mysql'),
+            'last_activity'         => current_time('mysql'),
+            'status'                => 'active',
+            'settings_snapshot'     => json_encode($session_settings),
+            'question_ids_snapshot' => wp_json_encode(array_values($cleaned_ids)),
+        ];
+
+        $result = $wpdb->insert($session_table, $insert_data);
+
+        if (!$result) {
+            return new \WP_Error('db_error', 'Failed to create session in database.', ['status' => 500]);
+        }
+
+        return $wpdb->insert_id;
+    }
 
     /**
      * Checks an answer for a non-mock test session.
@@ -1678,17 +1722,17 @@ class Practice_Manager
         t.term_id as reason_id,
         t.name as reason_text,
         MAX(CASE WHEN m.meta_key = 'type' THEN m.meta_value END) as type
-    FROM {$term_table} t
-    LEFT JOIN {$meta_table} m ON t.term_id = m.term_id
-    WHERE t.taxonomy_id = %d AND (
-        NOT EXISTS (SELECT 1 FROM {$meta_table} meta_active WHERE meta_active.term_id = t.term_id AND meta_active.meta_key = 'is_active')
-        OR
-        (SELECT meta_active.meta_value FROM {$meta_table} meta_active WHERE meta_active.term_id = t.term_id AND meta_active.meta_key = 'is_active' LIMIT 1) = '1'
-    )
-    GROUP BY t.term_id
-    ORDER BY t.name ASC",
-            $reason_tax_id
-        ));
+        FROM {$term_table} t
+        LEFT JOIN {$meta_table} m ON t.term_id = m.term_id
+        WHERE t.taxonomy_id = %d AND (
+            NOT EXISTS (SELECT 1 FROM {$meta_table} meta_active WHERE meta_active.term_id = t.term_id AND meta_active.meta_key = 'is_active')
+            OR
+            (SELECT meta_active.meta_value FROM {$meta_table} meta_active WHERE meta_active.term_id = t.term_id AND meta_active.meta_key = 'is_active' LIMIT 1) = '1'
+        )
+        GROUP BY t.term_id
+        ORDER BY t.name ASC",
+                $reason_tax_id
+            ));
 
         error_log("Retrieved " . count($reasons_raw) . " report reasons from the database.");
         error_log("Report Reasons Data: " . print_r($reasons_raw, true));
@@ -2658,50 +2702,6 @@ class Practice_Manager
 
         // Return just the data array. The AJAX handler will wrap it.
         return $buffered_data;
-    }
-
-    /**
-     * Starts a practice session from a provided list of Question IDs.
-     * * @param array  $question_ids List of question IDs.
-     * @param string $mode_name    The name of the practice mode (e.g., "Daily Current Affairs").
-     * @return int|\WP_Error       The new session ID or a WP_Error on failure.
-     */
-    public static function start_session_from_ids($question_ids, $mode_name = "Custom Practice")
-    {
-        if (!is_user_logged_in()) {
-            return new \WP_Error('not_logged_in', 'You must be logged in to start a session.', ['status' => 401]);
-        }
-
-        if (!is_array($question_ids) || empty($question_ids)) {
-            return new \WP_Error('invalid_questions', 'A valid array of question IDs is required.', ['status' => 400]);
-        }
-
-        global $wpdb;
-        $user_id = get_current_user_id();
-        $cleaned_ids = array_unique(array_map('absint', $question_ids));
-        $session_table = $wpdb->prefix . 'qp_user_sessions';
-
-        $session_settings = [
-            'practice_mode' => sanitize_text_field($mode_name),
-            'num_questions' => count($cleaned_ids),
-        ];
-
-        $insert_data = [
-            'user_id'               => $user_id,
-            'start_time'            => current_time('mysql'),
-            'last_activity'         => current_time('mysql'),
-            'status'                => 'active',
-            'settings_snapshot'     => json_encode($session_settings),
-            'question_ids_snapshot' => wp_json_encode(array_values($cleaned_ids)),
-        ];
-
-        $result = $wpdb->insert($session_table, $insert_data);
-
-        if (!$result) {
-            return new \WP_Error('db_error', 'Failed to create session in database.', ['status' => 500]);
-        }
-
-        return $wpdb->insert_id;
     }
 
     /**

@@ -81,13 +81,16 @@ class AuthController {
 
         $token = JWT::encode($payload, $secret_key, 'HS256');
 
+        $role = $user->roles ? $user->roles[0] : 'subscriber';
+
         return new \WP_REST_Response([
             'success' => true,
             'data' => [
                 'token'             => $token,
                 'user_email'        => $user->user_email,
                 'user_nicename'     => $user->user_nicename,
-                'user_display_name' => $user->display_name
+                'user_display_name' => $user->display_name,
+                'role'              => $role
             ]
         ], 200);
     }
