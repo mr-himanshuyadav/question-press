@@ -29,6 +29,14 @@ class Admin_Menu {
 	 * Hooked into 'admin_menu'.
 	 */
 	public function register_menus() {
+
+        add_action('admin_head', function () {
+    echo '<style>
+        #toplevel_page_question-press {
+            margin-top: 15px !important;
+        }
+    </style>';
+});
 		// Add top-level menu page for "All Questions" and store the hook
 		$hook = add_menu_page(
 			'All Questions',                // Page title

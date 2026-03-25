@@ -1092,7 +1092,7 @@ class Practice_Manager
         // return data array
         return ['redirect_url' => $redirect_url, 'session_id' => $session_id];
     }
-    
+
     /**
      * Starts a practice session from a provided list of Question IDs.
      * * @param array  $question_ids List of question IDs.
@@ -1731,8 +1731,8 @@ class Practice_Manager
         )
         GROUP BY t.term_id
         ORDER BY t.name ASC",
-                $reason_tax_id
-            ));
+            $reason_tax_id
+        ));
 
         error_log("Retrieved " . count($reasons_raw) . " report reasons from the database.");
         error_log("Report Reasons Data: " . print_r($reasons_raw, true));
@@ -2891,6 +2891,8 @@ class Practice_Manager
 
         error_log("[SR] Pool before fallback: $current_count");
 
+        error_log("[SR] Current IDs: " . implode(',', $ids_list));
+
         /*
         =========================
         FALLBACK SYSTEM
@@ -2982,12 +2984,13 @@ class Practice_Manager
             }
 
             /*
-        =========================
-        FINAL GUARD
-        =========================
-        */
+            =========================
+            FINAL GUARD
+            =========================
+            */
 
             $final_ids = array_keys($ids);
+
 
             if (empty($final_ids)) {
 
@@ -3007,6 +3010,12 @@ class Practice_Manager
 
             return $final_selection;
         }
+
+        $final_ids = array_keys($ids);
+        shuffle($final_ids);
+
+        return array_slice($final_ids, 0, $limit);
+        error_log("[SR] No fallback needed. Final count: " . count($final_ids));
     }
 
 
