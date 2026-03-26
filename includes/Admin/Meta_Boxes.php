@@ -13,372 +13,289 @@ if (! defined('ABSPATH')) {
 class Meta_Boxes
 {
 
-	// --- qp_plan Meta Box ---
-
 	/**
-	 * Adds the meta box container for Plan Details.
-	 * Hooked to 'add_meta_boxes_qp_plan'.
-	 * Replaces qp_add_plan_details_meta_box().
-	 */
-	public static function add_plan_details()
-	{
-		add_meta_box(
-			'qp_plan_details_meta_box',           // Unique ID
-			__('Plan Details', 'question-press'), // Box title
-			[self::class, 'render_plan_details'],    // Callback function (static method in this class)
-			'qp_plan',                            // Post type
-			'normal',                             // Context
-			'high'                                // Priority
-		);
-	}
+     * Adds the meta box containers.
+     */
+    public static function add_plan_details()
+    {
+        // Main settings box
+        add_meta_box(
+            'qp_plan_settings_meta_box',
+            __('Plan Configuration', 'question-press'),
+            [self::class, 'render_plan_details'],
+            'qp_plan',
+            'normal',
+            'high'
+        );
 
-	/**
-	 * Renders the HTML content for the Plan Details meta box.
-	 * Replaces qp_render_plan_details_meta_box().
-	 *
-	 * @param \WP_Post $post The post object.
-	 */
-	public static function render_plan_details($post)
-	{
-		// Add a nonce field for security
-		wp_nonce_field('qp_save_plan_details_meta', 'qp_plan_details_nonce');
+        // WooCommerce side box
+        add_meta_box(
+            'qp_plan_product_meta_box',
+            __('Monetization (WooCommerce)', 'question-press'),
+            [self::class, 'render_plan_product_box'],
+            'qp_plan',
+            'side',
+            'default'
+        );
+    }
 
-		// Get existing meta values
-		$plan_type = get_post_meta($post->ID, '_qp_plan_type', true);
-		// ... (rest of the variable fetching logic from original function) ...
-		$duration_value = get_post_meta($post->ID, '_qp_plan_duration_value', true);
-		$duration_unit = get_post_meta($post->ID, '_qp_plan_duration_unit', true);
-		$attempts = get_post_meta($post->ID, '_qp_plan_attempts', true);
-		$course_access_type = get_post_meta($post->ID, '_qp_plan_course_access_type', true);
-		$linked_courses_raw = get_post_meta($post->ID, '_qp_plan_linked_courses', true);
-		$linked_courses = is_array($linked_courses_raw) ? $linked_courses_raw : [];
-		$description = get_post_meta($post->ID, '_qp_plan_description', true);
+    /**
+     * Renders the main Plan Settings.
+     */
+    public static function render_plan_details($post) {
+        wp_nonce_field('qp_save_plan_details_meta', 'qp_plan_details_nonce');
 
-		// Get all published courses for selection
-		$courses = get_posts([ /* ... get_posts args ... */
-			'post_type' => 'qp_course',
-			'post_status' => 'publish',
-			'numberposts' => -1,
-			'orderby' => 'title',
-			'order' => 'ASC',
-		]);
+        // Fetch meta values with requested defaults
+        $schema             = get_post_meta($post->ID, '_qp_plan_schema', true) ?: 'combined';
+        $course_scope       = get_post_meta($post->ID, '_qp_plan_course_scope', true) ?: 'single'; // Default: Single
+        $attempt_mode       = get_post_meta($post->ID, '_qp_plan_attempt_mode', true) ?: 'limited'; // Default: Number of Attempts
+        $attempts           = get_post_meta($post->ID, '_qp_plan_attempts', true) ?: 500;
+        $duration_mode      = get_post_meta($post->ID, '_qp_plan_duration_mode', true) ?: 'fixed';
+        $expiry_date        = get_post_meta($post->ID, '_qp_plan_expiry_date', true);
+        $duration_value     = get_post_meta($post->ID, '_qp_plan_duration_value', true) ?: 365;
+        $course_access_type = get_post_meta($post->ID, '_qp_plan_course_access_type', true) ?: 'none'; // Default: None
+        $linked_courses     = (array) get_post_meta($post->ID, '_qp_plan_linked_courses', true);
 
-		// --- Output the HTML (copied directly from original function) ---
-?>
-		<style>
-			/* Keep styles here for now */
-			.qp-plan-meta-box table {
-				width: 100%;
-				border-collapse: collapse;
-			}
+        $courses = get_posts(['post_type' => 'qp_course', 'post_status' => 'publish', 'numberposts' => -1, 'orderby' => 'title', 'order' => 'ASC']);
+        $is_auto_plan = get_post_meta($post->ID, '_qp_is_auto_generated', true) === 'true';
+        ?>
+        <style>
+            .qp-plan-row { border-bottom: 1px solid #eee; padding: 18px 0; display: flex; align-items: flex-start; }
+            .qp-plan-row:last-child { border-bottom: none; }
+            .qp-plan-label { width: 220px; font-weight: 600; font-size: 14px; color: #1d2327; }
+            .qp-plan-content { flex: 1; }
+            .qp-conditional-box { margin-top: 12px; padding: 15px; background: #f6f7f7; border: 1px solid #dcdcde; border-radius: 4px; }
+            .course-list-scroll { max-height: 200px; overflow-y: auto; border: 1px solid #ccc; padding: 10px; background: #fff; }
+            .search-filter-input { width: 100%; margin-bottom: 10px; padding: 6px; border: 1px solid #8c8f94; border-radius: 4px; }
+            .path-section { margin-top: 10px; }
+        </style>
 
-			/* ... rest of the styles ... */
-			.qp-plan-meta-box th,
-			.qp-plan-meta-box td {
-				text-align: left;
-				padding: 10px;
-				border-bottom: 1px solid #eee;
-				vertical-align: top;
-			}
+        <div class="qp-plan-settings-wrapper">
+            <?php if ($is_auto_plan) : ?>
+                <div class="notice notice-info inline"><p><?php _e('Auto-generated plan for a course. Minimal settings available.', 'question-press'); ?></p></div>
+            <?php endif; ?>
 
-			.qp-plan-meta-box th {
-				width: 150px;
-				font-weight: 600;
-			}
+            <div class="qp-plan-row" <?php if ($is_auto_plan) echo 'style="display:none;"'; ?>>
+                <div class="qp-plan-label">Plan Category</div>
+                <div class="qp-plan-content">
+					<label><input type="radio" name="_qp_plan_schema" value="combined" <?php checked($schema, 'combined'); ?>> Combined</label>
+                    <label><input type="radio" name="_qp_plan_schema" value="course_only" <?php checked($schema, 'course_only'); ?>> Course Only</label> &nbsp;&nbsp;
+                </div>
+            </div>
 
-			.qp-plan-meta-box select,
-			.qp-plan-meta-box input[type="number"],
-			.qp-plan-meta-box textarea {
-				width: 100%;
-				max-width: 350px;
-				box-sizing: border-box;
-			}
+            <div id="path_course_only" class="path-section" style="<?php echo ($schema !== 'course_only') ? 'display:none;' : ''; ?>">
+                <div class="qp-plan-row">
+                    <div class="qp-plan-label">Enrollment Scope</div>
+                    <div class="qp-plan-content">
+                        <label><input type="radio" name="_qp_plan_course_scope" value="single" <?php checked($course_scope, 'single'); ?>> Single Course</label> &nbsp;
+                        <label><input type="radio" name="_qp_plan_course_scope" value="multiple" <?php checked($course_scope, 'multiple'); ?>> Multiple Courses</label> &nbsp;
+                        <label><input type="radio" name="_qp_plan_course_scope" value="all" <?php checked($course_scope, 'all'); ?>> All Courses</label>
+                        
+                        <div id="course_only_selector" class="qp-conditional-box" style="<?php echo ($course_scope === 'all') ? 'display:none;' : ''; ?>">
+                            <input type="text" class="course-search-field search-filter-input" placeholder="Search courses...">
+                            <div class="course-list-scroll">
+                                <?php foreach ($courses as $c) : ?>
+                                    <label class="course-item" style="display:block; margin-bottom: 5px;">
+                                        <input type="<?php echo ($course_scope === 'single') ? 'radio' : 'checkbox'; ?>" 
+                                               name="_qp_plan_linked_courses[]" value="<?php echo $c->ID; ?>" 
+                                               <?php checked(in_array($c->ID, $linked_courses)); ?>> <?php echo esc_html($c->post_title); ?>
+                                    </label>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
-			.qp-plan-meta-box .description {
-				font-size: 0.9em;
-				color: #666;
-			}
+            <div id="path_combined" class="path-section" style="<?php echo ($schema !== 'combined') ? 'display:none;' : ''; ?>">
+                <div class="qp-plan-row">
+                    <div class="qp-plan-label">Practice Attempts</div>
+                    <div class="qp-plan-content">
+                        <div style="display:flex; gap:20px;">
+                            <label><input type="radio" name="_qp_plan_attempt_mode" value="limited" <?php checked($attempt_mode, 'limited'); ?>> Number of Attempts</label>
+                            <label><input type="radio" name="_qp_plan_attempt_mode" value="unlimited" <?php checked($attempt_mode, 'unlimited'); ?>> Unlimited</label>
+                        </div>
+                        <div id="attempt_qty_box" class="qp-conditional-box" style="<?php echo ($attempt_mode === 'unlimited') ? 'display:none;' : ''; ?>">
+                            <input type="number" name="_qp_plan_attempts" value="<?php echo esc_attr($attempts); ?>" min="500" step="100" style="width:120px;">
+                            <p class="description">Minimum 500. Adjusts in steps of 100.</p>
+                        </div>
+                    </div>
+                </div>
 
-			.qp-plan-meta-box .conditional-field {
-				display: none;
-			}
+                <div class="qp-plan-row">
+                    <div class="qp-plan-label">Duration Type</div>
+                    <div class="qp-plan-content">
+                        <div style="display:flex; gap:20px;">
+                            <label><input type="radio" name="_qp_plan_duration_mode" value="fixed" <?php checked($duration_mode, 'fixed'); ?>> Fixed Days</label>
+                            <label><input type="radio" name="_qp_plan_duration_mode" value="expiry" <?php checked($duration_mode, 'expiry'); ?>> Expiry Date</label>
+                        </div>
+                        <div id="duration_input_box" class="qp-conditional-box">
+                            <div id="mode_fixed" style="<?php echo ($duration_mode !== 'fixed') ? 'display:none;' : ''; ?>">
+                                <label>Number of Days:</label>
+                                <input type="number" name="_qp_plan_duration_value" value="<?php echo esc_attr($duration_value); ?>" min="1" style="width:100px;">
+                            </div>
+                            <div id="mode_expiry" style="<?php echo ($duration_mode !== 'expiry') ? 'display:none;' : ''; ?>">
+                                <label>Select Date:</label>
+                                <input type="text" name="_qp_plan_expiry_date" class="qp-datepicker" value="<?php echo esc_attr($expiry_date); ?>" placeholder="YYYY-MM-DD">
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
-			/* Hide conditional fields initially */
-			.qp-plan-meta-box .course-select-list {
-				max-height: 200px;
-				overflow-y: auto;
-				border: 1px solid #ddd;
-				padding: 10px;
-				background: #fff;
-			}
+                <div class="qp-plan-row">
+                    <div class="qp-plan-label">Course Enrollment</div>
+                    <div class="qp-plan-content">
+                        <div style="display:flex; gap:20px;">
+                            <label><input type="radio" name="_qp_plan_course_access_type" value="none" <?php checked($course_access_type, 'none'); ?>> None (Default)</label>
+                            <label><input type="radio" name="_qp_plan_course_access_type" value="specific" <?php checked($course_access_type, 'specific'); ?>> Select Courses</label>
+                        </div>
+                        <div id="combined_course_selector" class="qp-conditional-box" style="<?php echo ($course_access_type !== 'specific') ? 'display:none;' : ''; ?>">
+                            <input type="text" class="course-search-field search-filter-input" placeholder="Search courses...">
+                            <div class="course-list-scroll">
+                                <?php foreach ($courses as $c) : ?>
+                                    <label class="course-item" style="display:block; margin-bottom: 5px;">
+                                        <input type="checkbox" name="_qp_plan_linked_courses_combined[]" value="<?php echo $c->ID; ?>" 
+                                               <?php checked(in_array($c->ID, $linked_courses)); ?>> <?php echo esc_html($c->post_title); ?>
+                                    </label>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
 
-			.qp-plan-meta-box .course-select-list label {
-				display: block;
-				margin-bottom: 5px;
-			}
-		</style>
+        <script>
+        jQuery(document).ready(function($) {
+            // Path Switching
+            $('input[name="_qp_plan_schema"]').on('change', function() {
+                $('.path-section').hide();
+                $('#path_' + $(this).val()).fadeIn(200);
+            });
 
-		<div class="qp-plan-meta-box">
-			<table>
-				<tbody>
-					<?php // --- ADDED: Check if this is an auto-generated plan ---
-					$is_auto_plan = get_post_meta($post->ID, '_qp_is_auto_generated', true) === 'true';
-					if ($is_auto_plan) :
-						$course_id_arr = get_post_meta($post->ID, '_qp_plan_linked_courses', true);
-						$course_id     = (is_array($course_id_arr) && ! empty($course_id_arr)) ? $course_id_arr[0] : 0;
-					?>
-						<tr>
-							<td colspan="2">
-								<div class="notice notice-info inline" style="margin: 0;">
-									<p><strong><?php esc_html_e('Auto-Generated Plan', 'question-press'); ?></strong><br>
-										<?php esc_html_e('This plan is automatically managed by its associated course and cannot be edited here.', 'question-press'); ?>
-										<?php if ($course_id && get_post($course_id)) : ?>
-											<br><a href="<?php echo esc_url(get_edit_post_link($course_id)); ?>" class="button button-small" style="margin-top: 10px;"><?php esc_html_e('Edit Linked Course', 'question-press'); ?></a>
-										<?php endif; ?>
-									</p>
-								</div>
-							</td>
-						</tr>
-					<?php endif; ?>
-					<tr <?php if ($is_auto_plan) echo 'style="display:none;"'; ?>>
-						<th><label for="qp_plan_type">Plan Type</label></th>
-						<td>
-							<select name="_qp_plan_type" id="qp_plan_type">
-								<option value="">— Select Type —</option>
-								<option value="time_limited" <?php selected($plan_type, 'time_limited'); ?>>Time Limited</option>
-								<option value="attempt_limited" <?php selected($plan_type, 'attempt_limited'); ?>>Attempt Limited</option>
-								<option value="course_access" <?php selected($plan_type, 'course_access'); ?>>Course Access Only</option>
-								<option value="unlimited" <?php selected($plan_type, 'unlimited'); ?>>Unlimited (Time & Attempts)</option>
-								<option value="combined" <?php selected($plan_type, 'combined'); ?>>Combined (Time, Attempts, Courses)</option>
-							</select>
-							<p class="description">Select the primary restriction type for this plan.</p>
-						</td>
-					</tr>
+            // Course Scope (Course Only Path)
+            $('input[name="_qp_plan_course_scope"]').on('change', function() {
+                const scope = $(this).val();
+                $('#course_only_selector').toggle(scope !== 'all');
+                // Change input type based on Single vs Multiple
+                $('#course_only_selector input[name="_qp_plan_linked_courses[]"]').attr('type', scope === 'single' ? 'radio' : 'checkbox');
+            });
 
-					<tr class="conditional-field" data-depends-on="time_limited combined" <?php if ($is_auto_plan) echo 'style="display:none;"'; ?>>
-						<th><label for="qp_plan_duration_value">Duration</label></th>
-						<td>
-							<input type="number" name="_qp_plan_duration_value" id="qp_plan_duration_value" value="<?php echo esc_attr($duration_value); ?>" min="1" style="width: 80px; margin-right: 10px;">
-							<select name="_qp_plan_duration_unit" id="qp_plan_duration_unit">
-								<option value="day" <?php selected($duration_unit, 'day'); ?>>Day(s)</option>
-								<option value="month" <?php selected($duration_unit, 'month'); ?>>Month(s)</option>
-								<option value="year" <?php selected($duration_unit, 'year'); ?>>Year(s)</option>
-							</select>
-							<p class="description">How long the access lasts after purchase.</p>
-						</td>
-					</tr>
-					<?php // ... rest of the table rows from original function ... 
-					?>
-					<tr class="conditional-field" data-depends-on="attempt_limited combined" <?php if ($is_auto_plan) echo 'style="display:none;"'; ?>>
-						<th><label for="qp_plan_attempts">Number of Attempts</label></th>
-						<td>
-							<input type="number" name="_qp_plan_attempts" id="qp_plan_attempts" value="<?php echo esc_attr($attempts); ?>" min="1">
-							<p class="description">How many attempts the user gets with this plan.</p>
-						</td>
-					</tr>
-					<tr class="conditional-field" data-depends-on="course_access combined" <?php if ($is_auto_plan) echo 'style="display:none;"'; ?>>
-						<th><label for="qp_plan_course_access_type">Course Access</label></th>
-						<td>
-							<select name="_qp_plan_course_access_type" id="qp_plan_course_access_type">
-								<option value="all" <?php selected($course_access_type, 'all'); ?>>All Courses</option>
-								<option value="specific" <?php selected($course_access_type, 'specific'); ?>>Specific Courses</option>
-							</select>
-						</td>
-					</tr>
-					<tr class="conditional-field" data-depends-on="course_access combined" data-sub-depends-on="specific" <?php if ($is_auto_plan) echo 'style="display:none;"'; ?>>
-						<th><label>Select Courses</label></th>
-						<td>
-							<div class="course-select-list">
-								<?php if (!empty($courses)) : ?>
-									<?php foreach ($courses as $course) : ?>
-										<label>
-											<input type="checkbox" name="_qp_plan_linked_courses[]" value="<?php echo esc_attr($course->ID); ?>" <?php checked(in_array($course->ID, $linked_courses)); ?>>
-											<?php echo esc_html($course->post_title); ?>
-										</label>
-									<?php endforeach; ?>
-								<?php else: ?>
-									<p>No courses found. Please create courses first.</p>
-								<?php endif; ?>
-							</div>
-							<p class="description">Select the specific courses included in this plan.</p>
-						</td>
-					</tr>
-					<tr <?php if ($is_auto_plan) echo 'style="display:none;"'; ?>>
-						<th><label for="qp_plan_description">Description</label></th>
-						<td>
-							<textarea name="_qp_plan_description" id="qp_plan_description" rows="3"><?php echo esc_textarea($description); ?></textarea>
-							<p class="description">Optional user-facing description (e.g., for display on product page or user dashboard).</p>
-						</td>
-					</tr>
-				</tbody>
-			</table>
-			<?php if (! $is_auto_plan && class_exists('WooCommerce')) : ?>
-				<?php
-				$auto_product_id = get_post_meta($post->ID, '_qp_auto_product_id', true);
-				$product_post = $auto_product_id ? get_post($auto_product_id) : null;
-				$product_regular_price = '';
-				$product_sale_price = '';
-				if ($auto_product_id && $product_post) {
-					$product = wc_get_product($auto_product_id);
-					if ($product) {
-						$product_regular_price = $product->get_regular_price();
-						$product_sale_price = $product->get_sale_price();
-					}
-				}
-				?>
-				<div id="qp-auto-product-box" style="margin-top: 20px; padding: 12px; border: 1px solid #ccd0d4; background: #fdfdfd; border-radius: 4px;">
-					<h3 style="margin: 0 0 10px; padding: 0 0 10px; border-bottom: 1px solid #eee;"><?php esc_html_e('Auto-Linked Product', 'question-press'); ?></h3>
+            // Attempts Mode (Combined Path)
+            $('input[name="_qp_plan_attempt_mode"]').on('change', function() {
+                $('#attempt_qty_box').toggle($(this).val() === 'limited');
+            });
 
-					<?php if ($auto_product_id && $product_post) : ?>
-						<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
-							<div>
-								<strong style="font-size: 1.1em;"><?php echo esc_html($product_post->post_title); ?></strong>
-								(ID: <?php echo esc_html($auto_product_id); ?>)
-							</div>
-							<a href="<?php echo esc_url(get_edit_post_link($auto_product_id)); ?>" class="button button-secondary button-small" target="_blank"><?php esc_html_e('Edit Product', 'question-press'); ?></a>
-						</div>
+            // Duration Mode (Combined Path)
+            $('input[name="_qp_plan_duration_mode"]').on('change', function() {
+                const mode = $(this).val();
+                $('#mode_fixed').toggle(mode === 'fixed');
+                $('#mode_expiry').toggle(mode === 'expiry');
+            });
 
-						<div class="qp-price-fields-group" style="display: flex; gap: 10px; margin-bottom: 10px;">
-							<div style="flex: 1;">
-								<label for="_qp_product_regular_price" style="display: block; font-weight: 600; font-size: 0.9em; margin-bottom: 3px;"><?php esc_html_e('Regular Price', 'question-press'); ?></label>
-								<input type="text" id="_qp_product_regular_price" name="_qp_product_regular_price" value="<?php echo esc_attr($product_regular_price); ?>" class="wc_input_price" placeholder="e.g., 20.00" style="width: 100%;">
-							</div>
-							<div style="flex: 1;">
-								<label for="_qp_product_sale_price" style="display: block; font-weight: 600; font-size: 0.9em; margin-bottom: 3px;"><?php esc_html_e('Sale Price', 'question-press'); ?></label>
-								<input type="text" id="_qp_product_sale_price" name="_qp_product_sale_price" value="<?php echo esc_attr($product_sale_price); ?>" class="wc_input_price" placeholder="Optional" style="width: 100%;">
-							</div>
-						</div>
-						<div>
-							<button type="button" class="button button-primary" id="qp-save-product-price-btn"
-								data-product-id="<?php echo esc_attr($auto_product_id); ?>"
-								data-nonce="<?php echo esc_attr(wp_create_nonce('qp_save_product_price_nonce')); ?>">
-								<?php esc_html_e('Save Price', 'question-press'); ?>
-							</button>
-							<span id="qp-price-save-success" style="color: #2e7d32; font-weight: 600; margin-left: 10px;"></span>
-						</div>
-					<?php elseif ($plan_type !== '') : ?>
-						<p style="margin: 0; font-style: italic; color: #666;">
-							<?php esc_html_e('A new WooCommerce product will be automatically created and linked when you save this plan.', 'question-press'); ?>
-						</p>
-					<?php else: ?>
-						<p style="margin: 0; font-style: italic; color: #666;">
-							<?php esc_html_e('Please select a "Plan Type" and save to generate a product.', 'question-press'); ?>
-						</p>
-					<?php endif; ?>
-				</div>
-			<?php endif; ?>
-		</div>
+            // Course Access (Combined Path)
+            $('input[name="_qp_plan_course_access_type"]').on('change', function() {
+                $('#combined_course_selector').toggle($(this).val() === 'specific');
+            });
 
-		<script type="text/javascript">
-			/* Keep JS here for now */
-			jQuery(document).ready(function($) {
-				// Hide conditional fields if it's an auto-plan
-				if (<?php echo $is_auto_plan ? 'true' : 'false'; ?>) {
-					$('.qp-plan-meta-box .conditional-field').hide();
-				}
+            // Search Filter Logic
+            $('.course-search-field').on('keyup', function() {
+                const term = $(this).val().toLowerCase();
+                $(this).closest('.qp-conditional-box').find('.course-item').each(function() {
+                    const text = $(this).text().toLowerCase();
+                    $(this).toggle(text.indexOf(term) > -1);
+                });
+            });
+        });
+        </script>
+        <?php
+    }
 
-				const planTypeSelect = $('#qp_plan_type');
-				const courseAccessSelect = $('#qp_plan_course_access_type');
-				const metaBox = $('.qp-plan-meta-box');
+    /**
+     * Renders the product price details in the side meta box.
+     */
+    public static function render_plan_product_box($post) {
+        if (!class_exists('WooCommerce')) {
+            echo '<p>'.__('WooCommerce not active.', 'question-press').'</p>';
+            return;
+        }
 
-				function toggleFields() {
-					const selectedType = planTypeSelect.val();
-					const selectedCourseAccess = courseAccessSelect.val();
+        $auto_product_id = get_post_meta($post->ID, '_qp_auto_product_id', true);
+        $product = $auto_product_id ? wc_get_product($auto_product_id) : null;
+        
+        if ($product) : ?>
+            <div class="qp-side-product-settings">
+                <p><strong><?php _e('Linked Product:', 'question-press'); ?></strong><br>
+                <code style="display:block; margin-top:5px;"><?php echo esc_html($product->get_name()); ?> (ID: <?php echo $auto_product_id; ?>)</code></p>
+                
+                <p><label style="font-weight:600;"><?php _e('Regular Price:', 'question-press'); ?></label>
+                <input type="text" name="_qp_product_regular_price" value="<?php echo esc_attr($product->get_regular_price()); ?>" class="widefat" style="margin-top:5px;"></p>
+                
+                <p><label style="font-weight:600;"><?php _e('Sale Price (Optional):', 'question-press'); ?></label>
+                <input type="text" name="_qp_product_sale_price" value="<?php echo esc_attr($product->get_sale_price()); ?>" class="widefat" style="margin-top:5px;"></p>
+                
+                <hr>
+                <p><a href="<?php echo get_edit_post_link($auto_product_id); ?>" class="button button-secondary" target="_blank"><?php _e('View in WooCommerce', 'question-press'); ?></a></p>
+            </div>
+        <?php else : ?>
+            <p class="description"><?php _e('A WooCommerce product will be created automatically when this plan is published.', 'question-press'); ?></p>
+        <?php endif;
+    }
 
-					metaBox.find('.conditional-field').each(function() {
-						const $fieldRow = $(this);
-						const dependsOn = $fieldRow.data('depends-on') ? $fieldRow.data('depends-on').split(' ') : [];
-						const subDependsOn = $fieldRow.data('sub-depends-on');
+    /**
+     * Saves the plan details.
+     */
+    public static function save_plan_details($post_id) {
+        if (!isset($_POST['qp_plan_details_nonce']) || !wp_verify_nonce($_POST['qp_plan_details_nonce'], 'qp_save_plan_details_meta')) return;
+        if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) return;
+        if (get_post_meta($post_id, '_qp_is_auto_generated', true) === 'true') return;
 
-						let show = false;
-						if (dependsOn.includes(selectedType)) {
-							show = true;
-							if (subDependsOn === 'specific' && selectedCourseAccess !== 'specific') {
-								show = false;
-							}
-						}
+        $schema = sanitize_key($_POST['_qp_plan_schema'] ?? 'combined');
+        update_post_meta($post_id, '_qp_plan_schema', $schema);
 
-						if (show) {
-							$fieldRow.slideDown(200);
-						} else {
-							$fieldRow.slideUp(200);
-						}
-					});
-				}
-				toggleFields(); // Initial call
-				planTypeSelect.on('change', toggleFields);
-				courseAccessSelect.on('change', toggleFields);
-			});
-		</script>
-	<?php
-		// --- End HTML Output ---
-	}
-
-	/**
-	 * Saves the meta box data when the 'qp_plan' post type is saved.
-	 * Replaces qp_save_plan_details_meta().
-	 * Hooked to 'save_post_qp_plan'.
-	 *
-	 * @param int $post_id The ID of the post being saved.
-	 */
-	public static function save_plan_details($post_id)
-	{
-		// Check nonce, permissions, autosave, post type (copied from original function)
-		if (!isset($_POST['qp_plan_details_nonce']) || !wp_verify_nonce($_POST['qp_plan_details_nonce'], 'qp_save_plan_details_meta')) return $post_id;
-		if (!current_user_can('edit_post', $post_id)) return $post_id;
-		if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) return $post_id;
-		if ('qp_plan' !== get_post_type($post_id)) return $post_id;
-
-		// --- ADDED: Prevent editing auto-generated plans ---
-		if (get_post_meta($post_id, '_qp_is_auto_generated', true) === 'true') {
-			return $post_id; // Do not save any changes
-		}
-		// --- END ADDED ---
-
-		// Sanitize and save meta fields (copied from original function)
-		$fields_to_save = [ /* ... fields ... */
-			'_qp_plan_type' => 'sanitize_key',
-			'_qp_plan_duration_value' => 'absint',
-			'_qp_plan_duration_unit' => 'sanitize_key',
-			'_qp_plan_course_access_type' => 'sanitize_key',
-			'_qp_plan_description' => 'sanitize_textarea_field',
-		];
-		// Manual Handling for Plan Attempts 
-		$plan_type = isset($_POST['_qp_plan_type']) ? sanitize_key($_POST['_qp_plan_type']) : '';
-		if ($plan_type === 'unlimited') {
-			// Unlimited plan = NULL attempts
-			update_post_meta($post_id, '_qp_plan_attempts', null);
-		} elseif ($plan_type === 'course_access') {
-			// Course Access plan = 0 attempts
+        if ($schema === 'course_only') {
 			update_post_meta($post_id, '_qp_plan_attempts', 0);
-		} elseif ($plan_type === 'attempt_limited' || $plan_type === 'combined') {
-			// Attempt/Combined plan = value from form
-			$attempts = isset($_POST['_qp_plan_attempts']) ? absint($_POST['_qp_plan_attempts']) : 0;
-			update_post_meta($post_id, '_qp_plan_attempts', $attempts);
-		} else {
-			// No type or other type, save as 0
-			update_post_meta($post_id, '_qp_plan_attempts', 0);
-		}
-		foreach ($fields_to_save as $meta_key => $sanitize_func) {
-			if (isset($_POST[$meta_key])) {
-				$value = call_user_func($sanitize_func, $_POST[$meta_key]);
-				if (($sanitize_func === 'absint') && $value === 0 && !isset($_POST[$meta_key])) {
-					delete_post_meta($post_id, $meta_key);
-					continue;
-				}
-				update_post_meta($post_id, $meta_key, $value);
-			} else {
-				delete_post_meta($post_id, $meta_key);
-			}
-		}
-		// Handle linked courses array (copied from original function)
-		if (isset($_POST['_qp_plan_linked_courses']) && is_array($_POST['_qp_plan_linked_courses'])) {
-			$linked_courses = array_map('absint', $_POST['_qp_plan_linked_courses']);
-			update_post_meta($post_id, '_qp_plan_linked_courses', $linked_courses);
-		} else {
-			update_post_meta($post_id, '_qp_plan_linked_courses', []);
-		}
-	}
+			update_post_meta($post_id, '_qp_plan_attempt_mode', 'limited');
+            $scope = sanitize_key($_POST['_qp_plan_course_scope'] ?? 'single');
+            $courses = isset($_POST['_qp_plan_linked_courses']) ? array_map('absint', $_POST['_qp_plan_linked_courses']) : [];
+            
+            // VALIDATION: Prevent publishing if no course selected for Single/Multiple path
+            if ($scope !== 'all' && empty($courses) && get_post_status($post_id) === 'publish') {
+                remove_action('save_post_qp_plan', [self::class, 'save_plan_details']);
+                wp_update_post(['ID' => $post_id, 'post_status' => 'draft']);
+                add_action('save_post_qp_plan', [self::class, 'save_plan_details']);
+                // Note: Consider adding an admin notice here via transients if needed.
+            }
+
+            update_post_meta($post_id, '_qp_plan_course_scope', $scope);
+            update_post_meta($post_id, '_qp_plan_linked_courses', $courses);
+            
+            // Clear other fields to keep DB clean
+            update_post_meta($post_id, '_qp_plan_attempt_mode', 'unlimited');
+            update_post_meta($post_id, '_qp_plan_course_access_type', 'none');
+        } else {
+            // Path: Combined
+            $att_mode = sanitize_key($_POST['_qp_plan_attempt_mode'] ?? 'limited');
+            update_post_meta($post_id, '_qp_plan_attempt_mode', $att_mode);
+            update_post_meta($post_id, '_qp_plan_attempts', ($att_mode === 'limited') ? absint($_POST['_qp_plan_attempts'] ?? 500) : null);
+
+            $dur_mode = sanitize_key($_POST['_qp_plan_duration_mode'] ?? 'fixed');
+            update_post_meta($post_id, '_qp_plan_duration_mode', $dur_mode);
+            update_post_meta($post_id, '_qp_plan_expiry_date', sanitize_text_field($_POST['_qp_plan_expiry_date'] ?? ''));
+            update_post_meta($post_id, '_qp_plan_duration_value', absint($_POST['_qp_plan_duration_value'] ?? 365));
+
+            $acc_type = sanitize_key($_POST['_qp_plan_course_access_type'] ?? 'none');
+            $linked = ($acc_type === 'specific') ? array_map('absint', $_POST['_qp_plan_linked_courses_combined'] ?? []) : [];
+            
+            // Validation: If "Select Courses" was picked but none chosen, revert to 'none'
+            if ($acc_type === 'specific' && empty($linked)) {
+                $acc_type = 'none';
+            }
+
+            update_post_meta($post_id, '_qp_plan_course_access_type', $acc_type);
+            update_post_meta($post_id, '_qp_plan_linked_courses', $linked);
+        }
+    }
 
 	// --- NEW Meta Box for Course Settings (Progression & Expiry) ---
 
@@ -445,53 +362,53 @@ class Meta_Boxes
 		</style>
 
 		<div class="qp-metabox-field-wrapper" style="border-bottom: 1px solid #eee; padding-bottom: 15px;">
-            <label><?php esc_html_e('Progression Mode:', 'question-press'); ?></label>
-            
-            <div style="display: flex; flex-direction: row; gap: 20px; margin-top: 5px;">
-				<div class="qp-access-mode-radio">
-                    <input type="radio" name="_qp_course_progression_mode" id="qp_progression_mode_progressive" value="progressive" <?php checked($progression_mode, 'progressive'); ?>>
-                    <label for="qp_progression_mode_progressive"><?php esc_html_e('Progressive', 'question-press'); ?></label>
-                    <span class="dashicons dashicons-editor-help qp-tooltip-icon" title="<?php esc_attr_e('User must complete items in the order you set.', 'question-press'); ?>"></span>
-                </div>
-                
-                <div class="qp-access-mode-radio">
-                    <input type="radio" name="_qp_course_progression_mode" id="qp_progression_mode_open" value="open" <?php checked($progression_mode, 'open'); ?>>
-                    <label for="qp_progression_mode_open"><?php esc_html_e('Open', 'question-press'); ?></label>
-                    <span class="dashicons dashicons-editor-help qp-tooltip-icon" title="<?php esc_attr_e('User can start any lesson or test at any time.', 'question-press'); ?>"></span>
-                </div>
-                
-                
+			<label><?php esc_html_e('Progression Mode:', 'question-press'); ?></label>
 
-            </div>
-        </div>
+			<div style="display: flex; flex-direction: row; gap: 20px; margin-top: 5px;">
+				<div class="qp-access-mode-radio">
+					<input type="radio" name="_qp_course_progression_mode" id="qp_progression_mode_progressive" value="progressive" <?php checked($progression_mode, 'progressive'); ?>>
+					<label for="qp_progression_mode_progressive"><?php esc_html_e('Progressive', 'question-press'); ?></label>
+					<span class="dashicons dashicons-editor-help qp-tooltip-icon" title="<?php esc_attr_e('User must complete items in the order you set.', 'question-press'); ?>"></span>
+				</div>
+
+				<div class="qp-access-mode-radio">
+					<input type="radio" name="_qp_course_progression_mode" id="qp_progression_mode_open" value="open" <?php checked($progression_mode, 'open'); ?>>
+					<label for="qp_progression_mode_open"><?php esc_html_e('Open', 'question-press'); ?></label>
+					<span class="dashicons dashicons-editor-help qp-tooltip-icon" title="<?php esc_attr_e('User can start any lesson or test at any time.', 'question-press'); ?>"></span>
+				</div>
+
+
+
+			</div>
+		</div>
 
 		<div class="qp-metabox-field-wrapper" style="border-bottom: 1px solid #eee; padding-bottom: 15px;">
-            <label style="display:block; margin-bottom: 5px;"><?php esc_html_e('Retake Policy:', 'question-press'); ?></label>
-            <label style="font-weight: normal; display: block; margin-bottom: 10px;">
-                <input type="checkbox" name="_qp_course_allow_retakes" value="1" <?php checked(get_post_meta($post->ID, '_qp_course_allow_retakes', true), '1'); ?>>
-                <?php esc_html_e('Allow users to retake tests', 'question-press'); ?>
-            </label>
-            
-            <div class="qp-retake-limit-field">
-                <label for="qp_course_retake_limit" style="font-weight: normal; font-size: 0.9em;"><?php esc_html_e('Number of retakes allowed (0 for unlimited)', 'question-press'); ?></label>
-                <input type="number" name="_qp_course_retake_limit" id="qp_course_retake_limit" value="<?php echo esc_attr(get_post_meta($post->ID, '_qp_course_retake_limit', true) ?: '0'); ?>" min="0" step="1" style="width: 100px;">
-            </div>
-        </div>
+			<label style="display:block; margin-bottom: 5px;"><?php esc_html_e('Retake Policy:', 'question-press'); ?></label>
+			<label style="font-weight: normal; display: block; margin-bottom: 10px;">
+				<input type="checkbox" name="_qp_course_allow_retakes" value="1" <?php checked(get_post_meta($post->ID, '_qp_course_allow_retakes', true), '1'); ?>>
+				<?php esc_html_e('Allow users to retake tests', 'question-press'); ?>
+			</label>
+
+			<div class="qp-retake-limit-field">
+				<label for="qp_course_retake_limit" style="font-weight: normal; font-size: 0.9em;"><?php esc_html_e('Number of retakes allowed (0 for unlimited)', 'question-press'); ?></label>
+				<input type="number" name="_qp_course_retake_limit" id="qp_course_retake_limit" value="<?php echo esc_attr(get_post_meta($post->ID, '_qp_course_retake_limit', true) ?: '0'); ?>" min="0" step="1" style="width: 100px;">
+			</div>
+		</div>
 
 		<?php
-        $global_opt_out = get_option('qp_settings')['allow_course_opt_out'] ?? 0;
-        if ($global_opt_out) : // Only show this if the global setting is enabled
-            $course_opt_out = get_post_meta($post->ID, '_qp_course_allow_opt_out', true);
-        ?>
-        <div class="qp-metabox-field-wrapper" style="border-bottom: 1px solid #eee; padding-bottom: 15px;">
-            <label style="display:block; margin-bottom: 5px;"><?php esc_html_e('User Opt-Out:', 'question-press'); ?></label>
-            <label style="font-weight: normal; display: block;">
-                <input type="checkbox" name="_qp_course_allow_opt_out" value="1" <?php checked($course_opt_out, '1'); ?>>
-                <?php esc_html_e('Allow users to deregister (opt-out)', 'question-press'); ?>
-            </label>
-             <small class="description"><?php esc_html_e('If checked, users can remove this course and all their progress from their dashboard.', 'question-press'); ?></small>
-        </div>
-        <?php endif; ?>
+		$global_opt_out = get_option('qp_settings')['allow_course_opt_out'] ?? 0;
+		if ($global_opt_out) : // Only show this if the global setting is enabled
+			$course_opt_out = get_post_meta($post->ID, '_qp_course_allow_opt_out', true);
+		?>
+			<div class="qp-metabox-field-wrapper" style="border-bottom: 1px solid #eee; padding-bottom: 15px;">
+				<label style="display:block; margin-bottom: 5px;"><?php esc_html_e('User Opt-Out:', 'question-press'); ?></label>
+				<label style="font-weight: normal; display: block;">
+					<input type="checkbox" name="_qp_course_allow_opt_out" value="1" <?php checked($course_opt_out, '1'); ?>>
+					<?php esc_html_e('Allow users to deregister (opt-out)', 'question-press'); ?>
+				</label>
+				<small class="description"><?php esc_html_e('If checked, users can remove this course and all their progress from their dashboard.', 'question-press'); ?></small>
+			</div>
+		<?php endif; ?>
 
 		<p class="qp-expiry-date-field">
 			<label for="qp_course_expiry_date">
@@ -677,44 +594,51 @@ class Meta_Boxes
 		</style>
 
 		<div class="qp-metabox-field-wrapper">
-            <label><?php esc_html_e('Access Mode:', 'question-press'); ?></label>
-            
-            <?php // NEW: Wrapper div to make radio buttons side-by-side ?>
-            <div style="display: flex; flex-direction: row; gap: 20px; margin-top: 5px;">
-                
-                <div class="qp-access-mode-radio">
-                    <input type="radio" name="_qp_course_access_mode" id="qp_access_mode_free" value="free" <?php checked($access_mode, 'free'); ?>>
-                    <label for="qp_access_mode_free"><?php esc_html_e('Free', 'question-press'); ?></label> <?php // <-- CHANGED TEXT ?>
-                    <span class="dashicons dashicons-editor-help qp-tooltip-icon" title="<?php esc_attr_e('Anyone can enroll in this course for free.', 'question-press'); ?>"></span>
-                </div>
-                
-                <div class="qp-access-mode-radio">
-                    <input type="radio" name="_qp_course_access_mode" id="qp_access_mode_paid" value="requires_purchase" <?php checked($access_mode, 'requires_purchase'); ?>>
-                    <label for="qp_access_mode_paid"><?php esc_html_e('Paid', 'question-press'); ?></label> <?php // <-- CHANGED TEXT ?>
-                    <span class="dashicons dashicons-editor-help qp-tooltip-icon" title="<?php esc_attr_e('Generates a Plan & Product. Access is granted via a WooCommerce purchase.', 'question-press'); ?>"></span>
-                </div>
+			<label><?php esc_html_e('Access Mode:', 'question-press'); ?></label>
 
-            </div>
-        </div>
+			<?php // NEW: Wrapper div to make radio buttons side-by-side 
+			?>
+			<div style="display: flex; flex-direction: row; gap: 20px; margin-top: 5px;">
+
+				<div class="qp-access-mode-radio">
+					<input type="radio" name="_qp_course_access_mode" id="qp_access_mode_free" value="free" <?php checked($access_mode, 'free'); ?>>
+					<label for="qp_access_mode_free"><?php esc_html_e('Free', 'question-press'); ?></label> <?php // <-- CHANGED TEXT 
+																											?>
+					<span class="dashicons dashicons-editor-help qp-tooltip-icon" title="<?php esc_attr_e('Anyone can enroll in this course for free.', 'question-press'); ?>"></span>
+				</div>
+
+				<div class="qp-access-mode-radio">
+					<input type="radio" name="_qp_course_access_mode" id="qp_access_mode_paid" value="requires_purchase" <?php checked($access_mode, 'requires_purchase'); ?>>
+					<label for="qp_access_mode_paid"><?php esc_html_e('Paid', 'question-press'); ?></label> <?php // <-- CHANGED TEXT 
+																											?>
+					<span class="dashicons dashicons-editor-help qp-tooltip-icon" title="<?php esc_attr_e('Generates a Plan & Product. Access is granted via a WooCommerce purchase.', 'question-press'); ?>"></span>
+				</div>
+
+			</div>
+		</div>
 
 		<div id="qp-purchase-fields" style="display: <?php echo ($access_mode === 'requires_purchase') ? 'block' : 'none'; ?>;">
 
 			<div class="qp-metabox-field-wrapper">
-                <label for="qp_course_access_duration_value"> <?php // Added 'for' attribute ?>
-                    <?php esc_html_e('Access Duration:', 'question-press'); ?>
-                    <?php // Added tooltip ?>
-                    <span class="dashicons dashicons-editor-help qp-tooltip-icon" title="<?php esc_attr_e('How long access lasts after purchase. Leave blank for lifetime access.', 'question-press'); ?>"></span>
-                </label>
-                <div class="duration-group">
-                    <input type="number" id="qp_course_access_duration_value" name="_qp_course_access_duration_value" value="<?php echo esc_attr($duration_value); ?>" min="0" placeholder="e.g., 30"> <?php // Added 'id' attribute ?>
-                    <select name="_qp_course_access_duration_unit">
-                        <option value="day" <?php selected($duration_unit, 'day'); ?>>Day(s)</option>
-                        <option value="month" <?php selected($duration_unit, 'month'); ?>>Month(s)</option>
-                        <option value="year" <?php selected($duration_unit, 'year'); ?>>Year(s)</option>
-                    </select>
-                </div>
-                <?php // Removed the <small> description tag ?>
-            </div>
+				<label for="qp_course_access_duration_value"> <?php // Added 'for' attribute 
+																?>
+					<?php esc_html_e('Access Duration:', 'question-press'); ?>
+					<?php // Added tooltip 
+					?>
+					<span class="dashicons dashicons-editor-help qp-tooltip-icon" title="<?php esc_attr_e('How long access lasts after purchase. Leave blank for lifetime access.', 'question-press'); ?>"></span>
+				</label>
+				<div class="duration-group">
+					<input type="number" id="qp_course_access_duration_value" name="_qp_course_access_duration_value" value="<?php echo esc_attr($duration_value); ?>" min="0" placeholder="e.g., 30"> <?php // Added 'id' attribute 
+																																																		?>
+					<select name="_qp_course_access_duration_unit">
+						<option value="day" <?php selected($duration_unit, 'day'); ?>>Day(s)</option>
+						<option value="month" <?php selected($duration_unit, 'month'); ?>>Month(s)</option>
+						<option value="year" <?php selected($duration_unit, 'year'); ?>>Year(s)</option>
+					</select>
+				</div>
+				<?php // Removed the <small> description tag 
+				?>
+			</div>
 
 			<?php // Only show product link if WooCommerce is active 
 			?>
@@ -758,19 +682,19 @@ class Meta_Boxes
 				<?php // NEW: Show NEW price fields if no product is linked
 				else : ?>
 					<div id="qp-new-product-price-fields" class="qp-metabox-field-wrapper" style="padding: 10px; background: #fdfdfd; border: 1px solid #ddd; border-radius: 4px;">
-                        <p style="margin: 0 0 10px; font-style: italic; color: #666;">
+						<p style="margin: 0 0 10px; font-style: italic; color: #666;">
 							<?php esc_html_e('A new WooCommerce product will be created. Please set the price.', 'question-press'); ?>
 						</p>
-                        <div class="qp-price-fields-group" style="display: flex; gap: 10px; margin-bottom: 10px;">
-                            <div style="flex: 1;">
-                                <label for="_qp_new_product_regular_price" style="display: block; font-weight: 600; font-size: 0.9em; margin-bottom: 3px;"><?php esc_html_e( 'Regular Price', 'question-press' ); ?> <span style="color: red;">*</span></label>
-                                <input type="text" id="_qp_new_product_regular_price" name="_qp_new_product_regular_price" value="" class="wc_input_price" placeholder="e.g., 20.00" style="width: 100%;">
-                            </div>
-                            <div style="flex: 1;">
-                                <label for="_qp_new_product_sale_price" style="display: block; font-weight: 600; font-size: 0.9em; margin-bottom: 3px;"><?php esc_html_e( 'Sale Price', 'question-press' ); ?></label>
-                                <input type="text" id="_qp_new_product_sale_price" name="_qp_new_product_sale_price" value="" class="wc_input_price" placeholder="Optional" style="width: 100%;">
-                            </div>
-                        </div>
+						<div class="qp-price-fields-group" style="display: flex; gap: 10px; margin-bottom: 10px;">
+							<div style="flex: 1;">
+								<label for="_qp_new_product_regular_price" style="display: block; font-weight: 600; font-size: 0.9em; margin-bottom: 3px;"><?php esc_html_e('Regular Price', 'question-press'); ?> <span style="color: red;">*</span></label>
+								<input type="text" id="_qp_new_product_regular_price" name="_qp_new_product_regular_price" value="" class="wc_input_price" placeholder="e.g., 20.00" style="width: 100%;">
+							</div>
+							<div style="flex: 1;">
+								<label for="_qp_new_product_sale_price" style="display: block; font-weight: 600; font-size: 0.9em; margin-bottom: 3px;"><?php esc_html_e('Sale Price', 'question-press'); ?></label>
+								<input type="text" id="_qp_new_product_sale_price" name="_qp_new_product_sale_price" value="" class="wc_input_price" placeholder="Optional" style="width: 100%;">
+							</div>
+						</div>
 					</div>
 				<?php endif; ?>
 
@@ -814,51 +738,50 @@ class Meta_Boxes
 	}
 
 	/**
- * Saves the meta box data when the 'qp_course' post type is saved (for Access & Monetization box).
- * Replaces qp_save_course_access_meta().
- * Hooked to 'save_post_qp_course'.
- *
- * @param int $post_id The ID of the post being saved.
- */
-public static function save_course_access($post_id)
-{
-	// Check nonce, permissions, autosave, post type
-	if (!isset($_POST['qp_course_access_nonce']) || !wp_verify_nonce($_POST['qp_course_access_nonce'], 'qp_save_course_access_meta')) return $post_id;
-	if (!current_user_can('edit_post', $post_id) || (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) || 'qp_course' !== get_post_type($post_id)) return $post_id;
+	 * Saves the meta box data when the 'qp_course' post type is saved (for Access & Monetization box).
+	 * Replaces qp_save_course_access_meta().
+	 * Hooked to 'save_post_qp_course'.
+	 *
+	 * @param int $post_id The ID of the post being saved.
+	 */
+	public static function save_course_access($post_id)
+	{
+		// Check nonce, permissions, autosave, post type
+		if (!isset($_POST['qp_course_access_nonce']) || !wp_verify_nonce($_POST['qp_course_access_nonce'], 'qp_save_course_access_meta')) return $post_id;
+		if (!current_user_can('edit_post', $post_id) || (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) || 'qp_course' !== get_post_type($post_id)) return $post_id;
 
-	// Save Access Mode
-	$access_mode = isset($_POST['_qp_course_access_mode']) ? sanitize_key($_POST['_qp_course_access_mode']) : 'free';
-	update_post_meta($post_id, '_qp_course_access_mode', $access_mode);
+		// Save Access Mode
+		$access_mode = isset($_POST['_qp_course_access_mode']) ? sanitize_key($_POST['_qp_course_access_mode']) : 'free';
+		update_post_meta($post_id, '_qp_course_access_mode', $access_mode);
 
-    // Expiry Date and Progression Mode are saved in save_course_progression()
+		// Expiry Date and Progression Mode are saved in save_course_progression()
 
-	// Save fields only if requires_purchase
-	if ($access_mode === 'requires_purchase') {
-		$duration_value = isset($_POST['_qp_course_access_duration_value']) ? absint($_POST['_qp_course_access_duration_value']) : '';
-		update_post_meta($post_id, '_qp_course_access_duration_value', $duration_value);
-		$duration_unit = isset($_POST['_qp_course_access_duration_unit']) ? sanitize_key($_POST['_qp_course_access_duration_unit']) : 'day';
-		update_post_meta($post_id, '_qp_course_access_duration_unit', $duration_unit);
+		// Save fields only if requires_purchase
+		if ($access_mode === 'requires_purchase') {
+			$duration_value = isset($_POST['_qp_course_access_duration_value']) ? absint($_POST['_qp_course_access_duration_value']) : '';
+			update_post_meta($post_id, '_qp_course_access_duration_value', $duration_value);
+			$duration_unit = isset($_POST['_qp_course_access_duration_unit']) ? sanitize_key($_POST['_qp_course_access_duration_unit']) : 'day';
+			update_post_meta($post_id, '_qp_course_access_duration_unit', $duration_unit);
 
-		// Handle product ID (auto-product ID is saved via hidden field)
-		if (isset($_POST['_qp_linked_product_id'])) {
-			$product_id = absint($_POST['_qp_linked_product_id']);
-            // We just save what's submitted. The sync_course_plan function
-            // will create the product if it doesn't exist and link it.
-            // This field primarily handles the auto-product link.
-            update_post_meta($post_id, '_qp_linked_product_id', $product_id);
-		}
+			// Handle product ID (auto-product ID is saved via hidden field)
+			if (isset($_POST['_qp_linked_product_id'])) {
+				$product_id = absint($_POST['_qp_linked_product_id']);
+				// We just save what's submitted. The sync_course_plan function
+				// will create the product if it doesn't exist and link it.
+				// This field primarily handles the auto-product link.
+				update_post_meta($post_id, '_qp_linked_product_id', $product_id);
+			}
+		} else {
+			delete_post_meta($post_id, '_qp_course_access_duration_value');
+			delete_post_meta($post_id, '_qp_course_access_duration_unit');
 
-	} else {
-		delete_post_meta($post_id, '_qp_course_access_duration_value');
-		delete_post_meta($post_id, '_qp_course_access_duration_unit');
-
-		// Only delete the link if it's NOT an auto-product
-		$linked_product_id = get_post_meta($post_id, '_qp_linked_product_id', true);
-		if (! empty($linked_product_id) && get_post_meta($linked_product_id, '_qp_is_auto_generated', true) !== 'true') {
-			delete_post_meta($post_id, '_qp_linked_product_id');
+			// Only delete the link if it's NOT an auto-product
+			$linked_product_id = get_post_meta($post_id, '_qp_linked_product_id', true);
+			if (! empty($linked_product_id) && get_post_meta($linked_product_id, '_qp_is_auto_generated', true) !== 'true') {
+				delete_post_meta($post_id, '_qp_linked_product_id');
+			}
 		}
 	}
-}
 
 	/**
 	 * Saves the meta box data when the 'qp_course' post type is saved (for Progression box).
@@ -1360,14 +1283,14 @@ public static function save_course_access($post_id)
 						$product->set_status('publish');
 						$product->update_meta_data('_qp_linked_plan_id', $plan_id_to_save); // Re-sync plan ID
 
-                        // --- NEW: Read and set prices from POST data ---
-                        if (isset($_POST['_qp_product_regular_price'])) {
-                            $product->set_regular_price(wc_format_decimal($_POST['_qp_product_regular_price']));
-                        }
-                        if (isset($_POST['_qp_product_sale_price'])) {
-                            $product->set_sale_price(wc_format_decimal($_POST['_qp_product_sale_price']));
-                        }
-                        // --- END NEW ---
+						// --- NEW: Read and set prices from POST data ---
+						if (isset($_POST['_qp_product_regular_price'])) {
+							$product->set_regular_price(wc_format_decimal($_POST['_qp_product_regular_price']));
+						}
+						if (isset($_POST['_qp_product_sale_price'])) {
+							$product->set_sale_price(wc_format_decimal($_POST['_qp_product_sale_price']));
+						}
+						// --- END NEW ---
 
 						$product_id_to_save = $product->save();
 						error_log("QP Auto Sync: Updated and Published Product ID #{$product_id_to_save} for Course #{$post_id}");
@@ -1383,16 +1306,16 @@ public static function save_course_access($post_id)
 					$product->set_status('publish');
 					$product->set_virtual(true);
 					$product->set_downloadable(false);
-                    
-                    // --- NEW: Read and set prices from POST data ---
-                    $regular_price = isset($_POST['_qp_new_product_regular_price']) ? wc_format_decimal($_POST['_qp_new_product_regular_price']) : '';
-                    $sale_price = isset($_POST['_qp_new_product_sale_price']) ? wc_format_decimal($_POST['_qp_new_product_sale_price']) : '';
-                    
-                    $product->set_regular_price($regular_price);
-                    if ($sale_price !== '') {
-                        $product->set_sale_price($sale_price);
-                    }
-                    // --- END NEW ---
+
+					// --- NEW: Read and set prices from POST data ---
+					$regular_price = isset($_POST['_qp_new_product_regular_price']) ? wc_format_decimal($_POST['_qp_new_product_regular_price']) : '';
+					$sale_price = isset($_POST['_qp_new_product_sale_price']) ? wc_format_decimal($_POST['_qp_new_product_sale_price']) : '';
+
+					$product->set_regular_price($regular_price);
+					if ($sale_price !== '') {
+						$product->set_sale_price($sale_price);
+					}
+					// --- END NEW ---
 
 					if ($category_id > 0) {
 						$product->set_category_ids([$category_id]);

@@ -1094,6 +1094,50 @@ class Practice_Manager
     }
 
     /**
+     * Starts a practice session from a provided list of Question IDs.
+     * * @param array  $question_ids List of question IDs.
+     * @param string $mode_name    The name of the practice mode (e.g., "Daily Current Affairs").
+     * @return int|\WP_Error       The new session ID or a WP_Error on failure.
+     */
+    public static function start_session_from_ids($question_ids, $mode_name = "Custom Practice")
+    {
+        if (!is_user_logged_in()) {
+            return new \WP_Error('not_logged_in', 'You must be logged in to start a session.', ['status' => 401]);
+        }
+
+        if (!is_array($question_ids) || empty($question_ids)) {
+            return new \WP_Error('invalid_questions', 'A valid array of question IDs is required.', ['status' => 400]);
+        }
+
+        global $wpdb;
+        $user_id = get_current_user_id();
+        $cleaned_ids = array_unique(array_map('absint', $question_ids));
+        $session_table = $wpdb->prefix . 'qp_user_sessions';
+
+        $session_settings = [
+            'practice_mode' => sanitize_text_field($mode_name),
+            'num_questions' => count($cleaned_ids),
+        ];
+
+        $insert_data = [
+            'user_id'               => $user_id,
+            'start_time'            => current_time('mysql'),
+            'last_activity'         => current_time('mysql'),
+            'status'                => 'active',
+            'settings_snapshot'     => json_encode($session_settings),
+            'question_ids_snapshot' => wp_json_encode(array_values($cleaned_ids)),
+        ];
+
+        $result = $wpdb->insert($session_table, $insert_data);
+
+        if (!$result) {
+            return new \WP_Error('db_error', 'Failed to create session in database.', ['status' => 500]);
+        }
+
+        return $wpdb->insert_id;
+    }
+
+    /**
      * Checks an answer for a non-mock test session.
      *
      * @param array $params The parameters for the check, typically from $_POST.
@@ -1674,21 +1718,21 @@ class Practice_Manager
         error_log("Fetching report reasons for taxonomy ID: " . $reason_tax_id);
 
         $reasons_raw = $wpdb->get_results($wpdb->prepare(
-    "SELECT
+            "SELECT
         t.term_id as reason_id,
         t.name as reason_text,
         MAX(CASE WHEN m.meta_key = 'type' THEN m.meta_value END) as type
-    FROM {$term_table} t
-    LEFT JOIN {$meta_table} m ON t.term_id = m.term_id
-    WHERE t.taxonomy_id = %d AND (
-        NOT EXISTS (SELECT 1 FROM {$meta_table} meta_active WHERE meta_active.term_id = t.term_id AND meta_active.meta_key = 'is_active')
-        OR
-        (SELECT meta_active.meta_value FROM {$meta_table} meta_active WHERE meta_active.term_id = t.term_id AND meta_active.meta_key = 'is_active' LIMIT 1) = '1'
-    )
-    GROUP BY t.term_id
-    ORDER BY t.name ASC",
-    $reason_tax_id
-));
+        FROM {$term_table} t
+        LEFT JOIN {$meta_table} m ON t.term_id = m.term_id
+        WHERE t.taxonomy_id = %d AND (
+            NOT EXISTS (SELECT 1 FROM {$meta_table} meta_active WHERE meta_active.term_id = t.term_id AND meta_active.meta_key = 'is_active')
+            OR
+            (SELECT meta_active.meta_value FROM {$meta_table} meta_active WHERE meta_active.term_id = t.term_id AND meta_active.meta_key = 'is_active' LIMIT 1) = '1'
+        )
+        GROUP BY t.term_id
+        ORDER BY t.name ASC",
+            $reason_tax_id
+        ));
 
         error_log("Retrieved " . count($reasons_raw) . " report reasons from the database.");
         error_log("Report Reasons Data: " . print_r($reasons_raw, true));
@@ -1897,9 +1941,9 @@ class Practice_Manager
         $session_manifest['reported_info'] = $reported_info;
 
         // --- Add App-specific fields (for the app's 'SessionDetails' interface)
-        $session_manifest['current_question_index'] = isset($session_settings['current_question_index']) 
-                                                    ? (int) $session_settings['current_question_index'] 
-                                                    : 0;
+        $session_manifest['current_question_index'] = isset($session_settings['current_question_index'])
+            ? (int) $session_settings['current_question_index']
+            : 0;
         $session_manifest['total_questions'] = count($session_manifest['question_ids']);
 
         return $session_manifest;
@@ -1957,7 +2001,8 @@ class Practice_Manager
      * @param int $new_index  The new question index to save.
      * @return bool True on success, false on failure.
      */
-    public static function update_current_question_index( $session_id, $new_index ) {
+    public static function update_current_question_index($session_id, $new_index)
+    {
         global $wpdb;
         $session_table = $wpdb->prefix . 'qp_user_sessions';
         $current_user_id = get_current_user_id();
@@ -1970,28 +2015,28 @@ class Practice_Manager
             )
         );
 
-        if ( ! $session_data ) {
+        if (! $session_data) {
             // Session not found
             return false;
         }
 
-        if ( (int) $session_data->user_id !== (int) $current_user_id ) {
+        if ((int) $session_data->user_id !== (int) $current_user_id) {
             // User does not own this session. Stop execution.
             return false;
         }
 
         // 2. Decode, update, and re-encode
-        $config = json_decode( $session_data->settings_snapshot, true );
+        $config = json_decode($session_data->settings_snapshot, true);
         $config['current_question_index'] = (int) $new_index;
-        $new_config_json = wp_json_encode( $config );
+        $new_config_json = wp_json_encode($config);
 
         // 3. Update the row in the database
         $result = $wpdb->update(
             $session_table,
-            [ 'settings_snapshot' => $new_config_json ], // Data
-            [ 'session_id' => $session_id ],          // Where
-            [ '%s' ],                                 // Format data
-            [ '%d' ]                                  // Format where
+            ['settings_snapshot' => $new_config_json], // Data
+            ['session_id' => $session_id],          // Where
+            ['%s'],                                 // Format data
+            ['%d']                                  // Format where
         );
 
         return $result !== false;
@@ -2660,135 +2705,349 @@ class Practice_Manager
     }
 
     /**
-     * Starts a practice session from a provided list of Question IDs.
-     * * @param array  $question_ids List of question IDs.
-     * @param string $mode_name    The name of the practice mode (e.g., "Daily Current Affairs").
-     * @return int|\WP_Error       The new session ID or a WP_Error on failure.
-     */
-    public static function start_session_from_ids($question_ids, $mode_name = "Custom Practice")
-    {
-        if (!is_user_logged_in()) {
-            return new \WP_Error('not_logged_in', 'You must be logged in to start a session.', ['status' => 401]);
-        }
-
-        if (!is_array($question_ids) || empty($question_ids)) {
-            return new \WP_Error('invalid_questions', 'A valid array of question IDs is required.', ['status' => 400]);
-        }
-
-        global $wpdb;
-        $user_id = get_current_user_id();
-        $cleaned_ids = array_unique(array_map('absint', $question_ids));
-        $session_table = $wpdb->prefix . 'qp_user_sessions';
-
-        $session_settings = [
-            'practice_mode' => sanitize_text_field($mode_name),
-            'num_questions' => count($cleaned_ids),
-        ];
-
-        $insert_data = [
-            'user_id'               => $user_id,
-            'start_time'            => current_time('mysql'),
-            'last_activity'         => current_time('mysql'),
-            'status'                => 'active',
-            'settings_snapshot'     => json_encode($session_settings),
-            'question_ids_snapshot' => wp_json_encode(array_values($cleaned_ids)),
-        ];
-
-        $result = $wpdb->insert($session_table, $insert_data);
-
-        if (!$result) {
-            return new \WP_Error('db_error', 'Failed to create session in database.', ['status' => 500]);
-        }
-
-        return $wpdb->insert_id;
-    }
-
-    /**
      * Fetches a weighted mix of question IDs for "Smart Revision".
-     * Mix: 40% SRS, 20% Mistakes, 20% Interleaved (New), 20% Bookmarks.
-     * Failsafe: If empty, gets 20 random published questions from allowed subjects.
+     * Implements time-windows, mode-specific minimums, and subject-aware fallbacks.
+     * Includes verbose logging for each logic branch.
      *
-     * @param int $user_id
-     * @param string $mode
+     * @param int    $user_id
+     * @param string $mode 'Daily Review', 'Weekly Review', or 'Monthly Review'
      * @return int[]|\WP_Error
      */
-    public static function get_smart_revision_ids(int $user_id, string $mode) {
+    public static function get_smart_revision_ids(int $user_id, string $mode)
+    {
         global $wpdb;
-        $vault = \QuestionPress\Utils\Vault_Manager::get_vault($user_id);
-        $limit = $vault->revision_config['session_min_questions'] ?? 20;
+
+        $vault = Vault_Manager::get_vault($user_id);
+        $config = (array) ($vault->revision_config ?? []);
+
+        // ACT AS PHP ARCHITECT: Map session modes to their respective configuration keys
+        $mode_key_map = [
+            'Daily Review'   => 'daily_count',
+            'Weekly Review'  => 'weekly_count',
+            'Monthly Review' => 'monthly_count',
+        ];
+
+        $config_key = $mode_key_map[$mode] ?? 'daily_count';
+
+        // Vault_Manager::get_vault already ensures these defaults (20, 50, 100) are merged
+        $mode_min = (int) ($config[$config_key] ?? 20);
+        $user_target = isset($config['session_min_questions']) ? (int)$config['session_min_questions'] : 20;
+        $limit = max($mode_min, $user_target);
+
+        // --- NEW: Access Control Setup ---
+        $allowed = User_Access::get_allowed_subject_ids($user_id);
+        $subject_restriction_sql = "";
+
+        if ($allowed !== 'all') {
+            $allowed_array = array_filter(array_map('intval', (array)$allowed));
+            if (empty($allowed_array)) {
+                return new \WP_Error('no_access', 'You do not have access to any subjects for revision.');
+            }
+            $allowed_ids_str = implode(',', $allowed_array);
+            $subject_restriction_sql = " AND q.primary_subject_term_id IN ($allowed_ids_str)";
+        }
+        // --- End Access Control Setup ---
+
+        error_log("--- [SR LOG] START User $user_id | Mode: $mode | Target: $limit ---");
 
         $ids = [];
 
-        // 1. 40% SRS (Due now or overdue)
-        $srs_limit = ceil($limit * 0.4);
-        $srs_ids = $wpdb->get_col($wpdb->prepare(
-            "SELECT question_id FROM {$wpdb->prefix}qp_user_mastery 
-             WHERE user_id = %d AND next_review_date <= NOW() 
-             ORDER BY next_review_date ASC LIMIT %d",
-            $user_id, $srs_limit
-        ));
-        if (!empty($srs_ids)) $ids = array_merge($ids, array_map('intval', $srs_ids));
+        $add_ids = function (array $new_ids) use (&$ids) {
+            foreach ($new_ids as $id) {
+                $ids[(int)$id] = true;
+            }
+        };
 
-        // 2. 20% Recent Mistakes (Last 7 days)
-        $mistake_limit = ceil($limit * 0.2);
-        $mistake_ids = $wpdb->get_col($wpdb->prepare(
-            "SELECT DISTINCT question_id FROM {$wpdb->prefix}qp_user_attempts 
-             WHERE user_id = %d AND is_correct = 0 AND attempt_time >= DATE_SUB(NOW(), INTERVAL 7 DAY) 
+        /*
+        =========================
+        DISTRIBUTION
+        =========================
+        */
+
+        $srs_limit       = (int) ceil($limit * 0.6);
+        $mistake_limit   = (int) ceil($limit * 0.2);
+        $reinforce_limit = (int) ceil($limit * 0.1);
+        $bookmark_limit  = (int) ceil($limit * 0.1);
+
+        /*
+        =========================
+        1. SRS DUE (PRIMARY)
+        =========================
+        */
+        $srs_pool_size = ceil($mode_min * 0.60);
+        $consolidation_percent = rand(5, 15) / 100;
+        $target_consolidation = ceil($srs_pool_size * $consolidation_percent);
+
+        // Memory Consolidation: Target questions from the previous cycle interval
+        $cycle_days = ($mode === 'Weekly Review') ? 7 : (($mode === 'Monthly Review') ? 30 : 1);
+
+        // 1.1 Consolidation Layer (Attempts JOIN Questions)
+        $consolidation_ids = $wpdb->get_col($wpdb->prepare(
+            "SELECT DISTINCT a.question_id 
+             FROM {$wpdb->prefix}qp_user_attempts a
+             JOIN {$wpdb->prefix}qp_questions q ON a.question_id = q.question_id
+             WHERE a.user_id = %d 
+             AND DATE(a.attempt_time) = DATE_SUB(CURRENT_DATE(), INTERVAL %d DAY)
+             AND q.status = 'publish'
+             {$subject_restriction_sql}
+             ORDER BY RAND() 
              LIMIT %d",
-            $user_id, $mistake_limit
+            $user_id,
+            $cycle_days,
+            $target_consolidation
         ));
-        if (!empty($mistake_ids)) $ids = array_merge($ids, array_map('intval', $mistake_ids));
 
-        // 3. 20% Interleaved (Focus Subjects, never attempted)
-        $focus_subjects = $vault->access_scope['focus_subjects'] ?? [];
-        if (!empty($focus_subjects)) {
-            $new_limit = ceil($limit * 0.2);
-            $subj_placeholders = implode(',', array_map('intval', $focus_subjects));
-            $new_ids = $wpdb->get_col($wpdb->prepare(
-                "SELECT q.question_id FROM {$wpdb->prefix}qp_questions q
-                 LEFT JOIN {$wpdb->prefix}qp_user_attempts a ON q.question_id = a.question_id AND a.user_id = %d
-                 WHERE q.primary_subject_term_id IN ($subj_placeholders) AND a.attempt_id IS NULL
-                 LIMIT %d",
-                $user_id, $new_limit
-            ));
-            if (!empty($new_ids)) $ids = array_merge($ids, array_map('intval', $new_ids));
-        }
+        // 1.2 Core SRS Layer (Mastery JOIN Questions)
+        $remaining_limit = $srs_pool_size - count($consolidation_ids);
+        $due_ids = $wpdb->get_col($wpdb->prepare(
+            "SELECT m.question_id
+             FROM {$wpdb->prefix}qp_user_mastery m
+             JOIN {$wpdb->prefix}qp_questions q ON m.question_id = q.question_id
+             WHERE m.user_id = %d
+             AND m.next_review_date <= NOW()
+             AND q.status = 'publish'
+             {$subject_restriction_sql}
+             ORDER BY m.next_review_date ASC
+             LIMIT %d",
+            $user_id,
+            $remaining_limit
+        ));
 
-        // 4. 20% Bookmarks
-        $bookmark_limit = ceil($limit * 0.2);
+        $srs_ids = array_unique(array_merge($consolidation_ids, $due_ids));
+
+        $add_ids($srs_ids);
+        error_log("[SR] SRS Logic: Core=" . count($due_ids) . ", Consolidation=" . count($consolidation_ids));
+
+        /*
+        =========================
+        2. RECENT MISTAKES
+        =========================
+        */
+
+        $mistake_ids = $wpdb->get_col($wpdb->prepare(
+            "SELECT a.question_id
+             FROM {$wpdb->prefix}qp_user_attempts a
+             JOIN {$wpdb->prefix}qp_questions q ON a.question_id = q.question_id
+             WHERE a.user_id = %d AND a.is_correct = 0 AND q.status = 'publish'
+             {$subject_restriction_sql}
+             ORDER BY a.attempt_time DESC
+             LIMIT %d",
+            $user_id,
+            $mistake_limit
+        ));
+        $add_ids($mistake_ids);
+
+        error_log("[SR] Mistakes added: " . count($mistake_ids));
+
+        /*
+        =========================
+        3. LOW MASTERY
+        =========================
+        */
+
+        $reinforce_ids = $wpdb->get_col($wpdb->prepare(
+            "SELECT m.question_id
+             FROM {$wpdb->prefix}qp_user_mastery m
+             JOIN {$wpdb->prefix}qp_questions q ON m.question_id = q.question_id
+             WHERE m.user_id = %d AND m.box_number <= 2 AND q.status = 'publish'
+             {$subject_restriction_sql}
+             ORDER BY m.box_number ASC
+             LIMIT %d",
+            $user_id,
+            $reinforce_limit
+        ));
+        $add_ids($reinforce_ids);
+
+        error_log("[SR] Reinforcement added: " . count($reinforce_ids));
+
+        /*
+        =========================
+        4. BOOKMARKS
+        =========================
+        */
+
         $bookmark_ids = $wpdb->get_col($wpdb->prepare(
-            "SELECT question_id FROM {$wpdb->prefix}qp_review_later WHERE user_id = %d LIMIT %d",
-            $user_id, $bookmark_limit
+            "SELECT r.question_id
+             FROM {$wpdb->prefix}qp_review_later r
+             JOIN {$wpdb->prefix}qp_questions q ON r.question_id = q.question_id
+             WHERE r.user_id = %d AND q.status = 'publish'
+             {$subject_restriction_sql}
+             LIMIT %d",
+            $user_id,
+            $bookmark_limit
         ));
-        if (!empty($bookmark_ids)) $ids = array_merge($ids, array_map('intval', $bookmark_ids));
+        $add_ids($bookmark_ids);
 
-        $ids = array_unique($ids);
+        error_log("[SR] Bookmarks added: " . count($bookmark_ids));
 
-        // --- FAILSAFE FALLBACK ---
-        if (empty($ids)) {
-            $allowed_subjects = \QuestionPress\Utils\User_Access::get_allowed_subject_ids($user_id);
-            $where_subjects = "";
-            if ($allowed_subjects !== 'all' && is_array($allowed_subjects)) {
-                if (empty($allowed_subjects)) {
-                    return new \WP_Error('empty_vault', 'Your vault is empty. Please complete some standard practice first.');
+        /*
+        =========================
+        CURRENT POOL
+        =========================
+        */
+
+        $ids_list = array_keys($ids);
+        $current_count = count($ids_list);
+
+        error_log("[SR] Pool before fallback: $current_count");
+
+        error_log("[SR] Current IDs: " . implode(',', $ids_list));
+
+        /*
+        =========================
+        FALLBACK SYSTEM
+        =========================
+        */
+
+        if ($current_count < $limit) {
+
+            $needed = $limit - $current_count;
+
+            error_log("[SR] Fallback triggered. Need $needed more.");
+
+            /*
+            1. Detect subjects of current pool
+            */
+
+            $subject_ids = [];
+            if (!empty($ids_list)) {
+                $subject_ids = $wpdb->get_col(
+                    "SELECT DISTINCT primary_subject_term_id
+                     FROM {$wpdb->prefix}qp_questions
+                     WHERE question_id IN (" . implode(',', array_map('intval', $ids_list)) . ")
+                     AND primary_subject_term_id != 0"
+                );
+            }
+
+            /*
+            2. Scope Validation: Filter detected subjects by what user is CURRENTLY allowed to see
+            */
+            $allowed = User_Access::get_allowed_subject_ids($user_id);
+            if ($allowed !== 'all') {
+                $allowed_array = array_map('intval', (array)$allowed);
+                // If the pool had subjects the user is no longer allowed to see, remove them
+                $subject_ids = !empty($subject_ids) ? array_intersect($subject_ids, $allowed_array) : $allowed_array;
+            }
+
+            // If we ended up with no subjects (e.g., empty pool + no allowed subjects), we must stop
+            if (empty($subject_ids) && $allowed !== 'all') {
+                error_log("[SR] Fallback failed: No allowed subjects found for user $user_id");
+            } else {
+                $subject_where = !empty($subject_ids)
+                    ? " AND q.primary_subject_term_id IN (" . implode(',', array_map('intval', $subject_ids)) . ")"
+                    : "";
+
+                /*
+                3. Primary Fallback: Questions attempted within the specific Time Window
+                */
+                $interval = ($mode === 'Weekly Review') ? '7 DAY' : (($mode === 'Monthly Review') ? '30 DAY' : '1 DAY');
+
+                $common_ids = $wpdb->get_col($wpdb->prepare(
+                    "SELECT DISTINCT q.question_id
+                     FROM {$wpdb->prefix}qp_questions q
+                     JOIN {$wpdb->prefix}qp_user_attempts a ON q.question_id = a.question_id
+                     WHERE a.user_id = %d
+                     AND a.attempt_time >= DATE_SUB(NOW(), INTERVAL $interval)
+                     AND q.status = 'publish'
+                     $subject_where",
+                    $user_id
+                ));
+
+                if (!empty($common_ids)) {
+                    shuffle($common_ids);
+                    $added_from_common = array_slice($common_ids, 0, $needed);
+                    $add_ids($added_from_common);
+                    error_log("[SR] Fallback stage 1 (Intersection) added: " . count($added_from_common));
                 }
-                $subj_placeholders = implode(',', array_map('intval', $allowed_subjects));
-                $where_subjects = " AND primary_subject_term_id IN ($subj_placeholders)";
+
+                /*
+                4. Secondary Fallback: Purely random questions from allowed subjects
+                */
+                $ids_list = array_keys($ids);
+                $current_count = count($ids_list);
+
+                if ($current_count < $limit) {
+                    $needed = $limit - $current_count;
+                    error_log("[SR] Fallback stage 2 (Random Fill) triggered. Need $needed more.");
+
+                    $rand_ids = $wpdb->get_col(
+                        "SELECT q.question_id
+                         FROM {$wpdb->prefix}qp_questions q
+                         WHERE q.status = 'publish'
+                         $subject_where
+                         ORDER BY RAND()
+                         LIMIT $needed"
+                    );
+
+                    $add_ids($rand_ids);
+                }
             }
 
-            $fallback_ids = $wpdb->get_col(
-                "SELECT question_id FROM {$wpdb->prefix}qp_questions 
-                 WHERE status = 'publish' $where_subjects 
-                 ORDER BY RAND() LIMIT 20"
-            );
+            /*
+            =========================
+            FINAL GUARD
+            =========================
+            */
 
-            if (empty($fallback_ids)) {
-                return new \WP_Error('empty_vault', 'Your vault is empty. Please complete some standard practice first.');
+            $final_ids = array_keys($ids);
+
+
+            if (empty($final_ids)) {
+
+                error_log("[SR] CRITICAL: empty pool");
+
+                return new \WP_Error(
+                    'empty_pool',
+                    'No questions found for revision.'
+                );
             }
 
-            $ids = array_map('intval', $fallback_ids);
+            shuffle($final_ids);
+
+            $final_selection = array_slice($final_ids, 0, $limit);
+
+            error_log("[SR] FINISHED with " . count($final_selection) . " questions");
+
+            return $final_selection;
         }
 
-        return $ids;
+        $final_ids = array_keys($ids);
+        shuffle($final_ids);
+
+        return array_slice($final_ids, 0, $limit);
+        error_log("[SR] No fallback needed. Final count: " . count($final_ids));
+    }
+
+
+    /**
+     * Checks if the user has already completed a revision session today.
+     *
+     * @param int $user_id
+     * @return bool
+     */
+    public static function has_completed_revision_today(int $user_id): bool
+    {
+        global $wpdb;
+        $table = $wpdb->prefix . 'qp_user_sessions';
+        $today = gmdate('Y-m-d');
+
+        $exists = $wpdb->get_var($wpdb->prepare(
+            "SELECT 1 FROM $table 
+             WHERE user_id = %d 
+             AND status = 'completed' 
+             AND DATE(end_time) = %s 
+             AND (
+                settings_snapshot LIKE '%%\"practice_mode\":\"Daily Review\"%%' OR 
+                settings_snapshot LIKE '%%\"practice_mode\":\"Weekly Review\"%%' OR 
+                settings_snapshot LIKE '%%\"practice_mode\":\"Monthly Review\"%%'
+             )
+             LIMIT 1",
+            $user_id,
+            $today
+        ));
+
+        error_log("Checked revision completion for user_id $user_id on $today: " . ($exists ? 'completed' : 'not completed'));
+
+        return (bool) $exists;
     }
 }

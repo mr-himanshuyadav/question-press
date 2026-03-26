@@ -60,7 +60,7 @@ class Auth_Manager {
      * @return array|WP_Error An array with a success message, or a WP_Error on failure.
      */
     public static function resend_registration_otp( $params ) {
-        if ( session_status() === PHP_SESSION_NONE ) {
+        if ( session_status() === PHP_SESSION_NONE && ! headers_sent() ) {
             session_start();
         }
 

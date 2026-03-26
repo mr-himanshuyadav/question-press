@@ -614,9 +614,9 @@ final class Shortcodes
 		$enable_otp = (bool) ($options['enable_otp_verification'] ?? 0);
 
 		// Ensure session is started
-		if (session_status() === PHP_SESSION_NONE) {
-			session_start();
-		}
+		if ( session_status() === PHP_SESSION_NONE && ! headers_sent() ) {
+            session_start();
+        }
 
 		// --- 2. Handle All Form Submissions ---
 		if (! empty($_POST) && isset($_POST['action'])) {

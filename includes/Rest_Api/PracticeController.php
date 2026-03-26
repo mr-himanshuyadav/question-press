@@ -561,25 +561,34 @@ class PracticeController
 	{
 		$user_id = get_current_user_id();
 
-		// 1. Determine the Priority Task from Vault_Manager
-		$task = Vault_Manager::get_today_priority_task($user_id);
-
-		// 2. Fetch the mix of IDs to get the due count
-		$ids = Practice_Manager::get_smart_revision_ids($user_id, $task);
-
-		// If it's a WP_Error (e.g. empty vault), or empty array, return data: null
-		if (is_wp_error($ids) || empty($ids)) {
+		// 1. Check if user already completed a revision session today
+		if (Practice_Manager::has_completed_revision_today($user_id)) {
 			return new \WP_REST_Response([
 				'success' => true,
 				'data'    => null
 			], 200);
 		}
 
+		// 2. Determine the Priority Task from Vault_Manager
+		$task = Vault_Manager::get_today_priority_task($user_id);
+
+		// 3. OPTIMIZATION: Get due count from vault configuration instead of calculating IDs
+		$vault        = Vault_Manager::get_vault($user_id);
+		$config       = (array) ($vault->revision_config ?? []);
+		$mode_key_map = [
+			'Daily Review'   => 'daily_count',
+			'Weekly Review'  => 'weekly_count',
+			'Monthly Review' => 'monthly_count',
+		];
+
+		$config_key = $mode_key_map[$task] ?? 'daily_count';
+		$due_count  = (int) ($config[$config_key] ?? 20);
+
 		return new \WP_REST_Response([
 			'success' => true,
 			'data'    => [
 				'priority_task' => $task,
-				'due_count'     => count($ids)
+				'due_count'     => $due_count
 			]
 		], 200);
 	}
@@ -612,4 +621,30 @@ class PracticeController
 			]
 		], 200);
 	}
+
+	/**
+     * Updates the user's Smart Revision (Vault) settings.
+     */
+    public static function update_vault_settings( \WP_REST_Request $request ) {
+        $user_id = get_current_user_id();
+        $params  = $request->get_json_params();
+
+        if ( empty( $params ) ) {
+            return new \WP_Error( 'rest_invalid_param', 'No settings provided.', [ 'status' => 400 ] );
+        }
+
+        // Call the Manager to handle database logic and JSON synchronization
+        $success = Vault_Manager::update_revision_settings( $user_id, $params );
+
+		error_log("Vault settings update for user_id $user_id with params: " . json_encode($params) . " resulted in success: " . ($success ? 'true' : 'false'));
+
+        if ( ! $success ) {
+            return new \WP_Error( 'save_failed', 'Could not update vault settings in the database.', [ 'status' => 500 ] );
+        }
+
+        return new \WP_REST_Response( [ 
+            'success' => true, 
+            'message' => 'Vault settings updated successfully.' 
+        ], 200 );
+    }
 }

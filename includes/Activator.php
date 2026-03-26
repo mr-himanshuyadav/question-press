@@ -39,7 +39,7 @@ class Activator {
         specific_source_term_id BIGINT(20) UNSIGNED DEFAULT NULL,
         exam_term_id BIGINT(20) UNSIGNED DEFAULT NULL,
         PRIMARY KEY (group_id),
-        KEY is_pyq (is_pyq)
+        KEY is_pyq (is_pyq),
         KEY primary_subject_term_id (primary_subject_term_id),
         KEY specific_subject_term_id (specific_subject_term_id),
         KEY primary_source_term_id (primary_source_term_id),
@@ -422,6 +422,20 @@ class Activator {
         KEY next_review_date (next_review_date)
     ) $charset_collate;";
     dbDelta($sql_mastery);
+
+    // 14. Device Tokens Table (Centralized for all notifications)
+    $table_tokens = $wpdb->get_blog_prefix() . 'qp_device_tokens';
+    $sql_tokens = "CREATE TABLE $table_tokens (
+        id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+        user_id BIGINT(20) UNSIGNED NOT NULL,
+        token VARCHAR(255) NOT NULL,
+        platform VARCHAR(20) DEFAULT 'expo',
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY  (id),
+        UNIQUE KEY token (token(191)),
+        KEY user_id (user_id)
+    ) $charset_collate;";
+    dbDelta($sql_tokens);
 
     // === SCHEDULE CRON JOBS ===
     if (!wp_next_scheduled('qp_check_entitlement_expiration_hook')) {

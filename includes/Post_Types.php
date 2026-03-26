@@ -99,7 +99,7 @@ class Post_Types
             'capability_type'    => 'post', // Use standard post capabilities
             'has_archive'        => false, // No archive page needed
             'hierarchical'       => false, // Courses are not hierarchical like pages
-            'menu_position'      => 26,    // Position below Question Press (usually 25)
+            'menu_position'      => 27,    // Position below Question Press (usually 25)
             'menu_icon'          => 'dashicons-welcome-learn-more', // Choose an appropriate icon
             'supports'           => ['title', 'author', 'editor'], // Features we want initially
             'show_in_rest'       => false, // Disable Block Editor support for now
@@ -134,7 +134,7 @@ class Post_Types
         $labels = [
             'name'                  => _x('Plans', 'Post type general name', 'question-press'),
             'singular_name'         => _x('Plan', 'Post type singular name', 'question-press'),
-            'menu_name'             => _x('Monetization Plans', 'Admin Menu text', 'question-press'),
+            'menu_name'             => _x('Access Plans', 'Admin Menu text', 'question-press'),
             'name_admin_bar'        => _x('Plan', 'Add New on Toolbar', 'question-press'),
             'add_new'               => __('Add New Plan', 'question-press'),
             'add_new_item'          => __('Add New Plan', 'question-press'),
@@ -154,13 +154,14 @@ class Post_Types
             'public'             => false, // Not publicly viewable on frontend
             'publicly_queryable' => false, // Not queryable directly
             'show_ui'            => true,  // Show in admin UI
-            'show_in_menu'       => 'question-press', // Show under the main Question Press menu
+            'show_in_menu'       => true, // Show under the main Question Press menu
             'query_var'          => false,
             'rewrite'            => false,
             'capability_type'    => 'post', // Use standard post capabilities (adjust if needed)
             'has_archive'        => false,
             'hierarchical'       => false,
-            'menu_position'      => null, // Will appear as submenu
+            'menu_position'      => 28, // Will appear as submenu\
+            'menu_icon'          => 'dashicons-tickets-alt',
             'supports'           => ['title', 'editor'], // Only title needed initially, details via meta
             'show_in_rest'       => false, // Disable Gutenberg for this CPT
         ];

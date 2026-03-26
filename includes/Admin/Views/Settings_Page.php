@@ -88,8 +88,6 @@ class Settings_Page
         add_settings_field('qp_min_app_version', 'Min Required Version', [self::class, 'render_min_version_input'], 'qp-settings-page', 'qp_app_control_section');
         add_settings_field('qp_maintenance_mode', 'Maintenance Mode', [self::class, 'render_maintenance_mode_checkbox'], 'qp-settings-page', 'qp_app_control_section');
         add_settings_field('qp_maintenance_message', 'Maintenance Message', [self::class, 'render_maintenance_message_textarea'], 'qp-settings-page', 'qp_app_control_section');
-        add_settings_field('qp_store_url_android', 'Play Store URL', [self::class, 'render_android_url_input'], 'qp-settings-page', 'qp_app_control_section');
-        add_settings_field('qp_store_url_ios', 'App Store URL', [self::class, 'render_ios_url_input'], 'qp-settings-page', 'qp_app_control_section');
     }
 
     /**
@@ -192,8 +190,6 @@ class Settings_Page
         // 5. App Control & Data Persistence
         if (isset($input['min_app_version']))       $new_input['min_app_version']       = sanitize_text_field($input['min_app_version']);
         if (isset($input['maintenance_message']))   $new_input['maintenance_message']   = sanitize_textarea_field($input['maintenance_message']);
-        if (isset($input['store_url_android']))     $new_input['store_url_android']     = esc_url_raw($input['store_url_android']);
-        if (isset($input['store_url_ios']))         $new_input['store_url_ios']         = esc_url_raw($input['store_url_ios']);
         
         // Explicitly preserve release data unless explicitly passed (e.g. from Update_Manager)
         if (isset($input['latest_app_version']))    $new_input['latest_app_version']    = sanitize_text_field($input['latest_app_version']);
@@ -283,16 +279,6 @@ class Settings_Page
     public static function render_min_version_input() {
         $opts = get_option('qp_settings');
         echo '<input type="text" name="qp_settings[min_app_version]" value="' . esc_attr($opts['min_app_version'] ?? '1.0.0') . '" class="small-text" />';
-    }
-
-    public static function render_android_url_input() {
-        $opts = get_option('qp_settings');
-        echo '<input type="url" name="qp_settings[store_url_android]" value="' . esc_url($opts['store_url_android'] ?? '') . '" class="regular-text" />';
-    }
-
-    public static function render_ios_url_input() {
-        $opts = get_option('qp_settings');
-        echo '<input type="url" name="qp_settings[store_url_ios]" value="' . esc_url($opts['store_url_ios'] ?? '') . '" class="regular-text" />';
     }
 
     public static function render_delete_data_checkbox() {
