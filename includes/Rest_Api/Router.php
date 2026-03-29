@@ -104,6 +104,21 @@ final class Router
             'permission_callback' => '__return_true' // Public endpoint
         ]);
 
+
+        register_rest_route('questionpress/v1', '/legal', [
+            'methods'  => \WP_REST_Server::READABLE,
+            'callback' => function () {
+                return [
+                    'success' => true,
+                    'data' => [
+                        'terms'   => 'We are working on Terms & Conditions. Please check back later.',
+                        'privacy' => 'We are working on Privacy Policy. Please check back later.',
+                    ],
+                ];
+            },
+            'permission_callback' => '__return_true', // ✅ PUBLIC
+        ]);
+
         // --- Data "Get" Endpoints (Protected) ---
         register_rest_route('questionpress/v1', '/subjects', [
             'methods' => WP_REST_Server::READABLE,

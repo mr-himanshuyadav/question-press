@@ -87,6 +87,7 @@ class AuthController {
             'success' => true,
             'data' => [
                 'token'             => $token,
+                'user_id'          => $user->ID,
                 'user_email'        => $user->user_email,
                 'user_nicename'     => $user->user_nicename,
                 'user_display_name' => $user->display_name,
