@@ -73,4 +73,9 @@
       "C:\\Users\\HIMANSHU\\Local Sites\\qp\\app\\public\\wp-includes",
       "C:\\Users\\HIMANSHU\\Local Sites\\qp\\app\\public\\wp-content\\plugins\\woocommerce\\includes",
       "C:\\Users\\HIMANSHU\\Local Sites\\qp\\app\\public\\wp-content\\plugins\\woocommerce"
-   ]}
+   ],
+
+   "editor.stickyScroll.enabled": true,
+   "breadcrumbs.enabled": true,
+   "editor.stickyScroll.maxLineCount": 20,
+  }

@@ -16,7 +16,7 @@ use QuestionPress\Utils\Vault_Manager;
  */
 class Practice_Manager
 {
-
+    // TODO: Integrate centralized session creation function using newly created create_session function
     /**
      * Starts a MOCK TEST session.
      *
@@ -248,20 +248,14 @@ class Practice_Manager
             return new WP_Error('no_session_page', 'The administrator has not configured a session page.');
         }
 
-        $wpdb->insert($wpdb->prefix . 'qp_user_sessions', [
-            'user_id'                 => get_current_user_id(),
-            'status'                  => 'mock_test',
-            'start_time'              => current_time('mysql'),
-            'last_activity'           => current_time('mysql'),
-            'settings_snapshot'       => wp_json_encode($session_settings),
-            'question_ids_snapshot'   => wp_json_encode($final_question_ids) // Store only the final list
-        ]);
-        $session_id = $wpdb->insert_id;
+        $session_id = self::create_session($final_question_ids, 'mock_test', $session_settings);
+        if (is_wp_error($session_id)) return $session_id;
 
         $redirect_url = add_query_arg('session_id', $session_id, get_permalink($session_page_id));
         return ['redirect_url' => $redirect_url];
     }
 
+    // TODO: Integrate centralized session creation function using newly created create_session function
     /**
      * Starts a REVISION practice session.
      *
@@ -483,6 +477,7 @@ class Practice_Manager
         return ['redirect_url' => $redirect_url];
     }
 
+    // TODO: Integrate centralized session creation function using newly created create_session function
     /**
      * Starts a standard or section-wise practice session.
      *
@@ -733,6 +728,7 @@ class Practice_Manager
         return ['redirect_url' => $redirect_url];
     }
 
+    // TODO: Integrate centralized session creation function using newly created create_session function
     /**
      * Starts a special session with incorrectly answered questions.
      *
@@ -818,6 +814,7 @@ class Practice_Manager
         return ['redirect_url' => $redirect_url];
     }
 
+    // TODO: Integrate centralized session creation function using newly created create_session function
     /**
      * Starts a special session with only the questions marked for review.
      *
@@ -878,6 +875,7 @@ class Practice_Manager
         return ['redirect_url' => $redirect_url];
     }
 
+    // TODO: Integrate centralized session creation function using newly created create_session function
     /**
      * Starts a Test Series session launched from a course item.
      * This is the refactored version of the *original* logic from Session_Ajax.php.
@@ -1095,12 +1093,15 @@ class Practice_Manager
 
     /**
      * Starts a practice session from a provided list of Question IDs.
-     * * @param array  $question_ids List of question IDs.
+     * Regulated via the centralized session creation logic.
+     *
+     * @param array  $question_ids List of question IDs.
      * @param string $mode_name    The name of the practice mode (e.g., "Daily Current Affairs").
      * @return int|\WP_Error       The new session ID or a WP_Error on failure.
      */
     public static function start_session_from_ids($question_ids, $mode_name = "Custom Practice")
     {
+        // Basic Request Validation
         if (!is_user_logged_in()) {
             return new \WP_Error('not_logged_in', 'You must be logged in to start a session.', ['status' => 401]);
         }
@@ -1109,32 +1110,124 @@ class Practice_Manager
             return new \WP_Error('invalid_questions', 'A valid array of question IDs is required.', ['status' => 400]);
         }
 
+        // Delegate creation to the central logic. 
+        // Defaults for timer, pyq_only, etc., are automatically added by create_session.
+        return self::create_session(
+            $question_ids,
+            'active',
+            ['practice_mode' => sanitize_text_field($mode_name)]
+        );
+    }
+
+    /**
+     * Master source for session creation and updates.
+     * Unifies all settings snapshots with defaults and handles DB persistence.
+     *
+     * @param array  $question_ids        List of question IDs.
+     * @param string $status              Status for the session (e.g., 'active', 'mock_test').
+     * @param array  $custom_settings     Specific settings for this session type.
+     * @param int    $existing_session_id Optional. If provided, updates this session.
+     * @return int|\WP_Error              The Session ID on success, WP_Error on failure.
+     */
+    public static function create_session($question_ids, $status = 'active', $custom_settings = [], $existing_session_id = 0)
+    {
         global $wpdb;
         $user_id = get_current_user_id();
-        $cleaned_ids = array_unique(array_map('absint', $question_ids));
-        $session_table = $wpdb->prefix . 'qp_user_sessions';
+        $current_time = current_time('mysql');
+        $sessions_table = $wpdb->prefix . 'qp_user_sessions';
 
-        $session_settings = [
-            'practice_mode' => sanitize_text_field($mode_name),
-            'num_questions' => count($cleaned_ids),
-        ];
+        // 1. Ownership & Existence Verification (Crucial Security Check)
+        if ($existing_session_id > 0) {
+            $existing_user_id = $wpdb->get_var($wpdb->prepare(
+                "SELECT user_id FROM $sessions_table WHERE session_id = %d",
+                $existing_session_id
+            ));
 
-        $insert_data = [
-            'user_id'               => $user_id,
-            'start_time'            => current_time('mysql'),
-            'last_activity'         => current_time('mysql'),
-            'status'                => 'active',
-            'settings_snapshot'     => json_encode($session_settings),
-            'question_ids_snapshot' => wp_json_encode(array_values($cleaned_ids)),
-        ];
+            if (!$existing_user_id) {
+                return new \WP_Error('session_not_found', 'The session record could not be found.');
+            }
 
-        $result = $wpdb->insert($session_table, $insert_data);
-
-        if (!$result) {
-            return new \WP_Error('db_error', 'Failed to create session in database.', ['status' => 500]);
+            if ((int) $existing_user_id !== (int) $user_id) {
+                return new \WP_Error('unauthorized_update', 'Security violation: You do not own this session.');
+            }
         }
 
-        return $wpdb->insert_id;
+        // 1. Comprehensive Defaults for all identified session settings keys
+        $defaults = [
+            'practice_mode'          => 'normal',
+            'subjects'               => [],
+            'topics'                 => [],
+            'num_questions'          => count($question_ids),
+            'marks_correct'          => null,
+            'marks_incorrect'        => null,
+            'timer_enabled'          => false,
+            'timer_seconds'          => null,
+            'distribution'           => 'random',
+            'questions_per'          => null,
+            'exclude_pyq'            => false,
+            'pyq_only'               => false,
+            'section_id'             => 'all',
+            'question_numbers'       => [],
+            'course_id'              => null,
+            'item_id'                => null,
+            'original_selection'     => [],
+            'subject_id'             => null,
+            'revise_mode'            => false,
+            'current_question_index' => 0,
+        ];
+
+        // 3. Merge custom inputs into defaults
+        $final_settings = array_merge($defaults, $custom_settings);
+        $cleaned_question_ids = array_values(array_unique(array_map('absint', $question_ids)));
+
+        $data = [
+            'status'                => sanitize_text_field($status),
+            'last_activity'         => $current_time,
+            'settings_snapshot'     => wp_json_encode($final_settings),
+            'question_ids_snapshot' => wp_json_encode($cleaned_question_ids),
+        ];
+
+        if ($existing_session_id > 0) {
+            // Handle Session Resumption/Pausing records (Used by Section Practice)
+            $pauses_table = $wpdb->prefix . 'qp_session_pauses';
+            $end_time = $wpdb->get_var($wpdb->prepare("SELECT end_time FROM $sessions_table WHERE session_id = %d", $existing_session_id));
+
+            if ($end_time) {
+                $wpdb->insert($pauses_table, [
+                    'session_id'  => $existing_session_id,
+                    'pause_time'  => $end_time,
+                    'resume_time' => $current_time
+                ]);
+            }
+
+            $wpdb->update($sessions_table, $data, ['session_id' => $existing_session_id]);
+            $session_id = $existing_session_id;
+        } else {
+            $data['user_id']    = $user_id;
+            $data['start_time'] = $current_time;
+
+            $result = $wpdb->insert($sessions_table, $data);
+            if (!$result) {
+                return new \WP_Error('db_error', 'Failed to create session in database.');
+            }
+            $session_id = $wpdb->insert_id;
+        }
+
+        // 4. Centralized Course Progress Integration
+        if (!empty($final_settings['item_id']) && !empty($final_settings['course_id'])) {
+            $progress_table = $wpdb->prefix . 'qp_user_items_progress';
+            $wpdb->query($wpdb->prepare(
+                "REPLACE INTO {$progress_table} (user_id, item_id, course_id, status, last_viewed)
+             VALUES (%d, %d, %d, %s, %s)",
+                $user_id,
+                $final_settings['item_id'],
+                $final_settings['course_id'],
+                'in_progress',
+                $current_time
+            ));
+        }
+
+        return $session_id;
     }
 
     /**
