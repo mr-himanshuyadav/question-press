@@ -455,6 +455,8 @@ final class Shortcodes
 		$session_settings = $session_data['settings'];
 
 		// Determine mode flags
+
+		// TODO: Correctly Map to session_type and session_name
 		$is_mock_test           = isset($session_settings['practice_mode']) && $session_settings['practice_mode'] === 'mock_test';
 		$is_section_wise        = isset($session_settings['practice_mode']) && $session_settings['practice_mode'] === 'Section Wise Practice';
 		$is_palette_mandatory = $is_mock_test || $is_section_wise;

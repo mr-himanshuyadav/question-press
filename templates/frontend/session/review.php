@@ -64,7 +64,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 													} ?></div>
 					</div>
 
-					<?php if (isset($settings['practice_mode']) && $settings['practice_mode'] === 'mock_test') : ?>
+					<?php if (isset($settings['practice_mode']) && $settings['practice_mode'] === 'mock_test') :  // TODO: Fix this pratice_mode reference for session_name and session_type ?>
 						<div class="stat">
 							<div class="value"><?php echo (int) $session->skipped_count; ?></div>
 							<div class="label">Viewed & Unattempted</div>
@@ -94,6 +94,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 					$is_skipped          = empty($attempt->selected_option_id);
 					$answer_display_text = 'Skipped';
 					$answer_class        = $is_skipped ? 'skipped' : ($attempt->is_correct ? 'correct' : 'incorrect');
+
+					// TODO: Fix this pratice_mode reference for session_name and session_type
 
 					if (isset($settings['practice_mode']) && $settings['practice_mode'] === 'mock_test') {
 						if ($attempt->mock_status === 'not_viewed') {

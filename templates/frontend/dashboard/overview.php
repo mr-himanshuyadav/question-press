@@ -33,6 +33,8 @@ if ( ! function_exists( 'qp_get_history_mode_details' ) ) {
             'label' => 'Practice',
         ];
 
+        // TODO: Fix this pratice_mode reference for session_name and session_type
+
         if ( isset( $settings['practice_mode'] ) && $settings['practice_mode'] === 'mock_test' ) {
             if ( isset( $settings['course_id'] ) && $settings['course_id'] > 0 ) {
                 $details = [

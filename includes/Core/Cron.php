@@ -116,8 +116,10 @@ class Cron
         $sessions_table = $wpdb->prefix . 'qp_user_sessions';
 
         // --- 1. Handle Expired Mock Tests ---
+
+        // TODO: Check correctness of mock_test identification
         $active_mock_tests = $wpdb->get_results(
-            "SELECT session_id, start_time, settings_snapshot FROM {$sessions_table} WHERE status = 'mock_test'"
+            "SELECT session_id, start_time, settings_snapshot FROM {$sessions_table} WHERE session_type = 'mock_test'"
         );
 
         foreach ($active_mock_tests as $test) {
@@ -149,6 +151,7 @@ class Cron
         if (! empty($abandoned_sessions)) {
             foreach ($abandoned_sessions as $session) {
                 $settings            = json_decode($session->settings_snapshot, true);
+                // TODO: Fix this pratice_mode reference for session_name and session_type
                 $is_section_practice = isset($settings['practice_mode']) && $settings['practice_mode'] === 'Section Wise Practice';
 
                 if ($is_section_practice) {

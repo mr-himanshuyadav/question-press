@@ -498,6 +498,8 @@ class Backup_Manager {
                                     }
                                     $settings['question_numbers'] = $new_q_nums;
                                 }
+
+                                // TODO: ensure these are not needed and see why they are needed. Most probably for nothing. Only use question_ids_snapshot column
                                 if (isset($settings['original_selection']) && is_array($settings['original_selection'])) {
                                     $new_selection = [];
                                     foreach ($settings['original_selection'] as $old_qid) {

@@ -31,6 +31,8 @@ class Dashboard_Manager
 		$overall_accuracy = ($total_attempted > 0) ? ($total_correct / $total_attempted) * 100 : 0;
 
 		// 2. Fetch active sessions
+
+		// TODO: Properly map mock_test to new column session_type
 		$active_sessions = $wpdb->get_results($wpdb->prepare("SELECT * FROM $sessions_table WHERE user_id = %d AND status IN ('active', 'mock_test', 'paused') ORDER BY start_time DESC", $user_id));
 
 		// 3. Fetch recent history
@@ -420,6 +422,8 @@ class Dashboard_Manager
 		}
 
 		// (Copied from your original function)
+
+		// TODO: Fix this pratice_mode reference for session_name and session_type
 		$is_mock_test = isset($settings['practice_mode']) && $settings['practice_mode'] === 'mock_test';
 		$is_section_wise_practice = isset($settings['practice_mode']) && $settings['practice_mode'] === 'Section Wise Practice';
 		$mode_class = 'mode-normal';
@@ -591,6 +595,8 @@ class Dashboard_Manager
 	/**
 	 * NEW HELPER: Determines the display name for a session's mode.
 	 */
+
+	// TODO: Fix this pratice_mode reference for session_name and session_type
 	public static function get_session_mode_name($session, $settings)
 	{
 		$mode = 'Practice'; // Default
@@ -687,6 +693,7 @@ class Dashboard_Manager
 			'label' => 'Practice',
 		];
 
+		// TODO: Fix this pratice_mode reference for session_name and session_type
 		if (isset($settings['practice_mode']) && $settings['practice_mode'] === 'mock_test') {
 			if (isset($settings['course_id']) && $settings['course_id'] > 0) {
 				$details = [

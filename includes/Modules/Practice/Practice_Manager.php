@@ -121,6 +121,7 @@ class Practice_Manager
         $num_questions = isset($params['qp_mock_num_questions']) ? absint($params['qp_mock_num_questions']) : 20;
         $distribution = isset($params['question_distribution']) ? sanitize_key($params['question_distribution']) : 'random';
 
+        // TODO: Fix this for session_name and session_type
         $session_settings = [
             'practice_mode'       => 'mock_test',
             'subjects'            => $subjects_raw, // Use raw values here for snapshot
@@ -248,7 +249,7 @@ class Practice_Manager
             return new WP_Error('no_session_page', 'The administrator has not configured a session page.');
         }
 
-        $session_id = self::create_session($final_question_ids, 'mock_test', $session_settings);
+        $session_id = self::create_session($final_question_ids, 'mock_test', "Mock Test", $session_settings);
         if (is_wp_error($session_id)) return $session_id;
 
         $redirect_url = add_query_arg('session_id', $session_id, get_permalink($session_page_id));
@@ -368,6 +369,8 @@ class Practice_Manager
         $questions_per_topic = isset($params['qp_revision_questions_per_topic']) ? absint($params['qp_revision_questions_per_topic']) : 2; // Default to 2
         $exclude_pyq = isset($params['exclude_pyq']);
         $choose_random = isset($params['choose_random']);
+
+        // TODO: Fix this for session_name
 
         $session_settings = [
             'practice_mode'       => 'revision',
@@ -556,6 +559,7 @@ class Practice_Manager
             return new WP_Error('no_subject_selected', 'Please select at least one subject.');
         }
 
+        // TODO: Fix this for session_name
         $session_settings = [
             'practice_mode'    => $practice_mode,
             'subjects'         => $subjects_raw,
@@ -793,6 +797,7 @@ class Practice_Manager
             return new WP_Error('no_session_page', 'The administrator has not configured a session page.');
         }
 
+        // TODO: Fix this for session_name
         $session_settings = [
             'practice_mode'   => 'Incorrect Que. Practice',
             'marks_correct'   => null,
@@ -906,7 +911,7 @@ class Practice_Manager
         $existing_session_id = $wpdb->get_var($wpdb->prepare(
             "SELECT session_id FROM {$sessions_table} 
              WHERE user_id = %d 
-               AND status IN ('active', 'mock_test', 'paused') 
+               AND status IN ('active', 'paused') 
                AND settings_snapshot LIKE %s",
             $user_id,
             '%"item_id":' . $item_id . '%'
@@ -1047,8 +1052,9 @@ class Practice_Manager
             return new WP_Error('no_session_page', 'The administrator has not configured a session page.');
         }
 
+        // TODO: Fix this for session_name
         $session_settings = [
-            'practice_mode'       => 'mock_test', // This is correct, as it's a timed test
+            'practice_mode'       => 'mock_test', // TODO: Replace with proper name or eleminate this and use session_name and session_type columns
             'course_id'           => $item->course_id,
             'item_id'             => $item_id, // THIS IS THE CRITICAL FIELD
             'num_questions'       => count($final_question_ids),
@@ -1062,8 +1068,10 @@ class Practice_Manager
         // sessions_table is already defined
         $wpdb->insert($sessions_table, [
             'user_id'                 => $user_id,
-            'status'                  => 'mock_test', // Use 'mock_test' status
+            'status'                  => 'active',
             'start_time'              => $current_time,
+            'session_name'            => 'Course Test',
+            'session_type'            => 'mock_test',
             'last_activity'           => $current_time,
             'settings_snapshot'       => wp_json_encode($session_settings),
             'question_ids_snapshot'   => wp_json_encode(array_values($final_question_ids))
@@ -1157,6 +1165,7 @@ class Practice_Manager
 
         // 1. Comprehensive Defaults for all identified session settings keys
         $defaults = [
+            // TODO: Fix this for session_name
             'practice_mode'          => $session_type,
             'subjects'               => [],
             'topics'                 => [],
@@ -1169,7 +1178,7 @@ class Practice_Manager
             'questions_per'          => null,
             'exclude_pyq'            => false,
             'pyq_only'               => false,
-            'section_id'             => 'all',
+            'section_id'             => null,
             'question_numbers'       => [],
             'course_id'              => null,
             'item_id'                => null,
@@ -1348,6 +1357,7 @@ class Practice_Manager
         );
         $attempt_id = $wpdb->insert_id;
 
+        // TODO: Fix this pratice_mode reference for session_name
         if (isset($settings['practice_mode']) && $settings['practice_mode'] === 'revision') {
             $q_table = $wpdb->prefix . 'qp_questions';
             $rel_table = $wpdb->prefix . 'qp_term_relationships';
@@ -2000,7 +2010,8 @@ class Practice_Manager
             'test_end_timestamp'      => null, // Will be set below if mock test
         ];
 
-        if (isset($session_settings['practice_mode']) && $session_settings['practice_mode'] === 'mock_test') {
+        if (isset($session_manifest['session_type']) && $session_manifest['session_type'] === 'mock_test') {
+            error_log("Mock Test identified");
             $start_time_gmt_string = get_gmt_from_date($session_data_from_db->start_time);
             $start_time_timestamp = strtotime($start_time_gmt_string);
             $duration_seconds = $session_settings['timer_seconds'];
@@ -2083,6 +2094,8 @@ class Practice_Manager
         ));
         $settings = $session_settings_json ? json_decode($session_settings_json, true) : [];
         $options = get_option('qp_settings');
+
+        // TODO: Properly map mock_test to new column session_type
 
         $is_mock_test = isset($settings['practice_mode']) && $settings['practice_mode'] === 'mock_test';
         $allow_send_answer = isset($options['send_correct_answer']) && $options['send_correct_answer'] == 1;
@@ -2431,6 +2444,7 @@ class Practice_Manager
         $session_info_by_section = [];
         foreach ($section_sessions as $session) {
             $settings = json_decode($session->settings_snapshot, true);
+            // TODO: Fix this pratice_mode reference for session_name
             if (isset($settings['practice_mode']) && $settings['practice_mode'] === 'Section Wise Practice' && isset($settings['section_id'])) {
                 $section_id = $settings['section_id'];
                 if (!isset($session_info_by_section[$section_id])) {
@@ -2771,6 +2785,8 @@ class Practice_Manager
         ));
         $settings = $session_settings_json ? json_decode($session_settings_json, true) : [];
         $options = get_option('qp_settings');
+
+        // TODO: Properly map mock_test to new column session_type
 
         $is_mock_test = isset($settings['practice_mode']) && $settings['practice_mode'] === 'mock_test';
         $allow_send_answer = isset($options['send_correct_answer']) && $options['send_correct_answer'] == 1;
