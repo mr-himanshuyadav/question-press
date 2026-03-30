@@ -1099,7 +1099,7 @@ class Practice_Manager
      * @param string $mode_name    The name of the practice mode (e.g., "Daily Current Affairs").
      * @return int|\WP_Error       The new session ID or a WP_Error on failure.
      */
-    public static function start_session_from_ids($question_ids, $mode_name = "Custom Practice")
+    public static function start_session_from_ids($question_ids, $mode_name = "Custom Practice", $session_type = "mock_test", $session_name = 'Practice Session')
     {
         // Basic Request Validation
         if (!is_user_logged_in()) {
@@ -1114,22 +1114,25 @@ class Practice_Manager
         // Defaults for timer, pyq_only, etc., are automatically added by create_session.
         return self::create_session(
             $question_ids,
-            'active',
-            ['practice_mode' => sanitize_text_field($mode_name)]
+            $session_type,
+            $session_name,
+            ['practice_mode' => sanitize_text_field($mode_name)],
+            'active'            
         );
     }
 
     /**
      * Master source for session creation and updates.
-     * Unifies all settings snapshots with defaults and handles DB persistence.
      *
      * @param array  $question_ids        List of question IDs.
-     * @param string $status              Status for the session (e.g., 'active', 'mock_test').
-     * @param array  $custom_settings     Specific settings for this session type.
-     * @param int    $existing_session_id Optional. If provided, updates this session.
-     * @return int|\WP_Error              The Session ID on success, WP_Error on failure.
+     * @param string $session_type        Type (e.g., 'normal', 'mock_test', 'revision').
+     * @param string $session_name        Friendly name for the session.
+     * @param array  $custom_settings     Snapshot overrides.
+     * @param string $status              Lifecycle status ('active', 'paused').
+     * @param int    $existing_session_id Optional. ID of session to update.
+     * @return int|\WP_Error              Session ID.
      */
-    public static function create_session($question_ids, $status = 'active', $custom_settings = [], $existing_session_id = 0)
+    public static function create_session($question_ids, $session_type = 'normal', $session_name = 'Practice Session', $custom_settings = [], $status = 'active', $existing_session_id = 0)
     {
         global $wpdb;
         $user_id = get_current_user_id();
@@ -1154,7 +1157,7 @@ class Practice_Manager
 
         // 1. Comprehensive Defaults for all identified session settings keys
         $defaults = [
-            'practice_mode'          => 'normal',
+            'practice_mode'          => $session_type,
             'subjects'               => [],
             'topics'                 => [],
             'num_questions'          => count($question_ids),
@@ -1181,6 +1184,8 @@ class Practice_Manager
         $cleaned_question_ids = array_values(array_unique(array_map('absint', $question_ids)));
 
         $data = [
+            'session_name'          => sanitize_text_field($session_name),
+            'session_type'          => sanitize_key($session_type),
             'status'                => sanitize_text_field($status),
             'last_activity'         => $current_time,
             'settings_snapshot'     => wp_json_encode($final_settings),
@@ -1987,6 +1992,8 @@ class Practice_Manager
         $session_manifest = [
             'session_id'              => $session_id,
             'status'                  => $session_data_from_db->status,
+            'session_name'            => $session_data_from_db->session_name,
+            'session_type'            => $session_data_from_db->session_type,
             'question_ids'            => json_decode($session_data_from_db->question_ids_snapshot, true),
             'settings'                => $session_settings,
             'initial_elapsed_seconds' => $initial_elapsed_time,

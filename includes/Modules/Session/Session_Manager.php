@@ -77,7 +77,7 @@ class Session_Manager extends DB
 			$settings = json_decode($session->settings_snapshot, true);
 			$marks_correct = $settings['marks_correct'] ?? 0;
 			$marks_incorrect = $settings['marks_incorrect'] ?? 0;
-			$is_mock_test = isset($settings['practice_mode']) && $settings['practice_mode'] === 'mock_test';
+			$is_mock_test = (isset($session->session_type) && $session->session_type === 'mock_test');
 
 			if ($is_mock_test) {
 				// Grade attempts

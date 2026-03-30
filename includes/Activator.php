@@ -96,6 +96,8 @@ class Activator {
     $sql_sessions = "CREATE TABLE $table_sessions (
         session_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
         user_id BIGINT(20) UNSIGNED NOT NULL,
+        session_name VARCHAR(255) DEFAULT NULL,
+        session_type VARCHAR(50) DEFAULT 'normal',
         start_time DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00',
         last_activity DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00',
         end_time DATETIME,
@@ -113,6 +115,8 @@ class Activator {
         PRIMARY KEY (session_id),
         KEY user_id (user_id),
         KEY status (status)
+        KEY session_type (session_type),
+        KEY session_name (session_name)
     ) $charset_collate;";
     dbDelta($sql_sessions);
 
