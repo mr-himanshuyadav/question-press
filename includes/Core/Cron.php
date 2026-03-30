@@ -2,6 +2,8 @@
 // Use the correct namespace
 namespace QuestionPress\Core;
 
+use QuestionPress\Modules\Session\Session_Manager; // For session handling
+
 // Exit if accessed directly.
 if (! defined('ABSPATH')) {
     exit;
@@ -133,7 +135,7 @@ class Cron
             // If the current time is past the test's official end time, finalize it as abandoned.
             if (time() > $end_timestamp) {
                 // Our updated function will delete it if empty, or mark as abandoned if there are attempts.
-                \QuestionPress\Utils\Session_Manager::finalize_and_end_session($test->session_id, 'abandoned', 'abandoned_by_system');
+                Session_Manager::finalize_and_end_session($test->session_id, 'abandoned', 'abandoned_by_system');
             }
         }
 
@@ -158,7 +160,7 @@ class Cron
                     );
                 } else {
                     // For all other modes, use the standard abandon/delete logic.
-                    \QuestionPress\Utils\Session_Manager::finalize_and_end_session($session->session_id, 'abandoned', 'abandoned_by_system');
+                    Session_Manager::finalize_and_end_session($session->session_id, 'abandoned', 'abandoned_by_system');
                 }
             }
         }

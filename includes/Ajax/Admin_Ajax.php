@@ -8,12 +8,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 use QuestionPress\Database\Terms_DB;
 use QuestionPress\Database\Questions_DB;
-use QuestionPress\Utils\Attempt_Evaluator;
+use QuestionPress\Modules\Practice\Attempt_Evaluator;
 use QuestionPress\Admin\Backup\Backup_Manager;
 use QuestionPress\Admin\Views\Questions_List_Table;
-use WP_Error; // Use statement for WP_Error
-use WP_Query; // Use statement for WP_Query
-use QP_Questions_List_Table; // Use statement for list table
+use QuestionPress\Utils\Vault_Manager;
 
 /**
  * Handles AJAX requests related to the WordPress Admin area.
@@ -640,11 +638,21 @@ class Admin_Ajax {
         }
 
         $filename = isset($_POST['filename']) ? sanitize_file_name($_POST['filename']) : '';
+        // --- NEW: Handle restore mode ---
+        $mode = isset($_POST['mode']) ? sanitize_key($_POST['mode']) : 'merge'; // Default to merge
+
         if (empty($filename)) {
             wp_send_json_error(['message' => 'Invalid filename.']);
         }
 
-        $result = Backup_Manager::perform_restore($filename);
+        // Validate mode
+        if (!in_array($mode, ['merge', 'overwrite'])) {
+             $mode = 'merge'; // Safety fallback
+        }
+
+        // Pass the mode to the manager
+        $result = Backup_Manager::perform_restore($filename, $mode);
+        
         if ($result['success']) {
             wp_send_json_success(['message' => 'Data has been successfully restored.', 'stats' => $result['stats']]);
         } else {
@@ -665,6 +673,38 @@ class Admin_Ajax {
         update_option('qp_jwt_secret_key', $new_key);
 
         wp_send_json_success(['new_key' => $new_key]);
+    }
+
+    /**
+     * AJAX handler to initialize vaults for all users.
+     */
+    public static function initialize_user_vaults() {
+        check_ajax_referer('qp_admin_integrity_nonce', 'nonce');
+        if (!current_user_can('manage_options')) wp_send_json_error(['message' => 'Unauthorized']);
+
+        try {
+            $count = Vault_Manager::sync_all_vaults();
+            wp_send_json_success(['message' => sprintf('%d missing vaults initialized.', $count)]);
+        } catch (\Exception $e) {
+            error_log('QP Vault Sync Error: ' . $e->getMessage());
+            wp_send_json_error(['message' => 'Server error during sync. Check PHP error logs.']);
+        }
+    }
+
+    /**
+     * AJAX handler to recalculate mastery data from history.
+     */
+    public static function sync_mastery_data() {
+        check_ajax_referer('qp_admin_integrity_nonce', 'nonce');
+        if (!current_user_can('manage_options')) wp_send_json_error(['message' => 'Unauthorized']);
+
+        try {
+            $count = Vault_Manager::recalculate_mastery_from_history();
+            wp_send_json_success(['message' => sprintf('%d mastery records processed.', $count)]);
+        } catch (\Exception $e) {
+            error_log('QP Mastery Recalculation Error: ' . $e->getMessage());
+            wp_send_json_error(['message' => 'Database error during recalculation. Check PHP error logs.']);
+        }
     }
 
 

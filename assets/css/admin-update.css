@@ -1,0 +1,60 @@
+/* Release Card Container */
+.qp-release-card {
+    background: #fff;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    max-width: 600px;
+    margin: 20px 0;
+    overflow: hidden;
+}
+.qp-release-header {
+    background: #f8fafc;
+    padding: 20px;
+    border-bottom: 1px solid #edf2f7;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.qp-version-pill {
+    background: #5300ee;
+    color: #fff;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: bold;
+}
+.qp-file-list {
+    padding: 20px;
+}
+.qp-file-item {
+    display: flex;
+    align-items: center;
+    padding: 12px;
+    background: #fff;
+    border: 1px solid #f1f5f9;
+    border-radius: 8px;
+    margin-bottom: 10px;
+    transition: all 0.2s ease;
+}
+.qp-file-item.detected {
+    border-color: #48bb78;
+    background: #f0fff4;
+}
+.qp-status-icon {
+    margin-right: 12px;
+    font-size: 18px;
+}
+.qp-file-info { flex: 1; }
+.qp-file-info span { display: block; font-size: 12px; color: #718096; }
+.qp-file-info strong { font-size: 14px; color: #2d3748; }
+
+/* Upload Section */
+.qp-upload-container {
+    padding: 0 20px 20px;
+}
+.qp-upload-btn-row {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}

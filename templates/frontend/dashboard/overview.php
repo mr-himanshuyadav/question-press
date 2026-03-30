@@ -23,6 +23,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 use QuestionPress\Frontend\Dashboard;
+use QuestionPress\Utils\Dashboard_Manager;
 
 if ( ! function_exists( 'qp_get_history_mode_details' ) ) {
     function qp_get_history_mode_details( $session, $settings ) {
@@ -43,7 +44,7 @@ if ( ! function_exists( 'qp_get_history_mode_details' ) ) {
                 $details = [
                     'icon'  => 'dashicons-analytics',
                     'class' => 'mode-mock-test',
-                    'label' => Dashboard::get_session_mode_name( $session, $settings ),
+                    'label' => Dashboard_Manager::get_session_mode_name( $session, $settings ),
                 ];
             }
         } elseif ( isset( $settings['practice_mode'] ) ) {
@@ -140,7 +141,7 @@ $never_correct_count = $never_correct_count ?? 0;
 				<?php
 				foreach ( $active_sessions as $session ) {
 					$settings    = json_decode( $session->settings_snapshot, true );
-					$mode        = Dashboard::get_session_mode_name( $session, $settings ); // Use helper
+					$mode        = Dashboard_Manager::get_session_mode_name( $session, $settings ); // Use helper
 					$row_class   = $session->status === 'paused' ? 'qp-session-paused-card' : ''; // Add class for paused
 					?>
 					<div class="qp-active-session-card <?php echo esc_attr( $row_class ); ?>">
@@ -181,7 +182,7 @@ $never_correct_count = $never_correct_count ?? 0;
                 if ( isset( $accuracy_stats[ $session->session_id ] ) && ! $is_scored ) {
                     $result_display = $accuracy_stats[ $session->session_id ];
                 } else {
-                    $result_display = Dashboard::get_session_result_display( $session, $settings );
+                    $result_display = Dashboard_Manager::get_session_result_display( $session, $settings );
                 }
 
                 // Get context (subjects or course)
@@ -212,7 +213,7 @@ $never_correct_count = $never_correct_count ?? 0;
                     }
                 } else {
                     // --- Use the *recent* lineage data ---
-                    $context_display = Dashboard::get_session_subjects_display( $session, $settings, $lineage_cache_recent, $group_to_topic_map_recent, $question_to_group_map_recent );
+                    $context_display = Dashboard_Manager::get_session_subjects_display( $session, $settings, $lineage_cache_recent, $group_to_topic_map_recent, $question_to_group_map_recent );
                 }
             ?>
                 <div class="qp-history-item-card <?php echo esc_attr( $mode_details['class'] ); ?>">

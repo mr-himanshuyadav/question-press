@@ -31,13 +31,15 @@ class Activator {
         direction_image_id BIGINT(20) UNSIGNED,
         is_pyq BOOLEAN NOT NULL DEFAULT 0,
         pyq_year VARCHAR(4) DEFAULT NULL,
+        is_current_affair TINYINT(1) NOT NULL DEFAULT 0,
+        ca_date DATE DEFAULT NULL,
         primary_subject_term_id BIGINT(20) UNSIGNED DEFAULT NULL,
         specific_subject_term_id BIGINT(20) UNSIGNED DEFAULT NULL,
         primary_source_term_id BIGINT(20) UNSIGNED DEFAULT NULL,
         specific_source_term_id BIGINT(20) UNSIGNED DEFAULT NULL,
         exam_term_id BIGINT(20) UNSIGNED DEFAULT NULL,
         PRIMARY KEY (group_id),
-        KEY is_pyq (is_pyq)
+        KEY is_pyq (is_pyq),
         KEY primary_subject_term_id (primary_subject_term_id),
         KEY specific_subject_term_id (specific_subject_term_id),
         KEY primary_source_term_id (primary_source_term_id),
@@ -375,20 +377,65 @@ class Activator {
     ) $charset_collate;";
     dbDelta($sql_user_entitlements);
 
-    // 11. OTP Verification Table
-    $table_otp = $wpdb->prefix . 'qp_otp_verification';
-    $sql_otp = "CREATE TABLE $table_otp (
-        id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
-        email VARCHAR(100) NOT NULL,
-        code_hash VARCHAR(255) NOT NULL,
-        expires_at DATETIME NOT NULL,
-        status VARCHAR(20) NOT NULL DEFAULT 'pending',
-        PRIMARY KEY (id),
-        KEY email (email),
-        KEY expires_at (expires_at),
-        KEY status (status)
+    // 11. OTP Verification Table (Updated for Multi-Purpose Engine)
+        $table_otp = $wpdb->prefix . 'qp_otp_verification';
+        $sql_otp = "CREATE TABLE $table_otp (
+            id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+            email VARCHAR(100) NOT NULL,
+            code_hash VARCHAR(255) NOT NULL,
+            reset_token VARCHAR(255) DEFAULT NULL,
+            purpose VARCHAR(50) NOT NULL DEFAULT 'registration',
+            expires_at DATETIME NOT NULL,
+            status VARCHAR(20) NOT NULL DEFAULT 'pending',
+            PRIMARY KEY (id),
+            KEY email (email),
+            KEY expires_at (expires_at),
+            KEY status (status),
+            KEY purpose (purpose),
+            KEY reset_token (reset_token(191))
+        ) $charset_collate;";
+        dbDelta($sql_otp);
+    
+        // 12. User Vault Table (Centralized user state)
+    $table_vault = $wpdb->get_blog_prefix() . 'qp_user_vault';
+    $sql_vault = "CREATE TABLE $table_vault (
+        user_id BIGINT(20) UNSIGNED NOT NULL,
+        access_scope JSON NOT NULL,
+        revision_config JSON NOT NULL,
+        performance_snapshot JSON NOT NULL,
+        streak_data JSON NOT NULL,
+        last_sync TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY  (user_id)
     ) $charset_collate;";
-    dbDelta($sql_otp);
+    dbDelta($sql_vault);
+
+    // 13. User Mastery Table (SRS Tracking)
+    $table_mastery = $wpdb->get_blog_prefix() . 'qp_user_mastery';
+    $sql_mastery = "CREATE TABLE $table_mastery (
+        user_id BIGINT(20) UNSIGNED NOT NULL,
+        question_id BIGINT(20) UNSIGNED NOT NULL,
+        box_number INT NOT NULL DEFAULT 0,
+        ease_factor DECIMAL(5,2) NOT NULL DEFAULT 2.50,
+        next_review_date DATETIME DEFAULT NULL,
+        last_result TINYINT DEFAULT NULL,
+        PRIMARY KEY  (user_id, question_id),
+        KEY next_review_date (next_review_date)
+    ) $charset_collate;";
+    dbDelta($sql_mastery);
+
+    // 14. Device Tokens Table (Centralized for all notifications)
+    $table_tokens = $wpdb->get_blog_prefix() . 'qp_device_tokens';
+    $sql_tokens = "CREATE TABLE $table_tokens (
+        id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+        user_id BIGINT(20) UNSIGNED NOT NULL,
+        token VARCHAR(255) NOT NULL,
+        platform VARCHAR(20) DEFAULT 'expo',
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY  (id),
+        UNIQUE KEY token (token(191)),
+        KEY user_id (user_id)
+    ) $charset_collate;";
+    dbDelta($sql_tokens);
 
     // === SCHEDULE CRON JOBS ===
     if (!wp_next_scheduled('qp_check_entitlement_expiration_hook')) {

@@ -57,7 +57,7 @@ class Questions_DB extends DB
         $g_table = self::get_groups_table_name();
 
         return self::$wpdb->get_row(self::$wpdb->prepare(
-            "SELECT q.*, g.direction_text, g.direction_image_id, g.is_pyq, g.pyq_year
+            "SELECT q.*, g.direction_text, g.direction_image_id, g.is_pyq, g.pyq_year, g.is_current_affair, g.ca_date
              FROM {$q_table} q
              LEFT JOIN {$g_table} g ON q.group_id = g.group_id
              WHERE q.question_id = %d",
@@ -144,6 +144,8 @@ class Questions_DB extends DB
             'direction_image_id' => '%d',
             'is_pyq'             => '%d',
             'pyq_year'           => '%s',
+            'is_current_affair'        => '%d',
+            'ca_date'                  => '%s',
             'primary_subject_term_id'  => '%d',
             'specific_subject_term_id' => '%d',
             'primary_source_term_id'   => '%d',
@@ -189,6 +191,8 @@ class Questions_DB extends DB
             'direction_text'     => '%s',
             'direction_image_id' => '%d',
             'is_pyq'             => '%d',
+            'is_current_affair'        => '%d',
+            'ca_date'                  => '%s',
             'pyq_year'           => '%s',
             'primary_subject_term_id'  => '%d',
             'specific_subject_term_id' => '%d',
@@ -320,7 +324,7 @@ class Questions_DB extends DB
         $tax_table = Terms_DB::get_taxonomies_table_name();
 
         // Base query structure
-        $select_sql = $args['count_only'] ? "SELECT COUNT(DISTINCT q.question_id)" : "SELECT DISTINCT q.*, g.group_id, g.direction_text, g.direction_image_id, g.is_pyq, g.pyq_year";
+        $select_sql = $args['count_only'] ? "SELECT COUNT(DISTINCT q.question_id)" : "SELECT DISTINCT q.*, g.group_id, g.direction_text, g.direction_image_id, g.is_pyq, g.pyq_year, g.is_current_affair, g.ca_date";
         $query_from = "FROM {$q_table} q";
         $query_joins = " LEFT JOIN {$g_table} g ON q.group_id = g.group_id";
         $where_conditions = [];
@@ -1073,99 +1077,83 @@ class Questions_DB extends DB
      */
     public static function search_questions($args = [])
     {
-        if (is_null(self::$wpdb)) {
-            global $wpdb;
-            self::$wpdb = $wpdb;
-        }
-        $wpdb = self::$wpdb;
+        global $wpdb;
         $defaults = [
             'search'     => '',
             'subject_id' => 0,
             'topic_id'   => 0,
             'source_id'  => 0,
-            'limit'      => 100,
+            'limit'      => 20, // Default per page
+            'offset'     => 0,
         ];
         $args = wp_parse_args($args, $defaults);
 
-        // Table names
         $q_table = self::get_questions_table_name();
         $g_table = self::get_groups_table_name();
         $rel_table = Terms_DB::get_relationships_table_name();
-        $term_table = Terms_DB::get_terms_table_name();
 
-        // Base query structure
-        $select_sql = "SELECT DISTINCT q.question_id, q.question_text";
-        $query_from = "FROM {$q_table} q";
-        $query_joins = " LEFT JOIN {$g_table} g ON q.group_id = g.group_id";
+        $select_sql = "SELECT DISTINCT q.*, g.group_id";
+        $query_from = " FROM {$q_table} q JOIN {$g_table} g ON q.group_id = g.group_id";
         $where_conditions = ["q.status = 'publish'"];
-        $params = [];
-        $joins_added = []; // Helper to avoid duplicate joins
+        $joins = "";
 
-        // Search term filter (ID or text)
-        if (! empty($args['search'])) {
+        // Search filter
+        if (!empty($args['search'])) {
             $search_term = $args['search'];
             if (is_numeric($search_term)) {
-                $where_conditions[] = self::$wpdb->prepare("q.question_id = %d", absint($search_term));
+                $where_conditions[] = $wpdb->prepare("q.question_id = %d", absint($search_term));
             } else {
-                $like_term = '%' . self::$wpdb->esc_like($search_term) . '%';
-                $where_conditions[] = self::$wpdb->prepare("q.question_text LIKE %s", $like_term);
+                $like_term = '%' . $wpdb->esc_like($search_term) . '%';
+                $where_conditions[] = $wpdb->prepare("q.question_text LIKE %s", $like_term);
             }
         }
 
-        // Subject/Topic filter
+        // Subject/Topic Filter
         if ($args['topic_id'] > 0) {
-            // Filter by specific topic
-            if (! in_array('topic_rel', $joins_added)) {
-                $query_joins .= " JOIN {$rel_table} topic_rel ON g.group_id = topic_rel.object_id AND topic_rel.object_type = 'group'";
-                $joins_added[] = 'topic_rel';
-            }
-            $where_conditions[] = self::$wpdb->prepare("topic_rel.term_id = %d", $args['topic_id']);
+            $joins .= " JOIN {$rel_table} topic_rel ON g.group_id = topic_rel.object_id AND topic_rel.object_type = 'group'";
+            $where_conditions[] = $wpdb->prepare("topic_rel.term_id = %d", $args['topic_id']);
         } elseif ($args['subject_id'] > 0) {
-            // Filter by subject (find all child topics)
             $child_topic_ids = Terms_DB::get_all_descendant_ids($args['subject_id']);
-            $child_topic_ids = array_filter($child_topic_ids, function ($tid) use ($args) {
-                return $tid != $args['subject_id'];
-            });
-
-            if (! empty($child_topic_ids)) {
-                $ids_placeholder = implode(',', $child_topic_ids);
-                if (! in_array('topic_rel', $joins_added)) {
-                    $query_joins .= " JOIN {$rel_table} topic_rel ON g.group_id = topic_rel.object_id AND topic_rel.object_type = 'group'";
-                    $joins_added[] = 'topic_rel';
-                }
+            if (!empty($child_topic_ids)) {
+                $joins .= " JOIN {$rel_table} topic_rel ON g.group_id = topic_rel.object_id AND topic_rel.object_type = 'group'";
+                $ids_placeholder = implode(',', array_map('absint', $child_topic_ids));
                 $where_conditions[] = "topic_rel.term_id IN ($ids_placeholder)";
             } else {
                 $where_conditions[] = "1=0";
             }
         }
 
-        // Source filter (includes descendants)
+        // Source Filter
         if ($args['source_id'] > 0) {
             $descendant_ids = Terms_DB::get_all_descendant_ids($args['source_id']);
-            if (! empty($descendant_ids)) {
-                $ids_placeholder = implode(',', $descendant_ids);
-                if (! in_array('source_rel', $joins_added)) {
-                    $query_joins .= " JOIN {$rel_table} source_rel ON g.group_id = source_rel.object_id AND source_rel.object_type = 'group'";
-                    $joins_added[] = 'source_rel';
-                }
+            if (!empty($descendant_ids)) {
+                $joins .= " JOIN {$rel_table} source_rel ON g.group_id = source_rel.object_id AND source_rel.object_type = 'group'";
+                $ids_placeholder = implode(',', array_map('absint', $descendant_ids));
                 $where_conditions[] = "source_rel.term_id IN ($ids_placeholder)";
             } else {
                 $where_conditions[] = "1=0";
             }
         }
 
-        // Construct final query
         $where_clause = ' WHERE ' . implode(' AND ', $where_conditions);
-        $limit_clause = self::$wpdb->prepare(" LIMIT %d", absint($args['limit']));
-        $sql = $select_sql . " " . $query_from . " " . $query_joins . " " . $where_clause . " ORDER BY q.question_id DESC" . $limit_clause;
 
-        // Execute query
-        $query_to_run = empty($params) ? $sql : self::$wpdb->prepare($sql, $params);
-        return self::$wpdb->get_results($query_to_run, OBJECT);
+        // 1. Get Total Count for Pagination
+        $count_sql = "SELECT COUNT(DISTINCT q.question_id) " . $query_from . $joins . $where_clause;
+        $total_items = (int) $wpdb->get_var($count_sql);
+
+        // 2. Get Data for Current Page
+        $data_sql = $select_sql . $query_from . $joins . $where_clause . " ORDER BY q.question_id DESC LIMIT %d OFFSET %d";
+        $items = $wpdb->get_results($wpdb->prepare($data_sql, $args['limit'], $args['offset']), ARRAY_A);
+
+        return [
+            'items' => $items,
+            'total' => $total_items
+        ];
     }
 
     /**
      * Retrieves detailed data for a single question for the REST API.
+     * Updated to include is_correct flag for options and explanation_text.
      *
      * @param int $question_id The ID of the question.
      * @return array|null An associative array containing question details, or null if not found/published.
@@ -1177,10 +1165,11 @@ class Questions_DB extends DB
         }
 
         // 1. Fetch Basic Question & Group Data (only if published)
+        // Added q.explanation_text to the SELECT statement
         $q_table = self::get_questions_table_name();
         $g_table = self::get_groups_table_name();
         $question_base = self::$wpdb->get_row(self::$wpdb->prepare(
-            "SELECT q.question_id, q.question_text, q.status, g.group_id, g.direction_text, g.direction_image_id
+            "SELECT q.question_id, q.question_text, q.explanation_text, q.status, g.group_id, g.direction_text, g.direction_image_id, g.is_current_affair, g.ca_date
              FROM {$q_table} q
              LEFT JOIN {$g_table} g ON q.group_id = g.group_id
              WHERE q.question_id = %d",
@@ -1215,22 +1204,30 @@ class Questions_DB extends DB
             }
         }
 
-        // 3. Get Options (ID and Text only)
+        // 3. Get Options (ID, Text, and is_correct flag)
+        // Updated query to include is_correct
         $o_table = self::get_options_table_name();
         $options_raw = self::$wpdb->get_results(self::$wpdb->prepare(
-            "SELECT option_id, option_text FROM {$o_table} WHERE question_id = %d ORDER BY option_id ASC",
+            "SELECT option_id, option_text, is_correct FROM {$o_table} WHERE question_id = %d ORDER BY option_id ASC",
             $question_id
         ), ARRAY_A);
 
         $question_data['options'] = array_map(function ($opt) {
-            $opt['option_text'] = wp_kses_post(nl2br(stripslashes($opt['option_text'])));
-            return $opt;
+            return [
+                'option_id'   => (int) $opt['option_id'],
+                'option_text' => wp_kses_post(nl2br(stripslashes($opt['option_text']))),
+                'is_correct'  => (bool) $opt['is_correct'] // Cast to boolean for the app
+            ];
         }, $options_raw);
 
 
-        // 4. Apply formatting to question/direction text
+        // 4. Apply formatting to question/explanation/direction text
         if (!empty($question_data['question_text'])) {
             $question_data['question_text'] = wp_kses_post(nl2br(stripslashes($question_data['question_text'])));
+        }
+        // Added formatting for explanation_text
+        if (!empty($question_data['explanation_text'])) {
+            $question_data['explanation_text'] = wp_kses_post(nl2br(stripslashes($question_data['explanation_text'])));
         }
         if (!empty($question_data['direction_text'])) {
             $question_data['direction_text'] = wp_kses_post(nl2br(stripslashes($question_data['direction_text'])));
@@ -1454,5 +1451,54 @@ class Questions_DB extends DB
         }
 
         return true;
+    }
+
+    /**
+     * Centralized logic to check Current Affairs status for a user on a given date.
+     * * @param int    $user_id The current user ID.
+     * @param string $date    The date in YYYY-MM-DD format.
+     * @return array Status data.
+     */
+    public static function get_daily_current_affairs_status(int $user_id, string $date)
+    {
+        $g_table = self::get_groups_table_name();
+        $q_table = self::get_questions_table_name();
+        $a_table = self::$wpdb->prefix . 'qp_user_attempts';
+
+        // 1. Fetch published question IDs for the specified date and current affair flag
+        $question_ids = self::$wpdb->get_col(self::$wpdb->prepare(
+            "SELECT q.question_id 
+             FROM {$q_table} q
+             JOIN {$g_table} g ON q.group_id = g.group_id
+             WHERE g.is_current_affair = 1 AND g.ca_date = %s AND q.status = 'publish'",
+            $date
+        ));
+
+        if (empty($question_ids)) {
+            return [
+                'status'         => 'none',
+                'question_count' => 0,
+                'question_ids'   => [],
+                'date'           => $date
+            ];
+        }
+
+        // 2. Check user attempts for these specific questions
+        $placeholders = implode(',', array_fill(0, count($question_ids), '%d'));
+        $answered_count = (int) self::$wpdb->get_var(self::$wpdb->prepare(
+            "SELECT COUNT(DISTINCT question_id) 
+             FROM {$a_table} 
+             WHERE user_id = %d AND question_id IN ($placeholders) AND status = 'answered'",
+            array_merge([$user_id], $question_ids)
+        ));
+
+        $status = ($answered_count > 0) ? 'completed' : 'available';
+
+        return [
+            'status'         => $status,
+            'question_count' => count($question_ids),
+            'question_ids'   => array_map('intval', $question_ids),
+            'date'           => $date
+        ];
     }
 } // End class Questions_DB

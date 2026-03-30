@@ -45,6 +45,7 @@ use QuestionPress\Admin\Views\Sources_Page;
 use QuestionPress\Admin\Views\Export_Page;
 use QuestionPress\Admin\Views\Subjects_Page;
 use QuestionPress\Admin\Views\User_Entitlements_Page;
+use QuestionPress\Admin\Views\Api_Settings_Page;
 
 // API Router
 use QuestionPress\Rest_Api\Router;
@@ -136,6 +137,7 @@ final class Plugin {
         // Shortcodes::instance();
         Post_Types::instance();
         Taxonomies::instance(); // Just in case if migrated to native taxonomies later
+
         $this->cron = new Cron();
         // REST_API::instance(); // Assuming REST_API is a class handling registration
         if ( is_admin() ) {
@@ -151,6 +153,7 @@ final class Plugin {
         // Actions
         add_action('plugins_loaded', [$this, 'on_plugins_loaded']);
         add_action('init', [$this, 'start_session'], 1);
+        Form_Handler::init();
         add_action('init', [$this->cron, 'ensure_cron_scheduled']);
         add_action('init', [$this, 'register_shortcodes']);
         add_action('init', [Rewrites::class, 'add_dashboard_rewrite_rules']);
@@ -160,6 +163,7 @@ final class Plugin {
         add_action('admin_init', [Exams_Page::class, 'handle_forms']);
         add_action('admin_init', [Sources_Page::class, 'handle_forms']);
         add_action('admin_init', [Settings_Page::class, 'register_settings']);
+        add_action('admin_init', [Api_Settings_Page::class, 'register_settings']);
 
         // Remove this after migration
 
@@ -284,6 +288,8 @@ final class Plugin {
         add_action('wp_ajax_qp_delete_backup', [Admin_Ajax::class, 'delete_backup']);
         add_action('wp_ajax_qp_restore_backup', [Admin_Ajax::class, 'restore_backup']);
         add_action('wp_ajax_regenerate_api_key', [Admin_Ajax::class, 'regenerate_api_key']);
+        add_action('wp_ajax_qp_initialize_user_vaults', [Admin_Ajax::class, 'initialize_user_vaults']);
+        add_action('wp_ajax_qp_sync_mastery_data', [Admin_Ajax::class, 'sync_mastery_data']);
         add_action('wp_ajax_get_practice_form_html', [Practice_Ajax::class, 'get_practice_form_html']);
         add_action('wp_ajax_get_course_structure', [Practice_Ajax::class, 'get_course_structure']);
         add_action('wp_ajax_qp_deregister_from_course', [Practice_Ajax::class, 'deregister_from_course']);
@@ -300,6 +306,8 @@ final class Plugin {
         add_filter('views_edit-qp_course', [Post_Types::class, 'add_expired_to_course_views'], 10, 1);
         add_filter('the_content', [Post_Types::class, 'inject_course_details'], 20);
         add_filter('display_post_states', [Admin_Utils::class, 'add_product_post_states'], 10, 2);
+        add_filter('upload_mimes', [Admin_Utils::class, 'add_custom_upload_mimes']); // Added for APK support
+        add_filter('query_vars', [Rewrites::class, 'register_query_vars']);
     }
 
     /**
@@ -322,7 +330,7 @@ final class Plugin {
      * Start session on init hook.
      */
     public function start_session() {
-        if ( session_status() === PHP_SESSION_NONE ) {
+        if ( session_status() === PHP_SESSION_NONE && ! headers_sent() ) {
             session_start();
         }
     }

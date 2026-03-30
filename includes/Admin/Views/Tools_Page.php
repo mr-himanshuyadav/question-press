@@ -25,6 +25,7 @@ class Tools_Page {
 			'import'         => ['label' => 'Import', 'callback' => [Import_Page::class, 'render']],
 			'export'         => ['label' => 'Export', 'callback' => [Export_Page::class, 'render']],
 			'backup_restore' => ['label' => 'Backup & Restore', 'callback' => [Backup_Restore_Page::class, 'render']],
+			'data_integrity' => ['label' => 'Data Integrity', 'callback' => [self::class, 'render_integrity_tab']],
 		];
 		$active_tab = isset( $_GET['tab'] ) && array_key_exists( $_GET['tab'], $tabs ) ? $_GET['tab'] : 'import';
 		?>
@@ -53,6 +54,49 @@ class Tools_Page {
 				?>
 			</div>
 		</div>
+		<?php
+	}
+
+	/**
+	 * Renders the Data Integrity tab content.
+	 */
+	public static function render_integrity_tab() {
+		$nonce = wp_create_nonce('qp_admin_integrity_nonce');
+		?>
+		<div class="qp-integrity-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+			<div class="card">
+				<h2>Initialize User Vaults</h2>
+				<p>Creates missing vault entries for all users to ensure analytics and revision tracking work correctly.</p>
+				<button id="qp-init-vaults" class="button button-primary" data-nonce="<?php echo esc_attr($nonce); ?>">Run Sync</button>
+				<p id="qp-vault-status" class="status-msg" style="margin-top: 10px; font-weight: 600;"></p>
+			</div>
+			<div class="card">
+				<h2>Sync Mastery Data</h2>
+				<p>Re-evaluates Spaced Repetition boxes based on attempt history. (Latest Correct: Box 2, Latest Incorrect: Box 1)</p>
+				<button id="qp-sync-mastery" class="button button-primary" data-nonce="<?php echo esc_attr($nonce); ?>">Recalculate</button>
+				<p id="qp-mastery-status" class="status-msg" style="margin-top: 10px; font-weight: 600;"></p>
+			</div>
+		</div>
+		<script>
+			jQuery(document).ready(function($) {
+				$('#qp-init-vaults').on('click', function() {
+					const $btn = $(this);
+					$btn.prop('disabled', true).text('Processing...');
+					$.post(ajaxurl, { action: 'qp_initialize_user_vaults', nonce: $btn.data('nonce') }, function(res) {
+						$('#qp-vault-status').text(res.data.message);
+						$btn.prop('disabled', false).text('Run Sync');
+					});
+				});
+				$('#qp-sync-mastery').on('click', function() {
+					const $btn = $(this);
+					$btn.prop('disabled', true).text('Processing...');
+					$.post(ajaxurl, { action: 'qp_sync_mastery_data', nonce: $btn.data('nonce') }, function(res) {
+						$('#qp-mastery-status').text(res.data.message);
+						$btn.prop('disabled', false).text('Recalculate');
+					});
+				});
+			});
+		</script>
 		<?php
 	}
 }

@@ -5,6 +5,9 @@ jQuery(document).ready(function ($) {
   var sectionSelect = $("#section_id");
   var isPyqCheckbox = $("#is_pyq_checkbox");
   var pyqFieldsWrapper = $("#pyq_fields_wrapper");
+  var isCurrentAffairCheckbox = $("#is_current_affair_checkbox");
+  var caDateWrapper = $("#ca_date_wrapper");
+  var caDateInput = caDateWrapper.find('input[type="date"], input.datepicker');
   let initialFormState = {};
 
   function getCurrentState() {
@@ -56,10 +59,27 @@ jQuery(document).ready(function ($) {
       isPyq: $("#is_pyq_checkbox").is(":checked"),
       examId: $("#exam_id").val(),
       pyqYear: $('input[name="pyq_year"]').val(),
+      isCurrentAffair: isCurrentAffairCheckbox.is(":checked"),
+      caDate: caDateInput.val(),
       directionText: directionEditor ? directionEditor.getContent() : "",
       directionImageId: $("#direction-image-id").val(),
       questions: questions,
     };
+  }
+
+  // --- Current Affairs UI Logic ---
+  isCurrentAffairCheckbox.on("change", function () {
+    if ($(this).is(":checked")) {
+      caDateWrapper.slideDown(200);
+    } else {
+      caDateWrapper.slideUp(200);
+      caDateInput.val(""); // Clear date if unchecked
+    }
+  });
+
+  // Ensure initial visibility based on load state
+  if (!isCurrentAffairCheckbox.is(":checked")) {
+    caDateWrapper.hide();
   }
 
   // Use $(window).on('load') to ensure all scripts, including TinyMCE, are fully loaded.

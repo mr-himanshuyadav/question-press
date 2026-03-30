@@ -215,6 +215,21 @@
     justify-content: center;
 }
 
+#qp-question-select-modal .qp-modal-content {
+    max-width: 900px;
+    height: 80vh; /* Fixed viewport height */
+    display: flex;
+    flex-direction: column;
+}
+
+#qp-question-select-modal .qp-modal-results-container {
+    flex-grow: 1;
+    display: flex;
+    gap: 20px;
+    overflow: hidden; /* Prevent modal body scroll */
+    margin-top: 15px;
+}
+
 .qp-modal-overlay {
     position: absolute;
     top: 0;
@@ -329,8 +344,106 @@
     justify-content: space-between;
     align-items: center;
 }
+.qp-result-item {
+    display: flex;
+    align-items: center;
+    padding: 12px 16px;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    margin-bottom: 8px;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    animation: qpFadeInUp 0.4s ease forwards;
+}
 .qp-results-list .qp-result-item:hover {
      background: #f0f0f0;
+}
+.qp-result-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(83, 0, 238, 0.08);
+    border-color: #5300ee;
+}
+.qp-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    background: rgba(83, 0, 238, 0.05);
+    color: #5300ee;
+    border: 1px solid rgba(83, 0, 238, 0.15);
+}
+#qp-modal-search-results {
+    display: flex;
+    flex-direction: column;
+    flex: 1.5;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+.qp-results-container {
+    flex: 1;
+    overflow-y: auto;
+    padding-right: 8px;
+}
+/* Professional Pagination Footer */
+.qp-pagination {
+    flex-shrink: 0;
+    padding: 12px;
+    border-top: 1px solid #eee;
+    background: #fcfcfc;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.qp-pagination button {
+    background: #fff;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    padding: 6px 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.qp-pagination button:hover:not(:disabled) {
+    border-color: #5300ee;
+    color: #5300ee;
+    background: rgba(83, 0, 238, 0.02);
+}
+
+/* --- Animations --- */
+@keyframes qpFadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* --- Empty State --- */
+.qp-no-results {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: #94a3b8;
+    text-align: center;
+    gap: 12px;
+}
+
+.qp-no-results .dashicons {
+    font-size: 48px;
+    width: 48px;
+    height: 48px;
+    opacity: 0.5;
 }
 .qp-selected-list .qp-selected-item button {
      font-size: 16px; color: #b32d2e; background: none; border: none; cursor: pointer; padding: 0 5px;
