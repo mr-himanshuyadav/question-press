@@ -388,4 +388,82 @@ class Vault_Manager
             'last_result'      => $is_correct ? 1 : 0
         ];
     }
+
+
+    /**
+     * Updates access scope and resolves exams to subjects immediately.
+     */
+    public static function update_access_scope(int $user_id, array $exam_ids, array $manual_subject_ids): bool
+    {
+        global $wpdb;
+        self::ensure_vault_exists($user_id);
+
+        // Resolve Exam -> Subject links now so we don't have to later
+        $resolved_subject_ids = $manual_subject_ids;
+        if (!empty($exam_ids)) {
+            $exam_placeholders = implode(',', array_map('absint', $exam_ids));
+            $subjects_from_exams = $wpdb->get_col(
+                "SELECT DISTINCT term_id FROM {$wpdb->prefix}qp_term_relationships 
+             WHERE object_type = 'exam_subject_link' AND object_id IN ($exam_placeholders)"
+            );
+            $resolved_subject_ids = array_unique(array_merge($resolved_subject_ids, $subjects_from_exams));
+        }
+
+        $scope = [
+            'exams'             => array_values(array_unique(array_map('absint', $exam_ids))),
+            'manual_subjects'   => array_values(array_unique(array_map('absint', $manual_subject_ids))),
+            'resolved_subjects' => array_values(array_map('absint', $resolved_subject_ids))
+        ];
+
+        return false !== $wpdb->update(
+            $wpdb->prefix . 'qp_user_vault',
+            ['access_scope' => wp_json_encode($scope)],
+            ['user_id' => $user_id]
+        );
+    }
+
+    /**
+     * Global utility to refresh all user scopes if an Exam link changes.
+     */
+    public static function refresh_all_user_scopes()
+    {
+        global $wpdb;
+        $vault_table = $wpdb->prefix . 'qp_user_vault';
+        $users = $wpdb->get_results("SELECT user_id, access_scope FROM $vault_table");
+
+        foreach ($users as $u) {
+            $scope = json_decode($u->access_scope, true);
+            if (!empty($scope['exams'])) {
+                self::update_access_scope((int)$u->user_id, $scope['exams'], $scope['manual_subjects'] ?? []);
+            }
+        }
+    }
+
+    /**
+     * Persists aggregated performance data to the vault.
+     */
+    public static function update_performance(int $user_id, array $stats): bool
+    {
+        global $wpdb;
+        self::ensure_vault_exists($user_id);
+        return false !== $wpdb->update(
+            $wpdb->prefix . 'qp_user_vault',
+            ['performance_snapshot' => wp_json_encode($stats)],
+            ['user_id' => $user_id]
+        );
+    }
+
+    /**
+     * Persists streak data to the vault.
+     */
+    public static function update_streak(int $user_id, array $streak): bool
+    {
+        global $wpdb;
+        self::ensure_vault_exists($user_id);
+        return false !== $wpdb->update(
+            $wpdb->prefix . 'qp_user_vault',
+            ['streak_data' => wp_json_encode($streak)],
+            ['user_id' => $user_id]
+        );
+    }
 }

@@ -174,6 +174,7 @@ class Backup_Manager {
         foreach ( $unique_user_ids as $user_id ) {
             $user = get_userdata( $user_id );
             if ( $user ) {
+                // TODO: Migrate to user vault
                 $all_meta = get_user_meta( $user_id );
                 
                 // Collect avatar ID
@@ -582,6 +583,8 @@ class Backup_Manager {
                             $val = maybe_unserialize($v);
                             
                             // --- REMAPPING LOGIC for User Meta ---
+
+                            // TODO: Update for user_vault reference
                             
                             // 1. Avatars
                             if ($key === '_qp_avatar_attachment_id' && isset($media_id_map[$val])) {
@@ -609,7 +612,7 @@ class Backup_Manager {
                                 }
                             }
                             
-                            // Update (add if new, update if exists)
+                            // TODO: Update for user_vault reference
                             update_user_meta($new_user_id, $key, $val);
                         }
                     }

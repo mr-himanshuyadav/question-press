@@ -29,7 +29,9 @@ class Session_Manager extends DB
 	 * @return array|null An array of summary data, or null if the session was empty and deleted.
 	 */
 	public static function finalize_and_end_session($session_id, $new_status = 'completed', $end_reason = null)
+	
 	{
+		error_log("Session Finalizing Triggerd");
 		// 1. Capture Start State
 		$start_time = microtime(true);
 		$start_queries = get_num_queries();

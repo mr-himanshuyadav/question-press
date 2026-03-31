@@ -796,45 +796,44 @@ class DataController
      * Callback to get basic user analytics directly from user meta.
      * Implementation of Streak Decay Logic (Step 1.4).
      */
+
     public static function get_basic_analytics(WP_REST_Request $request)
     {
         $user_id = get_current_user_id();
+        $vault   = \QuestionPress\Utils\Vault_Manager::get_vault($user_id);
 
-        // 1. Streak Decay Logic
-        $today = current_time('Y-m-d');
-        $yesterday = date('Y-m-d', strtotime('-1 day', strtotime($today)));
+        $perf   = $vault->performance_snapshot ?? [];
+        $streak = $vault->streak_data ?? [];
 
-        $last_act_date  = get_user_meta($user_id, '_qp_last_activity_date', true);
-        $current_streak = (int) get_user_meta($user_id, '_qp_current_streak', true);
+        // 1. Streak Decay Logic using Vault data
+        $today          = current_time('Y-m-d');
+        $yesterday      = date('Y-m-d', strtotime('-1 day', strtotime($today)));
+        $last_act_date  = $streak['last_activity_date'] ?? '';
+        $current_streak = (int) ($streak['current_streak'] ?? 0);
 
-        // If activity was not today AND not yesterday, the streak has decayed
         if (!empty($last_act_date) && $last_act_date !== $today && $last_act_date !== $yesterday) {
             $current_streak = 0;
-            update_user_meta($user_id, '_qp_current_streak', 0);
+            \QuestionPress\Utils\Vault_Manager::update_streak($user_id, [
+                'current_streak'     => 0,
+                'last_activity_date' => $last_act_date
+            ]);
         }
 
-        // Determine activity status for today
         $completed_today = ($last_act_date === $today);
-        $streak_status   = 'inactive';
+        $streak_status   = $completed_today ? 'active' : ($current_streak > 0 ? 'at_risk' : 'inactive');
 
-        if ($completed_today) {
-            $streak_status = 'active';
-        } elseif ($current_streak > 0) {
-            $streak_status = 'at_risk';
-        }
-
-        // 2. Assemble pre-calculated stats (Architect's Path)
+        // 2. Assemble pre-calculated stats
         $data = [
-            'total_time'       => (int) get_user_meta($user_id, '_qp_total_time_spent', true),
-            'total_attempts'   => (int) get_user_meta($user_id, '_qp_total_attempts', true),
-            'correct_count'    => (int) get_user_meta($user_id, '_qp_correct_count', true),
-            'accuracy'         => (float) get_user_meta($user_id, '_qp_overall_accuracy', true),
-            'streak'           => [
+            'total_time'     => (int) ($perf['total_time'] ?? 0),
+            'total_attempts' => (int) ($perf['total_attempts'] ?? 0),
+            'correct_count'  => (int) ($perf['correct_count'] ?? 0),
+            'accuracy'       => (float) ($perf['accuracy'] ?? 0),
+            'streak'         => [
                 'count'           => $current_streak,
                 'completed_today' => $completed_today,
                 'status'          => $streak_status,
             ],
-            'advanced_enabled' => false, // Hook for Analytics Addon
+            'advanced_enabled' => false,
         ];
 
         return new WP_REST_Response(['success' => true, 'data' => $data], 200);

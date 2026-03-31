@@ -1163,6 +1163,11 @@ class Practice_Manager
             }
         }
 
+        $timer_seconds = null;
+        if ($session_type = "mock_test") {
+            $timer_seconds = count($question_ids)*60;
+        }
+
         // 1. Comprehensive Defaults for all identified session settings keys
         $defaults = [
             // TODO: Fix this for session_name
@@ -1173,7 +1178,7 @@ class Practice_Manager
             'marks_correct'          => null,
             'marks_incorrect'        => null,
             'timer_enabled'          => false,
-            'timer_seconds'          => null,
+            'timer_seconds'          => $timer_seconds, // TODO: Resolve the issue of untimed mock_tests because making it zero is immediately causing test to submit. Temporarily marked for 60 seconds per question.
             'distribution'           => 'random',
             'questions_per'          => null,
             'exclude_pyq'            => false,
@@ -2852,6 +2857,7 @@ class Practice_Manager
 
         // --- NEW: Access Control Setup ---
         $allowed = User_Access::get_allowed_subject_ids($user_id);
+        error_log("allowed subjec IDs" . array_values($allowed));
         $subject_restriction_sql = "";
 
         if ($allowed !== 'all') {

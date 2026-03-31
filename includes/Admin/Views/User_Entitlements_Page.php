@@ -8,6 +8,7 @@ if (! defined('ABSPATH')) {
 }
 
 use QuestionPress\Utils\Template_Loader;
+use QuestionPress\Utils\Vault_Manager;
 
 /**
  * Handles rendering the "User Entitlements & Scope" admin page.
@@ -125,10 +126,13 @@ class User_Entitlements_Page
             $allowed_subjects = array_map('absint', $_POST['allowed_subjects']);
         }
 
+        // 3. Sanitize inputs as before...
+$allowed_exams = isset( $_POST['allowed_exams'] ) ? array_map( 'absint', $_POST['allowed_exams'] ) : [];
+$allowed_subjects = isset( $_POST['allowed_subjects'] ) ? array_map( 'absint', $_POST['allowed_subjects'] ) : [];
+
         // 4. Update Usermeta (copied from original function)
         // Note: Storing as JSON-encoded strings
-        update_user_meta($user_id_to_update, '_qp_allowed_exam_term_ids', wp_json_encode($allowed_exams));
-        update_user_meta($user_id_to_update, '_qp_allowed_subject_term_ids', wp_json_encode($allowed_subjects));
+        Vault_Manager::update_access_scope($user_id_to_update, $allowed_exams, $allowed_subjects);
 
         // 5. Redirect back (copied from original function)
         $redirect_url = add_query_arg(

@@ -114,65 +114,46 @@ class Dashboard_Manager
 	 * @param int $user_id The ID of the user.
 	 * @return array An array containing profile details.
 	 */
+
 	public static function get_profile_data($user_id)
 	{
 		$user_info = get_userdata($user_id);
-		if (! $user_info) {
-			return [ // Return default empty values if user not found
-				'display_name'          => 'User Not Found',
-				'email'                 => '',
-				'avatar_url'            => get_avatar_url(0), // Default avatar
-				'scope_description'     => 'N/A',
-				'allowed_subjects_list' => [],
-				'allowed_exams_list'    => [],
-			];
-		}
+		if (!$user_info) return []; // Fallback logic...
+
+		$vault = Vault_Manager::get_vault($user_id);
+		$scope = $vault->access_scope ?? [];
+
+		// Avatar Logic (Shift to Vault later if needed, current meta is fine for single files)
 		$custom_avatar_id = get_user_meta($user_id, '_qp_avatar_attachment_id', true);
-		$avatar_url       = '';
-		if (! empty($custom_avatar_id)) {
-			$avatar_url = wp_get_attachment_image_url(absint($custom_avatar_id), 'thumbnail');
-		}
-		if (empty($avatar_url)) {
-			$avatar_url = get_avatar_url($user_id, ['size' => 128, 'default' => 'mystery']);
-		}
-		$scope_description       = 'All Subjects & Exams';
-		$allowed_subjects_list   = [];
-		$allowed_exams_list      = [];
-		$allowed_subject_ids_or_all = User_Access::get_allowed_subject_ids($user_id);
-		if ($allowed_subject_ids_or_all !== 'all') {
+		$avatar_url = !empty($custom_avatar_id) ? wp_get_attachment_image_url(absint($custom_avatar_id), 'thumbnail') : get_avatar_url($user_id);
+
+		$allowed_subjects_list = [];
+		$allowed_exams_list    = [];
+		$scope_description     = 'All Subjects & Exams';
+
+		if (User_Access::get_allowed_subject_ids($user_id) !== 'all') {
 			global $wpdb;
-			$term_table            = $wpdb->prefix . 'qp_terms';
-			$allowed_subject_ids   = $allowed_subject_ids_or_all;
-			if (! empty($allowed_subject_ids)) {
-				$subj_ids_placeholder  = implode(',', array_map('absint', $allowed_subject_ids));
-				$allowed_subjects_list = $wpdb->get_col("SELECT name FROM {$term_table} WHERE term_id IN ($subj_ids_placeholder) AND parent = 0 ORDER BY name ASC");
+			$term_table = $wpdb->prefix . 'qp_terms';
+
+			// 1. Get Exam Names from Vault Cache
+			if (!empty($scope['exams'])) {
+				$ids = implode(',', array_map('absint', $scope['exams']));
+				$allowed_exams_list = $wpdb->get_col("SELECT name FROM {$term_table} WHERE term_id IN ($ids) ORDER BY name ASC");
 			}
-			$direct_exams_json = get_user_meta($user_id, '_qp_allowed_exam_term_ids', true);
-			$direct_exam_ids   = json_decode($direct_exams_json, true);
-			if (! is_array($direct_exam_ids)) {
-				$direct_exam_ids = [];
+
+			// 2. Get Subject Names (Manual only) from Vault Cache
+			if (!empty($scope['manual_subjects'])) {
+				$ids = implode(',', array_map('absint', $scope['manual_subjects']));
+				$allowed_subjects_list = $wpdb->get_col("SELECT name FROM {$term_table} WHERE term_id IN ($ids) ORDER BY name ASC");
 			}
-			$final_allowed_exam_ids = array_map('absint', $direct_exam_ids);
-			if (! empty($final_allowed_exam_ids)) {
-				$exam_ids_placeholder = implode(',', $final_allowed_exam_ids);
-				$allowed_exams_list   = $wpdb->get_col("SELECT name FROM {$term_table} WHERE term_id IN ($exam_ids_placeholder) ORDER BY name ASC");
-			}
-			if (empty($allowed_subjects_list) && empty($allowed_exams_list)) {
-				$scope_description = 'No specific scope assigned.';
-			} else {
-				$scope_parts = [];
-				if (! empty($allowed_exams_list)) {
-					$scope_parts[] = 'Allowed Exams: ' . implode(', ', array_map('esc_html', $allowed_exams_list));
-				}
-				if (! empty($allowed_subjects_list)) {
-					$scope_parts[] = 'Accessible Subjects: ' . implode(', ', array_map('esc_html', $allowed_subjects_list));
-				}
-				$scope_description = implode('; ', $scope_parts);
-			}
+
+			// Construct Description
+			$parts = [];
+			if (!empty($allowed_exams_list)) $parts[] = 'Exams: ' . implode(', ', $allowed_exams_list);
+			if (!empty($allowed_subjects_list)) $parts[] = 'Subjects: ' . implode(', ', $allowed_subjects_list);
+			$scope_description = !empty($parts) ? implode('; ', $parts) : 'No specific scope assigned.';
 		}
 
-		Vault_Manager::ensure_vault_exists($user_id);
-		$vault = Vault_Manager::get_vault($user_id);
 		return [
 			'display_name'          => $user_info->display_name,
 			'email'                 => $user_info->user_email,
@@ -180,7 +161,7 @@ class Dashboard_Manager
 			'scope_description'     => $scope_description,
 			'allowed_subjects_list' => $allowed_subjects_list,
 			'allowed_exams_list'    => $allowed_exams_list,
-			'vault_settings'        => $vault ? $vault->revision_config : [],
+			'vault_settings'        => $vault->revision_config ?? [],
 		];
 	}
 
@@ -193,12 +174,16 @@ class Dashboard_Manager
 	 */
 	public static function get_progress_data($user_id): array
 	{
+		$vault = Vault_Manager::get_vault($user_id);
+		$perf  = $vault->performance_snapshot ?? [];
+		$streak = $vault->streak_data ?? [];
+
 		return [
-			'total_time'       => (int) get_user_meta($user_id, '_qp_total_time_spent', true),
-			'total_attempts'   => (int) get_user_meta($user_id, '_qp_total_attempts', true),
-			'correct_count'    => (int) get_user_meta($user_id, '_qp_correct_count', true),
-			'accuracy'         => (float) get_user_meta($user_id, '_qp_overall_accuracy', true),
-			'streak'           => (int) get_user_meta($user_id, '_qp_current_streak', true),
+			'total_time'     => (int) ($perf['total_time'] ?? 0),
+			'total_attempts' => (int) ($perf['total_attempts'] ?? 0),
+			'correct_count'  => (int) ($perf['correct_count'] ?? 0),
+			'accuracy'       => (float) ($perf['accuracy'] ?? 0),
+			'streak'         => (int) ($streak['current_streak'] ?? 0),
 		];
 	}
 
