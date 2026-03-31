@@ -48,6 +48,7 @@ use QuestionPress\Admin\Views\User_Entitlements_Page;
 use QuestionPress\Admin\Views\Api_Settings_Page;
 
 use QuestionPress\Utils\Vault_Manager;
+use QuestionPress\Utils\Logger;
 
 // API Router
 use QuestionPress\Rest_Api\Router;
@@ -245,16 +246,16 @@ final class Plugin {
         add_action('delete_user', [Data_Cleanup::class, 'cleanup_user_data_on_delete'], 10, 1);
 
         // When a global link changes, refresh everyone's cache
-add_action('qp_exam_subject_link_updated', function() {
-    global $wpdb;
-    $users = $wpdb->get_results("SELECT user_id, access_scope FROM {$wpdb->prefix}qp_user_vault");
-    foreach ($users as $u) {
-        $scope = json_decode($u->access_scope, true);
-        if (!empty($scope['exams'])) {
-            Vault_Manager::update_access_scope((int)$u->user_id, $scope['exams'], $scope['manual_subjects'] ?? []);
-        }
-    }
-});
+        add_action('qp_exam_subject_link_updated', function() {
+            global $wpdb;
+            $users = $wpdb->get_results("SELECT user_id, access_scope FROM {$wpdb->prefix}qp_user_vault");
+            foreach ($users as $u) {
+                $scope = json_decode($u->access_scope, true);
+                if (!empty($scope['exams'])) {
+                    Vault_Manager::update_access_scope((int)$u->user_id, $scope['exams'], $scope['manual_subjects'] ?? []);
+                }
+            }
+        });
 
         // AJAX Actions (already using class methods)
         add_action('wp_ajax_qp_save_profile', [Profile_Ajax::class, 'save_profile']);
@@ -322,6 +323,7 @@ add_action('qp_exam_subject_link_updated', function() {
         add_filter('display_post_states', [Admin_Utils::class, 'add_product_post_states'], 10, 2);
         add_filter('upload_mimes', [Admin_Utils::class, 'add_custom_upload_mimes']); // Added for APK support
         add_filter('query_vars', [Rewrites::class, 'register_query_vars']);
+        add_filter( 'rest_post_dispatch', [Logger::class, 'intercept_rest_errors' ], 10, 3 );
     }
 
     /**
