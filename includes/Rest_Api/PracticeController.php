@@ -501,12 +501,14 @@ class PracticeController
 	{
 		$question_ids = $request->get_param('question_ids');
 		$mode         = $request->get_param('mode') ?: "Custom Practice";
+		$session_name = $request->get_param('session_name') ?: $mode;
+		$session_type = $request->get_param('session_type') ?: "mock_test";
 
 		if (empty($question_ids) || !is_array($question_ids)) {
 			return new \WP_Error('rest_invalid_param', 'question_ids must be a non-empty array.', ['status' => 400]);
 		}
 
-		$session_id = Practice_Manager::start_session_from_ids($question_ids, $mode);
+		$session_id = Practice_Manager::start_session_from_ids($question_ids, $mode, $session_type, $session_name);
 
 		if (is_wp_error($session_id)) {
 			return $session_id;
