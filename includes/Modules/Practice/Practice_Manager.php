@@ -1828,7 +1828,6 @@ class Practice_Manager
 
         $reason_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'report_reason'");
 
-        error_log("Fetching report reasons for taxonomy ID: " . $reason_tax_id);
 
         $reasons_raw = $wpdb->get_results($wpdb->prepare(
             "SELECT
@@ -1847,16 +1846,11 @@ class Practice_Manager
             $reason_tax_id
         ));
 
-        error_log("Retrieved " . count($reasons_raw) . " report reasons from the database.");
-        error_log("Report Reasons Data: " . print_r($reasons_raw, true));
-
         $reasons_by_type = [
             'report' => [],
             'suggestion' => []
         ];
 
-        error_log("Organizing report reasons by type.");
-        error_log("Initial reasons by type structure: " . print_r($reasons_by_type, true));
 
         $other_reasons = [];
         foreach ($reasons_raw as $reason) {
@@ -1874,8 +1868,6 @@ class Practice_Manager
         if (isset($other_reasons['suggestion'])) {
             $reasons_by_type['suggestion'] = array_merge($reasons_by_type['suggestion'], $other_reasons['suggestion']);
         }
-
-        error_log("Final reasons by type structure: " . print_r($reasons_by_type, true));
 
         return $reasons_by_type;
     }
@@ -2016,7 +2008,6 @@ class Practice_Manager
         ];
 
         if (isset($session_manifest['session_type']) && $session_manifest['session_type'] === 'mock_test') {
-            error_log("Mock Test identified");
             $start_time_gmt_string = get_gmt_from_date($session_data_from_db->start_time);
             $start_time_timestamp = strtotime($start_time_gmt_string);
             $duration_seconds = $session_settings['timer_seconds'];
@@ -2869,7 +2860,7 @@ class Practice_Manager
         }
         // --- End Access Control Setup ---
 
-        error_log("--- [SR LOG] START User $user_id | Mode: $mode | Target: $limit ---");
+        // error_log("--- [SR LOG] START User $user_id | Mode: $mode | Target: $limit ---");
 
         $ids = [];
 
@@ -2937,7 +2928,7 @@ class Practice_Manager
         $srs_ids = array_unique(array_merge($consolidation_ids, $due_ids));
 
         $add_ids($srs_ids);
-        error_log("[SR] SRS Logic: Core=" . count($due_ids) . ", Consolidation=" . count($consolidation_ids));
+        // error_log("[SR] SRS Logic: Core=" . count($due_ids) . ", Consolidation=" . count($consolidation_ids));
 
         /*
         =========================
@@ -2958,7 +2949,7 @@ class Practice_Manager
         ));
         $add_ids($mistake_ids);
 
-        error_log("[SR] Mistakes added: " . count($mistake_ids));
+        // error_log("[SR] Mistakes added: " . count($mistake_ids));
 
         /*
         =========================
@@ -2979,7 +2970,7 @@ class Practice_Manager
         ));
         $add_ids($reinforce_ids);
 
-        error_log("[SR] Reinforcement added: " . count($reinforce_ids));
+        // error_log("[SR] Reinforcement added: " . count($reinforce_ids));
 
         /*
         =========================
@@ -2999,7 +2990,7 @@ class Practice_Manager
         ));
         $add_ids($bookmark_ids);
 
-        error_log("[SR] Bookmarks added: " . count($bookmark_ids));
+        // error_log("[SR] Bookmarks added: " . count($bookmark_ids));
 
         /*
         =========================
@@ -3010,9 +3001,9 @@ class Practice_Manager
         $ids_list = array_keys($ids);
         $current_count = count($ids_list);
 
-        error_log("[SR] Pool before fallback: $current_count");
+        // error_log("[SR] Pool before fallback: $current_count");
 
-        error_log("[SR] Current IDs: " . implode(',', $ids_list));
+        // error_log("[SR] Current IDs: " . implode(',', $ids_list));
 
         /*
         =========================
@@ -3024,7 +3015,7 @@ class Practice_Manager
 
             $needed = $limit - $current_count;
 
-            error_log("[SR] Fallback triggered. Need $needed more.");
+            // error_log("[SR] Fallback triggered. Need $needed more.");
 
             /*
             1. Detect subjects of current pool
@@ -3052,7 +3043,7 @@ class Practice_Manager
 
             // If we ended up with no subjects (e.g., empty pool + no allowed subjects), we must stop
             if (empty($subject_ids) && $allowed !== 'all') {
-                error_log("[SR] Fallback failed: No allowed subjects found for user $user_id");
+                // error_log("[SR] Fallback failed: No allowed subjects found for user $user_id");
             } else {
                 $subject_where = !empty($subject_ids)
                     ? " AND q.primary_subject_term_id IN (" . implode(',', array_map('intval', $subject_ids)) . ")"
@@ -3078,7 +3069,7 @@ class Practice_Manager
                     shuffle($common_ids);
                     $added_from_common = array_slice($common_ids, 0, $needed);
                     $add_ids($added_from_common);
-                    error_log("[SR] Fallback stage 1 (Intersection) added: " . count($added_from_common));
+                    // error_log("[SR] Fallback stage 1 (Intersection) added: " . count($added_from_common));
                 }
 
                 /*
@@ -3089,7 +3080,7 @@ class Practice_Manager
 
                 if ($current_count < $limit) {
                     $needed = $limit - $current_count;
-                    error_log("[SR] Fallback stage 2 (Random Fill) triggered. Need $needed more.");
+                    // error_log("[SR] Fallback stage 2 (Random Fill) triggered. Need $needed more.");
 
                     $rand_ids = $wpdb->get_col(
                         "SELECT q.question_id
@@ -3115,7 +3106,7 @@ class Practice_Manager
 
             if (empty($final_ids)) {
 
-                error_log("[SR] CRITICAL: empty pool");
+                // error_log("[SR] CRITICAL: empty pool");
 
                 return new \WP_Error(
                     'empty_pool',
@@ -3127,8 +3118,6 @@ class Practice_Manager
 
             $final_selection = array_slice($final_ids, 0, $limit);
 
-            error_log("[SR] FINISHED with " . count($final_selection) . " questions");
-
             return $final_selection;
         }
 
@@ -3136,7 +3125,6 @@ class Practice_Manager
         shuffle($final_ids);
 
         return array_slice($final_ids, 0, $limit);
-        error_log("[SR] No fallback needed. Final count: " . count($final_ids));
     }
 
 
@@ -3166,8 +3154,6 @@ class Practice_Manager
             $user_id,
             $today
         ));
-
-        error_log("Checked revision completion for user_id $user_id on $today: " . ($exists ? 'completed' : 'not completed'));
 
         return (bool) $exists;
     }

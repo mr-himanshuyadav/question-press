@@ -455,12 +455,8 @@ class PracticeController
 			return new \WP_Error('rest_not_logged_in', 'You are not logged in.', ['status' => 401]);
 		}
 
-		error_log("Updating index for user" . $user_id);
-
 		$session_id = (int) $request->get_param('session_id');
-		error_log("Session ID" . $session_id);
 		$new_index  = (int) $request->get_param('new_index');
-		error_log("New index" . $new_index);
 
 		if (empty($session_id)) {
 			return new \WP_Error('rest_invalid_param', 'Session ID is required.', ['status' => 400]);
@@ -471,7 +467,6 @@ class PracticeController
 		// Call the Session Manager to do the update
 		// The security check is now handled INSIDE this function.
 		$success = Practice_Manager::update_current_question_index($session_id, $new_index);
-		error_log($success);
 
 		if ($success) {
 			return new \WP_REST_Response(['success' => true, 'message' => 'Index updated.'], 200);
@@ -613,8 +608,6 @@ class PracticeController
 		if (is_wp_error($session_id)) {
 			return $session_id;
 		}
-
-		error_log("Started priority session for user_id $user_id with task $task and session_id $session_id");
 
 		return new \WP_REST_Response([
 			'success'    => true,
