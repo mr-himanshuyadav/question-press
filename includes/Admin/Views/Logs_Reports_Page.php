@@ -1,4 +1,5 @@
 <?php
+
 namespace QuestionPress\Admin\Views;
 
 use QuestionPress\Database\Terms_DB;
@@ -7,12 +8,15 @@ use QuestionPress\Admin\Admin_Utils;
 
 if (!defined('ABSPATH')) exit;
 
-class Logs_Reports_Page {
+class Logs_Reports_Page
+{
 
-    public static function render() {
+    public static function render()
+    {
         $tabs = [
             'reports' => ['label' => 'Reports', 'callback' => [self::class, 'render_reports_tab']],
             'log_settings' => ['label' => 'Log Settings', 'callback' => [self::class, 'render_log_settings_tab']],
+            'operation_logs' => ['label' => 'Operation Logs', 'callback' => [self::class, 'render_operation_logs_tab']],
         ];
         $active_tab = isset($_GET['tab']) && array_key_exists($_GET['tab'], $tabs) ? $_GET['tab'] : 'reports';
 
@@ -28,30 +32,71 @@ class Logs_Reports_Page {
             'active_tab'       => $active_tab,
             'tab_content_html' => $tab_content_html,
         ];
-        
+
         // Load and echo the wrapper template
-        echo Template_Loader::get_html( 'reports-page-wrapper', 'admin', $args );
+        echo Template_Loader::get_html('reports-page-wrapper', 'admin', $args);
     }
 
-    public static function render_reports_tab() {
+    /**
+     * NEW: Callback to render the general operation logs (qp_logs table).
+     */
+    public static function render_operation_logs_tab()
+    {
+        $list_table = new Logs_List_Table();
+        $list_table->prepare_items();
+?>
+        <div class="qp-logs-table-wrapper">
+            <form method="get">
+                <input type="hidden" name="page" value="qp-logs-reports" />
+                <input type="hidden" name="tab" value="operation_logs" />
+                <?php $list_table->display(); ?>
+            </form>
+        </div>
+
+        <div id="qp-log-details-modal" style="display:none; position:fixed; z-index:100000; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.8);">
+            <div style="background:#fff; margin:5% auto; padding:20px; width:70%; max-height:80%; overflow:auto; border-radius:8px; position:relative;">
+                <button type="button" class="qp-close-log-modal" style="position:absolute; right:15px; top:10px; cursor:pointer; background:none; border:none; font-size:24px;">&times;</button>
+                <h3>Extended Log Information</h3>
+                <pre id="qp-json-display" style="background:#f9f9f9; padding:15px; border:1px solid #ddd; white-space: pre-wrap; font-family: monospace; font-size: 12px; color: #333;"></pre>
+            </div>
+        </div>
+
+        <script>
+            jQuery(document).ready(function($) {
+                $('.qp-view-details').on('click', function(e) {
+                    e.preventDefault();
+                    const data = $(this).data('full');
+                    $('#qp-json-display').text(JSON.stringify(data, null, 4));
+                    $('#qp-log-details-modal').fadeIn(200);
+                });
+                $('.qp-close-log-modal').on('click', function() {
+                    $('#qp-log-details-modal').fadeOut(200);
+                });
+            });
+        </script>
+<?php
+    }
+
+    public static function render_reports_tab()
+    {
         global $wpdb;
         $reports_table = $wpdb->prefix . 'qp_question_reports';
 
         // Get counts for the view links
         $open_count = $wpdb->get_var("SELECT COUNT(DISTINCT question_id) FROM {$reports_table} WHERE status = 'open'");
         $resolved_count = $wpdb->get_var("SELECT COUNT(DISTINCT question_id) FROM {$reports_table} WHERE status = 'resolved'");
-        
+
         $current_status = isset($_GET['status']) ? sanitize_key($_GET['status']) : 'open';
 
         // Prepare the list table
         $list_table = new Reports_List_Table();
         $list_table->prepare_items();
-        
+
         // Capture the list table's HTML components
         ob_start();
         $list_table->search_box('Search Reports', 'report');
         $list_table_search_box_html = ob_get_clean();
-        
+
         ob_start();
         $list_table->display();
         $list_table_display_html = ob_get_clean();
@@ -64,12 +109,13 @@ class Logs_Reports_Page {
             'list_table_search_box_html' => $list_table_search_box_html,
             'list_table_display_html'  => $list_table_display_html,
         ];
-        
+
         // Load and echo the template
-        echo Template_Loader::get_html( 'reports-tab-main', 'admin', $args );
+        echo Template_Loader::get_html('reports-tab-main', 'admin', $args);
     }
 
-    public static function render_log_settings_tab() {
+    public static function render_log_settings_tab()
+    {
         global $wpdb;
         $tax_table = $wpdb->prefix . 'qp_taxonomies';
         $term_table = $wpdb->prefix . 'qp_terms';
@@ -94,7 +140,7 @@ class Logs_Reports_Page {
         // Prepare the list table
         $list_table = new Log_Settings_List_Table();
         $list_table->prepare_items();
-        
+
         // Capture the list table's HTML
         ob_start();
         $list_table->display();
@@ -108,9 +154,9 @@ class Logs_Reports_Page {
             'type_for_edit'      => $type_for_edit,
             'list_table_html'    => $list_table_html,
         ];
-        
+
         // Load and echo the template
-        echo Template_Loader::get_html( 'reports-tab-log-settings', 'admin', $args );
+        echo Template_Loader::get_html('reports-tab-log-settings', 'admin', $args);
     }
 
     /**
@@ -118,7 +164,8 @@ class Logs_Reports_Page {
      * Replaces the old qp_handle_log_settings_forms function.
      * Hooked to 'admin_init'.
      */
-    public static function handle_log_settings_forms() {
+    public static function handle_log_settings_forms()
+    {
         if (!isset($_GET['page']) || $_GET['page'] !== 'qp-logs-reports' || !isset($_GET['tab']) || $_GET['tab'] !== 'log_settings') {
             return;
         }
@@ -159,7 +206,8 @@ class Logs_Reports_Page {
     /**
      * NEW: Handles the 'admin_post_qp_add_report_reason' action.
      */
-    public static function handle_add_reason() {
+    public static function handle_add_reason()
+    {
         if (!isset($_POST['action']) || $_POST['action'] !== 'qp_add_report_reason' || !check_admin_referer('qp_add_edit_reason_nonce')) {
             wp_die('Security check failed.');
         }
@@ -167,7 +215,7 @@ class Logs_Reports_Page {
 
         global $wpdb;
         $term_table = $wpdb->prefix . 'qp_terms';
-        
+
         $reason_text = sanitize_text_field($_POST['reason_text']);
         $is_active = isset($_POST['is_active']) ? 1 : 0;
         $reason_type = isset($_POST['reason_type']) ? sanitize_key($_POST['reason_type']) : 'report';
@@ -194,12 +242,13 @@ class Logs_Reports_Page {
     /**
      * NEW: Handles the 'admin_post_qp_update_report_reason' action.
      */
-    public static function handle_update_reason() {
+    public static function handle_update_reason()
+    {
         if (!isset($_POST['action']) || $_POST['action'] !== 'qp_update_report_reason' || !check_admin_referer('qp_add_edit_reason_nonce')) {
             wp_die('Security check failed.');
         }
         if (!current_user_can('manage_options')) wp_die('Permission denied.');
-        
+
         global $wpdb;
         $term_table = $wpdb->prefix . 'qp_terms';
 
