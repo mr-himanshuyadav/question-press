@@ -599,6 +599,7 @@ class PracticeController
 	 */
 	public static function start_priority_session(\WP_REST_Request $request)
 	{
+		
 		$user_id = get_current_user_id();
 		$task    = Vault_Manager::get_today_priority_task($user_id);
 		$ids     = Practice_Manager::get_smart_revision_ids($user_id, $task);
@@ -607,11 +608,13 @@ class PracticeController
 			return $ids;
 		}
 
-		$session_id = Practice_Manager::start_session_from_ids($ids, $task);
+		$session_id = Practice_Manager::start_session_from_ids($ids, $task, 'mock_test', $task);
 
 		if (is_wp_error($session_id)) {
 			return $session_id;
 		}
+
+		error_log("Started priority session for user_id $user_id with task $task and session_id $session_id");
 
 		return new \WP_REST_Response([
 			'success'    => true,

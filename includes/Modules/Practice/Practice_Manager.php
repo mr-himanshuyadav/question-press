@@ -1125,7 +1125,7 @@ class Practice_Manager
             $session_type,
             $session_name,
             ['practice_mode' => sanitize_text_field($mode_name)],
-            'active'            
+            'active'
         );
     }
 
@@ -1164,8 +1164,8 @@ class Practice_Manager
         }
 
         $timer_seconds = null;
-        if ($session_type = "mock_test") {
-            $timer_seconds = count($question_ids)*60;
+        if ($session_type == "mock_test") {
+            $timer_seconds = count($question_ids) * 60;
         }
 
         // 1. Comprehensive Defaults for all identified session settings keys
@@ -2857,7 +2857,6 @@ class Practice_Manager
 
         // --- NEW: Access Control Setup ---
         $allowed = User_Access::get_allowed_subject_ids($user_id);
-        error_log("allowed subjec IDs" . array_values($allowed));
         $subject_restriction_sql = "";
 
         if ($allowed !== 'all') {
