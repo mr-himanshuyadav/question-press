@@ -119,7 +119,7 @@ class Cron
 
         // TODO: Check correctness of mock_test identification
         $active_mock_tests = $wpdb->get_results(
-            "SELECT session_id, start_time, settings_snapshot FROM {$sessions_table} WHERE session_type = 'mock_test'"
+            "SELECT session_id, start_time, settings_snapshot FROM {$sessions_table} WHERE session_type = 'mock_test' and status = 'active'"
         );
 
         foreach ($active_mock_tests as $test) {

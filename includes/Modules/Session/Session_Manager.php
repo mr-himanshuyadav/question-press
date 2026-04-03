@@ -34,6 +34,7 @@ class Session_Manager extends DB
 		// 1. Capture Start State
 		$start_time = microtime(true);
 		$start_queries = get_num_queries();
+		error_log("Finalizing Session ID: " . $session_id);
 
 
 		$wpdb = self::$wpdb;
@@ -299,7 +300,8 @@ class Session_Manager extends DB
 			$wpdb->query('COMMIT');
 
 			// Architect's Path: Aggressively update aggregated user stats after session finalize
-			Analytics_Manager::update_user_stats($session->user_id);
+			$should_update_streak = ($end_reason !== 'abandoned_by_system');
+			Analytics_Manager::update_user_stats($session->user_id, $should_update_streak);
 
 			// 3. Capture End State
 			$end_time = microtime(true);
@@ -311,6 +313,7 @@ class Session_Manager extends DB
 
 			error_log("Total time taken:" . $total_time . "seconds");
 			error_log("Database Queries:" . $total_queries);
+			error_log("Finalised Session ID: " . $session_id);
 
 			return [
 				'final_score' => $final_score,

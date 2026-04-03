@@ -31,7 +31,7 @@ class Logs_List_Table extends WP_List_Table
     // NEW: Display logic for the Log Data column
     public function column_log_data($item)
     {
-        $data = json_decode($item['log_data'], true);
+        $data = !empty($item['log_data']) ? json_decode($item['log_data'], true) : [];
         if (empty($data)) return '-';
 
         // Create a compact preview and a button for the full JSON
@@ -80,7 +80,7 @@ class Logs_List_Table extends WP_List_Table
     public function column_status($item)
     {
         // Decode the log data once for efficiency
-        $log_data = json_decode($item['log_data'], true);
+        $log_data = !empty($item['log_data']) ? json_decode($item['log_data'], true) : [];
 
         // 1. Handle REST API Errors: Show the status code
         if ($item['log_type'] === 'REST Error' && isset($log_data['status'])) {
