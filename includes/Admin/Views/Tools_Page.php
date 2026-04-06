@@ -76,6 +76,12 @@ class Tools_Page {
 				<button id="qp-sync-mastery" class="button button-primary" data-nonce="<?php echo esc_attr($nonce); ?>">Recalculate</button>
 				<p id="qp-mastery-status" class="status-msg" style="margin-top: 10px; font-weight: 600;"></p>
 			</div>
+			<div class="card">
+				<h2>Calculate Subject Mastery</h2>
+				<p>Analyzes historical attempts to generate Subject Mastery scores. Applies to subjects with &ge; 50 questions and users with &ge; 20 attempts.</p>
+				<button id="qp-sync-subject-mastery" class="button button-primary" data-nonce="<?php echo esc_attr($nonce); ?>">Calculate Mastery</button>
+				<p id="qp-subject-mastery-status" class="status-msg" style="margin-top: 10px; font-weight: 600;"></p>
+			</div>
 		</div>
 		<script>
 			jQuery(document).ready(function($) {
@@ -93,6 +99,18 @@ class Tools_Page {
 					$.post(ajaxurl, { action: 'qp_sync_mastery_data', nonce: $btn.data('nonce') }, function(res) {
 						$('#qp-mastery-status').text(res.data.message);
 						$btn.prop('disabled', false).text('Recalculate');
+					});
+				});
+
+				$('#qp-sync-subject-mastery').on('click', function() {
+					const $btn = $(this);
+					$btn.prop('disabled', true).text('Calculating...');
+					$.post(ajaxurl, { action: 'qp_sync_subject_mastery_data', nonce: $btn.data('nonce') }, function(res) {
+						$('#qp-subject-mastery-status').text(res.data ? res.data.message : 'Error processing request.');
+						$btn.prop('disabled', false).text('Calculate Mastery');
+					}).fail(function() {
+						$('#qp-subject-mastery-status').text('Server error occurred. Check console.');
+						$btn.prop('disabled', false).text('Calculate Mastery');
 					});
 				});
 			});

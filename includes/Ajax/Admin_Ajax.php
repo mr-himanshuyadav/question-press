@@ -705,5 +705,89 @@ class Admin_Ajax {
         }
     }
 
+    /**
+     * AJAX handler to calculate subject mastery from historical attempts.
+     * Enforces >= 50 questions per term and >= 20 attempts per user.
+     */
+    public static function sync_subject_mastery_data() {
+        check_ajax_referer('qp_admin_integrity_nonce', 'nonce');
+        
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(['message' => 'Unauthorized']);
+        }
+
+        global $wpdb;
+        $questions_table = $wpdb->prefix . 'qp_questions';
+        $attempts_table  = $wpdb->prefix . 'qp_user_attempts';
+        $mastery_table   = $wpdb->prefix . 'qp_user_subject_mastery';
+        $rel_table       = $wpdb->prefix . 'qp_term_relationships';
+
+        try {
+            // 1. Find all eligible term_ids (Subjects/Topics with >= 50 questions)
+            $eligible_terms = $wpdb->get_col("
+                SELECT term_id 
+                FROM {$rel_table} 
+                WHERE object_type = 'group' 
+                GROUP BY term_id 
+                HAVING COUNT(object_id) >= 50
+            ");
+
+            if (empty($eligible_terms)) {
+                wp_send_json_success(['message' => 'No subjects found with 50 or more questions yet.']);
+            }
+
+            $terms_placeholder = implode(',', array_map('intval', $eligible_terms));
+            $records_updated = 0;
+
+            // 2. Aggregate user attempts ONLY for these eligible terms
+            $query = "
+                SELECT 
+                    a.user_id, 
+                    r.term_id, 
+                    COUNT(a.attempt_id) as total_answered,
+                    SUM(CASE WHEN a.is_correct = 1 THEN 1 ELSE 0 END) as correct_count
+                FROM {$attempts_table} a
+                JOIN {$questions_table} q ON a.question_id = q.question_id
+                JOIN {$rel_table} r ON (q.group_id = r.object_id AND r.object_type = 'group')
+                WHERE r.term_id IN ($terms_placeholder) AND a.status = 'answered'
+                GROUP BY a.user_id, r.term_id
+                HAVING total_answered >= 20
+            ";
+
+            $user_term_stats = $wpdb->get_results($query);
+
+            // 3. Process and Insert/Update Mastery
+            if (!empty($user_term_stats)) {
+                foreach ($user_term_stats as $stat) {
+                    // Calculate basic mastery percentage (0 to 100)
+                    $mastery_level = ($stat->correct_count / $stat->total_answered) * 100;
+
+                    // Insert or update if it already exists
+                    $wpdb->query($wpdb->prepare(
+                        "INSERT INTO {$mastery_table} (user_id, term_id, mastery_level, total_answered, correct_count) 
+                         VALUES (%d, %d, %f, %d, %d)
+                         ON DUPLICATE KEY UPDATE 
+                            mastery_level = VALUES(mastery_level),
+                            total_answered = VALUES(total_answered),
+                            correct_count = VALUES(correct_count),
+                            last_updated = CURRENT_TIMESTAMP",
+                        $stat->user_id,
+                        $stat->term_id,
+                        $mastery_level,
+                        $stat->total_answered,
+                        $stat->correct_count
+                    ));
+                    $records_updated++;
+                }
+            }
+
+            wp_send_json_success(['message' => sprintf('Successfully calculated and updated %d user mastery records.', $records_updated)]);
+            
+        } catch (\Exception $e) {
+            error_log('QP Subject Mastery Sync Error: ' . $e->getMessage());
+            wp_send_json_error(['message' => 'Database error during sync. Check PHP error logs.']);
+        }
+    }
+
 
 } // End class Admin_Ajax
