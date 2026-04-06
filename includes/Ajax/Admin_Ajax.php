@@ -390,8 +390,8 @@ class Admin_Ajax {
         $exam_term_id = ($is_pyq && !empty($data['exam_id'])) ? absint($data['exam_id']) : 0;
 
         // 2. Get the full lineage arrays using our new helper function
-        $subject_lineage_array = \QuestionPress\Database\Terms_DB::get_full_lineage_array($specific_subject_term_id);
-        $source_lineage_array  = \QuestionPress\Database\Terms_DB::get_full_lineage_array($specific_source_term_id);
+        $subject_lineage_array = Terms_DB::get_full_lineage_array($specific_subject_term_id);
+        $source_lineage_array  = Terms_DB::get_full_lineage_array($specific_source_term_id);
 
         // 3. Prepare the array of denormalized data
         $denormalized_data = [
@@ -708,6 +708,7 @@ class Admin_Ajax {
     /**
      * AJAX handler to calculate subject mastery from historical attempts.
      * Enforces >= 50 questions per term and >= 20 attempts per user.
+     * Uses a composite asymptotic curve for Volume, Breadth, Consistency, and Decay.
      */
     public static function sync_subject_mastery_data() {
         check_ajax_referer('qp_admin_integrity_nonce', 'nonce');
@@ -720,51 +721,96 @@ class Admin_Ajax {
         $questions_table = $wpdb->prefix . 'qp_questions';
         $attempts_table  = $wpdb->prefix . 'qp_user_attempts';
         $mastery_table   = $wpdb->prefix . 'qp_user_subject_mastery';
-        $rel_table       = $wpdb->prefix . 'qp_term_relationships';
 
         try {
-            // 1. Find all eligible term_ids (Subjects/Topics with >= 50 questions)
-            $eligible_terms = $wpdb->get_col("
-                SELECT term_id 
-                FROM {$rel_table} 
-                WHERE object_type = 'group' 
-                GROUP BY term_id 
-                HAVING COUNT(object_id) >= 50
-            ");
-
-            if (empty($eligible_terms)) {
-                wp_send_json_success(['message' => 'No subjects found with 50 or more questions yet.']);
+            // 1. EFFICIENTLY FIND ALL ELIGIBLE TERMS (>= 50 Questions)
+            // We pull all JSON lineages in PHP to count them. This is 100x faster than a MySQL JSON cross-join.
+            $all_lineages = $wpdb->get_col("SELECT subject_lineage FROM {$questions_table} WHERE status = 'publish' AND subject_lineage IS NOT NULL");
+            $term_question_counts = [];
+            
+            foreach ($all_lineages as $json) {
+                $arr = json_decode($json, true);
+                if (is_array($arr)) {
+                    foreach ($arr as $tid) {
+                        if (!isset($term_question_counts[$tid])) $term_question_counts[$tid] = 0;
+                        $term_question_counts[$tid]++;
+                    }
+                }
             }
 
-            $terms_placeholder = implode(',', array_map('intval', $eligible_terms));
+            $eligible_terms = [];
+            foreach ($term_question_counts as $tid => $count) {
+                if ($count >= 50) {
+                    $eligible_terms[$tid] = $count; // Store term_id => total_available_questions
+                }
+            }
+
+            if (empty($eligible_terms)) {
+                wp_send_json_success(['message' => 'No subjects found with 50 or more published questions yet.']);
+            }
+
             $records_updated = 0;
 
-            // 2. Aggregate user attempts ONLY for these eligible terms
-            $query = "
-                SELECT 
-                    a.user_id, 
-                    r.term_id, 
-                    COUNT(a.attempt_id) as total_answered,
-                    SUM(CASE WHEN a.is_correct = 1 THEN 1 ELSE 0 END) as correct_count
-                FROM {$attempts_table} a
-                JOIN {$questions_table} q ON a.question_id = q.question_id
-                JOIN {$rel_table} r ON (q.group_id = r.object_id AND r.object_type = 'group')
-                WHERE r.term_id IN ($terms_placeholder) AND a.status = 'answered'
-                GROUP BY a.user_id, r.term_id
-                HAVING total_answered >= 20
-            ";
+            // 2. PROCESS EACH ELIGIBLE TERM
+            foreach ($eligible_terms as $term_id => $total_available_questions) {
+                
+                // Fetch granular user stats for this specific subject term
+                $query = $wpdb->prepare("
+                    SELECT 
+                        a.user_id, 
+                        COUNT(a.attempt_id) as total_attempts,
+                        SUM(CASE WHEN a.is_correct = 1 THEN 1 ELSE 0 END) as correct_attempts,
+                        COUNT(DISTINCT a.question_id) as distinct_questions,
+                        COUNT(DISTINCT DATE(a.attempt_time)) as distinct_days,
+                        DATEDIFF(CURRENT_DATE(), MAX(a.attempt_time)) as days_inactive
+                    FROM {$attempts_table} a
+                    JOIN {$questions_table} q ON a.question_id = q.question_id
+                    WHERE JSON_CONTAINS(q.subject_lineage, %s) AND a.status = 'answered'
+                    GROUP BY a.user_id
+                    HAVING total_attempts >= 20
+                ", (string) $term_id);
 
-            $user_term_stats = $wpdb->get_results($query);
+                $user_stats = $wpdb->get_results($query);
 
-            // 3. Process and Insert/Update Mastery
-            if (!empty($user_term_stats)) {
-                foreach ($user_term_stats as $stat) {
-                    // Calculate basic mastery percentage (0 to 100)
-                    $mastery_level = ($stat->correct_count / $stat->total_answered) * 100;
+                if (empty($user_stats)) continue;
 
-                    // Insert or update if it already exists
+                // 3. APPLY THE COMPOSITE MASTERY ALGORITHM
+                foreach ($user_stats as $stat) {
+                    
+                    // A. Accuracy (0.0 to 1.0) - Base knowledge metric
+                    $accuracy = ($stat->correct_attempts / $stat->total_attempts);
+                    
+                    // B. Volume Factor (0.0 to 1.0) - Asymptotic curve. Requires ~300 attempts to near 1.0
+                    $volume_factor = 1.0 - exp(-$stat->total_attempts / 100);
+                    
+                    // C. Breadth Factor (0.0 to 1.0) - Distinct coverage. Capped at 200 questions to be fair on huge subjects
+                    $target_breadth = min($total_available_questions, 200);
+                    $breadth_factor = min($stat->distinct_questions / $target_breadth, 1.0);
+                    
+                    // D. Consistency Factor (0.0 to 1.0) - Anti-grind mechanic. Requires 15 distinct days of practice to hit 1.0.
+                    $consistency_factor = min($stat->distinct_days / 15, 1.0);
+
+                    // E. Composite Skill Score (Weighted Out of 100)
+                    // Makes reaching 100 nearly impossible without perfect accuracy, massive volume, and 15+ days of distinct practice.
+                    $skill_metric = (
+                        ($accuracy * 45) +          // 45% weight on raw accuracy
+                        ($consistency_factor * 25) + // 25% weight on daily consistency (Stops single-day jumps)
+                        ($breadth_factor * 15) +     // 15% weight on seeing new questions
+                        ($volume_factor * 15)        // 15% weight on sheer volume
+                    );
+
+                    // F. Time Decay Penalty (Subtract 1% per day after 3 days of grace period, capped at 50% drop)
+                    $decay_days = max(0, $stat->days_inactive - 3);
+                    $decay_multiplier = pow(0.99, $decay_days); 
+                    $decay_multiplier = max(0.50, $decay_multiplier); // Floor at 50%
+
+                    // Final Calculation
+                    $final_mastery = $skill_metric * $decay_multiplier;
+
+                    // 4. SAVE TO DATABASE
                     $wpdb->query($wpdb->prepare(
-                        "INSERT INTO {$mastery_table} (user_id, term_id, mastery_level, total_answered, correct_count) 
+                        "INSERT INTO {$mastery_table} 
+                        (user_id, term_id, mastery_level, total_answered, correct_count) 
                          VALUES (%d, %d, %f, %d, %d)
                          ON DUPLICATE KEY UPDATE 
                             mastery_level = VALUES(mastery_level),
@@ -772,16 +818,16 @@ class Admin_Ajax {
                             correct_count = VALUES(correct_count),
                             last_updated = CURRENT_TIMESTAMP",
                         $stat->user_id,
-                        $stat->term_id,
-                        $mastery_level,
-                        $stat->total_answered,
-                        $stat->correct_count
+                        $term_id,
+                        $final_mastery,
+                        $stat->total_attempts,
+                        $stat->correct_attempts
                     ));
                     $records_updated++;
                 }
             }
 
-            wp_send_json_success(['message' => sprintf('Successfully calculated and updated %d user mastery records.', $records_updated)]);
+            wp_send_json_success(['message' => sprintf('Successfully calculated and updated %d user mastery records across %d eligible subjects.', $records_updated, count($eligible_terms))]);
             
         } catch (\Exception $e) {
             error_log('QP Subject Mastery Sync Error: ' . $e->getMessage());

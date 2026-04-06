@@ -153,11 +153,6 @@ class Practice_Manager
             $where_clauses[] = "q.question_id NOT IN ($ids_placeholder)";
         }
 
-        // **REVISED FIX**: Incorporate scope validation AND user selection into WHERE clause
-        $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'subject'");
-        $joins .= " LEFT JOIN {$rel_table} topic_rel ON g.group_id = topic_rel.object_id AND topic_rel.object_type = 'group'";
-        $joins .= " LEFT JOIN {$term_table} topic_term ON topic_rel.term_id = topic_term.term_id AND topic_term.taxonomy_id = " . (int)$subject_tax_id . " AND topic_term.parent != 0";
-
         $final_topic_ids_to_filter = []; // Topics to actually query
 
         if ($topics_selected) {
@@ -181,14 +176,20 @@ class Practice_Manager
         }
         // If $allowed_subjects === 'all' and user selected 'all' or nothing, $final_topic_ids_to_filter remains empty, meaning don't filter by topic.
 
-        // Apply the topic filter if needed
+        // Apply the topic filter using JSON_CONTAINS
         if (!empty($final_topic_ids_to_filter)) {
-            $ids_placeholder = implode(',', $final_topic_ids_to_filter);
-            $where_clauses[] = "topic_term.term_id IN ($ids_placeholder)";
+            $topic_conditions = [];
+            foreach ($final_topic_ids_to_filter as $tid) {
+                $topic_conditions[] = $wpdb->prepare("JSON_CONTAINS(g.subject_lineage, %s)", (string)$tid);
+            }
+            $where_clauses[] = '(' . implode(' OR ', $topic_conditions) . ')';
         } elseif ($topics_selected || $subjects_selected || ($allowed_subjects !== 'all' && empty($allowed_subjects))) {
-            // If specific topics/subjects were selected but yielded no topic IDs, or scope restrictions yielded no topic IDs
             $where_clauses[] = "1=0"; // Ensure no questions are found
         }
+
+        $base_where_sql = implode(' AND ', $where_clauses);
+        // Extract the Topic ID (assuming it is the 2nd item in lineage `$[1]`) for equal distribution
+        $query = "SELECT DISTINCT q.question_id, JSON_EXTRACT(g.subject_lineage, '$[1]') as topic_id {$joins} WHERE {$base_where_sql}";
         // If $allowed_subjects === 'all' and no specific subject/topic selected, no topic WHERE clause is added.
 
         $base_where_sql = implode(' AND ', $where_clauses);
@@ -402,10 +403,9 @@ class Practice_Manager
                 "SELECT q.question_id
                     FROM {$questions_table} q
                     JOIN {$groups_table} g ON q.group_id = g.group_id
-                    JOIN {$rel_table} r ON g.group_id = r.object_id
-                    WHERE r.term_id = %d AND r.object_type = 'group' AND q.status = 'publish'
+                    WHERE JSON_CONTAINS(g.subject_lineage, %s) AND q.status = 'publish'
                     {$pyq_filter_sql} {$exclude_reported_sql}",
-                $topic_id
+                (string)$topic_id
             ));
 
             if (empty($master_pool_qids)) continue;
@@ -647,19 +647,24 @@ class Practice_Manager
             $subjects_selected = !empty($subjects_raw) && !in_array('all', $subjects_raw);
             $topics_selected = !empty($topics_raw) && !in_array('all', $topics_raw);
 
+            $term_ids_to_filter = [];
             if ($topics_selected) {
-                $topic_term_ids_to_filter = array_map('absint', $topics_raw);
+                $term_ids_to_filter = array_map('absint', $topics_raw);
             } elseif ($subjects_selected) {
-                $subject_ids_placeholder = implode(',', array_map('absint', $subjects_raw));
-                $topic_term_ids_to_filter = $wpdb->get_col("SELECT term_id FROM {$term_table} WHERE parent IN ($subject_ids_placeholder)");
+                $term_ids_to_filter = array_map('absint', $subjects_raw);
             }
-            if (!empty($topic_term_ids_to_filter)) {
-                $topic_ids_placeholder = implode(',', $topic_term_ids_to_filter);
-                $where_conditions[] = "g.group_id IN (SELECT object_id FROM {$rel_table} WHERE object_type = 'group' AND term_id IN ($topic_ids_placeholder))";
+            
+            // 1. Handle Subject/Topic Selection
+            if (!empty($term_ids_to_filter)) {
+                $term_conditions = [];
+                foreach ($term_ids_to_filter as $tid) {
+                    $term_conditions[] = $wpdb->prepare("JSON_CONTAINS(g.subject_lineage, %s)", (string)$tid);
+                }
+                $where_conditions[] = '(' . implode(' OR ', $term_conditions) . ')';
             }
 
             // 2. Handle Section selection
-            $where_conditions[] = $wpdb->prepare("g.group_id IN (SELECT object_id FROM {$rel_table} WHERE object_type = 'group' AND term_id = %d)", $section_id);
+            $where_conditions[] = $wpdb->prepare("JSON_CONTAINS(g.source_lineage, %s)", (string)$section_id);
 
             // 3. Apply PYQ filter
             if ($session_settings['pyq_only']) {
@@ -2855,8 +2860,12 @@ class Practice_Manager
             if (empty($allowed_array)) {
                 return new \WP_Error('no_access', 'You do not have access to any subjects for revision.');
             }
-            $allowed_ids_str = implode(',', $allowed_array);
-            $subject_restriction_sql = " AND q.primary_subject_term_id IN ($allowed_ids_str)";
+            
+            $allowed_conditions = [];
+            foreach ($allowed_array as $allowed_id) {
+                $allowed_conditions[] = "JSON_CONTAINS(q.subject_lineage, '" . intval($allowed_id) . "')";
+            }
+            $subject_restriction_sql = " AND (" . implode(' OR ', $allowed_conditions) . ")";
         }
         // --- End Access Control Setup ---
 
@@ -3023,12 +3032,13 @@ class Practice_Manager
 
             $subject_ids = [];
             if (!empty($ids_list)) {
-                $subject_ids = $wpdb->get_col(
-                    "SELECT DISTINCT primary_subject_term_id
+                $subject_ids_json = $wpdb->get_col(
+                    "SELECT DISTINCT JSON_EXTRACT(subject_lineage, '$[0]')
                      FROM {$wpdb->prefix}qp_questions
-                     WHERE question_id IN (" . implode(',', array_map('intval', $ids_list)) . ")
-                     AND primary_subject_term_id != 0"
+                     WHERE question_id IN (" . implode(',', array_map('intval', $ids_list)) . ")"
                 );
+                // Convert stringified numbers back to integers safely
+                $subject_ids = array_filter(array_map('intval', $subject_ids_json));
             }
 
             /*
@@ -3045,9 +3055,15 @@ class Practice_Manager
             if (empty($subject_ids) && $allowed !== 'all') {
                 // error_log("[SR] Fallback failed: No allowed subjects found for user $user_id");
             } else {
-                $subject_where = !empty($subject_ids)
-                    ? " AND q.primary_subject_term_id IN (" . implode(',', array_map('intval', $subject_ids)) . ")"
-                    : "";
+                if (!empty($subject_ids)) {
+                    $subject_conditions = [];
+                    foreach ($subject_ids as $subj_id) {
+                        $subject_conditions[] = "JSON_CONTAINS(q.subject_lineage, '" . intval($subj_id) . "')";
+                    }
+                    $subject_where = " AND (" . implode(' OR ', $subject_conditions) . ")";
+                } else {
+                    $subject_where = "";
+                }
 
                 /*
                 3. Primary Fallback: Questions attempted within the specific Time Window

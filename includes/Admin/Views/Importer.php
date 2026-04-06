@@ -173,8 +173,8 @@ class Importer
             }
 
             // --- Get Full Lineage Arrays ---
-            $subject_lineage_array = \QuestionPress\Database\Terms_DB::get_full_lineage_array($most_specific_subject_id);
-            $source_lineage_array  = \QuestionPress\Database\Terms_DB::get_full_lineage_array($most_specific_source_id);
+            $subject_lineage_array = Terms_DB::get_full_lineage_array($most_specific_subject_id);
+            $source_lineage_array  = Terms_DB::get_full_lineage_array($most_specific_source_id);
 
             // --- Create Question Group ---
             $group_db_data = [
