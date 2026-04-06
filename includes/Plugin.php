@@ -168,7 +168,7 @@ final class Plugin {
         add_action('admin_init', [Settings_Page::class, 'register_settings']);
         add_action('admin_init', [Api_Settings_Page::class, 'register_settings']);
 
-        // Remove this after migration
+        // TODO: Remove this after migration
 
         add_action('admin_init', [Admin_Menu::class, 'handle_one_time_migration']);
 

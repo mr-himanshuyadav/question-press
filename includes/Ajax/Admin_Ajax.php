@@ -389,17 +389,15 @@ class Admin_Ajax {
         $specific_source_term_id = !empty($data['section_id']) ? absint($data['section_id']) : (!empty($data['source_id']) ? absint($data['source_id']) : 0);
         $exam_term_id = ($is_pyq && !empty($data['exam_id'])) ? absint($data['exam_id']) : 0;
 
-        // 2. Get the full lineage (primary + specific)
-        $subject_lineage = Terms_DB::get_term_lineage_ids($specific_subject_term_id);
-        $source_lineage = Terms_DB::get_term_lineage_ids($specific_source_term_id);
+        // 2. Get the full lineage arrays using our new helper function
+        $subject_lineage_array = \QuestionPress\Database\Terms_DB::get_full_lineage_array($specific_subject_term_id);
+        $source_lineage_array  = \QuestionPress\Database\Terms_DB::get_full_lineage_array($specific_source_term_id);
 
         // 3. Prepare the array of denormalized data
         $denormalized_data = [
-            'primary_subject_term_id'  => $subject_lineage['primary'],
-            'specific_subject_term_id' => $subject_lineage['specific'],
-            'primary_source_term_id'   => $source_lineage['primary'],
-            'specific_source_term_id'  => $source_lineage['specific'],
-            'exam_term_id'             => $exam_term_id
+            'subject_lineage' => !empty($subject_lineage_array) ? wp_json_encode($subject_lineage_array) : null,
+            'source_lineage'  => !empty($source_lineage_array) ? wp_json_encode($source_lineage_array) : null,
+            'exam_term_id'    => $exam_term_id
         ];
 
         // Step 4: Update Group-Level Data (PYQ status)

@@ -139,18 +139,16 @@ class Questions_DB extends DB
         $g_table = self::get_groups_table_name();
 
         // Define expected columns and their formats for security/correctness
-        $allowed_columns = [
+       $allowed_columns = [
             'direction_text'     => '%s',
             'direction_image_id' => '%d',
             'is_pyq'             => '%d',
             'pyq_year'           => '%s',
-            'is_current_affair'        => '%d',
-            'ca_date'                  => '%s',
-            'primary_subject_term_id'  => '%d',
-            'specific_subject_term_id' => '%d',
-            'primary_source_term_id'   => '%d',
-            'specific_source_term_id'  => '%d',
-            'exam_term_id'             => '%d',
+            'is_current_affair'  => '%d',
+            'ca_date'            => '%s',
+            'subject_lineage'    => '%s', 
+            'source_lineage'     => '%s', 
+            'exam_term_id'       => '%d',
         ];
         $insert_data = [];
         $formats = [];
@@ -191,14 +189,12 @@ class Questions_DB extends DB
             'direction_text'     => '%s',
             'direction_image_id' => '%d',
             'is_pyq'             => '%d',
-            'is_current_affair'        => '%d',
-            'ca_date'                  => '%s',
             'pyq_year'           => '%s',
-            'primary_subject_term_id'  => '%d',
-            'specific_subject_term_id' => '%d',
-            'primary_source_term_id'   => '%d',
-            'specific_source_term_id'  => '%d',
-            'exam_term_id'             => '%d',
+            'is_current_affair'  => '%d',
+            'ca_date'            => '%s',
+            'subject_lineage'    => '%s',
+            'source_lineage'     => '%s',
+            'exam_term_id'       => '%d',
         ];
         $update_data = [];
         $formats = [];
@@ -1337,19 +1333,21 @@ class Questions_DB extends DB
         // --- NEW DENORMALIZED LOGIC ---
         // Prioritize specific topics if they are provided
         if (!empty($args['topic_ids'])) {
-            $placeholders = implode(',', array_fill(0, count($args['topic_ids']), '%d'));
-            $where_conditions[] = self::$wpdb->prepare(
-                "g.specific_subject_term_id IN ($placeholders)",
-                $args['topic_ids']
-            );
+            $topic_conditions = [];
+            foreach ($args['topic_ids'] as $topic_id) {
+                // JSON_CONTAINS checks if the number string exists inside the array
+                $topic_conditions[] = self::$wpdb->prepare("JSON_CONTAINS(g.subject_lineage, %s)", (string) absint($topic_id));
+            }
+            $where_conditions[] = '(' . implode(' OR ', $topic_conditions) . ')';
         }
         // Fallback to parent subjects if no topics were selected
         elseif (!empty($args['subject_ids'])) {
-            $ids_placeholder = implode(',', array_map('absint', $args['subject_ids']));
-            // ASSUMPTION: Your denormalized subject ID column is 'primary_subject_term_id'
-            $where_conditions[] = "g.primary_subject_term_id IN ($ids_placeholder)";
+            $subject_conditions = [];
+            foreach ($args['subject_ids'] as $subject_id) {
+                 $subject_conditions[] = self::$wpdb->prepare("JSON_CONTAINS(g.subject_lineage, %s)", (string) absint($subject_id));
+            }
+            $where_conditions[] = '(' . implode(' OR ', $subject_conditions) . ')';
         }
-        // --- END NEW LOGIC ---
 
         if (!empty($args['pyq_only'])) {
             $where_conditions[] = "g.is_pyq = 1";

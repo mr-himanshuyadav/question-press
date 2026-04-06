@@ -416,4 +416,24 @@ class Terms_DB extends DB { // Inherits from DB to get $wpdb
         ];
     }
 
+    /**
+     * Gets the full hierarchical lineage array for a term (e.g., [89, 76, 64]).
+     * * @param int $term_id The specific term ID.
+     * @return array Array of term IDs from highest parent down to the specific term.
+     */
+    public static function get_full_lineage_array($term_id) {
+        global $wpdb;
+        $term_table = self::get_terms_table_name();
+        if (!$term_id) return [];
+        
+        $lineage = [];
+        $current_id = $term_id;
+        for ($i = 0; $i < 10; $i++) { // Safety limit for depth
+            if (!$current_id) break;
+            array_unshift($lineage, (int) $current_id); // Add to beginning of array
+            $current_id = $wpdb->get_var($wpdb->prepare("SELECT parent FROM {$term_table} WHERE term_id = %d", $current_id));
+        }
+        return $lineage;
+    }
+
 } // End class Terms_DB

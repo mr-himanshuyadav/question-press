@@ -57,18 +57,17 @@ class Question_Editor_Page
         $specific_source_term_id = !empty($_POST['section_id']) ? absint($_POST['section_id']) : (!empty($_POST['source_id']) ? absint($_POST['source_id']) : 0);
         $exam_term_id = ($is_pyq && !empty($_POST['exam_id'])) ? absint($_POST['exam_id']) : 0;
 
-        // 2. Get the full lineage (primary + specific) for subject and source
-        $subject_lineage = Terms_DB::get_term_lineage_ids($specific_subject_term_id);
-        $source_lineage = Terms_DB::get_term_lineage_ids($specific_source_term_id);
+        // 2. Get the full lineage arrays using our new helper function
+        $subject_lineage_array = Terms_DB::get_full_lineage_array($specific_subject_term_id);
+        $source_lineage_array  = Terms_DB::get_full_lineage_array($specific_source_term_id);
 
-        // 3. Prepare the array of denormalized data
+        // 3. Prepare the array of data to save (encoded as JSON)
         $denormalized_data = [
-            'primary_subject_term_id' => $subject_lineage['primary'],
-            'specific_subject_term_id' => $subject_lineage['specific'],
-            'primary_source_term_id' => $source_lineage['primary'],
-            'specific_source_term_id' => $source_lineage['specific'],
-            'exam_term_id' => $exam_term_id
+            'subject_lineage' => !empty($subject_lineage_array) ? wp_json_encode($subject_lineage_array) : null,
+            'source_lineage'  => !empty($source_lineage_array) ? wp_json_encode($source_lineage_array) : null,
+            'exam_term_id'    => $exam_term_id
         ];
+        // --- END: NEW JSON LINEAGE LOGIC ---
 
         // --- 3. Save Group Data ---
         $group_data = [

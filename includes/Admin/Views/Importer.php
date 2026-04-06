@@ -172,22 +172,23 @@ class Importer
                 }
             }
 
+            // --- Get Full Lineage Arrays ---
+            $subject_lineage_array = \QuestionPress\Database\Terms_DB::get_full_lineage_array($most_specific_subject_id);
+            $source_lineage_array  = \QuestionPress\Database\Terms_DB::get_full_lineage_array($most_specific_source_id);
+
             // --- Create Question Group ---
             $group_db_data = [
                 'direction_text'     => $group['Direction']['text'] ?? null,
                 'direction_image_id' => $direction_image_id,
                 'is_pyq'             => $group['isPYQ'] ?? 0,
                 'pyq_year'           => $group['pyqYear'] ?? null,
-
-                /* --- ADDED CURRENT AFFAIRS MAPPING --- */
                 'is_current_affair'  => isset($group['isCurrentAffair']) ? (int)$group['isCurrentAffair'] : 0,
                 'ca_date'            => !empty($group['caDate']) ? sanitize_text_field($group['caDate']) : null,
 
-                'primary_subject_term_id'  => $subject_lineage['primary'],
-                'specific_subject_term_id' => $subject_lineage['specific'],
-                'primary_source_term_id'   => $source_lineage['primary'],
-                'specific_source_term_id'  => $most_specific_source_id,
-                'exam_term_id'             => ($group['isPYQ'] ?? 0) ? $exam_term_id : null
+                // Save encoded JSON arrays
+                'subject_lineage'    => !empty($subject_lineage_array) ? wp_json_encode($subject_lineage_array) : null,
+                'source_lineage'     => !empty($source_lineage_array) ? wp_json_encode($source_lineage_array) : null,
+                'exam_term_id'       => ($group['isPYQ'] ?? 0) ? $exam_term_id : null
             ];
             $wpdb->insert($groups_table, $group_db_data);
             $group_id = $wpdb->insert_id;
@@ -224,11 +225,10 @@ class Importer
                     'duplicate_of'               => $existing_question_id ?: null,
                     'status'                     => 'draft',
 
-                    'primary_subject_term_id'  => $subject_lineage['primary'],
-                    'specific_subject_term_id' => $subject_lineage['specific'],
-                    'primary_source_term_id'   => $source_lineage['primary'],
-                    'specific_source_term_id'  => $source_lineage['specific'],
-                    'exam_term_id'             => ($group['isPYQ'] ?? 0) ? $exam_term_id : null
+                    // Use the JSON arrays generated above
+                    'subject_lineage'    => !empty($subject_lineage_array) ? wp_json_encode($subject_lineage_array) : null,
+                    'source_lineage'     => !empty($source_lineage_array) ? wp_json_encode($source_lineage_array) : null,
+                    'exam_term_id'       => ($group['isPYQ'] ?? 0) ? $exam_term_id : null
                 ];
                 $wpdb->insert($questions_table, $question_db_data);
                 $question_id = $wpdb->insert_id;
