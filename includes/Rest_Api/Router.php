@@ -484,6 +484,12 @@ final class Router
             'permission_callback' => [AuthController::class, 'check_auth_token'],
         ]);
 
+        register_rest_route('questionpress/v1', '/practice/guidance/delete', [
+            'methods'             => \WP_REST_Server::CREATABLE, // Or DELETABLE if you prefer
+            'callback'            => [PracticeController::class, 'delete_vault_setting'],
+            'permission_callback' => [AuthController::class, 'check_auth_token'],
+        ]);
+
         register_rest_route('questionpress/v1', '/practice/guidance', [
             'methods'             => \WP_REST_Server::READABLE,
             'callback'            => [PracticeController::class, 'get_daily_guidance'],

@@ -1176,10 +1176,13 @@ class Practice_Manager
      * Regulated via the centralized session creation logic.
      *
      * @param array  $question_ids List of question IDs.
-     * @param string $mode_name    The name of the practice mode (e.g., "Daily Current Affairs").
+     * @param string $mode_name    The name of the practice mode (e.g., "Daily Review").
+     * @param string $session_type The internal type of session (e.g., "mock_test").
+     * @param string $session_name Friendly name for the session.
+     * @param string|null $revision_config_id The ID of the custom revision configuration.
      * @return int|\WP_Error       The new session ID or a WP_Error on failure.
      */
-    public static function start_session_from_ids($question_ids, $mode_name = "Custom Practice", $session_type = "mock_test", $session_name = 'Practice Session')
+    public static function start_session_from_ids($question_ids, $mode_name = "Custom Practice", $session_type = "mock_test", $session_name = 'Practice Session', ?string $revision_config_id = null)
     {
         // Basic Request Validation
         if (!is_user_logged_in()) {
@@ -1190,13 +1193,40 @@ class Practice_Manager
             return new \WP_Error('invalid_questions', 'A valid array of question IDs is required.', ['status' => 400]);
         }
 
+        $custom_settings = [
+            'practice_mode' => sanitize_text_field($mode_name)
+        ];
+
+        // -------------------------------------------------------------
+        // FIX: INJECT CONFIG DATA SO THE DASHBOARD KNOWS THE SUBJECTS
+        // -------------------------------------------------------------
+        if ($revision_config_id) {
+            $custom_settings['revision_config_id'] = sanitize_text_field($revision_config_id);
+            
+            // Fetch the config to append subjects/exam so the frontend UI can display them correctly
+            $vault = Vault_Manager::get_vault(get_current_user_id());
+            $sessions = $vault->revision_config['sessions'] ?? [];
+            foreach ($sessions as $s) {
+                if (isset($s['id']) && $s['id'] === $revision_config_id) {
+                    $custom_settings['exam_id'] = $s['exam_id'] ?? null;
+                    
+                    // Extract just the subject IDs for the standard 'subjects' array expected by the UI
+                    if (!empty($s['subjects'])) {
+                        $custom_settings['subjects'] = array_map(function($subj) {
+                            return (int)$subj['subject_id'];
+                        }, $s['subjects']);
+                    }
+                    break;
+                }
+            }
+        }
+
         // Delegate creation to the central logic. 
-        // Defaults for timer, pyq_only, etc., are automatically added by create_session.
         return self::create_session(
             $question_ids,
             $session_type,
             $session_name,
-            ['practice_mode' => sanitize_text_field($mode_name)],
+            $custom_settings,
             'active'
         );
     }
@@ -2890,101 +2920,126 @@ class Practice_Manager
 
     /**
      * Fetches a weighted mix of question IDs for "Smart Revision".
-     * Implements time-windows, mode-specific minimums, and subject-aware fallbacks.
-     * Includes verbose logging for each logic branch.
+     * Implements session-specific limits, subject weightages, and the Bucket System.
      *
      * @param int    $user_id
      * @param string $mode 'Daily Review', 'Weekly Review', or 'Monthly Review'
+     * @param string|null $session_id The custom configuration ID
      * @return int[]|\WP_Error
      */
-    public static function get_smart_revision_ids(int $user_id, string $mode)
+    public static function get_smart_revision_ids(int $user_id, string $mode, ?string $session_id = null)
     {
         global $wpdb;
 
+        // 1. Locate the correct session config
         $vault = Vault_Manager::get_vault($user_id);
-        $config = (array) ($vault->revision_config ?? []);
+        $sessions = $vault->revision_config['sessions'] ?? [];
+        
+        $target_session = null;
+        if ($session_id) {
+            foreach ($sessions as $s) {
+                if (isset($s['id']) && $s['id'] === $session_id) {
+                    $target_session = $s; break;
+                }
+            }
+        }
 
-        // ACT AS PHP ARCHITECT: Map session modes to their respective configuration keys
+        if (!$target_session) {
+            return new \WP_Error('no_config', 'No custom revision configuration found. Please set one up.');
+        }
+
+        // 2. Establish Limits based on Mode & Target Session
         $mode_key_map = [
             'Daily Review'   => 'daily_count',
             'Weekly Review'  => 'weekly_count',
             'Monthly Review' => 'monthly_count',
         ];
-
         $config_key = $mode_key_map[$mode] ?? 'daily_count';
-
-        // Vault_Manager::get_vault already ensures these defaults (20, 50, 100) are merged
-        $mode_min = (int) ($config[$config_key] ?? 20);
-        $user_target = isset($config['session_min_questions']) ? (int)$config['session_min_questions'] : 20;
+        $mode_min = (int) ($target_session[$config_key] ?? 20);
+        $user_target = (int) ($target_session['session_min_questions'] ?? 10);
         $limit = max($mode_min, $user_target);
 
-        // --- NEW: Access Control Setup ---
-        $allowed = User_Access::get_allowed_subject_ids($user_id);
-        $subject_restriction_sql = "";
+        // 3. Calculate Weightage Targets
+        $allowed_subjects = User_Access::get_allowed_subject_ids($user_id);
+        $configured_subjects = $target_session['subjects'] ?? [];
+        $subject_targets = [];
 
-        if ($allowed !== 'all') {
-            $allowed_array = array_filter(array_map('intval', (array)$allowed));
-            if (empty($allowed_array)) {
-                return new \WP_Error('no_access', 'You do not have access to any subjects for revision.');
-            }
-
-            $allowed_conditions = [];
-            foreach ($allowed_array as $allowed_id) {
-                $allowed_conditions[] = "JSON_CONTAINS(q.subject_lineage, '" . intval($allowed_id) . "')";
-            }
-            $subject_restriction_sql = " AND (" . implode(' OR ', $allowed_conditions) . ")";
+        if (empty($configured_subjects)) {
+             return new \WP_Error('no_subjects', 'Your revision configuration has no subjects assigned.');
         }
-        // --- End Access Control Setup ---
 
-        // error_log("--- [SR LOG] START User $user_id | Mode: $mode | Target: $limit ---");
+        foreach ($configured_subjects as $subj) {
+            $sid = (int)$subj['subject_id'];
+            if ($allowed_subjects === 'all' || in_array($sid, (array)$allowed_subjects)) {
+                $target_amount = (int) round($limit * (($subj['weightage'] ?? 0) / 100));
+                if ($target_amount > 0) {
+                    $subject_targets[$sid] = $target_amount;
+                }
+            }
+        }
 
-        $ids = [];
+        if (empty($subject_targets)) {
+             return new \WP_Error('no_allowed_subjects', 'You do not have access to the subjects requested in this configuration.');
+        }
 
-        $add_ids = function (array $new_ids) use (&$ids) {
-            foreach ($new_ids as $id) {
-                $ids[(int)$id] = true;
+        // Handle rounding deficit to ensure we hit exactly $limit
+        $total_target = array_sum($subject_targets);
+        if ($total_target < $limit) {
+            $first_key = array_key_first($subject_targets);
+            $subject_targets[$first_key] += ($limit - $total_target); 
+        } elseif ($total_target > $limit) {
+            $first_key = array_key_first($subject_targets);
+            $subject_targets[$first_key] -= ($total_target - $limit);
+        }
+
+        $subject_conditions = [];
+        foreach (array_keys($subject_targets) as $sid) {
+            $subject_conditions[] = "JSON_CONTAINS(q.subject_lineage, '" . intval($sid) . "')";
+        }
+        $subject_restriction_sql = " AND (" . implode(' OR ', $subject_conditions) . ")";
+
+        // 4. The PHP Bucket System
+        $collected_ids = []; 
+        $collected_counts = array_fill_keys(array_keys($subject_targets), 0);
+
+        $process_buckets = function($rows) use (&$collected_ids, &$collected_counts, $subject_targets) {
+            foreach ($rows as $row) {
+                $qid = (int)$row->question_id;
+                if (isset($collected_ids[$qid])) continue; 
+                
+                $lineage = json_decode($row->subject_lineage, true) ?: [];
+                foreach ($lineage as $tid) {
+                    if (isset($subject_targets[$tid]) && $collected_counts[$tid] < $subject_targets[$tid]) {
+                        $collected_ids[$qid] = true;
+                        $collected_counts[$tid]++;
+                        break; // Successfully bucketed
+                    }
+                }
             }
         };
 
-        /*
-        =========================
-        DISTRIBUTION
-        =========================
-        */
-
-        $discovery_limit = (int) ceil($limit * 0.4);  // 50% Unattempted Adaptive
-        $srs_limit       = (int) ceil($limit * 0.3);  // 20% Spaced Repetition Due
-        $mistake_limit   = (int) ceil($limit * 0.15); // 15% Mistakes Corrections
-        $reinforce_limit = (int) ceil($limit * 0.1);  // 10% Low Mastery Review
-        $bookmark_limit  = (int) ceil($limit * 0.05); // 5% Bookmarks
-
-        /*
-        =========================
-        0. DISCOVERY (LEAST ATTEMPTED & ADAPTIVE) - 50%
-        =========================
-        */
+        // 5. Fetch Data in Priority Layers
+        
+        // Layer 0: DISCOVERY (Least Attempted & Adaptive) - Using your custom logic!
         $mastery_data = $wpdb->get_results($wpdb->prepare(
             "SELECT term_id, mastery_level FROM {$wpdb->prefix}qp_user_subject_mastery WHERE user_id = %d",
             $user_id
         ), OBJECT_K);
 
-        // Fetch the 300 absolute least-seen questions by this user in their allowed scope
         $least_attempted_pool = $wpdb->get_results($wpdb->prepare(
             "SELECT q.question_id, q.subject_lineage, COALESCE(q.auto_hardness, q.admin_hardness, 3) as hardness,
                     COUNT(a.attempt_id) as user_attempt_count
              FROM {$wpdb->prefix}qp_questions q
              LEFT JOIN {$wpdb->prefix}qp_user_attempts a ON q.question_id = a.question_id AND a.user_id = %d
-             WHERE q.status = 'publish'
-             {$subject_restriction_sql}
+             WHERE q.status = 'publish' {$subject_restriction_sql}
              GROUP BY q.question_id
              ORDER BY user_attempt_count ASC
-             LIMIT 300",
+             LIMIT 200",
             $user_id
         ));
 
-        shuffle($least_attempted_pool); // Shuffle to add variety for questions with same attempt count
-
         if (!empty($least_attempted_pool)) {
+            shuffle($least_attempted_pool); 
             foreach ($least_attempted_pool as &$q) {
                 $lineage = json_decode($q->subject_lineage, true);
                 $mastery = 0;
@@ -2996,302 +3051,99 @@ class Practice_Manager
                         }
                     }
                 }
-
-                // Map mastery (0-100) to target hardness (1-10)
-                $target_hardness = ($mastery / 10) + 1;
-                $target_hardness = min(10, max(1, $target_hardness));
-
-                // Calculate difference + random noise for variety
+                $target_hardness = min(10, max(1, ($mastery / 10) + 1));
                 $q->diff = abs((float)$q->hardness - $target_hardness) + (mt_rand(0, 100) / 100);
             }
             unset($q);
 
-            // Sort the fetched pool by closest difficulty match
             usort($least_attempted_pool, function ($a, $b) {
                 return $a->diff <=> $b->diff;
             });
-
-            $top_discovery = array_slice($least_attempted_pool, 0, $discovery_limit);
-            $add_ids(wp_list_pluck($top_discovery, 'question_id'));
+            $process_buckets(array_slice($least_attempted_pool, 0, $limit));
         }
 
-        /*
-        =========================
-        1. SRS DUE (PRIMARY)
-        =========================
-        */
-        $srs_pool_size = $srs_limit;
-        $consolidation_percent = rand(5, 15) / 100;
-        $target_consolidation = ceil($srs_pool_size * $consolidation_percent);
-
-        // Memory Consolidation: Target questions from the previous cycle interval
-        $cycle_days = ($mode === 'Weekly Review') ? 7 : (($mode === 'Monthly Review') ? 30 : 1);
-
-        // 1.1 Consolidation Layer (Attempts JOIN Questions)
-        $consolidation_ids = $wpdb->get_col($wpdb->prepare(
-            "SELECT DISTINCT a.question_id 
-             FROM {$wpdb->prefix}qp_user_attempts a
-             JOIN {$wpdb->prefix}qp_questions q ON a.question_id = q.question_id
-             WHERE a.user_id = %d 
-             AND DATE(a.attempt_time) = DATE_SUB(CURRENT_DATE(), INTERVAL %d DAY)
-             AND q.status = 'publish'
-             {$subject_restriction_sql}
-             LIMIT %d",
-            $user_id,
-            $cycle_days,
-            $target_consolidation
-        ));
-
-        shuffle($consolidation_ids); // Shuffle to add variety
-
-        // 1.2 Core SRS Layer (Mastery JOIN Questions)
-        $remaining_limit = $srs_pool_size - count($consolidation_ids);
-        $due_ids = $wpdb->get_col($wpdb->prepare(
-            "SELECT m.question_id
+        // Layer 1: Core SRS Due
+        $srs_rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT m.question_id, q.subject_lineage
              FROM {$wpdb->prefix}qp_user_mastery m
              JOIN {$wpdb->prefix}qp_questions q ON m.question_id = q.question_id
-             WHERE m.user_id = %d
-             AND m.next_review_date <= NOW()
-             AND q.status = 'publish'
-             {$subject_restriction_sql}
-             ORDER BY m.next_review_date ASC
-             LIMIT %d",
-            $user_id,
-            $remaining_limit
+             WHERE m.user_id = %d AND m.next_review_date <= NOW() AND q.status = 'publish' {$subject_restriction_sql}
+             ORDER BY m.next_review_date ASC LIMIT %d",
+            $user_id, $limit
         ));
+        $process_buckets($srs_rows);
 
-        $srs_ids = array_unique(array_merge($consolidation_ids, $due_ids));
-
-        $add_ids($srs_ids);
-        // error_log("[SR] SRS Logic: Core=" . count($due_ids) . ", Consolidation=" . count($consolidation_ids));
-
-        /*
-        =========================
-        2. RECENT MISTAKES
-        =========================
-        */
-
-        $mistake_ids = $wpdb->get_col($wpdb->prepare(
-            "SELECT a.question_id
+        // Layer 2: Mistakes
+        $mistake_rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT a.question_id, q.subject_lineage
              FROM {$wpdb->prefix}qp_user_attempts a
              JOIN {$wpdb->prefix}qp_questions q ON a.question_id = q.question_id
-             WHERE a.user_id = %d AND a.is_correct = 0 AND q.status = 'publish'
-             {$subject_restriction_sql}
-             ORDER BY a.attempt_time DESC
-             LIMIT %d",
-            $user_id,
-            $mistake_limit
+             WHERE a.user_id = %d AND a.is_correct = 0 AND q.status = 'publish' {$subject_restriction_sql}
+             ORDER BY a.attempt_time DESC LIMIT %d",
+            $user_id, $limit
         ));
-        $add_ids($mistake_ids);
+        $process_buckets($mistake_rows);
 
-        // error_log("[SR] Mistakes added: " . count($mistake_ids));
-
-        /*
-        =========================
-        3. LOW MASTERY
-        =========================
-        */
-
-        $reinforce_ids = $wpdb->get_col($wpdb->prepare(
-            "SELECT m.question_id
-             FROM {$wpdb->prefix}qp_user_mastery m
-             JOIN {$wpdb->prefix}qp_questions q ON m.question_id = q.question_id
-             WHERE m.user_id = %d AND m.box_number <= 2 AND q.status = 'publish'
-             {$subject_restriction_sql}
-             ORDER BY m.box_number ASC
-             LIMIT %d",
-            $user_id,
-            $reinforce_limit
-        ));
-        $add_ids($reinforce_ids);
-
-        // error_log("[SR] Reinforcement added: " . count($reinforce_ids));
-
-        /*
-        =========================
-        4. BOOKMARKS
-        =========================
-        */
-
-        $bookmark_ids = $wpdb->get_col($wpdb->prepare(
-            "SELECT r.question_id
-             FROM {$wpdb->prefix}qp_review_later r
-             JOIN {$wpdb->prefix}qp_questions q ON r.question_id = q.question_id
-             WHERE r.user_id = %d AND q.status = 'publish'
-             {$subject_restriction_sql}
-             LIMIT %d",
-            $user_id,
-            $bookmark_limit
-        ));
-        $add_ids($bookmark_ids);
-
-        // error_log("[SR] Bookmarks added: " . count($bookmark_ids));
-
-        /*
-        =========================
-        CURRENT POOL
-        =========================
-        */
-
-        $ids_list = array_keys($ids);
-        $current_count = count($ids_list);
-
-        // error_log("[SR] Pool before fallback: $current_count");
-
-        // error_log("[SR] Current IDs: " . implode(',', $ids_list));
-
-        /*
-        =========================
-        FALLBACK SYSTEM
-        =========================
-        */
-
-        if ($current_count < $limit) {
-
-            $needed = $limit - $current_count;
-
-            // error_log("[SR] Fallback triggered. Need $needed more.");
-
-            /*
-            1. Detect subjects of current pool
-            */
-
-            $subject_ids = [];
-            if (!empty($ids_list)) {
-                $subject_ids_json = $wpdb->get_col(
-                    "SELECT DISTINCT JSON_EXTRACT(subject_lineage, '$[0]')
-                     FROM {$wpdb->prefix}qp_questions
-                     WHERE question_id IN (" . implode(',', array_map('intval', $ids_list)) . ")"
-                );
-                // Convert stringified numbers back to integers safely
-                $subject_ids = array_filter(array_map('intval', $subject_ids_json));
+        // Layer 3: Fallback (Random fill for any buckets that are still thirsty)
+        $needs_fallback = false;
+        $fallback_conditions = [];
+        foreach ($subject_targets as $sid => $target) {
+            if ($collected_counts[$sid] < $target) {
+                $needs_fallback = true;
+                $fallback_conditions[] = "JSON_CONTAINS(q.subject_lineage, '" . intval($sid) . "')";
             }
-
-            /*
-            2. Scope Validation: Filter detected subjects by what user is CURRENTLY allowed to see
-            */
-            $allowed = User_Access::get_allowed_subject_ids($user_id);
-            if ($allowed !== 'all') {
-                $allowed_array = array_map('intval', (array)$allowed);
-                // If the pool had subjects the user is no longer allowed to see, remove them
-                $subject_ids = !empty($subject_ids) ? array_intersect($subject_ids, $allowed_array) : $allowed_array;
-            }
-
-            // If we ended up with no subjects (e.g., empty pool + no allowed subjects), we must stop
-            if (empty($subject_ids) && $allowed !== 'all') {
-                // error_log("[SR] Fallback failed: No allowed subjects found for user $user_id");
-            } else {
-                if (!empty($subject_ids)) {
-                    $subject_conditions = [];
-                    foreach ($subject_ids as $subj_id) {
-                        $subject_conditions[] = "JSON_CONTAINS(q.subject_lineage, '" . intval($subj_id) . "')";
-                    }
-                    $subject_where = " AND (" . implode(' OR ', $subject_conditions) . ")";
-                } else {
-                    $subject_where = "";
-                }
-
-                /*
-                3. Primary Fallback: Questions attempted within the specific Time Window
-                */
-                $interval = ($mode === 'Weekly Review') ? '7 DAY' : (($mode === 'Monthly Review') ? '30 DAY' : '1 DAY');
-
-                $common_ids = $wpdb->get_col($wpdb->prepare(
-                    "SELECT DISTINCT q.question_id
-                     FROM {$wpdb->prefix}qp_questions q
-                     JOIN {$wpdb->prefix}qp_user_attempts a ON q.question_id = a.question_id
-                     WHERE a.user_id = %d
-                     AND a.attempt_time >= DATE_SUB(NOW(), INTERVAL $interval)
-                     AND q.status = 'publish'
-                     $subject_where",
-                    $user_id
-                ));
-
-                if (!empty($common_ids)) {
-                    shuffle($common_ids);
-                    $added_from_common = array_slice($common_ids, 0, $needed);
-                    $add_ids($added_from_common);
-                    // error_log("[SR] Fallback stage 1 (Intersection) added: " . count($added_from_common));
-                }
-
-                /*
-                4. Secondary Fallback: Purely random questions from allowed subjects
-                */
-                $ids_list = array_keys($ids);
-                $current_count = count($ids_list);
-
-                if ($current_count < $limit) {
-                    $needed = $limit - $current_count;
-                    // error_log("[SR] Fallback stage 2 (Random Fill) triggered. Need $needed more.");
-
-                    $rand_ids = $wpdb->get_col(
-                        "SELECT q.question_id
-                         FROM {$wpdb->prefix}qp_questions q
-                         WHERE q.status = 'publish'
-                         $subject_where
-                         LIMIT $needed"
-                    );
-                    shuffle($rand_ids);
-
-                    $add_ids($rand_ids);
-                }
-            }
-
-            /*
-            =========================
-            FINAL GUARD
-            =========================
-            */
-
-            $final_ids = array_keys($ids);
-
-
-            if (empty($final_ids)) {
-
-                // error_log("[SR] CRITICAL: empty pool");
-
-                return new \WP_Error(
-                    'empty_pool',
-                    'No questions found for revision.'
-                );
-            }
-
-            shuffle($final_ids);
-
-            $final_selection = array_slice($final_ids, 0, $limit);
-
-            return $final_selection;
         }
 
-        $final_ids = array_keys($ids);
+        if ($needs_fallback) {
+            $fallback_sql = " AND (" . implode(' OR ', $fallback_conditions) . ")";
+            $random_rows = $wpdb->get_results(
+                "SELECT q.question_id, q.subject_lineage
+                 FROM {$wpdb->prefix}qp_questions q
+                 WHERE q.status = 'publish' $fallback_sql
+                 ORDER BY RAND() LIMIT " . ($limit * 2) 
+            );
+            $process_buckets($random_rows);
+        }
+
+        $final_ids = array_keys($collected_ids);
+
+        if (empty($final_ids)) {
+            return new \WP_Error('empty_pool', 'No questions found for this revision configuration.');
+        }
+
         shuffle($final_ids);
-
-        return array_slice($final_ids, 0, $limit);
+        return array_slice($final_ids, 0, $limit); // Final slice to guarantee exactly the requested amount
     }
 
 
     /**
      * Checks if the user has already completed a revision session today.
+     * Optimized to use the session_name column for faster querying.
      *
      * @param int $user_id
+     * @param string|null $revision_config_id
      * @return bool
      */
-    public static function has_completed_revision_today(int $user_id): bool
+    public static function has_completed_revision_today(int $user_id, ?string $revision_config_id = null): bool
     {
         global $wpdb;
         $table = $wpdb->prefix . 'qp_user_sessions';
         $today = gmdate('Y-m-d');
+        
+        $session_check_sql = "";
+        if ($revision_config_id) {
+             // Validate it belongs to the specific revision config using snapshot
+             $session_check_sql = $wpdb->prepare(" AND settings_snapshot LIKE %s", '%"revision_config_id":"' . $revision_config_id . '"%');
+        }
 
+        // Utilizing the session_name column heavily speeds up this query!
         $exists = $wpdb->get_var($wpdb->prepare(
             "SELECT 1 FROM $table 
              WHERE user_id = %d 
              AND status = 'completed' 
              AND DATE(end_time) = %s 
-             AND (
-                settings_snapshot LIKE '%%\"practice_mode\":\"Daily Review\"%%' OR 
-                settings_snapshot LIKE '%%\"practice_mode\":\"Weekly Review\"%%' OR 
-                settings_snapshot LIKE '%%\"practice_mode\":\"Monthly Review\"%%'
-             )
+             AND session_name IN ('Daily Review', 'Weekly Review', 'Monthly Review')
+             $session_check_sql
              LIMIT 1",
             $user_id,
             $today

@@ -32,13 +32,7 @@ class Vault_Manager
                 'user_id'              => $user_id,
                 'access_scope'         => '{}',
                 'revision_config'      => wp_json_encode([
-                    'daily_count'          => 20,
-                    'weekly_count'         => 50,
-                    'monthly_count'        => 100,
-                    'weekly_day'           => 'Monday',
-                    'monthly_date'         => 1,
-                    'alert_time'           => '09:00',
-                    'session_min_questions' => 10
+                    'sessions' => [] // Empty triggers the frontend walkthrough
                 ]),
                 'performance_snapshot' => '{}',
                 'streak_data'          => '{}'
@@ -68,27 +62,224 @@ class Vault_Manager
             return null;
         }
 
-        // Decode JSON fields and merge revision_config with system defaults for backward compatibility
-        $row->access_scope         = json_decode($row->access_scope, true) ?: [];
+        $row->access_scope = json_decode($row->access_scope, true) ?: [];
 
-        $defaults = [
-            'daily_count'           => 20,
-            'weekly_count'          => 50,
-            'monthly_count'         => 100,
-            'weekly_day'            => 'Monday',
-            'monthly_date'          => 1,
-            'alert_time'            => '09:00',
-            'session_min_questions' => 10
-        ];
-
-        // Decode JSON fields for business logic use
         $current_config = json_decode($row->revision_config, true) ?: [];
-        $row->revision_config = wp_parse_args($current_config, $defaults);
-        unset($row->revision_config['daily_practice_time']);
+
+        // Handle legacy root-level configs safely
+        if (!isset($current_config['sessions']) && !empty($current_config)) {
+            // Old data exists at root, but no sessions array -> Needs Upgrade
+            $row->revision_config = ['sessions' => []];
+            $row->needs_config_walkthrough = true;
+            $row->walkthrough_type = 'update';
+        } else {
+            // Either brand new user or already updated user
+            $row->revision_config = $current_config;
+            $row->needs_config_walkthrough = empty($current_config['sessions']);
+            $row->walkthrough_type = 'new';
+        }
+
         $row->performance_snapshot = json_decode($row->performance_snapshot, true) ?: [];
         $row->streak_data          = json_decode($row->streak_data, true) ?: [];
 
         return $row;
+    }
+
+    /**
+     * Adds or updates a custom revision session configuration.
+     * Enforces the max 3 limit and the 15-day lock on subjects/exams.
+     *
+     * @param int $user_id
+     * @param array $session_data
+     * @return array|\WP_Error Returns the updated sessions array or WP_Error
+     */
+    public static function add_or_update_revision_session(int $user_id, array $session_data)
+    {
+        $vault = self::get_vault($user_id);
+        if (!$vault) return new \WP_Error('vault_not_found', 'User vault not found.');
+
+        $config = (array) $vault->revision_config;
+        $sessions = $config['sessions'];
+
+        $session_id = $session_data['id'] ?? uniqid('rev_');
+        $is_new = true;
+        $existing_index = -1;
+
+        foreach ($sessions as $index => $s) {
+            if (isset($s['id']) && $s['id'] === $session_id) {
+                $is_new = false;
+                $existing_index = $index;
+                break;
+            }
+        }
+
+        // Enforce the limit of 3 configs
+        if ($is_new && count($sessions) >= 3) {
+            return new \WP_Error('limit_reached', 'You can only have up to 3 revision configurations.');
+        }
+
+        $current_time = time();
+
+        // -------------------------------------------------------------
+        // FIX: PROCESS EXAMS & SUBJECTS FOR BOTH NEW AND UPDATED CONFIGS
+        // -------------------------------------------------------------
+        $final_subjects = $session_data['subjects'] ?? [];
+        $exam_id = isset($session_data['exam_id']) ? absint($session_data['exam_id']) : null;
+
+        if ($exam_id && empty($final_subjects)) {
+            global $wpdb;
+            // Find subjects linked to this exam
+            $linked_subjects = $wpdb->get_col($wpdb->prepare(
+                "SELECT term_id FROM {$wpdb->prefix}qp_term_relationships WHERE object_id = %d AND object_type = 'exam_subject_link'",
+                $exam_id
+            ));
+
+            // Fallback: Check meta if relationship fails
+            if (empty($linked_subjects)) {
+                $linked_subjects = get_term_meta($exam_id, '_qp_linked_subjects', true) ?: [];
+            }
+
+            if (!empty($linked_subjects)) {
+                $weight = floor(100 / count($linked_subjects));
+                $remainder = 100 % count($linked_subjects);
+                foreach ($linked_subjects as $index => $sub_id) {
+                    $final_subjects[] = [
+                        'subject_id' => (int)$sub_id,
+                        'weightage'  => $weight + ($index === 0 ? $remainder : 0) // Give remainder to the first one to equal 100%
+                    ];
+                }
+            }
+        }
+
+        if (!$is_new) {
+            $existing_session = $sessions[$existing_index];
+            $last_updated = isset($existing_session['last_updated_date']) ? strtotime($existing_session['last_updated_date']) : 0;
+            $days_since_update = ($current_time - $last_updated) / (60 * 60 * 24);
+
+            // Check if locked (15 days) and trying to change core config
+            if ($days_since_update < 15) {
+                $exam_changed = isset($session_data['exam_id']) && $session_data['exam_id'] !== $existing_session['exam_id'];
+                $subjects_changed = isset($session_data['subjects']) && wp_json_encode($final_subjects) !== wp_json_encode($existing_session['subjects']);
+
+                if ($exam_changed || $subjects_changed) {
+                    $days_left = ceil(15 - $days_since_update);
+                    return new \WP_Error('config_locked', "Core subjects are locked for $days_left more day(s). You can only edit name, color, limits, and alert time.");
+                }
+            }
+
+            // Always allow updates to appearance and limits (non-core logic)
+            $sessions[$existing_index]['name'] = sanitize_text_field($session_data['name'] ?? $existing_session['name']);
+            $sessions[$existing_index]['color'] = sanitize_hex_color($session_data['color'] ?? $existing_session['color']);
+            $sessions[$existing_index]['alert_time'] = sanitize_text_field($session_data['alert_time'] ?? $existing_session['alert_time']);
+            $sessions[$existing_index]['daily_count'] = absint($session_data['daily_count'] ?? $existing_session['daily_count'] ?? 20);
+            $sessions[$existing_index]['weekly_count'] = absint($session_data['weekly_count'] ?? $existing_session['weekly_count'] ?? 50);
+            $sessions[$existing_index]['monthly_count'] = absint($session_data['monthly_count'] ?? $existing_session['monthly_count'] ?? 100);
+            $sessions[$existing_index]['weekly_day'] = sanitize_text_field($session_data['weekly_day'] ?? $existing_session['weekly_day'] ?? 'Monday');
+            $sessions[$existing_index]['monthly_date'] = absint($session_data['monthly_date'] ?? $existing_session['monthly_date'] ?? 1);
+            $sessions[$existing_index]['session_min_questions'] = absint($session_data['session_min_questions'] ?? $existing_session['session_min_questions'] ?? 10);
+
+            // If past the 15-day lock, allow full subject/exam update and reset the timer
+            if ($days_since_update >= 15) {
+                $sessions[$existing_index]['exam_id'] = $exam_id;
+                $sessions[$existing_index]['subjects'] = $final_subjects;
+
+                if (array_key_exists('exam_id', $session_data) || isset($session_data['subjects'])) {
+                    $sessions[$existing_index]['last_updated_date'] = gmdate('Y-m-d H:i:s', $current_time);
+                }
+            }
+        } else {
+            // Generate a completely new session config
+            $sessions[] = [
+                'id' => $session_id,
+                'name' => sanitize_text_field($session_data['name'] ?? 'New Revision'),
+                'color' => sanitize_hex_color($session_data['color'] ?? '#4F46E5'),
+                'alert_time' => sanitize_text_field($session_data['alert_time'] ?? '09:00'),
+                'exam_id' => $exam_id, // Use resolved exam_id
+                'subjects' => $final_subjects, // Use resolved final_subjects
+                'daily_count' => absint($session_data['daily_count'] ?? 20),
+                'weekly_count' => absint($session_data['weekly_count'] ?? 50),
+                'monthly_count' => absint($session_data['monthly_count'] ?? 100),
+                'weekly_day' => sanitize_text_field($session_data['weekly_day'] ?? 'Monday'),
+                'monthly_date' => absint($session_data['monthly_date'] ?? 1),
+                'session_min_questions' => absint($session_data['session_min_questions'] ?? 10),
+                'last_updated_date' => gmdate('Y-m-d H:i:s', $current_time),
+            ];
+        }
+
+        $config['sessions'] = array_values($sessions);
+
+        global $wpdb;
+        $table = $wpdb->prefix . 'qp_user_vault';
+        $updated = $wpdb->update($table, ['revision_config' => wp_json_encode($config)], ['user_id' => $user_id]);
+
+        if ($updated === false) {
+            return new \WP_Error('db_error', 'Failed to update the revision configuration.');
+        }
+
+        return $config['sessions'];
+    }
+
+    /**
+     * Deletes a specific revision config for a user.
+     */
+    public static function delete_revision_session(int $user_id, string $session_id): bool
+    {
+        $vault = self::get_vault($user_id);
+        if (!$vault) return false;
+
+        $config = (array) $vault->revision_config;
+        $sessions = $config['sessions'];
+
+        $initial_count = count($sessions);
+        $sessions = array_filter($sessions, function ($s) use ($session_id) {
+            return isset($s['id']) && $s['id'] !== $session_id;
+        });
+
+        if (count($sessions) === $initial_count) return false;
+
+        $config['sessions'] = array_values($sessions);
+        global $wpdb;
+        $table = $wpdb->prefix . 'qp_user_vault';
+
+        return $wpdb->update($table, ['revision_config' => wp_json_encode($config)], ['user_id' => $user_id]) !== false;
+    }
+
+    /**
+     * Utility to push updated Exam subject requirements to all subscribed users.
+     */
+    public static function sync_exam_to_vaults(int $exam_id, array $new_subjects): int
+    {
+        global $wpdb;
+        $table = $wpdb->prefix . 'qp_user_vault';
+
+        $query = $wpdb->prepare(
+            "SELECT user_id, revision_config FROM {$table} WHERE revision_config LIKE %s",
+            '%"exam_id":' . $exam_id . '%'
+        );
+
+        $vaults = $wpdb->get_results($query);
+        $updated_count = 0;
+
+        foreach ($vaults as $vault) {
+            $config = json_decode($vault->revision_config, true);
+            $modified = false;
+
+            if (isset($config['sessions']) && is_array($config['sessions'])) {
+                foreach ($config['sessions'] as &$session) {
+                    if (isset($session['exam_id']) && (int)$session['exam_id'] === $exam_id) {
+                        $session['subjects'] = $new_subjects;
+                        $modified = true;
+                    }
+                }
+            }
+
+            if ($modified) {
+                $wpdb->update($table, ['revision_config' => wp_json_encode($config)], ['user_id' => $vault->user_id]);
+                $updated_count++;
+            }
+        }
+
+        return $updated_count;
     }
 
     /**
@@ -223,78 +414,44 @@ class Vault_Manager
     }
 
     /**
-     * Determines the priority task for a user based on their revision schedule.
-     * * @param int $user_id
-     * @return string
+     * Determines the priority task for a specific session based on its schedule.
+     * Evaluates against the specific session provided.
+     *
+     * @param int $user_id
+     * @param string|null $session_id Specific session to check.
+     * @return string 'Daily Review', 'Weekly Review', or 'Monthly Review'
      */
-    public static function get_today_priority_task(int $user_id): string
+    public static function get_today_priority_task(int $user_id, ?string $session_id = null): string
     {
         $vault = self::get_vault($user_id);
-        if (!$vault || empty($vault->revision_config)) {
+        if (!$vault || empty($vault->revision_config['sessions'])) {
             return 'Daily Review';
         }
 
-        $config = $vault->revision_config;
+        $sessions = $vault->revision_config['sessions'];
+        $target_session = $sessions[0]; // Default to first
 
-        $today_day_name = gmdate('l'); // Monday, Tuesday, etc.
-        $today_date = (int) gmdate('j'); // 1–31
+        if ($session_id) {
+            foreach ($sessions as $s) {
+                if (isset($s['id']) && $s['id'] === $session_id) {
+                    $target_session = $s;
+                    break;
+                }
+            }
+        }
 
-        if (isset($config['monthly_date']) && (int) $config['monthly_date'] === $today_date) {
+        $today_day_name = gmdate('l');
+        $today_date = (int) gmdate('j');
+
+        if (isset($target_session['monthly_date']) && (int) $target_session['monthly_date'] === $today_date) {
             return 'Monthly Review';
         }
 
-        if (
-            isset($config['weekly_day']) &&
-            strcasecmp($config['weekly_day'], $today_day_name) === 0
-        ) {
+        if (isset($target_session['weekly_day']) && strcasecmp($target_session['weekly_day'], $today_day_name) === 0) {
             return 'Weekly Review';
         }
 
         return 'Daily Review';
-    }
-
-    /**
-     * Updates the user's revision configuration within the vault.
-     * * @param int   $user_id
-     * @param array $settings Map containing weekly_day, monthly_date, session_min_questions, or focus_subjects.
-     * @return bool
-     */
-    public static function update_revision_settings(int $user_id, array $settings): bool
-    {
-        global $wpdb;
-        $table = $wpdb->prefix . 'qp_user_vault';
-
-        self::ensure_vault_exists($user_id);
-        $vault = self::get_vault($user_id);
-
-        if (!$vault) return false;
-
-        // revision_config is already decoded as an array by get_vault()
-        $config = (array) $vault->revision_config;
-
-        $valid_keys = [
-            'weekly_day',
-            'monthly_date',
-            'session_min_questions',
-            'focus_subjects',
-            'alert_time',
-            'daily_count',
-            'weekly_count',
-            'monthly_count'
-        ];
-        foreach ($valid_keys as $key) {
-            if (isset($settings[$key])) {
-                $config[$key] = $settings[$key];
-            }
-        }
-
-        $result = $wpdb->update(
-            $table,
-            ['revision_config' => wp_json_encode($config)],
-            ['user_id' => $user_id]
-        );
-
-        return $result !== false;
     }
 
     /**

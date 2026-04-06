@@ -551,61 +551,106 @@ class PracticeController
 	}
 
 	/**
-	 * REST API callback to get daily guidance information.
+	 * REST API callback to get daily guidance information for all revision configurations.
 	 * GET /questionpress/v1/practice/guidance
 	 */
 	public static function get_daily_guidance(\WP_REST_Request $request)
 	{
 		$user_id = get_current_user_id();
+		$vault = Vault_Manager::get_vault($user_id);
 
-		// 1. Check if user already completed a revision session today
-		if (Practice_Manager::has_completed_revision_today($user_id)) {
+        global $wpdb;
+        $term_table = $wpdb->prefix . 'qp_terms';
+
+        // Decode the access_scope to find allowed IDs
+        $access_scope = $vault->access_scope ?? [];
+        $exam_ids = $access_scope['exams'] ?? [];
+        $subject_ids = $access_scope['resolved_subjects'] ?? [];
+
+        // Fetch actual names from the database
+        $allowed_exams = [];
+        if (!empty($exam_ids)) {
+            $placeholders = implode(',', array_map('intval', $exam_ids));
+            $allowed_exams = $wpdb->get_results("SELECT term_id as id, name FROM {$term_table} WHERE term_id IN ($placeholders)", ARRAY_A);
+        }
+
+        $allowed_subjects = [];
+        if (!empty($subject_ids)) {
+            $placeholders = implode(',', array_map('intval', $subject_ids));
+            $allowed_subjects = $wpdb->get_results("SELECT term_id as id, name FROM {$term_table} WHERE term_id IN ($placeholders)", ARRAY_A);
+        }
+
+		// 1. If no configs exist (or old structure), trigger the walkthrough overlay
+		if (!empty($vault->needs_config_walkthrough)) {
 			return new \WP_REST_Response([
-				'success' => true,
-				'data'    => null
+				'success'           => true,
+				'needs_walkthrough' => true,
+				'walkthrough_type'  => $vault->walkthrough_type ?? 'new',
+				'data'              => [],
+                'allowed_exams'     => $allowed_exams,
+                'allowed_subjects'  => $allowed_subjects
 			], 200);
 		}
 
-		// 2. Determine the Priority Task from Vault_Manager
-		$task = Vault_Manager::get_today_priority_task($user_id);
+		// 2. Fetch all configs and prepare the array
+		$configs = $vault->revision_config['sessions'] ?? [];
+		$response_data = [];
 
-		// 3. OPTIMIZATION: Get due count from vault configuration instead of calculating IDs
-		$vault        = Vault_Manager::get_vault($user_id);
-		$config       = (array) ($vault->revision_config ?? []);
-		$mode_key_map = [
-			'Daily Review'   => 'daily_count',
-			'Weekly Review'  => 'weekly_count',
-			'Monthly Review' => 'monthly_count',
-		];
+		foreach ($configs as $config) {
+			$config_id = $config['id'];
+			
+			$task = Vault_Manager::get_today_priority_task($user_id, $config_id);
+			$is_completed = Practice_Manager::has_completed_revision_today($user_id, $config_id);
 
-		$config_key = $mode_key_map[$task] ?? 'daily_count';
-		$due_count  = (int) ($config[$config_key] ?? 20);
+			$mode_key_map = [
+				'Daily Review'   => 'daily_count',
+				'Weekly Review'  => 'weekly_count',
+				'Monthly Review' => 'monthly_count',
+			];
+			$config_key = $mode_key_map[$task] ?? 'daily_count';
+			$due_count  = (int) ($config[$config_key] ?? 20);
+
+			$response_data[] = [
+				'config_data'        => $config,
+				'priority_task'      => $task,
+				'due_count'          => $due_count,
+				'is_completed_today' => $is_completed
+			];
+		}
 
 		return new \WP_REST_Response([
-			'success' => true,
-			'data'    => [
-				'priority_task' => $task,
-				'due_count'     => $due_count
-			]
+			'success'           => true,
+			'needs_walkthrough' => false,
+            'walkthrough_type'  => $vault->walkthrough_type ?? 'new',
+			'data'              => $response_data,
+            'allowed_exams'     => $allowed_exams,
+            'allowed_subjects'  => $allowed_subjects
 		], 200);
 	}
 
 	/**
-	 * REST API callback to start the priority revision session.
+	 * REST API callback to start a specific revision session.
 	 * POST /questionpress/v1/practice/guidance/start
 	 */
 	public static function start_priority_session(\WP_REST_Request $request)
 	{
-		
 		$user_id = get_current_user_id();
-		$task    = Vault_Manager::get_today_priority_task($user_id);
-		$ids     = Practice_Manager::get_smart_revision_ids($user_id, $task);
+		$params  = $request->get_json_params() ?: $request->get_body_params();
+		$revision_config_id = $params['revision_config_id'] ?? null;
+
+		if (empty($revision_config_id)) {
+			return new \WP_Error('missing_param', 'revision_config_id is required to start a custom revision session.', ['status' => 400]);
+		}
+
+		$task = Vault_Manager::get_today_priority_task($user_id, $revision_config_id);
+		$ids  = Practice_Manager::get_smart_revision_ids($user_id, $task, $revision_config_id);
 
 		if (is_wp_error($ids)) {
 			return $ids;
 		}
 
-		$session_id = Practice_Manager::start_session_from_ids($ids, $task, 'mock_test', $task);
+		// Use the updated start_session_from_ids which accepts 5 parameters
+		$session_id = Practice_Manager::start_session_from_ids($ids, $task, 'mock_test', $task, $revision_config_id);
 
 		if (is_wp_error($session_id)) {
 			return $session_id;
@@ -625,24 +670,48 @@ class PracticeController
      */
     public static function update_vault_settings( \WP_REST_Request $request ) {
         $user_id = get_current_user_id();
-        $params  = $request->get_json_params();
+        $params  = $request->get_json_params() ?: $request->get_body_params();
 
         if ( empty( $params ) ) {
             return new \WP_Error( 'rest_invalid_param', 'No settings provided.', [ 'status' => 400 ] );
         }
 
-        // Call the Manager to handle database logic and JSON synchronization
-        $success = Vault_Manager::update_revision_settings( $user_id, $params );
+        // Delegate to the new Vault_Manager function that handles limits and 15-day locks
+        $result = Vault_Manager::add_or_update_revision_session( $user_id, $params );
 
-		error_log("Vault settings update for user_id $user_id with params: " . json_encode($params) . " resulted in success: " . ($success ? 'true' : 'false'));
-
-        if ( ! $success ) {
-            return new \WP_Error( 'save_failed', 'Could not update vault settings in the database.', [ 'status' => 500 ] );
+        if ( is_wp_error($result) ) {
+			// This safely returns the errors like "limit_reached" or "config_locked" back to the React app
+            return $result; 
         }
 
         return new \WP_REST_Response( [ 
             'success' => true, 
-            'message' => 'Vault settings updated successfully.' 
+            'message' => 'Configuration saved successfully.',
+			'configs' => $result // Return the updated sessions array so the app can refresh its state
+        ], 200 );
+    }
+
+	/**
+     * Deletes a specific user configuration
+     */
+    public static function delete_vault_setting( \WP_REST_Request $request ) {
+        $user_id = get_current_user_id();
+        $params  = $request->get_json_params() ?: $request->get_body_params();
+		$config_id = $params['id'] ?? null;
+
+        if ( empty( $config_id ) ) {
+            return new \WP_Error( 'rest_invalid_param', 'Config ID is required.', [ 'status' => 400 ] );
+        }
+
+        $success = Vault_Manager::delete_revision_session( $user_id, $config_id );
+
+        if ( ! $success ) {
+            return new \WP_Error( 'delete_failed', 'Could not delete configuration. It may not exist.', [ 'status' => 500 ] );
+        }
+
+        return new \WP_REST_Response( [ 
+            'success' => true, 
+            'message' => 'Configuration deleted successfully.' 
         ], 200 );
     }
 }
