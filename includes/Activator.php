@@ -23,7 +23,7 @@ class Activator {
     $charset_collate = $wpdb->get_charset_collate();
     require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
 
-    // Table: Groups (Migrate some columns from question table here & Remove some columns after update)
+    // Table: Groups 
     $table_groups = $wpdb->prefix . 'qp_question_groups';
     $sql_groups = "CREATE TABLE $table_groups (
         group_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -33,22 +33,16 @@ class Activator {
         pyq_year VARCHAR(4) DEFAULT NULL,
         is_current_affair TINYINT(1) NOT NULL DEFAULT 0,
         ca_date DATE DEFAULT NULL,
-        primary_subject_term_id BIGINT(20) UNSIGNED DEFAULT NULL,
-        specific_subject_term_id BIGINT(20) UNSIGNED DEFAULT NULL,
-        primary_source_term_id BIGINT(20) UNSIGNED DEFAULT NULL,
-        specific_source_term_id BIGINT(20) UNSIGNED DEFAULT NULL,
+        subject_lineage JSON DEFAULT NULL,
+        source_lineage JSON DEFAULT NULL,
         exam_term_id BIGINT(20) UNSIGNED DEFAULT NULL,
         PRIMARY KEY (group_id),
         KEY is_pyq (is_pyq),
-        KEY primary_subject_term_id (primary_subject_term_id),
-        KEY specific_subject_term_id (specific_subject_term_id),
-        KEY primary_source_term_id (primary_source_term_id),
-        KEY specific_source_term_id (specific_source_term_id),
         KEY exam_term_id (exam_term_id)
     ) $charset_collate;";
     dbDelta($sql_groups);
 
-    // Table: Questions (Remove some columns after update)
+    // Table: Questions
     $table_questions = $wpdb->prefix . 'qp_questions';
     $sql_questions = "CREATE TABLE $table_questions (
         question_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -61,19 +55,17 @@ class Activator {
         status VARCHAR(20) NOT NULL DEFAULT 'draft',
         last_modified DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         explanation_text LONGTEXT DEFAULT NULL,
-        primary_subject_term_id BIGINT(20) UNSIGNED DEFAULT NULL,
-        specific_subject_term_id BIGINT(20) UNSIGNED DEFAULT NULL,
-        primary_source_term_id BIGINT(20) UNSIGNED DEFAULT NULL,
-        specific_source_term_id BIGINT(20) UNSIGNED DEFAULT NULL,
-        exam_term_id BIGINT(20) UNSIGNED DEFAULT NULL,
+        admin_hardness TINYINT UNSIGNED DEFAULT NULL,
+        auto_hardness DECIMAL(4,2) DEFAULT NULL,
+        global_attempts INT UNSIGNED DEFAULT 0,
+        global_correct INT UNSIGNED DEFAULT 0,
+        subject_lineage JSON DEFAULT NULL,
+        source_lineage JSON DEFAULT NULL,
+        exam_term_id BIGINT(20) UNSIGNED DEFAULT NULL,        
         PRIMARY KEY (question_id),
         KEY group_id (group_id),
         KEY status (status),
         KEY question_text_hash (question_text_hash),
-        KEY primary_subject_term_id (primary_subject_term_id),
-        KEY specific_subject_term_id (specific_subject_term_id),
-        KEY primary_source_term_id (primary_source_term_id),
-        KEY specific_source_term_id (specific_source_term_id),
         KEY exam_term_id (exam_term_id)
     ) $charset_collate;";
     dbDelta($sql_questions);
@@ -426,6 +418,22 @@ class Activator {
         KEY next_review_date (next_review_date)
     ) $charset_collate;";
     dbDelta($sql_mastery);
+
+    // NEW Table: Subject Mastery
+    $table_subject_mastery = $wpdb->prefix . 'qp_user_subject_mastery';
+    $sql_subject_mastery = "CREATE TABLE $table_subject_mastery (
+        id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+        user_id BIGINT(20) UNSIGNED NOT NULL,
+        term_id BIGINT(20) UNSIGNED NOT NULL, -- The Subject or Topic ID
+        mastery_level DECIMAL(5,2) DEFAULT 0.00, -- 0-100 calculated score
+        total_answered INT UNSIGNED DEFAULT 0,
+        correct_count INT UNSIGNED DEFAULT 0,
+        last_updated DATETIME DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY user_term (user_id, term_id),
+        KEY user_id (user_id)
+    ) $charset_collate;";
+    dbDelta($sql_subject_mastery);
 
     // 14. Device Tokens Table (Centralized for all notifications)
     $table_tokens = $wpdb->get_blog_prefix() . 'qp_device_tokens';

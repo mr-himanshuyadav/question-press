@@ -118,7 +118,7 @@ class Backup_Restore_Page {
 	}
 
     /**
-     * Handles the one-time database migration to denormalize term IDs.
+     * Handles the one-time database migration to denormalize term IDs into JSON lineage arrays.
      * This is triggered by a GET request from the Tools page.
      */
     public static function handle_one_time_migration() {
@@ -159,7 +159,7 @@ class Backup_Restore_Page {
         if (empty($group_ids)) {
             // No more groups to process. We are done!
             add_action('admin_notices', function() {
-                echo '<div class="notice notice-success is-dismissible"><p><strong>QuestionPress Migration Complete:</strong> All existing question and group data has been successfully updated with the new term structure.</p></div>';
+                echo '<div class="notice notice-success is-dismissible"><p><strong>QuestionPress Migration Complete:</strong> All existing question and group data has been successfully updated with the new JSON lineage array structure.</p></div>';
             });
             // Remove the migration button (handled via JS in the view)
             echo '<script> if(document.getElementById("qp-migration-tool")) document.getElementById("qp-migration-tool").style.display = "none"; </script>';
@@ -174,6 +174,20 @@ class Backup_Restore_Page {
         ];
         
         $processed_count = 0;
+
+        // Helper function to build full lineage array: Parent -> Child -> Sub-child
+        $get_lineage_array = function($term_id) use ($wpdb, $term_table) {
+            if (!$term_id) return [];
+            $lineage = [];
+            $current_id = $term_id;
+            for ($i = 0; $i < 10; $i++) { // Max depth safety limit
+                if (!$current_id) break;
+                // Prepend so the highest parent is first: e.g. [89, 76, 64]
+                array_unshift($lineage, (int) $current_id);
+                $current_id = $wpdb->get_var($wpdb->prepare("SELECT parent FROM {$term_table} WHERE term_id = %d", $current_id));
+            }
+            return $lineage;
+        };
 
         // 6. Loop through each group in this batch
         foreach ($group_ids as $group_id) {
@@ -202,17 +216,15 @@ class Backup_Restore_Page {
                 }
             }
 
-            // 7. Get the full term lineage using Terms_DB
-            $subject_lineage = Terms_DB::get_term_lineage_ids($specific_subject_id);
-            $source_lineage  = Terms_DB::get_term_lineage_ids($specific_source_id);
+            // 7. Get the full term lineage arrays
+            $subject_lineage_array = $get_lineage_array($specific_subject_id);
+            $source_lineage_array  = $get_lineage_array($specific_source_id);
 
-            // 8. Prepare the data to save
+            // 8. Prepare the data to save (encode as JSON strings for the DB)
             $denormalized_data = [
-                'primary_subject_term_id'  => $subject_lineage['primary'],
-                'specific_subject_term_id' => $subject_lineage['specific'],
-                'primary_source_term_id'   => $source_lineage['primary'],
-                'specific_source_term_id'  => $source_lineage['specific'],
-                'exam_term_id'             => $exam_id > 0 ? $exam_id : null, 
+                'subject_lineage' => !empty($subject_lineage_array) ? wp_json_encode($subject_lineage_array) : null,
+                'source_lineage'  => !empty($source_lineage_array) ? wp_json_encode($source_lineage_array) : null,
+                'exam_term_id'    => $exam_id > 0 ? $exam_id : null, 
             ];
 
             // 9. Update the qp_question_groups table
