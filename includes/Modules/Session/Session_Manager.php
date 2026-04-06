@@ -120,6 +120,18 @@ class Session_Manager extends DB
 				));
 			}
 
+			// --- NEW: Increment Global Question Stats for Auto-Hardness ---
+            $questions_table = $wpdb->prefix . 'qp_questions';
+            $wpdb->query($wpdb->prepare(
+                "UPDATE {$questions_table} q
+                 JOIN {$attempts_table} a ON q.question_id = a.question_id
+                 SET 
+                    q.global_attempts = q.global_attempts + 1,
+                    q.global_correct = q.global_correct + CASE WHEN a.is_correct = 1 THEN 1 ELSE 0 END
+                 WHERE a.session_id = %d AND a.status = 'answered'",
+                $session_id
+            ));
+
 			// Calculate Stats (Aggregated Query)
 			$stats = $wpdb->get_row($wpdb->prepare(
 				"SELECT 

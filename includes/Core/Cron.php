@@ -276,30 +276,22 @@ class Cron
      * Calculates and updates the auto_hardness for all questions based on user attempts.
      * Runs daily via WP Cron.
      */
+    /**
+     * Calculates and updates the auto_hardness for all questions.
+     * Relies on global_attempts and global_correct updated by Session_Manager.
+     * Runs daily via WP Cron.
+     */
     public static function calculate_question_auto_hardness() {
         global $wpdb;
         $questions_table = $wpdb->prefix . 'qp_questions';
-        $attempts_table  = $wpdb->prefix . 'qp_user_attempts';
 
-        // Extremely fast, single-query bulk update
-        // Requires >= 10 attempts to establish a reliable hardness score
+        // Extremely fast bulk update using pre-aggregated global stats
+        // Threshold lowered to 5 attempts per your request
         // Formula: 10 - (Accuracy * 9). Maps 100% accuracy to 1.00, and 0% accuracy to 10.00
         $sql = "
-            UPDATE {$questions_table} q
-            JOIN (
-                SELECT 
-                    question_id,
-                    COUNT(attempt_id) as total_attempts,
-                    SUM(CASE WHEN is_correct = 1 THEN 1 ELSE 0 END) as total_correct
-                FROM {$attempts_table}
-                WHERE status = 'answered'
-                GROUP BY question_id
-                HAVING total_attempts >= 10 
-            ) as stats ON q.question_id = stats.question_id
-            SET 
-                q.global_attempts = stats.total_attempts,
-                q.global_correct = stats.total_correct,
-                q.auto_hardness = ROUND(10 - ((stats.total_correct / stats.total_attempts) * 9), 2)
+            UPDATE {$questions_table}
+            SET auto_hardness = ROUND(10 - ((global_correct / global_attempts) * 9), 2)
+            WHERE global_attempts >= 10
         ";
 
         $result = $wpdb->query($sql);

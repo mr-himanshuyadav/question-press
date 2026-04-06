@@ -837,15 +837,42 @@ class Admin_Ajax {
 
     /**
      * AJAX handler to manually trigger the Auto-Hardness calculation.
+     * Does a full historical sync of global counts first.
      */
     public static function sync_auto_hardness() {
         check_ajax_referer('qp_admin_integrity_nonce', 'nonce');
-        if (!current_user_can('manage_options')) wp_send_json_error(['message' => 'Unauthorized']);
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(['message' => 'Unauthorized']);
+        }
+
+        global $wpdb;
+        $questions_table = $wpdb->prefix . 'qp_questions';
+        $attempts_table  = $wpdb->prefix . 'qp_user_attempts';
 
         try {
-            // Call the Cron function directly
+            // 1. Sync all historical data into the global tracking columns
+            $sync_sql = "
+                UPDATE {$questions_table} q
+                JOIN (
+                    SELECT 
+                        question_id,
+                        COUNT(attempt_id) as total_attempts,
+                        SUM(CASE WHEN is_correct = 1 THEN 1 ELSE 0 END) as total_correct
+                    FROM {$attempts_table}
+                    WHERE status = 'answered'
+                    GROUP BY question_id
+                ) as stats ON q.question_id = stats.question_id
+                SET 
+                    q.global_attempts = stats.total_attempts,
+                    q.global_correct = stats.total_correct
+            ";
+            
+            $wpdb->query($sync_sql);
+
+            // 2. Call the Cron function directly to calculate the 1-10 hardness
             \QuestionPress\Core\Cron::calculate_question_auto_hardness();
-            wp_send_json_success(['message' => 'Auto-Hardness calculation complete! Check your database.']);
+
+            wp_send_json_success(['message' => 'Historical counts synced and Hardness calculated successfully!']);
         } catch (\Exception $e) {
             wp_send_json_error(['message' => 'Error: ' . $e->getMessage()]);
         }
