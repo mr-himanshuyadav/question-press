@@ -835,5 +835,21 @@ class Admin_Ajax {
         }
     }
 
+    /**
+     * AJAX handler to manually trigger the Auto-Hardness calculation.
+     */
+    public static function sync_auto_hardness() {
+        check_ajax_referer('qp_admin_integrity_nonce', 'nonce');
+        if (!current_user_can('manage_options')) wp_send_json_error(['message' => 'Unauthorized']);
+
+        try {
+            // Call the Cron function directly
+            \QuestionPress\Core\Cron::calculate_question_auto_hardness();
+            wp_send_json_success(['message' => 'Auto-Hardness calculation complete! Check your database.']);
+        } catch (\Exception $e) {
+            wp_send_json_error(['message' => 'Error: ' . $e->getMessage()]);
+        }
+    }
+
 
 } // End class Admin_Ajax

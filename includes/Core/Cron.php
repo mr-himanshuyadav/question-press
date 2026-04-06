@@ -25,6 +25,27 @@ class Cron
         // Constructor can be used for setup if needed
     }
 
+    public function init()
+    {
+        // Schedule the entitlement expiration check on WP initialization
+        add_action('init', [$this, 'ensure_cron_scheduled']);
+
+        // Hook the entitlement expiration check to our custom cron event
+        add_action('qp_check_entitlement_expiration_hook', [$this, 'run_entitlement_expiration_check']);
+
+        // Schedule the session cleanup event
+        add_action('init', [$this, 'schedule_session_cleanup']);
+
+        // Hook the session cleanup function to our custom cron event
+        add_action('qp_cleanup_abandoned_sessions_event', [$this, 'cleanup_abandoned_sessions']);
+
+        // Hook the course expiration check to its custom cron event
+        add_action('qp_check_course_expiration_hook', [$this, 'run_course_expiration_check']);
+
+        // Register the daily hardness calculation hook
+        add_action('qp_daily_auto_hardness_calc', [$this, 'calculate_question_auto_hardness']);
+    }
+
     /**
      * Ensures the entitlement expiration cron job is scheduled.
      * Runs on WordPress initialization.
@@ -41,6 +62,14 @@ class Cron
         if (! wp_next_scheduled('qp_check_course_expiration_hook')) {
             wp_schedule_event(time(), 'daily', 'qp_check_course_expiration_hook');
             error_log("QP Cron: Scheduled course expiration check.");
+        }
+
+        // Schedule Auto-Hardness Calculation at Midnight
+        if (!wp_next_scheduled('qp_daily_auto_hardness_calc')) {
+            // Calculate the timestamp for the upcoming midnight (server time)
+            $midnight = strtotime('tomorrow 00:00:00');
+            wp_schedule_event($midnight, 'daily', 'qp_daily_auto_hardness_calc');
+            error_log("QP Cron: Scheduled daily auto-hardness calculation for midnight.");
         }
     }
 
@@ -241,5 +270,44 @@ class Cron
         wp_reset_postdata();
 
         error_log("QP Cron: Successfully expired {$expired_course_count} courses and their associated products/entitlements.");
+    }
+
+    /**
+     * Calculates and updates the auto_hardness for all questions based on user attempts.
+     * Runs daily via WP Cron.
+     */
+    public static function calculate_question_auto_hardness() {
+        global $wpdb;
+        $questions_table = $wpdb->prefix . 'qp_questions';
+        $attempts_table  = $wpdb->prefix . 'qp_user_attempts';
+
+        // Extremely fast, single-query bulk update
+        // Requires >= 10 attempts to establish a reliable hardness score
+        // Formula: 10 - (Accuracy * 9). Maps 100% accuracy to 1.00, and 0% accuracy to 10.00
+        $sql = "
+            UPDATE {$questions_table} q
+            JOIN (
+                SELECT 
+                    question_id,
+                    COUNT(attempt_id) as total_attempts,
+                    SUM(CASE WHEN is_correct = 1 THEN 1 ELSE 0 END) as total_correct
+                FROM {$attempts_table}
+                WHERE status = 'answered'
+                GROUP BY question_id
+                HAVING total_attempts >= 10 
+            ) as stats ON q.question_id = stats.question_id
+            SET 
+                q.global_attempts = stats.total_attempts,
+                q.global_correct = stats.total_correct,
+                q.auto_hardness = ROUND(10 - ((stats.total_correct / stats.total_attempts) * 9), 2)
+        ";
+
+        $result = $wpdb->query($sql);
+
+        if ($result !== false) {
+            error_log("QP Cron: Auto-Hardness updated successfully. Rows affected: " . $result);
+        } else {
+            error_log("QP Cron Error: Failed to update Auto-Hardness. " . $wpdb->last_error);
+        }
     }
 }

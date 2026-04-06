@@ -82,6 +82,13 @@ class Tools_Page {
 				<button id="qp-sync-subject-mastery" class="button button-primary" data-nonce="<?php echo esc_attr($nonce); ?>">Calculate Mastery</button>
 				<p id="qp-subject-mastery-status" class="status-msg" style="margin-top: 10px; font-weight: 600;"></p>
 			</div>
+
+			<div class="card">
+				<h2>Sync Question Hardness</h2>
+				<p>Calculates the 1-10 Auto-Hardness scale for all questions based on global attempt accuracy. (Requires &ge; 10 attempts per question).</p>
+				<button id="qp-sync-hardness" class="button button-primary" data-nonce="<?php echo esc_attr($nonce); ?>">Calculate Hardness</button>
+				<p id="qp-hardness-status" class="status-msg" style="margin-top: 10px; font-weight: 600;"></p>
+			</div>
 		</div>
 		<script>
 			jQuery(document).ready(function($) {
@@ -111,6 +118,14 @@ class Tools_Page {
 					}).fail(function() {
 						$('#qp-subject-mastery-status').text('Server error occurred. Check console.');
 						$btn.prop('disabled', false).text('Calculate Mastery');
+					});
+				});
+				$('#qp-sync-hardness').on('click', function() {
+					const $btn = $(this);
+					$btn.prop('disabled', true).text('Calculating...');
+					$.post(ajaxurl, { action: 'qp_sync_auto_hardness', nonce: $btn.data('nonce') }, function(res) {
+						$('#qp-hardness-status').text(res.data ? res.data.message : 'Error processing request.');
+						$btn.prop('disabled', false).text('Calculate Hardness');
 					});
 				});
 			});

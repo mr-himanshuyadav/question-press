@@ -21,6 +21,7 @@ class Deactivator {
          wp_clear_scheduled_hook('qp_check_entitlement_expiration_hook');
          wp_clear_scheduled_hook('qp_cleanup_abandoned_sessions_event');
          wp_clear_scheduled_hook('qp_scheduled_backup_hook'); // Clear backup hook
+         wp_clear_scheduled_hook('qp_daily_auto_hardness_calc');
 
         // Ensure flush_rewrite_rules() is called
         flush_rewrite_rules();
