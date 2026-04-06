@@ -85,7 +85,7 @@ class Tools_Page {
 
 			<div class="card">
 				<h2>Sync Question Hardness</h2>
-				<p>Syncs historical attempts into global tracking columns, then calculates the 1-10 Auto-Hardness scale for all questions. (Requires &ge; 5 attempts per question).</p>
+				<p>Syncs historical attempts into global tracking columns, then calculates the 1-10 Auto-Hardness scale for all questions. (Requires &ge; 10 attempts per question).</p>
 				<button id="qp-sync-hardness" class="button button-primary" data-nonce="<?php echo esc_attr($nonce); ?>">Sync & Calculate</button>
 				<p id="qp-hardness-status" class="status-msg" style="margin-top: 10px; font-weight: 600;"></p>
 			</div>

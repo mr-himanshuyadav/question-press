@@ -628,14 +628,81 @@ class Practice_Manager
             $full_question_pool = \QuestionPress\Database\Questions_DB::get_all_question_ids_for_practice($db_args);
 
             if (!empty($full_question_pool)) {
-                // 4. Randomize the full pool in PHP
                 if ($admin_order_setting === 'random') {
-                    shuffle($full_question_pool);
-                }
-                // (If 'in_order', we respect the DB order which is likely question_id ASC)
+                    // --- ADAPTIVE NORMAL PRACTICE (50% Least Attempted + 50% Best Match) ---
+                    $pool_placeholder = implode(',', array_map('intval', $full_question_pool));
 
-                // 5. Slice to get the final set of questions
-                $question_ids = array_slice($full_question_pool, 0, $final_limit);
+                    // Fetch details of the pool, including the user's specific attempt count
+                    $pool_details = $wpdb->get_results($wpdb->prepare(
+                        "SELECT q.question_id, q.subject_lineage, COALESCE(q.auto_hardness, q.admin_hardness, 3) as hardness,
+                                COUNT(a.attempt_id) as user_attempt_count
+                         FROM {$wpdb->prefix}qp_questions q
+                         LEFT JOIN {$wpdb->prefix}qp_user_attempts a ON q.question_id = a.question_id AND a.user_id = %d
+                         WHERE q.question_id IN ($pool_placeholder)
+                         GROUP BY q.question_id",
+                        $user_id
+                    ));
+
+                    // Fetch user mastery levels
+                    $mastery_data = $wpdb->get_results($wpdb->prepare(
+                        "SELECT term_id, mastery_level FROM {$wpdb->prefix}qp_user_subject_mastery WHERE user_id = %d",
+                        $user_id
+                    ), OBJECT_K);
+
+                    // Score every question's hardness against the user's mastery
+                    foreach ($pool_details as $q) {
+                        $lineage = json_decode($q->subject_lineage, true);
+                        $mastery = 0;
+                        if (is_array($lineage)) {
+                            foreach (array_reverse($lineage) as $tid) {
+                                if (isset($mastery_data[$tid])) {
+                                    $mastery = (float) $mastery_data[$tid]->mastery_level;
+                                    break;
+                                }
+                            }
+                        }
+
+                        // Map Mastery (0-100) to Hardness (1-10)
+                        $target_hardness = ($mastery / 10) + 1;
+                        $target_hardness = min(10, max(1, $target_hardness));
+
+                        // Score: absolute difference + random noise
+                        $q->diff = abs((float)$q->hardness - $target_hardness) + (mt_rand(0, 100) / 100);
+                    }
+
+                    // 1. DISCOVERY POOL (50%): Prioritize least attempts, then best hardness match
+                    $discovery_pool = $pool_details;
+                    usort($discovery_pool, function ($a, $b) {
+                        if ($a->user_attempt_count == $b->user_attempt_count) {
+                            return $a->diff <=> $b->diff;
+                        }
+                        return $a->user_attempt_count <=> $b->user_attempt_count;
+                    });
+
+                    $target_discovery = (int) ceil($final_limit * 0.5);
+                    $selected_discovery = array_slice($discovery_pool, 0, $target_discovery);
+                    $discovery_ids = wp_list_pluck($selected_discovery, 'question_id');
+
+                    // 2. ADAPTIVE REVIEW POOL (50%): From the remaining, prioritize absolute best hardness match
+                    $adaptive_pool = array_filter($pool_details, function ($q) use ($discovery_ids) {
+                        return !in_array($q->question_id, $discovery_ids);
+                    });
+
+                    usort($adaptive_pool, function ($a, $b) {
+                        return $a->diff <=> $b->diff;
+                    });
+
+                    $remaining_needed = $final_limit - count($selected_discovery);
+                    $selected_adaptive = array_slice($adaptive_pool, 0, $remaining_needed);
+
+                    // Merge and randomize the final set
+                    $final_selection = array_merge($selected_discovery, $selected_adaptive);
+                    shuffle($final_selection);
+                    $question_ids = wp_list_pluck($final_selection, 'question_id');
+                } else {
+                    // Respect DB order (in_order)
+                    $question_ids = array_slice($full_question_pool, 0, $final_limit);
+                }
             }
         } else {
             // --- UPDATED LOGIC FOR SECTION WISE PRACTICE ---
@@ -653,7 +720,7 @@ class Practice_Manager
             } elseif ($subjects_selected) {
                 $term_ids_to_filter = array_map('absint', $subjects_raw);
             }
-            
+
             // 1. Handle Subject/Topic Selection
             if (!empty($term_ids_to_filter)) {
                 $term_conditions = [];
@@ -2860,7 +2927,7 @@ class Practice_Manager
             if (empty($allowed_array)) {
                 return new \WP_Error('no_access', 'You do not have access to any subjects for revision.');
             }
-            
+
             $allowed_conditions = [];
             foreach ($allowed_array as $allowed_id) {
                 $allowed_conditions[] = "JSON_CONTAINS(q.subject_lineage, '" . intval($allowed_id) . "')";
@@ -2885,17 +2952,75 @@ class Practice_Manager
         =========================
         */
 
-        $srs_limit       = (int) ceil($limit * 0.6);
-        $mistake_limit   = (int) ceil($limit * 0.2);
-        $reinforce_limit = (int) ceil($limit * 0.1);
-        $bookmark_limit  = (int) ceil($limit * 0.1);
+        $discovery_limit = (int) ceil($limit * 0.4);  // 50% Unattempted Adaptive
+        $srs_limit       = (int) ceil($limit * 0.3);  // 20% Spaced Repetition Due
+        $mistake_limit   = (int) ceil($limit * 0.15); // 15% Mistakes Corrections
+        $reinforce_limit = (int) ceil($limit * 0.1);  // 10% Low Mastery Review
+        $bookmark_limit  = (int) ceil($limit * 0.05); // 5% Bookmarks
+
+        /*
+        =========================
+        0. DISCOVERY (LEAST ATTEMPTED & ADAPTIVE) - 50%
+        =========================
+        */
+        $mastery_data = $wpdb->get_results($wpdb->prepare(
+            "SELECT term_id, mastery_level FROM {$wpdb->prefix}qp_user_subject_mastery WHERE user_id = %d",
+            $user_id
+        ), OBJECT_K);
+
+        // Fetch the 300 absolute least-seen questions by this user in their allowed scope
+        $least_attempted_pool = $wpdb->get_results($wpdb->prepare(
+            "SELECT q.question_id, q.subject_lineage, COALESCE(q.auto_hardness, q.admin_hardness, 3) as hardness,
+                    COUNT(a.attempt_id) as user_attempt_count
+             FROM {$wpdb->prefix}qp_questions q
+             LEFT JOIN {$wpdb->prefix}qp_user_attempts a ON q.question_id = a.question_id AND a.user_id = %d
+             WHERE q.status = 'publish'
+             {$subject_restriction_sql}
+             GROUP BY q.question_id
+             ORDER BY user_attempt_count ASC
+             LIMIT 300",
+            $user_id
+        ));
+
+        shuffle($least_attempted_pool); // Shuffle to add variety for questions with same attempt count
+
+        if (!empty($least_attempted_pool)) {
+            foreach ($least_attempted_pool as &$q) {
+                $lineage = json_decode($q->subject_lineage, true);
+                $mastery = 0;
+                if (is_array($lineage)) {
+                    foreach (array_reverse($lineage) as $tid) {
+                        if (isset($mastery_data[$tid])) {
+                            $mastery = (float) $mastery_data[$tid]->mastery_level;
+                            break;
+                        }
+                    }
+                }
+
+                // Map mastery (0-100) to target hardness (1-10)
+                $target_hardness = ($mastery / 10) + 1;
+                $target_hardness = min(10, max(1, $target_hardness));
+
+                // Calculate difference + random noise for variety
+                $q->diff = abs((float)$q->hardness - $target_hardness) + (mt_rand(0, 100) / 100);
+            }
+            unset($q);
+
+            // Sort the fetched pool by closest difficulty match
+            usort($least_attempted_pool, function ($a, $b) {
+                return $a->diff <=> $b->diff;
+            });
+
+            $top_discovery = array_slice($least_attempted_pool, 0, $discovery_limit);
+            $add_ids(wp_list_pluck($top_discovery, 'question_id'));
+        }
 
         /*
         =========================
         1. SRS DUE (PRIMARY)
         =========================
         */
-        $srs_pool_size = ceil($mode_min * 0.60);
+        $srs_pool_size = $srs_limit;
         $consolidation_percent = rand(5, 15) / 100;
         $target_consolidation = ceil($srs_pool_size * $consolidation_percent);
 
@@ -2911,12 +3036,13 @@ class Practice_Manager
              AND DATE(a.attempt_time) = DATE_SUB(CURRENT_DATE(), INTERVAL %d DAY)
              AND q.status = 'publish'
              {$subject_restriction_sql}
-             ORDER BY RAND() 
              LIMIT %d",
             $user_id,
             $cycle_days,
             $target_consolidation
         ));
+
+        shuffle($consolidation_ids); // Shuffle to add variety
 
         // 1.2 Core SRS Layer (Mastery JOIN Questions)
         $remaining_limit = $srs_pool_size - count($consolidation_ids);
@@ -3103,9 +3229,9 @@ class Practice_Manager
                          FROM {$wpdb->prefix}qp_questions q
                          WHERE q.status = 'publish'
                          $subject_where
-                         ORDER BY RAND()
                          LIMIT $needed"
                     );
+                    shuffle($rand_ids);
 
                     $add_ids($rand_ids);
                 }
