@@ -559,36 +559,13 @@ class PracticeController
 		$user_id = get_current_user_id();
 		$vault = Vault_Manager::get_vault($user_id);
 
-        global $wpdb;
-        $term_table = $wpdb->prefix . 'qp_terms';
-
-        // Decode the access_scope to find allowed IDs
-        $access_scope = $vault->access_scope ?? [];
-        $exam_ids = $access_scope['exams'] ?? [];
-        $subject_ids = $access_scope['resolved_subjects'] ?? [];
-
-        // Fetch actual names from the database
-        $allowed_exams = [];
-        if (!empty($exam_ids)) {
-            $placeholders = implode(',', array_map('intval', $exam_ids));
-            $allowed_exams = $wpdb->get_results("SELECT term_id as id, name FROM {$term_table} WHERE term_id IN ($placeholders)", ARRAY_A);
-        }
-
-        $allowed_subjects = [];
-        if (!empty($subject_ids)) {
-            $placeholders = implode(',', array_map('intval', $subject_ids));
-            $allowed_subjects = $wpdb->get_results("SELECT term_id as id, name FROM {$term_table} WHERE term_id IN ($placeholders)", ARRAY_A);
-        }
-
 		// 1. If no configs exist (or old structure), trigger the walkthrough overlay
 		if (!empty($vault->needs_config_walkthrough)) {
 			return new \WP_REST_Response([
 				'success'           => true,
 				'needs_walkthrough' => true,
 				'walkthrough_type'  => $vault->walkthrough_type ?? 'new',
-				'data'              => [],
-                'allowed_exams'     => $allowed_exams,
-                'allowed_subjects'  => $allowed_subjects
+				'data'              => []
 			], 200);
 		}
 
@@ -622,9 +599,7 @@ class PracticeController
 			'success'           => true,
 			'needs_walkthrough' => false,
             'walkthrough_type'  => $vault->walkthrough_type ?? 'new',
-			'data'              => $response_data,
-            'allowed_exams'     => $allowed_exams,
-            'allowed_subjects'  => $allowed_subjects
+			'data'              => $response_data
 		], 200);
 	}
 
