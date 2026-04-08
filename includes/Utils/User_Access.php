@@ -7,6 +7,8 @@ if (! defined('ABSPATH')) {
 	exit;
 }
 
+use QuestionPress\Database\Terms_DB;
+
 /**
  * Handles user access and permission checks for subjects and courses.
  *
@@ -44,6 +46,74 @@ class User_Access
 
 		return $subjects;
 	}
+
+	/**
+     * Gets the user's allowed scope formatted as a hierarchy (Exams, Subjects -> Topics).
+     *
+     * @param int $user_id
+     * @return array
+     */
+    public static function get_user_scope_hierarchy(int $user_id): array
+    {
+        $scope = Vault_Manager::get_access_scope($user_id);
+        $exam_ids = $scope['exams'] ?? [];
+        $subject_ids = $scope['resolved_subjects'] ?? [];
+
+        global $wpdb;
+        $term_table = Terms_DB::get_terms_table_name();
+
+        $allowed_exams = [];
+        $allowed_subjects = [];
+
+        // 1. Fetch Exams
+        if (!empty($exam_ids)) {
+            $placeholders = implode(',', array_fill(0, count($exam_ids), '%d'));
+            $allowed_exams = $wpdb->get_results($wpdb->prepare(
+                "SELECT term_id as id, name FROM $term_table WHERE term_id IN ($placeholders) ORDER BY name ASC",
+                ...$exam_ids
+            ), ARRAY_A);
+        }
+
+        // 2. Fetch Subjects and child Topics
+        if (!empty($subject_ids)) {
+            $placeholders = implode(',', array_fill(0, count($subject_ids), '%d'));
+
+            // Get Subjects
+            $subjects = $wpdb->get_results($wpdb->prepare(
+                "SELECT term_id as id, name FROM $term_table WHERE term_id IN ($placeholders) ORDER BY name ASC",
+                ...$subject_ids
+            ), ARRAY_A);
+
+            // Get Topics (where parent is one of our allowed subjects)
+            $topics = $wpdb->get_results($wpdb->prepare(
+                "SELECT term_id as id, name, parent as subject_id FROM $term_table WHERE parent IN ($placeholders) ORDER BY name ASC",
+                ...$subject_ids
+            ), ARRAY_A);
+
+            // Group topics by their parent subject_id
+            $topics_by_subject = [];
+            foreach ($topics as $t) {
+                $topics_by_subject[$t['subject_id']][] = [
+                    'id'   => (string) $t['id'],
+                    'name' => $t['name']
+                ];
+            }
+
+            // Build the final hierarchical array
+            foreach ($subjects as $s) {
+                $allowed_subjects[] = [
+                    'id'     => (string) $s['id'],
+                    'name'   => $s['name'],
+                    'topics' => $topics_by_subject[$s['id']] ?? []
+                ];
+            }
+        }
+
+        return [
+            'exams'    => $allowed_exams,
+            'subjects' => $allowed_subjects
+        ];
+    }
 
 	/**
 	 * Checks if a user has access to a specific course via a relevant entitlement OR existing enrollment.

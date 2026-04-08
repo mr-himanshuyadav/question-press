@@ -86,6 +86,29 @@ class Vault_Manager
     }
 
     /**
+     * Retrieves only the access_scope column for a user.
+     *
+     * @param int $user_id
+     * @return array
+     */
+    public static function get_access_scope(int $user_id): array
+    {
+        global $wpdb;
+        $table = $wpdb->get_blog_prefix() . 'qp_user_vault';
+
+        $scope_json = $wpdb->get_var($wpdb->prepare(
+            "SELECT access_scope FROM $table WHERE user_id = %d",
+            $user_id
+        ));
+
+        if (!$scope_json) {
+            return [];
+        }
+
+        return json_decode($scope_json, true) ?: [];
+    }
+
+    /**
      * Adds or updates a custom revision session configuration.
      * Enforces the max 3 limit and the 15-day lock on subjects/exams.
      *

@@ -146,6 +146,13 @@ final class Router
             'permission_callback' => [AuthController::class, 'check_auth_token']
         ]);
 
+        // Get user's allowed scope (exams, subjects, etc.)
+        register_rest_route('questionpress/v1', '/user/scope', [
+            'methods'             => \WP_REST_Server::READABLE,
+            'callback'            => [DataController::class, 'get_user_scope'],
+            'permission_callback' => [AuthController::class, 'check_auth_token']
+        ]);
+
         register_rest_route('questionpress/v1', '/courses', [
             'methods' => WP_REST_Server::READABLE,
             'callback' => [DataController::class, 'get_courses'],

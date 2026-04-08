@@ -140,6 +140,25 @@ class DataController
     }
 
     /**
+     * Retrieves the allowed scope hierarchy for the current user.
+     *
+     * @param \WP_REST_Request $request
+     * @return \WP_REST_Response|\WP_Error
+     */
+    public static function get_user_scope(\WP_REST_Request $request)
+    {
+        $user_id = get_current_user_id();
+
+        if (!$user_id) {
+            return new \WP_Error('rest_unauthorized', 'User not logged in.', ['status' => 401]);
+        }
+
+        $scope_hierarchy = User_Access::get_user_scope_hierarchy($user_id);
+
+        return new \WP_REST_Response(['success' => true, 'data' => $scope_hierarchy], 200);
+    }
+
+    /**
      * Callback to get all published qp_course posts.
      */
     public static function get_courses()
