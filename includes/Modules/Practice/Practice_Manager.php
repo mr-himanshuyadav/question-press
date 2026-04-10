@@ -155,28 +155,27 @@ class Practice_Manager
 
         $final_topic_ids_to_filter = []; // Topics to actually query
 
+        // 1. Gather the base IDs selected by the user (or allowed by scope)
+        $base_ids = [];
         if ($topics_selected) {
-            // User selected specific topics (already scope-validated)
-            $final_topic_ids_to_filter = $requested_topic_ids;
+            $base_ids = $requested_topic_ids;
         } elseif ($subjects_selected) {
-            // User selected specific subjects (already scope-validated)
-            // Get all topics under these subjects
-            $subj_ids_placeholder = implode(',', $requested_subject_ids);
-            $final_topic_ids_to_filter = $wpdb->get_col("SELECT term_id FROM {$term_table} WHERE parent IN ($subj_ids_placeholder)");
+            $base_ids = $requested_subject_ids;
         } elseif ($allowed_subjects !== 'all' && is_array($allowed_subjects)) {
-            // User selected 'All' OR nothing, but has restrictions
-            if (!empty($allowed_subjects)) {
-                // Get topics under allowed subjects only
-                $subj_ids_placeholder = implode(',', $allowed_subjects);
-                $final_topic_ids_to_filter = $wpdb->get_col("SELECT term_id FROM {$term_table} WHERE parent IN ($subj_ids_placeholder)");
-            } else {
-                // User has restrictions but no subjects meet them
-                $where_clauses[] = "1=0"; // Ensure no questions are found later
-            }
+            $base_ids = $allowed_subjects;
         }
-        // If $allowed_subjects === 'all' and user selected 'all' or nothing, $final_topic_ids_to_filter remains empty, meaning don't filter by topic.
 
-        // Apply the topic filter using JSON_CONTAINS
+        // 2. Fetch the FULL array of descendant IDs for every selected term
+        if (!empty($base_ids)) {
+            foreach ($base_ids as $id) {
+                // This fetches the ID itself PLUS every child, grandchild, etc.
+                $descendants = \QuestionPress\Database\Terms_DB::get_all_descendant_ids($id);
+                $final_topic_ids_to_filter = array_merge($final_topic_ids_to_filter, $descendants);
+            }
+            $final_topic_ids_to_filter = array_unique($final_topic_ids_to_filter);
+        }
+
+        // 3. Apply the full array filter using JSON_CONTAINS
         if (!empty($final_topic_ids_to_filter)) {
             $topic_conditions = [];
             foreach ($final_topic_ids_to_filter as $tid) {
@@ -184,16 +183,13 @@ class Practice_Manager
             }
             $where_clauses[] = '(' . implode(' OR ', $topic_conditions) . ')';
         } elseif ($topics_selected || $subjects_selected || ($allowed_subjects !== 'all' && empty($allowed_subjects))) {
-            $where_clauses[] = "1=0"; // Ensure no questions are found
+            $where_clauses[] = "1=0"; // Ensure no questions are found if they have no scope
         }
 
         $base_where_sql = implode(' AND ', $where_clauses);
-        // Extract the Topic ID (assuming it is the 2nd item in lineage `$[1]`) for equal distribution
-        $query = "SELECT DISTINCT q.question_id, JSON_EXTRACT(g.subject_lineage, '$[1]') as topic_id {$joins} WHERE {$base_where_sql}";
-        // If $allowed_subjects === 'all' and no specific subject/topic selected, no topic WHERE clause is added.
-
-        $base_where_sql = implode(' AND ', $where_clauses);
-        $query = "SELECT DISTINCT q.question_id, topic_term.term_id as topic_id {$joins} WHERE {$base_where_sql}";
+        
+        // Use primary_subject_term_id to cleanly group by the most specific leaf node for 'equal distribution'
+        $query = "SELECT DISTINCT q.question_id, q.primary_subject_term_id as topic_id {$joins} WHERE {$base_where_sql}";
 
         $question_pool = $wpdb->get_results($wpdb->prepare($query, $query_params));
 

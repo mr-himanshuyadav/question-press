@@ -421,6 +421,7 @@ class Questions_DB extends DB
             $joins_added[] = 'topic_rel';
         }
         if ('subject_name' === $args['orderby'] && !in_array('topic_term', $joins_added)) {
+            // URGENT
             $query_joins .= " LEFT JOIN {$term_table} topic_term ON topic_rel.term_id = topic_term.term_id";
             $joins_added[] = 'topic_term';
         }

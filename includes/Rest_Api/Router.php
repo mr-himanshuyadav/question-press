@@ -479,6 +479,11 @@ final class Router
             'callback'            => [DataController::class, 'get_basic_analytics'],
             'permission_callback' => [AuthController::class, 'check_auth_token']
         ]);
+        register_rest_route('questionpress/v1', '/analytics/mastery', [
+            'methods'             => \WP_REST_Server::READABLE,
+            'callback'            => [DataController::class, 'get_user_mastery'],
+            'permission_callback' => [AuthController::class, 'check_auth_token']
+        ]);
         register_rest_route('questionpress/v1', '/ca-daily-status', [
             'methods'             => \WP_REST_Server::READABLE,
             'callback'            => [PracticeController::class, 'get_daily_status'],
@@ -515,6 +520,7 @@ final class Router
             'permission_callback' => [AuthController::class, 'check_auth_token'],
         ]);
 
+        // TODO: Check if this should be made public
         register_rest_route('questionpress/v1', '/notifications/deregister', [
             'methods'             => \WP_REST_Server::CREATABLE,
             'callback'            => [NotificationController::class, 'deregister_device_token'],

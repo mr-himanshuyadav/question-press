@@ -1062,6 +1062,7 @@ class Dashboard_Manager
 		$subject_tax_id   = $wpdb->get_var($wpdb->prepare("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = %s", 'subject'));
 
 		// --- THIS IS THE CORRECTED BUG FIX ---
+		// URGENT - topic_term.term_id fix needed, no such data
 		$review_questions = $wpdb->get_results(
 			$wpdb->prepare(
 				"SELECT

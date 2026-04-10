@@ -424,8 +424,9 @@ class Activator {
     $sql_subject_mastery = "CREATE TABLE $table_subject_mastery (
         id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
         user_id BIGINT(20) UNSIGNED NOT NULL,
-        term_id BIGINT(20) UNSIGNED NOT NULL, -- The Subject or Topic ID
-        mastery_level DECIMAL(5,2) DEFAULT 0.00, -- 0-100 calculated score
+        term_id BIGINT(20) UNSIGNED NOT NULL,
+        mastery_level DECIMAL(5,2) DEFAULT 0.00,
+        last_change DECIMAL(5,2) DEFAULT 0.00,
         total_answered INT UNSIGNED DEFAULT 0,
         correct_count INT UNSIGNED DEFAULT 0,
         last_updated DATETIME DEFAULT CURRENT_TIMESTAMP,

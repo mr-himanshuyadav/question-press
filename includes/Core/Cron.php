@@ -2,6 +2,7 @@
 // Use the correct namespace
 namespace QuestionPress\Core;
 
+use QuestionPress\Ajax\Admin_Ajax;
 use QuestionPress\Modules\Session\Session_Manager; // For session handling
 
 // Exit if accessed directly.
@@ -70,6 +71,13 @@ class Cron
             $midnight = strtotime('tomorrow 00:00:00');
             wp_schedule_event($midnight, 'daily', 'qp_daily_auto_hardness_calc');
             error_log("QP Cron: Scheduled daily auto-hardness calculation for midnight.");
+        }
+
+        // Schedule Daily Subject Mastery Update at Midnight
+        if (!wp_next_scheduled('qp_daily_mastery_calc')) {
+            $midnight = strtotime('tomorrow 00:00:00');
+            wp_schedule_event($midnight, 'daily', 'qp_daily_mastery_calc');
+            error_log("QP Cron: Scheduled daily subject mastery calculation for midnight.");
         }
     }
 
@@ -300,6 +308,40 @@ class Cron
             error_log("QP Cron: Auto-Hardness updated successfully. Rows affected: " . $result);
         } else {
             error_log("QP Cron Error: Failed to update Auto-Hardness. " . $wpdb->last_error);
+        }
+    }
+
+    /**
+     * Finds users active in the last 24 hours and delegates their 
+     * recalculation to the unified Practice_Manager function.
+     * Runs daily via WP Cron.
+     */
+    public function calculate_daily_subject_mastery() {
+        error_log("QP Cron: Running daily targeted subject mastery calculation...");
+        
+        global $wpdb;
+        $attempts_table = $wpdb->prefix . 'qp_user_attempts';
+
+        // 1. Isolate users active in the last 24 hours
+        $active_users = $wpdb->get_col("
+            SELECT DISTINCT user_id 
+            FROM {$attempts_table} 
+            WHERE attempt_time >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
+        ");
+
+        if (empty($active_users)) {
+            error_log("QP Cron: No recent activity found. Mastery sync skipped.");
+            return;
+        }
+
+        // 2. Delegate to the unified logic engine (Pass array of IDs, and set is_cron to true)
+        // Make sure to include the Practice_Manager if it isn't already included in this file
+        $result = Admin_Ajax::sync_subject_mastery_data($active_users, true);
+
+        if ($result['success']) {
+            error_log("QP Cron: " . $result['message']);
+        } else {
+            error_log("QP Cron Error: " . $result['message']);
         }
     }
 }

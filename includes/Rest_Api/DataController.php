@@ -15,6 +15,7 @@ use WP_Error;
 use WP_REST_Response;
 use QuestionPress\Database\Terms_DB; // Use our DB class
 use QuestionPress\Utils\User_Access; // For course access checks
+use QuestionPress\Utils\Vault_Manager; // For accessing the vault data
 
 /**
  * Handles REST API requests for retrieving data (subjects, topics, etc.).
@@ -375,56 +376,62 @@ class DataController
     public static function get_dashboard_overview(\WP_REST_Request $request)
     {
         $user_id = get_current_user_id();
+        $data = Dashboard_Manager::get_overview_data($user_id);
 
-        // 1. Call the correct data-fetching function from Dashboard.php
-        $data = Dashboard_Manager::get_overview_data($user_id); //
+        if (is_wp_error($data)) return $data;
 
-        if (is_wp_error($data)) {
-            return $data; // Pass the WP_Error object on failure
-        }
-
-        // 2. Process Active Sessions into the format the app expects
         $processed_active_sessions = [];
         foreach ($data['active_sessions'] as $session) {
             $settings = json_decode($session->settings_snapshot, true);
+
+            // Safely extract progress from snapshot
+            $current = isset($settings['current_question_index']) ? (int)$settings['current_question_index'] : 0;
+            $total = isset($settings['num_questions']) ? (int)$settings['num_questions'] : 0;
+
             $processed_active_sessions[] = [
-                'session_id' => (int) $session->session_id,
-                'start_time' => $session->start_time,
-                'status' => $session->status,
-                'mode_name' => Dashboard_Manager::get_session_mode_name($session, $settings), //
-                'subjects_display' => Dashboard_Manager::get_session_subjects_display($session, $settings, $data['lineage_cache_active'], $data['group_to_topic_map_active'], $data['question_to_group_map_active']), //
-                'result_display' => '-', // Active sessions don't have a result
+                'session_id'       => (int) $session->session_id,
+                'start_time'       => $session->start_time,
+                'last_activity'    => $session->last_activity, // NEW
+                'status'           => $session->status,
+                'session_type'     => $session->session_type, // NEW (mock_test/normal)
+                'mode_name'        => !empty($session->session_name) ? $session->session_name : Dashboard_Manager::get_session_mode_name($session, $settings),
+                'subjects_display' => Dashboard_Manager::get_session_subjects_display($session, $settings, $data['lineage_cache_active'], $data['group_to_topic_map_active'], $data['question_to_group_map_active']),
+                'progress'         => [ // NEW
+                    'current' => $current,
+                    'total'   => $total,
+                    'percent' => ($total > 0) ? round(($current / $total) * 100) : 0
+                ]
             ];
         }
 
-        // 3. Process Recent History into the format the app expects
-        // THIS IS THE CRITICAL FIX FOR YOUR RECENT HISTORY
         $processed_recent_history = [];
-        foreach ($data['recent_history'] as $session) { //
+        foreach ($data['recent_history'] as $session) {
             $settings = json_decode($session->settings_snapshot, true);
-            $processed_recent_history[] = [ //
-                'session_id' => (int) $session->session_id,
-                'start_time' => $session->start_time,
-                'status' => $session->status,
-                'mode_name' => Dashboard_Manager::get_session_mode_name($session, $settings), //
-                'subjects_display' => Dashboard_Manager::get_session_subjects_display($session, $settings, $data['lineage_cache_recent'], $data['group_to_topic_map_recent'], $data['question_to_group_map_recent']), //
-                'result_display' => $data['accuracy_stats'][$session->session_id] ?? Dashboard_Manager::get_session_result_display($session, $settings), //
+            $processed_recent_history[] = [
+                'session_id'       => (int) $session->session_id,
+                'start_time'       => $session->start_time,
+                'status'           => $session->status,
+                'mode_name'        => !empty($session->session_name) ? $session->session_name : Dashboard_Manager::get_session_mode_name($session, $settings),
+                'subjects_display' => Dashboard_Manager::get_session_subjects_display($session, $settings, $data['lineage_cache_recent'], $data['group_to_topic_map_recent'], $data['question_to_group_map_recent']),
+                'result_display'   => $data['accuracy_stats'][$session->session_id] ?? Dashboard_Manager::get_session_result_display($session, $settings),
+                'raw_stats'        => [ // NEW: For visual scorecards
+                    'correct'   => (int)$session->correct_count,
+                    'incorrect' => (int)$session->incorrect_count,
+                    'attempted' => (int)$session->total_attempted,
+                ]
             ];
         }
 
-        // 4. Create the final clean data object for the app
-        // THIS IS THE CRITICAL FIX FOR YOUR STATS
         $api_response_data = [
-            'total_attempted'     => (int) $data['stats']->total_attempted,   // <-- FIX: Accessing inside 'stats' and casting to (int)
-            'total_correct'       => (int) $data['stats']->total_correct,     // <-- FIX: Accessing inside 'stats' and casting to (int)
+            'total_attempted'     => (int) $data['stats']->total_attempted,
+            'total_correct'       => (int) $data['stats']->total_correct,
             'overall_accuracy'    => (float) $data['overall_accuracy'],
             'review_count'        => (int) $data['review_count'],
             'never_correct_count' => (int) $data['never_correct_count'],
-            'active_sessions'     => $processed_active_sessions,  // <-- FIX
-            'recent_history'      => $processed_recent_history, // <-- FIX: Using processed array
+            'active_sessions'     => $processed_active_sessions,
+            'recent_history'      => $processed_recent_history,
         ];
 
-        // 5. Return the *wrapped* response that the app expects
         return new \WP_REST_Response(['success' => true, 'data' => $api_response_data], 200);
     }
     /**
@@ -819,7 +826,7 @@ class DataController
     public static function get_basic_analytics(WP_REST_Request $request)
     {
         $user_id = get_current_user_id();
-        $vault   = \QuestionPress\Utils\Vault_Manager::get_vault($user_id);
+        $vault   = Vault_Manager::get_vault($user_id);
 
         $perf   = $vault->performance_snapshot ?? [];
         $streak = $vault->streak_data ?? [];
@@ -852,10 +859,95 @@ class DataController
                 'completed_today' => $completed_today,
                 'status'          => $streak_status,
             ],
-            'advanced_enabled' => false,
+            'advanced_enabled' => true,
         ];
 
         return new WP_REST_Response(['success' => true, 'data' => $data], 200);
+    }
+
+    public static function get_user_mastery(\WP_REST_Request $request)
+    {
+        global $wpdb;
+        $user_id = get_current_user_id();
+
+        if (!$user_id) {
+            return new \WP_Error('rest_unauthorized', 'User not logged in', ['status' => 401]);
+        }
+
+        $scope_hierarchy = User_Access::get_user_scope_hierarchy($user_id);
+        $allowed_subjects = $scope_hierarchy['subjects'] ?? [];
+
+        if (empty($allowed_subjects)) {
+            return new \WP_REST_Response(['success' => true, 'data' => []], 200);
+        }
+
+        $mastery_table = $wpdb->prefix . 'qp_user_subject_mastery';
+
+        // 1. UPDATED QUERY: Included last_change
+        $query = $wpdb->prepare("
+        SELECT term_id, mastery_level, last_change, total_answered, correct_count
+        FROM $mastery_table
+        WHERE user_id = %d
+    ", $user_id);
+
+        $mastery_results = $wpdb->get_results($query, ARRAY_A);
+
+        $mastery_index = [];
+        if ($mastery_results) {
+            foreach ($mastery_results as $row) {
+                $mastery_index[$row['term_id']] = [
+                    'mastery_level'  => (float) $row['mastery_level'],
+                    'last_change'    => (float) $row['last_change'], // 2. CAPTURE LAST CHANGE
+                    'total_answered' => (int) $row['total_answered'],
+                    'correct_count'  => (int) $row['correct_count'],
+                ];
+            }
+        }
+
+        $default_stats = [
+            'mastery_level'  => 0,
+            'last_change'    => 0, // Default to 0
+            'total_answered' => 0,
+            'correct_count'  => 0
+        ];
+
+        $structured_data = [];
+
+        foreach ($allowed_subjects as $subject) {
+            $subject_id = $subject['id'];
+            $subject_stats = $mastery_index[$subject_id] ?? $default_stats;
+
+            $mapped_subject = [
+                'term_id'        => (int) $subject_id,
+                'name'           => $subject['name'],
+                'parent'         => 0,
+                'mastery_level'  => $subject_stats['mastery_level'],
+                'last_change'    => $subject_stats['last_change'], // 3. MAP TO PARENT
+                'total_answered' => $subject_stats['total_answered'],
+                'correct_count'  => $subject_stats['correct_count'],
+                'children'       => []
+            ];
+
+            if (!empty($subject['topics'])) {
+                foreach ($subject['topics'] as $topic) {
+                    $topic_id = $topic['id'];
+                    $topic_stats = $mastery_index[$topic_id] ?? $default_stats;
+
+                    $mapped_subject['children'][] = [
+                        'term_id'        => (int) $topic_id,
+                        'name'           => $topic['name'],
+                        'parent'         => (int) $subject_id,
+                        'mastery_level'  => $topic_stats['mastery_level'],
+                        'last_change'    => $topic_stats['last_change'], // 4. MAP TO CHILD
+                        'total_answered' => $topic_stats['total_answered'],
+                        'correct_count'  => $topic_stats['correct_count'],
+                    ];
+                }
+            }
+            $structured_data[] = $mapped_subject;
+        }
+
+        return new \WP_REST_Response(['success' => true, 'data' => $structured_data], 200);
     }
 
     /**
