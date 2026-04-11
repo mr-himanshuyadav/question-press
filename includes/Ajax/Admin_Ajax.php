@@ -1,8 +1,9 @@
 <?php
+
 namespace QuestionPress\Ajax; // PSR-4 Namespace
 
 // Exit if accessed directly.
-if ( ! defined( 'ABSPATH' ) ) {
+if (! defined('ABSPATH')) {
     exit;
 }
 
@@ -12,17 +13,20 @@ use QuestionPress\Modules\Practice\Attempt_Evaluator;
 use QuestionPress\Admin\Backup\Backup_Manager;
 use QuestionPress\Admin\Views\Questions_List_Table;
 use QuestionPress\Utils\Vault_Manager;
+use QuestionPress\Utils\Mastery_Engine;
 
 /**
  * Handles AJAX requests related to the WordPress Admin area.
  */
-class Admin_Ajax {
+class Admin_Ajax
+{
 
     /**
      * AJAX handler for the admin list table.
      * Gets child topics for a given parent subject term.
      */
-    public static function get_topics_for_list_table_filter() {
+    public static function get_topics_for_list_table_filter()
+    {
         check_ajax_referer('qp_admin_filter_nonce', 'nonce');
         $subject_term_id = isset($_POST['subject_id']) ? absint($_POST['subject_id']) : 0;
 
@@ -49,7 +53,8 @@ class Admin_Ajax {
      * AJAX handler for the admin list table.
      * Gets sources/sections that have questions for a given subject and topic.
      */
-    public static function get_sources_for_list_table_filter() {
+    public static function get_sources_for_list_table_filter()
+    {
         check_ajax_referer('qp_admin_filter_nonce', 'nonce');
         $subject_id = isset($_POST['subject_id']) ? absint($_POST['subject_id']) : 0;
         $topic_id = isset($_POST['topic_id']) ? absint($_POST['topic_id']) : 0;
@@ -74,7 +79,7 @@ class Admin_Ajax {
             $term_ids_to_check = Terms_DB::get_all_descendant_ids($subject_id);
             // Ensure the subject ID itself is included if needed based on structure
             // $term_ids_to_check[] = $subject_id;
-             $term_ids_to_check = array_unique($term_ids_to_check);
+            $term_ids_to_check = array_unique($term_ids_to_check);
         }
 
 
@@ -130,12 +135,12 @@ class Admin_Ajax {
 
         $tree = [];
         foreach ($terms_by_id as $term_id => &$term) {
-             // Check parent exists before trying to access it
-             if ($term->parent != 0 && isset($terms_by_id[$term->parent])) {
-                 $terms_by_id[$term->parent]->children[] = &$term;
-             } elseif ($term->parent == 0) {
-                 $tree[] = &$term;
-             }
+            // Check parent exists before trying to access it
+            if ($term->parent != 0 && isset($terms_by_id[$term->parent])) {
+                $terms_by_id[$term->parent]->children[] = &$term;
+            } elseif ($term->parent == 0) {
+                $tree[] = &$term;
+            }
         }
         unset($term); // Break reference
 
@@ -146,17 +151,20 @@ class Admin_Ajax {
         });
 
         // Sort children recursively
-         if (!function_exists('qp_sort_term_children_recursive')) {
-            function qp_sort_term_children_recursive(&$terms) {
-                usort($terms, function ($a, $b) { return strcmp($a->name, $b->name); });
+        if (!function_exists('qp_sort_term_children_recursive')) {
+            function qp_sort_term_children_recursive(&$terms)
+            {
+                usort($terms, function ($a, $b) {
+                    return strcmp($a->name, $b->name);
+                });
                 foreach ($terms as &$term) {
                     if (!empty($term->children)) {
                         qp_sort_term_children_recursive($term->children);
                     }
                 }
             }
-         }
-         qp_sort_term_children_recursive($tree);
+        }
+        qp_sort_term_children_recursive($tree);
 
 
         wp_send_json_success(['sources' => $tree]);
@@ -165,7 +173,8 @@ class Admin_Ajax {
     /**
      * AJAX handler to get the HTML for the quick edit form row.
      */
-    public static function get_quick_edit_form() {
+    public static function get_quick_edit_form()
+    {
         // 1. Security & Basic Validation
         check_ajax_referer('qp_get_quick_edit_form_nonce', 'nonce');
         $question_id = isset($_POST['question_id']) ? absint($_POST['question_id']) : 0;
@@ -189,7 +198,7 @@ class Admin_Ajax {
 
         // 3. Generate Form HTML using Output Buffering
         ob_start();
-        ?>
+?>
         <script>
             // Localize necessary data for the quick-edit.js dropdown logic
             var qp_quick_edit_data = <?php echo wp_json_encode([
@@ -214,7 +223,8 @@ class Admin_Ajax {
             <?php wp_nonce_field('qp_save_quick_edit_nonce', 'qp_save_quick_edit_nonce_field'); ?>
 
             <div class="quick-edit-display-text">
-                <?php // Display Direction and Question Text (already sanitized in DB method) ?>
+                <?php // Display Direction and Question Text (already sanitized in DB method) 
+                ?>
                 <?php if (!empty($question->direction_text)) : ?>
                     <div class="display-group">
                         <strong>Direction:</strong>
@@ -228,7 +238,8 @@ class Admin_Ajax {
             </div>
 
             <input type="hidden" name="question_id" value="<?php echo esc_attr($question_id); ?>">
-            <input type="hidden" name="status" value="<?php echo esc_attr($question->status); // Pass status back ?>">
+            <input type="hidden" name="status" value="<?php echo esc_attr($question->status); // Pass status back 
+                                                        ?>">
 
             <div class="quick-edit-main-container">
                 <div class="quick-edit-col-left">
@@ -237,7 +248,8 @@ class Admin_Ajax {
                         <?php foreach ($options as $option) : ?>
                             <label class="option-label">
                                 <input type="radio" name="correct_option_id" value="<?php echo esc_attr($option->option_id); ?>" <?php checked($option->is_correct, 1); ?>>
-                                <?php // Option text is already sanitized in DB method ?>
+                                <?php // Option text is already sanitized in DB method 
+                                ?>
                                 <input type="text" readonly value="<?php echo esc_attr($option->option_text); ?>">
                             </label>
                         <?php endforeach; ?>
@@ -245,13 +257,14 @@ class Admin_Ajax {
                 </div>
 
                 <div class="quick-edit-col-right">
-                    <?php // Dropdowns will be populated by JS using qp_quick_edit_data ?>
+                    <?php // Dropdowns will be populated by JS using qp_quick_edit_data 
+                    ?>
                     <div class="form-row-flex">
                         <div class="form-group-half qe-right-dropdowns">
                             <label for="qe-subject-<?php echo esc_attr($question_id); ?>"><strong>Subject</strong></label>
                             <select name="subject_id" id="qe-subject-<?php echo esc_attr($question_id); ?>" class="qe-subject-select">
-                                 <option value="">— Select Subject —</option>
-                                 <?php foreach ($all_terms['subjects'] as $subject) : ?>
+                                <option value="">— Select Subject —</option>
+                                <?php foreach ($all_terms['subjects'] as $subject) : ?>
                                     <option value="<?php echo esc_attr($subject->subject_id); ?>" <?php selected($subject->subject_id, $current_terms['subject']); ?>>
                                         <?php echo esc_html($subject->subject_name); ?>
                                     </option>
@@ -262,7 +275,8 @@ class Admin_Ajax {
                             <label for="qe-topic-<?php echo esc_attr($question_id); ?>"><strong>Topic</strong></label>
                             <select name="topic_id" id="qe-topic-<?php echo esc_attr($question_id); ?>" class="qe-topic-select" disabled>
                                 <option value="">— Select subject first —</option>
-                                <?php // Options populated by JS ?>
+                                <?php // Options populated by JS 
+                                ?>
                             </select>
                         </div>
                     </div>
@@ -272,14 +286,16 @@ class Admin_Ajax {
                             <label for="qe-source-<?php echo esc_attr($question_id); ?>"><strong>Source</strong></label>
                             <select name="source_id" id="qe-source-<?php echo esc_attr($question_id); ?>" class="qe-source-select" disabled>
                                 <option value="">— Select Subject First —</option>
-                                 <?php // Options populated by JS ?>
+                                <?php // Options populated by JS 
+                                ?>
                             </select>
                         </div>
                         <div class="form-group-half qe-right-dropdowns">
                             <label for="qe-section-<?php echo esc_attr($question_id); ?>"><strong>Section</strong></label>
                             <select name="section_id" id="qe-section-<?php echo esc_attr($question_id); ?>" class="qe-section-select" disabled>
                                 <option value="">— Select Source First —</option>
-                                 <?php // Options populated by JS ?>
+                                <?php // Options populated by JS 
+                                ?>
                             </select>
                         </div>
                     </div>
@@ -294,7 +310,8 @@ class Admin_Ajax {
                             <div class="form-group-half">
                                 <select name="exam_id" class="qe-exam-select" <?php echo !$current_terms['subject'] ? 'disabled' : ''; ?>>
                                     <option value="">— Select Exam —</option>
-                                    <?php // Options populated by JS ?>
+                                    <?php // Options populated by JS 
+                                    ?>
                                 </select>
                             </div>
                             <div class="form-group-half">
@@ -324,34 +341,172 @@ class Admin_Ajax {
         </form>
 
         <style>
-            .quick-edit-display-text { background-color: #f6f7f7; border: 1px solid #e0e0e0; padding: 10px 20px; margin: 20px 20px 10px; border-radius: 4px }
-            .quick-edit-display-text .display-group { margin-bottom: 10px }
-            .options-group label:last-child, .quick-edit-display-text .display-group:last-child, .quick-edit-form-wrapper .form-row:last-child { margin-bottom: 0 }
-            .quick-edit-display-text p { margin: 5px 0 0; padding-left: 10px; border-left: 3px solid #ccc; color: #555; font-style: italic }
-            .quick-edit-form-wrapper h4 { font-size: 16px; margin-top: 20px; margin-bottom: 10px; padding: 10px 20px }
-            .inline-edit-row .submit { padding: 20px }
-            .quick-edit-form-wrapper .title { font-size: 15px; font-weight: 500; color: #555 }
-            .quick-edit-form-wrapper .form-row, .quick-edit-form-wrapper .form-row-flex { margin-bottom: 1rem }
-            .quick-edit-form-wrapper label, .quick-edit-form-wrapper strong { font-weight: 600; display: block; margin-bottom: 0rem }
-            .quick-edit-form-wrapper select, .quick-edit-form-wrapper input[type="number"] { width: 100%; box-sizing: border-box; } /* Ensure number input is full width */
-            .quick-edit-main-container { display: flex; gap: 20px; margin-bottom: 1rem; padding: 0 20px }
-            .form-row-flex .qe-pyq-fields { display: flex; gap: 1rem; flex-grow: 1; } /* Allow PYQ fields to grow */
-            .form-row-flex .qe-right-dropdowns { display: flex; flex-direction: column; gap: 0.5rem; flex: 1; }
-            .labels-group, .options-group { display: flex; padding: .5rem; border: 1px solid #ddd; background: #fff }
-            .quick-edit-col-left { flex: 0 0 40% }
-            .form-group-half, .quick-edit-col-right { flex: 1 }
-            .form-group-shrink { flex-shrink: 0; margin-right: 10px; } /* Prevent PYQ checkbox from shrinking */
-            .form-group-expand { flex-grow: 1; } /* Allow PYQ fields container to expand */
-            .options-group { flex-direction: column; justify-content: space-between; height: auto; box-sizing: border-box; gap: 10px; }
-            .option-label { display: flex; align-items: center; gap: .5rem; margin-bottom: .5rem }
-            .option-label input[type=radio] { margin-top: 0; align-self: center }
-            .option-label input[type=text] { width: 90%; background-color: #f0f0f1; border: none; padding: 8px; border-radius: 3px;} /* Readonly style */
-            .form-row-flex { display: flex; gap: 1rem; align-items: center; } /* Align items vertically center */
-            .quick-edit-form-wrapper p.submit button.button-secondary { margin-right: 10px }
-            .labels-group { flex-wrap: wrap; gap: .5rem 1rem }
-            .inline-checkbox { white-space: nowrap; display: inline-flex; align-items: center; gap: 5px; } /* Better alignment for inline checkboxes */
+            .quick-edit-display-text {
+                background-color: #f6f7f7;
+                border: 1px solid #e0e0e0;
+                padding: 10px 20px;
+                margin: 20px 20px 10px;
+                border-radius: 4px
+            }
+
+            .quick-edit-display-text .display-group {
+                margin-bottom: 10px
+            }
+
+            .options-group label:last-child,
+            .quick-edit-display-text .display-group:last-child,
+            .quick-edit-form-wrapper .form-row:last-child {
+                margin-bottom: 0
+            }
+
+            .quick-edit-display-text p {
+                margin: 5px 0 0;
+                padding-left: 10px;
+                border-left: 3px solid #ccc;
+                color: #555;
+                font-style: italic
+            }
+
+            .quick-edit-form-wrapper h4 {
+                font-size: 16px;
+                margin-top: 20px;
+                margin-bottom: 10px;
+                padding: 10px 20px
+            }
+
+            .inline-edit-row .submit {
+                padding: 20px
+            }
+
+            .quick-edit-form-wrapper .title {
+                font-size: 15px;
+                font-weight: 500;
+                color: #555
+            }
+
+            .quick-edit-form-wrapper .form-row,
+            .quick-edit-form-wrapper .form-row-flex {
+                margin-bottom: 1rem
+            }
+
+            .quick-edit-form-wrapper label,
+            .quick-edit-form-wrapper strong {
+                font-weight: 600;
+                display: block;
+                margin-bottom: 0rem
+            }
+
+            .quick-edit-form-wrapper select,
+            .quick-edit-form-wrapper input[type="number"] {
+                width: 100%;
+                box-sizing: border-box;
+            }
+
+            /* Ensure number input is full width */
+            .quick-edit-main-container {
+                display: flex;
+                gap: 20px;
+                margin-bottom: 1rem;
+                padding: 0 20px
+            }
+
+            .form-row-flex .qe-pyq-fields {
+                display: flex;
+                gap: 1rem;
+                flex-grow: 1;
+            }
+
+            /* Allow PYQ fields to grow */
+            .form-row-flex .qe-right-dropdowns {
+                display: flex;
+                flex-direction: column;
+                gap: 0.5rem;
+                flex: 1;
+            }
+
+            .labels-group,
+            .options-group {
+                display: flex;
+                padding: .5rem;
+                border: 1px solid #ddd;
+                background: #fff
+            }
+
+            .quick-edit-col-left {
+                flex: 0 0 40%
+            }
+
+            .form-group-half,
+            .quick-edit-col-right {
+                flex: 1
+            }
+
+            .form-group-shrink {
+                flex-shrink: 0;
+                margin-right: 10px;
+            }
+
+            /* Prevent PYQ checkbox from shrinking */
+            .form-group-expand {
+                flex-grow: 1;
+            }
+
+            /* Allow PYQ fields container to expand */
+            .options-group {
+                flex-direction: column;
+                justify-content: space-between;
+                height: auto;
+                box-sizing: border-box;
+                gap: 10px;
+            }
+
+            .option-label {
+                display: flex;
+                align-items: center;
+                gap: .5rem;
+                margin-bottom: .5rem
+            }
+
+            .option-label input[type=radio] {
+                margin-top: 0;
+                align-self: center
+            }
+
+            .option-label input[type=text] {
+                width: 90%;
+                background-color: #f0f0f1;
+                border: none;
+                padding: 8px;
+                border-radius: 3px;
+            }
+
+            /* Readonly style */
+            .form-row-flex {
+                display: flex;
+                gap: 1rem;
+                align-items: center;
+            }
+
+            /* Align items vertically center */
+            .quick-edit-form-wrapper p.submit button.button-secondary {
+                margin-right: 10px
+            }
+
+            .labels-group {
+                flex-wrap: wrap;
+                gap: .5rem 1rem
+            }
+
+            .inline-checkbox {
+                white-space: nowrap;
+                display: inline-flex;
+                align-items: center;
+                gap: 5px;
+            }
+
+            /* Better alignment for inline checkboxes */
         </style>
-        <?php
+<?php
         $form_html = ob_get_clean();
 
         // 4. Send JSON Response
@@ -361,7 +516,8 @@ class Admin_Ajax {
     /**
      * AJAX handler to save the data from the quick edit form.
      */
-    public static function save_quick_edit_data() {
+    public static function save_quick_edit_data()
+    {
         // Step 1: Security check and data validation
         check_ajax_referer('qp_save_quick_edit_nonce', 'qp_save_quick_edit_nonce_field');
 
@@ -402,14 +558,14 @@ class Admin_Ajax {
 
         // Step 4: Update Group-Level Data (PYQ status)
         if ($group_id) {
-            
+
             // --- MODIFICATION: Merge denormalized data with existing group data ---
             $group_data_to_save = [
                 'is_pyq' => $is_pyq,
                 'pyq_year' => ($is_pyq && !empty($data['pyq_year'])) ? sanitize_text_field($data['pyq_year']) : null
             ];
             $group_data_to_save = array_merge($group_data_to_save, $denormalized_data);
-            
+
             $wpdb->update($g_table, $group_data_to_save, ['group_id' => $group_id]);
         }
 
@@ -500,20 +656,19 @@ class Admin_Ajax {
 
 
             // If the correct answer has changed, trigger the re-evaluation.
-             if ($original_correct_option_id != $new_correct_option_id) {
-                    Attempt_Evaluator::re_evaluate_question_attempts($question_id, $new_correct_option_id);
-             }
-
+            if ($original_correct_option_id != $new_correct_option_id) {
+                Attempt_Evaluator::re_evaluate_question_attempts($question_id, $new_correct_option_id);
+            }
         } else {
-             // If no correct option was selected, ensure the status is 'draft'
-             $question_data_to_save = array_merge($denormalized_data, ['status' => 'draft']);
-             $wpdb->update($q_table, $question_data_to_save, ['question_id' => $question_id]);
-             $wpdb->update($o_table, ['is_correct' => 0], ['question_id' => $question_id]); // Ensure no option is marked correct
+            // If no correct option was selected, ensure the status is 'draft'
+            $question_data_to_save = array_merge($denormalized_data, ['status' => 'draft']);
+            $wpdb->update($q_table, $question_data_to_save, ['question_id' => $question_id]);
+            $wpdb->update($o_table, ['is_correct' => 0], ['question_id' => $question_id]); // Ensure no option is marked correct
         }
 
         // Step 7: Re-render the updated table row and send it back
-         // --- Re-fetch the updated item to pass to single_row ---
-         $list_table_args = [
+        // --- Re-fetch the updated item to pass to single_row ---
+        $list_table_args = [
             'status'        => isset($_REQUEST['status']) ? sanitize_key($_REQUEST['status']) : ($question->status ?? 'publish'), // Use updated status
             'subject_id'    => isset($_REQUEST['filter_by_subject']) ? absint($_REQUEST['filter_by_subject']) : 0,
             'topic_id'      => isset($_REQUEST['filter_by_topic']) ? absint($_REQUEST['filter_by_topic']) : 0,
@@ -527,60 +682,60 @@ class Admin_Ajax {
         ];
 
         // Add specific ID filter
-        $where_conditions = [ $wpdb->prepare("q.question_id = %d", $question_id) ];
+        $where_conditions = [$wpdb->prepare("q.question_id = %d", $question_id)];
         $params = [];
 
-         // Construct the query parts similar to get_questions_for_list_table
-         $q_table = Questions_DB::get_questions_table_name();
-         $g_table = Questions_DB::get_groups_table_name();
-         $select_sql = "SELECT DISTINCT q.*, g.group_id, g.direction_text, g.direction_image_id, g.is_pyq, g.pyq_year";
-         $query_from = "FROM {$q_table} q";
-         $query_joins = " LEFT JOIN {$g_table} g ON q.group_id = g.group_id";
-         // Simplified WHERE for single ID fetch, assuming status check happened already or isn't needed here
-         $where_clause = ' WHERE ' . implode(' AND ', $where_conditions);
+        // Construct the query parts similar to get_questions_for_list_table
+        $q_table = Questions_DB::get_questions_table_name();
+        $g_table = Questions_DB::get_groups_table_name();
+        $select_sql = "SELECT DISTINCT q.*, g.group_id, g.direction_text, g.direction_image_id, g.is_pyq, g.pyq_year";
+        $query_from = "FROM {$q_table} q";
+        $query_joins = " LEFT JOIN {$g_table} g ON q.group_id = g.group_id";
+        // Simplified WHERE for single ID fetch, assuming status check happened already or isn't needed here
+        $where_clause = ' WHERE ' . implode(' AND ', $where_conditions);
 
-         $item_query = $select_sql . " " . $query_from . " " . $query_joins . " " . $where_clause . " LIMIT 1";
-         $updated_item_raw = $wpdb->get_row( $wpdb->prepare($item_query, $params), ARRAY_A );
+        $item_query = $select_sql . " " . $query_from . " " . $query_joins . " " . $where_clause . " LIMIT 1";
+        $updated_item_raw = $wpdb->get_row($wpdb->prepare($item_query, $params), ARRAY_A);
 
-         if ($updated_item_raw) {
-             $items_array = [$updated_item_raw]; // Put in array for enrich function
-             Questions_DB::enrich_questions_with_terms($items_array); // Use the enrich function
-             $updated_item = $items_array[0];
+        if ($updated_item_raw) {
+            $items_array = [$updated_item_raw]; // Put in array for enrich function
+            Questions_DB::enrich_questions_with_terms($items_array); // Use the enrich function
+            $updated_item = $items_array[0];
 
-             // Check if the item still matches the current list table filters
-             $list_table = new Questions_List_Table(); // Need an instance
-             $current_filters = [ // Reconstruct filters from request
-                 'status'        => isset($_REQUEST['status']) ? sanitize_key($_REQUEST['status']) : 'publish',
-                 'subject_id'    => isset($_REQUEST['filter_by_subject']) ? absint($_REQUEST['filter_by_subject']) : 0,
-                 'topic_id'      => isset($_REQUEST['filter_by_topic']) ? absint($_REQUEST['filter_by_topic']) : 0,
-                 'source_filter' => isset($_REQUEST['filter_by_source']) ? sanitize_text_field($_REQUEST['filter_by_source']) : '',
-                 'label_ids'     => isset($_REQUEST['filter_by_label']) ? array_filter(array_map('absint', (array)$_REQUEST['filter_by_label'])) : [],
-                 'search'        => isset($_REQUEST['s']) ? sanitize_text_field(stripslashes($_REQUEST['s'])) : '',
-             ];
+            // Check if the item still matches the current list table filters
+            $list_table = new Questions_List_Table(); // Need an instance
+            $current_filters = [ // Reconstruct filters from request
+                'status'        => isset($_REQUEST['status']) ? sanitize_key($_REQUEST['status']) : 'publish',
+                'subject_id'    => isset($_REQUEST['filter_by_subject']) ? absint($_REQUEST['filter_by_subject']) : 0,
+                'topic_id'      => isset($_REQUEST['filter_by_topic']) ? absint($_REQUEST['filter_by_topic']) : 0,
+                'source_filter' => isset($_REQUEST['filter_by_source']) ? sanitize_text_field($_REQUEST['filter_by_source']) : '',
+                'label_ids'     => isset($_REQUEST['filter_by_label']) ? array_filter(array_map('absint', (array)$_REQUEST['filter_by_label'])) : [],
+                'search'        => isset($_REQUEST['s']) ? sanitize_text_field(stripslashes($_REQUEST['s'])) : '',
+            ];
 
-             $matches_filters = Questions_DB::check_question_matches_filters($updated_item, $current_filters);
+            $matches_filters = Questions_DB::check_question_matches_filters($updated_item, $current_filters);
 
 
-             if ($matches_filters) {
-                 ob_start();
-                 $list_table->single_row($updated_item); // Pass the enriched item
-                 $row_html = ob_get_clean();
-                 wp_send_json_success(['row_html' => $row_html]);
-             } else {
-                 // Item no longer matches filters, send empty row to remove it
-                 wp_send_json_success(['row_html' => '']);
-             }
-
-         } else {
-              // If item couldn't be re-fetched (e.g., status changed to trash and current view is publish)
-              wp_send_json_success(['row_html' => '']); // Send empty to remove
-         }
+            if ($matches_filters) {
+                ob_start();
+                $list_table->single_row($updated_item); // Pass the enriched item
+                $row_html = ob_get_clean();
+                wp_send_json_success(['row_html' => $row_html]);
+            } else {
+                // Item no longer matches filters, send empty row to remove it
+                wp_send_json_success(['row_html' => '']);
+            }
+        } else {
+            // If item couldn't be re-fetched (e.g., status changed to trash and current view is publish)
+            wp_send_json_success(['row_html' => '']); // Send empty to remove
+        }
     }
 
     /**
      * AJAX handler to create a new backup.
      */
-    public static function create_backup() {
+    public static function create_backup()
+    {
         check_ajax_referer('qp_backup_restore_nonce', 'nonce');
         if (!current_user_can('manage_options')) {
             wp_send_json_error(['message' => 'Permission denied.']);
@@ -588,8 +743,8 @@ class Admin_Ajax {
 
         $result = Backup_Manager::perform_backup('manual');
         if ($result['success']) {
-             $backups_html = Backup_Manager::get_local_backups_html();
-             wp_send_json_success(['backups_html' => $backups_html]);
+            $backups_html = Backup_Manager::get_local_backups_html();
+            wp_send_json_success(['backups_html' => $backups_html]);
         } else {
             wp_send_json_error(['message' => $result['message']]);
         }
@@ -598,7 +753,8 @@ class Admin_Ajax {
     /**
      * AJAX handler to delete a local backup file.
      */
-    public static function delete_backup() {
+    public static function delete_backup()
+    {
         check_ajax_referer('qp_backup_restore_nonce', 'nonce');
         if (!current_user_can('manage_options')) {
             wp_send_json_error(['message' => 'Permission denied.']);
@@ -616,8 +772,8 @@ class Admin_Ajax {
 
         if (file_exists($file_path)) {
             if (unlink($file_path)) {
-                 $backups_html = Backup_Manager::get_local_backups_html();
-                 wp_send_json_success(['backups_html' => $backups_html, 'message' => 'Backup deleted successfully.']);
+                $backups_html = Backup_Manager::get_local_backups_html();
+                wp_send_json_success(['backups_html' => $backups_html, 'message' => 'Backup deleted successfully.']);
             } else {
                 wp_send_json_error(['message' => 'Could not delete the file. Please check file permissions.']);
             }
@@ -629,7 +785,8 @@ class Admin_Ajax {
     /**
      * AJAX handler to restore a backup from a local file.
      */
-    public static function restore_backup() {
+    public static function restore_backup()
+    {
         check_ajax_referer('qp_backup_restore_nonce', 'nonce');
         if (!current_user_can('manage_options')) {
             wp_send_json_error(['message' => 'Permission denied.']);
@@ -645,12 +802,12 @@ class Admin_Ajax {
 
         // Validate mode
         if (!in_array($mode, ['merge', 'overwrite'])) {
-             $mode = 'merge'; // Safety fallback
+            $mode = 'merge'; // Safety fallback
         }
 
         // Pass the mode to the manager
         $result = Backup_Manager::perform_restore($filename, $mode);
-        
+
         if ($result['success']) {
             wp_send_json_success(['message' => 'Data has been successfully restored.', 'stats' => $result['stats']]);
         } else {
@@ -661,7 +818,8 @@ class Admin_Ajax {
     /**
      * AJAX handler to regenerate the JWT secret key.
      */
-    public static function regenerate_api_key() {
+    public static function regenerate_api_key()
+    {
         check_ajax_referer('qp_regenerate_api_key_nonce', 'nonce');
         if (!current_user_can('manage_options')) {
             wp_send_json_error(['message' => 'Permission denied.']);
@@ -676,7 +834,8 @@ class Admin_Ajax {
     /**
      * AJAX handler to initialize vaults for all users.
      */
-    public static function initialize_user_vaults() {
+    public static function initialize_user_vaults()
+    {
         check_ajax_referer('qp_admin_integrity_nonce', 'nonce');
         if (!current_user_can('manage_options')) wp_send_json_error(['message' => 'Unauthorized']);
 
@@ -692,7 +851,8 @@ class Admin_Ajax {
     /**
      * AJAX handler to recalculate mastery data from history.
      */
-    public static function sync_mastery_data() {
+    public static function sync_mastery_data()
+    {
         check_ajax_referer('qp_admin_integrity_nonce', 'nonce');
         if (!current_user_can('manage_options')) wp_send_json_error(['message' => 'Unauthorized']);
 
@@ -705,11 +865,8 @@ class Admin_Ajax {
         }
     }
 
-    /**
-     * Calculates and updates the holistic subject mastery for users.
-     */
-    public static function sync_subject_mastery_data($target_user_ids = [], $is_cron = false) {
-        
+    public static function sync_subject_mastery_data($target_user_ids = [], $is_cron = false)
+    {
         if (!is_array($target_user_ids)) $target_user_ids = [];
         $is_cron = (bool)$is_cron;
 
@@ -729,19 +886,32 @@ class Admin_Ajax {
         $tax_table       = $wpdb->prefix . 'qp_taxonomies';
 
         try {
-            // STAGE 1: BUILD THE HIERARCHY
+            // ==========================================
+            // STAGE 1: STRICT L1 & L2 MAPPING
+            // ==========================================
             $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'subject'");
             $terms = $wpdb->get_results($wpdb->prepare("SELECT term_id, parent FROM {$terms_table} WHERE taxonomy_id = %d", $subject_tax_id));
-            
-            $parent_map = []; $children_map = []; $all_term_ids = [];
+
+            $l1_parents = [];
+            $l2_children = [];
+            $children_map = [];
+
+            // 1. Find all L1 Parents (child of none)
             foreach ($terms as $t) {
-                $tid = (int)$t->term_id; $pid = (int)$t->parent;
-                $parent_map[$tid] = $pid;
-                if ($pid > 0) $children_map[$pid][] = $tid;
-                $all_term_ids[] = $tid;
+                if ((int)$t->parent === 0) {
+                    $l1_parents[] = (int)$t->term_id;
+                }
             }
 
-            // STAGE 2: MAP QUESTION COUNTS
+            // 2. Find all L2 Children
+            foreach ($terms as $t) {
+                $pid = (int)$t->parent;
+                if (in_array($pid, $l1_parents)) {
+                    $l2_children[] = (int)$t->term_id;
+                    $children_map[$pid][] = (int)$t->term_id;
+                }
+            }
+
             $term_question_counts = [];
             $all_lineages = $wpdb->get_col("SELECT subject_lineage FROM {$questions_table} WHERE status = 'publish' AND subject_lineage IS NOT NULL");
             foreach ($all_lineages as $json) {
@@ -753,133 +923,387 @@ class Admin_Ajax {
                 }
             }
 
-            // STAGE 3: FETCH USER STATS (With Temporal Buckets)
-            $user_stats_by_term = []; 
-            $user_filter_sql = "";
-            if (!empty($target_user_ids)) {
-                $user_filter_sql = " AND a.user_id IN (" . implode(',', array_map('intval', $target_user_ids)) . ")";
-            }
+            // ==========================================
+            // STAGE 2: EXTRACT & ROUTE
+            // ==========================================
+            $where_clause = "a.status = 'answered'";
 
-            foreach ($all_term_ids as $term_id) {
-                $results = $wpdb->get_results($wpdb->prepare("
-                    SELECT 
-                        a.user_id, 
-                        COUNT(a.attempt_id) as total_attempts,
-                        SUM(CASE WHEN a.is_correct = 1 THEN 1 ELSE 0 END) as correct_attempts,
-                        SUM(CASE WHEN DATEDIFF(NOW(), a.attempt_time) <= 14 THEN 1 ELSE 0 END) as vol_recent,
-                        SUM(CASE WHEN DATEDIFF(NOW(), a.attempt_time) <= 14 AND a.is_correct = 1 THEN 1 ELSE 0 END) as cor_recent,
-                        SUM(CASE WHEN DATEDIFF(NOW(), a.attempt_time) BETWEEN 15 AND 60 THEN 1 ELSE 0 END) as vol_mid,
-                        SUM(CASE WHEN DATEDIFF(NOW(), a.attempt_time) BETWEEN 15 AND 60 AND a.is_correct = 1 THEN 1 ELSE 0 END) as cor_mid,
-                        SUM(CASE WHEN DATEDIFF(NOW(), a.attempt_time) > 60 THEN 1 ELSE 0 END) as vol_old,
-                        SUM(CASE WHEN DATEDIFF(NOW(), a.attempt_time) > 60 AND a.is_correct = 1 THEN 1 ELSE 0 END) as cor_old,
-                        COUNT(DISTINCT a.question_id) as distinct_questions,
-                        COUNT(DISTINCT DATE(a.attempt_time)) as distinct_days,
-                        DATEDIFF(CURRENT_DATE(), MAX(a.attempt_time)) as days_inactive
-                    FROM {$attempts_table} a
-                    JOIN {$questions_table} q ON a.question_id = q.question_id
-                    WHERE JSON_CONTAINS(q.subject_lineage, %s) AND a.status = 'answered' {$user_filter_sql}
-                    GROUP BY a.user_id
-                ", (string)$term_id));
-                
-                foreach($results as $r) { $user_stats_by_term[$term_id][$r->user_id] = $r; }
-            }
-
-            // STAGE 4: RAW CALCULATIONS
-            $raw_scores = []; $all_users = [];
-            foreach ($user_stats_by_term as $term_id => $users) {
-                foreach ($users as $user_id => $stat) {
-                    $all_users[$user_id] = true;
-                    $w_vol = ($stat->vol_recent * 1.0) + ($stat->vol_mid * 0.4) + ($stat->vol_old * 0.1);
-                    $w_cor = ($stat->cor_recent * 1.0) + ($stat->cor_mid * 0.4) + ($stat->cor_old * 0.1);
-                    $Acc = $w_vol > 0 ? ($w_cor / $w_vol) : 0;
-                    
-                    $A = (int)$stat->total_attempts;
-                    $Q = (int)$stat->distinct_questions;
-                    $total_available = $term_question_counts[$term_id] ?? 1;
-
-                    if ($A < 5) { $raw = 10 + ($Acc * 15); }
-                    elseif ($A < 20) { $raw = 20 + ($Acc * 20) + (($A / 20) * 10); }
-                    else {
-                        $acc_score = $Acc * 40;
-                        $vol_score = (1.0 - exp(-$A / 100)) * 15;
-                        $breadth_score = min($Q / max(1, $total_available * 0.4), 1.0) * 25;
-                        $cons_score = min((int)$stat->distinct_days / 15, 1.0) * 20;
-                        $raw = $acc_score + $vol_score + $breadth_score + $cons_score;
-                    }
-
-                    $reliability = min(1.0, $A / 50);
-                    $decay = max(0.50, pow(0.99, max(0, $stat->days_inactive - 3)));
-                    $raw_scores[$user_id][$term_id] = $raw * $reliability * $decay;
+            if ($is_cron) {
+                $where_clause .= " AND a.is_processed_for_mastery = 0";
+            } else {
+                if (!empty($target_user_ids)) {
+                    $ids_str = implode(',', array_map('intval', $target_user_ids));
+                    $where_clause .= " AND a.user_id IN ($ids_str)";
+                    $wpdb->query("DELETE FROM {$mastery_table} WHERE user_id IN ($ids_str)");
+                } else {
+                    $wpdb->query("TRUNCATE TABLE {$mastery_table}");
                 }
             }
 
-            // STAGE 4.5: FETCH PREVIOUS SCORES (To calculate difference accurately)
-            $existing_scores = [];
-            $existing_results = $wpdb->get_results("SELECT user_id, term_id, mastery_level FROM {$mastery_table}");
-            foreach ($existing_results as $row) {
-                $existing_scores[$row->user_id][$row->term_id] = (float) $row->mastery_level;
+            $sql = "
+                SELECT 
+                    a.attempt_id, a.user_id, a.question_id, a.is_correct, a.attempt_time, a.behavioral_metrics,
+                    q.subject_lineage, q.auto_hardness 
+                    FROM {$attempts_table} a
+                    JOIN {$questions_table} q ON a.question_id = q.question_id
+                    WHERE {$where_clause}
+                    ORDER BY a.attempt_time ASC
+                ";
+            $raw_attempts = $wpdb->get_results($sql);
+
+            if (empty($raw_attempts)) {
+                return ['success' => true, 'message' => 'No new attempts to process.'];
             }
 
-            // STAGE 5: HOLISTIC ROLLUP & DB INSERT
-            $depths = [];
-            foreach ($all_term_ids as $tid) {
-                $d = 0; $curr = $tid;
-                while (isset($parent_map[$curr]) && $parent_map[$curr] > 0) { $d++; $curr = $parent_map[$curr]; }
-                $depths[$tid] = $d;
+            $users_touched = [];
+            foreach ($raw_attempts as $att) {
+                $users_touched[$att->user_id] = true;
             }
-            arsort($depths);
 
-            $final_scores = []; $records_updated = 0;
-            foreach (array_keys($all_users) as $user_id) {
-                foreach ($depths as $term_id => $depth) {
-                    $raw_score = $raw_scores[$user_id][$term_id] ?? 0;
+            $previously_answered = [];
+            if ($is_cron && !empty($users_touched)) {
+                $u_ids = implode(',', array_keys($users_touched));
+
+                // NEW: Extract only the question IDs touched in this specific run
+                $q_ids_touched = [];
+                foreach ($raw_attempts as $att) {
+                    $q_ids_touched[$att->question_id] = true;
+                }
+                $q_ids_str = implode(',', array_keys($q_ids_touched));
+
+                // NEW: Only query history for the specific questions touched today! (Massive memory optimization)
+                $history = $wpdb->get_results("SELECT user_id, question_id FROM {$attempts_table} WHERE user_id IN ($u_ids) AND question_id IN ($q_ids_str) AND is_processed_for_mastery = 1");
+                foreach ($history as $h) {
+                    $previously_answered[$h->user_id][$h->question_id] = true;
+                }
+            }
+
+            $grouped_attempts = [];
+            $seen_in_this_run = [];
+
+            $routing_log_counts = []; // For Diagnostic Log 2
+
+            foreach ($raw_attempts as $att) {
+                $lineage = json_decode($att->subject_lineage, true);
+                if (!is_array($lineage) || empty($lineage)) continue;
+
+                $target_term = null;
+
+                // 1. Prioritize assigning to an L2 Child Term
+                foreach ($lineage as $tid) {
+                    if (in_array($tid, $l2_children)) {
+                        $target_term = $tid;
+                        break;
+                    }
+                }
+
+                // 2. Fallback: If no L2 exists in lineage, is it directly assigned to L1?
+                if (!$target_term) {
+                    foreach ($lineage as $tid) {
+                        if (in_array($tid, $l1_parents)) {
+                            $target_term = $tid;
+                            break;
+                        }
+                    }
+                }
+
+                if (!$target_term) continue;
+
+                // Track routing counts for the log
+                $routing_log_counts[$target_term] = ($routing_log_counts[$target_term] ?? 0) + 1;
+
+                $att->question_hardness = $att->auto_hardness ?? 500;
+
+                if (!$is_cron) {
+                    $att->is_first_attempt = !isset($seen_in_this_run[$att->user_id][$att->question_id]);
+                } else {
+                    $att->is_first_attempt = !isset($previously_answered[$att->user_id][$att->question_id]) && !isset($seen_in_this_run[$att->user_id][$att->question_id]);
+                }
+
+                $seen_in_this_run[$att->user_id][$att->question_id] = true;
+                $grouped_attempts[$att->user_id][$target_term][$att->question_id][] = $att;
+            }
+
+            // ==========================================
+            // STAGE 3: ENGINE TRANSFORM (Buffer & Math)
+            // ==========================================
+            $final_states = [];
+            $processed_attempt_ids = [];
+
+            $users_str = implode(',', array_keys($users_touched));
+            $existing_states_raw = $wpdb->get_results("SELECT * FROM {$mastery_table} WHERE user_id IN ($users_str)", ARRAY_A);
+            $current_states = [];
+            foreach ($existing_states_raw as $row) {
+                $current_states[$row['user_id']][$row['term_id']] = $row;
+            }
+
+            foreach ($grouped_attempts as $user_id => $terms) {
+                foreach ($terms as $term_id => $questions) {
+                    $term_attempts = [];
+                    foreach ($questions as $q_attempts) {
+                        foreach ($q_attempts as $a) {
+                            $term_attempts[] = $a;
+                        }
+                    }
+
+                    // --- THE BUFFER CHECK ---
+                    $has_record = isset($current_states[$user_id][$term_id]);
+                    $attempt_count = count($term_attempts);
+
+
+                    if (!$has_record && $attempt_count < 15) {
+
+                        $debug_attempt_summary[$user_id]['terms'][$term_id]['status'] = 'BLOCKED';
+                        $debug_attempt_summary[$user_id]['terms'][$term_id]['reason'] = 'BUFFER_NOT_MET';
+                        $debug_attempt_summary[$user_id]['terms'][$term_id]['attempt_count'] = $attempt_count;
+                        $debug_attempt_summary[$user_id]['terms'][$term_id]['has_existing_record'] = $has_record;
+
+                        continue;
+                    }
+
+                    $debug_attempt_summary[$user_id]['terms'][$term_id]['status'] = 'PROCESSED';
+                    $debug_attempt_summary[$user_id]['terms'][$term_id]['attempt_count'] = $attempt_count;
+                    $debug_attempt_summary[$user_id]['terms'][$term_id]['has_existing_record'] = $has_record;
+
+                    usort($term_attempts, function ($a, $b) {
+                        return strtotime($a->attempt_time) <=> strtotime($b->attempt_time);
+                    });
+                    $state = $current_states[$user_id][$term_id] ?? [];
+
+                    $final_states[$user_id][$term_id] = Mastery_Engine::process_attempts($state, $term_attempts);
+
+                    // FIXED: Mark processed globally (no cron constraint)
+                    foreach ($term_attempts as $a) {
+                        $processed_attempt_ids[] = (int)$a->attempt_id;
+                    }
+                }
+            }
+
+            // ==========================================
+            // STAGE 4: DYNAMIC BOTTOM-UP ROLLUP
+            // ==========================================
+            $today_date = date('Y-m-d'); // Physical server today (for binge tracking)
+
+            foreach (array_keys($users_touched) as $user_id) {
+                foreach ($l1_parents as $term_id) {
                     $children = $children_map[$term_id] ?? [];
 
                     if (!empty($children)) {
-                        $child_sum = 0; $touched_count = 0;
-                        foreach ($children as $cid) {
-                            $c_score = $final_scores[$user_id][$cid] ?? 0;
-                            if (isset($user_stats_by_term[$cid][$user_id])) $touched_count++;
-                            $child_sum += ($c_score ?: 10);
-                        }
-                        $child_avg = $child_sum / count($children);
-                        $holistic = !isset($raw_scores[$user_id][$term_id]) ? $child_avg : ($raw_score * 0.4) + ($child_avg * 0.6);
-                        $coverage = $touched_count / count($children);
-                        $final_score = $holistic * $coverage;
-                    } else {
-                        $final_score = $raw_score;
-                    }
-
-                    $final_scores[$user_id][$term_id] = $final_score;
-
-                    $stat = $user_stats_by_term[$term_id][$user_id] ?? null;
-                    // Only save if attempts >= 15
-                    if ($stat && $stat->total_attempts >= 15 && $final_score > 0) {
                         
-                        // Calculate change in PHP instead of SQL for reliability
-                        $prev_mastery = $existing_scores[$user_id][$term_id] ?? 0;
-                        $last_change = $final_score - $prev_mastery;
+                        // --- PASS 1: Find the Parent's exact last active session date ---
+                        $parent_session_date = null;
+                        $parent_last_active_date = null;
+                        
+                        // Check if the parent had direct attempts first
+                        if (isset($final_states[$user_id][$term_id])) {
+                            $parent_session_date = $final_states[$user_id][$term_id]['current_session_date'] ?? null;
+                            $parent_last_active_date = $final_states[$user_id][$term_id]['last_active_date'] ?? null;
+                        }
+
+                        foreach ($children as $cid) {
+                            $c_state = $final_states[$user_id][$cid] ?? ($current_states[$user_id][$cid] ?? null);
+                            if ($c_state) {
+                                $c_date = $c_state['current_session_date'] ?? null;
+                                if ($c_date && (!$parent_session_date || strtotime($c_date) > strtotime($parent_session_date))) {
+                                    $parent_session_date = $c_date;
+                                }
+                                $c_active = $c_state['last_active_date'] ?? null;
+                                if ($c_active && (!$parent_last_active_date || strtotime($c_active) > strtotime($parent_last_active_date))) {
+                                    $parent_last_active_date = $c_active;
+                                }
+                            }
+                        }
+                        
+                        $parent_session_date = $parent_session_date ?: $today_date;
+
+                        // --- PASS 2: Time-Locked Aggregation ---
+                        $total_weight = 0;
+                        $agg_score_sum = 0;
+                        $agg_change_sum = 0; 
+                        $agg_depth_sum = 0;
+                        $agg_momentum_sum = 0;
+
+                        $child_total_answered = 0;
+                        $child_correct_count = 0;
+                        $child_distinct = 0;
+                        $child_today_attempts = 0;
+                        $child_today_delta = 0;
+
+                        foreach ($children as $cid) {
+                            $c_q_count = $term_question_counts[$cid] ?? 0;
+                            $weight = log(1 + $c_q_count);
+                            $total_weight += $weight;
+
+                            $c_state = $final_states[$user_id][$cid] ?? ($current_states[$user_id][$cid] ?? null);
+
+                            if ($c_state) {
+                                $c_date = $c_state['current_session_date'] ?? null;
+                                
+                                // NEW: Only roll up the delta if the child changed on the exact day the parent was last active
+                                $is_parent_session_day = ($c_date === $parent_session_date);
+                                $valid_child_change = $is_parent_session_day ? (float)($c_state['last_change'] ?? 0) : 0.0;
+                                
+                                $agg_score_sum += ((float)$c_state['mastery_level'] * $weight);
+                                $agg_change_sum += ($valid_child_change * $weight); 
+                                $agg_depth_sum += ((float)$c_state['mastery_depth'] * $weight);
+                                $agg_momentum_sum += ((float)$c_state['momentum_factor'] * $weight);
+
+                                $child_total_answered += ($c_state['total_answered'] ?? 0);
+                                $child_correct_count += ($c_state['correct_count'] ?? 0);
+                                $child_distinct += ($c_state['distinct_questions'] ?? 0);
+
+                                // Real-time today metrics (for anti-bingeing limits)
+                                $is_physically_today = ($c_date === $today_date);
+                                $child_today_attempts += $is_physically_today ? ($c_state['today_attempts_count'] ?? 0) : 0;
+                                $child_today_delta += $is_physically_today ? ((float)($c_state['today_accumulated_delta'] ?? 0)) : 0;
+                            } else {
+                                $agg_depth_sum += (400.0 * $weight);
+                                $agg_momentum_sum += (1.0 * $weight);
+                            }
+                        }
+
+                        // --- FINAL RESOLUTION ---
+                        if ($total_weight > 0) {
+                            $parent_score = $agg_score_sum / $total_weight;
+                            $parent_change = $agg_change_sum / $total_weight; 
+                            $parent_depth = $agg_depth_sum / $total_weight;
+                            $parent_momentum = $agg_momentum_sum / $total_weight;
+
+                            if (isset($final_states[$user_id][$term_id])) {
+                                // BLEND: 40% Direct Parent Attempts + 60% Aggregate Children
+                                $direct_score = (float)$final_states[$user_id][$term_id]['mastery_level'];
+                                $direct_change = (float)$final_states[$user_id][$term_id]['last_change'];
+
+                                $blended_score = ($direct_score * 0.4) + ($parent_score * 0.6);
+                                $blended_change = ($direct_change * 0.4) + ($parent_change * 0.6); 
+
+                                $final_states[$user_id][$term_id]['mastery_level'] = $blended_score;
+                                $final_states[$user_id][$term_id]['last_change'] = $blended_change;
+                                $final_states[$user_id][$term_id]['last_active_date'] = $parent_last_active_date;
+
+                                $final_states[$user_id][$term_id]['total_answered'] += $child_total_answered;
+                                $final_states[$user_id][$term_id]['correct_count'] += $child_correct_count;
+                                $final_states[$user_id][$term_id]['distinct_questions'] += $child_distinct;
+                                $final_states[$user_id][$term_id]['today_attempts_count'] += $child_today_attempts;
+                                $final_states[$user_id][$term_id]['today_accumulated_delta'] += $child_today_delta;
+                            } else {
+                                // PURE AGGREGATE
+                                $final_states[$user_id][$term_id] = [
+                                    'mastery_level' => $parent_score,
+                                    'last_change' => $parent_change, 
+                                    'mastery_depth' => $parent_depth,
+                                    'momentum_factor' => $parent_momentum,
+                                    'current_session_date' => $parent_session_date,
+                                    'last_active_date' => $parent_last_active_date, 
+                                    'today_attempts_count' => $child_today_attempts,
+                                    'today_accumulated_delta' => $child_today_delta,
+                                    'total_answered' => $child_total_answered,
+                                    'correct_count' => $child_correct_count,
+                                    'distinct_questions' => $child_distinct
+                                ];
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ==========================================
+            // STAGE 5: LOAD TO DB
+            // ==========================================
+            $records_updated = 0;
+            foreach ($final_states as $user_id => $terms) {
+                foreach ($terms as $term_id => $state) {
+
+                    $total_answered = $state['total_answered'] ?? 0;
+
+                    // Any state that reaches this block with > 0 answers HAS either passed the 15 buffer
+                    // or is a parent aggregating children that passed the buffer. It must insert.
+                    if ($total_answered > 0) {
+
+                        // Display filter: Under 15 total tracked questions masks the visual score
+                        $display_mastery = ($total_answered >= 15) ? $state['mastery_level'] : 0.00;
 
                         $wpdb->query($wpdb->prepare(
-                            "INSERT INTO {$mastery_table} (user_id, term_id, mastery_level, last_change, total_answered, correct_count) 
-                             VALUES (%d, %d, %f, %f, %d, %d) 
-                             ON DUPLICATE KEY UPDATE 
-                                last_change = VALUES(last_change),
-                                mastery_level = VALUES(mastery_level), 
-                                total_answered = VALUES(total_answered), 
-                                correct_count = VALUES(correct_count), 
-                                last_updated = CURRENT_TIMESTAMP",
-                            $user_id, $term_id, $final_score, $last_change, $stat->total_attempts, $stat->correct_attempts
+                            "
+                        INSERT INTO {$mastery_table} 
+                        (user_id, term_id, mastery_level, last_change, mastery_depth, distinct_questions, momentum_factor, current_session_date, last_active_date, today_attempts_count, today_accumulated_delta, total_answered, correct_count) 
+                        VALUES (%d, %d, %f, %f, %f, %d, %f, %s, %s, %d, %f, %d, %d)
+                        ON DUPLICATE KEY UPDATE 
+                            mastery_level = VALUES(mastery_level),
+                            last_change = VALUES(last_change),
+                            mastery_depth = VALUES(mastery_depth),
+                            distinct_questions = VALUES(distinct_questions),
+                            momentum_factor = VALUES(momentum_factor),
+                            current_session_date = VALUES(current_session_date),
+                            last_active_date = VALUES(last_active_date),
+                            today_attempts_count = VALUES(today_attempts_count),
+                            today_accumulated_delta = VALUES(today_accumulated_delta),
+                            total_answered = VALUES(total_answered),
+                            correct_count = VALUES(correct_count),
+                            last_updated = CURRENT_TIMESTAMP
+                    ",
+                            $user_id,
+                            $term_id,
+                            $display_mastery,
+                            $state['last_change'],
+                            $state['mastery_depth'],
+                            $state['distinct_questions'],
+                            $state['momentum_factor'],
+                            $state['current_session_date'],
+                            $state['last_active_date'] ?? null,
+                            $state['today_attempts_count'],
+                            $state['today_accumulated_delta'],
+                            $total_answered,
+                            ($state['correct_count'] ?? 0)
                         ));
                         $records_updated++;
                     }
                 }
             }
 
-            $msg = sprintf('Calculated mastery for %d users (%d saved).', count($all_users), $records_updated);
+            if (!empty($processed_attempt_ids)) {
+                $chunks = array_chunk($processed_attempt_ids, 2000);
+                foreach ($chunks as $chunk) {
+                    $ids = implode(',', $chunk);
+                    $wpdb->query("UPDATE {$attempts_table} SET is_processed_for_mastery = 1 WHERE attempt_id IN ($ids)");
+                }
+            }
+
+            // ==========================================
+            // STAGE 6: GLOBAL INACTIVE DECAY (CRON ONLY)
+            // ==========================================
+            // If this is a cron job, find all users who were NOT active today, apply the Ebbinghaus 
+            // decay penalty to them, reset their momentum (they broke their streak), and advance their math clock.
+            if ($is_cron) {
+                $wpdb->query("
+                UPDATE {$mastery_table}
+                SET 
+                    -- 1. Calculate the UI drop (last_change) based on what the decay is about to do
+                    last_change = (
+                        LEAST(100, GREATEST(0, (mastery_depth * POW((1 - (0.03 * momentum_factor)), DATEDIFF(CURDATE(), current_session_date)) / 1000) * 100))
+                        * SQRT(LEAST(1.0, distinct_questions / 150))
+                    ) - mastery_level,
+                    
+                    -- 2. Actually apply the decay to the backend Elo (Depth)
+                    mastery_depth = mastery_depth * POW((1 - (0.03 * momentum_factor)), DATEDIFF(CURDATE(), current_session_date)),
+                    
+                    -- 3. Calculate the new frontend Mastery Level using the newly decayed depth
+                    mastery_level = LEAST(100, GREATEST(0, (mastery_depth / 1000) * 100)) * SQRT(LEAST(1.0, distinct_questions / 150)),
+                    
+                    -- 4. Break their streak
+                    momentum_factor = 1.0,
+                    
+                    -- 5. Advance the Math Clock so they don't get double-decayed tomorrow
+                    current_session_date = CURDATE()
+                    
+                WHERE current_session_date < CURDATE() 
+                  AND total_answered >= 15
+            ");
+            }
+
+            $msg = sprintf('Processed %d attempts. Updated mastery for %d users (%d records saved).', count($processed_attempt_ids), count($users_touched), $records_updated);
             if (defined('DOING_AJAX') && DOING_AJAX) wp_send_json_success(['message' => $msg]);
             return ['success' => true, 'message' => $msg];
-
         } catch (\Exception $e) {
             if (defined('DOING_AJAX') && DOING_AJAX) wp_send_json_error(['message' => $e->getMessage()]);
             return ['success' => false, 'message' => $e->getMessage()];
@@ -890,44 +1314,20 @@ class Admin_Ajax {
      * AJAX handler to manually trigger the Auto-Hardness calculation.
      * Does a full historical sync of global counts first.
      */
-    public static function sync_auto_hardness() {
+    public static function sync_auto_hardness()
+    {
         check_ajax_referer('qp_admin_integrity_nonce', 'nonce');
         if (!current_user_can('manage_options')) {
             wp_send_json_error(['message' => 'Unauthorized']);
         }
 
-        global $wpdb;
-        $questions_table = $wpdb->prefix . 'qp_questions';
-        $attempts_table  = $wpdb->prefix . 'qp_user_attempts';
+        // Call the engine with $is_cron = false to trigger a full wipe and rebuild
+        $result = \QuestionPress\Core\Cron::calculate_question_auto_hardness(false);
 
-        try {
-            // 1. Sync all historical data into the global tracking columns
-            $sync_sql = "
-                UPDATE {$questions_table} q
-                JOIN (
-                    SELECT 
-                        question_id,
-                        COUNT(attempt_id) as total_attempts,
-                        SUM(CASE WHEN is_correct = 1 THEN 1 ELSE 0 END) as total_correct
-                    FROM {$attempts_table}
-                    WHERE status = 'answered'
-                    GROUP BY question_id
-                ) as stats ON q.question_id = stats.question_id
-                SET 
-                    q.global_attempts = stats.total_attempts,
-                    q.global_correct = stats.total_correct
-            ";
-            
-            $wpdb->query($sync_sql);
-
-            // 2. Call the Cron function directly to calculate the 1-10 hardness
-            \QuestionPress\Core\Cron::calculate_question_auto_hardness();
-
-            wp_send_json_success(['message' => 'Historical counts synced and Hardness calculated successfully!']);
-        } catch (\Exception $e) {
-            wp_send_json_error(['message' => 'Error: ' . $e->getMessage()]);
+        if ($result['success']) {
+            wp_send_json_success(['message' => $result['message']]);
+        } else {
+            wp_send_json_error(['message' => 'Error: ' . $result['message']]);
         }
     }
-
-
 } // End class Admin_Ajax

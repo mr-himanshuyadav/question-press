@@ -289,25 +289,164 @@ class Cron
      * Relies on global_attempts and global_correct updated by Session_Manager.
      * Runs daily via WP Cron.
      */
-    public static function calculate_question_auto_hardness() {
+    public static function calculate_question_auto_hardness($is_cron = true) {
         global $wpdb;
         $questions_table = $wpdb->prefix . 'qp_questions';
+        $attempts_table  = $wpdb->prefix . 'qp_user_attempts';
+        $mastery_table   = $wpdb->prefix . 'qp_user_subject_mastery';
+        $terms_table     = $wpdb->prefix . 'qp_terms';
+        $tax_table       = $wpdb->prefix . 'qp_taxonomies';
 
-        // Extremely fast bulk update using pre-aggregated global stats
-        // Threshold lowered to 5 attempts per your request
-        // Formula: 10 - (Accuracy * 9). Maps 100% accuracy to 1.00, and 0% accuracy to 10.00
-        $sql = "
-            UPDATE {$questions_table}
-            SET auto_hardness = ROUND(10 - ((global_correct / global_attempts) * 9), 2)
-            WHERE global_attempts >= 10
-        ";
+        try {
+            // ==========================================
+            // STAGE 1: DYNAMIC HIERARCHY & DEPTH MAP
+            // ==========================================
+            $subject_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$tax_table} WHERE taxonomy_name = 'subject'");
+            $terms = $wpdb->get_results($wpdb->prepare("SELECT term_id, parent FROM {$terms_table} WHERE taxonomy_id = %d", $subject_tax_id));
 
-        $result = $wpdb->query($sql);
+            $parent_map = []; $children_map = []; $depths = [];
+            foreach ($terms as $t) {
+                $tid = (int)$t->term_id; $pid = (int)$t->parent;
+                $parent_map[$tid] = $pid;
+                if ($pid > 0) $children_map[$pid][] = $tid;
+            }
 
-        if ($result !== false) {
-            error_log("QP Cron: Auto-Hardness updated successfully. Rows affected: " . $result);
-        } else {
-            error_log("QP Cron Error: Failed to update Auto-Hardness. " . $wpdb->last_error);
+            foreach ($parent_map as $tid => $pid) {
+                $d = 0; $curr = $tid;
+                while (isset($parent_map[$curr]) && $parent_map[$curr] > 0) {
+                    $d++; $curr = $parent_map[$curr];
+                    if ($d > 50) break; // Circuit breaker
+                }
+                $depths[$tid] = $d;
+            }
+            arsort($depths);
+
+            // ==========================================
+            // STAGE 2: EXTRACT ATTEMPTS
+            // ==========================================
+            $where_clause = "a.status = 'answered'";
+
+            if ($is_cron) {
+                $where_clause .= " AND a.is_processed_for_hardness = 0";
+            } else {
+                // If Full Rebuild: Reset all questions to base 500 Elo, reset processing flags.
+                $wpdb->query("UPDATE {$questions_table} SET auto_hardness = 500");
+                $wpdb->query("UPDATE {$attempts_table} SET is_processed_for_hardness = 0");
+            }
+
+            $sql = "
+                SELECT 
+                    a.attempt_id, a.user_id, a.question_id, a.is_correct, a.attempt_time,
+                    q.subject_lineage, q.auto_hardness 
+                FROM {$attempts_table} a
+                JOIN {$questions_table} q ON a.question_id = q.question_id
+                WHERE {$where_clause}
+                ORDER BY a.attempt_time ASC
+            ";
+            $raw_attempts = $wpdb->get_results($sql);
+
+            if (empty($raw_attempts)) {
+                return ['success' => true, 'message' => 'No new attempts to process for hardness.'];
+            }
+
+            // ==========================================
+            // STAGE 3: FETCH USERS' TARGET ABILITY (Theta)
+            // ==========================================
+            $users_touched = [];
+            foreach ($raw_attempts as $att) { $users_touched[$att->user_id] = true; }
+            
+            $users_str = implode(',', array_keys($users_touched));
+            $existing_mastery = $wpdb->get_results("SELECT user_id, term_id, mastery_depth FROM {$mastery_table} WHERE user_id IN ($users_str)", ARRAY_A);
+            
+            $user_mastery_dict = [];
+            foreach ($existing_mastery as $row) {
+                $user_mastery_dict[$row['user_id']][$row['term_id']] = (float)$row['mastery_depth'];
+            }
+
+            // ==========================================
+            // STAGE 4: ELO CALIBRATION TRANSFORM
+            // ==========================================
+            $question_states = [];
+            $processed_attempt_ids = [];
+            $k_factor = 16; // Elo Volatility Factor
+
+            foreach ($raw_attempts as $att) {
+                $lineage = json_decode($att->subject_lineage, true);
+                if (!is_array($lineage) || empty($lineage)) {
+                    $processed_attempt_ids[] = (int)$att->attempt_id; // Mark processed so it doesn't jam cron
+                    continue; 
+                }
+
+                // 1. Find the deepest Target Term (L2) to judge the user against
+                $target_term = null;
+                $max_depth = -1;
+                foreach ($lineage as $tid) {
+                    if (isset($depths[$tid]) && $depths[$tid] > $max_depth) {
+                        $max_depth = $depths[$tid];
+                        $target_term = $tid;
+                    }
+                }
+
+                if (!$target_term) {
+                    $processed_attempt_ids[] = (int)$att->attempt_id;
+                    continue;
+                }
+
+                // 2. Fetch the Combatants' Stats
+                // User's $\theta$ (Defaults to 400 if they have no history)
+                $user_ability = $user_mastery_dict[$att->user_id][$target_term] ?? 400.0;
+                
+                // Question's $H_q$ (Defaults to 500)
+                $question_hardness = $question_states[$att->question_id] ?? ($att->auto_hardness ?? 500.0);
+                
+                $is_correct = (int)$att->is_correct;
+
+                // 3. The Math (Probability of user getting it right)
+                $expected_prob = 1 / (1 + pow(10, ($question_hardness - $user_ability) / 400));
+                
+                // 4. The Calibration Shift
+                // If user is correct (1), (P_E - 1) is negative -> Hardness goes DOWN (Easier).
+                // If user is wrong (0), (P_E - 0) is positive -> Hardness goes UP (Harder).
+                $question_hardness += $k_factor * ($expected_prob - $is_correct);
+
+                // 5. Clamp Elo between 0 and 1000
+                $question_states[$att->question_id] = max(0, min(1000, $question_hardness));
+                $processed_attempt_ids[] = (int)$att->attempt_id;
+            }
+
+            // ==========================================
+            // STAGE 5: LOAD TO DB (BULK CASE UPDATE)
+            // ==========================================
+            $records_updated = 0;
+            
+            // Chunking into groups of 500 to prevent massive SQL strings from hitting MariaDB limits
+            foreach (array_chunk($question_states, 500, true) as $chunk) {
+                $cases = "";
+                $q_ids = [];
+                foreach ($chunk as $q_id => $hq) {
+                    $cases .= $wpdb->prepare("WHEN %d THEN %f ", $q_id, $hq);
+                    $q_ids[] = (int)$q_id;
+                }
+                
+                $id_list = implode(',', $q_ids);
+                $sql_update = "UPDATE {$questions_table} SET auto_hardness = CASE question_id {$cases} END WHERE question_id IN ({$id_list})";
+                $wpdb->query($sql_update);
+                $records_updated += count($q_ids);
+            }
+
+            if (!empty($processed_attempt_ids)) {
+                $chunks = array_chunk($processed_attempt_ids, 2000);
+                foreach ($chunks as $chunk) {
+                    $ids = implode(',', $chunk);
+                    $wpdb->query("UPDATE {$attempts_table} SET is_processed_for_hardness = 1 WHERE attempt_id IN ($ids)");
+                }
+            }
+
+            return ['success' => true, 'message' => sprintf('Auto-Hardness calibrated for %d questions from %d attempts.', $records_updated, count($processed_attempt_ids))];
+
+        } catch (\Exception $e) {
+            error_log("QP Hardness Cron Error: " . $e->getMessage());
+            return ['success' => false, 'message' => $e->getMessage()];
         }
     }
 

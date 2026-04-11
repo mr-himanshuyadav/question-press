@@ -1,4 +1,5 @@
 <?php
+
 namespace QuestionPress; // PSR-4 Namespace
 
 use QuestionPress\Database\Terms_DB;
@@ -11,21 +12,23 @@ use QuestionPress\Core\Rewrites;
  *
  * @package QuestionPress
  */
-class Activator {
+class Activator
+{
 
     /**
      * Activation hook callback.
      * Creates database tables, sets default options, etc.
      */
-    public static function activate() {
-        
-    global $wpdb;
-    $charset_collate = $wpdb->get_charset_collate();
-    require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+    public static function activate()
+    {
 
-    // Table: Groups 
-    $table_groups = $wpdb->prefix . 'qp_question_groups';
-    $sql_groups = "CREATE TABLE $table_groups (
+        global $wpdb;
+        $charset_collate = $wpdb->get_charset_collate();
+        require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+
+        // Table: Groups 
+        $table_groups = $wpdb->prefix . 'qp_question_groups';
+        $sql_groups = "CREATE TABLE $table_groups (
         group_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
         direction_text LONGTEXT,
         direction_image_id BIGINT(20) UNSIGNED,
@@ -40,11 +43,11 @@ class Activator {
         KEY is_pyq (is_pyq),
         KEY exam_term_id (exam_term_id)
     ) $charset_collate;";
-    dbDelta($sql_groups);
+        dbDelta($sql_groups);
 
-    // Table: Questions
-    $table_questions = $wpdb->prefix . 'qp_questions';
-    $sql_questions = "CREATE TABLE $table_questions (
+        // Table: Questions
+        $table_questions = $wpdb->prefix . 'qp_questions';
+        $sql_questions = "CREATE TABLE $table_questions (
         question_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
         group_id BIGINT(20) UNSIGNED,
         question_number_in_section VARCHAR(20) DEFAULT NULL,
@@ -56,23 +59,23 @@ class Activator {
         last_modified DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         explanation_text LONGTEXT DEFAULT NULL,
         admin_hardness TINYINT UNSIGNED DEFAULT NULL,
-        auto_hardness DECIMAL(4,2) DEFAULT NULL,
+        auto_hardness DECIMAL(6,2) DEFAULT 500.00,
         global_attempts INT UNSIGNED DEFAULT 0,
         global_correct INT UNSIGNED DEFAULT 0,
         subject_lineage JSON DEFAULT NULL,
         source_lineage JSON DEFAULT NULL,
         exam_term_id BIGINT(20) UNSIGNED DEFAULT NULL,        
-        PRIMARY KEY (question_id),
+        PRIMARY KEY  (question_id),
         KEY group_id (group_id),
         KEY status (status),
         KEY question_text_hash (question_text_hash),
         KEY exam_term_id (exam_term_id)
     ) $charset_collate;";
-    dbDelta($sql_questions);
+        dbDelta($sql_questions);
 
-    // Table: Options
-    $table_options = $wpdb->prefix . 'qp_options';
-    $sql_options = "CREATE TABLE $table_options (
+        // Table: Options
+        $table_options = $wpdb->prefix . 'qp_options';
+        $sql_options = "CREATE TABLE $table_options (
         option_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
         question_id BIGINT(20) UNSIGNED NOT NULL,
         option_text TEXT NOT NULL,
@@ -81,11 +84,11 @@ class Activator {
         PRIMARY KEY (option_id),
         KEY question_id (question_id)
     ) $charset_collate;";
-    dbDelta($sql_options);
+        dbDelta($sql_options);
 
-    // Table: User Sessions
-    $table_sessions = $wpdb->prefix . 'qp_user_sessions';
-    $sql_sessions = "CREATE TABLE $table_sessions (
+        // Table: User Sessions
+        $table_sessions = $wpdb->prefix . 'qp_user_sessions';
+        $sql_sessions = "CREATE TABLE $table_sessions (
         session_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
         user_id BIGINT(20) UNSIGNED NOT NULL,
         session_name VARCHAR(255) DEFAULT NULL,
@@ -106,15 +109,15 @@ class Activator {
         question_ids_snapshot LONGTEXT,
         PRIMARY KEY (session_id),
         KEY user_id (user_id),
-        KEY status (status)
+        KEY status (status),
         KEY session_type (session_type),
         KEY session_name (session_name)
     ) $charset_collate;";
-    dbDelta($sql_sessions);
+        dbDelta($sql_sessions);
 
-    // Table: Session Pauses
-    $table_session_pauses = $wpdb->prefix . 'qp_session_pauses';
-    $sql_session_pauses = "CREATE TABLE $table_session_pauses (
+        // Table: Session Pauses
+        $table_session_pauses = $wpdb->prefix . 'qp_session_pauses';
+        $sql_session_pauses = "CREATE TABLE $table_session_pauses (
         pause_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
         session_id BIGINT(20) UNSIGNED NOT NULL,
         pause_time DATETIME NOT NULL,
@@ -122,49 +125,53 @@ class Activator {
         PRIMARY KEY (pause_id),
         KEY session_id (session_id)
     ) $charset_collate;";
-    dbDelta($sql_session_pauses);
+        dbDelta($sql_session_pauses);
 
 
-    // Table: User Attempts
-    $table_attempts = $wpdb->prefix . 'qp_user_attempts';
-    $sql_attempts = "CREATE TABLE $table_attempts (
-        attempt_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
-        session_id BIGINT(20) UNSIGNED NOT NULL,
-        user_id BIGINT(20) UNSIGNED NOT NULL,
-        question_id BIGINT(20) UNSIGNED NOT NULL,
-        selected_option_id BIGINT(20) UNSIGNED,
-        is_correct BOOLEAN,
-        status VARCHAR(20) NOT NULL DEFAULT 'answered',
-        mock_status VARCHAR(50) DEFAULT NULL,
-        remaining_time INT,
-        attempt_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        PRIMARY KEY  (attempt_id),
-        UNIQUE KEY session_question (session_id, question_id),
-        KEY user_id (user_id),
-        KEY question_id (question_id),
-        KEY status (status),
-        KEY mock_status (mock_status)
-    ) $charset_collate;";
-    dbDelta($sql_attempts);
+        // Table: User Attempts
+        $table_attempts = $wpdb->prefix . 'qp_user_attempts';
+        $sql_attempts = "CREATE TABLE $table_attempts (
+            attempt_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+            session_id BIGINT(20) UNSIGNED NOT NULL,
+            user_id BIGINT(20) UNSIGNED NOT NULL,
+            question_id BIGINT(20) UNSIGNED NOT NULL,
+            selected_option_id BIGINT(20) UNSIGNED,
+            is_correct BOOLEAN,
+            status VARCHAR(20) NOT NULL DEFAULT 'answered',
+            mock_status VARCHAR(50) DEFAULT NULL,
+            remaining_time INT,
+            attempt_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            is_processed_for_mastery TINYINT(1) NOT NULL DEFAULT 0,
+            is_processed_for_hardness TINYINT(1) NOT NULL DEFAULT 0,
+            behavioral_metrics JSON DEFAULT NULL,
+            PRIMARY KEY  (attempt_id),
+            UNIQUE KEY session_question (session_id, question_id),
+            KEY user_id (user_id),
+            KEY question_id (question_id),
+            KEY status (status),
+            KEY mock_status (mock_status),
+            KEY is_processed (is_processed_for_mastery)
+        ) $charset_collate;";
+        dbDelta($sql_attempts);
 
-    // Table: Logs (Needs Attention if it's relevant or not)
-    $table_logs = $wpdb->prefix . 'qp_logs';
-    $sql_logs = "CREATE TABLE $table_logs (
-        log_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
-        log_type VARCHAR(50) NOT NULL,
-        log_message TEXT NOT NULL,
-        log_data LONGTEXT,
-        log_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        resolved TINYINT(1) NOT NULL DEFAULT 0,
-        PRIMARY KEY (log_id),
-        KEY log_type (log_type),
-        KEY resolved (resolved)
-    ) $charset_collate;";
-    dbDelta($sql_logs);
+        // Table: Logs (Needs Attention if it's relevant or not)
+        $table_logs = $wpdb->prefix . 'qp_logs';
+        $sql_logs = "CREATE TABLE $table_logs (
+            log_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+            log_type VARCHAR(50) NOT NULL,
+            log_message TEXT NOT NULL,
+            log_data LONGTEXT,
+            log_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            resolved TINYINT(1) NOT NULL DEFAULT 0,
+            PRIMARY KEY (log_id),
+            KEY log_type (log_type),
+            KEY resolved (resolved)
+        ) $charset_collate;";
+        dbDelta($sql_logs);
 
-    // Table: Review Later Questions
-    $table_review_later = $wpdb->prefix . 'qp_review_later';
-    $sql_review_later = "CREATE TABLE $table_review_later (
+        // Table: Review Later Questions
+        $table_review_later = $wpdb->prefix . 'qp_review_later';
+        $sql_review_later = "CREATE TABLE $table_review_later (
         review_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
         user_id BIGINT(20) UNSIGNED NOT NULL,
         question_id BIGINT(20) UNSIGNED NOT NULL,
@@ -173,11 +180,11 @@ class Activator {
         KEY user_id (user_id),
         KEY question_id (question_id)
     ) $charset_collate;";
-    dbDelta($sql_review_later);
+        dbDelta($sql_review_later);
 
-    // Table: Question Reports (Needs Attention for better handling)
-    $table_question_reports = $wpdb->prefix . 'qp_question_reports';
-    $sql_question_reports = "CREATE TABLE $table_question_reports (
+        // Table: Question Reports (Needs Attention for better handling)
+        $table_question_reports = $wpdb->prefix . 'qp_question_reports';
+        $sql_question_reports = "CREATE TABLE $table_question_reports (
         report_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
         question_id BIGINT(20) UNSIGNED NOT NULL,
         user_id BIGINT(20) UNSIGNED NOT NULL,
@@ -190,11 +197,11 @@ class Activator {
         KEY user_id (user_id),
         KEY status (status)
     ) $charset_collate;";
-    dbDelta($sql_question_reports);
+        dbDelta($sql_question_reports);
 
-    // Table: Revision Mode Attempts (Needs Attention on how it retains data)
-    $table_revision_attempts = $wpdb->prefix . 'qp_revision_attempts';
-    $sql_revision_attempts = "CREATE TABLE $table_revision_attempts (
+        // Table: Revision Mode Attempts (Needs Attention on how it retains data)
+        $table_revision_attempts = $wpdb->prefix . 'qp_revision_attempts';
+        $sql_revision_attempts = "CREATE TABLE $table_revision_attempts (
     revision_attempt_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
     user_id BIGINT(20) UNSIGNED NOT NULL,
     question_id BIGINT(20) UNSIGNED NOT NULL,
@@ -205,13 +212,13 @@ class Activator {
     KEY user_id (user_id),
     KEY topic_id (topic_id)
     ) $charset_collate;";
-    dbDelta($sql_revision_attempts);
+        dbDelta($sql_revision_attempts);
 
-    // === NEW TAXONOMY TABLES ===
+        // === NEW TAXONOMY TABLES ===
 
-    // 1. Taxonomies Table
-    $table_taxonomies = $wpdb->prefix . 'qp_taxonomies';
-    $sql_taxonomies = "CREATE TABLE $table_taxonomies (
+        // 1. Taxonomies Table
+        $table_taxonomies = $wpdb->prefix . 'qp_taxonomies';
+        $sql_taxonomies = "CREATE TABLE $table_taxonomies (
         taxonomy_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
         taxonomy_name VARCHAR(191) NOT NULL,
         taxonomy_label VARCHAR(255) NOT NULL,
@@ -220,11 +227,11 @@ class Activator {
         PRIMARY KEY (taxonomy_id),
         UNIQUE KEY taxonomy_name (taxonomy_name)
     ) $charset_collate;";
-    dbDelta($sql_taxonomies);
+        dbDelta($sql_taxonomies);
 
-    // 2. Terms Table
-    $table_terms = $wpdb->prefix . 'qp_terms';
-    $sql_terms = "CREATE TABLE $table_terms (
+        // 2. Terms Table
+        $table_terms = $wpdb->prefix . 'qp_terms';
+        $sql_terms = "CREATE TABLE $table_terms (
         term_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
         taxonomy_id BIGINT(20) UNSIGNED NOT NULL,
         name VARCHAR(255) NOT NULL,
@@ -234,22 +241,22 @@ class Activator {
         KEY taxonomy_id (taxonomy_id),
         KEY name (name(191))
     ) $charset_collate;";
-    dbDelta($sql_terms);
+        dbDelta($sql_terms);
 
-    // 3. Term Relationships Table
-    $table_term_relationships = $wpdb->prefix . 'qp_term_relationships';
-    $sql_term_relationships = "CREATE TABLE $table_term_relationships (
+        // 3. Term Relationships Table
+        $table_term_relationships = $wpdb->prefix . 'qp_term_relationships';
+        $sql_term_relationships = "CREATE TABLE $table_term_relationships (
         object_id BIGINT(20) UNSIGNED NOT NULL,
         term_id BIGINT(20) UNSIGNED NOT NULL,
         object_type VARCHAR(20) NOT NULL DEFAULT 'question',
         PRIMARY KEY (object_id, term_id, object_type),
         KEY term_id (term_id)
     ) $charset_collate;";
-    dbDelta($sql_term_relationships);
+        dbDelta($sql_term_relationships);
 
-    // 4. Term Meta Table
-    $table_term_meta = $wpdb->prefix . 'qp_term_meta';
-    $sql_term_meta = "CREATE TABLE $table_term_meta (
+        // 4. Term Meta Table
+        $table_term_meta = $wpdb->prefix . 'qp_term_meta';
+        $sql_term_meta = "CREATE TABLE $table_term_meta (
         meta_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
         term_id BIGINT(20) UNSIGNED NOT NULL,
         meta_key VARCHAR(255) DEFAULT NULL,
@@ -258,11 +265,11 @@ class Activator {
         KEY term_id (term_id),
         KEY meta_key (meta_key(191))
     ) $charset_collate;";
-    dbDelta($sql_term_meta);
+        dbDelta($sql_term_meta);
 
-    // 5. Courses Table
-    $table_courses = $wpdb->prefix . 'qp_courses';
-    $sql_courses = "CREATE TABLE $table_courses (
+        // 5. Courses Table
+        $table_courses = $wpdb->prefix . 'qp_courses';
+        $sql_courses = "CREATE TABLE $table_courses (
         course_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
         title VARCHAR(255) NOT NULL,
         slug VARCHAR(255) NOT NULL,
@@ -277,11 +284,11 @@ class Activator {
         KEY status (status),
         KEY author_id (author_id)
     ) $charset_collate;";
-    dbDelta($sql_courses);
+        dbDelta($sql_courses);
 
-    // 6. Course Sections Table
-    $table_course_sections = $wpdb->prefix . 'qp_course_sections';
-    $sql_course_sections = "CREATE TABLE $table_course_sections (
+        // 6. Course Sections Table
+        $table_course_sections = $wpdb->prefix . 'qp_course_sections';
+        $sql_course_sections = "CREATE TABLE $table_course_sections (
         section_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
         course_id BIGINT(20) UNSIGNED NOT NULL,
         title VARCHAR(255) NOT NULL,
@@ -291,11 +298,11 @@ class Activator {
         KEY course_id (course_id),
         KEY section_order (section_order)
     ) $charset_collate;";
-    dbDelta($sql_course_sections);
+        dbDelta($sql_course_sections);
 
-    // 7. Course Items Table
-    $table_course_items = $wpdb->prefix . 'qp_course_items';
-    $sql_course_items = "CREATE TABLE $table_course_items (
+        // 7. Course Items Table
+        $table_course_items = $wpdb->prefix . 'qp_course_items';
+        $sql_course_items = "CREATE TABLE $table_course_items (
         item_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
         section_id BIGINT(20) UNSIGNED NOT NULL,
         course_id BIGINT(20) UNSIGNED NOT NULL,
@@ -308,11 +315,11 @@ class Activator {
         KEY course_id (course_id),
         KEY item_order (item_order)
     ) $charset_collate;";
-    dbDelta($sql_course_items);
+        dbDelta($sql_course_items);
 
-    // 8. User Courses Table (Enrollment & Overall Progress)
-    $table_user_courses = $wpdb->prefix . 'qp_user_courses';
-    $sql_user_courses = "CREATE TABLE $table_user_courses (
+        // 8. User Courses Table (Enrollment & Overall Progress)
+        $table_user_courses = $wpdb->prefix . 'qp_user_courses';
+        $sql_user_courses = "CREATE TABLE $table_user_courses (
         user_course_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
         user_id BIGINT(20) UNSIGNED NOT NULL,
         course_id BIGINT(20) UNSIGNED NOT NULL,
@@ -329,11 +336,11 @@ class Activator {
         KEY entitlement_id (entitlement_id),
         KEY status (status)
     ) $charset_collate;";
-    dbDelta($sql_user_courses);
+        dbDelta($sql_user_courses);
 
-    // 9. User Items Progress Table
-    $table_user_items_progress = $wpdb->prefix . 'qp_user_items_progress';
-    $sql_user_items_progress = "CREATE TABLE $table_user_items_progress (
+        // 9. User Items Progress Table
+        $table_user_items_progress = $wpdb->prefix . 'qp_user_items_progress';
+        $sql_user_items_progress = "CREATE TABLE $table_user_items_progress (
         user_item_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
         user_id BIGINT(20) UNSIGNED NOT NULL,
         item_id BIGINT(20) UNSIGNED NOT NULL,
@@ -350,11 +357,11 @@ class Activator {
         KEY course_id (course_id),
         KEY status (status)
     ) $charset_collate;";
-    dbDelta($sql_user_items_progress);
+        dbDelta($sql_user_items_progress);
 
-    // 10. USER ENTITLEMENTS TABLE
-    $table_user_entitlements = $wpdb->prefix . 'qp_user_entitlements';
-    $sql_user_entitlements = "CREATE TABLE $table_user_entitlements (
+        // 10. USER ENTITLEMENTS TABLE
+        $table_user_entitlements = $wpdb->prefix . 'qp_user_entitlements';
+        $sql_user_entitlements = "CREATE TABLE $table_user_entitlements (
         entitlement_id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
         user_id BIGINT(20) UNSIGNED NOT NULL,
         plan_id BIGINT(20) UNSIGNED NOT NULL,
@@ -371,9 +378,9 @@ class Activator {
         KEY status (status),
         KEY expiry_date (expiry_date)
     ) $charset_collate;";
-    dbDelta($sql_user_entitlements);
+        dbDelta($sql_user_entitlements);
 
-    // 11. OTP Verification Table (Updated for Multi-Purpose Engine)
+        // 11. OTP Verification Table (Updated for Multi-Purpose Engine)
         $table_otp = $wpdb->prefix . 'qp_otp_verification';
         $sql_otp = "CREATE TABLE $table_otp (
             id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -391,10 +398,10 @@ class Activator {
             KEY reset_token (reset_token(191))
         ) $charset_collate;";
         dbDelta($sql_otp);
-    
+
         // 12. User Vault Table (Centralized user state)
-    $table_vault = $wpdb->get_blog_prefix() . 'qp_user_vault';
-    $sql_vault = "CREATE TABLE $table_vault (
+        $table_vault = $wpdb->get_blog_prefix() . 'qp_user_vault';
+        $sql_vault = "CREATE TABLE $table_vault (
         user_id BIGINT(20) UNSIGNED NOT NULL,
         access_scope JSON NOT NULL,
         revision_config JSON NOT NULL,
@@ -403,11 +410,11 @@ class Activator {
         last_sync TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         PRIMARY KEY  (user_id)
     ) $charset_collate;";
-    dbDelta($sql_vault);
+        dbDelta($sql_vault);
 
-    // 13. User Mastery Table (SRS Tracking)
-    $table_mastery = $wpdb->get_blog_prefix() . 'qp_user_mastery';
-    $sql_mastery = "CREATE TABLE $table_mastery (
+        // 13. User Mastery Table (SRS Tracking)
+        $table_mastery = $wpdb->get_blog_prefix() . 'qp_user_mastery';
+        $sql_mastery = "CREATE TABLE $table_mastery (
         user_id BIGINT(20) UNSIGNED NOT NULL,
         question_id BIGINT(20) UNSIGNED NOT NULL,
         box_number INT NOT NULL DEFAULT 0,
@@ -417,28 +424,35 @@ class Activator {
         PRIMARY KEY  (user_id, question_id),
         KEY next_review_date (next_review_date)
     ) $charset_collate;";
-    dbDelta($sql_mastery);
+        dbDelta($sql_mastery);
 
-    // NEW Table: Subject Mastery
-    $table_subject_mastery = $wpdb->prefix . 'qp_user_subject_mastery';
-    $sql_subject_mastery = "CREATE TABLE $table_subject_mastery (
+        // NEW Table: Subject Mastery (Updated for Event-Sourcing State)
+        $table_subject_mastery = $wpdb->prefix . 'qp_user_subject_mastery';
+        $sql_subject_mastery = "CREATE TABLE $table_subject_mastery (
         id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
         user_id BIGINT(20) UNSIGNED NOT NULL,
         term_id BIGINT(20) UNSIGNED NOT NULL,
         mastery_level DECIMAL(5,2) DEFAULT 0.00,
         last_change DECIMAL(5,2) DEFAULT 0.00,
+        mastery_depth DECIMAL(8,4) DEFAULT 0.0000,
+        distinct_questions INT UNSIGNED DEFAULT 0,
+        momentum_factor DECIMAL(5,4) DEFAULT 1.0000,
+        current_session_date DATE DEFAULT NULL,
+        last_active_date DATE DEFAULT NULL,
+        today_attempts_count INT UNSIGNED DEFAULT 0,
+        today_accumulated_delta DECIMAL(8,4) DEFAULT 0.0000,
         total_answered INT UNSIGNED DEFAULT 0,
         correct_count INT UNSIGNED DEFAULT 0,
-        last_updated DATETIME DEFAULT CURRENT_TIMESTAMP,
-        PRIMARY KEY (id),
-        UNIQUE KEY user_term (user_id, term_id),
+        last_updated DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY  (id),
+        UNIQUE KEY user_term (user_id,term_id),
         KEY user_id (user_id)
     ) $charset_collate;";
-    dbDelta($sql_subject_mastery);
+        dbDelta($sql_subject_mastery);
 
-    // 14. Device Tokens Table (Centralized for all notifications)
-    $table_tokens = $wpdb->get_blog_prefix() . 'qp_device_tokens';
-    $sql_tokens = "CREATE TABLE $table_tokens (
+        // 14. Device Tokens Table (Centralized for all notifications)
+        $table_tokens = $wpdb->get_blog_prefix() . 'qp_device_tokens';
+        $sql_tokens = "CREATE TABLE $table_tokens (
         id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
         user_id BIGINT(20) UNSIGNED NOT NULL,
         token VARCHAR(255) NOT NULL,
@@ -448,124 +462,157 @@ class Activator {
         UNIQUE KEY token (token(191)),
         KEY user_id (user_id)
     ) $charset_collate;";
-    dbDelta($sql_tokens);
+        dbDelta($sql_tokens);
 
-    // === SCHEDULE CRON JOBS ===
-    if (!wp_next_scheduled('qp_check_entitlement_expiration_hook')) {
-        // Schedule to run daily, around midnight server time. Adjust 'daily' if needed.
-        wp_schedule_event(time(), 'daily', 'qp_check_entitlement_expiration_hook');
-        error_log("QP Cron: Scheduled entitlement expiration check.");
-    }
-
-    $default_taxonomies = [
-        ['taxonomy_name' => 'subject', 'taxonomy_label' => 'Subjects', 'hierarchical' => 1],
-        ['taxonomy_name' => 'label', 'taxonomy_label' => 'Labels', 'hierarchical' => 0],
-        ['taxonomy_name' => 'exam', 'taxonomy_label' => 'Exams', 'hierarchical' => 0],
-        ['taxonomy_name' => 'source', 'taxonomy_label' => 'Sources', 'hierarchical' => 1],
-        ['taxonomy_name' => 'report_reason', 'taxonomy_label' => 'Report Reasons', 'hierarchical' => 0],
-    ];
-
-    foreach ($default_taxonomies as $tax) {
-        $exists = $wpdb->get_var($wpdb->prepare("SELECT taxonomy_id FROM $table_taxonomies WHERE taxonomy_name = %s", $tax['taxonomy_name']));
-        if (!$exists) {
-            $wpdb->insert($table_taxonomies, $tax);
+        function qp_constraint_exists($wpdb, $table, $constraint_name) {
+            return $wpdb->get_var($wpdb->prepare("
+                SELECT CONSTRAINT_NAME 
+                FROM information_schema.TABLE_CONSTRAINTS 
+                WHERE TABLE_NAME = %s 
+                AND CONSTRAINT_NAME = %s
+            ", $table, $constraint_name));
         }
-    }
 
-    // Get the taxonomy IDs for labels and report reasons
-    $label_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$wpdb->prefix}qp_taxonomies WHERE taxonomy_name = 'label'");
-    $reason_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$wpdb->prefix}qp_taxonomies WHERE taxonomy_name = 'report_reason'");
+        // Ensure InnoDB (required for FK)
+        $wpdb->query("ALTER TABLE {$table_sessions} ENGINE=InnoDB");
+        $wpdb->query("ALTER TABLE {$table_attempts} ENGINE=InnoDB");
 
-    // Define and insert default labels
-    $default_labels = [
-        ['name' => 'Wrong Answer', 'color' => '#ff5733', 'description' => 'Reported by users for having an incorrect answer key.'],
-        ['name' => 'No Answer', 'color' => '#ffc300', 'description' => 'Reported by users because the question has no correct option provided.'],
-        ['name' => 'Incorrect Formatting', 'color' => '#900c3f', 'description' => 'Reported by users for formatting or display issues.'],
-        ['name' => 'Wrong Subject', 'color' => '#581845', 'description' => 'Reported by users for being in the wrong subject category.'],
-        ['name' => 'Duplicate', 'color' => '#c70039', 'description' => 'Automatically marked as a duplicate of another question during import.']
-    ];
+        if (!qp_constraint_exists($wpdb, $table_attempts, 'fk_qp_attempts_session')) {
+            $wpdb->query("ALTER TABLE {$table_attempts}
+                ADD CONSTRAINT fk_qp_attempts_session
+                FOREIGN KEY (session_id)
+                REFERENCES {$table_sessions}(session_id)
+                ON DELETE CASCADE
+            ");
+        }
 
-    if ($label_tax_id) {
-        foreach ($default_labels as $label) {
-            $term_id = Terms_DB::get_or_create($label['name'], $label_tax_id);
-            if ($term_id) {
-                Terms_DB::update_meta($term_id, 'color', $label['color']);
-                Terms_DB::update_meta($term_id, 'description', $label['description']);
-                Terms_DB::update_meta($term_id, 'is_default', '1');
+        // Add FK: attempts → questions
+        if (!qp_constraint_exists($wpdb, $table_attempts, 'fk_qp_attempts_question')) {
+            $wpdb->query("
+                ALTER TABLE {$table_attempts}
+                ADD CONSTRAINT fk_qp_attempts_question
+            FOREIGN KEY (question_id)
+            REFERENCES {$table_questions}(question_id)
+            ON DELETE CASCADE
+        ");
+        }
+
+        // === SCHEDULE CRON JOBS ===
+        if (!wp_next_scheduled('qp_check_entitlement_expiration_hook')) {
+            // Schedule to run daily, around midnight server time. Adjust 'daily' if needed.
+            wp_schedule_event(time(), 'daily', 'qp_check_entitlement_expiration_hook');
+            error_log("QP Cron: Scheduled entitlement expiration check.");
+        }
+
+        $default_taxonomies = [
+            ['taxonomy_name' => 'subject', 'taxonomy_label' => 'Subjects', 'hierarchical' => 1],
+            ['taxonomy_name' => 'label', 'taxonomy_label' => 'Labels', 'hierarchical' => 0],
+            ['taxonomy_name' => 'exam', 'taxonomy_label' => 'Exams', 'hierarchical' => 0],
+            ['taxonomy_name' => 'source', 'taxonomy_label' => 'Sources', 'hierarchical' => 1],
+            ['taxonomy_name' => 'report_reason', 'taxonomy_label' => 'Report Reasons', 'hierarchical' => 0],
+        ];
+
+        foreach ($default_taxonomies as $tax) {
+            $exists = $wpdb->get_var($wpdb->prepare("SELECT taxonomy_id FROM $table_taxonomies WHERE taxonomy_name = %s", $tax['taxonomy_name']));
+            if (!$exists) {
+                $wpdb->insert($table_taxonomies, $tax);
             }
         }
-    }
 
-    // Define and insert default report reasons
-    $default_reasons = [
-        ['text' => 'Wrong Answer', 'type' => 'report'],
-        ['text' => 'Options are incorrect', 'type' => 'report'],
-        ['text' => 'Image is not loading', 'type' => 'report'],
-        ['text' => 'No Answer Provided', 'type' => 'report'],
-        ['text' => 'Other (Error)', 'type' => 'report'],
-        ['text' => 'Wrong Formatting', 'type' => 'suggestion'],
-        ['text' => 'Language Mistakes', 'type' => 'suggestion'],
-        ['text' => 'Question is confusing', 'type' => 'suggestion'],
-        ['text' => 'Other (Suggestion)', 'type' => 'suggestion']
-    ];
+        // Get the taxonomy IDs for labels and report reasons
+        $label_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$wpdb->prefix}qp_taxonomies WHERE taxonomy_name = 'label'");
+        $reason_tax_id = $wpdb->get_var("SELECT taxonomy_id FROM {$wpdb->prefix}qp_taxonomies WHERE taxonomy_name = 'report_reason'");
 
-    if ($reason_tax_id) {
-        foreach ($default_reasons as $reason) {
-            $term_id = Terms_DB::get_or_create($reason['text'], $reason_tax_id);
-            if ($term_id) {
-                Terms_DB::update_meta($term_id, 'is_active', '1');
-                Terms_DB::update_meta($term_id, 'type', $reason['type']); // Add the type meta
+        // Define and insert default labels
+        $default_labels = [
+            ['name' => 'Wrong Answer', 'color' => '#ff5733', 'description' => 'Reported by users for having an incorrect answer key.'],
+            ['name' => 'No Answer', 'color' => '#ffc300', 'description' => 'Reported by users because the question has no correct option provided.'],
+            ['name' => 'Incorrect Formatting', 'color' => '#900c3f', 'description' => 'Reported by users for formatting or display issues.'],
+            ['name' => 'Wrong Subject', 'color' => '#581845', 'description' => 'Reported by users for being in the wrong subject category.'],
+            ['name' => 'Duplicate', 'color' => '#c70039', 'description' => 'Automatically marked as a duplicate of another question during import.']
+        ];
+
+        if ($label_tax_id) {
+            foreach ($default_labels as $label) {
+                $term_id = Terms_DB::get_or_create($label['name'], $label_tax_id);
+                if ($term_id) {
+                    Terms_DB::update_meta($term_id, 'color', $label['color']);
+                    Terms_DB::update_meta($term_id, 'description', $label['description']);
+                    Terms_DB::update_meta($term_id, 'is_default', '1');
+                }
             }
         }
-    }
 
-    // Set default options 
-    if (!get_option('qp_jwt_secret_key')) {
-        add_option('qp_jwt_secret_key', wp_generate_password(64, true, true), '', 'no');
-    }
+        // Define and insert default report reasons
+        $default_reasons = [
+            ['text' => 'Wrong Answer', 'type' => 'report'],
+            ['text' => 'Options are incorrect', 'type' => 'report'],
+            ['text' => 'Image is not loading', 'type' => 'report'],
+            ['text' => 'No Answer Provided', 'type' => 'report'],
+            ['text' => 'Other (Error)', 'type' => 'report'],
+            ['text' => 'Wrong Formatting', 'type' => 'suggestion'],
+            ['text' => 'Language Mistakes', 'type' => 'suggestion'],
+            ['text' => 'Question is confusing', 'type' => 'suggestion'],
+            ['text' => 'Other (Suggestion)', 'type' => 'suggestion']
+        ];
 
-    // Get the current settings, or an empty array if they don't exist.
-    $options = get_option('qp_settings', []);
-
-    // Define the pages that need to be created.
-    $pages_to_create = [
-        'practice_page'  => ['title' => 'Practice', 'content' => '[question_press_practice]'],
-        'dashboard_page' => ['title' => 'Dashboard', 'content' => '[question_press_dashboard]'],
-        'session_page'   => ['title' => 'Session', 'content' => '[question_press_session]'],
-        'review_page'    => ['title' => 'Review', 'content' => '[question_press_review]'],
-        'signup_page'    => ['title' => 'Signup', 'content' => '[question_press_signup]']
-    ];
-
-    foreach ($pages_to_create as $option_key => $page_details) {
-        // Check if the page ID is already saved and if the page still exists.
-        $page_id = isset($options[$option_key]) ? $options[$option_key] : 0;
-        if (empty($page_id) || !get_post($page_id)) {
-            // Check if a page with this title already exists to avoid duplicates.
-            $existing_page = get_page_by_title($page_details['title'], 'OBJECT', 'page');
-
-            if ($existing_page) {
-                // If a page with the same title exists, use it.
-                $new_page_id = $existing_page->ID;
-            } else {
-                // If no page exists, create a new one.
-                $new_page_id = wp_insert_post([
-                    'post_title'   => wp_strip_all_tags($page_details['title']),
-                    'post_content' => $page_details['content'],
-                    'post_status'  => 'publish',
-                    'post_author'  => 1,
-                    'post_type'    => 'page',
-                ]);
-            }
-
-            // Save the new page ID to our settings.
-            if ($new_page_id) {
-                $options[$option_key] = $new_page_id;
+        if ($reason_tax_id) {
+            foreach ($default_reasons as $reason) {
+                $term_id = Terms_DB::get_or_create($reason['text'], $reason_tax_id);
+                if ($term_id) {
+                    Terms_DB::update_meta($term_id, 'is_active', '1');
+                    Terms_DB::update_meta($term_id, 'type', $reason['type']); // Add the type meta
+                }
             }
         }
-    }
 
-    // Save the updated settings with the new page IDs.
-    update_option('qp_settings', $options);
+        // Set default options 
+        if (!get_option('qp_jwt_secret_key')) {
+            add_option('qp_jwt_secret_key', wp_generate_password(64, true, true), '', 'no');
+        }
+
+        // Get the current settings, or an empty array if they don't exist.
+        $options = get_option('qp_settings', []);
+
+        // Define the pages that need to be created.
+        $pages_to_create = [
+            'practice_page'  => ['title' => 'Practice', 'content' => '[question_press_practice]'],
+            'dashboard_page' => ['title' => 'Dashboard', 'content' => '[question_press_dashboard]'],
+            'session_page'   => ['title' => 'Session', 'content' => '[question_press_session]'],
+            'review_page'    => ['title' => 'Review', 'content' => '[question_press_review]'],
+            'signup_page'    => ['title' => 'Signup', 'content' => '[question_press_signup]']
+        ];
+
+        foreach ($pages_to_create as $option_key => $page_details) {
+            // Check if the page ID is already saved and if the page still exists.
+            $page_id = isset($options[$option_key]) ? $options[$option_key] : 0;
+            if (empty($page_id) || !get_post($page_id)) {
+                // Check if a page with this title already exists to avoid duplicates.
+                $existing_page = get_page_by_title($page_details['title'], 'OBJECT', 'page');
+
+                if ($existing_page) {
+                    // If a page with the same title exists, use it.
+                    $new_page_id = $existing_page->ID;
+                } else {
+                    // If no page exists, create a new one.
+                    $new_page_id = wp_insert_post([
+                        'post_title'   => wp_strip_all_tags($page_details['title']),
+                        'post_content' => $page_details['content'],
+                        'post_status'  => 'publish',
+                        'post_author'  => 1,
+                        'post_type'    => 'page',
+                    ]);
+                }
+
+                // Save the new page ID to our settings.
+                if ($new_page_id) {
+                    $options[$option_key] = $new_page_id;
+                }
+            }
+        }
+
+        // Save the updated settings with the new page IDs.
+        update_option('qp_settings', $options);
 
 
         // Ensure flush_rewrite_rules() is called if needed for CPTs/Taxonomies
@@ -573,5 +620,4 @@ class Activator {
         Rewrites::add_dashboard_rewrite_rules();
         flush_rewrite_rules();
     }
-
 } // End class Activator
